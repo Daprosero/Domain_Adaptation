@@ -117,7 +117,7 @@ def get_eta(epoch, total_epochs,alpha, eta_0=0.01, beta=0.75):
 def get_lambda(epoch, total_epochs, delta):
     p = epoch / total_epochs
     return (1 - np.exp(-delta * p)) / (1 + np.exp(-delta * p))
-# --- CDAN Entrenamiento ---
+
 def entropy(p):
     return -torch.sum(p * torch.log(p + 1e-5), dim=1)
 def grl_hook(coeff):
@@ -335,6 +335,7 @@ def train_adda_phase2(model, src_loader, tgt_loader, val_loader_src, val_loader_
               f"Domain Acc = {100. * dom_correct / total_dom:.2f}%")
         print(f"  Val Src: Loss = {val_loss_src:.4f}, Acc = {val_acc_src:.2f}%")
         print(f"  Val Tgt: Loss = {val_loss_tgt:.4f}, Acc = {val_acc_tgt:.2f}%")
+# --- CDAN Entrenamiento ---
 def train_cdan(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, device,num_classes,alpha,delta, epochs=5, eta_0=1e-3):
     set_seed(42)
     optimizer = optim.Adam(model.parameters(), lr=eta_0)
@@ -407,8 +408,7 @@ def train_cdan(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, de
             softmax_tgt = nn.Softmax(dim=1)(preds_tgt)
             loss_entropy = torch.mean(entropy(softmax_tgt))
 
-            # --- Total loss (with entropy regularization) ---
-            #(1-lambda_val)*loss_class + lambda_val * (loss_domain + loss_entropy)
+            # --- Total loss (with entropy regularization) --
             loss = loss_class + lambda_val*loss_domain
 
             optimizer.zero_grad()
@@ -436,16 +436,10 @@ def train_creda(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, d
     criterion_class = nn.CrossEntropyLoss()
     creda_loss_fn = CREDALoss(sigma=sigma,lambda_creda=lambda_, use_entropy_weighting=True)
 
-    # Acelerar con torch.compile (¡ideal en PyTorch 2.x!)
-    #creda_loss_fn = torch.compile(creda_loss_fn)
-
     for epoch in range(epochs):
         print(f"[CREDA] => Epoch {epoch+1}/{epochs} - INICIO")
 
         model.train()
-        #print(f"[GPU Check] Modelo en: {next(model.parameters()).device}")
-        #new_lr = get_eta(epoch, epochs,10,1e-3,0.75)
-        #lambda_val = get_lambda(epoch, epochs,10)
         lambda_val = get_lambda(epoch, epochs,delta=delta)
         if alpha!=None:
             new_lr = get_eta(epoch, epochs,alpha, eta_0)
@@ -466,8 +460,6 @@ def train_creda(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, d
                 xt, _ = next(tgt_iter)
 
             xs, ys, xt = xs.to(device), ys.to(device), xt.to(device)
-            #print(f"[GPU Check] xs: {xs.device}, xt: {xt.device}")
-
             # Forward pass
             feats_src = model.forward(xs, mode='feature')
             preds_src = model.forward(xs, mode='class')
