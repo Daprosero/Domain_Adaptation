@@ -47,20 +47,8 @@ class GradientReversalLayer(nn.Module):
     def forward(self, x):
         return GradientReversalFunction.apply(x, self.lambda_)
 
-
-# La clase se sigue llamando ResNetFeatureExtractor para mantener la compatibilidad,
-# pero ahora es un "FeatureExtractor" más general.
-
 class FeatureExtractor(nn.Module):
     """
-    Extractor de características unificado.
-    Mantiene la misma interfaz para:
-    - ResNet18
-    - ResNet50
-    - ViT tiny 32x32
-
-    Parámetros
-    ----------
     backbone : str
         Opciones:
         - 'resnet18'
@@ -318,7 +306,6 @@ class CREDALoss(nn.Module):
             h_s = self._renyi_entropy_order_2(K_s_c)
             h_t = self._renyi_entropy_order_2(K_t_c)
             h_mix = self._renyi_entropy_order_2(K_mix_c)
-            #print('Hola mundo_',K_s_c.shape)
             creda_c = h_mix - 0.5 * (h_s + h_t)
             losses_per_class.append(creda_c)
             valid_class_count += 1
