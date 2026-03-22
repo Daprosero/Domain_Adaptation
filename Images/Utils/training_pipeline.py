@@ -21,7 +21,7 @@ import zipfile
 from itertools import permutations
 from tqdm import tqdm
 import timm
-from Domain_Adaptation.Utils.models import (
+from Domain_Adaptation.Images.Utils.models import (
     FeatureExtractor,
     Classifier,
     DomainDiscriminator,
