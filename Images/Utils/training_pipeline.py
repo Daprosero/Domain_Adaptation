@@ -942,6 +942,49 @@ def load_model(model_type, src, tgt, path="saved_models", num_classes=10):
     model.eval()
     return model
 
+def extract_features_model(model, dataloader, domain="source", device="cuda"):
+    model.eval()
+    features, labels = [], []
+
+    with torch.no_grad():
+        for x, y in dataloader:
+            x = x.to(device)
+
+            if isinstance(model, ADDA_ResNet):
+                feats = model.Fs(x) if domain == "source" else model.Ft(x)
+            else:
+                feats = model.feature(x)
+
+            features.append(feats.cpu())
+            labels.append(y)
+
+    return torch.cat(features, dim=0), torch.cat(labels, dim=0)
+
+
+def extract_features_baseline(F_model, dataloader, device="cuda"):
+    F_model.eval()
+    features, labels = [], []
+
+    with torch.no_grad():
+        for x, y in dataloader:
+            x = x.to(device)
+            feats = F_model(x)
+            features.append(feats.cpu())
+            labels.append(y)
+
+    return torch.cat(features, dim=0), torch.cat(labels, dim=0)
+
+
+def extract_flattened_features(dataset, batch_size=256):
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    X, y = [], []
+
+    for imgs, labels in loader:
+        imgs_flat = imgs.view(imgs.size(0), -1).numpy()
+        X.append(imgs_flat)
+        y.append(labels.numpy())
+
+    return np.vstack(X), np.hstack(y)
 
 def resize_image_pil(img, target_shape=(28, 28)):
     img = np.array(img.convert("RGB"))
