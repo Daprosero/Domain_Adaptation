@@ -1116,6 +1116,22 @@ def show_multi_domain_class_grid(
     plt.savefig("multi_domain_grid.pdf", bbox_inches="tight")
     plt.show()
 
+def extract_features_adaptive(model, dataloader, domain="source", device="cuda"):
+    model.eval()
+    features = []
+    labels = []
+
+    with torch.no_grad():
+        for x, y in dataloader:
+            x = x.to(device)
+            if isinstance(model, ADDA_ResNet):
+                f = model.Fs(x) if domain == "source" else model.Ft(x)
+            else:
+                f = model.feature(x)
+            features.append(f.cpu())
+            labels.append(y)
+
+    return torch.cat(features), torch.cat(labels)
 
 def get_last_conv_layer(model):
     return [m for m in model.feature.modules() if isinstance(m, torch.nn.Conv2d)][-1]
