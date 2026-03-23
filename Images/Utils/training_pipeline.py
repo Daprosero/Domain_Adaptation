@@ -21,6 +21,9 @@ import zipfile
 from itertools import permutations
 from tqdm import tqdm
 import timm
+import matplotlib.pyplot as plt
+from skimage.transform import resize
+from torchvision.transforms.functional import to_pil_image
 from Domain_Adaptation.Images.Utils.models import (
     FeatureExtractor,
     Classifier,
@@ -905,3 +908,246 @@ def run_all_models(combinations_dict, sets_all, cfg, output_dir="saved_models", 
         torch.cuda.empty_cache()
 
     return pd.concat(all_results, ignore_index=True)
+
+def load_model(model_type, src, tgt, path="saved_models", num_classes=10):
+    model_type = model_type.lower()
+
+    if model_type == "baseline":
+        F_model = FeatureExtractor(backbone='resnet50')
+        C = Classifier(feature_dim=2048, num_classes=num_classes)
+
+        F_model.load_state_dict(torch.load(f"{path}/Baseline_{src}_{tgt}_F.pth"))
+        C.load_state_dict(torch.load(f"{path}/Baseline_{src}_{tgt}_C.pth"))
+
+        F_model.eval()
+        C.eval()
+        return F_model, C
+
+    elif model_type == "dann":
+        model = DANN_ResNet(backbone='resnet50',num_classes=num_classes)
+
+    elif model_type == "adda":
+        model = ADDA_ResNet(backbone='resnet50',num_classes=num_classes)
+
+    elif model_type == "cdan":
+        model = CDAN_ResNet(backbone='resnet50',num_classes=num_classes)
+
+    elif model_type == "creda":
+        model = CREDA_ResNet(backbone='resnet50',num_classes=num_classes)
+
+    else:
+        raise ValueError(f"Modelo no reconocido: {model_type}")
+
+    model.load_state_dict(torch.load(f"{path}/{model_type.upper()}_{src}_{tgt}_weights.pth"))
+    model.eval()
+    return model
+
+
+def resize_image_pil(img, target_shape=(28, 28)):
+    img = np.array(img.convert("RGB"))
+    resized_img = resize(img, target_shape, preserve_range=True, anti_aliasing=True).astype(np.uint8)
+    return resized_img
+def tensor_to_imgarray(image, target_shape=(32, 32)):
+    if not torch.is_tensor(image):
+        img_rgb = np.array(image.convert("RGB"))
+    else:
+        tensor = image.clone().cpu().clamp(0, 1)
+        img_pil = to_pil_image(tensor)
+        img_rgb = np.array(img_pil.convert("RGB"))
+
+    resized = resize(
+        img_rgb,
+        target_shape,
+        preserve_range=True,
+        anti_aliasing=True
+    ).astype(np.uint8)
+
+    return resized
+
+
+def pil_to_imgarray(pil_image, target_shape=(64, 64)):
+    img_rgb = np.array(pil_image.convert("RGB"))
+    resized = resize(
+        img_rgb,
+        target_shape,
+        preserve_range=True,
+        anti_aliasing=True
+    ).astype(np.uint8)
+
+    return resized
+
+
+def get_one_sample_per_selected_classes(dataset, class_list):
+    samples = []
+    found = {cls: False for cls in class_list}
+
+    for i in range(len(dataset)):
+        x, y = dataset[i]
+        y_int = int(y)
+
+        if y_int in class_list and not found[y_int]:
+            samples.append((class_list.index(y_int), x))
+            found[y_int] = True
+
+        if all(found.values()):
+            break
+
+    return [x for _, x in sorted(samples, key=lambda x: x[0])]
+
+
+def get_representative_per_class(dataset):
+    class_to_img = {}
+
+    for path, label in dataset.samples:
+        if label not in class_to_img:
+            img = dataset.loader(path)
+            class_to_img[label] = img
+
+        if len(class_to_img) == len(dataset.classes):
+            break
+
+    return [class_to_img[i] for i in range(len(dataset.classes))]
+
+
+def show_digit_domains_grid(
+    domains,
+    datasets,
+    class_list,
+    target_shape=(32, 32),
+    title="",
+    only_class=None,
+):
+    n_domains = len(domains)
+
+    if only_class is not None:
+        if only_class not in class_list:
+            raise ValueError(f"La clase {only_class} no está en class_list={class_list}")
+
+        class_pos = class_list.index(only_class)
+
+        fig, axs = plt.subplots(1, n_domains, figsize=(n_domains * 2.5, 2.5))
+        if n_domains == 1:
+            axs = [axs]
+
+        for col_idx, (domain, dataset) in enumerate(zip(domains, datasets)):
+            samples = get_one_sample_per_selected_classes(dataset, class_list)
+            img = samples[class_pos]
+
+            axs[col_idx].imshow(tensor_to_imgarray(img, target_shape))
+            axs[col_idx].set_title(domain)
+            axs[col_idx].axis("off")
+
+        plt.suptitle(f"{title} — Clase: {only_class}")
+    else:
+        n_rows, n_cols = len(domains), len(class_list)
+        fig, axs = plt.subplots(n_rows, n_cols, figsize=(n_cols * 2, n_rows * 2))
+
+        for row_idx, (domain, dataset) in enumerate(zip(domains, datasets)):
+            samples = get_one_sample_per_selected_classes(dataset, class_list)
+
+            for col_idx, img in enumerate(samples):
+                ax = axs[row_idx, col_idx] if n_rows > 1 else axs[col_idx]
+                ax.imshow(tensor_to_imgarray(img, target_shape))
+                ax.axis("off")
+
+                if col_idx == 0:
+                    ax.set_ylabel(domain)
+
+                if row_idx == n_rows - 1:
+                    ax.set_xlabel(class_list[col_idx])
+
+    plt.tight_layout()
+    plt.savefig("digits_grid.pdf", bbox_inches="tight")
+    plt.show()
+
+
+def show_multi_domain_class_grid(
+    domains_dict,
+    target_shape=(224, 224),
+    title="",
+    only_class=None,
+):
+    domain_names = list(domains_dict.keys())
+    example_dataset = list(domains_dict.values())[0]
+
+    class_names = example_dataset.classes
+    n_domains = len(domain_names)
+    n_classes = len(class_names)
+
+    if only_class is not None:
+        if isinstance(only_class, str):
+            class_idx = class_names.index(only_class)
+        else:
+            class_idx = only_class
+
+        fig, axs = plt.subplots(1, n_domains, figsize=(n_domains * 3, 3))
+
+        if n_domains == 1:
+            axs = [axs]
+
+        for i, domain in enumerate(domain_names):
+            dataset = domains_dict[domain]
+            samples = get_representative_per_class(dataset)
+
+            axs[i].imshow(pil_to_imgarray(samples[class_idx], target_shape))
+            axs[i].set_title(domain)
+            axs[i].axis("off")
+
+        plt.suptitle(f"{title} — Clase: {class_names[class_idx]}")
+    else:
+        fig, axs = plt.subplots(n_domains, n_classes, figsize=(n_classes * 2, n_domains * 2.5))
+
+        for i, domain in enumerate(domain_names):
+            dataset = domains_dict[domain]
+            samples = get_representative_per_class(dataset)
+
+            for j in range(n_classes):
+                ax = axs[i, j]
+                ax.imshow(pil_to_imgarray(samples[j], target_shape))
+                ax.axis("off")
+
+                if i == n_domains - 1:
+                    ax.set_xlabel(class_names[j])
+
+                if j == 0:
+                    ax.set_ylabel(domain)
+
+    plt.tight_layout()
+    plt.savefig("multi_domain_grid.pdf", bbox_inches="tight")
+    plt.show()
+
+
+def get_last_conv_layer(model):
+    return [m for m in model.feature.modules() if isinstance(m, torch.nn.Conv2d)][-1]
+
+def get_denormalizer(dataset_key):
+    if dataset_key == "MNIST-USPS-SVHN":
+        mean, std = [0.5]*3, [0.5]*3
+    else:
+        mean = [0.485, 0.456, 0.406]
+        std  = [0.229, 0.224, 0.225]
+    def denorm(t):
+        for ch, m, s in zip(t, mean, std):
+            ch.mul_(s).add_(m)
+        return t.clamp(0, 1)
+    return denorm
+
+def norm_cam(cam):
+    cam = cam - cam.min()
+    cam = cam / (cam.max() + 1e-8)
+    return cam
+
+def get_nth_image_for_class(dataloader, class_idx, index, device):
+    """Devuelve la imagen N-ésima (index) de clase `class_idx` encontrada en el dataloader."""
+    imgs = []
+    for x, y in dataloader:
+        x, y = x.to(device), y.to(device)
+        mask = (y == class_idx)
+        if mask.any():
+            imgs.extend(x[mask].detach().cpu())
+        if len(imgs) > index:
+            return imgs[index]
+    return None  # No hay suficientes imágenes de esa clase
+
+
+
