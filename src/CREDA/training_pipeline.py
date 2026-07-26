@@ -24,7 +24,8 @@ import timm
 import matplotlib.pyplot as plt
 from skimage.transform import resize
 from torchvision.transforms.functional import to_pil_image
-from Domain_Adaptation.Images.Utils.models import (
+from .artifacts import checkpoint_path
+from .models import (
     FeatureExtractor,
     Classifier,
     DomainDiscriminator,
@@ -909,36 +910,34 @@ def run_all_models(combinations_dict, sets_all, cfg, output_dir="saved_models", 
 
     return pd.concat(all_results, ignore_index=True)
 
-def load_model(model_type, src, tgt, path="saved_models", num_classes=10):
+def load_model(model_type, src, tgt, models_root, backbone, num_classes=10):
+    """Load a checkpoint produced by ``run_all_models`` using its artifact contract."""
     model_type = model_type.lower()
 
     if model_type == "baseline":
-        F_model = FeatureExtractor(backbone='resnet50')
-        C = Classifier(feature_dim=2048, num_classes=num_classes)
+        F_model = FeatureExtractor(backbone=backbone, pretrained=False)
+        C = Classifier(feature_dim=F_model.output_dim, num_classes=num_classes)
 
-        F_model.load_state_dict(torch.load(f"{path}/Baseline_{src}_{tgt}_F.pth"))
-        C.load_state_dict(torch.load(f"{path}/Baseline_{src}_{tgt}_C.pth"))
+        F_model.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt, "F")))
+        C.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt, "C")))
 
         F_model.eval()
         C.eval()
         return F_model, C
 
-    elif model_type == "dann":
-        model = DANN_ResNet(backbone='resnet50',num_classes=num_classes)
+    model_classes = {
+        "dann": DANN_ResNet,
+        "adda": ADDA_ResNet,
+        "cdan": CDAN_ResNet,
+        "creda": CREDA_ResNet,
+    }
+    try:
+        model_class = model_classes[model_type]
+    except KeyError as error:
+        raise ValueError(f"Modelo no reconocido: {model_type}") from error
 
-    elif model_type == "adda":
-        model = ADDA_ResNet(backbone='resnet50',num_classes=num_classes)
-
-    elif model_type == "cdan":
-        model = CDAN_ResNet(backbone='resnet50',num_classes=num_classes)
-
-    elif model_type == "creda":
-        model = CREDA_ResNet(backbone='resnet50',num_classes=num_classes)
-
-    else:
-        raise ValueError(f"Modelo no reconocido: {model_type}")
-
-    model.load_state_dict(torch.load(f"{path}/{model_type.upper()}_{src}_{tgt}_weights.pth"))
+    model = model_class(backbone=backbone, num_classes=num_classes, pretrained=False)
+    model.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt)))
     model.eval()
     return model
 
