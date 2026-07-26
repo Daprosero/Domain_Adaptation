@@ -163,10 +163,10 @@ class DomainDiscriminator(nn.Module):
     def forward(self, x):
         return self.net(x)
 class DANN_ResNet(nn.Module):
-    def __init__(self, backbone,num_classes=10, lambda_grl=1.0):
+    def __init__(self, backbone, num_classes=10, lambda_grl=1.0, pretrained=True):
         super().__init__()
         set_seed(42)
-        self.feature = FeatureExtractor(backbone=backbone, pretrained=True)
+        self.feature = FeatureExtractor(backbone=backbone, pretrained=pretrained)
         self.classifier = Classifier(feature_dim=self.feature.output_dim, num_classes=num_classes)
         self.domain_discriminator = DomainDiscriminator(input_dim=self.feature.output_dim)
         self.grl = GradientReversalLayer(lambda_grl)
@@ -178,11 +178,11 @@ class DANN_ResNet(nn.Module):
         elif mode == 'domain':
             return self.domain_discriminator(self.grl(f))
 class ADDA_ResNet(nn.Module):
-    def __init__(self,backbone, num_classes=10):
+    def __init__(self, backbone, num_classes=10, pretrained=True):
         super().__init__()
         set_seed(42)
-        self.Fs = FeatureExtractor(backbone=backbone, pretrained=True)
-        self.Ft = FeatureExtractor(backbone=backbone, pretrained=True)
+        self.Fs = FeatureExtractor(backbone=backbone, pretrained=pretrained)
+        self.Ft = FeatureExtractor(backbone=backbone, pretrained=pretrained)
         self.classifier = Classifier(feature_dim=self.Fs.output_dim, num_classes=num_classes)
         self.domain_discriminator = DomainDiscriminator(input_dim=self.Fs.output_dim)
 
@@ -200,10 +200,10 @@ class ADDA_ResNet(nn.Module):
         else:
             raise ValueError("mode must be 'class' or 'domain'")
 class CDAN_ResNet(nn.Module):
-    def __init__(self,backbone, num_classes=10):
+    def __init__(self, backbone, num_classes=10, pretrained=True):
         super().__init__()
         set_seed(42)
-        self.feature = FeatureExtractor(backbone=backbone, pretrained=True)
+        self.feature = FeatureExtractor(backbone=backbone, pretrained=pretrained)
         self.classifier = nn.Linear(self.feature.output_dim, num_classes)
         self.domain_discriminator = DomainDiscriminator(input_dim=self.feature.output_dim * num_classes)
 
@@ -218,10 +218,10 @@ class CDAN_ResNet(nn.Module):
             return self.domain_discriminator(outer)
 
 class CREDA_ResNet(nn.Module):
-    def __init__(self,backbone, num_classes=10):
+    def __init__(self, backbone, num_classes=10, pretrained=True):
         super().__init__()
         set_seed(42)
-        self.feature = FeatureExtractor(backbone=backbone, pretrained=True)
+        self.feature = FeatureExtractor(backbone=backbone, pretrained=pretrained)
         self.classifier = nn.Linear(self.feature.output_dim, num_classes)
 
     def forward(self, x, mode='class'):

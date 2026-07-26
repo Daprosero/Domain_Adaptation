@@ -1,0 +1,7 @@
+# Local Pi runtime state
+.atl/
+.venv/
+.domain-adaptation-cache/
+
+# macOS
+.DS_Store
