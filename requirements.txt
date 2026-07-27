@@ -4,8 +4,9 @@ jupyter
 ipykernel
 gdown
 matplotlib
-numpy
-pandas
+# NumPy 1.26.4 and pandas 2.2.3 provide compatible CPython 3.11/3.12 wheels.
+numpy==1.26.4
+pandas==2.2.3
 scikit-image
 scikit-learn
 timm
