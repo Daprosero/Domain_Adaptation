@@ -1,9 +1,12 @@
 # Canonical runtime dependencies for the generator notebooks.
 # cuML remains optional: Plots_Generator uses it when provided by the CUDA/RAPIDS runtime.
+jupyter
+ipykernel
 gdown
 matplotlib
 numpy
 pandas
+scikit-image
 scikit-learn
 timm
 torch
