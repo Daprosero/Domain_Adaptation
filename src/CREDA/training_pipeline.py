@@ -37,6 +37,16 @@ from .models import (
     GradientReversalLayer,
     CREDALoss
 )
+
+
+def resolve_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def set_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
@@ -499,7 +509,7 @@ def train_creda(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, d
 
 def run_baseline(dataset_key, sets_dict, cfg, epochs=5, save=False, specific_pair=None):
     set_seed(42)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = resolve_device()
     results = []
     models = {}
 
@@ -545,7 +555,7 @@ def run_baseline(dataset_key, sets_dict, cfg, epochs=5, save=False, specific_pai
 
 def run_dann(dataset_key, sets_dict, cfg, epochs=5, save=False, specific_pair=None):
     set_seed(42)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = resolve_device()
     results = []
     models = {}
 
@@ -610,7 +620,7 @@ def run_dann(dataset_key, sets_dict, cfg, epochs=5, save=False, specific_pair=No
     return (pd.DataFrame(results), models) if save else pd.DataFrame(results)
 def run_adda(dataset_key, sets_dict, cfg, epochs_cl=5, epochs_dc=5, save=False, specific_pair=None):
     set_seed(42)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = resolve_device()
     results = []
     pretrained_sources = {}
     models = {}
@@ -695,7 +705,7 @@ def run_adda(dataset_key, sets_dict, cfg, epochs_cl=5, epochs_dc=5, save=False, 
 
 def run_cdan(dataset_key, sets_dict, cfg, epochs=5, save=False, specific_pair=None):
     set_seed(42)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = resolve_device()
     results = []
     models = {}
 
@@ -759,7 +769,7 @@ def run_cdan(dataset_key, sets_dict, cfg, epochs=5, save=False, specific_pair=No
 
 def run_creda(dataset_key, sets_dict, cfg, epochs=5, save=False, specific_pair=None):
     set_seed(42)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = resolve_device()
     results = []
     models = {}
 
@@ -913,16 +923,17 @@ def run_all_models(combinations_dict, sets_all, cfg, output_dir="saved_models", 
 def load_model(model_type, src, tgt, models_root, backbone, num_classes=10):
     """Load a checkpoint produced by ``run_all_models`` using its artifact contract."""
     model_type = model_type.lower()
+    device = resolve_device()
 
     if model_type == "baseline":
         F_model = FeatureExtractor(backbone=backbone, pretrained=False)
         C = Classifier(feature_dim=F_model.output_dim, num_classes=num_classes)
 
-        F_model.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt, "F")))
-        C.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt, "C")))
+        F_model.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt, "F"), map_location=device))
+        C.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt, "C"), map_location=device))
 
-        F_model.eval()
-        C.eval()
+        F_model.to(device).eval()
+        C.to(device).eval()
         return F_model, C
 
     model_classes = {
@@ -937,11 +948,12 @@ def load_model(model_type, src, tgt, models_root, backbone, num_classes=10):
         raise ValueError(f"Modelo no reconocido: {model_type}") from error
 
     model = model_class(backbone=backbone, num_classes=num_classes, pretrained=False)
-    model.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt)))
-    model.eval()
+    model.load_state_dict(torch.load(checkpoint_path(models_root, backbone, model_type, src, tgt), map_location=device))
+    model.to(device).eval()
     return model
 
-def extract_features_model(model, dataloader, domain="source", device="cuda"):
+def extract_features_model(model, dataloader, domain="source", device=None):
+    device = resolve_device() if device is None else device
     model.eval()
     features, labels = [], []
 
@@ -960,7 +972,8 @@ def extract_features_model(model, dataloader, domain="source", device="cuda"):
     return torch.cat(features, dim=0), torch.cat(labels, dim=0)
 
 
-def extract_features_baseline(F_model, dataloader, device="cuda"):
+def extract_features_baseline(F_model, dataloader, device=None):
+    device = resolve_device() if device is None else device
     F_model.eval()
     features, labels = [], []
 
@@ -1058,6 +1071,7 @@ def show_digit_domains_grid(
     target_shape=(32, 32),
     title="",
     only_class=None,
+    output_dir=".",
 ):
     n_domains = len(domains)
 
@@ -1099,7 +1113,7 @@ def show_digit_domains_grid(
                     ax.set_xlabel(class_list[col_idx])
 
     plt.tight_layout()
-    plt.savefig("digits_grid.pdf", bbox_inches="tight")
+    plt.savefig(os.path.join(output_dir, "digits_grid.pdf"), bbox_inches="tight")
     plt.show()
 
 
@@ -1108,6 +1122,7 @@ def show_multi_domain_class_grid(
     target_shape=(224, 224),
     title="",
     only_class=None,
+    output_dir=".",
 ):
     domain_names = list(domains_dict.keys())
     example_dataset = list(domains_dict.values())[0]
@@ -1155,10 +1170,11 @@ def show_multi_domain_class_grid(
                     ax.set_ylabel(domain)
 
     plt.tight_layout()
-    plt.savefig("multi_domain_grid.pdf", bbox_inches="tight")
+    plt.savefig(os.path.join(output_dir, "multi_domain_grid.pdf"), bbox_inches="tight")
     plt.show()
 
-def extract_features_adaptive(model, dataloader, domain="source", device="cuda"):
+def extract_features_adaptive(model, dataloader, domain="source", device=None):
+    device = resolve_device() if device is None else device
     model.eval()
     features = []
     labels = []

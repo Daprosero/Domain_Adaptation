@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from pathlib import Path
 from typing import Iterable
 
@@ -14,6 +15,7 @@ RESULT_BACKBONE_DIRECTORIES = {
     "vit_tiny_patch16_224": "Transformer",
 }
 DATASETS = ("MNIST-USPS-SVHN", "ImageCLEF", "Office-Caltech")
+RESULT_METHODS = ("Baseline", "DANN", "ADDA", "CDAN", "CREDA")
 
 
 def _repository_candidates(start: Path | None = None) -> Iterable[Path]:
@@ -81,7 +83,68 @@ def load_dataset_results(backbone: str, dataset: str, repository_root: Path | No
 
     import pandas as pd
 
-    return pd.read_csv(results_file)
+    results = pd.read_csv(results_file)
+    if "Dataset" in results:
+        legacy_names = {
+            f"{dataset}{method}": f"{dataset}_{method}" for method in RESULT_METHODS
+        }
+        results["Dataset"] = results["Dataset"].replace(legacy_names)
+    return results
+
+
+def warn_on_incomplete_table_results(df, methods, transfers) -> None:
+    """Warn when requested table results are missing or ambiguous without mutating ``df``."""
+    required_columns = {"Dataset", "Source", "Target"}
+    missing_columns = sorted(required_columns.difference(df.columns))
+    if missing_columns:
+        warnings.warn(
+            "Unable to validate table results because required columns are missing: "
+            f"{', '.join(missing_columns)}.",
+            stacklevel=2,
+        )
+        return
+
+    dataset_names = df["Dataset"].fillna("").astype(str)
+    for method in methods:
+        method_mask = dataset_names.str.contains(method, regex=False)
+        for source, target in transfers:
+            row_count = int((method_mask & (df["Source"] == source) & (df["Target"] == target)).sum())
+            transfer = f"{source} -> {target}"
+            if row_count == 0:
+                warnings.warn(
+                    f"Table results are missing method '{method}' for transfer '{transfer}'.",
+                    stacklevel=2,
+                )
+            elif row_count > 1:
+                warnings.warn(
+                    "Table results are ambiguous: "
+                    f"found {row_count} rows for method '{method}' and transfer '{transfer}'.",
+                    stacklevel=2,
+                )
+
+
+def get_latex_rows(df, model_name, methods, transfers):
+    """Format per-method experiment results as LaTeX table rows."""
+    rows = []
+    for method in methods:
+        row_values = []
+        method_mask = df["Dataset"].str.contains(method)
+
+        for src, tgt in transfers:
+            match = df[method_mask & (df["Source"] == src) & (df["Target"] == tgt)]
+            if not match.empty:
+                acc = match.iloc[0]["Test Accuracy"]
+                std = match.iloc[0]["std"]
+                row_values.append(f"{acc:.2f}~$\\pm$~{std:.2f}")
+            else:
+                row_values.append("--")
+
+        avg_acc = df[method_mask]["Test Accuracy"].mean()
+        avg_std = df[method_mask]["std"].mean()
+        row_values.append(f"{avg_acc:.2f}~$\\pm$~{avg_std:.2f}")
+
+        rows.append((model_name, method, row_values))
+    return rows
 
 
 def _resolve_existing_directory(label: str, env_var: str, candidates: Iterable[Path]) -> Path:

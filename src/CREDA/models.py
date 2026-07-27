@@ -259,15 +259,13 @@ class CREDALoss(nn.Module):
     def _renyi_entropy_order_2(self, K):
         tr_K = torch.trace(K) + 1e-6
         K_norm = K / tr_K
-        log2 = torch.log(torch.tensor(2.0, device=K.device))
-        return -torch.log(torch.trace(K_norm @ K_norm) + 1e-6) / log2
+        return -torch.log(torch.trace(K_norm.T @ K_norm) + 1e-6)
 
     def _mix_kernel_concat(self, K_s, K_t, K_st):
-        K_mix = torch.cat([
+        return torch.cat([
             torch.cat([K_s, K_st], dim=1),
             torch.cat([K_st.T, K_t], dim=1)
         ], dim=0)
-        return K_mix / (torch.trace(K_mix) + 1e-6)
 
     def forward(self, f_s, f_t, y_s, g_t, reduction='mean'):
         y_t_pseudo = torch.argmax(g_t, dim=1)
@@ -277,8 +275,7 @@ class CREDALoss(nn.Module):
 
         if self.use_entropy_weighting:
             squared_sum = torch.sum(g_t ** 2, dim=1)
-            log2 = torch.log(torch.tensor(2.0, device=g_t.device))
-            entropy = -torch.log(squared_sum + 1e-6) / log2
+            entropy = -torch.log(squared_sum + 1e-6)
             target_weights = 1.0 - entropy / torch.log(torch.tensor(float(g_t.shape[1]), device=g_t.device))
         else:
             target_weights = None
