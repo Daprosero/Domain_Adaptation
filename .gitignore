@@ -5,3 +5,7 @@
 
 # macOS
 .DS_Store
+
+# Created by proposal-implementation: the target's own environment
+__pycache__/
+.ipynb_checkpoints/
