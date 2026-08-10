@@ -18,7 +18,7 @@ import numpy as np
 from MIL_CREDA.kernels import gaussian_kernel
 
 __provenance__ = {
-    "revision": "research-concept-r14.md",
+    "revision": "research-concept-r16.md",
     "sections": ["3"],
     "equations": ["20", "21"],
     "invariants": [

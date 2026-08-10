@@ -17,7 +17,7 @@ import numpy as np
 from MIL_CREDA.renyi import quadratic_entropy, trace_normalize
 
 __provenance__ = {
-    "revision": "research-concept-r14.md",
+    "revision": "research-concept-r16.md",
     "sections": ["5"],
     "equations": ["32", "33", "34", "35", "36", "37"],
     "invariants": [

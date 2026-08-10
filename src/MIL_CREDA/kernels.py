@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 
 __provenance__ = {
-    "revision": "research-concept-r14.md",
+    "revision": "research-concept-r16.md",
     "sections": ["1", "3"],
     "equations": ["2", "19"],
     "invariants": ["kernel_unit_diagonal_and_bounded", "kernel_psd"],

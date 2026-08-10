@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 
 __provenance__ = {
-    "revision": "research-concept-r14.md",
+    "revision": "research-concept-r16.md",
     "sections": ["3"],
     "equations": ["14", "15", "16"],
     "invariants": ["bag_weights_on_simplex", "bag_embedding_permutation_invariant"],
