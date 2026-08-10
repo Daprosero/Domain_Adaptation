@@ -1,3 +1,14 @@
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
+
+# Isolation marker. Its presence stops pytest and ruff from walking up the
+# directory tree and adopting an outer configuration as their root.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Import the packages straight from src/ — no install step, no network.
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
