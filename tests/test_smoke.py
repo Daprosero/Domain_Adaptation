@@ -31,7 +31,7 @@ def test_every_module_declares_provenance() -> None:
     for module in MODULES:
         provenance = getattr(importlib.import_module(module), "__provenance__", None)
         assert provenance is not None, f"{module} has no __provenance__"
-        assert provenance["revision"] == "research-concept-r14.md"
+        assert provenance["revision"] == "research-concept-r16.md"
 
 
 def test_every_module_declares_at_least_one_invariant() -> None:

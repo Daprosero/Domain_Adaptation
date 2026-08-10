@@ -13,11 +13,12 @@ from __future__ import annotations
 import numpy as np
 
 __provenance__ = {
-    "revision": "research-concept-r14.md",
+    "revision": "research-concept-r16.md",
     "sections": ["3", "5"],
     "equations": ["18", "39"],
     "invariants": [
         "source_loss_matches_negative_log_likelihood_of_the_observed_class",
+        "source_loss_non_negative",
         "objective_reduces_to_source_only_when_coefficients_vanish",
         "objective_monotone_in_each_adaptation_term",
     ],
@@ -28,7 +29,11 @@ def source_loss(G_source: np.ndarray, Y_source: np.ndarray, epsilon: float = 1e-
     """Implement Eq. (18): the per-bag averaged negative log-likelihood.
 
     `Y_source` holds one-hot bag labels, so the inner sum selects the observed
-    class. `epsilon` is the numerical stabilizer of the logarithm.
+    class. The stabilizer is normalized by its own maximum, (g + eps)/(1 + eps),
+    so the argument never exceeds one: the logarithm stays non-positive, the
+    term stays non-negative, and a bag predicted with certainty costs exactly
+    zero. Adding eps inside the logarithm alone would make a certain, correct
+    prediction score -ln(1 + eps) < 0.
     """
     if epsilon <= 0:
         raise ValueError("the source stabilizer must be strictly positive")
@@ -38,7 +43,7 @@ def source_loss(G_source: np.ndarray, Y_source: np.ndarray, epsilon: float = 1e-
         raise ValueError("one label vector per bag, over the same classes, is required")
     if G.shape[0] == 0:
         raise ValueError("the supervised term needs at least one source bag")
-    return float(-np.sum(Y * np.log(G + epsilon)) / G.shape[0])
+    return float(-np.sum(Y * np.log((G + epsilon) / (1.0 + epsilon))) / G.shape[0])
 
 
 def total_objective(

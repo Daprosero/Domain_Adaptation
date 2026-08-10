@@ -14,14 +14,14 @@ from __future__ import annotations
 import numpy as np
 
 __provenance__ = {
-    "revision": "research-concept-r14.md",
+    "revision": "research-concept-r16.md",
     "sections": ["4", "5"],
     "equations": ["28", "29", "30", "31", "38"],
     "invariants": [
         "correspondence_simplex_per_class",
         "correspondence_order_preserving",
         "total_correspondence_sums_to_one",
-        "local_distance_nonnegative_and_bounded",
+        "local_distance_bounded_by_two",
         "local_distance_zero_iff_reference_matches",
         "local_loss_in_unit_interval",
     ],
@@ -98,13 +98,15 @@ def local_distance(
 
 
 def normalized_local_distance(squared_distance: float) -> float:
-    """Implement the first half of Eq. (38): l_loc,j = d_j^2 / 4, in [0, 1].
+    """Implement the first half of Eq. (38): l_loc,j = d_j^2 / 2, in [0, 1].
 
-    The constant 4 comes from the triangle inequality: both Psi(B) and mu_j^s
-    are convex combinations of unit-norm images in H_I, so each has norm at
-    most one and their difference at most two.
+    The constant is the tight one. The triangle inequality alone would give 4,
+    but the Gaussian instance kernel is strictly positive, so every inner
+    product in H_I is, and both Psi(B_j^t) and mu_j^s are convex combinations of
+    those images with non-negative weights. Hence <Psi, mu> > 0 and
+    d_j^2 = ||Psi||^2 - 2<Psi, mu> + ||mu||^2 < 2, which the sweep approaches.
     """
-    return float(squared_distance / 4.0)
+    return float(squared_distance / 2.0)
 
 
 def local_loss(
