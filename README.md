@@ -8,7 +8,7 @@ The implementation follows the article: [Conditional Domain Adaptation with α-R
 
 - CREDA model and loss implementations in `src/CREDA/models.py`.
 - Training utilities for CREDA and comparison methods in `src/CREDA/training_pipeline.py`.
-- Result-generation notebooks under `Images/Notebooks/` and stored model/result artifacts under `Images/`.
+- Result-generation notebooks under `CREDA/Notebooks/` and stored model/result artifacts under `CREDA/`.
 
 ## Verified dependencies
 

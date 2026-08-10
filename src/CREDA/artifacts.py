@@ -49,7 +49,7 @@ def resolve_repository_root(start: Path | None = None) -> Path:
 def resolve_artifact_paths(repository_root: Path | None = None) -> dict[str, Path]:
     """Return the canonical repository-owned directories for experiment artifacts."""
     root = repository_root or resolve_repository_root()
-    images = root / "Images"
+    images = root / "CREDA"
     return {
         "repository": root,
         "results": images / "Results",
@@ -60,7 +60,7 @@ def resolve_artifact_paths(repository_root: Path | None = None) -> dict[str, Pat
 def load_dataset_results(backbone: str, dataset: str, repository_root: Path | None = None):
     """Load one unified results CSV for a canonical backbone and dataset.
 
-    Results are stored in ``Images/Results/<artifact-directory>/<dataset>.csv``;
+    Results are stored in ``CREDA/Results/<artifact-directory>/<dataset>.csv``;
     each file is already unified and is intentionally read without concatenation.
     """
     if backbone not in BACKBONES:
@@ -78,7 +78,7 @@ def load_dataset_results(backbone: str, dataset: str, repository_root: Path | No
     if not results_file.is_file():
         raise FileNotFoundError(
             f"Results CSV for backbone '{backbone}' and dataset '{dataset}' was not found at "
-            f"{results_file}. Expected one unified CSV in Images/Results/{artifact_directory}/."
+            f"{results_file}. Expected one unified CSV in CREDA/Results/{artifact_directory}/."
         )
 
     import pandas as pd
