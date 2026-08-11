@@ -7,7 +7,9 @@ Nothing else in MIL-CREDA introduces a second kernel or a second bandwidth.
 
 from __future__ import annotations
 
-import numpy as np
+import torch
+
+from MIL_CREDA import as_matrix
 
 __provenance__ = {
     "revision": "research-concept-r16.md",
@@ -17,28 +19,34 @@ __provenance__ = {
 }
 
 
-def gaussian_kernel(X: np.ndarray, Y: np.ndarray, sigma: float) -> np.ndarray:
+def gaussian_kernel(
+    X: torch.Tensor, Y: torch.Tensor, sigma: float | torch.Tensor
+) -> torch.Tensor:
     """Implement Eq. (2)/(19): kappa_sigma(x, x') = exp(-||x - x'||^2 / (2 sigma^2)).
 
     `X` is (n, d), `Y` is (m, d); the result is the (n, m) matrix of pairwise
-    kernel values. The proposal requires sigma > 0.
+    kernel values. The proposal requires sigma > 0. The bandwidth may itself be a
+    tensor: nothing here assumes it is a constant, so a caller is free to learn
+    it alongside the encoder.
     """
     if sigma <= 0:
         raise ValueError("the bandwidth sigma must be strictly positive")
-    X = np.atleast_2d(np.asarray(X, dtype=float))
-    Y = np.atleast_2d(np.asarray(Y, dtype=float))
+    X = as_matrix(X)
+    Y = as_matrix(Y)
     if X.shape[1] != Y.shape[1]:
         raise ValueError("both sets must live in the same ambient dimension")
     squared = (
-        np.sum(X**2, axis=1)[:, None]
-        - 2.0 * (X @ Y.T)
-        + np.sum(Y**2, axis=1)[None, :]
+        (X * X).sum(dim=1).unsqueeze(1)
+        - 2.0 * (X @ Y.transpose(0, 1))
+        + (Y * Y).sum(dim=1).unsqueeze(0)
     )
     # The identity above is exact in real arithmetic but can drift a hair below
-    # zero in floating point for coincident points; the distance never is.
-    return np.exp(-np.maximum(squared, 0.0) / (2.0 * sigma**2))
+    # zero in floating point for coincident points; the distance never is. The
+    # clamp is flat there, which is also the correct derivative: a coincident
+    # pair is at the minimum of the squared distance.
+    return torch.exp(-squared.clamp_min(0.0) / (2.0 * sigma**2))
 
 
-def gram(X: np.ndarray, sigma: float) -> np.ndarray:
+def gram(X: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
     """The Gram matrix of one sample set: kappa_sigma(x_i, x_j) for all i, j."""
     return gaussian_kernel(X, X, sigma)

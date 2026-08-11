@@ -13,8 +13,9 @@ from __future__ import annotations
 
 from typing import Sequence
 
-import numpy as np
+import torch
 
+from MIL_CREDA import DTYPE, as_tensor
 from MIL_CREDA.kernels import gaussian_kernel
 
 __provenance__ = {
@@ -33,12 +34,12 @@ Bag = tuple  # (H, weights): embeddings (m, d) and their in-bag weights (m,)
 
 
 def bag_kernel(
-    H_u: np.ndarray,
-    weights_u: np.ndarray,
-    H_v: np.ndarray,
-    weights_v: np.ndarray,
-    sigma: float,
-) -> float:
+    H_u: torch.Tensor,
+    weights_u: torch.Tensor,
+    H_v: torch.Tensor,
+    weights_v: torch.Tensor,
+    sigma: float | torch.Tensor,
+) -> torch.Tensor:
     """Implement Eq. (21): kappa^B(B_u, B_v) = sum_{a,b} beta_a beta_b kappa^I(h_a, h_b).
 
     Equivalently the inner product in H_I of the two representations Psi of
@@ -46,26 +47,45 @@ def bag_kernel(
     coordinates of Phi_sigma are ever needed.
     """
     K_instances = gaussian_kernel(H_u, H_v, sigma)
-    beta_u = np.asarray(weights_u, dtype=float).ravel()
-    beta_v = np.asarray(weights_v, dtype=float).ravel()
-    if K_instances.shape != (beta_u.size, beta_v.size):
+    beta_u = as_tensor(weights_u).reshape(-1)
+    beta_v = as_tensor(weights_v).reshape(-1)
+    if tuple(K_instances.shape) != (beta_u.numel(), beta_v.numel()):
         raise ValueError("each bag needs exactly one weight per instance")
-    return float(beta_u @ K_instances @ beta_v)
+    return beta_u @ K_instances @ beta_v
 
 
 def bag_kernel_matrix(
-    bags_rows: Sequence[Bag], bags_cols: Sequence[Bag], sigma: float
-) -> np.ndarray:
-    """Every pairwise bag kernel value between two collections of bags."""
-    return np.array(
-        [
-            [bag_kernel(H_u, w_u, H_v, w_v, sigma) for H_v, w_v in bags_cols]
-            for H_u, w_u in bags_rows
-        ],
-        dtype=float,
-    ).reshape(len(bags_rows), len(bags_cols))
+    bags_rows: Sequence[Bag], bags_cols: Sequence[Bag], sigma: float | torch.Tensor
+) -> torch.Tensor:
+    """Every pairwise bag kernel value between two collections of bags.
+
+    Assembled with `stack` rather than by writing into a preallocated buffer, so
+    each entry keeps the path back to the embeddings and the bandwidth that
+    produced it: the whole matrix is one node of the graph, not a constant.
+    """
+    bags_rows, bags_cols = list(bags_rows), list(bags_cols)
+    if not bags_rows or not bags_cols:
+        return _empty(bags_rows, bags_cols)
+    return torch.stack([
+        torch.stack([bag_kernel(H_u, w_u, H_v, w_v, sigma) for H_v, w_v in bags_cols])
+        for H_u, w_u in bags_rows
+    ])
 
 
-def bag_gram(bags: Sequence[Bag], sigma: float) -> np.ndarray:
+def bag_gram(bags: Sequence[Bag], sigma: float | torch.Tensor) -> torch.Tensor:
     """The Gram matrix of one collection of bags under kappa^B."""
     return bag_kernel_matrix(bags, bags, sigma)
+
+
+def _empty(bags_rows: list[Bag], bags_cols: list[Bag]) -> torch.Tensor:
+    """The correctly shaped matrix when one side contributes no bag at all.
+
+    A class present in one domain and absent from the other reaches Eq. (23)
+    this way; Eq. (37) then excludes it. The dtype and device follow whichever
+    side does have a bag, so an empty block still composes with the rest.
+    """
+    reference = next((as_tensor(H) for H, _ in bags_rows + bags_cols), None)
+    shape = (len(bags_rows), len(bags_cols))
+    if reference is None:
+        return torch.empty(shape, dtype=DTYPE)
+    return torch.empty(shape, dtype=reference.dtype, device=reference.device)
