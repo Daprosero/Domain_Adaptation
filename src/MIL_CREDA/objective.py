@@ -10,7 +10,9 @@ source-only supervised training.
 
 from __future__ import annotations
 
-import numpy as np
+import torch
+
+from MIL_CREDA import as_matrix, as_tensor
 
 __provenance__ = {
     "revision": "research-concept-r16.md",
@@ -25,7 +27,9 @@ __provenance__ = {
 }
 
 
-def source_loss(G_source: np.ndarray, Y_source: np.ndarray, epsilon: float = 1e-8) -> float:
+def source_loss(
+    G_source: torch.Tensor, Y_source: torch.Tensor, epsilon: float = 1e-8
+) -> torch.Tensor:
     """Implement Eq. (18): the per-bag averaged negative log-likelihood.
 
     `Y_source` holds one-hot bag labels, so the inner sum selects the observed
@@ -37,27 +41,36 @@ def source_loss(G_source: np.ndarray, Y_source: np.ndarray, epsilon: float = 1e-
     """
     if epsilon <= 0:
         raise ValueError("the source stabilizer must be strictly positive")
-    G = np.atleast_2d(np.asarray(G_source, dtype=float))
-    Y = np.atleast_2d(np.asarray(Y_source, dtype=float))
+    G = as_matrix(G_source)
+    Y = as_matrix(Y_source)
     if G.shape != Y.shape:
         raise ValueError("one label vector per bag, over the same classes, is required")
     if G.shape[0] == 0:
         raise ValueError("the supervised term needs at least one source bag")
-    return float(-np.sum(Y * np.log((G + epsilon) / (1.0 + epsilon))) / G.shape[0])
+    return -(Y * torch.log((G + epsilon) / (1.0 + epsilon))).sum() / G.shape[0]
 
 
 def total_objective(
-    supervised: float,
-    global_term: float,
-    local_term: float,
+    supervised: float | torch.Tensor,
+    global_term: float | torch.Tensor,
+    local_term: float | torch.Tensor,
     lambda_global: float,
     lambda_local: float,
-) -> float:
+) -> torch.Tensor:
     """Implement Eq. (39): L_src + lambda_glob L_glob + lambda_loc L_loc.
 
     Both coefficients must be non-negative: a negative one would reward
     misalignment.
+
+    This is the scalar an optimizer is handed. It is a tensor rather than a
+    number for exactly that reason: casting it to a float here would sever the
+    three terms from the encoder, the relevance selector and the classifier that
+    produced them, and leave nothing to differentiate.
     """
     if lambda_global < 0 or lambda_local < 0:
         raise ValueError("both balance coefficients must be non-negative")
-    return float(supervised + lambda_global * global_term + lambda_local * local_term)
+    return (
+        as_tensor(supervised)
+        + lambda_global * as_tensor(global_term)
+        + lambda_local * as_tensor(local_term)
+    )

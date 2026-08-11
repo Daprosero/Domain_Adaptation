@@ -9,7 +9,9 @@ instance embeddings.
 
 from __future__ import annotations
 
-import numpy as np
+import torch
+
+from MIL_CREDA import as_matrix, as_tensor
 
 __provenance__ = {
     "revision": "research-concept-r16.md",
@@ -20,39 +22,38 @@ __provenance__ = {
 
 
 def relevance_logits(
-    H: np.ndarray, V_R: np.ndarray, b_R: np.ndarray, v_R: np.ndarray
-) -> np.ndarray:
+    H: torch.Tensor, V_R: torch.Tensor, b_R: torch.Tensor, v_R: torch.Tensor
+) -> torch.Tensor:
     """Implement Eq. (14): nu = v_R^T tanh(V_R h + b_R), applied per instance.
 
     `H` is (m, d), one embedding per row. The same parameters serve source and
-    target, so an embedding produces the same logit regardless of its domain.
+    target, so an embedding produces the same logit regardless of its domain —
+    and, now that they are tensors, one set of learnable parameters does.
     """
-    H = np.atleast_2d(np.asarray(H, dtype=float))
-    hidden = np.tanh(H @ np.asarray(V_R, dtype=float).T + np.asarray(b_R, dtype=float))
-    return hidden @ np.asarray(v_R, dtype=float)
+    H = as_matrix(H)
+    hidden = torch.tanh(H @ as_tensor(V_R).transpose(0, 1) + as_tensor(b_R))
+    return hidden @ as_tensor(v_R)
 
 
-def bag_weights(logits: np.ndarray) -> np.ndarray:
+def bag_weights(logits: torch.Tensor) -> torch.Tensor:
     """Implement Eq. (15): exponential normalization over the instances of ONE bag.
 
     Never across bags and never mixing domains: the weights express relative
-    relevance among the instances of a single subject.
+    relevance among the instances of a single subject. `softmax` over the single
+    instance axis IS that equation, and it applies the same shift by the maximum
+    the proposal's stabilized form does — the shift cancels in the ratio.
     """
-    logits = np.asarray(logits, dtype=float).ravel()
-    # Shifting by the maximum is the standard stabilization; it leaves the
-    # normalized weights unchanged because the shift cancels in the ratio.
-    shifted = np.exp(logits - logits.max())
-    return shifted / shifted.sum()
+    return torch.softmax(as_tensor(logits).reshape(-1), dim=0)
 
 
-def bag_embedding(H: np.ndarray, weights: np.ndarray) -> np.ndarray:
+def bag_embedding(H: torch.Tensor, weights: torch.Tensor) -> torch.Tensor:
     """Implement Eq. (16): z = sum_a beta_a h_a, a convex combination in R^d.
 
     Invariant under permutations of the bag's instances, since the sum pairs
     each weight with its own embedding.
     """
-    H = np.atleast_2d(np.asarray(H, dtype=float))
-    weights = np.asarray(weights, dtype=float).ravel()
+    H = as_matrix(H)
+    weights = as_tensor(weights).reshape(-1)
     if H.shape[0] != weights.shape[0]:
         raise ValueError("one weight per instance is required")
     return weights @ H

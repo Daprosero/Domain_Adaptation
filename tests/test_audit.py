@@ -9,30 +9,38 @@ been adopted, so `src/` no longer implements the formulations they indict. The
 indicted forms are therefore reproduced in this file: the evidence has to keep
 measuring what was actually wrong, not what replaced it. Reaching into `src/`
 would silently turn this level into a test of the correction.
+
+The reproductions are in torch, like everything else, and over the same 200
+configurations as before the backend conversion — which is what makes re-running
+this level a genuine re-establishment of both findings rather than a fresh draw
+that happens to agree.
 """
 
 from __future__ import annotations
 
-import numpy as np
+import torch
+from conftest import one_hot
 from findings import FINDINGS
 from sweep import SWEEP_SIZE, sweep
+
+from MIL_CREDA import as_matrix, as_tensor
 
 DECLARED_LOCAL_NORMALIZER = 4.0
 EPSILON_SRC = 1e-8
 
 
-def indicted_normalized_local_distance(squared_distance: float) -> float:
+def indicted_normalized_local_distance(squared_distance) -> torch.Tensor:
     """Eq. (38) AS DECLARED IN r14: l_loc,j = d_j^2 / 4."""
-    return float(squared_distance / DECLARED_LOCAL_NORMALIZER)
+    return as_tensor(squared_distance) / DECLARED_LOCAL_NORMALIZER
 
 
 def indicted_source_loss(
-    G_source: np.ndarray, Y_source: np.ndarray, epsilon: float = EPSILON_SRC
-) -> float:
+    G_source: torch.Tensor, Y_source: torch.Tensor, epsilon: float = EPSILON_SRC
+) -> torch.Tensor:
     """Eq. (18) AS DECLARED IN r14: the stabilizer sits inside the logarithm."""
-    G = np.atleast_2d(np.asarray(G_source, dtype=float))
-    Y = np.atleast_2d(np.asarray(Y_source, dtype=float))
-    return float(-np.sum(Y * np.log(G + epsilon)) / G.shape[0])
+    G = as_matrix(G_source)
+    Y = as_matrix(Y_source)
+    return -(Y * torch.log(G + epsilon)).sum() / G.shape[0]
 
 
 def test_every_finding_declares_a_remedy() -> None:
@@ -62,17 +70,17 @@ def test_finding_local_normalizer_loose_by_two() -> None:
     measured = 0
     for configuration in sweep():
         distances = configuration["squared_distances"]
-        if distances.size == 0:
+        if distances.numel() == 0:
             continue
-        measured += int(distances.size)
+        measured += int(distances.numel())
         largest = max(largest, float(distances.max()))
-        exceeding += int(np.count_nonzero(distances >= 2.0))
+        exceeding += int((distances >= 2.0).sum())
 
     assert measured > 0, "the sweep produced no target bag to measure"
     assert exceeding == 0, f"{exceeding} of {measured} distances reached the declared bound"
     assert largest < 2.0
     # The defect: under the indicted normalizer the loss cannot leave the lower half.
-    assert indicted_normalized_local_distance(largest) < 0.5
+    assert float(indicted_normalized_local_distance(largest)) < 0.5
     # And the bound is genuinely approached, so 2 is tight rather than another
     # arbitrary constant: the adopted normalizer uses the full range.
     assert largest > 1.99
@@ -89,8 +97,8 @@ def test_finding_source_stabilizer_breaks_non_negativity() -> None:
     minimum = 0.0
     for configuration in sweep():
         scores = configuration["source_scores"]
-        one_hot = np.eye(configuration["n_classes"])[configuration["source_labels"]]
-        value = indicted_source_loss(scores, one_hot)
+        labels = one_hot(configuration["source_labels"], configuration["n_classes"])
+        value = float(indicted_source_loss(scores, labels))
         minimum = min(minimum, value)
         if value < 0.0:
             negative += 1
