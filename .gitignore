@@ -10,16 +10,12 @@
 __pycache__/
 .ipynb_checkpoints/
 
-# What the bounded benchmark produces, not the benchmark itself.
+# The benchmark's own output travels with it: the harness, the notebooks, the record,
+# the results, the figures and the weights. None of it touches LFS — .gitattributes
+# routes *.pth and these are *.pt.
 #
-# The harness, the notebooks and the record are text and belong in the repository:
-# they are what makes the run reproducible, and they are what a later session reads
-# to learn where the work stood. What is ignored is regenerable output — the
-# checkpoints above all. A gigabyte of weights committed into history doubles the
-# working copy and never comes back out of it, and one command reproduces them.
-#
-# None of this touches LFS: .gitattributes routes *.pth, and these are *.pt.
-# Ignored by path throughout, so CREDA/Models and CREDA/Results stay tracked.
-MIL-CREDA/Models/Benchmark/
-MIL-CREDA/Results/Benchmark/
+# What stays out is the dataset cache, and only that. It is MNIST, USPS and SVHN
+# exactly as torchvision downloads them: somebody else's data, 243 MB of it, that a
+# single line fetches again. Carrying a copy in this repository would be
+# redistributing it, not recording anything about this work.
 .benchmark-data/
