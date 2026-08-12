@@ -10,16 +10,16 @@
 __pycache__/
 .ipynb_checkpoints/
 
-# The bounded benchmark, whole. It is scaffolding for deciding whether the method
-# is worth building an experiment around — not the experiment. What gets published
-# is the real one, once it exists, and until then none of this belongs in the
-# record: not the harness, not the notebooks that drive it, not the summaries,
-# checkpoints or figures it produces.
+# What the bounded benchmark produces, not the benchmark itself.
 #
+# The harness, the notebooks and the record are text and belong in the repository:
+# they are what makes the run reproducible, and they are what a later session reads
+# to learn where the work stood. What is ignored is regenerable output — the
+# checkpoints above all. A gigabyte of weights committed into history doubles the
+# working copy and never comes back out of it, and one command reproduces them.
+#
+# None of this touches LFS: .gitattributes routes *.pth, and these are *.pt.
 # Ignored by path throughout, so CREDA/Models and CREDA/Results stay tracked.
-src/MIL_CREDA_Benchmark/
-MIL-CREDA/Notebooks/Benchmark_*.ipynb
 MIL-CREDA/Models/Benchmark/
 MIL-CREDA/Results/Benchmark/
-MIL-CREDA/Results/Probe_results.json
 .benchmark-data/
