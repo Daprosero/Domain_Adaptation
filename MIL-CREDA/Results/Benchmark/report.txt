@@ -1,0 +1,245 @@
+setting=trained  backbone=resnet18  bags=100x30  split=64/36  epochs=3  seeds=1  device=mps  revision=research-concept-r16.md
+!! 1 repetition(s): the dispersion is zero, so the threshold is zero and every row below declares a winner from a bare difference. These are point estimates, not verdicts.
+
+panorama over 6 transfers, 1 seed(s) each
+
+rung    metric              difference     leans  reading
+A->B    targetAccuracy    -0.1435 ± 0.070     1/6    what the bag representation buys, with adaptation off
+A->B    sourceAccuracy    -0.0648 ± 0.026     0/6    what the bag representation buys, with adaptation off
+A->C    targetAccuracy    +0.0185 ± 0.009     3/6    what CREDA's alignment buys, unweighted
+A->C    sourceAccuracy    +0.0000 ± 0.000     0/6    what CREDA's alignment buys, unweighted
+C->D    targetAccuracy    -0.0694 ± 0.036     1/6    what confidence weighting buys in CREDA
+C->D    sourceAccuracy    -0.0046 ± 0.005     0/6    what confidence weighting buys in CREDA
+B->E    targetAccuracy    +0.0278 ± 0.019     5/6    what the global term buys, unweighted
+B->E    sourceAccuracy    -0.0046 ± 0.013     2/6    what the global term buys, unweighted
+E->F    targetAccuracy    -0.0417 ± 0.024     1/6    what confidence weighting buys in MIL-CREDA
+E->F    sourceAccuracy    -0.0278 ± 0.010     0/6    what confidence weighting buys in MIL-CREDA
+F->G    targetAccuracy    -0.0046 ± 0.030     1/6    what the local correspondence buys
+F->G    sourceAccuracy    +0.0185 ± 0.015     3/6    what the local correspondence buys
+C->E    targetAccuracy    -0.1343 ± 0.078     1/6    the same rung, built two ways: unweighted
+C->E    sourceAccuracy    -0.0694 ± 0.028     0/6    the same rung, built two ways: unweighted
+D->F    targetAccuracy    -0.1065 ± 0.052     1/6    the same rung, built two ways: weighted
+D->F    sourceAccuracy    -0.0926 ± 0.024     0/6    the same rung, built two ways: weighted
+D->G    targetAccuracy    -0.1111 ± 0.059     2/6    head to head, each method complete
+D->G    sourceAccuracy    -0.0741 ± 0.021     0/6    head to head, each method complete
+H1->G   targetAccuracy    -0.1435 ± 0.068     1/6    what learned attention buys over a uniform bag mean
+H1->G   sourceAccuracy    -0.0463 ± 0.032     1/6    what learned attention buys over a uniform bag mean
+H2->G   targetAccuracy    +0.0741 ± 0.080     3/6    what learned attention buys over an arbitrary fixed one
+H2->G   sourceAccuracy    +0.1759 ± 0.033     6/6    what learned attention buys over an arbitrary fixed one
+
+[M->U]
+setting=trained  backbone=resnet18  data=M->U  seeds=1  revision=research-concept-r16.md
+
+dimension                                 baseline             new  winner
+A->B targetAccuracy                     0.7778 ± 0      0.4722 ± 0  baseline
+A->B sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
+A->C targetAccuracy                     0.7778 ± 0      0.8333 ± 0  new
+A->C sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+C->D targetAccuracy                     0.8333 ± 0      0.7222 ± 0  baseline
+C->D sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+B->E targetAccuracy                     0.4722 ± 0      0.5556 ± 0  new
+B->E sourceAccuracy                     0.9444 ± 0      0.9722 ± 0  new
+E->F targetAccuracy                     0.5556 ± 0      0.4444 ± 0  baseline
+E->F sourceAccuracy                     0.9722 ± 0      0.9444 ± 0  baseline
+F->G targetAccuracy                     0.4444 ± 0      0.3889 ± 0  baseline
+F->G sourceAccuracy                     0.9444 ± 0      0.9444 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+C->E targetAccuracy                     0.8333 ± 0      0.5556 ± 0  baseline
+C->E sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
+D->F targetAccuracy                     0.7222 ± 0      0.4444 ± 0  baseline
+D->F sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
+D->G targetAccuracy                     0.7222 ± 0      0.3889 ± 0  baseline
+D->G sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
+H1->G targetAccuracy                    0.5833 ± 0      0.3889 ± 0  baseline
+H1->G sourceAccuracy                    0.9444 ± 0      0.9444 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+H2->G targetAccuracy                    0.3889 ± 0      0.3889 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+H2->G sourceAccuracy                    0.8056 ± 0      0.9444 ± 0  new
+
+new wins on 4, baseline on 13, 5 indistinguishable, 0 not applicable
+  new:      A->C targetAccuracy, B->E targetAccuracy, B->E sourceAccuracy, H2->G sourceAccuracy
+  baseline: A->B targetAccuracy, A->B sourceAccuracy, C->D targetAccuracy, E->F targetAccuracy, E->F sourceAccuracy, F->G targetAccuracy, C->E targetAccuracy, C->E sourceAccuracy, D->F targetAccuracy, D->F sourceAccuracy, D->G targetAccuracy, D->G sourceAccuracy, H1->G targetAccuracy
+
+[U->M]
+setting=trained  backbone=resnet18  data=U->M  seeds=1  revision=research-concept-r16.md
+
+dimension                                 baseline             new  winner
+A->B targetAccuracy                     0.9722 ± 0      0.8333 ± 0  baseline
+A->B sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+A->C targetAccuracy                     0.9722 ± 0           1 ± 0  new
+A->C sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+C->D targetAccuracy                          1 ± 0      0.9722 ± 0  baseline
+C->D sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+B->E targetAccuracy                     0.8333 ± 0      0.8611 ± 0  new
+B->E sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+E->F targetAccuracy                     0.8611 ± 0      0.8611 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+E->F sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+F->G targetAccuracy                     0.8611 ± 0           1 ± 0  new
+F->G sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
+C->E targetAccuracy                          1 ± 0      0.8611 ± 0  baseline
+C->E sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+D->F targetAccuracy                     0.9722 ± 0      0.8611 ± 0  baseline
+D->F sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+D->G targetAccuracy                     0.9722 ± 0           1 ± 0  new
+D->G sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
+H1->G targetAccuracy                         1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+H1->G sourceAccuracy                    0.9444 ± 0      0.9722 ± 0  new
+H2->G targetAccuracy                    0.6111 ± 0           1 ± 0  new
+H2->G sourceAccuracy                    0.8611 ± 0      0.9722 ± 0  new
+
+new wins on 7, baseline on 6, 9 indistinguishable, 0 not applicable
+  new:      A->C targetAccuracy, B->E targetAccuracy, F->G targetAccuracy, D->G targetAccuracy, H1->G sourceAccuracy, H2->G targetAccuracy, H2->G sourceAccuracy
+  baseline: A->B targetAccuracy, C->D targetAccuracy, F->G sourceAccuracy, C->E targetAccuracy, D->F targetAccuracy, D->G sourceAccuracy
+
+[M->S]
+setting=trained  backbone=resnet18  data=M->S  seeds=1  revision=research-concept-r16.md
+
+dimension                                 baseline             new  winner
+A->B targetAccuracy                    0.08333 ± 0      0.2222 ± 0  new
+A->B sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+A->C targetAccuracy                    0.08333 ± 0     0.08333 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+A->C sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+C->D targetAccuracy                    0.08333 ± 0      0.1389 ± 0  new
+C->D sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+B->E targetAccuracy                     0.2222 ± 0        0.25 ± 0  new
+B->E sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
+E->F targetAccuracy                       0.25 ± 0        0.25 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+E->F sourceAccuracy                     0.9444 ± 0      0.8889 ± 0  baseline
+F->G targetAccuracy                       0.25 ± 0      0.1944 ± 0  baseline
+F->G sourceAccuracy                     0.8889 ± 0      0.9722 ± 0  new
+C->E targetAccuracy                    0.08333 ± 0        0.25 ± 0  new
+C->E sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
+D->F targetAccuracy                     0.1389 ± 0        0.25 ± 0  new
+D->F sourceAccuracy                          1 ± 0      0.8889 ± 0  baseline
+D->G targetAccuracy                     0.1389 ± 0      0.1944 ± 0  new
+D->G sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
+H1->G targetAccuracy                   0.08333 ± 0      0.1944 ± 0  new
+H1->G sourceAccuracy                         1 ± 0      0.9722 ± 0  baseline
+H2->G targetAccuracy                    0.1944 ± 0      0.1944 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+H2->G sourceAccuracy                    0.6389 ± 0      0.9722 ± 0  new
+
+new wins on 9, baseline on 7, 6 indistinguishable, 0 not applicable
+  new:      A->B targetAccuracy, C->D targetAccuracy, B->E targetAccuracy, F->G sourceAccuracy, C->E targetAccuracy, D->F targetAccuracy, D->G targetAccuracy, H1->G targetAccuracy, H2->G sourceAccuracy
+  baseline: B->E sourceAccuracy, E->F sourceAccuracy, F->G targetAccuracy, C->E sourceAccuracy, D->F sourceAccuracy, D->G sourceAccuracy, H1->G sourceAccuracy
+
+[S->M]
+setting=trained  backbone=resnet18  data=S->M  seeds=1  revision=research-concept-r16.md
+
+dimension                                 baseline             new  winner
+A->B targetAccuracy                     0.7222 ± 0      0.3889 ± 0  baseline
+A->B sourceAccuracy                     0.4167 ± 0      0.2778 ± 0  baseline
+A->C targetAccuracy                     0.7222 ± 0      0.7222 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+A->C sourceAccuracy                     0.4167 ± 0      0.4167 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+C->D targetAccuracy                     0.7222 ± 0      0.5278 ± 0  baseline
+C->D sourceAccuracy                     0.4167 ± 0      0.3889 ± 0  baseline
+B->E targetAccuracy                     0.3889 ± 0      0.3333 ± 0  baseline
+B->E sourceAccuracy                     0.2778 ± 0      0.2778 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+E->F targetAccuracy                     0.3333 ± 0      0.3611 ± 0  new
+E->F sourceAccuracy                     0.2778 ± 0        0.25 ± 0  baseline
+F->G targetAccuracy                     0.3611 ± 0      0.3333 ± 0  baseline
+F->G sourceAccuracy                       0.25 ± 0        0.25 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+C->E targetAccuracy                     0.7222 ± 0      0.3333 ± 0  baseline
+C->E sourceAccuracy                     0.4167 ± 0      0.2778 ± 0  baseline
+D->F targetAccuracy                     0.5278 ± 0      0.3611 ± 0  baseline
+D->F sourceAccuracy                     0.3889 ± 0        0.25 ± 0  baseline
+D->G targetAccuracy                     0.5278 ± 0      0.3333 ± 0  baseline
+D->G sourceAccuracy                     0.3889 ± 0        0.25 ± 0  baseline
+H1->G targetAccuracy                    0.5833 ± 0      0.3333 ± 0  baseline
+H1->G sourceAccuracy                    0.4444 ± 0        0.25 ± 0  baseline
+H2->G targetAccuracy                    0.1667 ± 0      0.3333 ± 0  new
+H2->G sourceAccuracy                    0.1111 ± 0        0.25 ± 0  new
+
+new wins on 3, baseline on 15, 4 indistinguishable, 0 not applicable
+  new:      E->F targetAccuracy, H2->G targetAccuracy, H2->G sourceAccuracy
+  baseline: A->B targetAccuracy, A->B sourceAccuracy, C->D targetAccuracy, C->D sourceAccuracy, B->E targetAccuracy, E->F sourceAccuracy, F->G targetAccuracy, C->E targetAccuracy, C->E sourceAccuracy, D->F targetAccuracy, D->F sourceAccuracy, D->G targetAccuracy, D->G sourceAccuracy, H1->G targetAccuracy, H1->G sourceAccuracy
+
+[U->S]
+setting=trained  backbone=resnet18  data=U->S  seeds=1  revision=research-concept-r16.md
+
+dimension                                 baseline             new  winner
+A->B targetAccuracy                     0.1944 ± 0      0.1111 ± 0  baseline
+A->B sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
+A->C targetAccuracy                     0.1944 ± 0      0.2222 ± 0  new
+A->C sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+C->D targetAccuracy                     0.2222 ± 0      0.1944 ± 0  baseline
+C->D sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+B->E targetAccuracy                     0.1111 ± 0      0.1667 ± 0  new
+B->E sourceAccuracy                     0.9444 ± 0      0.9722 ± 0  new
+E->F targetAccuracy                     0.1667 ± 0     0.08333 ± 0  baseline
+E->F sourceAccuracy                     0.9722 ± 0      0.9167 ± 0  baseline
+F->G targetAccuracy                    0.08333 ± 0     0.08333 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+F->G sourceAccuracy                     0.9167 ± 0      0.9444 ± 0  new
+C->E targetAccuracy                     0.2222 ± 0      0.1667 ± 0  baseline
+C->E sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
+D->F targetAccuracy                     0.1944 ± 0     0.08333 ± 0  baseline
+D->F sourceAccuracy                          1 ± 0      0.9167 ± 0  baseline
+D->G targetAccuracy                     0.1944 ± 0     0.08333 ± 0  baseline
+D->G sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
+H1->G targetAccuracy                    0.2778 ± 0     0.08333 ± 0  baseline
+H1->G sourceAccuracy                         1 ± 0      0.9444 ± 0  baseline
+H2->G targetAccuracy                    0.2778 ± 0     0.08333 ± 0  baseline
+H2->G sourceAccuracy                    0.7778 ± 0      0.9444 ± 0  new
+
+new wins on 5, baseline on 14, 3 indistinguishable, 0 not applicable
+  new:      A->C targetAccuracy, B->E targetAccuracy, B->E sourceAccuracy, F->G sourceAccuracy, H2->G sourceAccuracy
+  baseline: A->B targetAccuracy, A->B sourceAccuracy, C->D targetAccuracy, E->F targetAccuracy, E->F sourceAccuracy, C->E targetAccuracy, C->E sourceAccuracy, D->F targetAccuracy, D->F sourceAccuracy, D->G targetAccuracy, D->G sourceAccuracy, H1->G targetAccuracy, H1->G sourceAccuracy, H2->G targetAccuracy
+
+[S->U]
+setting=trained  backbone=resnet18  data=S->U  seeds=1  revision=research-concept-r16.md
+
+dimension                                 baseline             new  winner
+A->B targetAccuracy                     0.4722 ± 0      0.3333 ± 0  baseline
+A->B sourceAccuracy                        0.5 ± 0      0.3611 ± 0  baseline
+A->C targetAccuracy                     0.4722 ± 0      0.4722 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+A->C sourceAccuracy                        0.5 ± 0         0.5 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+C->D targetAccuracy                     0.4722 ± 0      0.3611 ± 0  baseline
+C->D sourceAccuracy                        0.5 ± 0         0.5 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+B->E targetAccuracy                     0.3333 ± 0      0.3611 ± 0  new
+B->E sourceAccuracy                     0.3611 ± 0      0.3333 ± 0  baseline
+E->F targetAccuracy                     0.3611 ± 0      0.2778 ± 0  baseline
+E->F sourceAccuracy                     0.3333 ± 0      0.3333 ± 0  indistinguishable
+                                                                    (the means are closer than their combined standard error)
+F->G targetAccuracy                     0.2778 ± 0        0.25 ± 0  baseline
+F->G sourceAccuracy                     0.3333 ± 0      0.3611 ± 0  new
+C->E targetAccuracy                     0.4722 ± 0      0.3611 ± 0  baseline
+C->E sourceAccuracy                        0.5 ± 0      0.3333 ± 0  baseline
+D->F targetAccuracy                     0.3611 ± 0      0.2778 ± 0  baseline
+D->F sourceAccuracy                        0.5 ± 0      0.3333 ± 0  baseline
+D->G targetAccuracy                     0.3611 ± 0        0.25 ± 0  baseline
+D->G sourceAccuracy                        0.5 ± 0      0.3611 ± 0  baseline
+H1->G targetAccuracy                    0.5833 ± 0        0.25 ± 0  baseline
+H1->G sourceAccuracy                    0.3889 ± 0      0.3611 ± 0  baseline
+H2->G targetAccuracy                    0.1667 ± 0        0.25 ± 0  new
+H2->G sourceAccuracy                    0.1944 ± 0      0.3611 ± 0  new
+
+new wins on 4, baseline on 14, 4 indistinguishable, 0 not applicable
+  new:      B->E targetAccuracy, F->G sourceAccuracy, H2->G targetAccuracy, H2->G sourceAccuracy
+  baseline: A->B targetAccuracy, A->B sourceAccuracy, C->D targetAccuracy, B->E sourceAccuracy, E->F targetAccuracy, F->G targetAccuracy, C->E targetAccuracy, C->E sourceAccuracy, D->F targetAccuracy, D->F sourceAccuracy, D->G targetAccuracy, D->G sourceAccuracy, H1->G targetAccuracy, H1->G sourceAccuracy
