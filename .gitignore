@@ -9,3 +9,17 @@
 # Created by proposal-implementation: the target's own environment
 __pycache__/
 .ipynb_checkpoints/
+
+# The bounded benchmark, whole. It is scaffolding for deciding whether the method
+# is worth building an experiment around — not the experiment. What gets published
+# is the real one, once it exists, and until then none of this belongs in the
+# record: not the harness, not the notebooks that drive it, not the summaries,
+# checkpoints or figures it produces.
+#
+# Ignored by path throughout, so CREDA/Models and CREDA/Results stay tracked.
+src/MIL_CREDA_Benchmark/
+MIL-CREDA/Notebooks/Benchmark_*.ipynb
+MIL-CREDA/Models/Benchmark/
+MIL-CREDA/Results/Benchmark/
+MIL-CREDA/Results/Probe_results.json
+.benchmark-data/
