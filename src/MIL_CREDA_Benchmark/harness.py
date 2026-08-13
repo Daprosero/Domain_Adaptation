@@ -496,3 +496,4 @@ def render_transfer(summary: dict, transfer: str) -> str:
         "seeds": len(summary["reduction"]["seeds"]),
         "revision": summary["reduction"]["revision"],
     })
+

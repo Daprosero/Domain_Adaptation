@@ -2,7 +2,7 @@
   "arm": "G",
   "transfer": "M->S",
   "seed": 0,
-  "targetAccuracy": 0.19444444444444445,
+  "targetAccuracy": 0.1388888888888889,
   "sourceAccuracy": 0.9722222222222222,
   "reduction": {
     "setting": "trained",

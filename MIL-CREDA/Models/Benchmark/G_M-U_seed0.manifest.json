@@ -2,8 +2,8 @@
   "arm": "G",
   "transfer": "M->U",
   "seed": 0,
-  "targetAccuracy": 0.3888888888888889,
-  "sourceAccuracy": 0.9444444444444444,
+  "targetAccuracy": 0.4166666666666667,
+  "sourceAccuracy": 0.9722222222222222,
   "reduction": {
     "setting": "trained",
     "revision": "research-concept-r16.md",

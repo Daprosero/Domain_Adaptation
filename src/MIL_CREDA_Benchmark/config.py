@@ -4,8 +4,8 @@ Two constants separate the pilot from the full configuration — `EPOCHS` and
 `SEEDS` — and nothing else. That is deliberate: the pilot has to exercise the
 same path the full run will, or it proves nothing about it.
 
-    pilot:  EPOCHS = 3,  SEEDS = [0]           54 runs
-    full:   EPOCHS = 20, SEEDS = range(30)   1620 runs
+    pilot:  EPOCHS = 3,  SEEDS = [0]           60 runs
+    full:   EPOCHS = 20, SEEDS = range(30)   1800 runs
 
 Read the header of any summary before reading its numbers. A table produced with
 one seed carries a threshold of zero, so every row declares a winner from a bare
@@ -129,37 +129,64 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 # local       the subject-to-subject correspondence, which CREDA has no analogue of
 # attention   how a bag becomes a representation, for bag-unit arms
 
+#: selection   which instances of a bag the arm is allowed to look at: None for
+#:             all of them, or a rule that keeps `SELECT_K` of the `INSTANCES_PER_BAG`
+#:
+#: The display name is what every table and figure prints, and the asterisks in it
+#: count what the arm lacks: `CREDA*` is CREDA without the confidence weighting,
+#: `MIL-CREDA**` lacks the local term and the weighting, `MIL-CREDA*` lacks only
+#: the local term, and an unmarked name is the complete method.
+
 ARMS = [
-    {"id": "A", "label": "source-only (instances)",
+    {"id": "A", "name": "Baseline", "label": "source-only (instances)",
      "unit": "instance", "adaptation": None, "weighting": False, "local": False,
-     "attention": None},
-    {"id": "B", "label": "source-only (bags)",
-     "unit": "bag", "adaptation": None, "weighting": False, "local": False,
-     "attention": "learned"},
-    {"id": "C", "label": "CREDA, unweighted",
+     "attention": None, "selection": None},
+    {"id": "C", "name": "CREDA*", "label": "CREDA, unweighted",
      "unit": "instance", "adaptation": "creda", "weighting": False, "local": False,
-     "attention": None},
-    {"id": "D", "label": "CREDA, weighted (full)",
+     "attention": None, "selection": None},
+    {"id": "D", "name": "CREDA", "label": "CREDA, weighted (full)",
      "unit": "instance", "adaptation": "creda", "weighting": True, "local": False,
-     "attention": None},
-    {"id": "E", "label": "MIL-CREDA global, unweighted",
+     "attention": None, "selection": None},
+    {"id": "B", "name": "MIL-Baseline", "label": "source-only (bags)",
+     "unit": "bag", "adaptation": None, "weighting": False, "local": False,
+     "attention": "learned", "selection": None},
+    {"id": "E", "name": "MIL-CREDA**", "label": "MIL-CREDA global, unweighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": False, "local": False,
-     "attention": "learned"},
-    {"id": "F", "label": "MIL-CREDA global, weighted",
+     "attention": "learned", "selection": None},
+    {"id": "F", "name": "MIL-CREDA*", "label": "MIL-CREDA global, weighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": False,
-     "attention": "learned"},
-    {"id": "G", "label": "MIL-CREDA full (global + local)",
+     "attention": "learned", "selection": None},
+    {"id": "G", "name": "MIL-CREDA", "label": "MIL-CREDA full (global + local)",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned"},
-    {"id": "H1", "label": "MIL-CREDA full, uniform attention",
+     "attention": "learned", "selection": None},
+    {"id": "SU", "name": "MIL-CREDA-U", "label": "MIL-CREDA full, regular selection",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "uniform"},
-    {"id": "H2", "label": "MIL-CREDA full, random attention",
+     "attention": "learned", "selection": "regular"},
+    {"id": "SA", "name": "MIL-CREDA-A", "label": "MIL-CREDA full, arbitrary selection",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "random"},
+     "attention": "learned", "selection": "arbitrary"},
+    {"id": "SK", "name": "MIL-CREDA-K", "label": "MIL-CREDA full, top-K selection",
+     "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
+     "attention": "learned", "selection": "topk"},
 ]
 
 ARMS_BY_ID = {arm["id"]: arm for arm in ARMS}
+
+#: The display order of every table and figure: the order the arms are declared in.
+ARM_ORDER = [arm["id"] for arm in ARMS]
+NAME_OF = {arm["id"]: arm["name"] for arm in ARMS}
+
+#: How many of a bag's instances a selecting arm keeps. The three selecting arms
+#: hold this budget fixed and differ only in the rule that picks them, so the rung
+#: between any two of them is attributable to the rule. `SK -> G` is the separate
+#: question of what the budget itself costs.
+SELECT_K = 10
+
+#: The arbitrary selection is drawn once from a generator of its own and never
+#: again. Two reasons: re-drawing every step would test noise rather than test the
+#: rule, and drawing from the training generator would shift every later draw, so
+#: the rung would credit the selection with what the offset did.
+SELECTION_SEED = 20250812
 
 #: What each rung of the ladder reads. A comparison is only attributable when its
 #: two arms differ in one thing, so the pairs are written out rather than left to
@@ -174,8 +201,11 @@ LADDER = [
     ("C", "E", "the same rung, built two ways: unweighted"),
     ("D", "F", "the same rung, built two ways: weighted"),
     ("D", "G", "head to head, each method complete"),
-    ("H1", "G", "what learned attention buys over a uniform bag mean"),
-    ("H2", "G", "what learned attention buys over an arbitrary fixed one"),
+    # The three below hold the instance budget at SELECT_K and differ only in the
+    # rule that spends it, except the last, which is the budget itself.
+    ("SU", "SK", "what attention-based selection buys over a regular one"),
+    ("SA", "SK", "what it buys over an arbitrary fixed selection"),
+    ("SK", "G", "what keeping only the top instances costs against keeping all"),
 ]
 
 #: Which direction wins each dimension. The two costs and the parameter count are
@@ -196,16 +226,94 @@ DIMENSIONS = {
 #: of thirty draws, and its latent space describes the luckiest run rather than
 #: the method.
 #:
-#: The two complete methods get five, because every latent measurement is reported
-#: with its dispersion and one model gives none. Their floors get three: they are
-#: the reference the adapted space is compared against, and a coarser estimate is
-#: enough for a reference. At roughly 45 MB each this is about 4.3 GB, all of it
-#: local and ignored by git.
-CHECKPOINTS = {"A": 3, "B": 3, "D": 5, "G": 5}
+#: Every arm gets three, and the reason is which arms the figures will need: the
+#: latent grid shows the three best adaptations, and which three those are is only
+#: known once the campaign has ranked them. Keeping weights for four arms and
+#: discovering afterwards that the ranking names a fifth would cost the whole run
+#: again. Three is the smallest count that still gives every latent measurement a
+#: dispersion. At roughly 45 MB each this is about 8 GB, written as the run goes,
+#: all of it local and ignored by git — cheap against a day and a half of compute.
+CHECKPOINTS = {arm["id"]: 3 for arm in ARMS}
 
 #: Which floor each adapted arm is read against: same unit, same everything, with
 #: the adaptation term switched off.
-FLOOR_OF = {"D": "A", "G": "B"}
+FLOOR_OF = {"D": "A", "G": "B", "F": "B", "E": "B", "SU": "B", "SA": "B", "SK": "B",
+            "C": "A"}
+
+# ------------------------------------------------------------------- figures
+
+#: How many transfers the figures show. Three and not six: six rows at a legible
+#: panel size do not fit on a page, and the tables already carry every transfer.
+FIGURE_TRANSFER_COUNT = 3
+
+#: And which three: the ones where the methods reach the highest mean target
+#: accuracy, computed from the campaign rather than written here. Two things
+#: follow from that and both have to be said rather than assumed.
+#:
+#: It is a choice made by the outcome, so it is declared in every caption. What
+#: makes it defensible is that the alternative is worse for this particular
+#: figure: the latent space of a transfer where every method sits near chance is a
+#: picture of a model that did not learn, and nothing about alignment can be read
+#: off it. Showing where adaptation actually happened is the informative choice as
+#: long as nobody is told it was the neutral one.
+#:
+#: What it must never touch is *which draw* is shown. That stays the display seed,
+#: chosen by a rule that favours no method, because choosing the draw by the
+#: outcome is how a figure stops being able to come out wrong.
+FIGURE_TRANSFER_RULE = "mayor exactitud media en destino sobre todos los métodos"
+
+#: The columns of the latent grid after the shared original space: both floors,
+#: both CREDA, all three MIL-CREDA. The floors are what make the rest readable —
+#: "aligned" cannot be seen without a "not aligned" beside it.
+#:
+#: Both floors and not one, because whether they are redundant is a measurement
+#: and the measurement says they are not: drawn at the instance level on the pilot,
+#: their distance ratios differ by up to 0.38 and their domain separabilities by
+#: 0.07. They train the same encoder through different objectives — cross-entropy
+#: per instance against cross-entropy per bag through the attention pooling — so
+#: their instance embeddings had no reason to agree. `latent.floors_agree` runs
+#: that check on every campaign rather than leaving it as a belief.
+#:
+#: The selecting arms are left out because they differ from `G` in their instance
+#: budget rather than in what they align: a phase-one question, not a picture.
+LATENT_PANELS = ["A", "B", "C", "D", "E", "F", "G"]
+
+#: Whether `MIL-Baseline` is redundant with `Baseline` once both are drawn at the
+#: instance level is a measurement, not an assumption: the two train the same
+#: encoder through different objectives — per instance against per bag through the
+#: attention pooling — so their instance embeddings need not agree at all. The
+#: notebook measures how far apart they are and says so, and this constant is
+#: what the answer is checked against rather than a belief about it.
+FLOORS_AGREE_WITHIN = 0.05
+
+#: Every panel is drawn at the **instance** level, bag-unit arms included. Every
+#: arm encodes instances — that is where Eq. (13) applies — so it is a space they
+#: all have, and it is the only way the panels carry the same number of points.
+#: One point per subject beside one point per instance made the CREDA columns look
+#: like they covered the space and the MIL columns look sparse, which is the
+#: statistical unit drawn rather than anything about alignment.
+#:
+#: The bag-level view is not lost: the phase-two tables measure each arm in its own
+#: unit, which is where that distinction belongs.
+LATENT_UNIT = "instance"
+
+#: Points per domain in each panel of the grid, stratified by class. Every panel
+#: gets the same number so no column looks denser than another; 300 is thirty per
+#: class, enough to see a cluster and few enough that UMAP is quick over 21 panels.
+LATENT_POINTS = 300
+
+#: The bag figure is about the local correspondence, so it shows the arms that
+#: differ in it rather than the arms that rank highest: the floor, the same method
+#: without the local term, and the complete one. If the middle panel looks like
+#: the right one, the local term is doing nothing visible — which is the whole
+#: reason the figure is worth drawing.
+BAG_PANELS = ["B", "F", "G"]
+
+#: One bag of each class is highlighted, the same bags in every panel, and it is
+#: the median of its class by correspondence mass. The best bag of each class
+#: would produce a clean pairing under every arm, including the floor, and a
+#: figure that cannot come out wrong is not measuring anything.
+BAGS_HIGHLIGHTED_PER_CLASS = 1
 
 # ---------------------------------------------------------------------- paths
 

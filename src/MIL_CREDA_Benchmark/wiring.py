@@ -1,10 +1,11 @@
-"""The nine arms: what each one computes, and nothing about how it is trained.
+"""The ten arms: what each one computes, and nothing about how it is trained.
 
 Every arm shares the same encoder, the same linear head, the same data, the same
 schedules and the same optimizer. What separates them is written in `config.ARMS`
 and read here: which statistical unit the arm trains on, which adaptation term it
 carries, whether the target blocks are weighted by confidence, whether the local
-correspondence is on, and how a bag becomes a representation.
+correspondence is on, how a bag becomes a representation, and which of a bag's
+instances the arm is allowed to look at.
 
 Nothing in `src/CREDA/` is modified. `FeatureExtractor` and `CREDALoss` are used
 exactly as they are; the only thing this file decides is which tensors go in.
@@ -92,11 +93,19 @@ class Arm(nn.Module):
             self.v_R = nn.Parameter(torch.empty(config.ATTENTION_WIDTH))
             nn.init.xavier_uniform_(self.V_R)
             nn.init.normal_(self.v_R, std=0.1)
-        elif spec["attention"] == "random":
-            # A fixed arbitrary relevance function: not learned, not uniform, and
-            # deterministic given the embedding. Re-drawing it every step would
-            # test noise rather than test attention.
-            self.register_buffer("r_R", torch.randn(width) / width**0.5)
+        if spec["selection"] in ("regular", "arbitrary"):
+            # Fixed positions, decided once. `regular` walks the bag at an even
+            # stride; `arbitrary` draws from a generator of its own, so the choice
+            # is arbitrary without consuming a single number of the training
+            # generator — otherwise every later draw of the run would shift, and
+            # the rung would credit the selection rule with what the offset did.
+            m, k = config.INSTANCES_PER_BAG, min(config.SELECT_K, config.INSTANCES_PER_BAG)
+            if spec["selection"] == "regular":
+                positions = torch.arange(k) * (m // k)
+            else:
+                own = torch.Generator().manual_seed(config.SELECTION_SEED)
+                positions = torch.randperm(m, generator=own)[:k].sort().values
+            self.register_buffer("positions", positions)
 
         if spec["adaptation"] == "creda":
             # lambda_creda is one because the coefficient is applied outside, from
@@ -117,21 +126,46 @@ class Arm(nn.Module):
         return flat.reshape(B, m, -1)
 
     def weights_for(self, H: torch.Tensor) -> torch.Tensor:
-        """The in-bag weights beta of Eq. (15), by whichever rule this arm uses."""
+        """The in-bag weights beta of Eq. (15), over whatever instances survive."""
         if self.spec["attention"] == "learned":
-            logits = relevance_logits(H, self.V_R, self.b_R, self.v_R)
-        elif self.spec["attention"] == "random":
-            logits = H @ self.r_R
-        else:                                   # uniform: Eq. (16) with beta = 1/m
-            return torch.full((H.shape[0],), 1.0 / H.shape[0],
-                              dtype=H.dtype, device=H.device)
-        return bag_weights(logits)
+            return bag_weights(relevance_logits(H, self.V_R, self.b_R, self.v_R))
+        # uniform: Eq. (16) with beta = 1/m
+        return torch.full((H.shape[0],), 1.0 / H.shape[0],
+                          dtype=H.dtype, device=H.device)
+
+    def select(self, H: torch.Tensor) -> torch.Tensor:
+        """The instances of ONE bag this arm is allowed to look at: (m, d) -> (k, d).
+
+        An arm with no rule keeps all of them. The three that do keep the same
+        number and differ only in which — so a rung between any two of them is
+        attributable to the rule, and the rung against the arm that keeps all of
+        them is the separate question of what the budget costs.
+
+        Selection happens here and nowhere else, so the kernels, the attention,
+        the bag representation and the decision at evaluation all see the same
+        instances. An arm that trained on ten and decided on thirty would be two
+        arms wearing one name.
+        """
+        rule = self.spec["selection"]
+        if rule is None:
+            return H
+        k = min(config.SELECT_K, H.shape[0])
+        if rule == "topk":
+            scores = relevance_logits(H, self.V_R, self.b_R, self.v_R).reshape(-1)
+            keep = torch.topk(scores, k=k).indices.sort().values
+            return H[keep]
+        return H[self.positions[:k].to(H.device)]
+
+    def bags_of(self, embeddings: torch.Tensor) -> list[tuple]:
+        """Every bag as the (instances, weights) pair the rest of the file consumes."""
+        kept = [self.select(H) for H in embeddings]
+        return [(H, self.weights_for(H)) for H in kept]
 
     def bag_representations(self, embeddings: torch.Tensor):
         """Eq. (16) for every bag, plus the weights that produced it."""
-        weights = [self.weights_for(H) for H in embeddings]
-        Z = torch.stack([bag_embedding(H, w) for H, w in zip(embeddings, weights)])
-        return Z, weights
+        pairs = self.bags_of(embeddings)
+        Z = torch.stack([bag_embedding(H, w) for H, w in pairs])
+        return Z, [w for _, w in pairs]
 
     def forward(self, bags: torch.Tensor) -> torch.Tensor:
         """Bag-level scores, whatever unit the arm trains on.
@@ -167,14 +201,15 @@ class Arm(nn.Module):
         their source evidence the same way and the encoder runs once.
         """
         H_t = self.instance_embeddings(target_bags)
-        beta_s = [self.weights_for(H) for H in H_s]
-        beta_t = [self.weights_for(H) for H in H_t]
 
-        sigma = _median_sigma(torch.cat([H_s.reshape(-1, H_s.shape[-1]),
-                                         H_t.reshape(-1, H_t.shape[-1])]))
+        # Selection first: the bandwidth is the median over the instances the
+        # kernels actually operate on, so an arm that keeps ten of thirty gets the
+        # rule applied to its own ten rather than to a set it never sees.
+        bags_s = self.bags_of(H_s)
+        bags_t = self.bags_of(H_t)
+        sigma = _median_sigma(torch.cat([torch.cat([H for H, _ in bags_s]),
+                                         torch.cat([H for H, _ in bags_t])]))
 
-        bags_s = list(zip(H_s, beta_s))
-        bags_t = list(zip(H_t, beta_t))
         K_ss = bag_kernel_matrix(bags_s, bags_s, sigma)
         K_st = bag_kernel_matrix(bags_s, bags_t, sigma)
         K_tt = bag_kernel_matrix(bags_t, bags_t, sigma)
