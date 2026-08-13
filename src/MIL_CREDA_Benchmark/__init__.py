@@ -28,7 +28,71 @@ __benchmark__ = {
         "E": {"sections": ["1", "2", "3", "5"]},
         "F": {"sections": ["1", "2", "3", "5"]},
         "G": {"sections": ["1", "2", "3", "4", "5"]},
-        "H1": {"sections": ["1", "2", "3", "4", "5"]},
-        "H2": {"sections": ["1", "2", "3", "4", "5"]},
+        # The three selecting arms compute exactly what G computes, over a subset
+        # of each bag's instances. Same sections, different budget.
+        "SU": {"sections": ["1", "2", "3", "4", "5"]},
+        "SA": {"sections": ["1", "2", "3", "4", "5"]},
+        "SK": {"sections": ["1", "2", "3", "4", "5"]},
+    },
+    # What the protocol assumes about the prediction being measured. These are what
+    # a change of reach destroys while leaving every arm intact: a formulation that
+    # moved from deciding a class to estimating a quantity would leave all of the
+    # above standing and every dimension below meaningless.
+    # What the report is made of, so the verification can check the document a
+    # human reads without knowing one word of this field. It names which calls
+    # render a measurement, which produce a conclusion, and which way each
+    # dimension wins — and nothing else needs to be guessed from that.
+    "report": {
+        "renderers": [
+            "tables.render",
+            "tables.render_rungs",
+            "tables.render_readings",
+            "harness.render_panorama",
+        ],
+        "conclusions": [
+            "tables.conclusion",
+            "tables.conclusion_rungs",
+            "tables.conclusion_geometry",
+            "tables.conclusion_correspondence",
+        ],
+        # One call that takes a record and returns {label: text}. It exists so the
+        # verification can run every conclusion over permuted numbers without
+        # knowing a single signature: a conclusion whose text survives that is tied
+        # to nothing, exactly as an assertion that cannot fail proves nothing.
+        "conclusionEntry": "tables.conclusions",
+        # Constants that name a subset of another constant. Each one is a selection
+        # somebody wrote out, which is legitimate only when the rule that fixed it
+        # looks at no outcome — so the rule is stated here and can be argued with,
+        # instead of being inferred from the shape of a list.
+        "selections": {
+            "SEEDS": "el piloto: un prefijo de FULL_SEEDS, y las dos escalas se "
+                     "informan juntas en cada tabla",
+            "LATENT_PANELS": "los métodos que alinean, elegidos por lo que computan "
+                             "y no por lo que puntúan; los pisos entran por medición",
+            "BAG_PANELS": "el peldaño donde vive el término local: piso, sin el "
+                          "término y con él, elegidos por el mecanismo",
+        },
+        # Where the record a conclusion is exercised against lives.
+        "record": "latent.json",
+        "dimensions": {
+            "targetAccuracy": "higher",
+            "sourceAccuracy": "higher",
+            "seconds": "lower",
+            "contribution": "descriptive",
+            "peakMiB": "descriptive",
+            "parameters": "descriptive",
+            "geometry.ratio": "lower",
+            "geometry.crossDomainSameClass": "descriptive",
+            "geometry.betweenClasses": "descriptive",
+            "domainSeparability": "toward-chance",
+            "correspondence.massOnTrueClass": "higher",
+            "attentionSpread": "descriptive",
+        },
+    },
+    "premises": {
+        "prediction": "a single class per bag, chosen from CLASSES alternatives",
+        "unit": "the bag, for every arm, including the instance-unit ones",
+        "metric": "accuracy over the evaluation bags of the target domain",
+        "direction": "higher is better",
     },
 }

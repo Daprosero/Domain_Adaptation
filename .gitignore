@@ -11,8 +11,20 @@ __pycache__/
 .ipynb_checkpoints/
 
 # The benchmark's own output travels with it: the harness, the notebooks, the record,
-# the results, the figures and the weights. None of it touches LFS — .gitattributes
-# routes *.pth and these are *.pt.
+# the results and the figures. The weights do not, and that is a reversal of an
+# earlier decision made with a number nobody had measured.
+#
+# Keeping three checkpoints of every arm — which is what lets the figures be chosen
+# after the campaign ranks the arms instead of guessed before it — puts roughly
+# 7.7 GB of binaries into the history at full scale. History is the one thing that
+# cannot be made smaller later without rewriting it, and a repository nobody can
+# clone records nothing.
+#
+# What stays is everything needed to read the run and everything needed to repeat
+# it: the manifests, which record exactly which images formed every bag, beside the
+# results, the figures and the record. What is lost is analysing the latent space
+# without training first — a real cost, stated rather than discovered.
+MIL-CREDA/Models/Benchmark/*.pt
 #
 # What stays out is the dataset cache, and only that. It is MNIST, USPS and SVHN
 # exactly as torchvision downloads them: somebody else's data, 243 MB of it, that a

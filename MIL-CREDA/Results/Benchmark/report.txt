@@ -1,6 +1,126 @@
 setting=trained  backbone=resnet18  bags=100x30  split=64/36  epochs=3  seeds=1  device=mps  revision=research-concept-r16.md
 !! 1 repetition(s): the dispersion is zero, so the threshold is zero and every row below declares a winner from a bare difference. These are point estimates, not verdicts.
 
+tiempo de entrenamiento (s)  ·  resnet18  ·  3 épocas  ·  1 semilla(s)  ·  research-concept-r16.md
+!! 1 repetición(es): el ± de abajo es cero por construcción, no por acuerdo. Son estimaciones puntuales, no resultados.
+!! piloto: el protocolo declara 30 repeticiones y 20 épocas. Nada de esto es un resultado.
+
+Método                    M->U            U->M            M->S            S->M            U->S            S->U    Prom.     máx
+Baseline           5.86 ± 0.00     5.46 ± 0.00     5.56 ± 0.00     5.58 ± 0.00     5.92 ± 0.00     4.23 ± 0.00     5.43    5.43
+CREDA*            12.20 ± 0.00    10.82 ± 0.00    10.13 ± 0.00    10.35 ± 0.00    10.92 ± 0.00     8.74 ± 0.00    10.53   10.53
+CREDA             10.59 ± 0.00    10.05 ± 0.00     9.99 ± 0.00    10.60 ± 0.00    10.22 ± 0.00     8.01 ± 0.00     9.91    9.91
+MIL-Baseline       6.21 ± 0.00     5.64 ± 0.00     5.75 ± 0.00     5.72 ± 0.00     5.68 ± 0.00     4.30 ± 0.00     5.55    5.55
+MIL-CREDA**       13.01 ± 0.00    15.53 ± 0.00    14.15 ± 0.00    14.33 ± 0.00    14.02 ± 0.00    10.55 ± 0.00    13.60   13.60
+MIL-CREDA*        13.87 ± 0.00    14.42 ± 0.00    14.26 ± 0.00    14.26 ± 0.00    14.01 ± 0.00    12.18 ± 0.00    13.83   13.83
+MIL-CREDA         15.48 ± 0.00    15.50 ± 0.00    15.48 ± 0.00    16.00 ± 0.00    16.32 ± 0.00    11.95 ± 0.00    15.12   15.12
+MIL-CREDA-U       15.52 ± 0.00    15.39 ± 0.00    14.89 ± 0.00    14.96 ± 0.00    14.92 ± 0.00    11.46 ± 0.00    14.52   14.52
+MIL-CREDA-A       14.80 ± 0.00    15.05 ± 0.00    16.15 ± 0.00    15.38 ± 0.00    18.99 ± 0.00    11.60 ± 0.00    15.33   15.33
+MIL-CREDA-K       14.71 ± 0.00    15.08 ± 0.00    15.15 ± 0.00    14.94 ± 0.00    18.48 ± 0.00    11.76 ± 0.00    15.02   15.02
+
+Mejor promedio: **Baseline** con 5.43s; peor: MIL-CREDA-A con 15.33s. CREDA queda 4.48s por debajo de su piso Baseline. MIL-CREDA queda 9.57s por debajo de su piso MIL-Baseline. Con esta cantidad de repeticiones nada de lo anterior es un resultado: son estimaciones puntuales y la dispersión es cero por construcción.
+
+exactitud en fuente (%)  ·  resnet18  ·  3 épocas  ·  1 semilla(s)  ·  research-concept-r16.md
+!! 1 repetición(es): el ± de abajo es cero por construcción, no por acuerdo. Son estimaciones puntuales, no resultados.
+!! piloto: el protocolo declara 30 repeticiones y 20 épocas. Nada de esto es un resultado.
+la exactitud se mueve de a 2.78 puntos sobre 36 bolsas de evaluación
+
+Método                    M->U            U->M            M->S            S->M            U->S            S->U    Prom.     máx    peso
+Baseline           100.0 ± 0.0     100.0 ± 0.0     100.0 ± 0.0      41.7 ± 0.0     100.0 ± 0.0      50.0 ± 0.0     81.9    81.9   0.000
+CREDA*             100.0 ± 0.0     100.0 ± 0.0     100.0 ± 0.0      41.7 ± 0.0     100.0 ± 0.0      50.0 ± 0.0     81.9    81.9   0.030
+CREDA              100.0 ± 0.0     100.0 ± 0.0     100.0 ± 0.0      38.9 ± 0.0     100.0 ± 0.0      50.0 ± 0.0     81.5    81.5   0.273
+MIL-Baseline        94.4 ± 0.0     100.0 ± 0.0     100.0 ± 0.0      27.8 ± 0.0      94.4 ± 0.0      36.1 ± 0.0     75.5    75.5   0.000
+MIL-CREDA**         97.2 ± 0.0      97.2 ± 0.0     100.0 ± 0.0      27.8 ± 0.0      86.1 ± 0.0      33.3 ± 0.0     73.6    73.6   0.241
+MIL-CREDA*         100.0 ± 0.0     100.0 ± 0.0      94.4 ± 0.0      25.0 ± 0.0      94.4 ± 0.0      36.1 ± 0.0     75.0    75.0   0.196
+MIL-CREDA           97.2 ± 0.0      97.2 ± 0.0      97.2 ± 0.0      25.0 ± 0.0      91.7 ± 0.0      33.3 ± 0.0     73.6    73.6   0.247
+MIL-CREDA-U         86.1 ± 0.0      88.9 ± 0.0      88.9 ± 0.0      30.6 ± 0.0      86.1 ± 0.0      25.0 ± 0.0     67.6    67.6   0.303
+MIL-CREDA-A         77.8 ± 0.0      97.2 ± 0.0      66.7 ± 0.0       8.3 ± 0.0      86.1 ± 0.0      16.7 ± 0.0     58.8    58.8   0.326
+MIL-CREDA-K         72.2 ± 0.0      94.4 ± 0.0      91.7 ± 0.0      30.6 ± 0.0      83.3 ± 0.0      19.4 ± 0.0     65.3    65.3   0.199
+
+Mejor promedio: **Baseline** con 81.9%; peor: MIL-CREDA-A con 58.8%. CREDA queda 0.5% por debajo de su piso Baseline. MIL-CREDA queda 1.9% por debajo de su piso MIL-Baseline. Con esta cantidad de repeticiones nada de lo anterior es un resultado: son estimaciones puntuales y la dispersión es cero por construcción.
+
+peldaños · exactitud en fuente (%) · diferencia con signo hacia la derecha
+!! 1 repetición(es): el ± de abajo es cero por construcción, no por acuerdo. Son estimaciones puntuales, no resultados.
+!! piloto: el protocolo declara 30 repeticiones y 20 épocas. Nada de esto es un resultado.
+
+Peldaño                           M->U      U->M      M->S      S->M      U->S      S->U     Prom.   a favor
+Baseline → MIL-Baseline           -5.6      +0.0      +0.0     -13.9      -5.6     -13.9      -6.50/6       
+                                what the bag representation buys, with adaptation off
+Baseline → CREDA*                 +0.0      +0.0      +0.0      +0.0      +0.0      +0.0      +0.00/6       
+                                what CREDA's alignment buys, unweighted
+CREDA* → CREDA                    +0.0      +0.0      +0.0      -2.8      +0.0      +0.0      -0.50/6       
+                                what confidence weighting buys in CREDA
+MIL-Baseline → MIL-CREDA**        +2.8      -2.8      +0.0      +0.0      -8.3      -2.8      -1.91/6       
+                                what the global term buys, unweighted
+MIL-CREDA** → MIL-CREDA*          +2.8      +2.8      -5.6      -2.8      +8.3      +2.8      +1.44/6       
+                                what confidence weighting buys in MIL-CREDA
+MIL-CREDA* → MIL-CREDA            -2.8      -2.8      +2.8      +0.0      -2.8      -2.8      -1.41/6       
+                                what the local correspondence buys
+CREDA* → MIL-CREDA**              -2.8      -2.8      +0.0     -13.9     -13.9     -16.7      -8.30/6       
+                                the same rung, built two ways: unweighted
+CREDA → MIL-CREDA*                +0.0      +0.0      -5.6     -13.9      -5.6     -13.9      -6.50/6       
+                                the same rung, built two ways: weighted
+CREDA → MIL-CREDA                 -2.8      -2.8      -2.8     -13.9      -8.3     -16.7      -7.90/6       
+                                head to head, each method complete
+MIL-CREDA-U → MIL-CREDA-K        -13.9      +5.6      +2.8      +0.0      -2.8      -5.6      -2.32/6       
+                                what attention-based selection buys over a regular one
+MIL-CREDA-A → MIL-CREDA-K         -5.6      -2.8     +25.0     +22.2      -2.8      +2.8      +6.53/6       
+                                what it buys over an arbitrary fixed selection
+MIL-CREDA-K → MIL-CREDA          +25.0      +2.8      +5.6      -5.6      +8.3     +13.9      +8.35/6       
+                                what keeping only the top instances costs against keeping all
+
+El peldaño que más se movió es **CREDA* → MIL-CREDA**** (-8.3), que lee the same rung, built two ways: unweighted. Coinciden en las 6 transferencias: Baseline → MIL-Baseline (-6.5), Baseline → CREDA* (+0.0), CREDA* → CREDA (-0.5), CREDA* → MIL-CREDA** (-8.3), CREDA → MIL-CREDA* (-6.5), CREDA → MIL-CREDA (-7.9). Con una sola repetición la coincidencia entre transferencias es lo único que carga peso, y no reemplaza a las repeticiones.
+
+exactitud en destino (%)  ·  resnet18  ·  3 épocas  ·  1 semilla(s)  ·  research-concept-r16.md
+!! 1 repetición(es): el ± de abajo es cero por construcción, no por acuerdo. Son estimaciones puntuales, no resultados.
+!! piloto: el protocolo declara 30 repeticiones y 20 épocas. Nada de esto es un resultado.
+la exactitud se mueve de a 2.78 puntos sobre 36 bolsas de evaluación
+
+Método                    M->U            U->M            M->S            S->M            U->S            S->U    Prom.     máx    peso
+Baseline            77.8 ± 0.0      97.2 ± 0.0       8.3 ± 0.0      72.2 ± 0.0      19.4 ± 0.0      47.2 ± 0.0     53.7    53.7   0.000
+CREDA*              83.3 ± 0.0     100.0 ± 0.0       8.3 ± 0.0      72.2 ± 0.0      22.2 ± 0.0      47.2 ± 0.0     55.6    55.6   0.030
+CREDA               72.2 ± 0.0      97.2 ± 0.0      13.9 ± 0.0      52.8 ± 0.0      19.4 ± 0.0      36.1 ± 0.0     48.6    48.6   0.273
+MIL-Baseline        47.2 ± 0.0      83.3 ± 0.0      22.2 ± 0.0      38.9 ± 0.0      11.1 ± 0.0      33.3 ± 0.0     39.4    39.4   0.000
+MIL-CREDA**         58.3 ± 0.0      86.1 ± 0.0      25.0 ± 0.0      44.4 ± 0.0      13.9 ± 0.0      33.3 ± 0.0     43.5    43.5   0.241
+MIL-CREDA*          52.8 ± 0.0      86.1 ± 0.0      25.0 ± 0.0      33.3 ± 0.0       8.3 ± 0.0      30.6 ± 0.0     39.4    39.4   0.196
+MIL-CREDA           41.7 ± 0.0      94.4 ± 0.0      13.9 ± 0.0      36.1 ± 0.0       8.3 ± 0.0      25.0 ± 0.0     36.6    36.6   0.247
+MIL-CREDA-U         19.4 ± 0.0      80.6 ± 0.0       8.3 ± 0.0      38.9 ± 0.0      19.4 ± 0.0      38.9 ± 0.0     34.3    34.3   0.303
+MIL-CREDA-A         38.9 ± 0.0      63.9 ± 0.0      19.4 ± 0.0      27.8 ± 0.0      13.9 ± 0.0      19.4 ± 0.0     30.6    30.6   0.326
+MIL-CREDA-K         52.8 ± 0.0      86.1 ± 0.0      19.4 ± 0.0      22.2 ± 0.0      22.2 ± 0.0      25.0 ± 0.0     38.0    38.0   0.199
+
+Mejor promedio: **CREDA*** con 55.6%; peor: MIL-CREDA-A con 30.6%. CREDA queda 5.1% por debajo de su piso Baseline. MIL-CREDA queda 2.8% por debajo de su piso MIL-Baseline. Con esta cantidad de repeticiones nada de lo anterior es un resultado: son estimaciones puntuales y la dispersión es cero por construcción.
+
+peldaños · exactitud en destino (%) · diferencia con signo hacia la derecha
+!! 1 repetición(es): el ± de abajo es cero por construcción, no por acuerdo. Son estimaciones puntuales, no resultados.
+!! piloto: el protocolo declara 30 repeticiones y 20 épocas. Nada de esto es un resultado.
+
+Peldaño                           M->U      U->M      M->S      S->M      U->S      S->U     Prom.   a favor
+Baseline → MIL-Baseline          -30.6     -13.9     +13.9     -33.3      -8.3     -13.9     -14.41/6       
+                                what the bag representation buys, with adaptation off
+Baseline → CREDA*                 +5.6      +2.8      +0.0      +0.0      +2.8      +0.0      +1.93/6       
+                                what CREDA's alignment buys, unweighted
+CREDA* → CREDA                   -11.1      -2.8      +5.6     -19.4      -2.8     -11.1      -6.91/6       
+                                what confidence weighting buys in CREDA
+MIL-Baseline → MIL-CREDA**       +11.1      +2.8      +2.8      +5.6      +2.8      +0.0      +4.25/6       
+                                what the global term buys, unweighted
+MIL-CREDA** → MIL-CREDA*          -5.6      +0.0      +0.0     -11.1      -5.6      -2.8      -4.20/6       
+                                what confidence weighting buys in MIL-CREDA
+MIL-CREDA* → MIL-CREDA           -11.1      +8.3     -11.1      +2.8      +0.0      -5.6      -2.82/6       
+                                what the local correspondence buys
+CREDA* → MIL-CREDA**             -25.0     -13.9     +16.7     -27.8      -8.3     -13.9     -12.01/6       
+                                the same rung, built two ways: unweighted
+CREDA → MIL-CREDA*               -19.4     -11.1     +11.1     -19.4     -11.1      -5.6      -9.31/6       
+                                the same rung, built two ways: weighted
+CREDA → MIL-CREDA                -30.6      -2.8      +0.0     -16.7     -11.1     -11.1     -12.00/6       
+                                head to head, each method complete
+MIL-CREDA-U → MIL-CREDA-K        +33.3      +5.6     +11.1     -16.7      +2.8     -13.9      +3.74/6       
+                                what attention-based selection buys over a regular one
+MIL-CREDA-A → MIL-CREDA-K        +13.9     +22.2      +0.0      -5.6      +8.3      +5.6      +7.44/6       
+                                what it buys over an arbitrary fixed selection
+MIL-CREDA-K → MIL-CREDA          -11.1      +8.3      -5.6     +13.9     -13.9      +0.0      -1.42/6       
+                                what keeping only the top instances costs against keeping all
+
+El peldaño que más se movió es **Baseline → MIL-Baseline** (-14.4), que lee what the bag representation buys, with adaptation off. Coinciden en las 6 transferencias: MIL-CREDA** → MIL-CREDA* (-4.2), CREDA → MIL-CREDA (-12.0). Con una sola repetición la coincidencia entre transferencias es lo único que carga peso, y no reemplaza a las repeticiones.
+
 panorama over 6 transfers, 1 seed(s) each
 
 rung    metric              difference     leans  reading
@@ -10,236 +130,21 @@ A->C    targetAccuracy    +0.0185 ± 0.009     3/6    what CREDA's alignment buy
 A->C    sourceAccuracy    +0.0000 ± 0.000     0/6    what CREDA's alignment buys, unweighted
 C->D    targetAccuracy    -0.0694 ± 0.036     1/6    what confidence weighting buys in CREDA
 C->D    sourceAccuracy    -0.0046 ± 0.005     0/6    what confidence weighting buys in CREDA
-B->E    targetAccuracy    +0.0278 ± 0.019     5/6    what the global term buys, unweighted
-B->E    sourceAccuracy    -0.0046 ± 0.013     2/6    what the global term buys, unweighted
-E->F    targetAccuracy    -0.0417 ± 0.024     1/6    what confidence weighting buys in MIL-CREDA
-E->F    sourceAccuracy    -0.0278 ± 0.010     0/6    what confidence weighting buys in MIL-CREDA
-F->G    targetAccuracy    -0.0046 ± 0.030     1/6    what the local correspondence buys
-F->G    sourceAccuracy    +0.0185 ± 0.015     3/6    what the local correspondence buys
-C->E    targetAccuracy    -0.1343 ± 0.078     1/6    the same rung, built two ways: unweighted
-C->E    sourceAccuracy    -0.0694 ± 0.028     0/6    the same rung, built two ways: unweighted
-D->F    targetAccuracy    -0.1065 ± 0.052     1/6    the same rung, built two ways: weighted
-D->F    sourceAccuracy    -0.0926 ± 0.024     0/6    the same rung, built two ways: weighted
-D->G    targetAccuracy    -0.1111 ± 0.059     2/6    head to head, each method complete
-D->G    sourceAccuracy    -0.0741 ± 0.021     0/6    head to head, each method complete
-H1->G   targetAccuracy    -0.1435 ± 0.068     1/6    what learned attention buys over a uniform bag mean
-H1->G   sourceAccuracy    -0.0463 ± 0.032     1/6    what learned attention buys over a uniform bag mean
-H2->G   targetAccuracy    +0.0741 ± 0.080     3/6    what learned attention buys over an arbitrary fixed one
-H2->G   sourceAccuracy    +0.1759 ± 0.033     6/6    what learned attention buys over an arbitrary fixed one
-
-[M->U]
-setting=trained  backbone=resnet18  data=M->U  seeds=1  revision=research-concept-r16.md
-
-dimension                                 baseline             new  winner
-A->B targetAccuracy                     0.7778 ± 0      0.4722 ± 0  baseline
-A->B sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
-A->C targetAccuracy                     0.7778 ± 0      0.8333 ± 0  new
-A->C sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-C->D targetAccuracy                     0.8333 ± 0      0.7222 ± 0  baseline
-C->D sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-B->E targetAccuracy                     0.4722 ± 0      0.5556 ± 0  new
-B->E sourceAccuracy                     0.9444 ± 0      0.9722 ± 0  new
-E->F targetAccuracy                     0.5556 ± 0      0.4444 ± 0  baseline
-E->F sourceAccuracy                     0.9722 ± 0      0.9444 ± 0  baseline
-F->G targetAccuracy                     0.4444 ± 0      0.3889 ± 0  baseline
-F->G sourceAccuracy                     0.9444 ± 0      0.9444 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-C->E targetAccuracy                     0.8333 ± 0      0.5556 ± 0  baseline
-C->E sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
-D->F targetAccuracy                     0.7222 ± 0      0.4444 ± 0  baseline
-D->F sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
-D->G targetAccuracy                     0.7222 ± 0      0.3889 ± 0  baseline
-D->G sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
-H1->G targetAccuracy                    0.5833 ± 0      0.3889 ± 0  baseline
-H1->G sourceAccuracy                    0.9444 ± 0      0.9444 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-H2->G targetAccuracy                    0.3889 ± 0      0.3889 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-H2->G sourceAccuracy                    0.8056 ± 0      0.9444 ± 0  new
-
-new wins on 4, baseline on 13, 5 indistinguishable, 0 not applicable
-  new:      A->C targetAccuracy, B->E targetAccuracy, B->E sourceAccuracy, H2->G sourceAccuracy
-  baseline: A->B targetAccuracy, A->B sourceAccuracy, C->D targetAccuracy, E->F targetAccuracy, E->F sourceAccuracy, F->G targetAccuracy, C->E targetAccuracy, C->E sourceAccuracy, D->F targetAccuracy, D->F sourceAccuracy, D->G targetAccuracy, D->G sourceAccuracy, H1->G targetAccuracy
-
-[U->M]
-setting=trained  backbone=resnet18  data=U->M  seeds=1  revision=research-concept-r16.md
-
-dimension                                 baseline             new  winner
-A->B targetAccuracy                     0.9722 ± 0      0.8333 ± 0  baseline
-A->B sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-A->C targetAccuracy                     0.9722 ± 0           1 ± 0  new
-A->C sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-C->D targetAccuracy                          1 ± 0      0.9722 ± 0  baseline
-C->D sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-B->E targetAccuracy                     0.8333 ± 0      0.8611 ± 0  new
-B->E sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-E->F targetAccuracy                     0.8611 ± 0      0.8611 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-E->F sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-F->G targetAccuracy                     0.8611 ± 0           1 ± 0  new
-F->G sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
-C->E targetAccuracy                          1 ± 0      0.8611 ± 0  baseline
-C->E sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-D->F targetAccuracy                     0.9722 ± 0      0.8611 ± 0  baseline
-D->F sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-D->G targetAccuracy                     0.9722 ± 0           1 ± 0  new
-D->G sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
-H1->G targetAccuracy                         1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-H1->G sourceAccuracy                    0.9444 ± 0      0.9722 ± 0  new
-H2->G targetAccuracy                    0.6111 ± 0           1 ± 0  new
-H2->G sourceAccuracy                    0.8611 ± 0      0.9722 ± 0  new
-
-new wins on 7, baseline on 6, 9 indistinguishable, 0 not applicable
-  new:      A->C targetAccuracy, B->E targetAccuracy, F->G targetAccuracy, D->G targetAccuracy, H1->G sourceAccuracy, H2->G targetAccuracy, H2->G sourceAccuracy
-  baseline: A->B targetAccuracy, C->D targetAccuracy, F->G sourceAccuracy, C->E targetAccuracy, D->F targetAccuracy, D->G sourceAccuracy
-
-[M->S]
-setting=trained  backbone=resnet18  data=M->S  seeds=1  revision=research-concept-r16.md
-
-dimension                                 baseline             new  winner
-A->B targetAccuracy                    0.08333 ± 0      0.2222 ± 0  new
-A->B sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-A->C targetAccuracy                    0.08333 ± 0     0.08333 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-A->C sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-C->D targetAccuracy                    0.08333 ± 0      0.1389 ± 0  new
-C->D sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-B->E targetAccuracy                     0.2222 ± 0        0.25 ± 0  new
-B->E sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
-E->F targetAccuracy                       0.25 ± 0        0.25 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-E->F sourceAccuracy                     0.9444 ± 0      0.8889 ± 0  baseline
-F->G targetAccuracy                       0.25 ± 0      0.1944 ± 0  baseline
-F->G sourceAccuracy                     0.8889 ± 0      0.9722 ± 0  new
-C->E targetAccuracy                    0.08333 ± 0        0.25 ± 0  new
-C->E sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
-D->F targetAccuracy                     0.1389 ± 0        0.25 ± 0  new
-D->F sourceAccuracy                          1 ± 0      0.8889 ± 0  baseline
-D->G targetAccuracy                     0.1389 ± 0      0.1944 ± 0  new
-D->G sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
-H1->G targetAccuracy                   0.08333 ± 0      0.1944 ± 0  new
-H1->G sourceAccuracy                         1 ± 0      0.9722 ± 0  baseline
-H2->G targetAccuracy                    0.1944 ± 0      0.1944 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-H2->G sourceAccuracy                    0.6389 ± 0      0.9722 ± 0  new
-
-new wins on 9, baseline on 7, 6 indistinguishable, 0 not applicable
-  new:      A->B targetAccuracy, C->D targetAccuracy, B->E targetAccuracy, F->G sourceAccuracy, C->E targetAccuracy, D->F targetAccuracy, D->G targetAccuracy, H1->G targetAccuracy, H2->G sourceAccuracy
-  baseline: B->E sourceAccuracy, E->F sourceAccuracy, F->G targetAccuracy, C->E sourceAccuracy, D->F sourceAccuracy, D->G sourceAccuracy, H1->G sourceAccuracy
-
-[S->M]
-setting=trained  backbone=resnet18  data=S->M  seeds=1  revision=research-concept-r16.md
-
-dimension                                 baseline             new  winner
-A->B targetAccuracy                     0.7222 ± 0      0.3889 ± 0  baseline
-A->B sourceAccuracy                     0.4167 ± 0      0.2778 ± 0  baseline
-A->C targetAccuracy                     0.7222 ± 0      0.7222 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-A->C sourceAccuracy                     0.4167 ± 0      0.4167 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-C->D targetAccuracy                     0.7222 ± 0      0.5278 ± 0  baseline
-C->D sourceAccuracy                     0.4167 ± 0      0.3889 ± 0  baseline
-B->E targetAccuracy                     0.3889 ± 0      0.3333 ± 0  baseline
-B->E sourceAccuracy                     0.2778 ± 0      0.2778 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-E->F targetAccuracy                     0.3333 ± 0      0.3611 ± 0  new
-E->F sourceAccuracy                     0.2778 ± 0        0.25 ± 0  baseline
-F->G targetAccuracy                     0.3611 ± 0      0.3333 ± 0  baseline
-F->G sourceAccuracy                       0.25 ± 0        0.25 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-C->E targetAccuracy                     0.7222 ± 0      0.3333 ± 0  baseline
-C->E sourceAccuracy                     0.4167 ± 0      0.2778 ± 0  baseline
-D->F targetAccuracy                     0.5278 ± 0      0.3611 ± 0  baseline
-D->F sourceAccuracy                     0.3889 ± 0        0.25 ± 0  baseline
-D->G targetAccuracy                     0.5278 ± 0      0.3333 ± 0  baseline
-D->G sourceAccuracy                     0.3889 ± 0        0.25 ± 0  baseline
-H1->G targetAccuracy                    0.5833 ± 0      0.3333 ± 0  baseline
-H1->G sourceAccuracy                    0.4444 ± 0        0.25 ± 0  baseline
-H2->G targetAccuracy                    0.1667 ± 0      0.3333 ± 0  new
-H2->G sourceAccuracy                    0.1111 ± 0        0.25 ± 0  new
-
-new wins on 3, baseline on 15, 4 indistinguishable, 0 not applicable
-  new:      E->F targetAccuracy, H2->G targetAccuracy, H2->G sourceAccuracy
-  baseline: A->B targetAccuracy, A->B sourceAccuracy, C->D targetAccuracy, C->D sourceAccuracy, B->E targetAccuracy, E->F sourceAccuracy, F->G targetAccuracy, C->E targetAccuracy, C->E sourceAccuracy, D->F targetAccuracy, D->F sourceAccuracy, D->G targetAccuracy, D->G sourceAccuracy, H1->G targetAccuracy, H1->G sourceAccuracy
-
-[U->S]
-setting=trained  backbone=resnet18  data=U->S  seeds=1  revision=research-concept-r16.md
-
-dimension                                 baseline             new  winner
-A->B targetAccuracy                     0.1944 ± 0      0.1111 ± 0  baseline
-A->B sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
-A->C targetAccuracy                     0.1944 ± 0      0.2222 ± 0  new
-A->C sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-C->D targetAccuracy                     0.2222 ± 0      0.1944 ± 0  baseline
-C->D sourceAccuracy                          1 ± 0           1 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-B->E targetAccuracy                     0.1111 ± 0      0.1667 ± 0  new
-B->E sourceAccuracy                     0.9444 ± 0      0.9722 ± 0  new
-E->F targetAccuracy                     0.1667 ± 0     0.08333 ± 0  baseline
-E->F sourceAccuracy                     0.9722 ± 0      0.9167 ± 0  baseline
-F->G targetAccuracy                    0.08333 ± 0     0.08333 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-F->G sourceAccuracy                     0.9167 ± 0      0.9444 ± 0  new
-C->E targetAccuracy                     0.2222 ± 0      0.1667 ± 0  baseline
-C->E sourceAccuracy                          1 ± 0      0.9722 ± 0  baseline
-D->F targetAccuracy                     0.1944 ± 0     0.08333 ± 0  baseline
-D->F sourceAccuracy                          1 ± 0      0.9167 ± 0  baseline
-D->G targetAccuracy                     0.1944 ± 0     0.08333 ± 0  baseline
-D->G sourceAccuracy                          1 ± 0      0.9444 ± 0  baseline
-H1->G targetAccuracy                    0.2778 ± 0     0.08333 ± 0  baseline
-H1->G sourceAccuracy                         1 ± 0      0.9444 ± 0  baseline
-H2->G targetAccuracy                    0.2778 ± 0     0.08333 ± 0  baseline
-H2->G sourceAccuracy                    0.7778 ± 0      0.9444 ± 0  new
-
-new wins on 5, baseline on 14, 3 indistinguishable, 0 not applicable
-  new:      A->C targetAccuracy, B->E targetAccuracy, B->E sourceAccuracy, F->G sourceAccuracy, H2->G sourceAccuracy
-  baseline: A->B targetAccuracy, A->B sourceAccuracy, C->D targetAccuracy, E->F targetAccuracy, E->F sourceAccuracy, C->E targetAccuracy, C->E sourceAccuracy, D->F targetAccuracy, D->F sourceAccuracy, D->G targetAccuracy, D->G sourceAccuracy, H1->G targetAccuracy, H1->G sourceAccuracy, H2->G targetAccuracy
-
-[S->U]
-setting=trained  backbone=resnet18  data=S->U  seeds=1  revision=research-concept-r16.md
-
-dimension                                 baseline             new  winner
-A->B targetAccuracy                     0.4722 ± 0      0.3333 ± 0  baseline
-A->B sourceAccuracy                        0.5 ± 0      0.3611 ± 0  baseline
-A->C targetAccuracy                     0.4722 ± 0      0.4722 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-A->C sourceAccuracy                        0.5 ± 0         0.5 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-C->D targetAccuracy                     0.4722 ± 0      0.3611 ± 0  baseline
-C->D sourceAccuracy                        0.5 ± 0         0.5 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-B->E targetAccuracy                     0.3333 ± 0      0.3611 ± 0  new
-B->E sourceAccuracy                     0.3611 ± 0      0.3333 ± 0  baseline
-E->F targetAccuracy                     0.3611 ± 0      0.2778 ± 0  baseline
-E->F sourceAccuracy                     0.3333 ± 0      0.3333 ± 0  indistinguishable
-                                                                    (the means are closer than their combined standard error)
-F->G targetAccuracy                     0.2778 ± 0        0.25 ± 0  baseline
-F->G sourceAccuracy                     0.3333 ± 0      0.3611 ± 0  new
-C->E targetAccuracy                     0.4722 ± 0      0.3611 ± 0  baseline
-C->E sourceAccuracy                        0.5 ± 0      0.3333 ± 0  baseline
-D->F targetAccuracy                     0.3611 ± 0      0.2778 ± 0  baseline
-D->F sourceAccuracy                        0.5 ± 0      0.3333 ± 0  baseline
-D->G targetAccuracy                     0.3611 ± 0        0.25 ± 0  baseline
-D->G sourceAccuracy                        0.5 ± 0      0.3611 ± 0  baseline
-H1->G targetAccuracy                    0.5833 ± 0        0.25 ± 0  baseline
-H1->G sourceAccuracy                    0.3889 ± 0      0.3611 ± 0  baseline
-H2->G targetAccuracy                    0.1667 ± 0        0.25 ± 0  new
-H2->G sourceAccuracy                    0.1944 ± 0      0.3611 ± 0  new
-
-new wins on 4, baseline on 14, 4 indistinguishable, 0 not applicable
-  new:      B->E targetAccuracy, F->G sourceAccuracy, H2->G targetAccuracy, H2->G sourceAccuracy
-  baseline: A->B targetAccuracy, A->B sourceAccuracy, C->D targetAccuracy, B->E sourceAccuracy, E->F targetAccuracy, F->G targetAccuracy, C->E targetAccuracy, C->E sourceAccuracy, D->F targetAccuracy, D->F sourceAccuracy, D->G targetAccuracy, D->G sourceAccuracy, H1->G targetAccuracy, H1->G sourceAccuracy
+B->E    targetAccuracy    +0.0417 ± 0.016     5/6    what the global term buys, unweighted
+B->E    sourceAccuracy    -0.0185 ± 0.015     1/6    what the global term buys, unweighted
+E->F    targetAccuracy    -0.0417 ± 0.017     0/6    what confidence weighting buys in MIL-CREDA
+E->F    sourceAccuracy    +0.0139 ± 0.020     4/6    what confidence weighting buys in MIL-CREDA
+F->G    targetAccuracy    -0.0278 ± 0.032     2/6    what the local correspondence buys
+F->G    sourceAccuracy    -0.0139 ± 0.009     1/6    what the local correspondence buys
+C->E    targetAccuracy    -0.1204 ± 0.065     1/6    the same rung, built two ways: unweighted
+C->E    sourceAccuracy    -0.0833 ± 0.030     0/6    the same rung, built two ways: unweighted
+D->F    targetAccuracy    -0.0926 ± 0.046     1/6    the same rung, built two ways: weighted
+D->F    sourceAccuracy    -0.0648 ± 0.026     0/6    the same rung, built two ways: weighted
+D->G    targetAccuracy    -0.1204 ± 0.045     0/6    head to head, each method complete
+D->G    sourceAccuracy    -0.0787 ± 0.025     0/6    head to head, each method complete
+SU->SK  targetAccuracy    +0.0370 ± 0.074     4/6    what attention-based selection buys over a regular one
+SU->SK  sourceAccuracy    -0.0231 ± 0.028     2/6    what attention-based selection buys over a regular one
+SA->SK  targetAccuracy    +0.0741 ± 0.040     4/6    what it buys over an arbitrary fixed selection
+SA->SK  sourceAccuracy    +0.0648 ± 0.055     3/6    what it buys over an arbitrary fixed selection
+SK->G   targetAccuracy    -0.0139 ± 0.045     2/6    what keeping only the top instances costs against keeping all
+SK->G   sourceAccuracy    +0.0833 ± 0.042     5/6    what keeping only the top instances costs against keeping all

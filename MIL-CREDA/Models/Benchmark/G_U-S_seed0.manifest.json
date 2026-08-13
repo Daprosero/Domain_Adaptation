@@ -3,7 +3,7 @@
   "transfer": "U->S",
   "seed": 0,
   "targetAccuracy": 0.08333333333333333,
-  "sourceAccuracy": 0.9444444444444444,
+  "sourceAccuracy": 0.9166666666666666,
   "reduction": {
     "setting": "trained",
     "revision": "research-concept-r16.md",

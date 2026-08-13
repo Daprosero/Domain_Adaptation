@@ -63,13 +63,18 @@ def load(record: dict, device: torch.device):
 
 @torch.no_grad()
 def represent(model, bagset: bags.BagSet, positions: torch.Tensor,
-              device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+              device: torch.device, unit: str | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     """The rows this arm actually aligns, and the class of each.
 
     A bag-unit arm aligns bag representations, one row per subject. An
     instance-unit arm aligns instances, one row each, carrying the class of the
-    bag they came from. Each is measured in its own unit and the two are never
+    bag they came from. Each is **measured** in its own unit and the two are never
     put in the same number.
+
+    `unit` overrides that for drawing only. Every arm encodes instances, so
+    forcing the instance unit gives a space every arm has and every panel of a
+    grid the same number of points; forcing it for a measurement would put two
+    families in one number, which is what the default exists to prevent.
     """
     rows, labels = [], []
     for start in range(0, len(positions), config.BAGS_PER_STEP):
@@ -77,7 +82,7 @@ def represent(model, bagset: bags.BagSet, positions: torch.Tensor,
         instances = bagset.images[bagset.members[chunk]].to(device)
         embeddings = model.instance_embeddings(instances)
         classes = bagset.labels[chunk].to(device)
-        if model.spec["unit"] == "bag":
+        if (unit or model.spec["unit"]) == "bag":
             Z, _ = model.bag_representations(embeddings)
             rows.append(Z)
             labels.append(classes)
@@ -155,15 +160,18 @@ def correspondence(model, source: bags.BagSet, target: bags.BagSet,
     target_positions = target.eval_idx
     H_s = model.instance_embeddings(source.images[source.members[source_positions]].to(device))
     H_t = model.instance_embeddings(target.images[target.members[target_positions]].to(device))
-    beta_s = [model.weights_for(H) for H in H_s]
-    beta_t = [model.weights_for(H) for H in H_t]
 
-    sigma = wiring._median_sigma(torch.cat([H_s.reshape(-1, H_s.shape[-1]),
-                                            H_t.reshape(-1, H_t.shape[-1])]))
-    K_st = bag_kernel_matrix(list(zip(H_s, beta_s)), list(zip(H_t, beta_t)), sigma)
+    # Through the arm's own selection, so a selecting arm is scored on the
+    # instances it actually looks at. Reading the full bags here would measure a
+    # correspondence the trained model never computed.
+    bags_s = model.bags_of(H_s)
+    bags_t = model.bags_of(H_t)
+    sigma = wiring._median_sigma(torch.cat([torch.cat([H for H, _ in bags_s]),
+                                            torch.cat([H for H, _ in bags_t])]))
+    K_st = bag_kernel_matrix(bags_s, bags_t, sigma)
 
     from MIL_CREDA.attention import bag_embedding
-    Z_t = torch.stack([bag_embedding(H, w) for H, w in zip(H_t, beta_t)])
+    Z_t = torch.stack([bag_embedding(H, w) for H, w in bags_t])
     G_t = F.softmax(model.head(Z_t), dim=1)
 
     source_labels = source.labels[source_positions].to(device)
@@ -194,8 +202,7 @@ def attention_spread(model, bagset: bags.BagSet, positions: torch.Tensor,
     for start in range(0, len(positions), config.BAGS_PER_STEP):
         chunk = positions[start:start + config.BAGS_PER_STEP]
         instances = bagset.images[bagset.members[chunk]].to(device)
-        for H in model.instance_embeddings(instances):
-            beta = model.weights_for(H)
+        for _, beta in model.bags_of(model.instance_embeddings(instances)):
             entropy = -(beta * torch.log(beta + config.EPSILON)).sum()
             entropies.append(float(entropy / torch.log(torch.tensor(float(len(beta))))))
     return sum(entropies) / len(entropies)
@@ -289,3 +296,431 @@ def projection(rows, labels, domains, path: Path, title: str, seed: int,
     figure.savefig(path, dpi=140)
     plt.close(figure)
     return path
+
+
+# ------------------------------------------------------------- the comparative grid
+
+def display_seed(runs: list[dict]) -> int:
+    """The one seed every comparative panel is drawn from.
+
+    Not each arm's own median run, and the reason is the rule the whole ladder
+    rests on: a comparison may differ in one thing. Panels taken from different
+    seeds would differ in the method *and* in the draw — and because the seed
+    fixes the partition, they would not even share their bags, so "this subject
+    sits beside the wrong one here and the right one there" would stop being a
+    sentence anyone could say.
+
+    The seed is chosen by a rule that favours nobody: the one whose mean target
+    accuracy *across every arm* is the median. Choosing it by the headline arm's
+    own outcome would let that arm pick the ground it is judged on.
+    """
+    by_seed: dict[int, list[float]] = {}
+    for run in runs:
+        by_seed.setdefault(int(run["seed"]), []).append(float(run["targetAccuracy"]))
+    if not by_seed:
+        raise ValueError("no runs: there is no seed to display")
+    ordered = sorted(by_seed, key=lambda s: sum(by_seed[s]) / len(by_seed[s]))
+    return ordered[len(ordered) // 2]
+
+
+def checkpoint_for(arm: str, transfer: str, seed: int) -> dict | None:
+    """The kept checkpoint of one cell, or nothing if that cell kept none."""
+    for record in available():
+        if (record["arm"] == arm and record["transfer"] == transfer
+                and int(record["seed"]) == seed):
+            return record
+    return None
+
+
+def original_rows(record: dict, budget: int, seed: int):
+    """The shared original space of the pair: the images themselves, before any model.
+
+    The reference every trained column is read against, and model-free on purpose —
+    it has been fitted to this transfer by nothing at all. It is a *shared* space
+    because preprocessing already brings both domains to the same tensor shape, so
+    the two sets of pixels live in one vector space and can be projected together
+    without anything having learned to put them there.
+
+    Representative rather than complete: an evaluation split holds far more
+    instances than a panel can show, so the sample is stratified by class and drawn
+    from a generator of its own.
+    """
+    source = bags.rebuild(record["source"], config.DATA_CACHE)
+    target = bags.rebuild(record["target"], config.DATA_CACHE)
+
+    def pixels(bagset):
+        images = bagset.images[bagset.members[bagset.eval_idx]]
+        rows = images.reshape(images.shape[0] * images.shape[1], -1).float()
+        labels = bagset.labels[bagset.eval_idx].repeat_interleave(images.shape[1])
+        return equalize(rows, labels, budget, seed)
+
+    s_rows, s_labels = pixels(source)
+    t_rows, t_labels = pixels(target)
+    return s_rows, s_labels, t_rows, t_labels
+
+
+def _embed(rows: torch.Tensor, seed: int):
+    """UMAP, for the reason `projection` already gives: the claim is a distance."""
+    import umap
+    reducer = umap.UMAP(n_components=2, random_state=seed,
+                        n_neighbors=min(15, max(2, len(rows) // 4)), min_dist=0.1)
+    return reducer.fit_transform(rows.numpy())
+
+
+def equalize(rows, labels, budget: int, seed: int):
+    """Draw the same number of points for every arm, whatever its unit.
+
+    Without this the grid is unreadable in a way that looks like a finding: an
+    instance-unit arm contributes one row per instance and a bag-unit arm one row
+    per subject, so at thirty instances a bag the CREDA columns arrive with thirty
+    times the points. The eye reads that as *covers the space* and the sparse
+    columns as *learned less*, and neither is what happened — it is the statistical
+    unit, drawn.
+
+    The subsample is stratified by class and drawn from a generator of its own, so
+    it neither drops a class from a panel nor disturbs any other draw.
+    """
+    if len(rows) <= budget:
+        return rows, labels
+    generator = torch.Generator().manual_seed(seed)
+    per_class = max(1, budget // max(1, int(labels.unique().numel())))
+    keep = []
+    for class_id in labels.unique():
+        positions = (labels == class_id).nonzero().reshape(-1)
+        take = min(per_class, positions.numel())
+        keep.append(positions[torch.randperm(positions.numel(), generator=generator)[:take]])
+    chosen = torch.cat(keep)
+    return rows[chosen], labels[chosen]
+
+
+def _draw_cell(axis, embedded, labels, domains):
+    """Class by colour, domain by marker: source circles, target triangles.
+
+    The target markers are larger and edged and the source ones smaller and
+    semi-transparent, because at grid size a shape is harder to read than a
+    colour and the domain is the thing the reader is looking for.
+    """
+    for domain, marker, size, alpha, edge in ((0, "o", 12, 0.55, "none"),
+                                              (1, "^", 26, 0.95, "0.15")):
+        mask = domains == domain
+        if not mask.any():
+            continue
+        axis.scatter(embedded[mask, 0], embedded[mask, 1], c=labels[mask],
+                     cmap="tab10", vmin=0, vmax=9, marker=marker, s=size,
+                     alpha=alpha, linewidths=0.35, edgecolors=edge)
+    axis.set_xticks([])
+    axis.set_yticks([])
+
+
+def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
+                device: torch.device, caption: str = "") -> dict:
+    """Rows are transfers, columns are arms, and every panel is the same space.
+
+    Every panel of the grid is drawn at the instance level, whatever unit its arm
+    trains on. Every arm encodes instances — Eq. (13) applies identically in both
+    families — so it is a space they all have, and it is the only way the panels
+    carry the same number of points. One point per subject beside one point per
+    instance made the instance-unit columns look like they covered the space and
+    the bag-unit ones look sparse, which is the statistical unit drawn rather than
+    anything about alignment.
+
+    Every panel comes from the same seed, so every panel of a row is looking at
+    the same subjects.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    columns = ["Original"] + [config.NAME_OF[a] for a in arms]
+    figure, axes = plt.subplots(len(transfers), len(columns),
+                                figsize=(2.15 * len(columns), 2.3 * len(transfers)),
+                                squeeze=False)
+
+    for row, transfer in enumerate(transfers):
+        anchor = next((checkpoint_for(a, transfer, seed) for a in arms
+                       if checkpoint_for(a, transfer, seed)), None)
+        for column in range(len(columns)):
+            axis = axes[row][column]
+            axis.set_xticks([])
+            axis.set_yticks([])
+            if column == 0:
+                # The shared original space: the images themselves, before any
+                # model. Any checkpoint of this row names the same material, which
+                # is why the anchor can be whichever one exists.
+                if anchor is None:
+                    axis.axis("off")
+                    continue
+                s_rows, s_labels, t_rows, t_labels = original_rows(
+                    anchor, config.LATENT_POINTS, seed)
+                _draw_cell(axis, _embed(torch.cat([s_rows, t_rows]), seed),
+                           torch.cat([s_labels, t_labels]).numpy(),
+                           torch.cat([torch.zeros(len(s_rows)),
+                                      torch.ones(len(t_rows))]).numpy())
+                if row == 0:
+                    axis.set_title(columns[0], fontsize=9)
+                continue
+            arm = arms[column - 1]
+            record = checkpoint_for(arm, transfer, seed)
+            if record is None:
+                axis.axis("off")
+                continue
+            model, source, target = load(record, device)
+            s_rows, s_labels = represent(model, source, source.eval_idx, device,
+                                         unit=config.LATENT_UNIT)
+            t_rows, t_labels = represent(model, target, target.eval_idx, device,
+                                         unit=config.LATENT_UNIT)
+            del model
+            # Every panel the same size, so no column looks denser than another.
+            s_rows, s_labels = equalize(s_rows, s_labels, config.LATENT_POINTS, seed)
+            t_rows, t_labels = equalize(t_rows, t_labels, config.LATENT_POINTS, seed)
+            stacked = torch.cat([s_rows, t_rows])
+            domains = torch.cat([torch.zeros(len(s_rows)), torch.ones(len(t_rows))]).numpy()
+            _draw_cell(axis, _embed(stacked, seed),
+                       torch.cat([s_labels, t_labels]).numpy(), domains)
+            if row == 0:
+                axis.set_title(columns[column], fontsize=9)
+        axes[row][0].set_ylabel(transfer, fontsize=9)
+
+    figure.suptitle("El color es la clase · círculos: fuente · triángulos: destino",
+                    fontsize=10)
+    if caption:
+        import textwrap
+        figure.text(0.5, 0.008, "\n".join(textwrap.wrap(caption, width=110)),
+                    ha="center", va="bottom", fontsize=7, color="0.35")
+    figure.tight_layout(rect=(0, 0.045, 1, 0.975))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    return path
+
+
+# ------------------------------------------------------- the correspondence figure
+
+@torch.no_grad()
+def bag_pairs(model, source: bags.BagSet, target: bags.BagSet, device: torch.device) -> dict:
+    """Bag representations, and for each target bag the source bag nearest to it.
+
+    Nearest by the bag kernel of Section 3, in the representation space — never
+    Euclidean, which the method does not use, and never in the two-dimensional
+    projection, which would illustrate UMAP rather than the correspondence.
+    """
+    from MIL_CREDA.attention import bag_embedding
+    from MIL_CREDA.bag_kernel import bag_kernel_matrix
+
+    s_pos, t_pos = source.train_idx, target.eval_idx
+    H_s = model.instance_embeddings(source.images[source.members[s_pos]].to(device))
+    H_t = model.instance_embeddings(target.images[target.members[t_pos]].to(device))
+    pairs_s, pairs_t = model.bags_of(H_s), model.bags_of(H_t)
+    sigma = wiring._median_sigma(torch.cat([torch.cat([H for H, _ in pairs_s]),
+                                            torch.cat([H for H, _ in pairs_t])]))
+    K_st = bag_kernel_matrix(pairs_s, pairs_t, sigma)
+
+    Z_s = torch.stack([bag_embedding(H, w) for H, w in pairs_s])
+    Z_t = torch.stack([bag_embedding(H, w) for H, w in pairs_t])
+    G_t = F.softmax(model.head(Z_t), dim=1)
+    s_labels = source.labels[s_pos].to(device)
+    t_labels = target.labels[t_pos].to(device)
+
+    mass = []
+    for column in range(len(t_pos)):
+        pi = total_correspondence(K_st[:, column], s_labels, G_t[column], config.TAU_LOCAL)
+        mass.append(float(pi[s_labels == t_labels[column]].sum()))
+
+    return {
+        "sourceRows": Z_s.float().cpu(),
+        "targetRows": Z_t.float().cpu(),
+        "sourceLabels": s_labels.cpu(),
+        "targetLabels": t_labels.cpu(),
+        "nearest": K_st.argmax(dim=0).cpu(),
+        "mass": torch.tensor(mass),
+    }
+
+
+def median_bag_per_class(reference: dict) -> dict:
+    """One target bag of each class: the median by correspondence mass, never the best.
+
+    The best bag of a class pairs cleanly under every arm, including the floor
+    that learned no correspondence at all — a figure that cannot come out wrong
+    is not measuring anything. The median is what the arm typically does with
+    that class, which is the thing being compared.
+    """
+    chosen = {}
+    for class_id in range(config.CLASSES):
+        positions = (reference["targetLabels"] == class_id).nonzero().reshape(-1)
+        if not positions.numel():
+            continue
+        ordered = positions[reference["mass"][positions].argsort()]
+        chosen[class_id] = int(ordered[len(ordered) // 2])
+    return chosen
+
+
+
+
+def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
+                        device: torch.device, caption: str = "") -> dict:
+    """Rows are transfers, columns are arms: one figure, not one file per transfer.
+
+    The panels are chosen by the mechanism rather than by the ranking: the floor,
+    the same method without the local term, and the complete one. That is the rung
+    the local correspondence lives on, so the figure can come out wrong — and if
+    the middle column pairs its subjects as well as the right one does, the local
+    term is doing nothing visible.
+
+    The same subject of each class is highlighted in every panel of a row, and it
+    is the **median** of its class by correspondence mass, never the best: the best
+    subject of a class pairs cleanly under every arm, including the floor that
+    learned no correspondence at all, and a figure that cannot come out wrong is
+    not measuring anything.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    figure, axes = plt.subplots(len(transfers), len(arms),
+                                figsize=(3.5 * len(arms), 3.5 * len(transfers)),
+                                squeeze=False)
+    palette = plt.get_cmap("tab10")
+    scored: list[dict] = []
+
+    for row, transfer in enumerate(transfers):
+        readings, present = {}, []
+        for arm in arms:
+            record = checkpoint_for(arm, transfer, seed)
+            if record is None:
+                continue
+            model, source, target = load(record, device)
+            readings[arm] = bag_pairs(model, source, target, device)
+            present.append(arm)
+            del model
+        if not present:
+            for column in range(len(arms)):
+                axes[row][column].axis("off")
+            continue
+
+        # The subjects come from the floor's reading. Picking them from the arm
+        # being praised would let it choose the ground it is judged on.
+        highlighted = median_bag_per_class(readings[present[0]])
+
+        for column, arm in enumerate(arms):
+            axis = axes[row][column]
+            axis.set_xticks([])
+            axis.set_yticks([])
+            if arm not in readings:
+                axis.axis("off")
+                continue
+            reading = readings[arm]
+            cut = len(reading["sourceRows"])
+            embedded = _embed(torch.cat([reading["sourceRows"], reading["targetRows"]]), seed)
+            s_xy, t_xy = embedded[:cut], embedded[cut:]
+
+            axis.scatter(s_xy[:, 0], s_xy[:, 1], c="0.85", marker="o", s=18,
+                         linewidths=0, zorder=1)
+            axis.scatter(t_xy[:, 0], t_xy[:, 1], c="0.85", marker="^", s=24,
+                         linewidths=0, zorder=1)
+
+            hits = 0
+            for class_id, position in highlighted.items():
+                colour = palette(class_id % 10)
+                partner = int(reading["nearest"][position])
+                correct = int(reading["sourceLabels"][partner]) == class_id
+                hits += correct
+                axis.plot([t_xy[position, 0], s_xy[partner, 0]],
+                          [t_xy[position, 1], s_xy[partner, 1]],
+                          color=colour, linewidth=1.1,
+                          linestyle="-" if correct else ":", alpha=0.85, zorder=2)
+                axis.scatter(*s_xy[partner], color=colour, marker="o", s=80,
+                             edgecolors="0.15", linewidths=0.7, zorder=3)
+                axis.scatter(*t_xy[position], color=colour, marker="^", s=110,
+                             edgecolors="0.15", linewidths=0.7, zorder=3)
+
+            share = float(reading["mass"].mean())
+            scored.append({"arm": arm, "transfer": transfer, "hits": hits,
+                           "classes": len(highlighted), "mass": share})
+            axis.set_xlabel(f"{hits}/{len(highlighted)} de la clase correcta\n"
+                            f"masa en la clase verdadera {share:.3f}", fontsize=8)
+            if row == 0:
+                axis.set_title(config.NAME_OF[arm], fontsize=10)
+        axes[row][0].set_ylabel(transfer, fontsize=10)
+
+    figure.suptitle("La misma bolsa de cada clase en cada panel · línea llena: "
+                    f"la vecina de fuente es de la clase correcta (azar "
+                    f"{1 / config.CLASSES:.2f})", fontsize=10)
+    if caption:
+        import textwrap
+        figure.text(0.5, 0.006, "\n".join(textwrap.wrap(caption, width=110)),
+                    ha="center", va="bottom", fontsize=7, color="0.35")
+    figure.tight_layout(rect=(0, 0.035, 1, 0.965))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(path, dpi=150)
+    plt.close(figure)
+    return {"path": path, "scored": scored}
+
+
+@torch.no_grad()
+def floors_agree(transfers: list[str], seed: int, device: torch.device,
+                 left: str = "A", right: str = "B") -> dict:
+    """¿Los dos pisos representan lo mismo a nivel de instancia? Medido, no supuesto.
+
+    La pregunta importa porque de la respuesta depende si una columna de la grilla
+    es redundante. Y no se puede contestar mirando el código: los dos entrenan el
+    mismo codificador con objetivos distintos — entropía cruzada por instancia
+    contra entropía cruzada por bolsa a través del agrupamiento por atención — así
+    que sus embeddings de instancia no tienen por qué coincidir.
+
+    Se compara la **geometría**, no las coordenadas: dos codificadores pueden
+    aprender el mismo espacio rotado, y comparar coordenadas llamaría distintos a
+    dos espacios idénticos. Lo que se compara es la razón entre distancias y la
+    separabilidad de dominio, que son las cantidades que la figura muestra.
+    """
+    readings = []
+    for transfer in transfers:
+        pair = {}
+        for arm in (left, right):
+            record = checkpoint_for(arm, transfer, seed)
+            if record is None:
+                continue
+            model, source, target = load(record, device)
+            s_rows, s_labels = represent(model, source, source.eval_idx, device,
+                                         unit="instance")
+            t_rows, t_labels = represent(model, target, target.eval_idx, device,
+                                         unit="instance")
+            del model
+            pair[arm] = {
+                "ratio": geometry(s_rows, s_labels, t_rows, t_labels)["ratio"],
+                "separability": separability(s_rows, t_rows, seed),
+            }
+        if len(pair) == 2:
+            readings.append({
+                "transfer": transfer,
+                "ratio": {arm: pair[arm]["ratio"] for arm in pair},
+                "separability": {arm: pair[arm]["separability"] for arm in pair},
+                "ratioGap": abs(pair[left]["ratio"] - pair[right]["ratio"]),
+                "separabilityGap": abs(pair[left]["separability"]
+                                       - pair[right]["separability"]),
+            })
+    if not readings:
+        return {"agree": None, "detail": "sin checkpoints de los dos pisos"}
+
+    worst_ratio = max(r["ratioGap"] for r in readings)
+    worst_separability = max(r["separabilityGap"] for r in readings)
+    agree = (worst_ratio <= config.FLOORS_AGREE_WITHIN
+             and worst_separability <= config.FLOORS_AGREE_WITHIN)
+    return {
+        "agree": agree,
+        "left": config.NAME_OF[left],
+        "right": config.NAME_OF[right],
+        "tolerance": config.FLOORS_AGREE_WITHIN,
+        "worstRatioGap": worst_ratio,
+        "worstSeparabilityGap": worst_separability,
+        "byTransfer": readings,
+        "detail": (
+            f"{config.NAME_OF[left]} y {config.NAME_OF[right]} representan lo mismo "
+            f"a nivel de instancia dentro de {config.FLOORS_AGREE_WITHIN:.2f}: una "
+            f"de las dos columnas sería redundante."
+            if agree else
+            f"{config.NAME_OF[left]} y {config.NAME_OF[right]} NO representan lo "
+            f"mismo a nivel de instancia: la razón entre distancias difiere hasta "
+            f"{worst_ratio:.3f} y la separabilidad hasta {worst_separability:.3f}, "
+            f"contra una tolerancia de {config.FLOORS_AGREE_WITHIN:.2f}. Sacar una "
+            f"de las dos columnas pierde el piso de esa familia."),
+    }
