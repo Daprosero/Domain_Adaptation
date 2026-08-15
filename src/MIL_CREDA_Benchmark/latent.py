@@ -29,7 +29,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
 
 from MIL_CREDA.local_term import total_correspondence
-from MIL_CREDA_Benchmark import bags, config, wiring
+from MIL_CREDA_Benchmark import bags, config, figures, wiring
 
 
 def available() -> list[dict]:
@@ -252,7 +252,7 @@ def against_floor(readings: list[dict]) -> list[dict]:
 
 
 def projection(rows, labels, domains, path: Path, title: str, seed: int,
-               caption: str = "") -> Path:
+               caption: str = "") -> "figures.plt.Figure":
     """A picture beside the numbers, never instead of them.
 
     UMAP and not t-SNE, and the reason is the claim being shown rather than taste.
@@ -291,11 +291,8 @@ def projection(rows, labels, domains, path: Path, title: str, seed: int,
         wrapped = "\n".join(textwrap.wrap(caption, width=72))
         figure.text(0.5, 0.012, wrapped, ha="center", va="bottom",
                     fontsize=7, color="0.35", linespacing=1.5)
-    path.parent.mkdir(parents=True, exist_ok=True)
     figure.tight_layout(rect=(0, 0.10, 1, 1) if caption else None)
-    figure.savefig(path, dpi=140)
-    plt.close(figure)
-    return path
+    return figures.emit(figure, path)
 
 
 # ------------------------------------------------------------- the comparative grid
@@ -413,8 +410,13 @@ def _draw_cell(axis, embedded, labels, domains):
 
 
 def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
-                device: torch.device, caption: str = "") -> dict:
+                device: torch.device) -> "figures.plt.Figure":
     """Rows are transfers, columns are arms, and every panel is the same space.
+
+    No title and no footer. What the marks mean and what bounds the run was made
+    under are the framing's job, and the framing sits directly above the figure:
+    stating them here as well puts the same claim in two places, where they can
+    drift apart and the reader cannot tell which one moved.
 
     Every panel of the grid is drawn at the instance level, whatever unit its arm
     trains on. Every arm encodes instances — Eq. (13) applies identically in both
@@ -481,17 +483,8 @@ def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
                 axis.set_title(columns[column], fontsize=9)
         axes[row][0].set_ylabel(transfer, fontsize=9)
 
-    figure.suptitle("El color es la clase · círculos: fuente · triángulos: destino",
-                    fontsize=10)
-    if caption:
-        import textwrap
-        figure.text(0.5, 0.008, "\n".join(textwrap.wrap(caption, width=110)),
-                    ha="center", va="bottom", fontsize=7, color="0.35")
-    figure.tight_layout(rect=(0, 0.045, 1, 0.975))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(path, dpi=150)
-    plt.close(figure)
-    return path
+    figure.tight_layout()
+    return figures.emit(figure, path)
 
 
 # ------------------------------------------------------- the correspondence figure
@@ -557,7 +550,7 @@ def median_bag_per_class(reference: dict) -> dict:
 
 
 def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
-                        device: torch.device, caption: str = "") -> dict:
+                        device: torch.device) -> dict:
     """Rows are transfers, columns are arms: one figure, not one file per transfer.
 
     The panels are chosen by the mechanism rather than by the ranking: the floor,
@@ -613,10 +606,33 @@ def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed:
             embedded = _embed(torch.cat([reading["sourceRows"], reading["targetRows"]]), seed)
             s_xy, t_xy = embedded[:cut], embedded[cut:]
 
-            axis.scatter(s_xy[:, 0], s_xy[:, 1], c="0.85", marker="o", s=18,
-                         linewidths=0, zorder=1)
-            axis.scatter(t_xy[:, 0], t_xy[:, 1], c="0.85", marker="^", s=24,
-                         linewidths=0, zorder=1)
+            # Cada bolsa con el color de su clase, en los tres paneles. Sin las
+            # líneas, el color es lo único que deja juzgar la correspondencia: si
+            # el triángulo destacado cayó entre círculos de su propio color, quedó
+            # cerca de su clase, y eso se ve sin que el dibujo afirme un
+            # emparejamiento que el método no computa. En gris no se veía nada.
+            axis.scatter(s_xy[:, 0], s_xy[:, 1],
+                         c=[palette(int(k) % 10) for k in reading["sourceLabels"]],
+                         marker="o", s=18, linewidths=0, alpha=0.55, zorder=1)
+            axis.scatter(t_xy[:, 0], t_xy[:, 1],
+                         c=[palette(int(k) % 10) for k in reading["targetLabels"]],
+                         marker="^", s=24, linewidths=0, alpha=0.55, zorder=1)
+
+            # Only one column carries a claim, and it is the arm that declares the
+            # local term — read from the arm, never from its position, because a
+            # reordered panel list would silently move the emphasis onto a method
+            # that does not have the term.
+            #
+            # Drawn identically, the three columns read as if all three paired
+            # subjects on purpose. In the two without the local term the line is
+            # just the nearest source neighbour: something to look at for whether
+            # the subjects associate graphically, and nothing more. In the arm that
+            # has the term, that same line IS the term's assertion. So the weight
+            # of the ink follows the claim, and correctness coding — solid against
+            # dotted — appears only where correctness is being asserted. Every
+            # panel's hits still land in the table behind the figure, so nothing
+            # the muted columns stop showing is lost.
+            asserts = bool(config.ARMS_BY_ID[arm]["local"])
 
             hits = 0
             for class_id, position in highlighted.items():
@@ -624,36 +640,43 @@ def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed:
                 partner = int(reading["nearest"][position])
                 correct = int(reading["sourceLabels"][partner]) == class_id
                 hits += correct
+                # El sujeto destacado se dibuja en los tres paneles: es la misma
+                # bolsa a lo largo de toda la fila, elegida por el piso y no por el
+                # brazo que se está juzgando, así que seguirla de panel en panel es
+                # justamente la comparación que la figura ofrece.
+                axis.scatter(*t_xy[position], color=colour, marker="^", s=110,
+                             edgecolors="0.15", linewidths=0.7, zorder=3)
+
+                # La pareja y la línea, en cambio, SOLO donde hay correspondencia
+                # por bolsas que las sostenga. En un brazo sin término local no
+                # existe tal emparejamiento: lo que se trazaría es la vecina más
+                # cercana, que es una consecuencia de dónde quedaron los puntos y
+                # no algo que el método afirme. Dibujarla le prestaría a esos
+                # paneles el gesto que solo el término local se ganó. Lo que se ve
+                # ahí es el color: si el triángulo destacado cayó entre círculos de
+                # su misma clase, quedó cerca de su clase, y eso el lector lo juzga
+                # sin que nadie le trace una conclusión encima.
+                if not asserts:
+                    continue
                 axis.plot([t_xy[position, 0], s_xy[partner, 0]],
                           [t_xy[position, 1], s_xy[partner, 1]],
-                          color=colour, linewidth=1.1,
-                          linestyle="-" if correct else ":", alpha=0.85, zorder=2)
+                          color=colour, linewidth=1.6,
+                          linestyle="-" if correct else ":",
+                          alpha=0.95, zorder=2)
                 axis.scatter(*s_xy[partner], color=colour, marker="o", s=80,
-                             edgecolors="0.15", linewidths=0.7, zorder=3)
-                axis.scatter(*t_xy[position], color=colour, marker="^", s=110,
                              edgecolors="0.15", linewidths=0.7, zorder=3)
 
             share = float(reading["mass"].mean())
             scored.append({"arm": arm, "transfer": transfer, "hits": hits,
                            "classes": len(highlighted), "mass": share})
-            axis.set_xlabel(f"{hits}/{len(highlighted)} de la clase correcta\n"
-                            f"masa en la clase verdadera {share:.3f}", fontsize=8)
             if row == 0:
                 axis.set_title(config.NAME_OF[arm], fontsize=10)
         axes[row][0].set_ylabel(transfer, fontsize=10)
-
-    figure.suptitle("La misma bolsa de cada clase en cada panel · línea llena: "
-                    f"la vecina de fuente es de la clase correcta (azar "
-                    f"{1 / config.CLASSES:.2f})", fontsize=10)
-    if caption:
-        import textwrap
-        figure.text(0.5, 0.006, "\n".join(textwrap.wrap(caption, width=110)),
-                    ha="center", va="bottom", fontsize=7, color="0.35")
-    figure.tight_layout(rect=(0, 0.035, 1, 0.965))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(path, dpi=150)
-    plt.close(figure)
-    return {"path": path, "scored": scored}
+    # No reserved strips left: the top one held a suptitle and the bottom one a
+    # caption, and both moved into the framing above the figure.
+    figure.tight_layout()
+    drawn = figures.emit(figure, path)
+    return {"path": path.with_suffix(".pdf"), "figure": drawn, "scored": scored}
 
 
 @torch.no_grad()

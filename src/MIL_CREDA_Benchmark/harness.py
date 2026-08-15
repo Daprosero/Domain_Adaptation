@@ -306,11 +306,18 @@ def paired_across_transfers(grid: dict) -> list[dict]:
             differences = []
             for transfer, cell in grid.items():
                 if left in cell and right in cell:
-                    differences.append(cell[right][metric]["mean"] - cell[left][metric]["mean"])
+                    # Left minus right, the order the rung is named and read. The
+                    # panorama outlives its table in the record, so it carries the
+                    # same convention the rung table prints — one artifact with two
+                    # opposite signs for the same subtraction is a record that
+                    # cannot be read without knowing which function wrote it.
+                    differences.append(cell[left][metric]["mean"] - cell[right][metric]["mean"])
             if not differences:
                 continue
             statistics = spread(differences)
-            favouring = sum(1 for d in differences if d > 0)
+            # The field still counts transfers where the RIGHT arm came out above;
+            # with the subtraction flipped that is now the negative side.
+            favouring = sum(1 for d in differences if d < 0)
             readings.append({
                 "rung": f"{left}->{right}",
                 "reading": reading,
@@ -438,7 +445,7 @@ def campaign(reduction: Reduction, device: torch.device,
         "comparison": summary["panorama"],
         "detail": str((config.RESULTS / "summary.json").relative_to(config.REPOSITORY)),
         "figures": sorted(str(p.relative_to(config.REPOSITORY))
-                          for p in config.RESULTS.rglob("*.png")),
+                          for p in config.RESULTS.rglob("*.pdf")),
     }, indent=2), encoding="utf-8")
     return summary
 
@@ -456,31 +463,6 @@ def header(reduction: Reduction) -> str:
             f"!! {len(reduction.seeds)} repetition(s): the dispersion is zero, so the "
             f"threshold is zero and every row below declares a winner from a bare "
             f"difference. These are point estimates, not verdicts."
-        )
-    return "\n".join(lines)
-
-
-def render_panorama(summary: dict) -> str:
-    """The ladder read across every transfer at once.
-
-    No single transfer of this size resolves a small difference, so what carries
-    the reading is agreement: a rung that leans the same way in all six is saying
-    something a rung that splits three-three is not.
-    """
-    reduction = summary["reduction"]
-    total = len(reduction["seeds"])
-    lines = [
-        f"panorama over {len(summary['grid'])} transfers, {total} seed(s) each",
-        "",
-        f"{'rung':<8}{'metric':<16}{'difference':>14}{'leans':>10}  reading",
-    ]
-    for row in summary["panorama"]:
-        entry = {"mean": row["meanDifference"], "stdev": row["stdev"],
-                 "n": row["transfers"]}
-        lines.append(
-            f"{row['rung']:<8}{row['metric']:<16}"
-            f"{row['meanDifference']:>+9.4f} ± {standard_error(entry):<.3f}"
-            f"{row['favouringRight']:>6}/{row['transfers']:<3}  {row['reading']}"
         )
     return "\n".join(lines)
 

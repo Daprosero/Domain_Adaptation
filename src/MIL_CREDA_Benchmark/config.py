@@ -192,20 +192,20 @@ SELECTION_SEED = 20250812
 #: two arms differ in one thing, so the pairs are written out rather than left to
 #: whoever reads the table.
 LADDER = [
-    ("A", "B", "what the bag representation buys, with adaptation off"),
-    ("A", "C", "what CREDA's alignment buys, unweighted"),
-    ("C", "D", "what confidence weighting buys in CREDA"),
-    ("B", "E", "what the global term buys, unweighted"),
-    ("E", "F", "what confidence weighting buys in MIL-CREDA"),
-    ("F", "G", "what the local correspondence buys"),
-    ("C", "E", "the same rung, built two ways: unweighted"),
-    ("D", "F", "the same rung, built two ways: weighted"),
-    ("D", "G", "head to head, each method complete"),
+    ("A", "B", "qué compra la representación por bolsas, con la adaptación apagada"),
+    ("A", "C", "qué compra la alineación de CREDA, sin ponderar"),
+    ("C", "D", "qué compra la ponderación por confianza en CREDA"),
+    ("B", "E", "qué compra el término global, sin ponderar"),
+    ("E", "F", "qué compra la ponderación por confianza en MIL-CREDA"),
+    ("F", "G", "qué compra la correspondencia local"),
+    ("C", "E", "el mismo peldaño, construido de dos maneras: sin ponderar"),
+    ("D", "F", "el mismo peldaño, construido de dos maneras: ponderado"),
+    ("D", "G", "mano a mano, cada método completo"),
     # The three below hold the instance budget at SELECT_K and differ only in the
     # rule that spends it, except the last, which is the budget itself.
-    ("SU", "SK", "what attention-based selection buys over a regular one"),
-    ("SA", "SK", "what it buys over an arbitrary fixed selection"),
-    ("SK", "G", "what keeping only the top instances costs against keeping all"),
+    ("SU", "SK", "qué compra la selección por atención frente a una regular"),
+    ("SA", "SK", "qué compra frente a una selección fija arbitraria"),
+    ("SK", "G", "qué cuesta quedarse solo con las mejores instancias frente a quedarse con todas"),
 ]
 
 #: Which direction wins each dimension. The two costs and the parameter count are

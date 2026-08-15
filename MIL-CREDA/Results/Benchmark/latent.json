@@ -1678,12 +1678,284 @@
       "mass": 0.26776382327079773
     }
   ],
+  "reduction": {
+    "setting": "trained",
+    "revision": "research-concept-r16.md",
+    "backbone": "resnet18",
+    "instancesPerBag": 30,
+    "bagsPerDomain": 100,
+    "trainBags": 64,
+    "evalBags": 36,
+    "epochs": 3,
+    "seeds": [
+      0
+    ],
+    "lambdaConstant": 1.0,
+    "rampDelta": 20,
+    "device": "mps",
+    "environment": {
+      "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+      "python": "3.12.13",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "torch": "2.13.0",
+      "selfHosted": true
+    }
+  },
+  "panorama": [
+    {
+      "rung": "A->B",
+      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.14351851851851852,
+      "stdev": 0.1707071952263806,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "A->B",
+      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.06481481481481483,
+      "stdev": 0.06252571487457086,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "A->C",
+      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.01851851851851852,
+      "stdev": 0.022680460581325734,
+      "transfers": 6,
+      "favouringRight": 3,
+      "favouringLeft": 3
+    },
+    {
+      "rung": "A->C",
+      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "C->D",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.06944444444444445,
+      "stdev": 0.08740073734751262,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "C->D",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.004629629629629632,
+      "stdev": 0.011340230290662867,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.04166666666666668,
+      "stdev": 0.03828902431136174,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.018518518518518507,
+      "stdev": 0.037951669503554046,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.041666666666666664,
+      "stdev": 0.0421270858002864,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.013888888888888876,
+      "stdev": 0.048907824615719464,
+      "transfers": 6,
+      "favouringRight": 4,
+      "favouringLeft": 2
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.02777777777777779,
+      "stdev": 0.0785674201318386,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.013888888888888895,
+      "stdev": 0.02324055629261322,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.12037037037037035,
+      "stdev": 0.15876322406928006,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08333333333333333,
+      "stdev": 0.07243558228002943,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.09259259259259257,
+      "stdev": 0.1134023029066286,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.06481481481481483,
+      "stdev": 0.06252571487457086,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.12037037037037036,
+      "stdev": 0.10924356447224166,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.07870370370370372,
+      "stdev": 0.06190560981646955,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.03703703703703704,
+      "stdev": 0.182292217812218,
+      "transfers": 6,
+      "favouringRight": 4,
+      "favouringLeft": 2
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.023148148148148154,
+      "stdev": 0.06897992789699697,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.07407407407407408,
+      "stdev": 0.09886183566695662,
+      "transfers": 6,
+      "favouringRight": 4,
+      "favouringLeft": 2
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.06481481481481481,
+      "stdev": 0.13570422933749082,
+      "transfers": 6,
+      "favouringRight": 3,
+      "favouringLeft": 3
+    },
+    {
+      "rung": "SK->G",
+      "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.0138888888888889,
+      "stdev": 0.10936122047238625,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "SK->G",
+      "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.08333333333333331,
+      "stdev": 0.10393492741038726,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    }
+  ],
   "conclusions": {
-    "geometry": "Cada m\u00e9todo contra su propio piso, transferencia por transferencia. \u00abAlinea\u00bb = la raz\u00f3n baj\u00f3; \u00abcolapsa\u00bb = la raz\u00f3n no baj\u00f3 y la distancia entre clases cay\u00f3 m\u00e1s del 10%.\n\nM\u00e9todo        piso            alinea  plano  empeora  colapsa\nCREDA         Baseline             0      1        5        3\nMIL-CREDA     MIL-Baseline         2      1        3        4\nMIL-CREDA*    MIL-Baseline         4      1        1        2\nMIL-CREDA**   MIL-Baseline         3      2        1        2\nMIL-CREDA-U   MIL-Baseline         0      0        6        4\nMIL-CREDA-A   MIL-Baseline         1      0        5        5\nMIL-CREDA-K   MIL-Baseline         1      1        4        5\nCREDA*        Baseline             0      2        4        1\n\nLo que carga peso no es el promedio sino que las transferencias coincidan: un m\u00e9todo que alinea en una y empeora en otra no est\u00e1 diciendo nada todav\u00eda.\nPiloto: son estimaciones puntuales, no resultados.",
-    "correspondence": "Aciertos por transferencia (azar 0.100): MIL-Baseline U->M 7/10, M->U 2/10, S->M 2/10 \u00b7 MIL-CREDA* U->M 9/10, M->U 3/10, S->M 2/10 \u00b7 MIL-CREDA U->M 10/10, M->U 2/10, S->M 2/10. El t\u00e9rmino local, aislado como MIL-CREDA contra MIL-CREDA*: las transferencias no coinciden \u2014 1 a favor, 1 en contra, 1 planas (M->U -0.078, S->M +0.003, U->M +0.060). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. Piloto: son estimaciones puntuales, no resultados."
+    "niveles:seconds": "Mejor promedio: **Baseline** con 4.78s; peor: MIL-CREDA con 13.29s. CREDA queda 4.11s por debajo de su piso Baseline. MIL-CREDA queda 8.46s por debajo de su piso MIL-Baseline. Con 1 repetici\u00f3n(es) esto es una estimaci\u00f3n puntual y no un veredicto: la dispersi\u00f3n es cero por construcci\u00f3n, no por acuerdo. M\u00e1s repeticiones lo refuerzan o lo cambian.",
+    "niveles:sourceAccuracy": "Mejor promedio: **Baseline** con 81.9%; peor: MIL-CREDA-A con 58.8%. CREDA queda 0.5% por debajo de su piso Baseline. MIL-CREDA queda 1.9% por debajo de su piso MIL-Baseline. Con 1 repetici\u00f3n(es) esto es una estimaci\u00f3n puntual y no un veredicto: la dispersi\u00f3n es cero por construcci\u00f3n, no por acuerdo. M\u00e1s repeticiones lo refuerzan o lo cambian.",
+    "niveles:targetAccuracy": "Mejor promedio: **CREDA*** con 55.6%; peor: MIL-CREDA-A con 30.6%. CREDA queda 5.1% por debajo de su piso Baseline. MIL-CREDA queda 2.8% por debajo de su piso MIL-Baseline. Con 1 repetici\u00f3n(es) esto es una estimaci\u00f3n puntual y no un veredicto: la dispersi\u00f3n es cero por construcci\u00f3n, no por acuerdo. M\u00e1s repeticiones lo refuerzan o lo cambian.",
+    "geometr\u00eda": "Cada m\u00e9todo contra su propio piso, transferencia por transferencia. \u00abAlinea\u00bb = la raz\u00f3n baj\u00f3; \u00abcolapsa\u00bb = la raz\u00f3n no baj\u00f3 y la distancia entre clases cay\u00f3 m\u00e1s del 10%.\n\nM\u00e9todo        piso            alinea  plano  empeora  colapsa\nCREDA         Baseline             0      1        5        3\nMIL-CREDA     MIL-Baseline         2      1        3        4\nMIL-CREDA*    MIL-Baseline         4      1        1        2\nMIL-CREDA**   MIL-Baseline         3      2        1        2\nMIL-CREDA-U   MIL-Baseline         0      0        6        4\nMIL-CREDA-A   MIL-Baseline         1      0        5        5\nMIL-CREDA-K   MIL-Baseline         1      1        4        5\nCREDA*        Baseline             0      2        4        1\n\nLo que carga peso no es el promedio sino que las transferencias coincidan: un m\u00e9todo que alinea en una y empeora en otra no est\u00e1 diciendo nada todav\u00eda.\nPiloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "distancias": "CREDA contra Baseline: misma clase entre dominios +2.0%, clases distintas -9.2% sobre 6 transferencia(s) \u2014 las clases se juntaron entre s\u00ed m\u00e1s que la misma clase entre dominios. MIL-CREDA contra MIL-Baseline: misma clase entre dominios -22.8%, clases distintas -20.5% sobre 6 transferencia(s) \u2014 la misma clase se junt\u00f3 m\u00e1s de lo que se encogi\u00f3 el espacio. MIL-CREDA* contra MIL-Baseline: misma clase entre dominios -18.9%, clases distintas -15.5% sobre 6 transferencia(s) \u2014 la misma clase se junt\u00f3 m\u00e1s de lo que se encogi\u00f3 el espacio. MIL-CREDA** contra MIL-Baseline: misma clase entre dominios -19.1%, clases distintas -15.3% sobre 6 transferencia(s) \u2014 la misma clase se junt\u00f3 m\u00e1s de lo que se encogi\u00f3 el espacio. MIL-CREDA-U contra MIL-Baseline: misma clase entre dominios -25.3%, clases distintas -34.3% sobre 6 transferencia(s) \u2014 las clases se juntaron entre s\u00ed m\u00e1s que la misma clase entre dominios. MIL-CREDA-A contra MIL-Baseline: misma clase entre dominios -30.7%, clases distintas -38.6% sobre 6 transferencia(s) \u2014 las clases se juntaron entre s\u00ed m\u00e1s que la misma clase entre dominios. MIL-CREDA-K contra MIL-Baseline: misma clase entre dominios -27.2%, clases distintas -31.9% sobre 6 transferencia(s) \u2014 las clases se juntaron entre s\u00ed m\u00e1s que la misma clase entre dominios. CREDA* contra Baseline: misma clase entre dominios -3.8%, clases distintas -5.2% sobre 6 transferencia(s) \u2014 las clases se juntaron entre s\u00ed m\u00e1s que la misma clase entre dominios. Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "separabilidad": "Una diferencia negativa es mejor: la regla de dominio qued\u00f3 m\u00e1s cerca del azar que en el mismo m\u00e9todo sin adaptaci\u00f3n. CREDA contra Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 4 a favor, 0 en contra, 2 planas (M->S +0.023, M->U +0.012, S->M +0.001, S->U +0.005, U->M +0.050, U->S +0.060). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 5 a favor, 0 en contra, 1 planas (M->S +0.029, M->U +0.000, S->M +0.014, S->U +0.040, U->M +0.055, U->S +0.040). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA* contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 4 a favor, 1 en contra, 1 planas (M->S +0.001, M->U -0.027, S->M +0.014, S->U +0.040, U->M +0.029, U->S +0.013). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA** contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 4 a favor, 1 en contra, 1 planas (M->S -0.028, M->U +0.000, S->M +0.014, S->U +0.040, U->M +0.013, U->S +0.013). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA-U contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 5 a favor, 0 en contra, 1 planas (M->S +0.071, M->U +0.042, S->M +0.014, S->U +0.000, U->M +0.012, U->S +0.070). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA-A contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 4 a favor, 1 en contra, 1 planas (M->S +0.085, M->U -0.027, S->M +0.000, S->U +0.011, U->M +0.082, U->S +0.070). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA-K contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 4 a favor, 1 en contra, 1 planas (M->S +0.044, M->U -0.070, S->M +0.000, S->U +0.026, U->M +0.110, U->S +0.042). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. CREDA* contra Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 1 a favor, 0 en contra, 5 planas (M->S +0.007, M->U -0.008, S->M -0.001, S->U -0.007, U->M +0.025, U->S -0.007). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "masa": "La masa m\u00e1s alta es la de **MIL-CREDA-K**, contra un azar de 0.100. MIL-CREDA supera el azar en 6 de 6 transferencias MIL-CREDA-U supera el azar en 5 de 6 transferencias MIL-CREDA-A supera el azar en 6 de 6 transferencias MIL-CREDA-K supera el azar en 6 de 6 transferencias Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "atenci\u00f3n": "La entrop\u00eda est\u00e1 normalizada, as\u00ed que su m\u00e1ximo es uno y ah\u00ed la atenci\u00f3n no estar\u00eda haciendo nada. C\u00f3mo qued\u00f3 cada uno: MIL-Baseline reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA** reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA* reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA-U reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA-A reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA-K reparte de forma desigual sin apoyarse en unas pocas Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "correspondencia": "Empatan sumando sus transferencias: MIL-CREDA*, MIL-CREDA. De ac\u00e1 no sale qui\u00e9n empareja mejor; el azar de acertar una clase es 0.100. El t\u00e9rmino local, aislado como MIL-CREDA contra MIL-CREDA*: las transferencias no coinciden \u2014 1 a favor, 1 en contra, 1 planas (M->U -0.078, S->M +0.003, U->M +0.060). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto."
   },
   "figures": [
-    "MIL-CREDA/Results/Benchmark/latent/grid.png",
-    "MIL-CREDA/Results/Benchmark/latent/correspondence.png"
+    "MIL-CREDA/Results/Benchmark/latent/grid.pdf",
+    "MIL-CREDA/Results/Benchmark/latent/correspondence.pdf"
   ]
 }
