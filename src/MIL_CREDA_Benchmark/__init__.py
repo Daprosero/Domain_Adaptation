@@ -47,12 +47,16 @@ __benchmark__ = {
             "tables.render",
             "tables.render_rungs",
             "tables.render_readings",
-            "harness.render_panorama",
+            "tables.render_correspondence",
         ],
         "conclusions": [
             "tables.conclusion",
             "tables.conclusion_rungs",
             "tables.conclusion_geometry",
+            "tables.conclusion_distances",
+            "tables.conclusion_separability",
+            "tables.conclusion_mass",
+            "tables.conclusion_attention",
             "tables.conclusion_correspondence",
         ],
         # One call that takes a record and returns {label: text}. It exists so the
@@ -60,6 +64,34 @@ __benchmark__ = {
         # knowing a single signature: a conclusion whose text survives that is tied
         # to nothing, exactly as an assertion that cannot fail proves nothing.
         "conclusionEntry": "tables.conclusions",
+        # Qué valor busca cada lectura, calculado de la configuración. Un lector
+        # que no conoce la métrica necesita el hito contra el que se compara —el
+        # azar, una cota, el acuerdo entre transferencias— y no solo la dirección.
+        "objectiveEntry": "tables.objective",
+        # The calls that produce or show a picture. Naming them here is what lets
+        # the verification ask whether a figure actually rendered without knowing
+        # one word about who draws — a check that recognised matplotlib would go
+        # blind the day a notebook used anything else.
+        #
+        # Every entry earns its place by drawing, not by being in this module:
+        # `inline` is what puts a figure in front of a reader, the four builders
+        # return one, and `plt.show` is here because the verification notebook
+        # draws its bound with bare matplotlib rather than through `figures`.
+        # `emit` files the vector copy and is declared for the same reason the
+        # others are — a cell that archives a figure and never shows it has
+        # reported a filename, and with `emit` named that comes out as a finding
+        # instead of passing quietly.
+        "figures": [
+            "figures.inline",
+            "figures.emit",
+            "figures.adaptation_curves",
+            "figures.supervised_curves",
+            "figures.contribution_curves",
+            "latent.latent_grid",
+            "latent.correspondence_grid",
+            "latent.projection",
+            "plt.show",
+        ],
         # Constants that name a subset of another constant. Each one is a selection
         # somebody wrote out, which is legitimate only when the rule that fixed it
         # looks at no outcome — so the rule is stated here and can be argued with,

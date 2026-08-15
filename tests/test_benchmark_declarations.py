@@ -135,3 +135,60 @@ def test_the_pilot_and_the_full_run_are_the_same_program() -> None:
     assert config.EPOCHS <= config.FULL_EPOCHS
     assert len(config.SEEDS) <= len(config.FULL_SEEDS)
     assert set(config.SEEDS).issubset(set(config.FULL_SEEDS))
+
+
+def _one_rung_grid(left_mean: float, right_mean: float) -> dict:
+    """A grid holding one rung, both arms flat across every transfer."""
+    left, right, _ = config.LADDER[0]
+
+    def arm(mean: float) -> dict:
+        entry = {"mean": mean, "stdev": 0.0, "max": mean, "n": 1}
+        # Both metrics, because the panorama walks both and a cell missing one is
+        # a fixture defect that would read as a defect in the code under test.
+        return {"targetAccuracy": dict(entry), "sourceAccuracy": dict(entry)}
+
+    return {f"{s}->{d}": {left: arm(left_mean), right: arm(right_mean)}
+            for s, d in config.TRANSFERS}
+
+
+def test_a_rung_subtracts_left_minus_right_everywhere_it_is_computed() -> None:
+    """The sign is a reading convention, and a convention only holds if every
+    place that computes it agrees. It is computed three times — the rung table,
+    its conclusion, and the panorama that outlives both in the record — and the
+    prose in the notebook is written against it. Nothing else pins it, so an
+    inversion here comes back as a heading that says the opposite of its own
+    table while every number stays correct.
+    """
+    from MIL_CREDA_Benchmark import harness, tables
+
+    left, right, _ = config.LADDER[0]
+    grid = _one_rung_grid(left_mean=0.40, right_mean=0.70)
+    summary = {"grid": grid, "reduction": {"seeds": config.SEEDS},
+               "panorama": harness.paired_across_transfers(grid)}
+
+    # The right arm is 30 points above, so left - right is negative.
+    printed = tables.render_rungs(summary, "targetAccuracy", markdown=True)
+    assert "-30.0" in printed, printed
+
+    panorama = [row for row in summary["panorama"]
+                if row["rung"] == f"{left}->{right}"
+                and row["metric"] == "targetAccuracy"][0]
+    assert panorama["meanDifference"] < 0
+    # The field counts transfers won by the right arm, which is now the negative
+    # side. Flipping the subtraction without flipping this would report the right
+    # arm losing all six of the transfers it won.
+    assert panorama["favouringRight"] == len(config.TRANSFERS)
+
+
+def test_the_rung_conclusion_names_who_is_ahead_not_how_far_it_moved() -> None:
+    """A conclusion that reports a signed magnitude makes the reader reconstruct
+    the direction against the row's own name. Naming the arm is the whole job."""
+    from MIL_CREDA_Benchmark import tables
+
+    left, right, _ = config.LADDER[0]
+    summary = {"grid": _one_rung_grid(left_mean=0.40, right_mean=0.70),
+               "reduction": {"seeds": config.SEEDS}}
+    text = tables.conclusion_rungs(summary, "targetAccuracy")
+    assert config.NAME_OF[right] in text, text
+    assert "por encima de" in text, text
+    assert f"**{config.NAME_OF[right]}**" in text, text
