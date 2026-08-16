@@ -31,18 +31,28 @@ def source_digest(repository: Path, package: str) -> str:
     Las fechas de modificación no sirven: un clon las reescribe todas con la hora
     del checkout y el orden se pierde. El contenido sí.
 
-    Cubre el paquete del método, el del banco y los tests. El del banco entra
-    porque es el módulo que renderiza las tablas y escribe las conclusiones —
-    dejarlo afuera permitía corregir una conclusión y que el registro siguiera
-    afirmando la vieja con la verificación en verde.
+    Cubre `src/` entero, y nada más. Esa frontera es la afirmación: un informe
+    depende del código que la corrida ejecuta, y de nada más.
+
+    Nombrar los paquetes uno por uno fallaba en las dos direcciones. Dejaba
+    afuera al trabajo previo, del que el banco importa — mover ahí lo que
+    computa un brazo dejaba a los cuadernos diciendo `executed` con los números
+    viejos, y la sesión aparte que arregla el trabajo previo y vuelve es
+    exactamente el caso que lo dispara. Y metía adentro a `tests/`, que ningún
+    cuaderno importa: agregar cualquier prueba marcaba rancio todo informe del
+    repositorio y pedía re-ejecutar la campaña para re-estampar un hash.
+
+    El paquete del banco sigue adentro, ahora por pertenecer a `src/` en vez de
+    por estar nombrado, y por la misma razón de antes: es el módulo que renderiza
+    las tablas y escribe las conclusiones. Dejarlo afuera permitía corregir una
+    conclusión y que el registro siguiera afirmando la vieja con todo en verde.
+
+    `package` ya no se usa para elegir qué entra. Sigue en la firma porque las dos
+    mitades tienen que llamarse igual y el destino lo pasa desde `_here()`.
     """
     digest = hashlib.sha256()
-    roots = [repository / "src" / package,
-             repository / "src" / f"{package}_Benchmark",
-             repository / "tests"]
-    for root in roots:
-        if not root.is_dir():
-            continue
+    root = repository / "src"
+    if root.is_dir():
         for file in sorted(root.rglob("*.py")):
             if "__pycache__" in file.parts:
                 continue
