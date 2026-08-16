@@ -236,7 +236,7 @@ def contribution_curves(path: Path,
     """What share of the objective each declared term actually commands.
 
     Without this panel, "the term had no effect" and "the term had no weight" are
-    the same picture. The coefficient is fixed at `LAMBDA_CONST` for every arm, and
+    the same picture. The coefficient is fixed at `RAMP_CEILING` for every arm, and
     fixing the coefficient does not fix the share: a term whose magnitude differs
     by an order of magnitude between arms is a difference nobody declared, and a
     rung that ignores it credits the mechanism with what the scale did.

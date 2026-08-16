@@ -41,7 +41,7 @@ FULL_EPOCHS = 20
 
 # ------------------------------------------------------------------- material
 
-REVISION = "research-concept-r16.md"
+REVISION = "research-concept-r17.md"
 
 #: Every domain supplies its own bags; a transfer names which is source and which
 #: is target. All three hold far more than the 3000 images a domain contributes.
@@ -89,25 +89,44 @@ EPSILON = 1e-8
 
 # ------------------------------------------------------- schedules, shared by all
 
-#: The constant the ramp is multiplied by. CREDA's own value for this setting is
-#: `creda_lambda_special` = 1e-4, and it was measured to be inert here: at a
-#: ceiling of 1e-4 — and at 1e-2 and 1e-1 — every adapted arm scored exactly what
-#: its own floor scored, so the term was computed and changed no decision.
+#: The adaptation coefficient is one object with two knobs — how fast it grows
+#: and how far — and `CREDA.schedules.creda_ramp` is where both live. Both families
+#: drive it from there, so the two sides of the comparison share one
+#: implementation rather than two copies of the same formula.
 #:
-#: One is the smallest ceiling at which both terms move the outcome. The ramp is
-#: untouched: same shape, same delta, still zero in the first epoch. Only the
-#: ceiling it climbs to changes, from a ten-thousandth to one.
-#:
-#: The logarithm inside the Renyi entropy already keeps both terms the same order
-#: as the supervised loss, so one does not let either overwhelm it. What the
-#: logarithm does not do is fix the scale: it bounds the score by ln n, a window
-#: that widens with the bags a class contributes — measured at (-3.178, 2.485)
-#: for twelve bags a side. Eq. (36) normalizes by exactly those bounds, which is
-#: why MIL-CREDA's term is in [0, 1] whatever the class size.
-LAMBDA_CONST = 1.0
+#: Nothing multiplies the schedule afterwards. Three factors, two of them pinned
+#: at one and therefore invisible, is how a scale error hides: the supervised
+#: term of Eq. (18) spent a revision at 18.42 times its stated weight because the
+#: coefficient was spread across places nobody read together.
 
-#: CREDA's own warm-up, `get_lambda`. Zero in the first epoch, effectively one
-#: afterwards. Applied to both sides so the schedule is not one more difference.
+#: How far. One is the neutral of Eq. (39), and from r17 that is a statement about
+#: the objective rather than about this setting. Eq. (36) normalizes the global
+#: score by the conservative bounds, Eq. (38) bounds the local term, and Eq. (18)
+#: is divided by its own supremum B_src — so all three terms live in [0, 1) and a
+#: coefficient of one weighs them equally, which is what the normalization is for.
+#:
+#: It is identical for every arm that has an adaptation term, and it is not chosen
+#: by looking at outcomes. Tuning it on one side while the other keeps whatever
+#: its author chose would make the two arms differ in two things; held identical,
+#: the normalization shows up in the results instead of being compensated for.
+#:
+#: CREDA's own published ceiling for these domains is `creda_lambda_special`
+#: = 1e-4, and running it there was measured to be inert: at 1e-4, 1e-2 and 1e-1
+#: every adapted arm scored exactly what its own floor scored. A comparison
+#: against a CREDA whose term changes no decision is a comparison against the
+#: source-only floor with extra wall time, so both sides run at this ceiling and
+#: the report says so rather than leaving it to whoever knows CREDA to notice.
+RAMP_CEILING = 1.0
+
+#: How fast. CREDA's own `delta`, the shape of `get_lambda`: zero at the first
+#: epoch, approaching the ceiling afterwards. Applied to both sides so the
+#: schedule is not one more difference.
+#:
+#: The curve runs on the fraction of training elapsed, so a short run is not a
+#: slower version of a long one — at three epochs it is already at 0.9975 by the
+#: second, while twenty epochs take about five to get there. The pilot therefore
+#: exercises almost no warm-up, which is worth remembering before reading a pilot
+#: as evidence about a schedule.
 RAMP_DELTA = 20
 
 #: CREDA's own `creda_lr_special` and the decay of `get_eta`.
@@ -217,6 +236,14 @@ DIMENSIONS = {
     "sourceAccuracy": HIGHER,
     "seconds": LOWER,
     "contribution": DESCRIPTIVE,
+    #: The supervised magnitude and the adaptation's share of the objective.
+    #: `contribution` alone cannot separate a term that commanded nothing from a
+    #: term that was scaled to nothing, and both print as a small number. The two
+    #: are descriptive because neither has a better direction: a large share is
+    #: not a better method, it is a differently balanced objective, and a rung
+    #: whose two arms differ in share is a rung whose reading has to say so.
+    "supervised": DESCRIPTIVE,
+    "adaptationShare": DESCRIPTIVE,
     "peakMiB": DESCRIPTIVE,
     "parameters": DESCRIPTIVE,
 }
