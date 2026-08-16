@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 from skimage.transform import resize
 from torchvision.transforms.functional import to_pil_image
 from .artifacts import checkpoint_path
+from .schedules import creda_ramp
 from .models import (
     FeatureExtractor,
     Classifier,
@@ -448,13 +449,24 @@ def train_creda(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, d
     set_seed(42)
     optimizer = optim.Adam(model.parameters(), lr=eta_0)
     criterion_class = nn.CrossEntropyLoss()
-    creda_loss_fn = CREDALoss(sigma=sigma,lambda_creda=lambda_, use_entropy_weighting=True)
+    # No coefficient here at all: the schedule below supplies it. The loss
+    # returns its own magnitude, and `lambda_creda` keeps its own default of one.
+    creda_loss_fn = CREDALoss(sigma=sigma, use_entropy_weighting=True)
 
     for epoch in range(epochs):
         print(f"[CREDA] => Epoch {epoch+1}/{epochs} - INICIO")
 
         model.train()
-        lambda_val = get_lambda(epoch, epochs,delta=delta)
+        # The coefficient, whole: lambda_ still comes from the caller's cfg, as
+        # it always did, and is now the ceiling rather than a factor inside the
+        # loss. The product is reassociated from get_lambda * (lambda_ * loss)
+        # to (lambda_ * get_lambda) * loss, which is the same number in
+        # arithmetic and up to 3.5e-16 apart in float64 — measured, and pinned
+        # to that bound by tests/test_creda_schedule.py. Runs are already only
+        # as reproducible as `set_seed` makes them: cudnn is set deterministic,
+        # but torch.use_deterministic_algorithms is not, so the reductions in
+        # CREDALoss carry more variation than this reassociation does.
+        lambda_val = creda_ramp(epoch, epochs, delta=delta, ceiling=lambda_)
         if alpha!=None:
             new_lr = get_eta(epoch, epochs,alpha, eta_0)
             for param_group in optimizer.param_groups:
@@ -501,8 +513,14 @@ def train_creda(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, d
         val_loss_src, val_acc_src, _ = eval_model(model.feature, model.classifier, val_loader_src, device)
         val_loss_tgt, val_acc_tgt, _ = eval_model(model.feature, model.classifier, val_loader_tgt, device)
 
-        print(f"Epoch {epoch+1}: LR={new_lr:.6f}, Lambda={lambda_val:.4f}")
-        print(f"  Cls Loss={total_cls_loss:.4f}, CREDA Loss={total_creda_loss:.4f}, "
+        # Lambda is the whole coefficient now, ceiling included, so it prints in
+        # exponent form: .4f rendered every epoch of a 1e-4 run as 0.0000. The
+        # other loops keep .4f because their schedule really does climb to one.
+        # CREDA term is the term's own magnitude, unscaled — the coefficient is
+        # the line above and the product is theirs to take. Renamed from "CREDA
+        # Loss" so nobody compares it against an older log as the same column.
+        print(f"Epoch {epoch+1}: LR={new_lr:.6f}, Lambda={lambda_val:.3e}")
+        print(f"  Cls Loss={total_cls_loss:.4f}, CREDA term={total_creda_loss:.4f}, "
               f"Cls Acc={100. * cls_correct / len(src_loader.dataset):.2f}%")
         print(f"  Val Src: Loss={val_loss_src:.4f}, Acc={val_acc_src:.2f}%, "
               f"Val Tgt: Loss={val_loss_tgt:.4f}, Acc={val_acc_tgt:.2f}%")
