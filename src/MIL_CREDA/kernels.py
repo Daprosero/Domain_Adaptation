@@ -12,7 +12,7 @@ import torch
 from MIL_CREDA import as_matrix
 
 __provenance__ = {
-    "revision": "research-concept-r16.md",
+    "revision": "research-concept-r17.md",
     "sections": ["1", "3"],
     "equations": ["2", "19"],
     "invariants": ["kernel_unit_diagonal_and_bounded", "kernel_psd"],
