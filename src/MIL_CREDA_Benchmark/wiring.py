@@ -7,8 +7,17 @@ carries, whether the target blocks are weighted by confidence, whether the local
 correspondence is on, how a bag becomes a representation, and which of a bag's
 instances the arm is allowed to look at.
 
-Nothing in `src/CREDA/` is modified. `FeatureExtractor` and `CREDALoss` are used
-exactly as they are; the only thing this file decides is which tensors go in.
+`FeatureExtractor` and `CREDALoss` are used exactly as they are; the only thing
+this file decides is which tensors go in.
+
+Prior work carries one change, and it is a reparameterization rather than a
+change of method: CREDA's adaptation coefficient moved out of
+`CREDALoss.lambda_creda` and into the ceiling of `CREDA.schedules.creda_ramp`, so both
+families of this comparison drive one implementation instead of two copies of the
+same formula. `get_lambda` is untouched and still serves DANN, ADDA and CDAN+E at
+full strength — scaling their coefficient would switch CDAN+E's gradient-reversal
+hook off rather than weaken it. `tests/test_creda_schedule.py` holds the new
+composition against a golden frozen before the move.
 
 The head is built here rather than taken from `CREDA_ResNet` because that class
 calls `set_seed(42)` in its constructor, which would reset the global generator
@@ -41,6 +50,7 @@ from MIL_CREDA.global_term import (
     is_active,
 )
 from MIL_CREDA.local_term import local_distance, local_loss, total_correspondence
+from MIL_CREDA.objective import source_loss, total_objective
 from MIL_CREDA_Benchmark import config
 
 
@@ -199,6 +209,11 @@ class Arm(nn.Module):
         The source side is the step's own supervised batch, already encoded —
         which is what `train_creda` does with `feats_src`, so both families draw
         their source evidence the same way and the encoder runs once.
+
+        The two terms are returned apart rather than summed, because Eq. (39)
+        carries a coefficient for each and it is `total_objective` that combines
+        them. Summing here would fold both into one number and leave this file
+        deciding a weight the formulation states.
         """
         H_t = self.instance_embeddings(target_bags)
 
@@ -238,7 +253,8 @@ class Arm(nn.Module):
             lower, upper = conservative_bounds(int(s_idx.numel()), int(t_idx.numel()))
             losses.append(class_global_loss(score, lower, upper))
 
-        term = global_loss(losses)
+        global_term = global_loss(losses)
+        local_term = torch.zeros_like(global_term)
 
         if self.spec["local"]:
             distances = []
@@ -250,9 +266,9 @@ class Arm(nn.Module):
                 distances.append(
                     local_distance(bag_kernel(H_j, w_j, H_j, w_j, sigma), cross, K_ss, pi)
                 )
-            term = term + local_loss(torch.stack(distances), w_t)
+            local_term = local_loss(torch.stack(distances), w_t)
 
-        return term
+        return global_term, local_term
 
     def _creda_term(self, H_s, source_labels, target_bags):
         """CREDA's own loss, over instances, exactly as it was written."""
@@ -268,17 +284,29 @@ class Arm(nn.Module):
                       ramp: float, generator: torch.Generator) -> dict:
         """The arm's own objective, and nothing the arm does not have.
 
-        The supervised term is the arm's: per bag for a bag-unit arm, which is
-        Eq. (18) with the stabilizer at zero, and per instance for an instance-unit
-        arm, which is what CREDA optimizes. The adaptation term is added with the
-        shared coefficient — the same ramp and the same constant for every arm
-        that has one — so nothing separates the arms except the term itself.
+        The supervised term is the arm's. A bag-unit arm calls `source_loss`,
+        which is Eq. (18) as the revision states it, normalized by its own
+        supremum B_src; an instance-unit arm keeps CREDA's per-instance
+        cross-entropy, because prior work is used exactly as it was written. The
+        adaptation term is added with the shared coefficient — the same ramp and
+        the same constant for every arm that has one — so nothing separates the
+        arms except the term itself.
+
+        The two sides' supervised terms are therefore on different numeric
+        scales: MIL-CREDA's lands in [0, 1) and CREDA's does not. That asymmetry
+        is the formulation's, not the harness's, and it is reported rather than
+        removed — un-normalizing this side to make the two look alike would
+        delete the very thing the comparison exists to show.
         """
         embeddings = self.instance_embeddings(bags)
         if self.spec["unit"] == "bag":
             Z, _ = self.bag_representations(embeddings)
             logits = self.head(Z)
-            supervised = F.cross_entropy(logits, labels)
+            supervised = source_loss(                                 # Eq. (18)
+                F.softmax(logits, dim=1),
+                F.one_hot(labels, self.classes).to(logits.dtype),
+                config.EPSILON,
+            )
         else:
             instance_logits = self.head(embeddings)
             per_instance = labels.repeat_interleave(bags.shape[1])
@@ -299,16 +327,25 @@ class Arm(nn.Module):
         # and none of it the loss. Encoding the same batch everywhere leaves the
         # loss as the only difference, and makes the wall-time row comparable too.
         target_bags = self.target.take(self._draw_target(generator))
+        coefficient = ramp
         adaptation = torch.zeros((), device=logits.device, dtype=logits.dtype)
         if self.spec["adaptation"] == "milcreda":
-            adaptation = self._milcreda_term(embeddings, labels, target_bags)
+            global_term, local_term = self._milcreda_term(
+                embeddings, labels, target_bags
+            )
+            adaptation = global_term + local_term
+            total = total_objective(                                  # Eq. (39)
+                supervised, global_term, local_term, coefficient, coefficient
+            )
         elif self.spec["adaptation"] == "creda":
+            # CREDA's objective, not Eq. (39): one term, one coefficient, as its
+            # own code writes it.
             adaptation = self._creda_term(embeddings, labels, target_bags)
+            total = supervised + coefficient * adaptation
         else:
             self.instance_embeddings(target_bags)
+            total = supervised
 
-        coefficient = ramp * config.LAMBDA_CONST
-        total = supervised + coefficient * adaptation
         return {
             "logits": logits,
             "loss": total,

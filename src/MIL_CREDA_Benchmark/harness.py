@@ -28,6 +28,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
+from CREDA.schedules import creda_ramp
 from MIL_CREDA_Benchmark import bags, config, wiring
 from MIL_CREDA_Benchmark.verdict import judge, render, standard_error, tally
 
@@ -85,10 +86,17 @@ def environment() -> dict:
 
 # -------------------------------------------------------------------- schedules
 
-def ramp(epoch: int, epochs: int, delta: float = config.RAMP_DELTA) -> float:
-    """`get_lambda` of CREDA's pipeline: zero at the start, one soon after."""
-    p = epoch / epochs
-    return float((1 - math.exp(-delta * p)) / (1 + math.exp(-delta * p)))
+def ramp(epoch: int, epochs: int, delta: float = config.RAMP_DELTA,
+         ceiling: float = config.RAMP_CEILING) -> float:
+    """The adaptation coefficient, from CREDA's own schedule module.
+
+    This used to be a second copy of the formula, because `training_pipeline`
+    cannot be imported for it — scikit-image, timm, pandas and matplotlib all
+    load at its module level. Two copies across the two arms of a comparison is
+    the fork this benchmark exists not to have, so the schedule moved to
+    `CREDA.schedules` and both families read it from there.
+    """
+    return creda_ramp(epoch, epochs, delta=delta, ceiling=ceiling)
 
 
 def learning_rate(epoch: int, epochs: int) -> float:
@@ -137,7 +145,7 @@ class Reduction:
     evalBags: int = config.EVAL_BAGS
     epochs: int = config.EPOCHS
     seeds: list[int] = field(default_factory=lambda: list(config.SEEDS))
-    lambdaConstant: float = config.LAMBDA_CONST
+    rampCeiling: float = config.RAMP_CEILING
     rampDelta: float = config.RAMP_DELTA
     device: str = "cpu"
     environment: dict = field(default_factory=dict)
@@ -231,6 +239,15 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     tracemalloc.stop()
 
     contributions = [abs(point["contribution"]) for point in curve]
+    # The supervised magnitude has to leave this function or it is gone: the curve
+    # is discarded at the end of the run and no checkpoint can recover it. Without
+    # it `contribution` is a bare number, and "the term commanded nothing" and "the
+    # term was scaled to nothing" read identically. Eq. (18) is divided by B_src
+    # precisely so the three terms of Eq. (39) can be read against each other, so
+    # the ratio is the quantity that normalization exists to make meaningful.
+    supervised = [abs(point["supervised"]) for point in curve]
+    mean_supervised = sum(supervised) / len(supervised) if supervised else 0.0
+    mean_contribution = sum(contributions) / len(contributions) if contributions else 0.0
     # The last epoch's evaluation is the final one; measuring it again would cost
     # two more passes over both evaluation sets in every one of the runs.
     final = epochs_record[-1]
@@ -243,7 +260,14 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         "seconds": seconds,
         "peakMiB": peak,
         "parameters": sum(p.numel() for p in model.parameters()),
-        "contribution": sum(contributions) / len(contributions) if contributions else 0.0,
+        "contribution": mean_contribution,
+        "supervised": mean_supervised,
+        # An arm with no adaptation term reports zero rather than a ratio, because
+        # a floor has no share to command and a nan would propagate into the table.
+        "adaptationShare": (
+            mean_contribution / (mean_supervised + mean_contribution)
+            if (mean_supervised + mean_contribution) > 0 else 0.0
+        ),
         "curve": curve,
         "epochs": epochs_record,
         "state": model.state_dict() if arm_id in config.CHECKPOINTS else None,

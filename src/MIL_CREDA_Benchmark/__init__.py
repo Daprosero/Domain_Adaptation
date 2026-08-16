@@ -17,7 +17,7 @@ a changed section reaches.
 """
 
 __benchmark__ = {
-    "revision": "research-concept-r16.md",
+    "revision": "research-concept-r17.md",
     "arms": {
         # No section: this arm trains on instances with no term of the formulation.
         "A": {"sections": []},
@@ -111,6 +111,8 @@ __benchmark__ = {
             "sourceAccuracy": "higher",
             "seconds": "lower",
             "contribution": "descriptive",
+        "supervised": "descriptive",
+        "adaptationShare": "descriptive",
             "peakMiB": "descriptive",
             "parameters": "descriptive",
             "geometry.ratio": "lower",
