@@ -2,11 +2,11 @@
   "arm": "SA",
   "transfer": "M->U",
   "seed": 0,
-  "targetAccuracy": 0.3888888888888889,
-  "sourceAccuracy": 0.7777777777777778,
+  "targetAccuracy": 0.4444444444444444,
+  "sourceAccuracy": 0.6666666666666666,
   "reduction": {
     "setting": "trained",
-    "revision": "research-concept-r16.md",
+    "revision": "research-concept-r17.md",
     "backbone": "resnet18",
     "instancesPerBag": 30,
     "bagsPerDomain": 100,
@@ -16,7 +16,7 @@
     "seeds": [
       0
     ],
-    "lambdaConstant": 1.0,
+    "rampCeiling": 1.0,
     "rampDelta": 20,
     "device": "mps",
     "environment": {
@@ -3253,7 +3253,7 @@
       "8": 7,
       "9": 6
     },
-    "revision": "research-concept-r16.md"
+    "revision": "research-concept-r17.md"
   },
   "target": {
     "domain": "U",
@@ -6481,6 +6481,6 @@
       "8": 6,
       "9": 6
     },
-    "revision": "research-concept-r16.md"
+    "revision": "research-concept-r17.md"
   }
 }

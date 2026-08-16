@@ -1,9 +1,9 @@
 {
   "kind": "bounded",
-  "revision": "research-concept-r16.md",
+  "revision": "research-concept-r17.md",
   "reduction": {
     "setting": "trained",
-    "revision": "research-concept-r16.md",
+    "revision": "research-concept-r17.md",
     "backbone": "resnet18",
     "instancesPerBag": 30,
     "bagsPerDomain": 100,
@@ -13,7 +13,7 @@
     "seeds": [
       0
     ],
-    "lambdaConstant": 1.0,
+    "rampCeiling": 1.0,
     "rampDelta": 20,
     "device": "mps",
     "environment": {
@@ -65,8 +65,8 @@
       "rung": "A->B",
       "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
       "metric": "targetAccuracy",
-      "meanDifference": 0.14351851851851852,
-      "stdev": 0.1707071952263806,
+      "meanDifference": 0.12962962962962962,
+      "stdev": 0.15482633308206284,
       "transfers": 6,
       "favouringRight": 1,
       "favouringLeft": 5
@@ -75,8 +75,8 @@
       "rung": "A->B",
       "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
       "metric": "sourceAccuracy",
-      "meanDifference": 0.06481481481481483,
-      "stdev": 0.06252571487457086,
+      "meanDifference": 0.07870370370370372,
+      "stdev": 0.08130241266116738,
       "transfers": 6,
       "favouringRight": 0,
       "favouringLeft": 6
@@ -125,158 +125,158 @@
       "rung": "B->E",
       "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
       "metric": "targetAccuracy",
-      "meanDifference": -0.04166666666666668,
-      "stdev": 0.03828902431136174,
-      "transfers": 6,
-      "favouringRight": 5,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "B->E",
-      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.018518518518518507,
-      "stdev": 0.037951669503554046,
-      "transfers": 6,
-      "favouringRight": 1,
-      "favouringLeft": 5
-    },
-    {
-      "rung": "E->F",
-      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.041666666666666664,
-      "stdev": 0.0421270858002864,
-      "transfers": 6,
-      "favouringRight": 0,
-      "favouringLeft": 6
-    },
-    {
-      "rung": "E->F",
-      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
-      "metric": "sourceAccuracy",
-      "meanDifference": -0.013888888888888876,
-      "stdev": 0.048907824615719464,
-      "transfers": 6,
-      "favouringRight": 4,
-      "favouringLeft": 2
-    },
-    {
-      "rung": "F->G",
-      "reading": "qu\u00e9 compra la correspondencia local",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.02777777777777779,
-      "stdev": 0.0785674201318386,
+      "meanDifference": 0.027777777777777787,
+      "stdev": 0.05826715823167509,
       "transfers": 6,
       "favouringRight": 2,
       "favouringLeft": 4
     },
     {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.03703703703703704,
+      "stdev": 0.09568896802047268,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.04166666666666666,
+      "stdev": 0.0941990275434065,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.05092592592592592,
+      "stdev": 0.1045517573207057,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
       "rung": "F->G",
       "reading": "qu\u00e9 compra la correspondencia local",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.013888888888888895,
-      "stdev": 0.02324055629261322,
-      "transfers": 6,
-      "favouringRight": 1,
-      "favouringLeft": 5
-    },
-    {
-      "rung": "C->E",
-      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
       "metric": "targetAccuracy",
-      "meanDifference": 0.12037037037037035,
-      "stdev": 0.15876322406928006,
-      "transfers": 6,
-      "favouringRight": 1,
-      "favouringLeft": 5
-    },
-    {
-      "rung": "C->E",
-      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.08333333333333333,
-      "stdev": 0.07243558228002943,
-      "transfers": 6,
-      "favouringRight": 0,
-      "favouringLeft": 6
-    },
-    {
-      "rung": "D->F",
-      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.09259259259259257,
-      "stdev": 0.1134023029066286,
-      "transfers": 6,
-      "favouringRight": 1,
-      "favouringLeft": 5
-    },
-    {
-      "rung": "D->F",
-      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.06481481481481483,
-      "stdev": 0.06252571487457086,
-      "transfers": 6,
-      "favouringRight": 0,
-      "favouringLeft": 6
-    },
-    {
-      "rung": "D->G",
-      "reading": "mano a mano, cada m\u00e9todo completo",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.12037037037037036,
-      "stdev": 0.10924356447224166,
-      "transfers": 6,
-      "favouringRight": 0,
-      "favouringLeft": 6
-    },
-    {
-      "rung": "D->G",
-      "reading": "mano a mano, cada m\u00e9todo completo",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.07870370370370372,
-      "stdev": 0.06190560981646955,
-      "transfers": 6,
-      "favouringRight": 0,
-      "favouringLeft": 6
-    },
-    {
-      "rung": "SU->SK",
-      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
-      "metric": "targetAccuracy",
-      "meanDifference": -0.03703703703703704,
-      "stdev": 0.182292217812218,
-      "transfers": 6,
-      "favouringRight": 4,
-      "favouringLeft": 2
-    },
-    {
-      "rung": "SU->SK",
-      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.023148148148148154,
+      "meanDifference": 0.023148148148148164,
       "stdev": 0.06897992789699697,
       "transfers": 6,
       "favouringRight": 2,
       "favouringLeft": 4
     },
     {
-      "rung": "SA->SK",
-      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
-      "metric": "targetAccuracy",
-      "meanDifference": -0.07407407407407408,
-      "stdev": 0.09886183566695662,
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.018518518518518517,
+      "stdev": 0.16069550481419728,
       "transfers": 6,
       "favouringRight": 4,
       "favouringLeft": 2
     },
     {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.17592592592592593,
+      "stdev": 0.18975834751777032,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.11574074074074076,
+      "stdev": 0.11839548011615206,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.14814814814814814,
+      "stdev": 0.15680713429641888,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.16203703703703706,
+      "stdev": 0.06435018649590388,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.1712962962962963,
+      "stdev": 0.14424844251749924,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.14351851851851852,
+      "stdev": 0.10888983370716325,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.0787037037037037,
+      "stdev": 0.15457694822259463,
+      "transfers": 6,
+      "favouringRight": 3,
+      "favouringLeft": 3
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.06481481481481484,
+      "stdev": 0.05171940756951461,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.009259259259259264,
+      "stdev": 0.12255846005758739,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
       "rung": "SA->SK",
       "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
       "metric": "sourceAccuracy",
-      "meanDifference": -0.06481481481481481,
-      "stdev": 0.13570422933749082,
+      "meanDifference": -0.037037037037037056,
+      "stdev": 0.1390739507816192,
       "transfers": 6,
       "favouringRight": 3,
       "favouringLeft": 3
@@ -285,21 +285,21 @@
       "rung": "SK->G",
       "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
       "metric": "targetAccuracy",
-      "meanDifference": 0.0138888888888889,
-      "stdev": 0.10936122047238625,
+      "meanDifference": -0.01851851851851851,
+      "stdev": 0.06252571487457087,
       "transfers": 6,
-      "favouringRight": 2,
-      "favouringLeft": 4
+      "favouringRight": 4,
+      "favouringLeft": 2
     },
     {
       "rung": "SK->G",
       "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
       "metric": "sourceAccuracy",
-      "meanDifference": -0.08333333333333331,
-      "stdev": 0.10393492741038726,
+      "meanDifference": -0.060185185185185154,
+      "stdev": 0.12840025511813946,
       "transfers": 6,
-      "favouringRight": 5,
-      "favouringLeft": 1
+      "favouringRight": 4,
+      "favouringLeft": 2
     }
   ],
   "detail": "MIL-CREDA/Results/Benchmark/summary.json",
