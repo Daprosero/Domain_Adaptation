@@ -39,7 +39,7 @@ from MIL_CREDA.local_term import (
     normalized_local_distance,
     total_correspondence,
 )
-from MIL_CREDA.objective import source_loss, total_objective
+from MIL_CREDA.objective import source_bound, source_loss, total_objective
 from MIL_CREDA.renyi import quadratic_entropy, renyi_entropy, trace_normalize
 
 TOL = 1e-10
@@ -462,27 +462,41 @@ def test_local_loss_in_unit_interval(rng: Sampler) -> None:
 def test_source_loss_matches_negative_log_likelihood_of_the_observed_class(
     rng: Sampler,
 ) -> None:
-    """r16 Sec. 3, Eq. (18): the term is the per-bag AVERAGE, not the sum.
+    """r17 Sec. 3, Eq. (18): the observed class alone, averaged per bag, over B_src.
 
-    Averaging is checked by decomposition: the loss of a batch must equal the
-    mean of the single-bag losses, which the sum would violate.
+    Three things at once, because they are one claim. The one-hot label selects
+    the observed class, so the loss must equal what the observed class scores on
+    its own. The term is the per-bag AVERAGE, checked by decomposition: the loss
+    of a batch equals the mean of the single-bag losses, which the sum would
+    violate. And the whole thing is divided by B_src, checked against the
+    unnormalized likelihood computed here rather than against the code's own
+    bound, so a wrong divisor cannot agree with itself.
     """
     C, n_bags = 4, 6
     G = simplex_rows(rng, n_bags, C)
-    Y = one_hot(rng.integers(0, C, size=n_bags), C)
+    classes = rng.integers(0, C, size=n_bags)
+    Y = one_hot(classes, C)
+    epsilon = 1e-8
+
+    observed = torch.stack([G[i, int(c)] for i, c in enumerate(classes)])
+    unnormalized = -torch.log((observed + epsilon) / (1.0 + epsilon))
+    expected = unnormalized.mean() / math.log(1.0 + 1.0 / epsilon)
+
     batch = source_loss(G, Y)
+    assert close(batch, expected, atol=1e-12)
+
     singles = torch.stack([source_loss(G[i : i + 1], Y[i : i + 1]) for i in range(n_bags)])
     assert close(batch, singles.mean(), atol=1e-12)
     assert not close(batch, singles.sum(), atol=1e-6)
 
 
 def test_source_loss_non_negative(rng: Sampler) -> None:
-    """r16 Sec. 3, Eq. (18): L_src >= 0 always, and exactly 0 at a certain, correct bag.
+    """r17 Sec. 3, Eq. (18): L_src >= 0 always, and exactly 0 at a certain, correct bag.
 
     The stabilizer is normalized by its own maximum, so the argument of the
     logarithm never exceeds one. Adding it inside the logarithm alone would let
     a perfectly predicted bag score -ln(1 + eps) < 0, which no negative
-    log-likelihood may do.
+    log-likelihood may do. Dividing by B_src > 0 preserves the sign.
     """
     C, n_bags = 4, 12
     for _ in range(30):
@@ -498,6 +512,41 @@ def test_source_loss_non_negative(rng: Sampler) -> None:
     wrong = torch.zeros((1, C), dtype=DTYPE)
     wrong[0, 0] = 1.0
     assert bool(torch.isfinite(source_loss(certain, wrong)))
+
+
+def test_source_loss_in_unit_interval(rng: Sampler) -> None:
+    """r17 Sec. 3, Eq. (18): L_src in [0, 1), the upper end a supremum not attained.
+
+    B_src is the exact supremum of a single bag's loss, so dividing by it caps
+    the term at one. Two poles, because the bound only means something if it is
+    tight and only holds if it is reached from below.
+
+    Strictly positive scores — the only ones the classifier can produce — stay
+    strictly under one. The supremum is attained only at g = 0, which no softmax
+    reaches, and the fixture that sets it there scores exactly one: that is what
+    makes the divisor exact rather than merely safe. A loose bound would leave
+    the worst case short of one, so the equality is the test.
+    """
+    C, n_bags = 5, 16
+    for _ in range(30):
+        G = simplex_rows(rng, n_bags, C)
+        Y = one_hot(rng.integers(0, C, size=n_bags), C)
+        assert float(G.min()) > 0.0, "the fixture is not strictly positive"
+        value = float(source_loss(G, Y))
+        assert 0.0 <= value < 1.0
+
+    # The other pole: all the mass off the observed class is the supremum itself.
+    worst = torch.zeros((1, C), dtype=DTYPE)
+    worst[0, 0] = 1.0
+    label = torch.zeros((1, C), dtype=DTYPE)
+    label[0, 1] = 1.0
+    assert float(worst[0, 1]) == 0.0, "the fixture does not place zero on the observed class"
+    assert close(source_loss(worst, label), 1.0, atol=1e-12)
+
+    # And the bound is what eps fixes, not a constant: a larger stabilizer is a
+    # smaller ceiling, so the same bag costs more of it.
+    assert source_bound(1e-6) < source_bound(1e-8)
+    assert float(source_loss(G, Y, epsilon=1e-6)) > float(source_loss(G, Y, epsilon=1e-8))
 
 
 def test_objective_reduces_to_source_only_when_coefficients_vanish() -> None:
