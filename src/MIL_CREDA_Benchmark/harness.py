@@ -16,6 +16,7 @@ because the pilot has to exercise the same path the full run will.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import platform
@@ -85,7 +86,53 @@ def environment() -> dict:
         "torch": torch.__version__,
         "selfHosted": inside,
         "power": power_state(),
+        "device": device_class(),
     }
+
+
+def device_class() -> dict:
+    """Which accelerator this actually got, not which one was asked for.
+
+    Requesting a class and receiving it are two obligations, and only the second
+    is a fact. A remote service allocates by availability, so a run can ask for
+    one accelerator and land on another without a word — and `seconds` and
+    `peakMiB` are dimensions of the verdict, so grouping them by an environment
+    that cannot tell two GPU classes apart is grouping by a label that lies.
+
+    The name is what the driver reports; `kind` is the backend, which is what
+    survives when a platform gives no model name at all.
+    """
+    if torch.cuda.is_available():
+        try:
+            return {"name": torch.cuda.get_device_name(0), "kind": "cuda"}
+        except Exception:
+            return {"name": "cuda", "kind": "cuda"}
+    if torch.backends.mps.is_available():
+        return {"name": "mps", "kind": "mps"}
+    return {"name": platform.processor() or "cpu", "kind": "cpu"}
+
+
+#: What makes two runs the same machine for the purpose of a cost measurement.
+#:
+#: `power.charge` is deliberately absent: it moves while a run is going and is not
+#: a class of machine. `power.source` is present because throttling on battery is
+#: a real difference between arms, which is the reason the stamp exists at all.
+ENVIRONMENT_KEYS = ("python", "platform", "torch", "selfHosted")
+
+
+def environment_key(stamp: dict) -> str:
+    """A short handle for one machine, so a run can carry it without the whole stamp.
+
+    Runs reference this; the full stamps live once beside them. Comparing handles
+    is what lets a merge group cost dimensions by machine instead of pooling them
+    into a mean that describes none of the machines involved.
+    """
+    device = stamp.get("device") or {}
+    power = stamp.get("power") or {}
+    material = [str(stamp.get(k)) for k in ENVIRONMENT_KEYS]
+    material += [str(device.get("name")), str(device.get("kind")),
+                 str(power.get("source"))]
+    return hashlib.sha256("|".join(material).encode("utf-8")).hexdigest()[:12]
 
 
 def power_state() -> dict:
@@ -349,6 +396,12 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         "arm": arm_id,
         "transfer": f"{transfer[0]}->{transfer[1]}",
         "seed": seed,
+        # Which machine produced this run, on the run and not only on the
+        # campaign. A shard is a remote session, and a session that times out and
+        # resumes can land on different hardware inside one shard — a stamp held
+        # once per file cannot express that, and it is exactly what distributing
+        # produces. The full stamps live once beside the runs; this is the handle.
+        "env": environment_key(reduction.environment),
         "targetAccuracy": final["targetAccuracy"],
         "sourceAccuracy": final["sourceAccuracy"],
         "seconds": seconds,
@@ -449,6 +502,24 @@ def paired_across_transfers(grid: dict) -> list[dict]:
     return readings
 
 
+def median_seeds(cell_runs: list[dict], arm_id: str) -> set:
+    """Which repetitions of one cell sit closest to its median.
+
+    The selection rule on its own, so a shard and the centre can share it rather
+    than each carrying a copy that drifts. Lifted verbatim out of `keep_median`,
+    which now calls it — same ordering, same span, same edge behaviour when a cell
+    has fewer runs than `CHECKPOINTS` asks for.
+
+    Never the best. The best of thirty is an extreme of thirty draws, and the
+    latent space of the luckiest run describes that run rather than the method.
+    """
+    ordered = sorted(cell_runs, key=lambda r: r["targetAccuracy"])
+    middle = len(ordered) // 2
+    span = min(config.CHECKPOINTS[arm_id], len(ordered))
+    start = max(0, min(middle - span // 2, len(ordered) - span))
+    return {run["seed"] for run in ordered[start:start + span]}
+
+
 def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
                 manifests: dict, reduction: Reduction) -> list[str]:
     """Persist the repetitions closest to the median, and drop the rest.
@@ -461,11 +532,7 @@ def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
     and re-running the chosen ones later would not reproduce them bit for bit on
     a device that does not promise determinism.
     """
-    ordered = sorted(cell_runs, key=lambda r: r["targetAccuracy"])
-    middle = len(ordered) // 2
-    span = min(config.CHECKPOINTS[arm_id], len(ordered))
-    start = max(0, min(middle - span // 2, len(ordered) - span))
-    keep = {run["seed"] for run in ordered[start:start + span]}
+    keep = median_seeds(cell_runs, arm_id)
 
     kept: list[str] = []
     for run in cell_runs:
