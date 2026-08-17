@@ -384,3 +384,88 @@ def test_the_power_state_is_stamped_and_never_fatal() -> None:
     state = harness.power_state()
     assert state["source"] in ("mains", "battery", "unknown")
     assert "power" in harness.environment()
+
+
+# ------------------------------------------------- the device actually received
+
+def test_the_environment_stamps_the_accelerator_it_got() -> None:
+    """Pinning an accelerator is an intention; the stamp is the fact.
+
+    A remote service allocates by availability, so a shard can request one class
+    and silently land on another. `seconds` and `peakMiB` describe whichever
+    machine produced them, so grouping them by an environment that cannot tell
+    two GPU classes apart is grouping by a label that lies.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    device = harness.device_class()
+    assert set(device) >= {"name", "kind"}
+    assert isinstance(device["name"], str) and device["name"]
+    assert device["kind"] in ("cuda", "mps", "cpu")
+    assert harness.environment()["device"] == device
+
+
+def test_two_stamps_differ_when_the_accelerator_differs() -> None:
+    """Reachable red: a stamp that ignored the device would call these equal,
+    which is exactly the case sharding across accounts produces."""
+    from MIL_CREDA_Benchmark import harness
+
+    base = {"python": "3.12.13", "platform": "linux", "torch": "2.13.0",
+            "selfHosted": True, "power": {"source": "mains"}}
+    t4 = harness.environment_key({**base, "device": {"name": "Tesla T4", "kind": "cuda"}})
+    p100 = harness.environment_key({**base, "device": {"name": "Tesla P100", "kind": "cuda"}})
+    assert t4 != p100
+    assert t4 == harness.environment_key(
+        {**base, "device": {"name": "Tesla T4", "kind": "cuda"}})
+
+
+def test_the_charge_level_does_not_change_the_environment_key() -> None:
+    """It moves during a run and is not a machine class; the source is, because
+    throttling is a real between-arms difference."""
+    from MIL_CREDA_Benchmark import harness
+
+    base = {"python": "3.12.13", "platform": "linux", "torch": "2.13.0",
+            "selfHosted": True, "device": {"name": "Tesla T4", "kind": "cuda"}}
+    full = harness.environment_key({**base, "power": {"source": "mains", "charge": 100}})
+    low = harness.environment_key({**base, "power": {"source": "mains", "charge": 12}})
+    battery = harness.environment_key({**base, "power": {"source": "battery", "charge": 12}})
+    assert full == low
+    assert battery != low
+
+
+def test_median_seeds_is_the_selection_rule_on_its_own() -> None:
+    """Extracted so a shard and the centre share one rule.
+
+    Acceptance criterion: bit-identical to what `keep_median` selected before, so
+    the existing callers and tests do not move.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    runs = [{"seed": s, "targetAccuracy": a}
+            for s, a in ((0, 0.10), (1, 0.90), (2, 0.50), (3, 0.30), (4, 0.70))]
+    # The historical body, reproduced here as the golden the extraction must match.
+    ordered = sorted(runs, key=lambda r: r["targetAccuracy"])
+    middle = len(ordered) // 2
+    span = min(config.CHECKPOINTS["G"], len(ordered))
+    start = max(0, min(middle - span // 2, len(ordered) - span))
+    expected = {run["seed"] for run in ordered[start:start + span]}
+
+    assert harness.median_seeds(runs, "G") == expected
+    assert harness.median_seeds(runs, "G") == {2, 3, 4}
+
+
+def test_every_run_carries_the_machine_that_produced_it() -> None:
+    """The stamp travels on the run, not only on the campaign.
+
+    A shard is a remote session, and one that times out and resumes can land on
+    different hardware inside a single shard id. A per-campaign stamp cannot
+    express that, and it is precisely what distributing produces.
+
+    Reachable red: with the handle only on the Reduction, a merge could not tell
+    two machines apart within one shard, and would pool their cost dimensions.
+    """
+    import inspect
+    from MIL_CREDA_Benchmark import harness
+
+    source = inspect.getsource(harness.run_one)
+    assert '"env": environment_key(reduction.environment)' in source
