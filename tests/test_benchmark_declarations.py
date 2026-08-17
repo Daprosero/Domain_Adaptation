@@ -14,6 +14,8 @@ no network and no model weights.
 from __future__ import annotations
 
 import MIL_CREDA_Benchmark
+import json
+
 import pytest
 import torch
 
@@ -469,3 +471,51 @@ def test_every_run_carries_the_machine_that_produced_it() -> None:
 
     source = inspect.getsource(harness.run_one)
     assert '"env": environment_key(reduction.environment)' in source
+
+
+# ------------------------------------------------------- shard-safe persistence
+
+def test_each_shard_writes_where_no_other_shard_writes(tmp_path, monkeypatch) -> None:
+    """Today one hardcoded path, opened `"w"`, truncating on every campaign.
+
+    Two shards running at once against it would clobber each other's records, and
+    the loser would be a silent partial file rather than an error. Reachable red:
+    with the paths fixed, both of these resolve to the same file.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    one = harness.shard_paths("alpha")
+    two = harness.shard_paths("beta")
+    assert one["runs"] != two["runs"]
+    assert one["partial"] != two["partial"]
+    assert one["stamp"] != two["stamp"]
+    for name in ("runs", "partial", "stamp"):
+        assert "alpha" in str(one[name]) and "beta" in str(two[name])
+
+
+def test_no_shard_named_means_the_paths_stay_where_they_always_were(tmp_path, monkeypatch) -> None:
+    """A single-machine run must not move its own files.
+
+    Every notebook, every record already written and the whole `records`
+    declaration name these paths. Sharding is an addition, not a relocation.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    here = harness.shard_paths(None)
+    assert here["runs"] == tmp_path / "runs.jsonl"
+    assert here["partial"] == tmp_path / "ceilings.partial.json"
+
+
+def test_a_shard_records_its_own_stamp_beside_its_runs(tmp_path, monkeypatch) -> None:
+    """The full environment lives once per shard; runs carry only the handle."""
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    harness.write_shard_stamp("alpha", harness.Reduction())
+    stored = json.loads(harness.shard_paths("alpha")["stamp"].read_text())
+    assert stored["shard"] == "alpha"
+    assert stored["env"] == harness.environment_key(stored["environment"])
+    assert "device" in stored["environment"]
