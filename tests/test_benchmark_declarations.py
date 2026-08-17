@@ -329,6 +329,164 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
     assert "creda" in str(raised.value)
 
 
+# ------------------------------ the notebook actually obtains what it needs
+
+def _phase_one() -> list[dict]:
+    """The campaign notebook's code cells, in order."""
+    path = (config.REPOSITORY / "MIL-CREDA" / "Notebooks"
+            / "Benchmark_Phase1.ipynb")
+    notebook = json.loads(path.read_text(encoding="utf-8"))
+    return [cell for cell in notebook["cells"] if cell["cell_type"] == "code"]
+
+
+def test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign() -> None:
+    """The join, checked from the notebook's end and not only from the harness'.
+
+    `campaign` refuses without ceilings and `ceilings_in_force` supplies them, and
+    both were green while the only caller that matters never called one from the
+    other: the notebook built its `Reduction` with the empty mapping `config`
+    imports and died on the refusal. Testing each half against a fixture written
+    here verifies both halves and never the connection, which is the only thing
+    this rule was ever about.
+    """
+    sources = ["".join(cell["source"]) for cell in _phase_one()]
+    obtains = [i for i, s in enumerate(sources) if "ceilings_in_force" in s]
+    runs = [i for i, s in enumerate(sources) if "harness.campaign(" in s]
+    assert obtains, "no cell obtains the ceilings; the campaign will refuse"
+    assert runs, "no cell runs the campaign"
+    assert min(obtains) < min(runs), (
+        f"the ceilings are obtained at cell {min(obtains)}, after the campaign at "
+        f"{min(runs)}")
+
+
+def test_the_notebook_forecasts_the_search_before_spending_it() -> None:
+    """The search is the longest single wait and the one part with no pilot scale.
+
+    A notebook forecasting only the grid puts it ahead of the estimate that exists
+    to precede it.
+    """
+    sources = ["".join(cell["source"]) for cell in _phase_one()]
+    forecasts = [i for i, s in enumerate(sources) if '["search"]' in s]
+    obtains = [i for i, s in enumerate(sources) if "ceilings_in_force" in s]
+    assert forecasts, "nothing forecasts what the ceiling search costs"
+    assert min(forecasts) < min(obtains), (
+        "the search is forecast after it is spent, which is not a forecast")
+
+
+def test_the_ceilings_reach_the_written_report_and_not_only_the_screen() -> None:
+    """The agreement is that the *report* says which ceiling each family found.
+
+    A cell that prints it to the console satisfies a reader watching the run and
+    nobody afterwards, and the record is what a later session reads.
+    """
+    written = [s for s in ("".join(c["source"]) for c in _phase_one())
+               if "report.md" in s]
+    assert written, "no cell writes the readable report"
+    assert any("render_ceilings" in s and "conclusion_ceilings" in s
+               for s in written), (
+        "the written report carries no ceiling section")
+
+
+def _searched(**overrides) -> dict:
+    entry = {"arm": "G", "ceiling": 1e-4, "criterion": "targetAccuracy",
+             "grid": [{"ceiling": 1e-4, "targetAccuracy": 0.8},
+                      {"ceiling": 1.0, "targetAccuracy": 0.6}],
+             "tied": [1e-4], "decidedByTieBreak": False, "seedsAgree": True,
+             "role": "valid", "epochs": 20, "seeds": [0, 1, 2],
+             "atRequiredScale": True, "neutral": 1.0}
+    return {"milcreda": {**entry, **overrides}}
+
+
+def test_the_ceiling_conclusion_separates_a_measurement_from_a_tie_break() -> None:
+    """A ceiling chosen between four identical scores and one chosen by a real
+    difference are the same number, so the number cannot be the conclusion."""
+    from MIL_CREDA_Benchmark import tables
+
+    measured = tables.conclusion_ceilings(_searched())
+    tied = tables.conclusion_ceilings(
+        _searched(decidedByTieBreak=True, tied=[1e-4, 1e-3, 1e-2, 1.0]))
+    assert measured != tied, "the conclusion cannot come out different"
+    assert "desempate" in tied and "desempate" not in measured
+
+
+def test_the_ceiling_conclusion_says_what_the_record_does_not_say() -> None:
+    """A record written by an earlier search carries no tie-break and no agreement.
+
+    Defaulting to `False` would assert *chosen by a real difference* about a record
+    that never said so — a reason invented to cover what was not found, which reads
+    as a finding and gets acted on like one.
+    """
+    from MIL_CREDA_Benchmark import tables
+
+    older = {"milcreda": {"ceiling": 1e-4, "grid": [], "criterion": "targetAccuracy"}}
+    text = tables.conclusion_ceilings(older)
+    assert "sin que el registro diga cómo se desempató" in text
+    assert "el registro no dice si las semillas coincidieron" in text
+    assert "por una diferencia en el criterio" not in text
+
+
+def test_the_campaign_carries_the_whole_search_record_not_only_the_winner() -> None:
+    """A ceiling chosen between four identical scores and one chosen by a real
+    difference are the same number and not the same evidence.
+
+    And filling the field at the caller's hand is how it ends up filled on the run
+    somebody was paying attention to and empty on the next.
+    """
+    import inspect
+    from MIL_CREDA_Benchmark import harness
+
+    source = inspect.getsource(harness.campaign)
+    assert "ceilingSearch=searched" in source, (
+        "the campaign does not copy the search record into its reduction")
+
+
+def test_an_existing_ceiling_record_is_never_re_searched(tmp_path, monkeypatch) -> None:
+    """Overwriting an answer because a later caller wanted a different one is the
+    silent refunding the campaign's refusal exists to prevent."""
+    from MIL_CREDA_Benchmark import harness
+
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "creda": {"ceiling": 0.5, "atRequiredScale": True},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("re-searched over an existing record")
+
+    monkeypatch.setattr(harness, "search_ceilings", refuse)
+    found = harness.ceilings_in_force(harness.Reduction(), torch.device("cpu"),
+                                      progress=lambda *a: None)
+    assert found == {"creda": 0.5}
+
+
+def test_the_ceilings_are_read_back_from_disk_and_not_from_the_import(
+        tmp_path, monkeypatch) -> None:
+    """`config.CEILINGS` is filled once at import, from a file that may not exist.
+
+    A caller that searches in the same process — a notebook, the only place that
+    ever does — would otherwise hold the empty mapping it imported and hand it to
+    a campaign that refuses it, with the answer sitting on disk beside it.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    record = tmp_path / "ceilings.json"
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    monkeypatch.setattr(config, "CEILINGS", {})
+
+    def write_it(*args, **kwargs):
+        record.write_text(json.dumps({
+            "milcreda": {"ceiling": 0.25, "atRequiredScale": True},
+        }), encoding="utf-8")
+        return {}
+
+    monkeypatch.setattr(harness, "search_ceilings", write_it)
+    found = harness.ceilings_in_force(harness.Reduction(), torch.device("cpu"),
+                                      progress=lambda *a: None)
+    assert found == {"milcreda": 0.25}, (
+        f"read from the stale import instead of the record: {found}")
+
+
 # ------------------------------------------- resuming a search cut in half
 
 def test_a_measured_cell_survives_the_run_being_cut(tmp_path, monkeypatch) -> None:

@@ -663,6 +663,29 @@ def search_record() -> dict | None:
     return json.loads(config.CEILINGS_RECORD.read_text(encoding="utf-8"))
 
 
+def ceilings_in_force(reduction: Reduction, device: torch.device,
+                      progress=print, shard: str | None = None) -> dict[str, float]:
+    """The ceilings the campaign will run at: searched once if no record exists.
+
+    The campaign refuses without them, and `config.CEILINGS` is filled at import
+    from a file that may not exist yet — so a caller that imports the package,
+    searches, and then builds a `Reduction` gets the empty mapping it started
+    with and a refusal it cannot read. This is the one call that closes that gap,
+    and it reads the record back from disk rather than trusting what the search
+    returned, so what the campaign runs at is what the record says.
+
+    An existing record is used as it stands and never re-searched. A record that
+    exists means the search answered, and overwriting an answer because a later
+    caller wanted a different one is exactly the silent refunding the campaign's
+    refusal exists to prevent. Under-scale is not fixed here either: `campaign`
+    reads `atRequiredScale` itself and says which record to delete.
+    """
+    if search_record() is None:
+        progress("no ceiling record: searching, once, before anything is compared")
+        search_ceilings(reduction, device, progress=progress, shard=shard)
+    return config.ceilings_on_record()
+
+
 def search_ceilings(reduction: Reduction, device: torch.device,
                     progress=print, shard: str | None = None) -> dict:
     """Each family's ceiling, found on the selection transfers and kept for its
@@ -854,7 +877,13 @@ def campaign(reduction: Reduction, device: torch.device,
     # obvious failure; this is the quiet one — someone lowers the search to test
     # the pipeline cheaply, `ceilings.json` gets written from three epochs, and
     # every campaign afterwards consumes it without a word.
-    under = [family for family, entry in (search_record() or {}).items()
+    searched = search_record() or {}
+    # The whole record travels into the reduction, here and not at the caller's
+    # hand. The winner alone cannot say whether the grid leaned or the tie-break
+    # chose, and a field a caller has to remember to fill is one that gets filled
+    # on the run somebody was paying attention and left empty on the next.
+    reduction = replace(reduction, ceilingSearch=searched)
+    under = [family for family, entry in searched.items()
              if not entry.get("atRequiredScale", False)]
     if under:
         raise SystemExit(

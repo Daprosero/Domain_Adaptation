@@ -64,6 +64,12 @@ __benchmark__ = {
             "tables.render_rungs",
             "tables.render_readings",
             "tables.render_correspondence",
+            # The ceiling search's whole grid, not only its winner. The scalar that
+            # governs every table below is chosen here, so the report has to show
+            # what it was chosen over: a ceiling that wins among four identical
+            # scores and one that wins by a real difference are the same number and
+            # not the same evidence.
+            "tables.render_ceilings",
         ],
         "conclusions": [
             "tables.conclusion",
@@ -74,6 +80,7 @@ __benchmark__ = {
             "tables.conclusion_mass",
             "tables.conclusion_attention",
             "tables.conclusion_correspondence",
+            "tables.conclusion_ceilings",
         ],
         # One call that takes a record and returns {label: text}. It exists so the
         # verification can run every conclusion over permuted numbers without

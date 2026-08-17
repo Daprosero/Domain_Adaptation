@@ -460,12 +460,17 @@ DATA_CACHE = REPOSITORY / ".benchmark-data"
 CEILINGS_RECORD = RESULTS / "ceilings.json"
 
 
-def _load_ceilings() -> dict[str, float]:
+def ceilings_on_record() -> dict[str, float]:
     """The searched ceilings, read from the record the search wrote.
 
     Read and not remembered, like everything else here. A constant typed in by
     hand would be a second source of truth for a measured value: it goes stale in
     silence the first time the search is re-run and is believed anyway.
+
+    Public, and re-read on every call, because `CEILINGS` below is filled once at
+    import. A caller that runs the search in the same process — a notebook, which
+    is the only place that ever does — would otherwise hold the empty mapping this
+    module was imported with and hand it to a campaign that refuses it.
     """
     if not CEILINGS_RECORD.exists():
         return {}
@@ -474,7 +479,7 @@ def _load_ceilings() -> dict[str, float]:
     return {family: entry["ceiling"] for family, entry in found.items()}
 
 
-CEILINGS.update(_load_ceilings())
+CEILINGS.update(ceilings_on_record())
 
 # All three are ignored by git: this is a preliminary phase for deciding whether
 # the strategy holds, not part of the paper's record.
@@ -493,4 +498,29 @@ def sizing() -> dict:
         "imagesPerStep": IMAGES_PER_STEP,
         "imagePassesPerRun": EPOCHS * steps * IMAGES_PER_STEP * 2,  # source + target
         "verdictsMeaningful": len(SEEDS) >= 3,
+        # And the search's own shape, beside the campaign's. It is the first thing
+        # that spends machine time and the one part that has no pilot scale: a
+        # notebook forecasting only the grid would put the longest single wait
+        # ahead of the estimate that exists to precede it.
+        "search": search_sizing(),
+    }
+
+
+def search_sizing() -> dict:
+    """What the ceiling search costs, in the same units the grid is forecast in.
+
+    Its epoch count is its own — `SEARCH_EPOCHS`, never the pilot's — so a caller
+    scaling from a timed pilot run has to know the ratio rather than assume it.
+    """
+    runs = (len(SEARCH_ARMS) * len(CEILING_GRID)
+            * len(SEARCH_TRANSFERS) * len(SEARCH_SEEDS))
+    return {
+        "families": len(SEARCH_ARMS),
+        "ceilings": len(CEILING_GRID),
+        "transfers": len(SEARCH_TRANSFERS),
+        "seeds": len(SEARCH_SEEDS),
+        "runs": runs,
+        "epochs": SEARCH_EPOCHS,
+        "atRequiredScale": (SEARCH_EPOCHS >= FULL_SEARCH_EPOCHS
+                            and len(SEARCH_SEEDS) >= FULL_SEARCH_SEEDS),
     }
