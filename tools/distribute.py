@@ -13,16 +13,21 @@ a run costing hours would live on one disk and no later session could reproduce
 how it was launched.
 
 **Credentials are a path here and never a value.** The store is never opened,
-never printed, never parsed. How many accounts exist comes from the accounts
-CLI's own `list`, which is built to report usernames and never keys, and even
-that is used only to size a plan.
+never printed, never parsed — not even indirectly: worker enumeration and the
+capacity clamp are the forge's own `remote-execution` skill's job now.
+`adapters/kaggle.py` runs the accounts CLI's own `list`, built to report
+usernames and never keys; `packer.py` clamps what this file declares it wants
+against what each worker states it allows. What stays genuinely this
+repository's to say — the seed axis a shard is, the accelerator asked for, how
+much of a worker it wants at once, and `run_shard()`'s own local execution
+path — stays here, and only here.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -40,30 +45,92 @@ from MIL_CREDA_Benchmark import config, harness, shards  # noqa: E402
 #: arrived, and the merge groups by that rather than by this.
 ACCELERATOR = "T4"
 
-#: Where the accounts skill keeps its store. A path, passed along, never read.
-ACCOUNTS_CLI = (REPOSITORY.parents[1] / ".claude" / "skills" / "kaggle-accounts"
-                / "scripts" / "accounts_cli.py")
+#: The forge root, two levels above this file: `<root>/implementations/
+#: Domain_Adaptation/tools/distribute.py`.
+_FORGE_ROOT = REPOSITORY.parents[1]
+_REMOTE_EXECUTION_SCRIPTS = (
+    _FORGE_ROOT / ".claude" / "skills" / "remote-execution" / "scripts"
+)
 
 
-def account_count() -> int | None:
-    """How many accounts are available, via the command built to say so.
+def _load_forge_module(module_name: str, relative_path: str):
+    """Path-import one module from the forge's `remote-execution` skill,
+    reusing an already-loaded copy under `module_name` when one exists.
 
-    `list` reports usernames and never keys, which is exactly why it is the only
-    thing asked. Returns `None` when the question cannot be answered rather than
-    guessing a number a plan would then be sized against.
+    Same technique, and the same correctness reason, as that skill's own
+    `packer.py`/`remote_cli.py` reusing each other's sibling loads:
+    `packer.plan()`'s `isinstance(adapter, ADAPTER.Adapter)` check has to be
+    made against the SAME `Adapter` class the loaded `adapters/kaggle.py`
+    subclasses, not a second, separately exec'd copy of `adapter.py` that
+    merely shares its name. Loading `packer.py` first, so it is the one that
+    first puts `"remote_execution_adapter"` into `sys.modules`, is what makes
+    the later Kaggle adapter load reuse that exact copy instead of its own.
     """
-    if not ACCOUNTS_CLI.exists():
-        return None
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    script = _REMOTE_EXECUTION_SCRIPTS / relative_path
+    spec = importlib.util.spec_from_file_location(module_name, script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+PACKER = _load_forge_module("remote_execution_packer", "packer.py")
+# Side effect only: executing adapters/kaggle.py registers "kaggle" into
+# PACKER.ADAPTER's own registry. Nothing here keeps a direct reference to
+# it — `capacity_plans()` below reaches the class back out through
+# `PACKER.ADAPTER.resolve("kaggle")`, the same route `remote_cli.py`'s own
+# `main()` uses to select a backend by name.
+_load_forge_module("remote_execution_adapter_kaggle", "adapters/kaggle.py")
+
+#: What this repository asks of every worker, concurrently — its own
+#: declared want, and no opinion about what a worker will actually allow.
+#: One, because `shard_seeds()` already guarantees a shard is a whole
+#: repetition running start to finish on a single machine: this repository
+#: never asks one worker to run two shards side by side. The cap this gets
+#: clamped against is `adapter.workers()`'s own fact, read fresh by
+#: `packer.plan()` below — never read or asserted here.
+REQUESTED_CAPACITY_PER_WORKER = 1
+
+
+def capacity_plans() -> list["PACKER.Plan"] | None:
+    """One clamped `Plan` per worker the Kaggle adapter currently reports.
+
+    Replaces this file's own former `account_count()`, which re-derived a
+    worker count through its own subprocess call and asked for no clamp at
+    all. Worker enumeration now happens exactly once inside
+    `adapter.workers()` — the same sanctioned `accounts_cli.py list --json`
+    command `account_count()` used to run itself, moved to the one file in
+    the forge's skill permitted to name a service — and the clamp happens
+    exactly once inside `packer.plan()`. This function duplicates neither;
+    it only asks each in turn, once per worker.
+
+    Returns `None`, never a guess, when workers cannot be enumerated at
+    all — everything `KaggleAdapterError` already refuses to fabricate past,
+    surfaced here as the same `None` `account_count()` returned on the same
+    kind of failure. A caller sizing a plan on this falls back to one shard,
+    exactly as it always has.
+    """
+    adapter = PACKER.ADAPTER.resolve("kaggle")()
     try:
-        done = subprocess.run([sys.executable, str(ACCOUNTS_CLI), "list", "--json"],
-                              capture_output=True, text=True, timeout=30, shell=False)
-    except (OSError, subprocess.SubprocessError):
+        workers = adapter.workers()
+    except PACKER.ADAPTER.AdapterError:
         return None
-    if done.returncode != 0 or not done.stdout.strip().startswith(("{", "[")):
-        return None
-    listed = json.loads(done.stdout)
-    accounts = listed.get("accounts") if isinstance(listed, dict) else listed
-    return len(accounts) if isinstance(accounts, list) else None
+    return [
+        PACKER.plan(
+            adapter=adapter,
+            worker_id=worker.id,
+            requested=REQUESTED_CAPACITY_PER_WORKER,
+            ledger_lines=(),
+            # No ledger lines means the fold never dereferences this value —
+            # a plan here is a dry run before any notebook is even chosen,
+            # so there is no source tree yet for a real digest to describe.
+            live_digest="",
+        )
+        for worker in workers
+    ]
 
 
 def shard_seeds(seeds: list[int], parts: int) -> list[list[int]]:
@@ -96,14 +163,36 @@ def plan(parts: int | None = None, seeds: list[int] | None = None) -> dict:
     measured, so it is a projection from data rather than an estimate from
     memory, and it is reported without a threshold: whether it is worth
     distributing is not a question this file gets to answer.
+
+    `requested`, `cap`, `inFlight` and `granted` are kept as four separate
+    numbers per worker, exactly as `packer.plan()` itself reports them: a
+    clamp collapsed down to one number would be indistinguishable from an
+    unclamped grant that merely happens to equal it.
     """
     seeds = list(seeds if seeds is not None else config.FULL_SEEDS)
-    available = account_count()
+    worker_capacity = capacity_plans()
+    available = (
+        sum(one.granted for one in worker_capacity)
+        if worker_capacity is not None else None
+    )
     parts = parts or available or 1
     groups = shard_seeds(seeds, parts)
     return {
         "accelerator": ACCELERATOR,
-        "accountsAvailable": available,
+        "capacity": {
+            "requestedPerWorker": REQUESTED_CAPACITY_PER_WORKER,
+            "granted": available,
+            "workers": [
+                {
+                    "worker": one.worker,
+                    "requested": one.requested,
+                    "cap": one.cap,
+                    "inFlight": one.in_flight,
+                    "granted": one.granted,
+                }
+                for one in (worker_capacity or [])
+            ],
+        },
         "axis": (shards.declaration() or {}).get("axis"),
         "shards": [{"id": f"s{index:02d}", "seeds": group}
                    for index, group in enumerate(groups)],

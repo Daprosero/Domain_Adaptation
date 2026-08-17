@@ -7,6 +7,7 @@ quietly stops being one: requesting an accelerator, and having received it.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -62,9 +63,11 @@ def test_the_plan_says_the_request_is_not_a_guarantee():
 def test_the_store_is_never_opened(monkeypatch):
     """Credentials are a path here and never a value.
 
-    The count comes from the command built to report usernames and never keys,
-    and a failure to answer returns None rather than a guess a plan would then
-    be sized against.
+    Worker enumeration is now the forge's own Kaggle adapter's job, held to
+    the same discipline this file used to enforce with its own subprocess
+    call: usernames only, from the accounts CLI's own `list`, and a failure
+    to answer returns None rather than a guess a plan would then be sized
+    against.
     """
     import subprocess as sp
 
@@ -77,8 +80,80 @@ def test_the_store_is_never_opened(monkeypatch):
 
     monkeypatch.setattr(Path, "read_text", watched)
     monkeypatch.setattr(sp, "run", lambda *a, **k: (_ for _ in ()).throw(OSError()))
-    monkeypatch.setattr(distribute.subprocess, "run",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError()))
 
-    assert distribute.account_count() is None
+    assert distribute.capacity_plans() is None
     assert not any("accounts.json" in p for p in opened)
+
+
+def _fake_accounts_result(usernames):
+    class _Result:
+        returncode = 0
+        stdout = json.dumps({"accounts": [{"username": name} for name in usernames]})
+        stderr = ""
+
+    return _Result()
+
+
+def test_distribute_declares_capacity_and_calls_packer_plan(monkeypatch):
+    """`capacity_plans()` delegates worker enumeration and the capacity
+    clamp entirely to the forge's `adapters/kaggle.py` and `packer.plan()`;
+    `plan()`'s own dict reports what came back, all four numbers included.
+
+    Reachable red: before this task, neither `capacity_plans` nor a
+    `capacity` key on `plan()`'s dict existed — this raised `AttributeError`
+    / `KeyError` against pre-change code.
+    """
+    import subprocess as sp
+
+    monkeypatch.setattr(
+        sp, "run", lambda argv, **k: _fake_accounts_result(["alice", "bob"]))
+
+    plans = distribute.capacity_plans()
+    assert plans is not None
+    assert sorted(p.worker for p in plans) == ["alice", "bob"]
+    for one in plans:
+        assert one.requested == distribute.REQUESTED_CAPACITY_PER_WORKER
+        assert one.cap == 1
+        assert one.in_flight == 0
+        assert one.granted == 1
+
+    drawn = distribute.plan(seeds=list(range(2)))
+    assert drawn["capacity"]["requestedPerWorker"] == distribute.REQUESTED_CAPACITY_PER_WORKER
+    assert drawn["capacity"]["granted"] == 2
+    assert {w["worker"] for w in drawn["capacity"]["workers"]} == {"alice", "bob"}
+    assert all(
+        {"worker", "requested", "cap", "inFlight", "granted"} <= w.keys()
+        for w in drawn["capacity"]["workers"]
+    )
+    assert len(drawn["shards"]) == 2
+
+
+def test_a_clamped_plan_is_distinguishable_from_an_unclamped_one_with_the_same_granted(monkeypatch):
+    """`requested`, `cap`, `inFlight` and `granted` stay four separate
+    numbers: a request the worker fully honors and a request the worker
+    clamps down can land on the identical `granted` count, and only the
+    other three numbers tell those two plans apart.
+    """
+    import subprocess as sp
+
+    monkeypatch.setattr(sp, "run", lambda argv, **k: _fake_accounts_result(["alice"]))
+
+    monkeypatch.setattr(distribute, "REQUESTED_CAPACITY_PER_WORKER", 1)
+    unclamped = distribute.capacity_plans()[0]
+
+    monkeypatch.setattr(distribute, "REQUESTED_CAPACITY_PER_WORKER", 5)
+    clamped = distribute.capacity_plans()[0]
+
+    assert unclamped.granted == clamped.granted == 1
+    assert unclamped.requested == unclamped.cap
+    assert clamped.requested > clamped.cap
+
+
+def test_distribute_py_makes_no_direct_service_call_itself():
+    """The forge's adapter is the one place allowed to shell out to a
+    service or its accounts CLI; this launcher delegates entirely and
+    invokes no subprocess of its own."""
+    source = (REPOSITORY / "tools" / "distribute.py").read_text(encoding="utf-8")
+    assert "import subprocess" not in source
+    assert "subprocess.run" not in source
+    assert "kernels" not in source
