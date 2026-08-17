@@ -560,19 +560,70 @@ def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
 PARTIAL_SUFFIX = ".partial.json"
 
 
+#: Where a shard's own files live, under the results the campaign already owns.
+SHARDS_DIR = "shards"
+
+
+def shard_paths(shard: str | None) -> dict:
+    """Where one shard writes, so no two shards write to the same place.
+
+    Without this there is one `runs.jsonl`, opened `"w"` and truncated on every
+    campaign, and one `ceilings.partial.json` with no locking. Two shards running
+    at once would clobber each other, and the loser would be a silent partial
+    file rather than an error — the failure mode that reads as a finished run.
+
+    `None` is the single-machine case and keeps every path exactly where it has
+    always been. Sharding is an addition, not a relocation: the notebooks, the
+    records already written and the `records` declaration all name these paths,
+    and moving them would break a working repository to serve one that does not
+    exist yet.
+    """
+    if shard is None:
+        return {"runs": config.RESULTS / "runs.jsonl",
+                "partial": config.CEILINGS_RECORD.with_name(
+                    config.CEILINGS_RECORD.stem + PARTIAL_SUFFIX),
+                "stamp": config.RESULTS / "shard.json"}
+    home = config.RESULTS / SHARDS_DIR / shard
+    return {"runs": home / "runs.jsonl",
+            "partial": home / f"ceilings{PARTIAL_SUFFIX}",
+            "stamp": home / "shard.json"}
+
+
+def write_shard_stamp(shard: str | None, reduction: Reduction) -> Path:
+    """The full environment, once per shard, beside the runs that reference it.
+
+    Runs carry a twelve-character handle rather than the whole stamp — repeating
+    it on every record would be the same fact written a thousand times, and a
+    fact written a thousand times is one that can disagree with itself. This is
+    where the handle resolves.
+    """
+    path = shard_paths(shard)["stamp"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    stamp = reduction.environment or environment()
+    path.write_text(json.dumps({
+        "shard": shard,
+        "env": environment_key(stamp),
+        "environment": stamp,
+        "seeds": list(reduction.seeds),
+        "epochs": reduction.epochs,
+        "revision": reduction.revision,
+        "ceilings": dict(reduction.ceilings),
+    }, indent=2), encoding="utf-8")
+    return path
+
+
 def _partial_path() -> Path:
-    return config.CEILINGS_RECORD.with_name(
-        config.CEILINGS_RECORD.stem + PARTIAL_SUFFIX)
+    return shard_paths(None)["partial"]
 
 
-def _read_partial() -> dict:
+def _read_partial(path: Path | None = None) -> dict:
     """Cells already measured, keyed by family, so a relaunch skips them.
 
     Keyed by `(seed, transfer)` rather than by position: a relaunch that resumed
     by counting would silently shift if the seed list or the transfer list moved,
     and would then attribute one cell's measurements to another.
     """
-    path = _partial_path()
+    path = path or _partial_path()
     if not path.exists():
         return {}
     stored = json.loads(path.read_text(encoding="utf-8"))
@@ -585,9 +636,9 @@ def _read_partial() -> dict:
 
 
 def _write_partial(family: str, arm_id: str, cells: dict, minutes: float,
-                   progress) -> None:
+                   progress, path: Path | None = None) -> None:
     """Persist what is measured so far, after every cell."""
-    path = _partial_path()
+    path = path or _partial_path()
     stored = (json.loads(path.read_text(encoding="utf-8"))
               if path.exists() else {"cells": {}, "minutesPerCell": {}})
     stored["cells"].setdefault(family, {}).update({
@@ -613,7 +664,7 @@ def search_record() -> dict | None:
 
 
 def search_ceilings(reduction: Reduction, device: torch.device,
-                    progress=print) -> dict:
+                    progress=print, shard: str | None = None) -> dict:
     """Each family's ceiling, found on the selection transfers and kept for its
     derivations.
 
@@ -640,7 +691,8 @@ def search_ceilings(reduction: Reduction, device: torch.device,
     reduction = replace(reduction, epochs=config.SEARCH_EPOCHS,
                         seeds=list(config.SEARCH_SEEDS))
     grid = list(config.CEILING_GRID)
-    measured = _read_partial()
+    partial = shard_paths(shard)['partial']
+    measured = _read_partial(partial)
     if measured:
         done = sum(len(cells) for cells in measured.values())
         progress(f"  resuming: {done} cell(s) already measured, skipping them")
@@ -681,7 +733,7 @@ def search_ceilings(reduction: Reduction, device: torch.device,
                 # somebody's estimate into a number, so a twenty-minute stall in
                 # the middle — a machine dropping to battery, say — is visible
                 # instead of averaged away.
-                _write_partial(family, arm_id, cells, minutes, progress)
+                _write_partial(family, arm_id, cells, minutes, progress, partial)
 
         # Paired, not pooled. Comparing bare means folds each cell's own
         # difficulty into the dispersion and drowns the effect; centring every
@@ -767,12 +819,13 @@ def search_ceilings(reduction: Reduction, device: torch.device,
     config.CEILINGS_RECORD.write_text(json.dumps(found, indent=2), encoding="utf-8")
     # The scratch file goes only once the answer exists. Leaving it would let a
     # later relaunch resume from cells that already produced a finished record.
-    _partial_path().unlink(missing_ok=True)
+    partial.unlink(missing_ok=True)
     return found
 
 
 def campaign(reduction: Reduction, device: torch.device,
-             arms: list[str] | None = None, progress=print) -> dict:
+             arms: list[str] | None = None, progress=print,
+             shard: str | None = None) -> dict:
     """The whole grid: every arm, every transfer, every repetition.
 
     The search runs first and its answer is part of the bounds, not a detail:
@@ -812,7 +865,12 @@ def campaign(reduction: Reduction, device: torch.device,
         )
     progress(f"Ceilings in force: {reduction.ceilings}")
 
-    records = (config.RESULTS / "runs.jsonl").open("w", encoding="utf-8")
+    # This shard's own file, so two running at once cannot clobber one another.
+    # `None` keeps the single-machine path exactly where it has always been.
+    paths = shard_paths(shard)
+    paths["runs"].parent.mkdir(parents=True, exist_ok=True)
+    write_shard_stamp(shard, reduction)
+    records = paths["runs"].open("w", encoding="utf-8")
 
     # Seeds sit outermost so a repetition's material — the stratified draw, the
     # composition of the bags and the split — is built once for all three domains
