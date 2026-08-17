@@ -44,7 +44,7 @@ FULL_EPOCHS = 20
 REVISION = "research-concept-r17.md"
 
 #: Every domain supplies its own bags; a transfer names which is source and which
-#: is target. All three hold far more than the 3000 images a domain contributes.
+#: is target. All three hold far more than the 3600 images a domain contributes.
 DOMAINS = {"M": "MNIST", "U": "USPS", "S": "SVHN"}
 
 TRANSFERS = [("M", "U"), ("U", "M"), ("M", "S"), ("S", "M"), ("U", "S"), ("S", "U")]
@@ -55,18 +55,39 @@ CLASSES = 10
 #: instance carries a label of its own, and no instance comes from another class.
 INSTANCES_PER_BAG = 30
 
-#: Ten per class, so the draw is stratified and balanced rather than proportional.
-#: The local correspondence is undefined for a class with no source bag, so class
-#: coverage is a requirement of the formulation and not a convenience.
-BAGS_PER_CLASS = 10
-BAGS_PER_DOMAIN = BAGS_PER_CLASS * CLASSES          # 100
-IMAGES_PER_DOMAIN = BAGS_PER_DOMAIN * INSTANCES_PER_BAG  # 3000
+#: Twelve per class, so the draw is stratified and balanced rather than
+#: proportional. The local correspondence is undefined for a class with no source
+#: bag, so class coverage is a requirement of the formulation and not a
+#: convenience.
+#:
+#: It was ten until the ceiling search needed a role of its own. The two extra
+#: bags a class contributes fund that role outright, so nothing was taken from
+#: training or from the verdict: 64 / 20 / 36 where it used to be 64 / — / 36.
+#: The material allows it — the domains hold far more than they contribute, and
+#: USPS is the one that binds at 542 images in its smallest class, which is 18
+#: bags of thirty. Twelve sits under that with room, and the other two domains
+#: are not close to a limit.
+BAGS_PER_CLASS = 12
+BAGS_PER_DOMAIN = BAGS_PER_CLASS * CLASSES          # 120
+IMAGES_PER_DOMAIN = BAGS_PER_DOMAIN * INSTANCES_PER_BAG  # 3600
 
-#: Two roles, drawn identically in both domains. Nothing is selected by looking at
-#: outcomes any more — lambda and the epoch count are both fixed — so there is no
-#: validation role to carve. The 36 evaluation bags are what let 30 seeds resolve
-#: three points; an 80/20 would leave 20 and resolve five.
+#: Three roles, drawn identically in both domains, and disjoint.
+#:
+#: Training fits. Selection is where the ceiling search looks, and it exists
+#: because the search chooses by outcome: a coefficient picked on the material the
+#: verdict is read from makes the verdict read a decision it already made. The
+#: evaluation role is never seen before the verdict.
+#:
+#: The 36 evaluation bags are what let 30 seeds resolve three points, and they are
+#: untouched — the selection role is funded by the two extra bags per class, not
+#: taken from anywhere. An 80/20 would have left 20 and resolved five.
+#:
+#: Twenty selection bags across two search transfers and 30 seeds is 60
+#: measurements per ceiling, which separates about three points between grid
+#: points. That is enough to pick one scalar out of five and not enough to be
+#: read as a result, which is exactly what it is for.
 TRAIN_BAGS = 64
+VALID_BAGS = 20
 EVAL_BAGS = 36
 
 # -------------------------------------------------------------------- network
@@ -117,6 +138,85 @@ EPSILON = 1e-8
 #: source-only floor with extra wall time, so both sides run at this ceiling and
 #: the report says so rather than leaving it to whoever knows CREDA to notice.
 RAMP_CEILING = 1.0
+
+# --------------------------------------------------------- the ceiling search
+#
+# Each family looks for its own ceiling and keeps it for its derivations. A
+# shared ceiling equalizes the coefficient and unequalizes the balance: the two
+# objectives sit a factor of B_src apart, so the same number puts adaptation at
+# about 85% of one objective and 10% of the other. Searching per family
+# equalizes what actually matters, which is where each method operates.
+#
+# One search per family, inherited. If every arm found its own, B->E would
+# differ in two things and no rung would be attributable. The consequence is
+# declared rather than hidden: E and F carry no local term, so the ceiling found
+# on the complete method is not necessarily theirs, and that is the price of a
+# ladder that can be read.
+
+#: The interval, and it is not arbitrary: the endpoints are the two declared
+#: defaults. CREDA's published `creda_lambda_special` at the bottom, the neutral
+#: of a normalized Eq. (39) at the top. Whatever comes out sits between two
+#: values that were already defensible, so the search cannot invent one.
+CEILING_GRID = [1e-4, 1e-3, 1e-2, 1e-1, 1.0]
+
+#: Which arm each family searches with: the complete method, not an ablation.
+SEARCH_ARMS = {"creda": "D", "milcreda": "G"}
+
+#: The search runs once, at the scale the campaign runs at, and never at pilot
+#: scale. Its epoch count is `FULL_EPOCHS` and not `EPOCHS`, deliberately: the
+#: ramp climbs on the fraction of training elapsed, so at three epochs it is
+#: saturated by the second and every ceiling is reached almost immediately. A
+#: ceiling found there describes a landscape the campaign never trains in.
+#:
+#: Which is why it is not a knob of the pilot. The pilot is the campaign at a
+#: smaller scale, and a pilot that re-searched would be a different program from
+#: the one it exists to rehearse. Both read `CEILINGS` below.
+SEARCH_EPOCHS = FULL_EPOCHS
+SEARCH_SEEDS = [0, 1, 2]
+
+#: The scale the search's answer requires, declared separately from the scale it
+#: is running at — the same pairing the campaign has, for the same reason. With
+#: only one of them, a ceiling found at three epochs and the configuration agree
+#: with each other and everything reads as finished. With both, `atRequiredScale`
+#: lands in the record and the campaign refuses a ceiling searched below it.
+#:
+#: Three repetitions is not elegance, it is the floor. The ceiling is measured on
+#: 20 validation bags per transfer, so one seed leaves the granularity at five
+#: points and the argmax over five cells is picked by noise.
+FULL_SEARCH_EPOCHS = FULL_EPOCHS
+FULL_SEARCH_SEEDS = 3
+
+#: What the search found, once, and what everything else runs at. Empty means it
+#: has not been run: `campaign` refuses rather than searching on the spot, so a
+#: campaign can never quietly fund its own coefficient out of the run it is about
+#: to report.
+#:
+#: Filled in from `Results/Benchmark/ceilings.json`, which keeps the whole grid
+#: and not only the winner — a ceiling chosen between four identical scores and
+#: one chosen by a real difference are the same number and not the same evidence.
+#: Filled in at the end of this file, once the paths it reads from exist.
+CEILINGS: dict[str, float] = {}
+
+#: Which transfers the search runs on. This is cost and not insulation: the
+#: selection role is what keeps the search away from the verdict's material, so
+#: the search may look at any transfer it likes as long as it looks at validation
+#: bags. Two is what it costs to pick one scalar, and one easy transfer with one
+#: hard one keeps the choice from being fitted to a single difficulty.
+SEARCH_TRANSFERS = [("M", "U"), ("S", "M")]
+
+#: And the verdict keeps all six. An earlier draft withheld the two the search
+#: used, which was the right instinct against the wrong leak: with the roles
+#: already disjoint by bag, withholding them bought nothing and cost a third of
+#: the units the paired reading rests on. The ceiling being chosen on two
+#: transfers and applied to six is not a leak — it is an out-of-sample
+#: application, and the report says so.
+VERDICT_TRANSFERS = TRANSFERS
+
+#: What the search maximizes, and where. Target accuracy is the outcome the
+#: campaign is about; the validation role is the only place the search may read
+#: it, because the evaluation role is not seen before the verdict.
+SEARCH_CRITERION = "targetAccuracy"
+SEARCH_ROLE = "valid"
 
 #: How fast. CREDA's own `delta`, the shape of `get_lambda`: zero at the first
 #: epoch, approaching the ceiling afterwards. Applied to both sides so the
@@ -353,6 +453,28 @@ PRODUCT = REPOSITORY / "MIL-CREDA"
 RESULTS = PRODUCT / "Results" / "Benchmark"
 MODELS = PRODUCT / "Models" / "Benchmark"
 DATA_CACHE = REPOSITORY / ".benchmark-data"
+
+#: `RESULTS` already ends in `Benchmark`; appending it again buried the record one
+#: level deeper than the contract declares, and the search wrote there without a
+#: word. Every path here hangs off a constant that says where it points.
+CEILINGS_RECORD = RESULTS / "ceilings.json"
+
+
+def _load_ceilings() -> dict[str, float]:
+    """The searched ceilings, read from the record the search wrote.
+
+    Read and not remembered, like everything else here. A constant typed in by
+    hand would be a second source of truth for a measured value: it goes stale in
+    silence the first time the search is re-run and is believed anyway.
+    """
+    if not CEILINGS_RECORD.exists():
+        return {}
+    import json as _json
+    found = _json.loads(CEILINGS_RECORD.read_text(encoding="utf-8"))
+    return {family: entry["ceiling"] for family, entry in found.items()}
+
+
+CEILINGS.update(_load_ceilings())
 
 # All three are ignored by git: this is a preliminary phase for deciding whether
 # the strategy holds, not part of the paper's record.

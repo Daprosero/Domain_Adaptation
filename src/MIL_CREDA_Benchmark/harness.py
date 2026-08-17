@@ -19,10 +19,12 @@ from __future__ import annotations
 import json
 import math
 import platform
+import re
+import subprocess
 import sys
 import time
 import tracemalloc
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 import torch
@@ -30,6 +32,7 @@ import torch.nn as nn
 
 from CREDA.schedules import creda_ramp
 from MIL_CREDA_Benchmark import bags, config, wiring
+from MIL_CREDA_Benchmark.schedules import milcreda_ramp
 from MIL_CREDA_Benchmark.verdict import judge, render, standard_error, tally
 
 
@@ -81,22 +84,74 @@ def environment() -> dict:
         "platform": platform.platform(),
         "torch": torch.__version__,
         "selfHosted": inside,
+        "power": power_state(),
     }
+
+
+def power_state() -> dict:
+    """Whether the machine was on mains when the run happened.
+
+    `seconds` and `peakMiB` are dimensions of the verdict, not decoration, and a
+    measurement describes whichever environment produced it. A laptop that drops
+    to battery partway through a long grid throttles, and if that catches some
+    arms and not others it is a difference between arms nobody declared — the
+    ladder would credit a mechanism with what the power state did.
+
+    Recorded rather than enforced. Refusing to run on battery would stop work that
+    is often fine — the ceiling search measures accuracy, which is deterministic
+    and does not care. What must not happen is a throttled run being filed
+    alongside a clean one with nothing to tell them apart.
+
+    Best-effort and never fatal: an unreadable power state is reported as unknown,
+    because a stamp that crashed the run it was documenting would be worse than no
+    stamp at all.
+    """
+    try:
+        if sys.platform == "darwin":
+            out = subprocess.run(["pmset", "-g", "ps"], capture_output=True,
+                                 text=True, timeout=5)
+            first = out.stdout.splitlines()[0] if out.stdout else ""
+            source = ("mains" if "AC Power" in first
+                      else "battery" if "Battery Power" in first else "unknown")
+            charge = re.search(r"(\d+)%", out.stdout)
+            return {"source": source,
+                    "charge": int(charge.group(1)) if charge else None}
+        online = Path("/sys/class/power_supply/AC/online")
+        if online.exists():
+            return {"source": "mains" if online.read_text().strip() == "1"
+                    else "battery", "charge": None}
+    except Exception:
+        pass
+    return {"source": "unknown", "charge": None}
 
 
 # -------------------------------------------------------------------- schedules
 
-def ramp(epoch: int, epochs: int, delta: float = config.RAMP_DELTA,
+def ramp(epoch: int, epochs: int, family: str | None,
+         delta: float = config.RAMP_DELTA,
          ceiling: float = config.RAMP_CEILING) -> float:
-    """The adaptation coefficient, from CREDA's own schedule module.
+    """The arm's adaptation coefficient, from its own method's schedule.
 
-    This used to be a second copy of the formula, because `training_pipeline`
-    cannot be imported for it — scikit-image, timm, pandas and matplotlib all
-    load at its module level. Two copies across the two arms of a comparison is
-    the fork this benchmark exists not to have, so the schedule moved to
-    `CREDA.schedules` and both families read it from there.
+    Each family names its own entry point — `creda_ramp` for prior work,
+    `milcreda_ramp` for the method — and both are given the same `delta` and the
+    same `ceiling` here, explicitly. That is how each method keeps the default it
+    was defined with for its own runs while the two arms of this comparison share
+    one coefficient: the defaults are never what the benchmark uses.
+
+    Calling one method's schedule for both families would have been shorter and
+    would have made MIL-CREDA's coefficient come out of prior work's module,
+    which is a dependency nobody declared. The curve is still written once —
+    `milcreda_ramp` binds to `creda_ramp` rather than copying it, because two
+    implementations of one formula across two arms is the fork this package
+    exists not to have. Same numbers by construction, and pinned by a test.
+
+    A floor with no adaptation term passes `None` and gets zero: it has no
+    coefficient, and handing it one would suggest a term it does not carry.
     """
-    return creda_ramp(epoch, epochs, delta=delta, ceiling=ceiling)
+    if family is None:
+        return 0.0
+    schedule = creda_ramp if family == "creda" else milcreda_ramp
+    return schedule(epoch, epochs, delta=delta, ceiling=ceiling)
 
 
 def learning_rate(epoch: int, epochs: int) -> float:
@@ -142,10 +197,20 @@ class Reduction:
     instancesPerBag: int = config.INSTANCES_PER_BAG
     bagsPerDomain: int = config.BAGS_PER_DOMAIN
     trainBags: int = config.TRAIN_BAGS
+    validBags: int = config.VALID_BAGS
     evalBags: int = config.EVAL_BAGS
+    #: Which role the ceiling search read. Recorded because "chosen on material
+    #: the verdict never saw" is a claim about the run, not about the code.
+    searchRole: str = config.SEARCH_ROLE
     epochs: int = config.EPOCHS
     seeds: list[int] = field(default_factory=lambda: list(config.SEEDS))
+    #: The neutral each family's searched ceiling is read against.
     rampCeiling: float = config.RAMP_CEILING
+    #: What each family searched and kept for its derivations. Empty until the
+    #: search has run, and then carried beside every number it produced — a
+    #: coefficient chosen by measurement is part of the bounds, not a detail.
+    ceilings: dict = field(default_factory=lambda: dict(config.CEILINGS))
+    ceilingSearch: dict = field(default_factory=dict)
     rampDelta: float = config.RAMP_DELTA
     device: str = "cpu"
     environment: dict = field(default_factory=dict)
@@ -184,14 +249,38 @@ def pool_of(bagset: bags.BagSet, positions: torch.Tensor, device: torch.device) 
 
 def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
             reduction: Reduction, device: torch.device,
-            material: dict) -> dict:
-    """One arm, one transfer, one repetition, end to end."""
+            material: dict, ceiling: float | None = None,
+            role: str = "eval") -> dict:
+    """One arm, one transfer, one repetition, end to end.
+
+    `ceiling` overrides the family's for this run. The search passes it to walk
+    the grid; the campaign passes each family's found value, so every arm derived
+    from a family inherits the one that family searched.
+
+    `role` is which material the run is judged on. The search reads `valid` and
+    the campaign reads `eval`, and they are disjoint by construction — a
+    coefficient chosen on the material the verdict rests on would make the
+    verdict report a decision it already made, by an amount nobody can subtract
+    afterwards.
+    """
     torch.manual_seed(seed)
     generator = torch.Generator().manual_seed(seed + 9973)
 
     source, target = material["source"], material["target"]
-    source_train, source_eval = bags.roles(source)
-    target_train, target_eval = bags.roles(target)
+    source_train, source_valid, source_eval = bags.roles(source)
+    target_train, target_valid, target_eval = bags.roles(target)
+
+    # Which role this run is judged on, and it is one or the other rather than
+    # both. Measuring both would cost two extra passes per epoch inside the timed
+    # region of every run of a campaign, and — the reason that matters more — it
+    # would have the search read the evaluation role and then discard it. A role
+    # the search cannot see is a stronger guarantee than one it agrees not to use.
+    if role == "valid":
+        judged_source, judged_target = source_valid, target_valid
+    elif role == "eval":
+        judged_source, judged_target = source_eval, target_eval
+    else:
+        raise ValueError(f"unknown role {role!r}; the roles are 'valid' and 'eval'")
 
     model = wiring.build(
         arm_id, config.CLASSES,
@@ -210,7 +299,12 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     started = time.perf_counter()
     model.train()
     for epoch in range(reduction.epochs):
-        coefficient = ramp(epoch, reduction.epochs)
+        family = config.ARMS_BY_ID[arm_id]["adaptation"]
+        # The family's ceiling, or the one this call was handed. Never a global:
+        # each family keeps what it searched, and its derivations inherit it.
+        top = (reduction.ceilings.get(family, config.RAMP_CEILING)
+               if ceiling is None else ceiling)
+        coefficient = ramp(epoch, reduction.epochs, family, ceiling=top)
         for group in optimizer.param_groups:
             group["lr"] = learning_rate(epoch, reduction.epochs)
 
@@ -229,8 +323,8 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
 
         epochs_record.append({
             "epoch": epoch,
-            "sourceAccuracy": accuracy(model, source_eval, device),
-            "targetAccuracy": accuracy(model, target_eval, device),
+            "sourceAccuracy": accuracy(model, judged_source, device),
+            "targetAccuracy": accuracy(model, judged_target, device),
         })
 
     synchronize(device)
@@ -392,12 +486,265 @@ def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
     return kept
 
 
+#: Where a search in flight keeps what it has measured. Separate from the finished
+#: record on purpose: `ceilings.json` existing means the search answered, and a
+#: half-filled file under that name would be read as an answer by everything that
+#: consumes it, including the campaign's own refusal.
+PARTIAL_SUFFIX = ".partial.json"
+
+
+def _partial_path() -> Path:
+    return config.CEILINGS_RECORD.with_name(
+        config.CEILINGS_RECORD.stem + PARTIAL_SUFFIX)
+
+
+def _read_partial() -> dict:
+    """Cells already measured, keyed by family, so a relaunch skips them.
+
+    Keyed by `(seed, transfer)` rather than by position: a relaunch that resumed
+    by counting would silently shift if the seed list or the transfer list moved,
+    and would then attribute one cell's measurements to another.
+    """
+    path = _partial_path()
+    if not path.exists():
+        return {}
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        family: {(int(seed), label): {float(c): v for c, v in scores.items()}
+                 for key, scores in cells.items()
+                 for seed, label in [key.split("|", 1)]}
+        for family, cells in stored.get("cells", {}).items()
+    }
+
+
+def _write_partial(family: str, arm_id: str, cells: dict, minutes: float,
+                   progress) -> None:
+    """Persist what is measured so far, after every cell."""
+    path = _partial_path()
+    stored = (json.loads(path.read_text(encoding="utf-8"))
+              if path.exists() else {"cells": {}, "minutesPerCell": {}})
+    stored["cells"].setdefault(family, {}).update({
+        f"{seed}|{label}": {str(c): v for c, v in scores.items()}
+        for (seed, label), scores in cells.items()})
+    stored["minutesPerCell"].setdefault(family, []).append(round(minutes, 2))
+    stored["arms"] = {**stored.get("arms", {}), family: arm_id}
+    stored["environment"] = environment()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
+
+
+def search_record() -> dict | None:
+    """The ceiling search's own record, whole, or None when it has not run.
+
+    Read from disk and not carried in memory: `config.CEILINGS` keeps only the
+    winners, and the winner alone cannot say whether it was searched at scale or
+    whether the seeds agreed on it.
+    """
+    if not config.CEILINGS_RECORD.exists():
+        return None
+    return json.loads(config.CEILINGS_RECORD.read_text(encoding="utf-8"))
+
+
+def search_ceilings(reduction: Reduction, device: torch.device,
+                    progress=print) -> dict:
+    """Each family's ceiling, found on the selection transfers and kept for its
+    derivations.
+
+    A shared ceiling equalizes the coefficient and unequalizes the balance: the
+    two objectives sit a factor of B_src apart, so one number puts adaptation at
+    most of one objective and a tenth of the other. This equalizes where each
+    method operates instead.
+
+    It runs on `SEARCH_TRANSFERS` and never on the ones the verdict is read from.
+    Choosing by outcome on the material the verdict uses would make the verdict
+    read a decision it already made, and splitting the roles by transfer costs no
+    bags — the evaluation role keeps all 36 and the resolution the campaign was
+    sized for.
+
+    At pilot scale this exercises the pipeline and settles nothing: the ramp runs
+    on the fraction of training elapsed, so with three epochs it is saturated by
+    the second and every ceiling is reached almost immediately. The search is the
+    same program at both scales, which is the point; only its answer is worth
+    reading at the scale the protocol declares.
+    """
+    # Its own scale, and not the caller's. The search is one experiment run once
+    # at the scale the campaign runs at; borrowing the pilot's three epochs would
+    # answer about a landscape nothing else trains in.
+    reduction = replace(reduction, epochs=config.SEARCH_EPOCHS,
+                        seeds=list(config.SEARCH_SEEDS))
+    grid = list(config.CEILING_GRID)
+    measured = _read_partial()
+    if measured:
+        done = sum(len(cells) for cells in measured.values())
+        progress(f"  resuming: {done} cell(s) already measured, skipping them")
+    found: dict[str, dict] = {}
+    for family, arm_id in config.SEARCH_ARMS.items():
+        # Material outermost, ceilings innermost. Two reasons, and the second is
+        # the one that matters: `bags.build` decodes thousands of images, so
+        # rebuilding it per ceiling costs five draws per seed for nothing — and
+        # every ceiling has to be measured on *the same* material for the paired
+        # reading below to cancel anything.
+        cells: dict[tuple[int, str], dict[float, float]] = {}
+        for seed in reduction.seeds:
+            drawn = {code: bags.build(code, config.DATA_CACHE, seed)
+                     for code in config.DOMAINS}
+            for transfer in config.SEARCH_TRANSFERS:
+                label = f"{transfer[0]}->{transfer[1]}"
+                material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
+                if (seed, label) in measured.get(family, {}):
+                    cells[(seed, label)] = measured[family][(seed, label)]
+                    progress(f"  search {family:>8} seed={seed} {label}: ya medida")
+                    continue
+                started = time.perf_counter()
+                for ceiling in grid:
+                    run = run_one(arm_id, transfer, seed, reduction, device, material,
+                                  ceiling=ceiling, role=config.SEARCH_ROLE)
+                    cells.setdefault((seed, label), {})[ceiling] = \
+                        run[config.SEARCH_CRITERION]
+                minutes = (time.perf_counter() - started) / 60
+                progress(f"  search {family:>8} seed={seed} {label}: "
+                         + "  ".join(f"{c:g}={cells[(seed, label)][c]:.3f}" for c in grid)
+                         + f"   [{minutes:.1f} min]")
+                # Written now and not at the end. Cutting a grid of hours on its
+                # last cell used to lose every one before it — measured the hard
+                # way, at 1h37 for nothing. It also makes the file the progress
+                # report: a later session opens it and reads what is measured and
+                # what is left, which no amount of stdout could give it once the
+                # terminal is gone. And the per-cell minutes turn the cost from
+                # somebody's estimate into a number, so a twenty-minute stall in
+                # the middle — a machine dropping to battery, say — is visible
+                # instead of averaged away.
+                _write_partial(family, arm_id, cells, minutes, progress)
+
+        # Paired, not pooled. Comparing bare means folds each cell's own
+        # difficulty into the dispersion and drowns the effect; centring every
+        # cell on its own mean across ceilings cancels that difficulty, because
+        # each ceiling was measured on exactly the same material. It is the same
+        # reading `paired_across_transfers` gives the ladder.
+        centred: dict[float, list[float]] = {c: [] for c in grid}
+        pooled: dict[float, list[float]] = {c: [] for c in grid}
+        for scores in cells.values():
+            middle = sum(scores.values()) / len(scores)
+            for ceiling, value in scores.items():
+                centred[ceiling].append(value - middle)
+                pooled[ceiling].append(value)
+
+        rows = [{"ceiling": c,
+                 config.SEARCH_CRITERION: sum(pooled[c]) / len(pooled[c]),
+                 "paired": sum(centred[c]) / len(centred[c]),
+                 "n": len(pooled[c])}
+                for c in grid]
+        # The tie rule, declared rather than inherited from `max`. Ties are not a
+        # curiosity here: below some point a term is inert and every ceiling under
+        # it scores exactly the same, so on that stretch the tie-break is what
+        # chooses. The smallest wins — the same outcome for less adaptation is the
+        # weaker claim, and a search should not hand a term more weight than the
+        # measurement asked for.
+        def pick(candidates: list[dict], key: str = "paired") -> dict:
+            top = max(r[key] for r in candidates)
+            tied = [r for r in candidates if r[key] == top]
+            return min(tied, key=lambda r: r["ceiling"])
+
+        best = pick(rows)
+        top = best["paired"]
+        tied = [r for r in rows if r["paired"] == top]
+
+        # Whether each seed would have picked the same ceiling on its own. An
+        # average hides a choice that flips: three seeds landing on three
+        # different ceilings and one landing on the same one produce the same
+        # winner and are not the same evidence. It costs nothing — the runs are
+        # already done — and it is the only thing here that says whether the pick
+        # is a finding or a coin.
+        per_seed: dict[int, float] = {}
+        for seed in reduction.seeds:
+            of_seed = [scores for (s, _), scores in cells.items() if s == seed]
+            per_seed[seed] = pick(
+                [{"ceiling": c,
+                  "paired": sum(s[c] - sum(s.values()) / len(s) for s in of_seed)
+                            / len(of_seed)}
+                 for c in grid])["ceiling"]
+        found[family] = {
+            "arm": arm_id,
+            "ceiling": best["ceiling"],
+            "criterion": config.SEARCH_CRITERION,
+            "grid": rows,
+            # How many grid points scored the same. A ceiling chosen between four
+            # identical scores and one chosen by a real difference are the same
+            # number and not the same evidence, and the record has to say which.
+            "tied": [r["ceiling"] for r in tied],
+            "decidedByTieBreak": len(tied) > 1,
+            "tieRule": "smallest ceiling among the tied: the same outcome for less "
+                       "adaptation is the weaker claim",
+            "comparison": "paired within (seed, transfer): every ceiling measured "
+                          "on the same material, so the cell's own difficulty "
+                          "cancels instead of drowning the effect",
+            "perSeedPick": {str(seed): value for seed, value in per_seed.items()},
+            "seedsAgree": len(set(per_seed.values())) == 1,
+            "role": config.SEARCH_ROLE,
+            "epochs": reduction.epochs,
+            "seeds": list(reduction.seeds),
+            # Whether this was searched at the scale the verdict requires. Without
+            # it the record and the configuration agree with each other and a
+            # ceiling found at pilot scale reads as finished — the same failure the
+            # pilot stamp exists to prevent, one experiment over.
+            "atRequiredScale": (reduction.epochs >= config.FULL_SEARCH_EPOCHS
+                                and len(reduction.seeds) >= config.FULL_SEARCH_SEEDS),
+            "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
+                              "seeds": config.FULL_SEARCH_SEEDS},
+            "transfers": [f"{a}->{b}" for a, b in config.SEARCH_TRANSFERS],
+            # The neutral it is read against, so a searched value that lands on it
+            # confirms the normalization by measurement rather than by argument.
+            "neutral": config.RAMP_CEILING,
+        }
+    config.CEILINGS_RECORD.parent.mkdir(parents=True, exist_ok=True)
+    config.CEILINGS_RECORD.write_text(json.dumps(found, indent=2), encoding="utf-8")
+    # The scratch file goes only once the answer exists. Leaving it would let a
+    # later relaunch resume from cells that already produced a finished record.
+    _partial_path().unlink(missing_ok=True)
+    return found
+
+
 def campaign(reduction: Reduction, device: torch.device,
              arms: list[str] | None = None, progress=print) -> dict:
-    """The whole grid: every arm, every transfer, every repetition."""
+    """The whole grid: every arm, every transfer, every repetition.
+
+    The search runs first and its answer is part of the bounds, not a detail:
+    every family trains at the ceiling it found, every derivation inherits its
+    family's, and the verdict is read only over the transfers the search never
+    saw. Reading it over all six would let the ceiling's own selection material
+    back into the number it was chosen to improve.
+    """
     arm_ids = arms or [arm["id"] for arm in config.ARMS]
     config.RESULTS.mkdir(parents=True, exist_ok=True)
     config.MODELS.mkdir(parents=True, exist_ok=True)
+
+    # Consumed, never searched here. A campaign that funded its own coefficient
+    # out of the run it is about to report would be choosing and judging in one
+    # pass, and the refusal is what makes "searched once, beforehand, at the
+    # campaign's own scale" a fact about the record rather than a convention.
+    if not reduction.ceilings:
+        raise SystemExit(
+            "refusing to run without the searched ceilings.\n"
+            "  Each family's ceiling is one experiment, run once at "
+            f"{config.SEARCH_EPOCHS} epochs, before any campaign.\n"
+            "  Run `harness.search_ceilings(...)` and load its record, or pass "
+            "`ceilings=` explicitly."
+        )
+    # And not a ceiling searched below the scale its answer needs. Missing is the
+    # obvious failure; this is the quiet one — someone lowers the search to test
+    # the pipeline cheaply, `ceilings.json` gets written from three epochs, and
+    # every campaign afterwards consumes it without a word.
+    under = [family for family, entry in (search_record() or {}).items()
+             if not entry.get("atRequiredScale", False)]
+    if under:
+        raise SystemExit(
+            f"refusing to run on ceilings searched below scale: {', '.join(under)}.\n"
+            f"  The search needs {config.FULL_SEARCH_EPOCHS} epochs and "
+            f"{config.FULL_SEARCH_SEEDS} repetitions; the record says otherwise.\n"
+            f"  Re-run the search, or delete {config.CEILINGS_RECORD.name} to start over."
+        )
+    progress(f"Ceilings in force: {reduction.ceilings}")
+
     records = (config.RESULTS / "runs.jsonl").open("w", encoding="utf-8")
 
     # Seeds sit outermost so a repetition's material — the stratified draw, the
@@ -408,7 +755,9 @@ def campaign(reduction: Reduction, device: torch.device,
     manifests: dict[tuple[str, str], dict] = {}
     for seed in reduction.seeds:
         drawn = {code: bags.build(code, config.DATA_CACHE, seed) for code in config.DOMAINS}
-        for transfer in config.TRANSFERS:
+        # Only the transfers the search never looked at. The other two funded the
+        # ceiling and cannot also carry the verdict it was chosen to improve.
+        for transfer in config.VERDICT_TRANSFERS:
             label = f"{transfer[0]}->{transfer[1]}"
             material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
             manifests[(label, seed)] = {"source": material["source"].manifest,
