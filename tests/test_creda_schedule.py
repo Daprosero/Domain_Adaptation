@@ -127,3 +127,42 @@ def test_the_shared_implementation_matches_the_one_the_other_methods_use():
 def test_a_negative_ceiling_is_refused_rather_than_rewarding_misalignment():
     with pytest.raises(ValueError):
         ramp(1, 20, 20.0, ceiling=-1.0)
+
+
+def test_the_two_families_get_the_same_curve_for_the_same_arguments():
+    """The one-difference guarantee, crossed where it lives.
+
+    Each method names its own entry point and carries its own default, and the
+    experiment hands both the same `delta` and the same `ceiling`. If those two
+    entry points returned different numbers, the arms would differ in the
+    coefficient as well as in the term, and no rung would be attributable.
+
+    Reachable red: `milcreda_ramp` binds to `creda_ramp` rather than copying it
+    precisely so this cannot break in silence; if somebody reimplements it, this
+    is the test that says so.
+    """
+    from MIL_CREDA_Benchmark.schedules import milcreda_ramp
+
+    for row in GOLDEN:
+        for ceiling in (1e-4, 1e-2, 1.0, 5.0):
+            assert milcreda_ramp(
+                row["epoch"], row["epochs"], row["delta"], ceiling=ceiling
+            ) == ramp(row["epoch"], row["epochs"], row["delta"], ceiling=ceiling)
+
+
+def test_each_family_keeps_the_default_its_own_method_was_defined_with():
+    """The defaults serve each method's own runs; the benchmark never uses them."""
+    from CREDA.schedules import CREDA_CEILING
+    from MIL_CREDA_Benchmark.schedules import MILCREDA_CEILING, milcreda_ramp
+
+    assert CREDA_CEILING == 1e-4          # `creda_lambda_special`, the published one
+    assert MILCREDA_CEILING == 1.0        # the neutral of a normalized Eq. (39)
+    assert milcreda_ramp(19, 20, 20.0) != ramp(19, 20, 20.0)
+
+
+def test_a_floor_gets_no_coefficient_rather_than_one_it_does_not_carry():
+    """An arm with no adaptation term has no coefficient to report."""
+    from MIL_CREDA_Benchmark import harness
+
+    assert harness.ramp(5, 20, None) == 0.0
+    assert harness.ramp(5, 20, "creda") == harness.ramp(5, 20, "milcreda")

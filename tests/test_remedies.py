@@ -13,7 +13,7 @@ The proposed replacements live here, never in src/.
 
 ---
 
-No remedy is open against research-concept-r16.md.
+No remedy is open against research-concept-r17.md.
 
 Both findings the audit raised against r14 were validated here, adopted by the
 deliberation, and published: the local normalizer in Eq. (38) and the placement

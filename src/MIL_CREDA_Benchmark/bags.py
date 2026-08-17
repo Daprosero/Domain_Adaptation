@@ -4,7 +4,7 @@ MNIST, USPS and SVHN hold one label per image and no notion of a subject, so the
 bags are constructed here. A bag is pure: 30 instances of one class, drawn at
 random inside that class. The label belongs to the bag; no instance carries one.
 
-The draw is stratified and balanced — 10 bags of every class in every domain —
+The draw is stratified and balanced — 12 bags of every class in every domain —
 rather than proportional. USPS and SVHN are imbalanced, and a proportional draw
 can leave a class with too few source bags, which is not a matter of taste: the
 local correspondence of Section 4 is undefined for a class with no source bag.
@@ -82,36 +82,51 @@ def _select(labels: np.ndarray, rng: np.random.Generator) -> dict[int, np.ndarra
     return chosen
 
 
-def _split_counts(rng: np.random.Generator) -> dict[int, int]:
-    """How many of each class's bags go to training.
+def _share(total: int, rng: np.random.Generator) -> dict[int, int]:
+    """How many of each class's bags go to one role.
 
-    `TRAIN_BAGS` need not divide by the class count, so the base share goes to
+    A role's size need not divide by the class count, so the base share goes to
     every class and the remainder lands on classes picked by the seed. Which ones
     is recorded in the manifest, because a split nobody can reproduce is a split
     nobody can check.
     """
-    base, remainder = divmod(config.TRAIN_BAGS, config.CLASSES)
+    base, remainder = divmod(total, config.CLASSES)
     counts = {class_id: base for class_id in range(config.CLASSES)}
     for class_id in rng.permutation(config.CLASSES)[:remainder]:
         counts[int(class_id)] += 1
     return counts
 
 
+def _split_counts(rng: np.random.Generator) -> tuple[dict[int, int], dict[int, int]]:
+    """How many of each class's bags go to training, and how many to selection.
+
+    Three disjoint roles, drawn per class so every one of them covers every class:
+    the local correspondence is undefined for a class with no source bag, so a
+    role that dropped one would produce a failure that reads as a defect of the
+    method and is a defect of the split.
+
+    Selection is drawn second and evaluation is whatever is left, so the role the
+    verdict rests on is never the one that absorbs a rounding remainder.
+    """
+    return _share(config.TRAIN_BAGS, rng), _share(config.VALID_BAGS, rng)
+
+
 @dataclass
 class BagSet:
-    """One domain's bags, already materialized, split into its two roles.
+    """One domain's bags, already materialized, split into its three roles.
 
-    `images` holds the 3000 selected instances as one tensor. Decoding happens
+    `images` holds the 3600 selected instances as one tensor. Decoding happens
     once, here, rather than inside the training loop: the run is timed, and time
     spent in PIL would be attributed to the method that happened to be running.
     """
 
     domain: str
-    images: torch.Tensor          # (3000, 3, 32, 32)
-    members: torch.Tensor         # (100, 30) rows of indices into `images`
-    labels: torch.Tensor          # (100,) one class per bag
+    images: torch.Tensor          # (3600, 3, 32, 32)
+    members: torch.Tensor         # (120, 30) rows of indices into `images`
+    labels: torch.Tensor          # (120,) one class per bag
     train_idx: torch.Tensor       # (64,)  indices into `members`
-    eval_idx: torch.Tensor        # (36,)
+    valid_idx: torch.Tensor       # (20,)  where the ceiling search looks
+    eval_idx: torch.Tensor        # (36,)  never seen before the verdict
     manifest: dict
 
     def bag(self, position: int) -> tuple[torch.Tensor, int]:
@@ -152,12 +167,13 @@ def build(code: str, root: Path, seed: int) -> BagSet:
     rng = np.random.default_rng(seed * 1000 + ord(code))
 
     selected = _select(labels, rng)
-    train_share = _split_counts(rng)
+    train_share, valid_share = _split_counts(rng)
 
     flat: list[int] = []
     members: list[list[int]] = []
     bag_labels: list[int] = []
     train_positions: list[int] = []
+    valid_positions: list[int] = []
     eval_positions: list[int] = []
 
     for class_id in range(config.CLASSES):
@@ -169,7 +185,12 @@ def build(code: str, root: Path, seed: int) -> BagSet:
             members.append(list(range(start, start + config.INSTANCES_PER_BAG)))
             bag_labels.append(class_id)
             position = len(members) - 1
-            (train_positions if k < train_share[class_id] else eval_positions).append(position)
+            if k < train_share[class_id]:
+                train_positions.append(position)
+            elif k < train_share[class_id] + valid_share[class_id]:
+                valid_positions.append(position)
+            else:
+                eval_positions.append(position)
 
     images = torch.stack([dataset[i][0] for i in flat])
 
@@ -184,8 +205,10 @@ def build(code: str, root: Path, seed: int) -> BagSet:
         "imageIndices": flat,
         "bagLabels": bag_labels,
         "trainBags": train_positions,
+        "validBags": valid_positions,
         "evalBags": eval_positions,
         "trainShareByClass": train_share,
+        "validShareByClass": valid_share,
         "revision": config.REVISION,
     }
 
@@ -195,6 +218,7 @@ def build(code: str, root: Path, seed: int) -> BagSet:
         members=torch.tensor(members, dtype=torch.long),
         labels=torch.tensor(bag_labels, dtype=torch.long),
         train_idx=torch.tensor(train_positions, dtype=torch.long),
+        valid_idx=torch.tensor(valid_positions, dtype=torch.long),
         eval_idx=torch.tensor(eval_positions, dtype=torch.long),
         manifest=manifest,
     )
@@ -219,14 +243,22 @@ def rebuild(manifest: dict, root: Path) -> BagSet:
         members=members,
         labels=torch.tensor(manifest["bagLabels"], dtype=torch.long),
         train_idx=torch.tensor(manifest["trainBags"], dtype=torch.long),
+        valid_idx=torch.tensor(manifest["validBags"], dtype=torch.long),
         eval_idx=torch.tensor(manifest["evalBags"], dtype=torch.long),
         manifest=manifest,
     )
 
 
-def roles(bagset: BagSet) -> tuple[BagDataset, BagDataset]:
-    """The two roles of a domain: what is trained on, what is judged on."""
-    return BagDataset(bagset, bagset.train_idx), BagDataset(bagset, bagset.eval_idx)
+def roles(bagset: BagSet) -> tuple[BagDataset, BagDataset, BagDataset]:
+    """The three roles of a domain, disjoint: fitted on, selected on, judged on.
+
+    Selection exists because the ceiling search chooses by outcome. Reading that
+    outcome off the evaluation role would make the verdict report a decision it
+    already made, and by an amount nobody can subtract afterwards.
+    """
+    return (BagDataset(bagset, bagset.train_idx),
+            BagDataset(bagset, bagset.valid_idx),
+            BagDataset(bagset, bagset.eval_idx))
 
 
 def write_manifest(path: Path, **entries) -> Path:

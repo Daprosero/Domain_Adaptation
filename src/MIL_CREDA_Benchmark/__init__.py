@@ -34,6 +34,22 @@ __benchmark__ = {
         "SA": {"sections": ["1", "2", "3", "4", "5"]},
         "SK": {"sections": ["1", "2", "3", "4", "5"]},
     },
+    # The ceiling search, declared as the experiment it is. A value chosen by
+    # looking at outcomes needs everything a run needs, and the three below are
+    # the ones that go invisible: without them a ceiling found at pilot scale, or
+    # on the material the verdict rests on, or by a tie nobody wrote a rule for,
+    # is indistinguishable from one that was measured.
+    "search": {
+        "what": "the ceiling of the adaptation coefficient, one per family, "
+                "inherited by that family's derivations. The growth rate is not "
+                "searched: it stays at RAMP_DELTA, which is CREDA's own",
+        "requiredScale": {"epochs": 20, "seeds": 3},
+        "role": "valid",
+        "tieRule": "the smallest ceiling among the tied: the same outcome for less "
+                   "adaptation is the weaker claim, and a search should not hand a "
+                   "term more weight than the measurement asked for",
+        "record": "Results/Benchmark/ceilings.json",
+    },
     # What the protocol assumes about the prediction being measured. These are what
     # a change of reach destroys while leaving every arm intact: a formulation that
     # moved from deciding a class to estimating a quantity would leave all of the
@@ -103,16 +119,59 @@ __benchmark__ = {
                              "y no por lo que puntúan; los pisos entran por medición",
             "BAG_PANELS": "el peldaño donde vive el término local: piso, sin el "
                           "término y con él, elegidos por el mecanismo",
+            "SEARCH_SEEDS": "tres repeticiones, elegidas por cuenta y no por "
+                            "resultado: con 20 bolsas de validación por "
+                            "transferencia, una sola semilla deja la granularidad "
+                            "en cinco puntos y el argmax entre cinco celdas lo "
+                            "decide el ruido. Tres es el piso para que la "
+                            "elección signifique algo",
+            "SEARCH_TRANSFERS": "una transferencia fácil y una difícil, elegidas "
+                                "por dificultad y no por resultado, para que el "
+                                "techo no quede ajustado a una sola. El veredicto "
+                                "se lee igual sobre las seis: los roles ya son "
+                                "disjuntos por bolsa",
         },
         # Where the record a conclusion is exercised against lives.
         "record": "latent.json",
+        # What a run leaves under `Results/`. Named so a later artefact — a second
+        # experiment arriving as a file, with its own scale and its own material
+        # role — has to be written down instead of appearing unremarked.
+        #
+        # `Benchmark/` is declared as a directory rather than file by file: the
+        # campaign writes its record, its readable summary and its archived
+        # figures there together, and they are one output. `ceilings.json` will
+        # land beside them, which is precisely why it gets its own line — the
+        # ceiling search is a separate experiment and reads as one here.
+        "records": [
+            "Results/Probe_results.json",
+            "Results/Benchmark",
+            "Results/Benchmark/ceilings.json",
+            "Results/local_distance_bound.pdf",
+        ],
+        # The terms Eq. (39) combines, and the dimension carrying their share.
+        #
+        # `contribution` on its own is the numerator: it cannot separate a term
+        # that commanded nothing from a term that was scaled to nothing, and both
+        # print small. Eq. (18) is divided by B_src precisely so the three terms
+        # can be read against each other, so the ratio is the quantity the
+        # normalization exists to make meaningful.
+        #
+        # Two terms and not three: `supervised` and `contribution` are what an
+        # arm's objective is made of here, because the harness applies one shared
+        # coefficient to the global and local terms together rather than the two
+        # of Eq. (39) separately. Splitting them would need two coefficients, and
+        # that is a change to what the experiment is, not a declaration.
+        "components": {
+            "terms": ["supervised", "contribution"],
+            "share": "adaptationShare",
+        },
         "dimensions": {
             "targetAccuracy": "higher",
             "sourceAccuracy": "higher",
             "seconds": "lower",
             "contribution": "descriptive",
-        "supervised": "descriptive",
-        "adaptationShare": "descriptive",
+            "supervised": "descriptive",
+            "adaptationShare": "descriptive",
             "peakMiB": "descriptive",
             "parameters": "descriptive",
             "geometry.ratio": "lower",

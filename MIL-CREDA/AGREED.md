@@ -1,4 +1,4 @@
-# Agreed for the benchmark report — bound to research-concept-r16.md
+# Agreed for the benchmark report — bound to research-concept-r17.md
 
 Every item here was settled in deliberation, not derived from a plan of work. An
 item that never reaches the code shows up as an unticked box rather than as a
@@ -11,9 +11,12 @@ these is raised, not resolved in passing.
       batch-wise dispersion the reference paper reports. The seed dispersion is
       what the verdict rule consumes; a batch-wise `±` would stay plausible while
       the run grants no verdicts.
-- [x] `LAMBDA_CONST` stays at **1.0**, declared and not calibrated. The realized
-      share of the objective is reported instead, per arm, so a term scaled to
-      irrelevance is visible rather than inferred.
+- [x] `RAMP_CEILING` stays at **1.0** as the neutral each family's searched
+      ceiling is read against. The realized share of the objective is reported
+      too, per arm, so a term scaled to irrelevance is visible rather than
+      inferred. Renamed from LAMBDA_CONST when the coefficient became one
+      object with two knobs; superseded as *the* value by the per-family search,
+      and the Reversed section below says how.
 - [x] Accuracy granularity is **1/36 = 2.78 points** with 36 evaluation bags, so
       tables print one decimal and say so. Two decimals would be false precision.
 
@@ -88,8 +91,8 @@ these is raised, not resolved in passing.
       dispersion, so best-vs-best flatters the noisiest arm by the most.
 - [x] **Three transfers in every figure, not six.** Six rows at a legible panel
       size do not fit on a page and the tables already carry all six. Fixed in
-      `FIGURE_TRANSFERS` by a rule that looks at no outcome: each domain appears
-      once as source and once as target.
+      `FIGURE_TRANSFER_COUNT` and `FIGURE_TRANSFER_RULE` by a rule that looks at
+      no outcome: each domain appears once as source and once as target.
 - [x] **Which three is computed, not fixed**: the transfers where the methods
       reach the highest mean target accuracy. It is a choice made by the outcome,
       so it is declared in every caption. What makes it defensible here is that
@@ -157,3 +160,69 @@ these is raised, not resolved in passing.
 
 - [x] Three per arm per cell, for every arm, so the top 3 can be selected after
       the run instead of being guessed before it. Local, gitignored.
+
+<!-- What follows was settled in the session of 16 August, against r17. It lived
+in a separate `AGREEMENTS.md`, created by not having looked whether this file
+already existed: they are two halves of one contract and they live in one. -->
+
+## The objective and its coefficient
+
+- [x] The supervised term of Eq. (18) is divided by its own supremum `B_src`, so the three terms of Eq. (39) live in [0, 1) and are read on a common scale.
+- [x] The bag-unit arms call `source_loss` and `total_objective`. No supervised term written inline in the benchmark.
+- [x] Each family searches **its own** ceiling and passes it to its derivations. A shared ceiling equalizes the coefficient and unequalizes the balance: the two objectives sit a factor of `B_src` apart, so one number puts adaptation at 85% of one and 10% of the other.
+- [x] One search per family, on the complete method — D and G — and inherited. If every arm searched its own, B→E would differ in two things and no rung would be attributable. Declared consequence: E and F carry no local term, so the ceiling found on the complete method is not necessarily theirs.
+- [x] The 1.0 stops being the value and becomes **the neutral the searched value is read against**. If MIL-CREDA's ceiling lands there, the normalization argument is confirmed by measurement rather than by reasoning.
+- [x] `RAMP_CEILING`'s comment states that argument, not r16's scale one. The old 1e-4 measurement stays as historical record, marked as taken against the un-normalized objective.
+
+## Prior work
+
+- [x] CREDA is used as it is: per-instance cross-entropy, its own single-term objective, never edited to make the comparison work.
+- [x] The 1e-4 leaves where it was and becomes the ceiling of CREDA's own ramp, with `creda_lambda_special` as the default. `train_creda` still reads it from the notebook's `cfg`, because it is not always 1e-4.
+- [x] `get_lambda` is untouched. DANN, ADDA and CDAN+E still read it at full strength: lowering their coefficient would switch CDAN+E's domain adversary off rather than attenuate it.
+- [x] The notebooks under `CREDA/Notebooks/` remain functional, verified statically without executing them.
+- [x] The cost of moving the coefficient is measured and bounded, not denied: the product's reassociation stays within 2 ULP and the gradients come out bit-identical.
+
+## The two ramps
+
+- [x] Each method names its own ramp and carries its own default: `creda_ramp` at 1e-4, `milcreda_ramp` at 1.0. The defaults serve each method's own runs; the benchmark never uses them, it always passes explicit values.
+- [x] A floor with no adaptation term gets a coefficient of zero, not the curve. It has no coefficient, and handing it one would suggest a term it does not carry.
+- [x] The experiment hands both the same `delta` and the same `ceiling`, explicitly.
+- [x] The curve is written once. `milcreda_ramp` binds to `creda_ramp` rather than copying it, and a test pins them to the same numbers.
+
+## The record and the report
+
+- [x] The benchmark declares revision r17 and which sections each arm exercises.
+- [x] The record keeps the supervised term's magnitude and the ratio between terms, not only the contribution. Without a denominator, "the term commanded nothing" and "the term was scaled to nothing" print alike.
+- [x] The benchmark declares `components` in its report contract.
+- [ ] The report says which ceiling each family found, on which role, over how many repetitions, and whether the seeds agreed. That CREDA does not run at its published 1e-4 is a consequence of the search and has to be read there, not in a comment in `config.py`.
+- [ ] The report marks the three cross-family rungs — C→E, D→F, D→G — with whatever remains of the confound **after** the search. With per-family ceilings the balance is partly equalized, so the magnitude has to be measured again rather than repeating the `B_src` factor that came from the shared ceiling. The within-family rungs stay attributable.
+
+## The ceiling search
+
+- [x] Three material roles, disjoint: 64 training / 20 selection / 36 evaluation. The search reads selection and the verdict reads evaluation, and `run_one` measures one **or** the other — a role the search cannot see is a stronger guarantee than one it agrees not to use.
+- [x] The selection role is funded with **new material**, not taken from training: 12 bags per class instead of 10. Evaluation keeps its 36 and the three-point resolution the campaign was sized for. USPS is what binds, at 18 bags per class.
+- [x] The search runs at 20 epochs and 3 seeds, and **never at pilot scale**. The ramp climbs on the fraction of training elapsed, so at three epochs it is saturated by the second and a ceiling found there describes a landscape the campaign never trains in.
+- [x] Its required scale is declared apart from the one it runs at, and `atRequiredScale` goes into the record. With only one of them, a cheaply-found ceiling and the configuration agree with each other.
+- [x] The campaign **refuses** without ceilings, and with ceilings searched below scale. Funding your own coefficient out of the run you are about to report is choosing and judging in one pass.
+- [x] Ceilings are compared **paired** by cell (seed, transfer): every ceiling is measured on the same material, so the cell's difficulty cancels instead of drowning the effect.
+- [x] Whether each seed would have chosen the same on its own is recorded. Three seeds on three different ceilings and three on the same one produce the same winner and are not the same evidence.
+- [x] The tie rule is written down: the **smallest** ceiling among the tied wins. Below some point a term is inert and everything ties, so there the tie-break is what actually chooses.
+- [x] The grid runs between the two declared defaults, 1e-4 and 1.0, so nothing outside what was already defensible can come out.
+- [x] The **growth rate is not searched**: it stays at `RAMP_DELTA = 20`, CREDA's own, shared by both sides. Searching it too would have turned the run into a 2D grid of three to five hours.
+- [x] No adaptive sampling. With 20 points the exhaustive grid is affordable and gives strictly more evidence: pruning biases against slow deltas, and sparse sampling destroys the tie structure, which here is a finding.
+- [x] The verdict is read over **all six** transfers. Withholding the two that funded the search bought nothing with the roles already disjoint by bag, and cost a third of the units the paired reading rests on.
+
+## The full run
+
+- [ ] The full grid — 30 seeds, 20 epochs — is not launched without an explicit authorization. Neither a clean verification nor a green pilot is permission.
+- [ ] While the run stands at pilot scale, its numbers are not quoted as results: not in the report, not in the summary, not in conversation.
+
+## Reversed
+
+What was agreed and later changed, and what replaced it. Written rather than deleted: an agreement that was turned over is part of the record, and removing it would lose exactly what this file exists to keep. No bullets, because the parser counts items and this is not one.
+
+**"The ceiling is fixed at 1.0 and not chosen by looking at outcomes."** Agreed when the ceiling was shared and its value came from the neutral argument. Reversed on deciding that each method searches its own: a shared ceiling equalized the coefficient and unequalized the balance. The neutral argument did not die, it changed role — it is now the reference the searched value is read against.
+
+**"The sweep is a sensitivity reading and not a selection, because there is no validation role."** Both halves changed. It is a selection now, and there is a validation role: it was carved, funded with new material so evaluation lost nothing.
+
+**"The report says CREDA runs at the shared ceiling and not at its published 1e-4."** There is no shared ceiling any more. What the report has to say now is which ceiling each family found, on which role, over how many repetitions, and whether the seeds agreed.

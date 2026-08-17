@@ -31,7 +31,7 @@ sound is not the same as adopting it.
 
 ---
 
-No finding is open against research-concept-r16.md.
+No finding is open against research-concept-r17.md.
 
 Two were raised against r14, measured over 200 configurations, validated with
 both poles, and adopted by the deliberation:

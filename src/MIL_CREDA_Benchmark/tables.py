@@ -32,6 +32,7 @@ pena decir una vez:
 from __future__ import annotations
 
 import math
+import re
 from typing import Iterable
 
 from MIL_CREDA_Benchmark import config
@@ -92,7 +93,7 @@ def table(runs: Iterable[dict], metric: str) -> list[dict]:
     runs = list(runs)
     grid = cells(runs, metric)
     shares = cells(runs, "contribution")
-    labels = [f"{s}->{t}" for s, t in config.TRANSFERS]
+    labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
 
     rows = []
     for arm in config.ARM_ORDER:
@@ -184,7 +185,7 @@ def _stamp(reduction: dict) -> list[str]:
 def objective(key: str, markdown: bool = True) -> str:
     """Qué valor buscamos en la lectura que sigue."""
     clase = 1.0 / config.CLASSES
-    transferencias = len(config.TRANSFERS)
+    transferencias = len(config.VERDICT_TRANSFERS)
     metas = {
         "seconds":
             "**Buscamos el número más bajo**, y sobre todo que la diferencia entre "
@@ -274,7 +275,7 @@ def render(runs: Iterable[dict], metric: str, reduction: dict,
     resume, no antes.
     """
     rows = table(runs, metric)
-    labels = [f"{s}->{t}" for s, t in config.TRANSFERS]
+    labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
     title, unit = SPANISH.get(metric, (metric, ""))
     seeds = reduction.get("seeds", config.SEEDS)
     n_seeds = len(seeds) if isinstance(seeds, (list, tuple)) else int(seeds or 0)
@@ -331,9 +332,29 @@ def conclusion(runs: Iterable[dict], metric: str, reduction: dict) -> str:
         return (f"{_scaled(value, metric):.1f}{unit}" if metric in PERCENT
                 else f"{value:.2f}{unit}")
 
+    def vanishes(value: float) -> bool:
+        """Si la distancia se redondea a cero, decirlo en palabras y no en cifra.
+
+        `0.0` no es una distancia, es la ausencia de una, y escribirlo como número
+        finge una precisión que el redondeo ya se comió. Además es un número de la
+        tabla: imprimirlo la repite sin agregar nada.
+
+        Se lee del número que `show` imprime y no de su cadena. Recortar caracteres
+        funcionaba para los porcentajes y fallaba en silencio para cualquier
+        métrica sin `%` — `0.00s` no se reconocía —, que es la forma exacta de
+        error que este archivo existe para no cometer.
+        """
+        printed = re.search(r"-?\d+(?:\.\d+)?", show(abs(value)))
+        return printed is not None and float(printed.group()) == 0.0
+
     by_name = {row["name"]: row for row in rows}
-    lines = [f"Mejor promedio: **{best['name']}** con {show(best['avg'])}; "
-             f"peor: {worst['name']} con {show(worst['avg'])}."]
+    # Los extremos por nombre y la distancia entre ellos. Imprimir los dos valores
+    # sería reponer el máximo y el mínimo de la tabla, que ya están ahí a la vista;
+    # lo que la tabla no dice es cuánto los separa, porque exige restar.
+    spread = abs(best["avg"] - worst["avg"])
+    lines = [f"Mejor promedio: **{best['name']}**; peor: {worst['name']}, "
+             + ("sin distancia apreciable entre ellos." if vanishes(spread)
+                else f"a {show(spread)} de distancia.")]
 
     # Cada método completo contra su propio piso, que es la única lectura que
     # separa lo que aporta la adaptación de lo que aporta la representación.
@@ -341,6 +362,9 @@ def conclusion(runs: Iterable[dict], metric: str, reduction: dict) -> str:
         pair = (config.NAME_OF[arm], config.NAME_OF[floor])
         if pair[0] in by_name and pair[1] in by_name:
             delta = by_name[pair[0]]["avg"] - by_name[pair[1]]["avg"]
+            if vanishes(delta):
+                lines.append(f"{pair[0]} no se separa de su piso {pair[1]}.")
+                continue
             direction = "por encima de" if (delta > 0) == reverse else "por debajo de"
             lines.append(f"{pair[0]} queda {show(abs(delta))} {direction} su piso "
                          f"{pair[1]}.")
@@ -370,7 +394,7 @@ def render_rungs(summary: dict, metric: str, markdown: bool = False) -> str:
     obligaba a invertir mentalmente cada celda contra el título de su propia fila.
     """
     grid = summary["grid"]
-    labels = [t for t in [f"{s}->{d}" for s, d in config.TRANSFERS] if t in grid]
+    labels = [t for t in [f"{s}->{d}" for s, d in config.VERDICT_TRANSFERS] if t in grid]
     title, unit = SPANISH.get(metric, (metric, ""))
     rows = []
     for left, right, reading in config.LADDER:
@@ -424,7 +448,7 @@ def render_rungs(summary: dict, metric: str, markdown: bool = False) -> str:
 def conclusion_rungs(summary: dict, metric: str) -> str:
     """Qué peldaño se movió más y cuál coincidió en todas las transferencias."""
     grid = summary["grid"]
-    labels = [t for t in [f"{s}->{d}" for s, d in config.TRANSFERS] if t in grid]
+    labels = [t for t in [f"{s}->{d}" for s, d in config.VERDICT_TRANSFERS] if t in grid]
     readings = []
     for left, right, reading in config.LADDER:
         values = [grid[l][left][metric]["mean"] - grid[l][right][metric]["mean"]
@@ -493,7 +517,7 @@ def render_readings(readings: Iterable[dict], path: str, title: str,
     correspondencia — recibe una celda vacía, no un cero.
     """
     readings = list(readings)
-    labels = [f"{s}->{t}" for s, t in config.TRANSFERS]
+    labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
     gathered: dict[tuple[str, str], list[float]] = {}
     for reading in readings:
         value = _reach(reading, path)

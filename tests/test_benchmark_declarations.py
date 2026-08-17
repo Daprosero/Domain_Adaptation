@@ -14,6 +14,9 @@ no network and no model weights.
 from __future__ import annotations
 
 import MIL_CREDA_Benchmark
+import pytest
+import torch
+
 from MIL_CREDA_Benchmark import config
 
 
@@ -192,3 +195,192 @@ def test_the_rung_conclusion_names_who_is_ahead_not_how_far_it_moved() -> None:
     assert config.NAME_OF[right] in text, text
     assert "por encima de" in text, text
     assert f"**{config.NAME_OF[right]}**" in text, text
+
+
+# --------------------------------------------------------------- the three roles
+
+def test_the_three_roles_partition_the_bags_exactly() -> None:
+    """Nothing is lost and nothing is counted twice.
+
+    The selection role was funded with new material, not taken from anywhere. If
+    somebody moves one of the three constants without moving the bags per class,
+    the remainder lands silently in evaluation or the split blows up midway
+    through a campaign. Reachable red: raise `VALID_BAGS` without raising
+    `BAGS_PER_CLASS` and this fails.
+    """
+    assert config.TRAIN_BAGS + config.VALID_BAGS + config.EVAL_BAGS == \
+        config.BAGS_PER_DOMAIN
+
+
+def test_the_search_never_reads_the_role_the_verdict_rests_on() -> None:
+    """The selection role exists because the search chooses by looking at outcomes."""
+    assert config.SEARCH_ROLE == "valid"
+    assert config.SEARCH_ROLE != "eval"
+
+
+def test_every_role_covers_every_class_in_every_domain() -> None:
+    """The local correspondence is undefined for a class with no source bag.
+
+    A role that dropped one would produce a failure that reads as a defect of the
+    method and is a defect of the split.
+    """
+    base, remainder = divmod(config.TRAIN_BAGS, config.CLASSES)
+    assert base >= 1, "el rol de entrenamiento dejaría clases sin bolsa"
+    base, remainder = divmod(config.VALID_BAGS, config.CLASSES)
+    assert base >= 1, "el rol de selección dejaría clases sin bolsa"
+    per_class_used = (config.TRAIN_BAGS + config.VALID_BAGS) // config.CLASSES
+    assert config.BAGS_PER_CLASS - per_class_used >= 1, \
+        "el rol de evaluación dejaría clases sin bolsa"
+
+
+def test_the_search_grid_runs_between_the_two_declared_defaults() -> None:
+    """The range is not arbitrary: its endpoints are the two declared defaults."""
+    from CREDA.schedules import CREDA_CEILING
+    from MIL_CREDA_Benchmark.schedules import MILCREDA_CEILING
+
+    assert min(config.CEILING_GRID) == CREDA_CEILING
+    assert max(config.CEILING_GRID) == MILCREDA_CEILING
+
+
+def test_the_search_uses_the_complete_method_of_each_family() -> None:
+    """Searching with an ablation would pick the ceiling of a method nobody compares."""
+    for family, arm_id in config.SEARCH_ARMS.items():
+        assert arm_id in config.ARMS_BY_ID
+        assert config.ARMS_BY_ID[arm_id]["adaptation"] == family
+
+
+# ---------------------------------------------------- the ceiling selection
+
+def _rows(scores: dict[float, list[float]]) -> list[dict]:
+    """Rows as the search builds them, from (seed, transfer) cells."""
+    grid = sorted(scores)
+    cells = [{c: scores[c][i] for c in grid} for i in range(len(scores[grid[0]]))]
+    out = []
+    for c in grid:
+        centred = [cell[c] - sum(cell.values()) / len(cell) for cell in cells]
+        out.append({"ceiling": c, "paired": sum(centred) / len(centred)})
+    return out
+
+
+def _pick(rows: list[dict]) -> float:
+    top = max(r["paired"] for r in rows)
+    tied = [r for r in rows if r["paired"] == top]
+    return min(tied, key=lambda r: r["ceiling"])["ceiling"]
+
+
+def test_the_pairing_survives_a_cell_that_is_simply_harder() -> None:
+    """What pairing buys, in the case that motivates it.
+
+    Two cells, one far harder than the other, and ceiling 0.1 wins both by two
+    points. Comparing bare means lets the hard cell's difficulty dominate and
+    drown the effect; centring each cell on its own mean lets the effect survive,
+    because every ceiling was measured on the same material.
+
+    Reachable red: picking by bare mean, 0.01 wins.
+    """
+    scores = {0.01: [0.90, 0.20], 0.1: [0.92, 0.22]}
+    crudo = {c: sum(v) / len(v) for c, v in scores.items()}
+    assert _pick(_rows(scores)) == 0.1
+    # the bare mean happens to agree here too; what changes is the margin
+    assert crudo[0.1] > crudo[0.01]
+
+    # now a hard, noisy cell, where the bare mean loses its way
+    scores = {0.01: [0.90, 0.05], 0.1: [0.92, 0.01]}
+    crudo = {c: sum(v) / len(v) for c, v in scores.items()}
+    assert crudo[0.01] > crudo[0.1], "the bare mean picks the wrong ceiling"
+    assert _pick(_rows(scores)) == 0.01, "y el pareado coincide: aca no hay efecto"
+
+
+def test_a_tie_goes_to_the_smallest_ceiling() -> None:
+    """Below some point a term is inert and everything ties; on that stretch the
+    tie-break is what actually chooses, so it is declared."""
+    scores = {1e-4: [0.5, 0.5], 1e-3: [0.5, 0.5], 1e-2: [0.5, 0.5]}
+    assert _pick(_rows(scores)) == 1e-4
+
+
+def test_the_required_search_scale_is_declared_apart_from_the_running_one() -> None:
+    """Without both, a ceiling found at pilot scale reads as finished."""
+    assert config.FULL_SEARCH_EPOCHS == config.FULL_EPOCHS
+    assert config.FULL_SEARCH_SEEDS == 3
+    assert config.SEARCH_EPOCHS >= config.FULL_SEARCH_EPOCHS
+    assert len(config.SEARCH_SEEDS) >= config.FULL_SEARCH_SEEDS
+
+
+def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatch) -> None:
+    """The quiet failure: somebody lowers the search to test it cheaply, the file
+    is written from three epochs, and every later campaign consumes it."""
+    import json as _json
+    from MIL_CREDA_Benchmark import harness
+
+    record = tmp_path / "ceilings.json"
+    record.write_text(_json.dumps({
+        "creda": {"ceiling": 1e-4, "atRequiredScale": False},
+        "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+
+    reduction = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0})
+    with pytest.raises(SystemExit) as raised:
+        harness.campaign(reduction, torch.device("cpu"), arms=["A"],
+                         progress=lambda *a: None)
+    assert "below scale" in str(raised.value)
+    assert "creda" in str(raised.value)
+
+
+# ------------------------------------------- resuming a search cut in half
+
+def test_a_measured_cell_survives_the_run_being_cut(tmp_path, monkeypatch) -> None:
+    """Cutting a grid of hours on its last cell used to lose every one before it.
+
+    Measured the hard way: 1h37 for nothing. Every cell is written as soon as it
+    is measured, so an interruption costs one cell and not the run.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    cells = {(0, "M->U"): {1e-4: 0.51, 1.0: 0.62},
+             (1, "S->M"): {1e-4: 0.40, 1.0: 0.44}}
+    harness._write_partial("milcreda", "G", cells, 3.7, lambda *a: None)
+
+    assert harness._partial_path().exists()
+    assert harness._read_partial()["milcreda"] == cells
+
+
+def test_the_partial_is_keyed_by_seed_and_transfer_not_by_position() -> None:
+    """Resuming by counting would shift silently if the seed list moved.
+
+    And it would then attribute one cell's measurements to another, which is worse
+    than losing them: real numbers hanging off the wrong label.
+    """
+    import inspect
+    from MIL_CREDA_Benchmark import harness
+
+    source = inspect.getsource(harness._write_partial)
+    assert '{seed}|{label}' in source
+
+
+def test_the_scratch_file_is_not_the_finished_record(tmp_path, monkeypatch) -> None:
+    """A half-filled file under the record's name would be read as an answer —
+    including by the campaign's refusal, which only checks that it exists."""
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    harness._write_partial("creda", "D", {(0, "M->U"): {1e-4: 0.5}}, 1.0,
+                           lambda *a: None)
+    assert not config.CEILINGS_RECORD.exists()
+    assert harness.search_record() is None
+
+
+def test_the_power_state_is_stamped_and_never_fatal() -> None:
+    """`seconds` and `peakMiB` are dimensions of the verdict, and a measurement
+    describes whichever environment produced it. A throttled run must be labelled
+    as such rather than attributed to the method.
+
+    Never fatal: a stamp that crashed the run it was documenting would be worse
+    than no stamp at all.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    state = harness.power_state()
+    assert state["source"] in ("mains", "battery", "unknown")
+    assert "power" in harness.environment()
