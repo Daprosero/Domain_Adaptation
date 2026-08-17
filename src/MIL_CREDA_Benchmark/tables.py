@@ -254,11 +254,110 @@ def objective(key: str, markdown: bool = True) -> str:
             f"así que 1.000 es la media uniforme: la atención dejó de elegir y "
             f"cualquier lectura de la masa de arriba queda en duda. Es descriptivo, "
             f"no se disputa, pero condiciona lo anterior.",
+        "ceilings":
+            f"**Buscamos que la rejilla se incline**, no un número en particular. "
+            f"El neutro es {config.RAMP_CEILING:g}: un techo que aterriza ahí "
+            f"confirma la normalización por medición y no por argumento. Lo que "
+            f"invalida la elección es una rejilla plana —ahí el ganador lo elige la "
+            f"regla de desempate y no el criterio— o semillas que no coinciden.",
     }
     texto = metas.get(key)
     if texto is None:
         return f"(sin objetivo declarado para `{key}`)"
     return f"> {texto}" if markdown else texto
+
+
+def render_ceilings(record: dict | None, markdown: bool = False) -> str:
+    """La rejilla de la búsqueda, una fila por familia y una columna por techo.
+
+    Recibe el registro en lugar de leerlo: este módulo es solo biblioteca estándar
+    y el registro lo lee `harness.search_record`, que necesita torch para todo lo
+    demás. Y recibirlo entero, no solo el ganador: un techo elegido entre cuatro
+    puntajes idénticos y uno elegido por una diferencia real son el mismo número y
+    no la misma evidencia, así que la fila muestra la rejilla y marca cuál ganó.
+    """
+    if not record:
+        return ("Sin búsqueda de techos: no hay rejilla que mostrar. La campaña se "
+                "niega a correr hasta que exista.")
+    grid = sorted({fila["ceiling"] for entrada in record.values()
+                   for fila in entrada["grid"]})
+    columns = ["Familia", "Brazo", *(f"{c:g}" for c in grid)]
+
+    def cells(entrada: dict) -> list[str]:
+        puntajes = {fila["ceiling"]: fila.get(entrada["criterion"])
+                    for fila in entrada["grid"]}
+        out = []
+        for techo in grid:
+            valor = puntajes.get(techo)
+            texto = "—" if valor is None else f"{_scaled(valor, entrada['criterion']):.1f}"
+            # El elegido se marca en la propia celda: una columna «elegido» aparte
+            # repetiría un número que la fila ya muestra, y son dos cosas que se
+            # pueden mover por separado.
+            if techo == entrada["ceiling"]:
+                texto = f"**{texto}**" if markdown else f"[{texto}]"
+            out.append(texto)
+        return out
+
+    if markdown:
+        lines = ["| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for familia, entrada in sorted(record.items()):
+            lines.append("| " + " | ".join(
+                [f"`{familia}`", f"`{entrada['arm']}`", *cells(entrada)]) + " |")
+        return "\n".join(lines)
+
+    width = max(14, max((len(f) for f in record), default=14) + 2)
+    lines = [f"{'Familia':<{width}}{'Brazo':>8}"
+             + "".join(f"{c:g}".rjust(12) for c in grid)]
+    for familia, entrada in sorted(record.items()):
+        lines.append(f"{familia:<{width}}{entrada['arm']:>8}"
+                     + "".join(cell.rjust(12) for cell in cells(entrada)))
+    return "\n".join(lines)
+
+
+def conclusion_ceilings(record: dict | None) -> str:
+    """Si la rejilla eligió el techo o lo eligió la regla de desempate.
+
+    Calculada y no escrita: es la lectura que decide si el escalar que va a gobernar
+    toda la campaña se apoya en una medición o en un criterio de escritorio, y esa
+    distinción sobrevive a que los números cambien solo si se recalcula con ellos.
+
+    Lo que el registro no dice se informa como no dicho. Un registro escrito por una
+    versión anterior de la búsqueda no trae cómo se desempató ni si las semillas
+    coincidieron, y suponer que no hubo empate sería afirmar «elegido por una
+    diferencia real» sobre algo que nunca lo dijo: una explicación inventada para
+    tapar un hueco se lee como hallazgo y se usa como tal.
+    """
+    if not record:
+        return "Sin búsqueda: ningún techo está elegido y nada de abajo puede correr."
+    partes = []
+    for familia, entrada in sorted(record.items()):
+        if "decidedByTieBreak" not in entrada:
+            como = "sin que el registro diga cómo se desempató"
+        elif entrada["decidedByTieBreak"]:
+            como = f"por desempate entre {len(entrada['tied'])} techos empatados"
+        else:
+            como = "por una diferencia en el criterio"
+        acuerdo = {True: "y las semillas coinciden",
+                   False: "y las semillas **no** coinciden entre sí",
+                   None: "y el registro no dice si las semillas coincidieron",
+                   }[entrada.get("seedsAgree")]
+        escala = ("" if entrada.get("atRequiredScale")
+                  else ", **por debajo de la escala que su respuesta necesita**")
+        neutro = (" — que es el neutro, así que la normalización queda confirmada "
+                  "por medición" if entrada["ceiling"] == entrada.get("neutral") else "")
+        partes.append(
+            f"**{familia}** se queda en {entrada['ceiling']:g}{neutro}, elegido {como} "
+            f"sobre el rol `{entrada.get('role', '?')}` con "
+            f"{len(entrada.get('seeds') or [])} repetición(es) de "
+            f"{entrada.get('epochs', '?')} épocas {acuerdo}{escala}.")
+    plano = [f for f, e in record.items() if e.get("decidedByTieBreak")]
+    if plano:
+        partes.append(
+            f"La rejilla no se inclinó para {', '.join(sorted(plano))}: el techo lo "
+            f"puso la regla de desempate y no el criterio, así que sostiene menos de "
+            f"lo que un número elegido parece sostener.")
+    return " ".join(partes)
 
 
 def render(runs: Iterable[dict], metric: str, reduction: dict,
@@ -1008,4 +1107,11 @@ def conclusions(record: dict) -> dict:
     scored = record.get("correspondence")
     if isinstance(scored, list) and scored:
         produced["correspondencia"] = conclusion_correspondence(scored)
+    # La búsqueda del techo vive en su propio registro y entra por la reducción de
+    # la campaña, que la copia entera. Se concluye acá y no aparte para que la
+    # permutación de números la ejercite como a cualquier otra: es la conclusión
+    # sobre la que descansa el escalar de todas las demás.
+    searched = reduction.get("ceilingSearch")
+    if isinstance(searched, dict) and searched:
+        produced["techos"] = conclusion_ceilings(searched)
     return produced
