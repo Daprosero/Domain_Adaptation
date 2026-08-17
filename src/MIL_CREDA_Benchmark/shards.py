@@ -26,11 +26,19 @@ would produce a table nobody could attribute.
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 from MIL_CREDA_Benchmark import config, harness
+
+# The forge root: <root>/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/shards.py
+_FORGE_ROOT = Path(__file__).resolve().parents[4]
+_SHARD_IO_SCRIPT = (
+    _FORGE_ROOT / ".claude" / "skills" / "remote-execution" / "scripts" / "shard_io.py"
+)
 
 
 class ShardsDisagree(SystemExit):
@@ -48,48 +56,53 @@ def declaration() -> dict:
     return __benchmark__.get("distribution") or {}
 
 
+def _load_shard_io():
+    """Path-import the forge's generic shard-reading module.
+
+    `read_shards` and `disagreements` moved to the forge because they assume
+    only the `shard.json` + `runs.jsonl` contract, and nothing about how
+    runs group into a result cell. The grouping this repository does with
+    that data — keyed on the two experiment dimensions `_cells`/`_grid` and
+    `promote_candidates` still use below — is this repository's own
+    vocabulary and stayed here rather than moving into forge infrastructure.
+
+    Reused from `sys.modules` on a second load for the same reason
+    `implementation_cli.py`'s own sibling loader reuses `ledger.py`: a
+    second `exec_module` of the same source would define a second, distinct
+    module object, and callers comparing identity across the two would see
+    them as different even though the source is byte-identical.
+    """
+    module_name = "remote_execution_shard_io"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+    spec = importlib.util.spec_from_file_location(module_name, _SHARD_IO_SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_shard_io = _load_shard_io()
+
+# `disagreements` needs no knowledge this repository would have to supply —
+# it operates only on the stamps `read_shards` already collected — so it is
+# re-exported as-is, with no wrapper and no logic duplicated.
+disagreements = _shard_io.disagreements
+
+
 def read_shards(root: Path | None = None) -> list[dict]:
     """Every shard that came back, with its stamp and its raw runs.
 
-    Enumerated from the disk. A shard that never arrived is absent here rather
-    than reported as empty, and the difference matters: `merge` counts what it
-    expected against what it has, and one of those numbers has to come from
-    somewhere other than the pile of files that did show up.
+    A thin wrapper, not a reimplementation: the only fact this repository
+    adds is where its own shards live when the caller does not say —
+    `config.RESULTS / harness.SHARDS_DIR` — a location the forge's generic
+    reader has no way to know and no business assuming. Everything else,
+    including "a shard that never arrived is absent here rather than
+    reported as empty", is `shard_io.read_shards`'s behavior, unchanged.
     """
-    home = (root if root is not None
-            else config.RESULTS / harness.SHARDS_DIR)
-    if not home.is_dir():
-        return []
-    found = []
-    for folder in sorted(p for p in home.iterdir() if p.is_dir()):
-        stamp_path = folder / "shard.json"
-        runs_path = folder / "runs.jsonl"
-        if not stamp_path.exists():
-            continue
-        stamp = json.loads(stamp_path.read_text(encoding="utf-8"))
-        runs = [json.loads(line) for line in
-                runs_path.read_text(encoding="utf-8").splitlines()
-                if line.strip()] if runs_path.exists() else []
-        found.append({"shard": folder.name, "stamp": stamp, "runs": runs})
-    return found
-
-
-def disagreements(shards: list[dict], fields: list[str]) -> list[dict]:
-    """Where the shards do not match on what they were required to match on.
-
-    Reported per field with every value seen, because "they disagree" is not
-    actionable and "one shard ran twenty epochs and two ran three" is.
-    """
-    found = []
-    for field in fields:
-        seen = {}
-        for entry in shards:
-            seen.setdefault(json.dumps(entry["stamp"].get(field), sort_keys=True),
-                            []).append(entry["shard"])
-        if len(seen) > 1:
-            found.append({"field": field,
-                          "values": {value: names for value, names in seen.items()}})
-    return found
+    home = root if root is not None else config.RESULTS / harness.SHARDS_DIR
+    return _shard_io.read_shards(home)
 
 
 def partition(dimensions: dict, dist: dict) -> tuple[list[str], list[str]]:
