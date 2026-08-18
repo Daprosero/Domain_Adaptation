@@ -43,7 +43,7 @@ from MIL_CREDA_Benchmark import config, harness, shards  # noqa: E402
 #: Asking is not receiving. A service allocates by availability, so the request
 #: lives here and the fact lives in the stamp: `environment()` records what
 #: arrived, and the merge groups by that rather than by this.
-ACCELERATOR = "T4"
+ACCELERATOR = "NvidiaTeslaT4"
 
 #: The forge root, two levels above this file: `<root>/implementations/
 #: Domain_Adaptation/tools/distribute.py`.

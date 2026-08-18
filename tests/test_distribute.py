@@ -45,7 +45,7 @@ def test_more_shards_than_seeds_collapses_rather_than_producing_empty_ones():
 
 def test_the_accelerator_is_requested_here_and_nowhere_else():
     """It is a service's configuration, so it lives in the launcher alone."""
-    assert distribute.ACCELERATOR == "T4"
+    assert distribute.ACCELERATOR == "NvidiaTeslaT4"
     source = (REPOSITORY / "src").rglob("*.py")
     for path in source:
         assert "T4" not in path.read_text(encoding="utf-8"), path
@@ -55,7 +55,7 @@ def test_the_plan_says_the_request_is_not_a_guarantee():
     """A plan that promised the hardware would be the claim the stamp exists to
     check. Reachable red: drop the note and this fails."""
     drawn = distribute.plan(parts=3, seeds=list(range(9)))
-    assert drawn["accelerator"] == "T4"
+    assert drawn["accelerator"] == "NvidiaTeslaT4"
     assert "requested, not guaranteed" in drawn["note"]
     assert [s["seeds"] for s in drawn["shards"]] == [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
 
