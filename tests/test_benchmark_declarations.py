@@ -35,6 +35,60 @@ def test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration() -> N
     assert MIL_CREDA_Benchmark.__benchmark__["revision"] == config.REVISION
 
 
+# --------------------------------------------------------- distribution -------
+
+def test_the_distribution_declares_exactly_what_was_approved() -> None:
+    """`shards.declaration()` reads this block, and `merge()` refuses every
+    merge until it exists. The three groups say no more than what was
+    approved: an accuracy pools because it is a property of the method: the
+    same seed and the same code produce it regardless of which machine
+    computed it. `seconds` stays per-environment because timing measures the
+    machine as much as the method. `commit` and `codeDigest` are not named
+    here even though they were approved alongside `epochs` — both live at
+    `evidence.commit` / `evidence.codeDigest` on a shard's stamp, and
+    `shards.disagreements()` (the forge's own, re-exported unchanged) reads
+    `identicalAcrossShards` entries with a flat `stamp.get(field)`, never a
+    dotted path. Naming them here would silently check nothing rather than
+    check what was asked for, so only the one name that is actually a
+    top-level stamp field is declared.
+    """
+    from MIL_CREDA_Benchmark import shards
+
+    dist = shards.declaration()
+    assert dist == {
+        "axis": "seed",
+        "poolable": ["sourceAccuracy", "targetAccuracy"],
+        "perEnvironment": ["seconds"],
+        "identicalAcrossShards": ["epochs"],
+    }
+
+
+def test_the_declared_dimensions_are_a_real_subset_of_every_dimension_the_harness_measures() -> None:
+    """Named so the gap cannot drift out of sight: five of `config.DIMENSIONS`
+    — `contribution`, `supervised`, `adaptationShare`, `peakMiB`, `parameters`
+    — carry no approved classification. `shards.partition()` requires every
+    key of the `dimensions` it is handed to appear in `poolable` or
+    `perEnvironment`, so `shards.merge()` called with its default
+    `dimensions=config.DIMENSIONS` refuses on real shards until someone
+    approves where the other five belong. This is not fixed here — a
+    classification invented without approval would be exactly the kind of
+    unchecked number this exercise exists to catch.
+    """
+    from MIL_CREDA_Benchmark import shards
+
+    dist = shards.declaration()
+    classified = set(dist["poolable"]) | set(dist["perEnvironment"])
+    unclassified = set(config.DIMENSIONS) - classified
+    assert unclassified == {
+        "contribution", "supervised", "adaptationShare", "peakMiB", "parameters",
+    }
+
+    with pytest.raises(shards.ShardsDisagree) as raised:
+        shards.partition(config.DIMENSIONS, dist)
+    for name in unclassified:
+        assert name in str(raised.value)
+
+
 def test_the_benchmark_declares_what_its_protocol_assumes() -> None:
     """A change of reach leaves every arm intact and every dimension meaningless,
     so the premises sit beside the arms rather than in somebody's memory."""
