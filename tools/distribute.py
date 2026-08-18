@@ -29,7 +29,6 @@ import argparse
 import importlib.util
 import json
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -221,30 +220,6 @@ def run_shard(shard: str, seeds: list[int]) -> dict:
         seeds=list(seeds), epochs=config.FULL_EPOCHS,
         device=str(device), environment=harness.environment())
     return harness.campaign(reduction, device, shard=shard)
-
-
-def run_pilot(epochs: int = config.EPOCHS, seeds: list[int] | None = None) -> dict:
-    """One single-machine campaign at pilot scale — the whole seed axis,
-    never a shard of it — cheap enough to prove the pipeline runs before
-    ever asking for the fan-out `run_shard()` exists for.
-
-    Mirrors `Benchmark_Phase1_Run.ipynb`'s own pilot cells: `ceilings_in_force()`
-    searches once (or reuses `ceilings.json` if a search already ran, exactly
-    as `campaign()` requires) and `campaign()` runs the whole grid at
-    `reduction.epochs` — never `run_shard()`'s `FULL_EPOCHS`.
-
-    `epochs` is the one dial a caller may cheapen without touching a
-    scientific constant: `Reduction`'s own default already reads
-    `config.EPOCHS`, so calling this with no override reproduces that
-    default exactly, and `--run-kwargs '{"epochs": 2}'` reaches a cheaper
-    number than even the pilot's own default without editing `config.py`.
-    """
-    device = harness.resolve_device()
-    reduction = harness.Reduction(
-        seeds=list(seeds) if seeds is not None else list(config.SEEDS),
-        epochs=epochs, device=str(device), environment=harness.environment())
-    reduction = replace(reduction, ceilings=harness.ceilings_in_force(reduction, device))
-    return harness.campaign(reduction, device)
 
 
 def main() -> int:
