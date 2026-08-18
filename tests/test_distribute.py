@@ -170,3 +170,71 @@ def test_distribute_py_makes_no_direct_service_call_itself():
     assert "import subprocess" not in source
     assert "subprocess.run" not in source
     assert "kernels" not in source
+
+
+def test_run_pilot_epochs_default_is_reductions_own_default_not_full_epochs():
+    """`run_pilot()` is the single-machine entry point a cheap firedrill
+    reaches through `--run-kwargs` — distinct from `run_shard()`'s own
+    `FULL_EPOCHS`-pinned fan-out path. With no override it must reproduce
+    exactly what a bare `Reduction()` already defaults to
+    (`config.EPOCHS`), so calling it with nothing changes nothing about
+    what the pilot cells in `Benchmark_Phase1_Run.ipynb` already run.
+
+    Reachable red: before this task, `distribute` exposed no `run_pilot`
+    attribute at all.
+    """
+    import inspect
+
+    default = inspect.signature(distribute.run_pilot).parameters["epochs"].default
+    assert default == distribute.config.EPOCHS
+    assert default != distribute.config.FULL_EPOCHS
+
+
+def test_run_pilot_epochs_is_overridable_as_a_plain_json_kwarg():
+    """The whole point: a caller reaches a cheaper-than-pilot run by
+    passing `{"epochs": 2}` through `--run-kwargs`, never by editing
+    `config.py`. `seeds` stays optional the same way, defaulting to
+    `config.SEEDS` exactly like a bare `Reduction()` would.
+    """
+    import inspect
+
+    params = inspect.signature(distribute.run_pilot).parameters
+    assert params["epochs"].kind in (
+        inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY,
+    )
+    assert params["seeds"].default is None
+
+
+def test_run_pilot_computes_ceilings_before_campaigning():
+    """`campaign()` refuses outright without `reduction.ceilings` already
+    populated (`config.CEILINGS` is only filled at import from a record
+    that may not exist yet). `run_pilot()` has to close that gap itself,
+    the same way the notebook's own pilot cells do, rather than handing a
+    caller a refusal it has no way to read.
+    """
+    import inspect
+
+    source = inspect.getsource(distribute.run_pilot)
+    assert source.index("ceilings_in_force(") < source.index("harness.campaign(")
+
+
+def test_run_pilot_drives_the_same_campaign_no_local_exemption():
+    """Same discipline `run_shard()` already holds: `run_pilot()` drives
+    `harness.campaign()` and reimplements no part of stamping itself.
+    """
+    import inspect
+
+    source = inspect.getsource(distribute.run_pilot)
+    assert "harness.campaign(" in source
+    assert "write_shard_stamp" not in source
+    assert "seal_shard_stamp" not in source
+
+
+def test_run_pilot_never_shards_the_seed_axis():
+    """The one thing that tells `run_pilot()` apart from `run_shard()`:
+    it never passes `shard=` into `campaign()`, so the whole seed axis
+    runs in one machine's own namespace rather than one shard of it."""
+    import inspect
+
+    source = inspect.getsource(distribute.run_pilot)
+    assert "shard=" not in source
