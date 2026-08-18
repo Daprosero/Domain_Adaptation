@@ -33,8 +33,10 @@ from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY / "src"))
+sys.path.insert(0, str(REPOSITORY / "tools"))
 
 from MIL_CREDA_Benchmark import config, harness, shards  # noqa: E402
+import bridge  # noqa: E402
 
 #: The accelerator every session asks for. One class for every shard, because
 #: `seconds` and `peakMiB` are dimensions of the verdict and two arms measured on
@@ -248,7 +250,13 @@ def main() -> int:
     if not found:
         print("no shards came back yet; nothing to merge", file=sys.stderr)
         return 1
-    print(json.dumps(shards.merge(found), indent=2, default=str))
+    # `bridge.py` is what turns `shards.merge()`'s own shape into what
+    # `Benchmark_Phase1_Report.ipynb` reads, written to its own scratch
+    # location and never into `config.RESULTS` — see its module docstring.
+    written = bridge.bridge(found)
+    print(f"written to {written['summary'].parent}:")
+    for name, path in written.items():
+        print(f"  {name}: {path.relative_to(REPOSITORY)}")
     return 0
 
 

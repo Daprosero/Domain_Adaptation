@@ -31,3 +31,8 @@ MIL-CREDA/Models/Benchmark/*.pt
 # single line fetches again. Carrying a copy in this repository would be
 # redistributing it, not recording anything about this work.
 .benchmark-data/
+
+# tools/bridge.py's own output: a merge of shards reshaped for the report
+# notebook to read, reproducible from the shards on disk and never a
+# campaign's record — see tools/bridge.py's module docstring.
+.scratch/
