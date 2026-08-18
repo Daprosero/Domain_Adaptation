@@ -1080,6 +1080,89 @@ def run_pilot(epochs: int = config.EPOCHS, seeds: list[int] | None = None) -> di
     return campaign(reduction, device)
 
 
+#: What a smoke run stamps as its ceiling, for both families, so
+#: `write_shard_stamp`'s record is honest about what was used rather than
+#: leaving it implied by `ramp()`'s own per-call default. `RAMP_CEILING` is
+#: not chosen for this run: it is the value every derivation already falls
+#: back to before any search has run — `ramp()`'s own default argument, and
+#: the neutral of a normalized Eq. (39), declared once in `config.py` and
+#: never the search's to find. A smoke run reuses that declared neutral
+#: rather than inventing a ceiling of its own.
+SMOKE_CEILINGS: dict[str, float] = {family: config.RAMP_CEILING
+                                    for family in config.SEARCH_ARMS}
+
+#: The arm and transfer a smoke run exercises. `G` is the complete method —
+#: weighting, the learned selector and the local term all fire, which is
+#: more of `wiring.build`'s own branching than any lighter arm reaches — and
+#: `VERDICT_TRANSFERS[0]` is `M->U`, the same pair `SEARCH_TRANSFERS` leads
+#: with. Neither choice is a scientific one: a smoke run reports no accuracy
+#: anybody is meant to read, only that the wire from `bags.build` through
+#: `wiring.build` to a sealed stamp still carries current.
+SMOKE_ARM = "G"
+
+
+def run_smoke(seed: int = 0, shard: str | None = None) -> dict:
+    """The smallest slice that exercises a real shard's whole wire, and
+    nothing past it: one arm, one transfer, one seed, two epochs.
+
+    Every wire a real shard uses, in the same order `campaign()` uses them:
+    `resolve_device()`, `bags.build()`, `wiring.build()` (through
+    `run_one()`), then `write_shard_stamp()` / `seal_shard_stamp()` around a
+    `runs.jsonl` this function writes itself. `campaign()` is not called
+    here — it always walks every one of `config.VERDICT_TRANSFERS` for every
+    arm it is given, with no argument that narrows it to one transfer — so a
+    single-slice smoke does its own minimal version of `campaign()`'s
+    bookkeeping instead, over exactly one `run_one()` call.
+
+    Never calls `ceilings_in_force()` or `search_ceilings()` — the one hard
+    requirement this function exists to meet. `run_one()` needs a ceiling to
+    run at all, and gets one explicitly here, from `reduction.ceilings`
+    (`SMOKE_CEILINGS`): the module's own already-declared neutral, not a
+    value chosen by outcome and not a shortcut through the search. Skipping
+    the search is therefore not a scientific claim about where either
+    family's ceiling actually sits — it is a statement that this run is
+    plumbing, not a result. A smoke run never writes `summary.json` or
+    `Probe_results.json`, and `campaign()` run for real still refuses
+    without a `ceilings.json` the search produced; nothing here weakens
+    that refusal.
+
+    `shard` names this call's own shard namespace, the same parameter
+    `distribute.run_shard()` takes, passed through to `shard_paths()` so a
+    smoke rehearsal never collides with a real shard's files sharing the
+    same directory. Defaults to `None` — one kernel container runs one
+    smoke call, so there is nothing else in that container to collide with.
+    """
+    device = resolve_device()
+    transfer = config.VERDICT_TRANSFERS[0]
+    reduction = Reduction(
+        seeds=[seed], epochs=2, device=str(device),
+        environment=environment(), ceilings=dict(SMOKE_CEILINGS),
+    )
+
+    paths = shard_paths(shard)
+    paths["runs"].parent.mkdir(parents=True, exist_ok=True)
+    write_shard_stamp(shard, reduction)
+
+    drawn = {code: bags.build(code, config.DATA_CACHE, seed)
+             for code in {transfer[0], transfer[1]}}
+    material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
+    run = run_one(SMOKE_ARM, transfer, seed, reduction, device, material)
+    run.pop("state", None)
+
+    with paths["runs"].open("w", encoding="utf-8") as handle:
+        handle.write(json.dumps(run) + "\n")
+
+    seal_shard_stamp(shard)
+    return {
+        "arm": SMOKE_ARM,
+        "transfer": run["transfer"],
+        "seed": seed,
+        "targetAccuracy": run["targetAccuracy"],
+        "sourceAccuracy": run["sourceAccuracy"],
+        "seconds": run["seconds"],
+    }
+
+
 def header(reduction: Reduction) -> str:
     lines = [
         f"setting={reduction.setting}  backbone={reduction.backbone}  "
