@@ -700,3 +700,129 @@ def test_a_shard_records_its_own_stamp_beside_its_runs(tmp_path, monkeypatch) ->
     assert stored["shard"] == "alpha"
     assert stored["env"] == harness.environment_key(stored["environment"])
     assert "device" in stored["environment"]
+
+
+# --------------------------------------------------------------- shard evidence
+
+def test_write_shard_stamp_carries_evidence_without_outputs(tmp_path, monkeypatch) -> None:
+    """`outputs` cannot be known before the run finishes, so it is absent here.
+
+    The other three fields can: the commit, the code digest, and where imports
+    resolved from are all facts about the checkout at the moment the stamp is
+    written, not about what the run produces.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    harness.write_shard_stamp("alpha", harness.Reduction())
+    stored = json.loads(harness.shard_paths("alpha")["stamp"].read_text())
+
+    evidence = stored["evidence"]
+    assert evidence["commit"] and len(evidence["commit"]) == 40
+    assert evidence["codeDigest"] and len(evidence["codeDigest"]) == 64
+    assert evidence["importsFrom"].endswith("MIL_CREDA_Benchmark")
+    assert "outputs" not in evidence
+
+
+def test_seal_shard_stamp_adds_outputs_atomically(tmp_path, monkeypatch) -> None:
+    """Sealing rewrites the stamp once the run's own files exist beside it."""
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    harness.write_shard_stamp("alpha", harness.Reduction())
+    paths = harness.shard_paths("alpha")
+    paths["runs"].parent.mkdir(parents=True, exist_ok=True)
+    paths["runs"].write_text('{"seed": 0}\n', encoding="utf-8")
+
+    sealed = harness.seal_shard_stamp("alpha")
+    assert sealed == paths["stamp"]
+    stored = json.loads(paths["stamp"].read_text())
+    assert sorted(stored["evidence"]["outputs"]) == ["runs.jsonl", "shard.json"]
+    # No leftover scratch file: the rename is the only trace of the rewrite.
+    assert list(paths["stamp"].parent.glob("*.partial.json")) == []
+
+
+def test_an_unsealed_shard_is_incomplete_and_a_sealed_one_is_not(
+        tmp_path, monkeypatch) -> None:
+    """The whole enforcement mechanism: a run that dies before sealing never
+    lists `outputs`, so it is never complete, so it is never mergeable."""
+    from MIL_CREDA_Benchmark import harness, shards
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    harness.write_shard_stamp("alpha", harness.Reduction())
+    paths = harness.shard_paths("alpha")
+
+    unsealed = json.loads(paths["stamp"].read_text())
+    before = shards.completeness(unsealed, shards.REQUIRED_EVIDENCE)
+    assert before["complete"] is False
+    assert "evidence.outputs" in before["missing"]
+
+    harness.seal_shard_stamp("alpha")
+    sealed = json.loads(paths["stamp"].read_text())
+    after = shards.completeness(sealed, shards.REQUIRED_EVIDENCE)
+    assert after["complete"] is True
+    assert after["missing"] == []
+
+
+def test_a_concurrent_reader_during_seal_sees_the_pre_seal_stamp(
+        tmp_path, monkeypatch) -> None:
+    """Reachable red: sealing that mutated the stamp file in place, rather than
+    rewriting a scratch copy and renaming it, would let a reader mid-write see a
+    half-written JSON document instead of a whole, if older, one.
+
+    `os.replace` is the boundary a concurrent reader can land either side of and
+    never inside, so this test reads the file at the exact instant just before
+    the rename and asserts it is still the complete, if incomplete-as-evidence,
+    pre-seal stamp — correct, and worth this explicit test rather than an
+    assumption, per the design's own open question.
+    """
+    import os as _os
+
+    from MIL_CREDA_Benchmark import harness, shards
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    harness.write_shard_stamp("alpha", harness.Reduction())
+    paths = harness.shard_paths("alpha")
+    paths["runs"].write_text('{"seed": 0}\n', encoding="utf-8")
+
+    seen_during_window = {}
+    real_replace = _os.replace
+
+    def watched_replace(src, dst):
+        # The exact window: the scratch file is fully written, the real stamp
+        # has not moved yet. A reader landing here sees only the old bytes.
+        seen_during_window["stamp"] = json.loads(paths["stamp"].read_text())
+        real_replace(src, dst)
+
+    monkeypatch.setattr(_os, "replace", watched_replace)
+    harness.seal_shard_stamp("alpha")
+
+    mid_seal = shards.completeness(seen_during_window["stamp"], shards.REQUIRED_EVIDENCE)
+    assert mid_seal["complete"] is False
+    assert "evidence.outputs" in mid_seal["missing"]
+
+    post_seal = shards.completeness(
+        json.loads(paths["stamp"].read_text()), shards.REQUIRED_EVIDENCE)
+    assert post_seal["complete"] is True
+
+
+def test_a_checkout_with_no_git_history_never_produces_a_complete_shard(
+        tmp_path, monkeypatch) -> None:
+    """`evidence.commit` requires git in the runtime that stamps. A checkout
+    with no git history — `.git` stripped, a source tarball — can never
+    produce a complete shard. Accepted as correct; a behavior change for any
+    non-git test fixture, hence flagged with its own explicit test."""
+    from MIL_CREDA_Benchmark import harness, shards
+
+    no_git = tmp_path / "no-git-checkout"
+    no_git.mkdir()
+    monkeypatch.setattr(config, "REPOSITORY", no_git)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "results")
+
+    harness.write_shard_stamp("alpha", harness.Reduction())
+    stored = json.loads(harness.shard_paths("alpha")["stamp"].read_text())
+
+    assert "commit" not in stored["evidence"]
+    result = shards.completeness(stored, shards.REQUIRED_EVIDENCE)
+    assert result["complete"] is False
+    assert "evidence.commit" in result["missing"]

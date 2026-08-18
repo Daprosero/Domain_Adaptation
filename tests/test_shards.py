@@ -30,9 +30,19 @@ def _run(arm, transfer, seed, env, accuracy, seconds):
             "peakMiB": 50.0, "parameters": 11181642}
 
 
+def _complete_evidence(**overrides):
+    evidence = {"commit": "a" * 40, "codeDigest": "b" * 64,
+                "importsFrom": "/repo/src/MIL_CREDA_Benchmark",
+                "outputs": ["runs.jsonl", "shard.json"]}
+    evidence.update(overrides)
+    return evidence
+
+
 def _shard(name, env, seeds, accuracy=0.5, seconds=10.0, **stamp):
-    base = {"revision": "r17.md", "epochs": 20, "ceilings": {"creda": 1e-4},
-            "env": env, "environment": {"device": {"name": name, "kind": "cuda"}}}
+    base = {"revision": "r17.md", "epochs": 20, "seeds": list(seeds),
+            "ceilings": {"creda": 1e-4}, "env": env,
+            "environment": {"device": {"name": name, "kind": "cuda"}, "torch": "2.13.0"},
+            "evidence": _complete_evidence()}
     base.update(stamp)
     # Both arms of a rung, or `ladder_rows` skips the pair and never reaches a
     # dimension — which would make the redaction test pass for the wrong reason.
@@ -136,3 +146,73 @@ def test_shards_are_enumerated_from_the_disk(tmp_path, monkeypatch):
     found = shards.read_shards()
     assert [e["shard"] for e in found] == ["k01"]
     assert len(found[0]["runs"]) == 1
+
+
+# -------------------------------------------------------- merge refuses incomplete
+
+def test_required_evidence_names_the_four_evidence_paths_and_the_shard_shape():
+    assert shards.REQUIRED_EVIDENCE == [
+        "evidence.commit", "evidence.codeDigest", "evidence.importsFrom",
+        "evidence.outputs", "environment.device.kind", "environment.torch",
+        "seeds", "epochs",
+    ]
+
+
+def test_completeness_is_the_forge_s_own_service_blind_predicate_reexported():
+    """No field name is pushed into the forge: this repository's own
+    `REQUIRED_EVIDENCE` is what supplies the vocabulary, and the predicate
+    itself names nothing of its own — verified with foreign field names."""
+    assert shards.completeness({"widget": {"gizmo": 1}}, ["widget.gizmo"]) == {
+        "complete": True, "missing": []}
+    assert shards.completeness({}, ["widget.gizmo"]) == {
+        "complete": False, "missing": ["widget.gizmo"]}
+
+
+def test_merge_accepts_a_fully_sealed_shard():
+    """A complete stamp merges exactly as before evidence stamping existed."""
+    merged = shards.merge([_shard("a", "e1", [0, 1])],
+                          dimensions=config.DIMENSIONS, dist=DIST)
+    assert merged["shardsArrived"] == ["a"]
+
+
+def test_merge_refuses_an_incomplete_shard_naming_it_and_its_missing_paths():
+    """A shard whose run died mid-way — or whose stamp predates evidence
+    stamping entirely — is not merge-eligible. `ShardsDisagree` is the wrong
+    exception for this: the shards here do not disagree with each other, one
+    of them is simply not proven finished."""
+    incomplete = _shard("b", "e2", [2, 3])
+    incomplete["stamp"] = {k: v for k, v in incomplete["stamp"].items()
+                           if k != "evidence"}
+
+    with pytest.raises(shards.ShardIncomplete) as raised:
+        shards.merge([_shard("a", "e1", [0, 1]), incomplete],
+                     dimensions=config.DIMENSIONS, dist=DIST)
+    assert "b" in str(raised.value)
+    assert "evidence.commit" in str(raised.value)
+    assert "evidence.outputs" in str(raised.value)
+
+
+def test_an_old_stamp_with_no_evidence_at_all_reads_incomplete_never_invalid(
+        tmp_path, monkeypatch):
+    """Rollback strands nothing: an old `shard.json` from before evidence
+    stamping existed still parses and lists normally through `read_shards`,
+    and only refuses at `merge()`, never at read time."""
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    home = tmp_path / harness.SHARDS_DIR / "old"
+    home.mkdir(parents=True)
+    (home / "shard.json").write_text(json.dumps(
+        {"shard": "old", "epochs": 20, "revision": "r17.md",
+         "ceilings": {"creda": 1e-4}, "env": "e1",
+         "environment": {"device": {"name": "old", "kind": "cuda"}}}))
+    (home / "runs.jsonl").write_text(
+        json.dumps(_run("G", "M->U", 0, "e1", 0.5, 1.0)) + "\n")
+
+    found = shards.read_shards()
+    assert [e["shard"] for e in found] == ["old"]
+
+    result = shards.completeness(found[0]["stamp"], shards.REQUIRED_EVIDENCE)
+    assert result["complete"] is False
+    assert "evidence.commit" in result["missing"]
+
+    with pytest.raises(shards.ShardIncomplete):
+        shards.merge(found, dimensions=config.DIMENSIONS, dist=DIST)
