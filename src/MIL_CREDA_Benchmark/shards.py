@@ -50,6 +50,17 @@ class ShardsDisagree(SystemExit):
     """
 
 
+class ShardIncomplete(SystemExit):
+    """Raised instead of merging a shard whose stamp is not proven finished.
+
+    A separate exception from `ShardsDisagree`: the shards here do not
+    disagree with each other, one of them is simply unsealed — a run that
+    died mid-way, or a stamp written before evidence stamping existed. Both
+    are refused the same way and for the same reason: what merge produces is
+    only as trustworthy as what it was allowed to include.
+    """
+
+
 def declaration() -> dict:
     """The `distribution` block of the benchmark's own declaration."""
     from MIL_CREDA_Benchmark import __benchmark__
@@ -89,6 +100,28 @@ _shard_io = _load_shard_io()
 # it operates only on the stamps `read_shards` already collected — so it is
 # re-exported as-is, with no wrapper and no logic duplicated.
 disagreements = _shard_io.disagreements
+
+# Same reason, same shape: `completeness()` names no field of its own, so it
+# is re-exported as-is too. This repository supplies the vocabulary below,
+# in `REQUIRED_EVIDENCE`, rather than pushing any field name into the forge.
+completeness = _shard_io.completeness
+
+#: What a shard's stamp must carry for `merge()` to accept it: the four
+#: `evidence` paths a sealed stamp gains (`harness.write_shard_stamp` /
+#: `seal_shard_stamp`), plus the four fields a shard's stamp already carried
+#: before evidence stamping existed. An older stamp missing every one of
+#: these is `incomplete`, never invalid — `read_shards`/`disagreements` list
+#: it exactly as before; only `merge()` refuses it.
+REQUIRED_EVIDENCE = [
+    "evidence.commit",
+    "evidence.codeDigest",
+    "evidence.importsFrom",
+    "evidence.outputs",
+    "environment.device.kind",
+    "environment.torch",
+    "seeds",
+    "epochs",
+]
 
 
 def read_shards(root: Path | None = None) -> list[dict]:
@@ -158,6 +191,21 @@ def merge(shards: list[dict], expected: int | None = None,
     """
     dimensions = dimensions if dimensions is not None else config.DIMENSIONS
     dist = dist if dist is not None else declaration()
+
+    # Refused before anything else is even read from the shard: an unsealed
+    # or pre-evidence stamp is not proven finished, and a merge that pooled
+    # it in anyway would be reporting on a run nobody can vouch for.
+    for entry in shards:
+        result = completeness(entry["stamp"], REQUIRED_EVIDENCE)
+        if not result["complete"]:
+            raise ShardIncomplete(
+                f"refusing to merge shard {entry['shard']!r}: missing "
+                f"{', '.join(result['missing'])}.\n"
+                "  A shard whose run died mid-way is never sealed, and a "
+                "stamp written before evidence stamping existed was never "
+                "proven finished either way. Re-run the shard, or fetch its "
+                "sealed stamp again."
+            )
 
     identical = list(dist.get("identicalAcrossShards") or [])
     clashes = disagreements(shards, identical)

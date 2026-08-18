@@ -149,6 +149,19 @@ def test_a_clamped_plan_is_distinguishable_from_an_unclamped_one_with_the_same_g
     assert clamped.requested > clamped.cap
 
 
+def test_run_shard_stamps_through_the_same_campaign_no_local_exemption():
+    """A locally-run and a remotely-run shard are stamped by literally the
+    same code: `run_shard()` drives `harness.campaign()` and does not
+    reimplement any part of stamping itself. The earlier "local shards are
+    exempt" assumption does not exist here to reintroduce."""
+    import inspect
+
+    source = inspect.getsource(distribute.run_shard)
+    assert "harness.campaign(" in source
+    assert "write_shard_stamp" not in source
+    assert "seal_shard_stamp" not in source
+
+
 def test_distribute_py_makes_no_direct_service_call_itself():
     """The forge's adapter is the one place allowed to shell out to a
     service or its accounts CLI; this launcher delegates entirely and

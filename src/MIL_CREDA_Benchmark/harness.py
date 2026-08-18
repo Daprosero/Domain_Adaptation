@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import platform
 import re
 import subprocess
@@ -32,7 +33,7 @@ import torch
 import torch.nn as nn
 
 from CREDA.schedules import creda_ramp
-from MIL_CREDA_Benchmark import bags, config, wiring
+from MIL_CREDA_Benchmark import bags, config, report_digest, wiring
 from MIL_CREDA_Benchmark.schedules import milcreda_ramp
 from MIL_CREDA_Benchmark.verdict import judge, render, standard_error, tally
 
@@ -589,6 +590,48 @@ def shard_paths(shard: str | None) -> dict:
             "stamp": home / "shard.json"}
 
 
+def _git_commit(repository: Path) -> str | None:
+    """`HEAD`'s commit in the checkout that is stamping this run, or `None`.
+
+    `git` genuinely unavailable — no history, no `.git`, the executable
+    missing — is a fact about the checkout, not a failure to raise past. The
+    caller omits the `commit` key entirely rather than write a value that
+    looks like evidence and is not: that is what lets `completeness()` report
+    it `missing` instead of present-and-wrong, and what makes this a stamp a
+    non-git checkout can never seal.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repository,
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    commit = result.stdout.strip()
+    return commit or None
+
+
+def _evidence() -> dict:
+    """Everything a stamp can know before the run it describes has happened.
+
+    `outputs` is deliberately absent: the files a shard produces cannot be
+    named before the run that produces them, which is exactly why sealing
+    them in is a separate, later call.
+    """
+    evidence: dict = {
+        # The same digest a report's own provenance stamp uses over `src/` —
+        # reused, not recomputed, so the two halves can never drift apart.
+        "codeDigest": report_digest.stamp().split(" ", 1)[1],
+        "importsFrom": str(Path(__file__).resolve().parent),
+    }
+    commit = _git_commit(config.REPOSITORY)
+    if commit is not None:
+        evidence["commit"] = commit
+    return evidence
+
+
 def write_shard_stamp(shard: str | None, reduction: Reduction) -> Path:
     """The full environment, once per shard, beside the runs that reference it.
 
@@ -608,7 +651,33 @@ def write_shard_stamp(shard: str | None, reduction: Reduction) -> Path:
         "epochs": reduction.epochs,
         "revision": reduction.revision,
         "ceilings": dict(reduction.ceilings),
+        "evidence": _evidence(),
     }, indent=2), encoding="utf-8")
+    return path
+
+
+def seal_shard_stamp(shard: str | None) -> Path:
+    """Add `outputs` to an already-written stamp, atomically, once the run ends.
+
+    Two-phase because `outputs` cannot be known when `write_shard_stamp` runs:
+    the files a shard writes are exactly the files this call closes over, once
+    they exist. Atomic the same way `jobfolder.py`'s own generation is — a
+    scratch copy plus `os.replace` — so a reader hitting the rewrite window
+    sees either the whole pre-seal stamp or the whole sealed one, never a
+    half-written file.
+
+    A run that dies before this call leaves its stamp unsealed forever: no
+    `outputs` key, so `completeness()` reports it missing, so `merge()`
+    refuses it. That refusal is the entire enforcement mechanism — there is no
+    separate "did it finish" flag a caller could forget to check.
+    """
+    path = shard_paths(shard)["stamp"]
+    stamp = json.loads(path.read_text(encoding="utf-8"))
+    outputs = sorted(p.name for p in path.parent.iterdir() if p.is_file())
+    stamp.setdefault("evidence", {})["outputs"] = outputs
+    partial = path.with_name(path.stem + PARTIAL_SUFFIX)
+    partial.write_text(json.dumps(stamp, indent=2), encoding="utf-8")
+    os.replace(partial, path)
     return path
 
 
@@ -974,6 +1043,11 @@ def campaign(reduction: Reduction, device: torch.device,
         "figures": sorted(str(p.relative_to(config.REPOSITORY))
                           for p in config.RESULTS.rglob("*.pdf")),
     }, indent=2), encoding="utf-8")
+
+    # Sealed last, once every file this shard writes actually exists. A run
+    # that raises anywhere above never reaches this line, so its stamp stays
+    # unsealed and therefore incomplete — never merge-eligible.
+    seal_shard_stamp(shard)
     return summary
 
 
