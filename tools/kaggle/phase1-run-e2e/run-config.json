@@ -4,7 +4,7 @@
     "src/CREDA",
     "src/MIL_CREDA"
   ],
-  "commit": "69440837ef51714d0f5019818b0e22b949918009",
+  "commit": "4e7a33e07af727da9bdb9dccca1845e45b881cad",
   "jobName": "phase1-run-e2e",
   "product": "MIL-CREDA",
   "repo": {
@@ -16,7 +16,24 @@
     "kwargs": {
       "epochs": 2
     },
-    "module": "MIL_CREDA_Benchmark.harness"
+    "module": "MIL_CREDA_Benchmark.harness",
+    "smoke": {
+      "function": "run_smoke",
+      "kwargs": {
+        "seed": 0
+      },
+      "module": "MIL_CREDA_Benchmark.harness",
+      "requiredEvidence": [
+        "evidence.commit",
+        "evidence.codeDigest",
+        "evidence.importsFrom",
+        "evidence.outputs",
+        "environment.device.kind",
+        "environment.torch",
+        "seeds",
+        "epochs"
+      ]
+    }
   },
   "runnerTemplate": [
     {
