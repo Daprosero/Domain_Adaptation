@@ -331,12 +331,29 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
 
 # ------------------------------ the notebook actually obtains what it needs
 
-def _phase_one() -> list[dict]:
-    """The campaign notebook's code cells, in order."""
-    path = (config.REPOSITORY / "MIL-CREDA" / "Notebooks"
-            / "Benchmark_Phase1.ipynb")
+def _notebook_code_cells(name: str) -> list[dict]:
+    """A notebook's code cells, in order."""
+    path = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / name
     notebook = json.loads(path.read_text(encoding="utf-8"))
     return [cell for cell in notebook["cells"] if cell["cell_type"] == "code"]
+
+
+def _phase_one_run() -> list[dict]:
+    """The notebook that runs the campaign: the forecast, the search, the grid.
+
+    It renders nothing and writes no report — only the records the reporting
+    notebook reads back from disk.
+    """
+    return _notebook_code_cells("Benchmark_Phase1_Run.ipynb")
+
+
+def _phase_one_report() -> list[dict]:
+    """The notebook that reads those records and writes the readable report.
+
+    It trains and searches nothing; every number in it comes from
+    `summary.json`, `runs.jsonl` and the ceiling search's own record.
+    """
+    return _notebook_code_cells("Benchmark_Phase1_Report.ipynb")
 
 
 def test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign() -> None:
@@ -348,8 +365,11 @@ def test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign() -> None
     imports and died on the refusal. Testing each half against a fixture written
     here verifies both halves and never the connection, which is the only thing
     this rule was ever about.
+
+    Both calls live in the run notebook: obtaining the ceilings is what lets the
+    campaign that follows in the same notebook proceed.
     """
-    sources = ["".join(cell["source"]) for cell in _phase_one()]
+    sources = ["".join(cell["source"]) for cell in _phase_one_run()]
     obtains = [i for i, s in enumerate(sources) if "ceilings_in_force" in s]
     runs = [i for i, s in enumerate(sources) if "harness.campaign(" in s]
     assert obtains, "no cell obtains the ceilings; the campaign will refuse"
@@ -363,9 +383,10 @@ def test_the_notebook_forecasts_the_search_before_spending_it() -> None:
     """The search is the longest single wait and the one part with no pilot scale.
 
     A notebook forecasting only the grid puts it ahead of the estimate that exists
-    to precede it.
+    to precede it. Both the forecast and the obtaining call live in the run
+    notebook, ahead of the search and the campaign they precede.
     """
-    sources = ["".join(cell["source"]) for cell in _phase_one()]
+    sources = ["".join(cell["source"]) for cell in _phase_one_run()]
     forecasts = [i for i, s in enumerate(sources) if '["search"]' in s]
     obtains = [i for i, s in enumerate(sources) if "ceilings_in_force" in s]
     assert forecasts, "nothing forecasts what the ceiling search costs"
@@ -377,9 +398,11 @@ def test_the_ceilings_reach_the_written_report_and_not_only_the_screen() -> None
     """The agreement is that the *report* says which ceiling each family found.
 
     A cell that prints it to the console satisfies a reader watching the run and
-    nobody afterwards, and the record is what a later session reads.
+    nobody afterwards, and the record is what a later session reads. The report
+    notebook is the one that writes `report.md`, reading the ceiling record back
+    from disk rather than from a run still live in memory.
     """
-    written = [s for s in ("".join(c["source"]) for c in _phase_one())
+    written = [s for s in ("".join(c["source"]) for c in _phase_one_report())
                if "report.md" in s]
     assert written, "no cell writes the readable report"
     assert any("render_ceilings" in s and "conclusion_ceilings" in s
