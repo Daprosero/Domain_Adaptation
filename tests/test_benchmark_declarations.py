@@ -394,6 +394,92 @@ def test_the_notebook_forecasts_the_search_before_spending_it() -> None:
         "the search is forecast after it is spent, which is not a forecast")
 
 
+# ---------------------------- run_pilot(): the notebook, headless, cheapenable
+
+def test_run_pilot_epochs_default_is_reductions_own_default_not_full_epochs() -> None:
+    """`run_pilot()` is what a remote job's `--run-kwargs` actually reaches
+    — distinct from `tools/distribute.py`'s `run_shard()`, whose epochs
+    are pinned to `config.FULL_EPOCHS` for the fan-out path. With no
+    override `run_pilot()` must reproduce exactly what a bare
+    `Reduction()` already defaults to (`config.EPOCHS`), so calling it
+    with nothing changes nothing about what the pilot cells already run.
+
+    Reachable red: before this task, `harness` exposed no `run_pilot`
+    attribute at all.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    default = inspect.signature(harness.run_pilot).parameters["epochs"].default
+    assert default == config.EPOCHS
+    assert default != config.FULL_EPOCHS
+
+
+def test_run_pilot_epochs_is_overridable_as_a_plain_json_kwarg() -> None:
+    """The whole point: a caller reaches a cheaper-than-pilot run by
+    passing `{"epochs": 2}` through `--run-kwargs`, never by editing
+    `config.py`. `seeds` stays optional the same way, defaulting to
+    `config.SEEDS` exactly like a bare `Reduction()` would.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    params = inspect.signature(harness.run_pilot).parameters
+    assert params["epochs"].kind in (
+        inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY,
+    )
+    assert params["seeds"].default is None
+
+
+def test_run_pilot_obtains_ceilings_before_it_runs_the_campaign() -> None:
+    """The same join the notebook itself is held to
+    (`test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign`),
+    now inside `run_pilot()`'s own source: `campaign()` refuses outright
+    without `reduction.ceilings` already populated, so this has to close
+    that gap itself rather than hand a caller a refusal it cannot read.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    source = inspect.getsource(harness.run_pilot)
+    assert source.index("ceilings_in_force(") < source.index("campaign(")
+
+
+def test_run_pilot_is_the_single_machine_counterpart_never_a_shard() -> None:
+    """The one thing that tells `run_pilot()` apart from
+    `tools/distribute.py`'s `run_shard()`: it never passes `shard=` into
+    `campaign()`, so the whole seed axis runs in one machine's own
+    namespace rather than one shard of it."""
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    source = inspect.getsource(harness.run_pilot)
+    assert "shard=" not in source
+
+
+def test_run_pilot_is_reachable_under_src_for_a_remote_run_module() -> None:
+    """A remote job's generated runner only ever puts `<clone>/src` on
+    `sys.path` (never `tools/`), and `--run-module` is resolved the same
+    way at generation time: only what lives under `src/` is importable at
+    all. `run_pilot()` has to live in `harness.py`, under `src/`, for
+    `--run-module MIL_CREDA_Benchmark.harness --run-function run_pilot`
+    to ever resolve — `run_shard()` staying in `tools/distribute.py` is
+    what makes it the fan-out path's own, local-invocation-only entry
+    point instead.
+    """
+    import inspect
+    from pathlib import Path
+
+    from MIL_CREDA_Benchmark import harness
+
+    assert Path(inspect.getfile(harness.run_pilot)).is_relative_to(
+        config.REPOSITORY / "src")
+
+
 def test_the_ceilings_reach_the_written_report_and_not_only_the_screen() -> None:
     """The agreement is that the *report* says which ceiling each family found.
 

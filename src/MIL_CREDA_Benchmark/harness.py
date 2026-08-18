@@ -1051,6 +1051,35 @@ def campaign(reduction: Reduction, device: torch.device,
     return summary
 
 
+def run_pilot(epochs: int = config.EPOCHS, seeds: list[int] | None = None) -> dict:
+    """One single-machine campaign, headless: exactly what
+    `Benchmark_Phase1_Run.ipynb`'s own pilot cells run, callable with plain
+    JSON-native arguments instead of from a notebook.
+
+    `ceilings_in_force()` obtains what `campaign()` refuses to run
+    without — searching once if `ceilings.json` has no record yet, or
+    reusing it unchanged if it does, the exact join
+    `test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign`
+    already holds the notebook to. `campaign()` then runs the whole grid,
+    never a shard of it — `tools/distribute.py`'s `run_shard()` is the
+    fan-out path for splitting the seed axis across several remote
+    workers; this is the single-machine counterpart it is not.
+
+    `epochs` is the one dial a caller may cheapen without touching a
+    scientific constant: `Reduction`'s own default already reads
+    `config.EPOCHS`, so calling this with no override reproduces that
+    default exactly, and a caller may reach a cheaper number — for a
+    firedrill proving a remote pipeline runs at all, say — by passing
+    `epochs=` explicitly rather than editing `config.py`.
+    """
+    device = resolve_device()
+    reduction = Reduction(
+        seeds=list(seeds) if seeds is not None else list(config.SEEDS),
+        epochs=epochs, device=str(device), environment=environment())
+    reduction = replace(reduction, ceilings=ceilings_in_force(reduction, device))
+    return campaign(reduction, device)
+
+
 def header(reduction: Reduction) -> str:
     lines = [
         f"setting={reduction.setting}  backbone={reduction.backbone}  "
