@@ -87,12 +87,22 @@ _load_forge_module("remote_execution_adapter_kaggle", "adapters/kaggle.py")
 
 #: What this repository asks of every worker, concurrently — its own
 #: declared want, and no opinion about what a worker will actually allow.
-#: One, because `shard_seeds()` already guarantees a shard is a whole
-#: repetition running start to finish on a single machine: this repository
-#: never asks one worker to run two shards side by side. The cap this gets
-#: clamped against is `adapter.workers()`'s own fact, read fresh by
-#: `packer.plan()` below — never read or asserted here.
-REQUESTED_CAPACITY_PER_WORKER = 1
+#: Two, mirroring the batch-session figure the forge's Kaggle adapter
+#: itself observes for a single account's concurrent submissions, so
+#: this repository now asks a worker for as much concurrency as that
+#: account is known to offer, rather than under-asking against it. Each
+#: concurrent submission still runs its own shard start to finish on its
+#: own machine — `shard_seeds()` already guarantees that — so this
+#: number only ever governs how many separate shards may be in flight
+#: against the same worker at once, never a split within one shard.
+#: Like the adapter's own figure, this is an observed property of the
+#: service rather than one this repository derives independently, and
+#: it is documented and expected to be revised as that allowance
+#: changes — never asserted as a universal per-worker ceiling. The cap
+#: this actually gets clamped against remains `adapter.workers()`'s own
+#: fact, read fresh by `packer.plan()` below — never read or asserted
+#: here.
+REQUESTED_CAPACITY_PER_WORKER = 2
 
 
 def capacity_plans() -> list["PACKER.Plan"] | None:

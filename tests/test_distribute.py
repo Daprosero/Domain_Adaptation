@@ -113,13 +113,13 @@ def test_distribute_declares_capacity_and_calls_packer_plan(monkeypatch):
     assert sorted(p.worker for p in plans) == ["alice", "bob"]
     for one in plans:
         assert one.requested == distribute.REQUESTED_CAPACITY_PER_WORKER
-        assert one.cap == 1
+        assert one.cap == 2
         assert one.in_flight == 0
-        assert one.granted == 1
+        assert one.granted == 2
 
     drawn = distribute.plan(seeds=list(range(2)))
     assert drawn["capacity"]["requestedPerWorker"] == distribute.REQUESTED_CAPACITY_PER_WORKER
-    assert drawn["capacity"]["granted"] == 2
+    assert drawn["capacity"]["granted"] == 4
     assert {w["worker"] for w in drawn["capacity"]["workers"]} == {"alice", "bob"}
     assert all(
         {"worker", "requested", "cap", "inFlight", "granted"} <= w.keys()
@@ -138,13 +138,13 @@ def test_a_clamped_plan_is_distinguishable_from_an_unclamped_one_with_the_same_g
 
     monkeypatch.setattr(sp, "run", lambda argv, **k: _fake_accounts_result(["alice"]))
 
-    monkeypatch.setattr(distribute, "REQUESTED_CAPACITY_PER_WORKER", 1)
+    monkeypatch.setattr(distribute, "REQUESTED_CAPACITY_PER_WORKER", 2)
     unclamped = distribute.capacity_plans()[0]
 
     monkeypatch.setattr(distribute, "REQUESTED_CAPACITY_PER_WORKER", 5)
     clamped = distribute.capacity_plans()[0]
 
-    assert unclamped.granted == clamped.granted == 1
+    assert unclamped.granted == clamped.granted == 2
     assert unclamped.requested == unclamped.cap
     assert clamped.requested > clamped.cap
 
