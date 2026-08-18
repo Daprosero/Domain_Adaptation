@@ -195,4 +195,50 @@ __benchmark__ = {
         "metric": "accuracy over the evaluation bags of the target domain",
         "direction": "higher is better",
     },
+    # `shards.declaration()` reads this block; `shards.merge()` refuses every
+    # merge until it exists. The axis a shard is split on, and which of a
+    # run's dimensions may be pooled across machines, read per environment, or
+    # must match exactly before shards are trusted to be one campaign split up.
+    #
+    # `axis`: the seed. `tools/distribute.py`'s own `shard_seeds()` splits the
+    # seed list and nothing else — every arm of every transfer within one seed
+    # runs on one machine, so no rung's subtraction ever crosses a hardware
+    # boundary.
+    #
+    # `poolable`: an accuracy measured under the same seed and the same code
+    # does not change because a different machine computed it, so
+    # `sourceAccuracy` and `targetAccuracy` pool freely across every shard
+    # that arrived.
+    #
+    # `perEnvironment`: `seconds` measures the machine as much as the method —
+    # averaging one accelerator's wall time with another's describes neither —
+    # so it stays split by the environment that produced it.
+    #
+    # `identicalAcrossShards`: only `epochs`. `commit` and `codeDigest` were
+    # approved alongside it, but neither is a name `shards.disagreements()`
+    # can actually check: both live nested at `evidence.commit` /
+    # `evidence.codeDigest` on a shard's stamp, and `disagreements()` (the
+    # forge's own `shard_io.py`, re-exported unchanged) compares
+    # `stamp.get(field)` — a flat top-level lookup, never a dotted path.
+    # Declaring `"commit"` or `"codeDigest"` here would resolve to `None` on
+    # every shard and silently pass regardless of whether the shards actually
+    # agree, which is worse than not checking at all: it would read as a
+    # guarantee that was never enforced. `epochs` is a real top-level field of
+    # every stamp, so it is the only name from that approval that belongs
+    # here; the other two need either a dotted-path-aware `disagreements()` in
+    # the forge or a different field name, and that decision was not this
+    # task's to make.
+    #
+    # Five of `config.DIMENSIONS` — `contribution`, `supervised`,
+    # `adaptationShare`, `peakMiB`, `parameters` — are not classified here
+    # either, because nobody approved where they belong. `shards.merge()`
+    # called with its default `dimensions=config.DIMENSIONS` will refuse on
+    # real shards until that classification exists; see
+    # `test_the_declared_dimensions_are_a_real_subset_of_every_dimension_the_harness_measures`.
+    "distribution": {
+        "axis": "seed",
+        "poolable": ["sourceAccuracy", "targetAccuracy"],
+        "perEnvironment": ["seconds"],
+        "identicalAcrossShards": ["epochs"],
+    },
 }
