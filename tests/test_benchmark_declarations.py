@@ -432,6 +432,83 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
     assert "creda" in str(raised.value)
 
 
+# --------------------------------------------------------- run_smoke checkpoints
+
+def _fake_run_one(fake_state):
+    def run_one(arm_id, transfer, seed, reduction, device, material, **kwargs):
+        return {
+            "arm": arm_id, "transfer": f"{transfer[0]}->{transfer[1]}", "seed": seed,
+            "env": "test-env", "targetAccuracy": 0.5, "sourceAccuracy": 0.5,
+            "seconds": 0.01, "peakMiB": 1.0, "parameters": 4, "contribution": 0.1,
+            "supervised": 0.2, "adaptationShare": 0.3, "curve": [],
+            "epochs": [{"epoch": 0}], "state": dict(fake_state),
+        }
+    return run_one
+
+
+def _fake_build():
+    from types import SimpleNamespace
+
+    def build(code, cache, seed):
+        return SimpleNamespace(manifest={"code": code, "seed": seed})
+    return build
+
+
+def test_run_smoke_writes_one_checkpoint_through_the_campaigns_own_path(
+        tmp_path, monkeypatch) -> None:
+    """Phase 2's `latent.available()`/`latent.load()` read `config.MODELS` in
+    exactly `campaign()`'s own shape — a `.pt` saved with `torch.save({k: v.cpu()
+    for k, v in state.items()}, ...)` beside a manifest `keep_median` writes
+    through `bags.write_manifest`. A bespoke save in `run_smoke` would prove
+    nothing about whether that real path works; this exercises
+    `run_smoke(checkpoint=True)` over the same one, without paying for a real
+    training loop — `run_one` and `bags.build` are faked, everything downstream
+    of the state dict they return is real."""
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "REPOSITORY", tmp_path)
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models")
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results")
+    monkeypatch.setattr(harness, "run_one", _fake_run_one({"weight": torch.zeros(2, 2)}))
+    monkeypatch.setattr(harness.bags, "build", _fake_build())
+
+    harness.run_smoke(seed=0, checkpoint=True)
+
+    left, right = config.VERDICT_TRANSFERS[0]
+    stem = f"{harness.SMOKE_ARM}_{left}-{right}_seed0"
+    weights = config.MODELS / f"{stem}.pt"
+    manifest = config.MODELS / f"{stem}.manifest.json"
+    assert weights.is_file()
+    assert manifest.is_file()
+
+    loaded_state = torch.load(weights)
+    assert set(loaded_state) == {"weight"}
+
+    written = json.loads(manifest.read_text())
+    assert written["arm"] == harness.SMOKE_ARM
+    assert written["seed"] == 0
+    assert written["source"] == {"code": left, "seed": 0}
+    # Exactly one, never the three per cell a campaign's own `CHECKPOINTS`
+    # asks for: `median_seeds` degenerates to the only seed there is.
+    assert len(list(config.MODELS.glob("*.pt"))) == 1
+
+
+def test_run_smoke_writes_no_checkpoint_by_default(tmp_path, monkeypatch) -> None:
+    """Off unless asked for: most rehearsals only need `runs.jsonl`, and a
+    checkpoint costs a model's worth of disk on every call this doesn't ask
+    for one. `config.MODELS` must not even be created."""
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models")
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results")
+    monkeypatch.setattr(harness, "run_one", _fake_run_one({"weight": torch.zeros(1)}))
+    monkeypatch.setattr(harness.bags, "build", _fake_build())
+
+    harness.run_smoke(seed=0)
+
+    assert not config.MODELS.exists()
+
+
 # ------------------------------ the notebook actually obtains what it needs
 
 def _notebook_code_cells(name: str) -> list[dict]:
