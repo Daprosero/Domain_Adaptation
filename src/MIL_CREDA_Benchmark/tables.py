@@ -544,6 +544,88 @@ def render_rungs(summary: dict, metric: str, markdown: bool = False) -> str:
     return "\n".join(lines)
 
 
+#: Prepended to every `render_per_run` table, in both formats — the one place a
+#: reader who skips straight to the numbers still meets the reason there is no
+#: `±` column here, before they can mistake a per-machine row for a pooled one.
+_PER_RUN_NOTE = ("cada fila es una corrida en su propia máquina, nunca "
+                  "promediada con otra: no hay una columna de método que hable "
+                  "por todas.")
+
+
+def render_per_run(grid_per_run: dict, metric: str, markdown: bool = False) -> str:
+    """Every `perRun` reading, one row per run, tagged with its own environment.
+
+    A `perRun` dimension has no mean this report is willing to print: the
+    replication that created the category (see `shards.merge`) found no value
+    of `seconds`/`peakMiB` stable enough to stand for the method, or even for
+    one fixed machine across two of its own runs. Pooling `n` readings into a
+    single `mean ± stdev`, the way `render` does for a `poolable` dimension,
+    would print a number that describes none of the runs behind it and reads
+    exactly as rigorous as one that does — the dispersion column makes it look
+    more trustworthy, not less misleading.
+
+    So every row here names the run that produced it instead: its own
+    environment and seed. There is no aggregate row and no `±` anywhere in the
+    output — a reader who wants a summary has to build one themselves, in full
+    view of how many machines and readings it would be standing in for.
+    """
+    title, unit = SPANISH.get(metric, (metric, ""))
+    decimals = 1 if metric in PERCENT else 2
+    rows = []
+    for transfer, cell in grid_per_run.items():
+        for arm in config.ARM_ORDER:
+            readings = cell.get(arm, {}).get(metric)
+            if not readings:
+                continue
+            for reading in sorted(readings, key=lambda r: (r["env"], r["seed"])):
+                rows.append({
+                    "arm": config.NAME_OF.get(arm, arm),
+                    "transfer": transfer,
+                    "env": reading["env"],
+                    "seed": reading["seed"],
+                    "value": _scaled(reading["value"], metric),
+                })
+    if not rows:
+        return "(sin corridas medidas)"
+
+    note = _notes_block([_PER_RUN_NOTE], markdown)
+    columns = ["Método", "Transferencia", "Entorno", "Semilla", f"{title} ({unit})" if unit else title]
+    if markdown:
+        lines = [note, "",
+                 "| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for row in rows:
+            lines.append("| " + " | ".join([
+                f"`{row['arm']}`", row["transfer"], f"`{row['env']}`",
+                str(row["seed"]), f"{row['value']:.{decimals}f}"]) + " |")
+        return "\n".join(lines)
+
+    width = max(14, max(len(r["arm"]) for r in rows) + 2)
+    lines = [note, "",
+             f"{'Método':<{width}}{'Transferencia':<16}{'Entorno':<16}"
+             f"{'Semilla':>8}{columns[-1]:>16}"]
+    for row in rows:
+        lines.append(f"{row['arm']:<{width}}{row['transfer']:<16}{row['env']:<16}"
+                     f"{row['seed']:>8}{row['value']:>16.{decimals}f}")
+    return "\n".join(lines)
+
+
+def conclusion_per_run(metric: str) -> str:
+    """Why this section prints no best/worst, unlike `conclusion`.
+
+    `render_per_run` already refuses to average; a conclusion that then
+    printed 'best average / worst average' over the same readings would take
+    back with prose exactly what the table just refused to claim with
+    numbers. There is nothing this function computes — the readings above are
+    the entire finding.
+    """
+    title, unit = SPANISH.get(metric, (metric, ""))
+    return (f"Sin conclusión: {title} no se promedia entre máquinas — cada "
+            f"corrida es la lectura de su propio entorno, no una propiedad del "
+            f"método ni de la máquina que la corrió. Ver la tabla de arriba, "
+            f"corrida por corrida.")
+
+
 def conclusion_rungs(summary: dict, metric: str) -> str:
     """Qué peldaño se movió más y cuál coincidió en todas las transferencias."""
     grid = summary["grid"]

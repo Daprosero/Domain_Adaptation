@@ -3,8 +3,11 @@
 `shards.merge()` refuses or agrees; it does not shape its answer for a reader.
 Its own shape — `shardsArrived`, `gridByEnvironment`, `poolable`,
 `perEnvironment`, … — shares no keys with what `Benchmark_Phase1_Report.ipynb`
-reads: `summary["reduction"]`, `summary["grid"]`, `summary["perTransfer"]`, plus
-`runs.jsonl` beside it. This module is the join between the two.
+reads: `summary["reduction"]`, `summary["grid"]`, `summary["gridPerRun"]`,
+`summary["perTransfer"]`, plus `runs.jsonl` beside it. This module is the join
+between the two. `gridPerRun` travels through untouched — the merge already
+refuses to average it, and reshaping it here would just move the overclaim
+from one module to the other.
 
 **Never `config.RESULTS`.** `harness.run_smoke()`'s own docstring is explicit:
 skipping the ceiling search is not a scientific claim, it is a statement that a
@@ -112,6 +115,13 @@ def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, li
         "reduction": reduction,
         "verdictsMeaningful": merged["verdictsMeaningful"],
         "grid": grid,
+        # Every `perRun` reading, untouched and tagged with its own
+        # environment — never averaged, and never dropped here the way it
+        # would be if this module only forwarded `grid`. Absent from a
+        # single-machine `campaign()` summary (there is no such key there),
+        # so the report notebook must treat its absence as "nothing to show
+        # per run", not as an empty table.
+        "gridPerRun": merged["gridPerRun"],
         "perTransfer": per_transfer,
         "tally": {label: verdict.tally(rows) for label, rows in per_transfer.items()},
         "panorama": harness.paired_across_transfers(grid),

@@ -256,6 +256,52 @@ def test_the_rung_conclusion_names_who_is_ahead_not_how_far_it_moved() -> None:
     assert f"**{config.NAME_OF[right]}**" in text, text
 
 
+# ------------------------------------------------------------------ perRun table
+
+def test_the_per_run_table_prints_one_row_per_run_tagged_with_its_environment() -> None:
+    """A `perRun` dimension (`seconds`, `peakMiB`) has no mean this report is
+    willing to print: the replication that created the category found no value
+    stable enough to stand for the method, or even for one fixed machine across
+    two of its own runs. Pooling `n` readings into a single `mean ± stdev`, the
+    way `render` does for a `poolable` dimension, would print a number that
+    describes none of the runs behind it and looks exactly as rigorous as one
+    that does. So every row here names the run that produced it — its own
+    environment and seed — and no aggregate figure appears anywhere."""
+    from MIL_CREDA_Benchmark import tables
+
+    grid_per_run = {
+        "M->U": {"G": {"seconds": [
+            {"env": "c888ccf4ecc8", "seed": 0, "value": 64.8256},
+            {"env": "a111a111a111", "seed": 1, "value": 70.2},
+        ]}},
+    }
+    printed = tables.render_per_run(grid_per_run, "seconds", markdown=True)
+    assert "c888ccf4ecc8" in printed
+    assert "a111a111a111" in printed
+    assert "64.83" in printed or "64.8" in printed
+    assert "70.2" in printed
+    # No pooled figure anywhere: a mean over two machines would look exactly
+    # like a real one and describe neither.
+    assert "±" not in printed
+
+
+def test_the_per_run_table_reports_nothing_measured_when_the_grid_is_empty() -> None:
+    from MIL_CREDA_Benchmark import tables
+
+    assert "sin corridas" in tables.render_per_run({}, "seconds").lower()
+
+
+def test_the_per_run_conclusion_declines_to_pool_and_points_back_at_the_table() -> None:
+    """The table above already refuses to average; a conclusion that then
+    printed 'best/worst average' over the same readings would take back with
+    prose exactly what the table just refused to claim with numbers."""
+    from MIL_CREDA_Benchmark import tables
+
+    text = tables.conclusion_per_run("seconds")
+    assert "no se promedia" in text.lower()
+    assert "tabla" in text.lower()
+
+
 # --------------------------------------------------------------- the three roles
 
 def test_the_three_roles_partition_the_bags_exactly() -> None:
