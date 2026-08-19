@@ -2,26 +2,48 @@
 
 A campaign split across machines produces records that are identical in shape and
 not interchangeable in meaning. Accuracy is a property of the method and pools
-freely; wall time and peak memory are properties of the machine, and averaging
-them across two of them yields a number that describes neither.
+freely; wall time and peak memory turned out to be a property of neither — a
+same-machine control run (`A` and `C`, both on Trayectoria51) produced three
+different values for `seconds` and `peakMiB` across three runs of the identical
+arm, transfer and seed. Averaging them across shards would claim a stable value
+the method does not have; averaging them per machine would claim a stable value
+the machine does not have either.
 
-So the merge builds two grids rather than one, and that split is what lets every
-aggregation function stay exactly as it was:
+So the merge builds three shapes rather than one, and that split is what lets
+every aggregation function stay exactly as it was for the dimensions it was
+always correct for:
 
-    grid              poolable dimensions only, every shard together
-    gridByEnvironment all dimensions, one machine at a time
+    grid              poolable dimensions only, every shard together, averaged
+    gridByEnvironment poolable + perEnvironment dimensions, one machine at a
+                       time, averaged within that machine
+    gridPerRun         perRun dimensions, every run's own reading, never
+                       averaged — see the field-by-field reasoning below
 
 `paired_across_transfers` reads only the accuracy dimensions, so the pooled grid
 is safe for it by construction. `ladder_rows` iterates every key of
 `config.DIMENSIONS` and would raise on a cell with a machine-described dimension
-left out — giving it one environment at a time means every dimension is
-legitimately present, and with a single environment its output is what it always
-was. Nothing in `harness` had to change to accommodate this.
+left out; `gridByEnvironment` still carries every `poolable`/`perEnvironment`
+dimension for exactly that reason. A `perRun` dimension is deliberately not
+among them — see below.
+
+Why `perRun` gets a shape of its own rather than reusing `gridByEnvironment`:
+grouping by environment and taking a mean is precisely the framing the control
+run disproved for `seconds` and `peakMiB` — it would still read as "this is
+what this machine does," a claim about the machine that is not true. `merge()`
+instead reports each run's own value, tagged with the shard that produced it:
+not a property of the method (it is not pooled), not a property of the machine
+(it is not grouped or averaged by environment), and not a bare mean standing in
+for either. A caller that wants dispersion can compute a range from the raw
+list; `merge()` does not compute one on the caller's behalf, because printing
+one invites reading it as the thing itself.
 
 What the merge refuses rather than reconciles: shards that disagree on anything
-the declaration lists as having to be identical. A different epoch count is a
-different experiment, not different hardware, and silently averaging the two
-would produce a table nobody could attribute.
+the declaration lists as having to be identical, or a dimension the declaration
+does not classify into `poolable`, `perEnvironment` or `perRun` at all. A
+different epoch count is a different experiment, not different hardware, and
+silently averaging the two would produce a table nobody could attribute; an
+unclassified dimension silently dropped would leave a column nobody notices is
+gone.
 """
 
 from __future__ import annotations
@@ -138,8 +160,9 @@ def read_shards(root: Path | None = None) -> list[dict]:
     return _shard_io.read_shards(home)
 
 
-def partition(dimensions: dict, dist: dict) -> tuple[list[str], list[str]]:
-    """Which dimensions pool across machines and which are read one machine at a time.
+def partition(dimensions: dict, dist: dict) -> tuple[list[str], list[str], list[str]]:
+    """Which dimensions pool across machines, which are read one machine at a
+    time, and which belong to no wider scope than the run that produced them.
 
     Read from the declaration and never decided here. This module does not know
     what any dimension measures, and a merge that guessed would be choosing which
@@ -147,15 +170,17 @@ def partition(dimensions: dict, dist: dict) -> tuple[list[str], list[str]]:
     """
     poolable = list(dist.get("poolable") or [])
     per_environment = list(dist.get("perEnvironment") or [])
-    missing = [d for d in dimensions if d not in poolable + per_environment]
+    per_run = list(dist.get("perRun") or [])
+    missing = [d for d in dimensions if d not in poolable + per_environment + per_run]
     if missing:
         raise ShardsDisagree(
             "refusing to merge: the distribution declaration does not say whether "
             f"these dimensions pool across machines: {', '.join(sorted(missing))}.\n"
-            "  Every dimension belongs to exactly one of `poolable` or "
-            "`perEnvironment`; a dimension in neither would be silently dropped."
+            "  Every dimension belongs to exactly one of `poolable`, "
+            "`perEnvironment` or `perRun`; a dimension in none of them would be "
+            "silently dropped."
         )
-    return poolable, per_environment
+    return poolable, per_environment, per_run
 
 
 def _cells(runs: list[dict]) -> dict:
@@ -175,14 +200,40 @@ def _grid(runs: list[dict], dimensions: list[str]) -> dict:
     return dict(built)
 
 
+def _grid_per_run(runs: list[dict], dimensions: list[str]) -> dict:
+    """`{transfer: {arm: {dimension: [{"env", "seed", "value"}, ...]}}}`.
+
+    Deliberately not `harness.spread`: a `perRun` dimension has no mean this
+    module is willing to hand a caller, because the replication that created
+    this category found none stable enough to report as one — not across
+    shards, and not even across two runs of the same shard's own machine.
+    Every reading keeps the shard's environment and seed, which is what a
+    caller needs to tell "the method's own value" and "the machine's own
+    value" apart from "one execution's own value" instead of losing that
+    distinction to an average.
+    """
+    built: dict[str, dict] = defaultdict(dict)
+    for (transfer, arm), cell in _cells(runs).items():
+        built[transfer][arm] = {
+            d: [{"env": run.get("env", "unknown"), "seed": run["seed"],
+                 "value": float(run[d])} for run in cell]
+            for d in dimensions
+        }
+    return dict(built)
+
+
 def merge(shards: list[dict], expected: int | None = None,
           dimensions: dict | None = None, dist: dict | None = None) -> dict:
-    """Two grids, the shards that arrived, and a refusal when they disagree.
+    """Three shapes, the shards that arrived, and a refusal when they disagree.
 
-    The pooled grid carries only what pools. The per-environment grids carry
-    every dimension, one machine at a time, which is what keeps `ladder_rows` and
-    `judge` unchanged — they iterate all of `DIMENSIONS` and a redacted cell would
-    raise rather than be skipped.
+    The pooled grid carries only what pools. The per-environment grid carries
+    every `poolable`/`perEnvironment` dimension, one machine at a time, which is
+    what keeps `ladder_rows` and `judge` unchanged for those — they iterate all
+    of `DIMENSIONS` and a redacted cell would raise rather than be skipped. A
+    `perRun` dimension is never redacted into either shape silently — it goes to
+    `gridPerRun` instead, as every run's own untouched reading, because grouping
+    it by environment would repeat the same overclaim `perEnvironment` itself
+    was rejected for.
 
     Scale is recomputed from what arrived and never from what was intended. Three
     shards planned and two returned is a smaller campaign, not a failed one, and
@@ -218,12 +269,21 @@ def merge(shards: list[dict], expected: int | None = None,
             "and averaging them would produce a table nobody can attribute."
         )
 
-    poolable, per_environment = partition(dimensions, dist)
+    poolable, per_environment, per_run = partition(dimensions, dist)
     runs = [run for entry in shards for run in entry["runs"]]
 
     by_environment: dict[str, list[dict]] = defaultdict(list)
     for run in runs:
         by_environment[run.get("env", "unknown")].append(run)
+
+    # `gridByEnvironment` groups by machine, so only the two shapes that are
+    # legitimately read that way — pooled across the whole campaign, or one
+    # machine at a time — go into it. `perRun` dimensions are excluded on
+    # purpose: presenting them here, even split by environment, would still
+    # read as "this machine's value," which is exactly the claim the
+    # replication's control run (same machine, three different readings)
+    # disproved.
+    by_environment_dims = list(poolable) + list(per_environment)
 
     seeds = sorted({run["seed"] for run in runs})
     arrived = [entry["shard"] for entry in shards]
@@ -238,10 +298,12 @@ def merge(shards: list[dict], expected: int | None = None,
         # for; only the runs say what the verdict actually rests on.
         "verdictsMeaningful": len(seeds) >= 3,
         "grid": _grid(runs, poolable),
-        "gridByEnvironment": {key: _grid(group, list(dimensions))
+        "gridByEnvironment": {key: _grid(group, by_environment_dims)
                               for key, group in by_environment.items()},
+        "gridPerRun": _grid_per_run(runs, per_run),
         "poolable": poolable,
         "perEnvironment": per_environment,
+        "perRun": per_run,
     }
 
 

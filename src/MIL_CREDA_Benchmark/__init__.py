@@ -197,22 +197,45 @@ __benchmark__ = {
     },
     # `shards.declaration()` reads this block; `shards.merge()` refuses every
     # merge until it exists. The axis a shard is split on, and which of a
-    # run's dimensions may be pooled across machines, read per environment, or
-    # must match exactly before shards are trusted to be one campaign split up.
+    # run's dimensions may be pooled across machines, read per environment,
+    # read per run, or must match exactly before shards are trusted to be one
+    # campaign split up.
     #
     # `axis`: the seed. `tools/distribute.py`'s own `shard_seeds()` splits the
     # seed list and nothing else — every arm of every transfer within one seed
     # runs on one machine, so no rung's subtraction ever crosses a hardware
     # boundary.
     #
-    # `poolable`: an accuracy measured under the same seed and the same code
-    # does not change because a different machine computed it, so
-    # `sourceAccuracy` and `targetAccuracy` pool freely across every shard
-    # that arrived.
+    # The four groups below are not a guess: a replication (`A` on
+    # Trayectoria51, `B` on Daprosero, `C` back on Trayectoria51 as a
+    # same-machine control — one arm, `G`, one transfer, `M->U`, seed 7)
+    # measured all eight of `config.DIMENSIONS` three times and compared the
+    # parsed JSON floats with exact `==`.
     #
-    # `perEnvironment`: `seconds` measures the machine as much as the method —
-    # averaging one accelerator's wall time with another's describes neither —
-    # so it stays split by the environment that produced it.
+    # `poolable`: `sourceAccuracy`, `targetAccuracy`, `contribution`,
+    # `supervised`, `adaptationShare` and `parameters` came back bit-identical
+    # on all three runs, including across the two different machines. A
+    # quantity measured under the same seed and the same code does not change
+    # because a different machine computed it, so all six pool freely across
+    # every shard that arrived.
+    #
+    # `perEnvironment`: empty. Nothing the replication measured turned out to
+    # be stable on one machine and different from another's — the two
+    # candidates for this group, `seconds` and `peakMiB`, turned out not even
+    # to be stable on the *same* machine (see `perRun` below), so this group
+    # is declared and left empty rather than removed: a dimension that is
+    # genuinely a property of the environment, and not of one run inside it,
+    # has a place to go without inventing a fourth category. Whether any
+    # dimension actually belongs here is a claim only another measurement can
+    # settle, the same way this one settled `poolable` and `perRun`.
+    #
+    # `perRun`: `seconds` and `peakMiB` differed on every one of the three
+    # runs — including `A` vs `C`, the same machine measured twice. That is
+    # what rules out `perEnvironment` for them: that label claims the value
+    # belongs to the machine, which implies re-running there reproduces it,
+    # and the control run shows it does not. `shards.merge()` reports each
+    # such dimension as every run's own reading rather than averaging it —
+    # see `merge()`'s own docstring for why a mean is not offered here.
     #
     # `identicalAcrossShards`: only `epochs`. `commit` and `codeDigest` were
     # approved alongside it, but neither is a name `shards.disagreements()`
@@ -229,16 +252,29 @@ __benchmark__ = {
     # the forge or a different field name, and that decision was not this
     # task's to make.
     #
-    # Five of `config.DIMENSIONS` — `contribution`, `supervised`,
-    # `adaptationShare`, `peakMiB`, `parameters` — are not classified here
-    # either, because nobody approved where they belong. `shards.merge()`
-    # called with its default `dimensions=config.DIMENSIONS` will refuse on
-    # real shards until that classification exists; see
-    # `test_the_declared_dimensions_are_a_real_subset_of_every_dimension_the_harness_measures`.
+    # `parameters` was weighed against this same group and kept out of it for
+    # the identical reason: `harness.run_one` writes `parameters` once per
+    # *run*, into the dict that becomes a line of `runs.jsonl` — it is never
+    # part of the dict `harness.write_shard_stamp` writes to a shard's stamp
+    # (`shard`, `env`, `environment`, `seeds`, `epochs`, `revision`,
+    # `ceilings`, `evidence`). `disagreements()`'s flat `stamp.get("parameters")`
+    # would therefore resolve to `None` on every shard, same as `commit` and
+    # `codeDigest` above, and "agree" regardless of whether two shards'
+    # models actually share an architecture — a check that always passes is
+    # not a check. Two shards reporting different parameter counts would be a
+    # real reason to refuse a merge (different architectures, not different
+    # hardware), but `identicalAcrossShards` cannot be that reason today
+    # without the same forge change `commit`/`codeDigest` would need.
+    # `poolable` is the only place left that can actually hold it, and it
+    # costs nothing to be there: the replication measured `parameters`
+    # bit-identical across every run, so averaging it returns exactly the
+    # constant it already was.
     "distribution": {
         "axis": "seed",
-        "poolable": ["sourceAccuracy", "targetAccuracy"],
-        "perEnvironment": ["seconds"],
+        "poolable": ["sourceAccuracy", "targetAccuracy", "contribution",
+                     "supervised", "adaptationShare", "parameters"],
+        "perEnvironment": [],
+        "perRun": ["seconds", "peakMiB"],
         "identicalAcrossShards": ["epochs"],
     },
 }
