@@ -94,49 +94,72 @@ def test_a_shard_disagreeing_on_epochs_is_still_refused_before_the_bridge_runs()
 
 # -------------------------------------------------------------------------- grid
 
-def test_the_grid_pools_only_the_declared_dimensions() -> None:
-    """`sourceAccuracy` and `targetAccuracy` are declared `poolable`; the
-    grid built from the real declaration carries exactly those two per cell,
+def test_the_grid_pools_every_dimension_the_replication_showed_was_poolable() -> None:
+    """All six machine-independent dimensions — the replication found them
+    bit-identical across three runs on two machines — reach the pooled grid,
     correctly averaged across every shard that arrived."""
     found = [_shard("a", 0, target=0.4, source=0.8),
              _shard("b", 1, target=0.6, source=0.6)]
     summary, _ = bridge.build_summary(found)
 
     cell = summary["grid"]["M->U"]["G"]
-    assert set(cell) == {"sourceAccuracy", "targetAccuracy"}
+    assert set(cell) == {"sourceAccuracy", "targetAccuracy", "contribution",
+                         "supervised", "adaptationShare", "parameters"}
     assert cell["targetAccuracy"]["mean"] == pytest.approx(0.5)
     assert cell["sourceAccuracy"]["mean"] == pytest.approx(0.7)
+    # Both shards' fixtures agree on these four, so pooling a constant
+    # returns the constant.
+    assert cell["parameters"]["mean"] == pytest.approx(11247434)
 
 
-def test_the_five_unclassified_dimensions_are_named_rather_than_guessed() -> None:
-    """`contribution`, `supervised`, `adaptationShare`, `peakMiB` and
-    `parameters` carry no approved poolable/perEnvironment classification.
-    The bridge does not invent one — it names the gap on the record it
-    writes, so a reader sees it was left out on purpose."""
+def test_the_real_declaration_now_leaves_nothing_unclassified() -> None:
+    """The replication settled every one of `config.DIMENSIONS`: six pool,
+    two (`seconds`, `peakMiB`) are `perRun`. `unclassifiedDimensions` is
+    still computed and still written — it is the receipt that nothing was
+    left out, not a report of a gap."""
     found = [_shard("a", 0, 0.5, 0.8)]
     summary, _ = bridge.build_summary(found)
 
-    assert summary["unclassifiedDimensions"] == [
-        "adaptationShare", "contribution", "parameters", "peakMiB", "supervised",
-    ]
-    cell = summary["grid"]["M->U"]["G"]
-    for name in summary["unclassifiedDimensions"]:
-        assert name not in cell
+    assert summary["unclassifiedDimensions"] == []
+    # seconds and peakMiB are real dimensions, just not pooled ones — they
+    # must not silently vanish from the merge, only from this grid.
+    assert "seconds" not in summary["grid"]["M->U"]["G"]
+    assert "peakMiB" not in summary["grid"]["M->U"]["G"]
 
 
 def test_the_bridge_reads_the_distribution_it_is_given_not_a_hardcoded_one() -> None:
     """Data-driven, not a copy of the real declaration re-typed into the
     bridge: a caller-supplied `dist` with a different poolable set changes
-    what the grid carries."""
+    what the grid carries. Fully classified, unlike the old fixture, because
+    the bridge no longer narrows `shards.merge()`'s dimensions to whatever a
+    partial `dist` happens to cover — it hands over `config.DIMENSIONS` in
+    full and lets the merge refuse if something is missing."""
     found = [_shard("a", 0, 0.5, 0.8)]
     custom = {"axis": "seed", "poolable": ["targetAccuracy"],
-              "perEnvironment": ["seconds", "sourceAccuracy"],
+              "perEnvironment": ["sourceAccuracy"],
+              "perRun": ["seconds", "peakMiB", "contribution", "supervised",
+                        "adaptationShare", "parameters"],
               "identicalAcrossShards": ["epochs"]}
     summary, _ = bridge.build_summary(found, dist=custom)
     assert set(summary["grid"]["M->U"]["G"]) == {"targetAccuracy"}
-    assert set(summary["unclassifiedDimensions"]) == {
-        "contribution", "supervised", "adaptationShare", "peakMiB", "parameters",
-    }
+    assert summary["unclassifiedDimensions"] == []
+
+
+def test_a_dimension_the_given_distribution_leaves_out_still_refuses() -> None:
+    """Removing the bridge's restriction must not turn a caller's gap into a
+    silent drop: an incomplete `dist` still refuses, exactly as
+    `shards.merge()` refuses it directly. Silence is not a classification,
+    and that holds whether the caller is a test or a real declaration."""
+    found = [_shard("a", 0, 0.5, 0.8)]
+    incomplete = {"axis": "seed", "poolable": ["targetAccuracy"],
+                  "perEnvironment": ["sourceAccuracy"],
+                  "perRun": ["seconds", "contribution", "supervised",
+                            "adaptationShare", "parameters"],
+                  # peakMiB named nowhere.
+                  "identicalAcrossShards": ["epochs"]}
+    with pytest.raises(shards.ShardsDisagree) as raised:
+        bridge.build_summary(found, dist=incomplete)
+    assert "peakMiB" in str(raised.value)
 
 
 # --------------------------------------------------------------------------- runs

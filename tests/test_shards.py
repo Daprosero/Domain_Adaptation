@@ -100,8 +100,87 @@ def test_a_dimension_in_neither_half_is_refused_rather_than_dropped():
     """Silently dropping it would leave a column nobody notices is gone."""
     with pytest.raises(shards.ShardsDisagree) as raised:
         shards.merge([_shard("a", "e1", [0])], dimensions=config.DIMENSIONS,
-                     dist={**DIST, "perEnvironment": ["seconds"]})
+                     dist={**DIST, "perEnvironment": ["seconds"], "perRun": []})
     assert "peakMiB" in str(raised.value)
+
+
+def test_a_dimension_named_in_none_of_the_three_groups_is_still_refused():
+    """Adding `perRun` as a third home must not loosen the refusal: a
+    dimension absent from all three groups is exactly as unclassified as one
+    absent from two, and silence is still not a classification."""
+    with pytest.raises(shards.ShardsDisagree) as raised:
+        shards.merge([_shard("a", "e1", [0])], dimensions=config.DIMENSIONS,
+                     dist={**DIST, "perRun": ["seconds"], "perEnvironment": []})
+    assert "peakMiB" in str(raised.value)
+
+
+# ------------------------------------------------------------------- perRun
+
+PER_RUN_DIST = {
+    "axis": "seed",
+    "poolable": ["targetAccuracy", "sourceAccuracy", "contribution",
+                 "supervised", "adaptationShare", "parameters"],
+    "perEnvironment": [],
+    "perRun": ["seconds", "peakMiB"],
+    "identicalAcrossShards": ["revision", "epochs", "ceilings"],
+}
+
+
+def test_partition_returns_the_three_groups_the_declaration_actually_holds():
+    poolable, per_environment, per_run = shards.partition(config.DIMENSIONS, PER_RUN_DIST)
+    assert set(poolable) == set(PER_RUN_DIST["poolable"])
+    assert per_environment == []
+    assert set(per_run) == {"seconds", "peakMiB"}
+
+
+def test_a_perrun_dimension_never_reaches_the_pooled_grid():
+    """Averaging `seconds` across shards would claim a stable central value
+    the control run disproved — the same reason it is not `poolable`."""
+    merged = shards.merge([_shard("a", "e1", [0, 1]), _shard("b", "e2", [2, 3])],
+                          dimensions=config.DIMENSIONS, dist=PER_RUN_DIST)
+    cell = merged["grid"]["M->U"]["G"]
+    assert "seconds" not in cell and "peakMiB" not in cell
+
+
+def test_a_perrun_dimension_never_reaches_the_per_environment_grid_either():
+    """`gridByEnvironment` groups by machine, which is exactly the framing
+    the replication's control run (same machine, three different `seconds`
+    and `peakMiB` values) disproved. A `perRun` dimension is not a property
+    of the machine either, so it stays out of this grid too."""
+    merged = shards.merge([_shard("a", "e1", [0, 1]), _shard("b", "e2", [2, 3])],
+                          dimensions=config.DIMENSIONS, dist=PER_RUN_DIST)
+    for env_grid in merged["gridByEnvironment"].values():
+        cell = env_grid["M->U"]["G"]
+        assert "seconds" not in cell and "peakMiB" not in cell
+
+
+def test_a_perrun_dimension_surfaces_as_each_runs_own_reading():
+    """Neither a property of the method (pooled) nor of the machine
+    (per-environment): `gridPerRun` carries every run's own value, tagged
+    with the shard that produced it, and computes no mean over them — a mean
+    would imply the stable central value these quantities do not have.
+    """
+    merged = shards.merge([_shard("a", "e1", [0, 1], seconds=10.0),
+                           _shard("b", "e2", [2, 3], seconds=90.0)],
+                          dimensions=config.DIMENSIONS, dist=PER_RUN_DIST)
+    readings = merged["gridPerRun"]["M->U"]["G"]["seconds"]
+    assert sorted(r["value"] for r in readings) == [10.0, 10.0, 90.0, 90.0]
+    # Each reading keeps the environment that produced it, which a bare
+    # average would erase.
+    assert {r["env"] for r in readings} == {"e1", "e2"}
+    # No aggregate key anywhere in the structure: `readings` is a plain list
+    # of per-run dicts, never a `{"mean": ...}` shape.
+    assert isinstance(readings, list)
+    for reading in readings:
+        assert set(reading) == {"env", "seed", "value"}
+
+
+def test_the_perrun_group_is_echoed_on_the_merge_result():
+    """Same pattern as `poolable`/`perEnvironment`: the classification the
+    merge actually used is echoed back, not only usable indirectly."""
+    merged = shards.merge([_shard("a", "e1", [0])], dimensions=config.DIMENSIONS,
+                          dist=PER_RUN_DIST)
+    assert merged["perRun"] == ["seconds", "peakMiB"]
 
 
 def test_scale_is_recomputed_from_what_arrived():

@@ -14,14 +14,22 @@ smoke run is plumbing, not a result, and "a smoke run never writes
 somewhere a real campaign's record never lives, and says so from inside every
 file it writes, not only from its own name.
 
-**The grid carries only what was actually classified.** Five of
-`config.DIMENSIONS` have no approved `poolable`/`perEnvironment` entry (see
-`MIL_CREDA_Benchmark.__benchmark__["distribution"]`). Rather than guess where
-they belong, `build_summary` restricts `shards.merge()`'s own `dimensions`
-argument to exactly what the declaration classifies, and lists the rest under
-`unclassifiedDimensions` on the record it writes. `runs.jsonl` is unaffected —
-it carries every field each shard wrote, untouched, because the notebook's own
-tables read most dimensions straight off `runs`, never off `summary["grid"]`.
+**The grid carries only what was actually classified — which, after the
+replication, is everything.** `MIL_CREDA_Benchmark.__benchmark__["distribution"]`
+used to leave five of `config.DIMENSIONS` unclassified; a replication
+(`A`/`B`/`C`) settled all of them, so every one of the eight now sits in
+`poolable`, `perEnvironment` or `perRun`. `build_summary` therefore hands
+`shards.merge()` `config.DIMENSIONS` in full rather than a subset narrowed to
+whatever the declaration happened to cover — the narrowing existed only to
+paper over the gap, and the gap is gone. `unclassifiedDimensions` is still
+computed and still written, but it is no longer a report of what was left
+out: on any declaration that actually covers `config.DIMENSIONS`, `merge()`
+refuses before `build_summary` ever gets this far (see `shards.partition()`),
+so the field can only read empty on a summary that exists at all — a receipt
+that nothing was silently dropped, not a list of gaps. `runs.jsonl` is
+unaffected — it carries every field each shard wrote, untouched, because the
+notebook's own tables read most dimensions straight off `runs`, never off
+`summary["grid"]`.
 
 **The reduction carries only what merging actually proved.** `identicalAcrossShards`
 is the one thing `shards.merge()` mechanically checks equal across every shard
@@ -75,15 +83,15 @@ def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, li
     succeeded, and refuses nothing of its own.
     """
     dist = dist if dist is not None else shards.declaration()
-    classified = list(dist.get("poolable") or []) + list(dist.get("perEnvironment") or [])
-    # Restricted to exactly what the declaration classifies, so `partition()`
-    # is never asked to arbitrate a dimension nobody approved a place for.
-    # This does not weaken the refusal it exists to raise: a shard that
-    # disagrees on `identicalAcrossShards`, or is not sealed, is still
-    # refused before this line is ever reached.
-    dimensions = {name: config.DIMENSIONS[name] for name in classified
-                  if name in config.DIMENSIONS}
-    merged = shards.merge(found, dimensions=dimensions, dist=dist)
+    classified = (list(dist.get("poolable") or []) + list(dist.get("perEnvironment") or [])
+                  + list(dist.get("perRun") or []))
+    # `config.DIMENSIONS` in full, unrestricted: with every dimension now
+    # classified into `poolable`, `perEnvironment` or `perRun`, there is no
+    # gap left to narrow around. A `dist` that still leaves one out is not
+    # papered over here — `shards.merge()`'s own `partition()` refuses it,
+    # exactly as it would refuse a shard that disagrees on
+    # `identicalAcrossShards` or is not sealed.
+    merged = shards.merge(found, dimensions=config.DIMENSIONS, dist=dist)
 
     identical = list(dist.get("identicalAcrossShards") or [])
     stamps = [entry["stamp"] for entry in found]
@@ -107,10 +115,12 @@ def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, li
         "perTransfer": per_transfer,
         "tally": {label: verdict.tally(rows) for label, rows in per_transfer.items()},
         "panorama": harness.paired_across_transfers(grid),
-        # Named rather than silently absent: a dimension `config.DIMENSIONS`
-        # measures but that nobody has approved a poolable/perEnvironment
-        # place for. `checkpoints` is left off `summary` entirely rather than
-        # written empty — a smoke run keeps no weights, so there was never a
+        # Computed rather than assumed empty: `merge()` above already refused
+        # if `dist` left anything out, so on any summary that exists at all
+        # this is `[]` — a receipt that every dimension `config.DIMENSIONS`
+        # measures had a place, not a report of one that didn't.
+        # `checkpoints` is left off `summary` entirely rather than written
+        # empty — a smoke run keeps no weights, so there was never a
         # selection to report, empty or otherwise.
         "unclassifiedDimensions": sorted(set(config.DIMENSIONS) - set(classified)),
     }
