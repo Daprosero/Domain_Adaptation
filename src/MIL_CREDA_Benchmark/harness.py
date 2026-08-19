@@ -1101,7 +1101,8 @@ SMOKE_CEILINGS: dict[str, float] = {family: config.RAMP_CEILING
 SMOKE_ARM = "G"
 
 
-def run_smoke(seed: int = 0, shard: str | None = None) -> dict:
+def run_smoke(seed: int = 0, shard: str | None = None,
+              checkpoint: bool = False) -> dict:
     """The smallest slice that exercises a real shard's whole wire, and
     nothing past it: one arm, one transfer, one seed, two epochs.
 
@@ -1131,6 +1132,18 @@ def run_smoke(seed: int = 0, shard: str | None = None) -> dict:
     smoke rehearsal never collides with a real shard's files sharing the
     same directory. Defaults to `None` — one kernel container runs one
     smoke call, so there is nothing else in that container to collide with.
+
+    `checkpoint`, off by default, writes exactly one `.pt` and its manifest
+    through `campaign()`'s own path — `torch.save({k: v.cpu() for k, v in
+    state.items()}, ...)` beside a manifest `keep_median()` writes with
+    `bags.write_manifest()` — rather than a bespoke save. Phase 2's
+    `latent.available()`/`latent.load()` read `config.MODELS` in exactly
+    that shape, so a checkpoint proven any other way would not prove the
+    path a real campaign actually uses. `config.CHECKPOINTS[SMOKE_ARM]`
+    asks for three per cell; with exactly one seed here, `median_seeds()`
+    degenerates to the only one there is rather than pruning it away. Off by
+    default because most rehearsals only need `runs.jsonl`, and a checkpoint
+    costs a model's worth of disk on every call that does not ask for one.
     """
     device = resolve_device()
     transfer = config.VERDICT_TRANSFERS[0]
@@ -1147,7 +1160,17 @@ def run_smoke(seed: int = 0, shard: str | None = None) -> dict:
              for code in {transfer[0], transfer[1]}}
     material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
     run = run_one(SMOKE_ARM, transfer, seed, reduction, device, material)
-    run.pop("state", None)
+    state = run.pop("state", None)
+
+    if checkpoint and state is not None:
+        config.MODELS.mkdir(parents=True, exist_ok=True)
+        label = run["transfer"]
+        stem = f"{SMOKE_ARM}_{label.replace('->', '-')}_seed{seed}"
+        torch.save({k: v.cpu() for k, v in state.items()},
+                   config.MODELS / f"{stem}.pt")
+        manifests = {(label, seed): {"source": material["source"].manifest,
+                                     "target": material["target"].manifest}}
+        keep_median([run], SMOKE_ARM, label, manifests, reduction)
 
     with paths["runs"].open("w", encoding="utf-8") as handle:
         handle.write(json.dumps(run) + "\n")
