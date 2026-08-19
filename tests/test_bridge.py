@@ -162,6 +162,21 @@ def test_a_dimension_the_given_distribution_leaves_out_still_refuses() -> None:
     assert "peakMiB" in str(raised.value)
 
 
+def test_the_summary_carries_gridperrun_for_the_report_to_read() -> None:
+    """`shards.merge()` already computes `gridPerRun` — every `perRun` reading,
+    tagged with its own environment, never averaged. `build_summary` must not
+    let it die here: without this key the report notebook has no way to render
+    `seconds`/`peakMiB` honestly, and falls back to pooling them across
+    machines into a mean that describes none of them."""
+    found = [_shard("a", 0, 0.5, 0.8, seconds=12.0, env="e1"),
+             _shard("b", 1, 0.6, 0.7, seconds=34.0, env="e2")]
+    summary, _ = bridge.build_summary(found)
+
+    per_run = summary["gridPerRun"]["M->U"]["G"]["seconds"]
+    assert {r["env"] for r in per_run} == {"e1", "e2"}
+    assert {r["value"] for r in per_run} == {12.0, 34.0}
+
+
 # --------------------------------------------------------------------------- runs
 
 def test_runs_jsonl_is_the_untouched_concatenation_of_every_shard() -> None:
