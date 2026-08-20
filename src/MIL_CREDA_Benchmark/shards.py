@@ -108,6 +108,24 @@ def _load_shard_io():
     module_name = "remote_execution_shard_io"
     if module_name in sys.modules:
         return sys.modules[module_name]
+    # Checked rather than assumed, because `_FORGE_ROOT` is a positional guess:
+    # it counts four directories up from this file and nothing verifies the
+    # answer. A repository cloned on its own, or moved to a different depth,
+    # lands here with a `FileNotFoundError` naming a path full of `.claude/`
+    # that says nothing about why this file wanted it. Saying what the
+    # arrangement is costs one branch and is the difference between a reader
+    # who knows what to do and one who reads a stack trace.
+    if not _SHARD_IO_SCRIPT.is_file():
+        raise ShardsDisagree(
+            f"{_SHARD_IO_SCRIPT} is not there, so the shard reader cannot be "
+            "loaded. This module is the repository-side shim over the forge's "
+            "generic shard reader: the file-reading half lives in the forge's "
+            "`remote-execution` skill and the grouping half lives here. That "
+            "means this repository expects to sit at "
+            "<forge>/implementations/<repo>/, four levels below the forge root. "
+            "Cloned on its own, or moved to another depth, the shim has nothing "
+            "to stand on — merging shards needs the forge checkout."
+        )
     spec = importlib.util.spec_from_file_location(module_name, _SHARD_IO_SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
