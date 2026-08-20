@@ -14,6 +14,27 @@ from pathlib import Path
 import pytest
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+
+#: `tools/distribute.py` loads the packer, the adapter registry and the service
+#: adapter out of the forge's `remote-execution` skill, and it does so at import
+#: time. That dependency is correct and is not vendored: splitting a campaign
+#: across machines is orchestration, and orchestration is the forge's job. What
+#: must not happen is this file erroring during collection when the forge is not
+#: there, because a clone of this repository is a paper's implementation and has
+#: to run its tests on its own. `src/` stands alone — see
+#: `test_shard_io_vendoring.py`, which holds it to that — and this one module
+#: says out loud that it cannot.
+_FORGE_SCRIPTS = (
+    REPOSITORY.parents[1] / ".claude" / "skills" / "remote-execution" / "scripts"
+)
+if not (_FORGE_SCRIPTS / "packer.py").is_file():
+    pytest.skip(
+        f"{_FORGE_SCRIPTS} is not there, so the launcher cannot be imported. "
+        "Submitting a campaign to a remote service is the forge's job and this "
+        "repository does not carry it; every other test here runs regardless.",
+        allow_module_level=True,
+    )
+
 _spec = importlib.util.spec_from_file_location(
     "distribute", REPOSITORY / "tools" / "distribute.py")
 distribute = importlib.util.module_from_spec(_spec)

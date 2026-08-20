@@ -48,19 +48,11 @@ gone.
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from collections import defaultdict
 from pathlib import Path
 
 from MIL_CREDA_Benchmark import config, harness
-
-# The forge root: <root>/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/shards.py
-_FORGE_ROOT = Path(__file__).resolve().parents[4]
-_SHARD_IO_SCRIPT = (
-    _FORGE_ROOT / ".claude" / "skills" / "remote-execution" / "scripts" / "shard_io.py"
-)
 
 
 class ShardsDisagree(SystemExit):
@@ -89,52 +81,16 @@ def declaration() -> dict:
     return __benchmark__.get("distribution") or {}
 
 
-def _load_shard_io():
-    """Path-import the forge's generic shard-reading module.
-
-    `read_shards` and `disagreements` moved to the forge because they assume
-    only the `shard.json` + `runs.jsonl` contract, and nothing about how
-    runs group into a result cell. The grouping this repository does with
-    that data — keyed on the two experiment dimensions `_cells`/`_grid` and
-    `promote_candidates` still use below — is this repository's own
-    vocabulary and stayed here rather than moving into forge infrastructure.
-
-    Reused from `sys.modules` on a second load for the same reason
-    `implementation_cli.py`'s own sibling loader reuses `ledger.py`: a
-    second `exec_module` of the same source would define a second, distinct
-    module object, and callers comparing identity across the two would see
-    them as different even though the source is byte-identical.
-    """
-    module_name = "remote_execution_shard_io"
-    if module_name in sys.modules:
-        return sys.modules[module_name]
-    # Checked rather than assumed, because `_FORGE_ROOT` is a positional guess:
-    # it counts four directories up from this file and nothing verifies the
-    # answer. A repository cloned on its own, or moved to a different depth,
-    # lands here with a `FileNotFoundError` naming a path full of `.claude/`
-    # that says nothing about why this file wanted it. Saying what the
-    # arrangement is costs one branch and is the difference between a reader
-    # who knows what to do and one who reads a stack trace.
-    if not _SHARD_IO_SCRIPT.is_file():
-        raise ShardsDisagree(
-            f"{_SHARD_IO_SCRIPT} is not there, so the shard reader cannot be "
-            "loaded. This module is the repository-side shim over the forge's "
-            "generic shard reader: the file-reading half lives in the forge's "
-            "`remote-execution` skill and the grouping half lives here. That "
-            "means this repository expects to sit at "
-            "<forge>/implementations/<repo>/, four levels below the forge root. "
-            "Cloned on its own, or moved to another depth, the shim has nothing "
-            "to stand on — merging shards needs the forge checkout."
-        )
-    spec = importlib.util.spec_from_file_location(module_name, _SHARD_IO_SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-_shard_io = _load_shard_io()
+# The generic half of the shard reader — `read_shards`, `disagreements` and
+# `completeness` — assumes only the `shard.json` + `runs.jsonl` contract and
+# nothing about how runs group into a result cell. That grouping is this
+# repository's own vocabulary and lives below. The generic half is vendored
+# beside this file rather than reached for across the filesystem: a clone of
+# this repository is a paper's implementation and has to stand on its own —
+# run its tests, read its results — without a forge checkout above it.
+# `tests/test_shard_io_vendoring.py` holds the copy equal to its origin
+# whenever that origin is present, and says nothing when it is not.
+from MIL_CREDA_Benchmark import shard_io as _shard_io  # noqa: E402
 
 # `disagreements` needs no knowledge this repository would have to supply —
 # it operates only on the stamps `read_shards` already collected — so it is
