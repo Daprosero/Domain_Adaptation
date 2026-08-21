@@ -1080,6 +1080,62 @@ def run_pilot(epochs: int = config.EPOCHS, seeds: list[int] | None = None) -> di
     return campaign(reduction, device)
 
 
+def run_search(shard: str | None = None) -> dict:
+    """The ceiling search alone, headless, and nothing after it.
+
+    `search_ceilings()` takes a `Reduction` and a `torch.device`, neither of
+    which a caller holding only JSON can build — and a remote job names a
+    `module.function` and hands it JSON keyword arguments. So the search had
+    a launcher for a notebook and a launcher for a whole campaign, and none
+    for itself: the one experiment this repository is currently blocked on
+    was the one with no way to ask for it. This is that way.
+
+    Stops at the record. `run_pilot()` searches *and then* runs the grid,
+    which is right for a single machine walking the whole thing in one go
+    and wrong for a worker asked to settle one question — the campaign is
+    73 hours at full scale and the search is under three, and conflating
+    them means a job that cannot be sized. `ceilings_in_force()` is what
+    both call, so an existing record is reused here exactly as it is there:
+    a record that exists means the search answered, and re-answering it
+    because a later caller wanted a different answer is the silent
+    refunding `campaign()`'s own refusal exists to prevent.
+
+    **There is deliberately no `epochs` dial**, and that is the difference
+    from `run_pilot()` rather than an omission. `run_pilot()` offers one
+    because a pilot is allowed to be cheap — it says so. The search is not:
+    `search_ceilings()` sets `config.SEARCH_EPOCHS` and `config.SEARCH_SEEDS`
+    on its own reduction and ignores whatever the caller passed, because a
+    ceiling found at pilot scale settles nothing and would still be written
+    to the same file the full-scale answer goes to. Any dial here would only
+    look like it worked.
+
+    `shard` names this call's own shard namespace, the same parameter
+    `run_smoke()` and `distribute.run_shard()` take, so a search split across
+    workers never has two of them writing one partial.
+    """
+    device = resolve_device()
+    # The search's own scale, stated rather than left implied. `search_ceilings`
+    # sets these itself, so this is a no-op for behaviour — and it is written
+    # anyway, because a `Reduction` that says three epochs while the run it
+    # describes does twenty is a record that lies about itself.
+    reduction = Reduction(
+        seeds=list(config.SEARCH_SEEDS), epochs=config.SEARCH_EPOCHS,
+        device=str(device), environment=environment())
+    ceilings_in_force(reduction, device, shard=shard)
+    # Read back from disk, never from what the search returned, for the reason
+    # `ceilings_in_force` already gives: what the campaign will run at is what
+    # the record says, and the record is the thing a later session reads.
+    record = search_record()
+    if record is None:
+        raise SystemExit(
+            "the search ran and left no record at "
+            f"{config.CEILINGS_RECORD}. Nothing downstream can read a ceiling "
+            "that was never written down, and a run that reports success "
+            "without one would be claiming an answer it cannot show."
+        )
+    return record
+
+
 #: What a smoke run stamps as its ceiling, for both families, so
 #: `write_shard_stamp`'s record is honest about what was used rather than
 #: leaving it implied by `ramp()`'s own per-call default. `RAMP_CEILING` is

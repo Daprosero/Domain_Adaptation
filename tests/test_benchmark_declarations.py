@@ -574,6 +574,90 @@ def test_the_notebook_forecasts_the_search_before_spending_it() -> None:
         "the search is forecast after it is spent, which is not a forecast")
 
 
+# ------------------------------ run_search(): the search alone, asked for by name
+
+def test_run_search_is_callable_with_json_alone() -> None:
+    """A remote job names a `module.function` and hands it JSON keyword
+    arguments; it cannot build a `Reduction` or a `torch.device`. So every
+    parameter of an entrypoint has to be JSON-native and optional, or the
+    entrypoint cannot be reached from a job at all.
+
+    Reachable red: before this, `harness` exposed `run_pilot`, `run_smoke`
+    and `run_one`, and the search — the one experiment this repository is
+    blocked on — had no launcher of its own.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    parameters = inspect.signature(harness.run_search).parameters
+    assert list(parameters) == ["shard"]
+    assert parameters["shard"].default is None
+
+
+def test_run_search_offers_no_scale_dial_because_a_cheap_search_settles_nothing() -> None:
+    """`run_pilot()` takes `epochs` on purpose: a pilot is allowed to be
+    cheap and says so. The search is not, and the asymmetry is the point.
+    `search_ceilings()` overwrites epochs and seeds on its own reduction,
+    so a dial here would be accepted, ignored, and still write its answer
+    to the file the full-scale answer goes to — a knob that only looks like
+    it worked is worse than no knob.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    assert "epochs" not in inspect.signature(harness.run_search).parameters
+    assert "seeds" not in inspect.signature(harness.run_search).parameters
+    assert "epochs" in inspect.signature(harness.run_pilot).parameters
+
+
+def test_run_search_runs_at_the_declared_scale_and_never_the_pilots(monkeypatch) -> None:
+    """What the search is handed has to be the scale it declares for itself,
+    not whatever the pilot happens to be running at. Asserted on the
+    `Reduction` that actually reaches `ceilings_in_force`, because the
+    record written afterwards carries that scale and a later reader trusts
+    it.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    seen = {}
+
+    def _spy(reduction, device, progress=print, shard=None):
+        seen["reduction"] = reduction
+        return {}
+
+    monkeypatch.setattr(harness, "ceilings_in_force", _spy)
+    monkeypatch.setattr(harness, "search_record", lambda: {"creda": {}})
+
+    harness.run_search()
+
+    assert seen["reduction"].epochs == config.SEARCH_EPOCHS
+    assert seen["reduction"].seeds == list(config.SEARCH_SEEDS)
+    assert seen["reduction"].epochs != config.EPOCHS
+
+
+def test_run_search_refuses_to_report_success_with_no_record_on_disk() -> None:
+    """The record is the whole product. A run that returned normally while
+    `ceilings.json` was never written would report an answer it cannot
+    show, and everything downstream reads the file rather than the return
+    value.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    original_force = harness.ceilings_in_force
+    original_record = harness.search_record
+    harness.ceilings_in_force = lambda *a, **k: {}
+    harness.search_record = lambda: None
+    try:
+        with pytest.raises(SystemExit) as raised:
+            harness.run_search()
+    finally:
+        harness.ceilings_in_force = original_force
+        harness.search_record = original_record
+    assert "left no record" in str(raised.value)
+
+
 # ---------------------------- run_pilot(): the notebook, headless, cheapenable
 
 def test_run_pilot_epochs_default_is_reductions_own_default_not_full_epochs() -> None:
