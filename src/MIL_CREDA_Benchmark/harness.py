@@ -1136,6 +1136,43 @@ def run_search(shard: str | None = None) -> dict:
     return record
 
 
+def run_campaign_shard(shard: str | None = None,
+                       seeds: list[int] | None = None) -> dict:
+    """One shard of the campaign, headless, callable with JSON alone.
+
+    `tools/distribute.py`'s `run_shard()` already does this and a remote worker
+    cannot reach it: `tools/` is outside every declared clone path, and that
+    module path-imports the forge's own packer, which does not exist inside a
+    kernel. So the fan-out this repository's distribution declaration is built
+    around — the seed axis split across machines — had no way to be asked for
+    from a job. This is that way, and it is the same three lines, placed where a
+    clone can see them.
+
+    The seed list is the whole parameterisation, because the seed axis is what
+    the declaration says may be split (`__benchmark__["distribution"]["axis"]`).
+    Everything else is the campaign's own: epochs stay at `config.FULL_EPOCHS`
+    for the reason `run_search` takes no dial either — a shard measured at pilot
+    scale is not a cheaper shard, it is a different experiment, and it would be
+    merged with the others as though it were one.
+
+    `shard` names this call's own namespace and is passed through to
+    `campaign()`, which hands it to `shard_paths()`. Without it two shards
+    running at once write one `runs.jsonl` and one stamp between them, and the
+    loser is a silent partial. Defaulting to `None` is the single-machine case,
+    where there is nothing to collide with.
+
+    Refuses nothing here that `campaign()` does not already refuse: it still
+    demands a ceiling record, and a worker that clones only `src/` does not
+    receive one. That is a property of what the job declares it clones, not
+    something this function can paper over.
+    """
+    device = resolve_device()
+    reduction = Reduction(
+        seeds=list(seeds) if seeds is not None else list(config.FULL_SEEDS),
+        epochs=config.FULL_EPOCHS, device=str(device), environment=environment())
+    return campaign(reduction, device, shard=shard)
+
+
 #: What a smoke run stamps as its ceiling, for both families, so
 #: `write_shard_stamp`'s record is honest about what was used rather than
 #: leaving it implied by `ramp()`'s own per-call default. `RAMP_CEILING` is
