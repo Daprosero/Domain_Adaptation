@@ -574,6 +574,65 @@ def test_the_notebook_forecasts_the_search_before_spending_it() -> None:
         "the search is forecast after it is spent, which is not a forecast")
 
 
+# --------------------- run_campaign_shard(): one shard's campaign, asked by name
+
+def test_run_campaign_shard_is_callable_with_json_alone() -> None:
+    """`tools/distribute.py`'s `run_shard()` already has the right shape, and a
+    remote worker cannot reach it: `tools/` is outside every declared clone
+    path, and that module path-imports the forge's own packer, which does not
+    exist inside a kernel. So the fan-out the distribution declaration is built
+    around had no way to be asked for remotely.
+
+    Reachable red: before this, `harness` exposed `run_pilot`, `run_smoke`,
+    `run_one` and `run_search`, and none of them runs one shard of the grid.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    parameters = inspect.signature(harness.run_campaign_shard).parameters
+    assert list(parameters) == ["shard", "seeds"]
+    assert all(p.default is not inspect.Parameter.empty for p in parameters.values())
+
+
+def test_run_campaign_shard_runs_at_full_scale_never_the_pilots() -> None:
+    """A shard is a slice of the campaign, not a cheaper version of it. The
+    seed axis is what splits across machines; the epoch count is not a dial,
+    for the same reason it is not one on the search.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    seen = {}
+
+    def _spy(reduction, device, arms=None, progress=print, shard=None):
+        seen["reduction"], seen["shard"] = reduction, shard
+        return {}
+
+    original = harness.campaign
+    harness.campaign = _spy
+    try:
+        harness.run_campaign_shard(shard="a", seeds=[3, 4])
+    finally:
+        harness.campaign = original
+
+    assert seen["reduction"].epochs == config.FULL_EPOCHS
+    assert seen["reduction"].seeds == [3, 4]
+    assert seen["shard"] == "a"
+
+
+def test_run_campaign_shard_writes_into_its_own_namespace() -> None:
+    """Two shards running at once would clobber each other's records if the
+    name did not reach `campaign()`. `shard_paths()` is what separates them,
+    and it only separates them if the caller passes the name through.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    source = inspect.getsource(harness.run_campaign_shard)
+    assert "shard=shard" in source
+
+
 # ------------------------------ run_search(): the search alone, asked for by name
 
 def test_run_search_is_callable_with_json_alone() -> None:
