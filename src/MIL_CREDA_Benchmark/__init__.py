@@ -277,4 +277,11 @@ __benchmark__ = {
         "perRun": ["seconds", "peakMiB"],
         "identicalAcrossShards": ["epochs"],
     },
+    # Which module carries the runtime, so a reading about this repository's
+    # environment is about the module that actually imports it. The same two
+    # values `tools/kaggle/ceiling-search/run-config.json` already fixes.
+    "entry": {
+        "module": "MIL_CREDA_Benchmark.harness",
+        "function": "run_pilot",
+    },
 }
