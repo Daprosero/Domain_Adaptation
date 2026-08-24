@@ -631,6 +631,28 @@ def test_run_campaign_shard_runs_at_full_scale_never_the_pilots(
     assert seen["reduction"].epochs == config.FULL_EPOCHS
     assert seen["reduction"].seeds == [3, 4]
     assert seen["shard"] == "a"
+    # A shard is one JSON-callable campaign entrypoint among four that must
+    # each obtain ceilings in force before running — proven behaviourally,
+    # against the record's own winners, not only against source text.
+    assert seen["reduction"].ceilings == {"creda": 1e-4, "milcreda": 1.0}
+
+
+def test_run_campaign_shard_obtains_ceilings_before_it_runs_the_campaign() -> None:
+    """The same join `run_pilot()` and `run_search()` are already held to
+    (`test_run_pilot_obtains_ceilings_before_it_runs_the_campaign`): `campaign()`
+    refuses outright without `reduction.ceilings` already populated, so this
+    has to close that gap itself rather than hand a caller a refusal it
+    cannot read.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    source = inspect.getsource(harness.run_campaign_shard)
+    # "campaign(reduction" and not the bare "campaign(": the docstring above
+    # already mentions "`campaign()`, which hands it to `shard_paths()`" —
+    # matching on "campaign(" alone would find that prose, not the call.
+    assert source.index("ceilings_in_force(") < source.index("campaign(reduction")
 
 
 def test_run_campaign_shard_writes_into_its_own_namespace() -> None:

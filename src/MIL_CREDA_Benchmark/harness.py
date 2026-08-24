@@ -1199,6 +1199,8 @@ def run_campaign_shard(shard: str | None = None,
     reduction = Reduction(
         seeds=list(seeds) if seeds is not None else list(config.FULL_SEEDS),
         epochs=config.FULL_EPOCHS, device=str(device), environment=environment())
+    reduction = replace(reduction, ceilings=ceilings_in_force(reduction, device,
+                                                              shard=shard))
     return campaign(reduction, device, shard=shard)
 
 
