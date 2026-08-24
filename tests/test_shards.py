@@ -295,3 +295,118 @@ def test_an_old_stamp_with_no_evidence_at_all_reads_incomplete_never_invalid(
 
     with pytest.raises(shards.ShardIncomplete):
         shards.merge(found, dimensions=config.DIMENSIONS, dist=DIST)
+
+
+# ---------------------------------------------------------- split_complete
+
+def test_split_complete_passes_a_sealed_shard_through_merge_shaped():
+    """A complete entry survives the split untouched — directly passable to
+    `merge()`, not reshaped."""
+    complete_shard = _shard("a", "e1", [0, 1])
+    complete, incomplete = shards.split_complete([complete_shard])
+    assert complete == [complete_shard]
+    assert incomplete == []
+
+
+def test_split_complete_reshapes_an_incomplete_entry_to_id_and_missing():
+    """Deliberately a DIFFERENT shape from a complete entry: `{"id",
+    "missing"}`, never `{"shard", "stamp", "runs"}`. Same shape would let an
+    incomplete entry reach `merge()` by mistake and be pooled unproven; a
+    different shape turns that mistake into a `KeyError` at the boundary."""
+    incomplete_shard = _shard("b", "e2", [2, 3])
+    incomplete_shard["stamp"] = {k: v for k, v in incomplete_shard["stamp"].items()
+                                 if k != "evidence"}
+    complete, incomplete = shards.split_complete([incomplete_shard])
+    assert complete == []
+    assert len(incomplete) == 1
+    assert set(incomplete[0]) == {"id", "missing"}
+    assert incomplete[0]["id"] == "b"
+    assert "evidence.commit" in incomplete[0]["missing"]
+    assert "evidence.outputs" in incomplete[0]["missing"]
+
+
+def test_split_complete_separates_a_mixed_batch():
+    complete_shard = _shard("a", "e1", [0])
+    straggler = _shard("b", "e2", [1])
+    straggler["stamp"] = {k: v for k, v in straggler["stamp"].items() if k != "evidence"}
+    complete, incomplete = shards.split_complete([complete_shard, straggler])
+    assert [e["shard"] for e in complete] == ["a"]
+    assert [e["id"] for e in incomplete] == ["b"]
+
+
+# ------------------------------------------------------- plan persistence
+
+def test_plan_path_lives_beside_the_shard_directories_never_inside_one(tmp_path):
+    home = tmp_path / harness.SHARDS_DIR
+    assert shards.plan_path(home) == home / "plan.json"
+
+
+def test_read_plan_is_none_when_nothing_was_ever_recorded(tmp_path):
+    """Never `{}`, never a plan synthesized from what arrived — a caller
+    must be able to tell "nothing was ever launched" apart from "everything
+    launched came back."""
+    assert shards.read_plan(tmp_path) is None
+
+
+def test_write_plan_then_read_plan_round_trips(tmp_path):
+    record = {"shards": [{"id": "s00", "seeds": [1, 2, 3]}],
+             "epochs": 20, "accelerator": "NvidiaTeslaT4"}
+    path = shards.write_plan(record, tmp_path)
+    assert path == tmp_path / "plan.json"
+
+    read_back = shards.read_plan(tmp_path)
+    assert read_back["shards"] == [{"id": "s00", "seeds": [1, 2, 3]}]
+    assert read_back["epochs"] == 20
+    assert read_back["accelerator"] == "NvidiaTeslaT4"
+    assert "writtenAt" in read_back
+
+
+def test_write_plan_is_idempotent_on_the_identical_id_and_seeds(tmp_path):
+    record = {"shards": [{"id": "s00", "seeds": [1, 2, 3]}], "epochs": 20}
+    shards.write_plan(record, tmp_path)
+    first_written_at = shards.read_plan(tmp_path)["writtenAt"]
+
+    shards.write_plan(record, tmp_path)
+    second = shards.read_plan(tmp_path)
+    assert second["shards"] == [{"id": "s00", "seeds": [1, 2, 3]}]
+    # Only writtenAt refreshes; the recorded shard entry itself is untouched.
+    assert "writtenAt" in second and first_written_at is not None
+
+
+def test_write_plan_appends_a_new_id_without_disturbing_the_recorded_one(tmp_path):
+    shards.write_plan({"shards": [{"id": "s00", "seeds": [1, 2, 3]}]}, tmp_path)
+    shards.write_plan({"shards": [{"id": "s01", "seeds": [4, 5, 6]}]}, tmp_path)
+
+    record = shards.read_plan(tmp_path)
+    assert record["shards"] == [
+        {"id": "s00", "seeds": [1, 2, 3]},
+        {"id": "s01", "seeds": [4, 5, 6]},
+    ]
+
+
+def test_write_plan_epochs_and_accelerator_are_last_write_wins(tmp_path):
+    shards.write_plan({"shards": [{"id": "s00", "seeds": [1]}],
+                       "epochs": 20, "accelerator": "NvidiaTeslaT4"}, tmp_path)
+    shards.write_plan({"shards": [{"id": "s01", "seeds": [2]}],
+                       "epochs": 20, "accelerator": "NvidiaTeslaP100"}, tmp_path)
+
+    record = shards.read_plan(tmp_path)
+    assert record["accelerator"] == "NvidiaTeslaP100"
+
+
+def test_write_plan_refuses_a_recorded_id_under_different_seeds(tmp_path):
+    """The load-bearing guard: `s00` already recorded under `[1, 2, 3]`. A
+    second write mapping `s00` to `[7, 8, 9]` must refuse rather than
+    silently rewrite the recorded seeds — `harness.shard_paths()` keys
+    `s00`'s entire on-disk home on the id string alone."""
+    shards.write_plan({"shards": [{"id": "s00", "seeds": [1, 2, 3]}]}, tmp_path)
+
+    with pytest.raises(shards.PlanConflict) as raised:
+        shards.write_plan({"shards": [{"id": "s00", "seeds": [7, 8, 9]}]}, tmp_path)
+    message = str(raised.value)
+    assert "s00" in message
+    assert "[1, 2, 3]" in message
+    assert "[7, 8, 9]" in message
+
+    # Refused, so the record itself must be untouched.
+    assert shards.read_plan(tmp_path)["shards"] == [{"id": "s00", "seeds": [1, 2, 3]}]
