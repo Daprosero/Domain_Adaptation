@@ -976,6 +976,55 @@ def test_the_scratch_file_is_not_the_finished_record(tmp_path, monkeypatch) -> N
     assert harness.search_record() is None
 
 
+def test_a_resumed_ceiling_the_grid_no_longer_has_refuses_by_name(
+        tmp_path, monkeypatch) -> None:
+    """A partial is a file on disk and the grid is a line in config.py —
+    nothing keeps them in step. Editing the grid after a partial was written
+    used to surface as a bare `KeyError` at aggregation, hours in. It has to
+    refuse by name instead, before anything else measures.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    monkeypatch.setattr(harness, "run_one", _fake_run_one({}))
+    monkeypatch.setattr(harness.bags, "build", _fake_build())
+    harness._write_partial("creda", "D", {(0, "M->U"): {0.05: 0.51}}, 1.0,
+                           lambda *a: None)
+
+    with pytest.raises(SystemExit) as raised:
+        harness.search_ceilings(harness.Reduction(), torch.device("cpu"),
+                                progress=lambda *a: None)
+
+    message = str(raised.value)
+    assert "creda" in message
+    assert "0.05" in message
+    assert str(config.CEILING_GRID) in message
+    assert str(harness.shard_paths(None)["partial"]) in message
+    assert "Delete" in message and "restore" in message
+
+
+def test_the_stale_resume_refuses_before_it_measures_anything(
+        tmp_path, monkeypatch) -> None:
+    """Eagerness is the point: a stale key must refuse before a single
+    further cell trains, not once some other family's grid has already run.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+
+    def _unreached(*args, **kwargs):
+        pytest.fail("measured before refusing")
+
+    monkeypatch.setattr(harness, "run_one", _unreached)
+    monkeypatch.setattr(harness.bags, "build", _unreached)
+    harness._write_partial("creda", "D", {(0, "M->U"): {0.05: 0.51}}, 1.0,
+                           lambda *a: None)
+
+    with pytest.raises(SystemExit):
+        harness.search_ceilings(harness.Reduction(), torch.device("cpu"),
+                                progress=lambda *a: None)
+
+
 def test_the_power_state_is_stamped_and_never_fatal() -> None:
     """`seconds` and `peakMiB` are dimensions of the verdict, and a measurement
     describes whichever environment produced it. A throttled run must be labelled
