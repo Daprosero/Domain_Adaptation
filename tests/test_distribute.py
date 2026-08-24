@@ -207,3 +207,101 @@ def test_distribute_py_makes_no_direct_service_call_itself():
     assert "import subprocess" not in source
     assert "subprocess.run" not in source
     assert "kernels" not in source
+
+
+# ------------------------------------------------------------- main() CLI wiring
+#
+# Thin wiring tests only: every underlying fact (split_complete, PlanConflict,
+# relaunch's own shape) is already covered unconditionally in test_shards.py,
+# which never skips. These only hold `main()`'s three branches to calling the
+# right thing.
+
+def test_main_plan_branch_persists_the_plan_via_write_plan(tmp_path, monkeypatch):
+    import subprocess as sp
+
+    monkeypatch.setattr(distribute.config, "RESULTS", tmp_path)
+    monkeypatch.setattr(sp, "run", lambda argv, **k: _fake_accounts_result(["alice"]))
+    monkeypatch.setattr(sys, "argv", ["distribute.py", "plan", "--shards", "1"])
+
+    distribute.main()
+
+    recorded = distribute.shards.read_plan()
+    assert recorded is not None
+    assert recorded["shards"]
+    assert recorded["accelerator"] == distribute.ACCELERATOR
+
+
+def test_main_run_branch_refuses_a_recorded_id_under_different_seeds(tmp_path, monkeypatch):
+    """A8b: the CLI guard, mirroring `write_plan()`'s own refusal (A8a) but
+    checked here without persisting anything -- `run_shard()` itself is
+    never reached."""
+    monkeypatch.setattr(distribute.config, "RESULTS", tmp_path)
+    distribute.shards.write_plan({"shards": [{"id": "s00", "seeds": [1, 2, 3]}]})
+
+    def _poison(*a, **k):
+        raise AssertionError("run_shard must not be called when the guard refuses")
+
+    monkeypatch.setattr(distribute, "run_shard", _poison)
+    monkeypatch.setattr(sys, "argv",
+                        ["distribute.py", "run", "--shard", "s00", "--seeds", "7,8,9"])
+
+    with pytest.raises(distribute.shards.PlanConflict) as raised:
+        distribute.main()
+    message = str(raised.value)
+    assert "s00" in message
+    assert "[1, 2, 3]" in message
+    assert "[7, 8, 9]" in message
+
+
+def test_main_run_branch_proceeds_for_an_unplanned_id(tmp_path, monkeypatch):
+    """No recorded plan at all, or an id the plan never mentions, must not
+    be refused -- the guard exists for a genuine collision, not for every
+    unplanned launch."""
+    monkeypatch.setattr(distribute.config, "RESULTS", tmp_path)
+    calls = []
+    monkeypatch.setattr(distribute, "run_shard", lambda shard, seeds: calls.append((shard, seeds)))
+    monkeypatch.setattr(sys, "argv",
+                        ["distribute.py", "run", "--shard", "s00", "--seeds", "1,2,3"])
+
+    distribute.main()
+    assert calls == [("s00", [1, 2, 3])]
+
+
+def test_main_merge_branch_prints_a_copy_pasteable_relaunch_hint(tmp_path, monkeypatch, capsys):
+    """A13: the hint is built here, in `distribute.py`, from
+    `relaunch["shards"]` alone -- `shards.py` returns no command strings."""
+    monkeypatch.setattr(distribute.shards, "read_shards",
+                        lambda: [{"shard": "s00", "stamp": {}, "runs": []}])
+    monkeypatch.setattr(distribute.shards, "read_plan",
+                        lambda: {"shards": [{"id": "s01", "seeds": [2, 3]}]})
+
+    fake_summary = {
+        "relaunch": {"planRecorded": True, "complete": False, "unplanned": [],
+                    "shards": [{"id": "s01", "seeds": [2, 3],
+                               "reason": "missing", "missing": []}]},
+    }
+    monkeypatch.setattr(
+        distribute.bridge, "build_summary",
+        lambda found, plan=None: (fake_summary, []))
+
+    written = {"summary": tmp_path / "summary.json", "runs": tmp_path / "runs.jsonl",
+              "provenance": tmp_path / "PROVENANCE.txt"}
+    for path in written.values():
+        path.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        distribute.bridge, "write_scratch",
+        lambda summary, runs, root=None: written)
+    # `main()`'s own print loop reports each written path relative to the
+    # repository root; patched here only so the fixture's own `tmp_path`
+    # (necessarily outside the real repository) resolves, not to change
+    # what `main()` does.
+    monkeypatch.setattr(distribute, "REPOSITORY", tmp_path)
+
+    monkeypatch.setattr(sys, "argv", ["distribute.py", "merge"])
+    distribute.main()
+
+    captured = capsys.readouterr()
+    assert "relaunch:" in captured.out
+    assert "--shard s01" in captured.out
+    assert "--seeds 2,3" in captured.out
+    assert "# missing" in captured.out
