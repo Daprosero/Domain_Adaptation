@@ -36,3 +36,22 @@ MIL-CREDA/Models/Benchmark/*.pt
 # notebook to read, reproducible from the shards on disk and never a
 # campaign's record — see tools/bridge.py's module docstring.
 .scratch/
+
+# remote-execution's local bookkeeping for this repository — created afresh
+# by scripts/ledger.py::append() and scripts/remote_cli.py::cmd_fetch() the
+# first time either writes here. Two separate decisions, not one:
+#
+# quarantine/ holds fetched artifacts a fetch judged not current. It is
+# machine-regenerable (a re-fetch of the same submission id reproduces it
+# byte-for-byte) and large — tens of MB per rehearsal alone. Nothing here
+# earns a place in history.
+#
+# The ledger files themselves (smoke.jsonl and any sibling *.jsonl this
+# command writes) are a separate call: they are genuine provenance about
+# what ran where, not disposable output. They stay out anyway, for a
+# different reason — they are per-machine local execution state keyed to
+# whichever account credentials that machine used at rehearsal time, an
+# append-only log that would generate merge noise on every local run, and
+# not a fact anyone reproducing the benchmark needs: the campaign's own
+# record is what lands under Results/, not this queue's bookkeeping.
+.remote-execution/
