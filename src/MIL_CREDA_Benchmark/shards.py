@@ -243,6 +243,68 @@ def write_plan(record: dict, root: Path | None = None) -> Path:
     return path
 
 
+def relaunch(plan: dict | None, complete: list[dict], incomplete: list[dict]) -> dict:
+    """Which planned shard ids still need relaunching, and whether the plan
+    already stands fully satisfied.
+
+    `complete`/`incomplete` are `split_complete()`'s own two lists — never
+    recomputed here. Every relaunch entry copies its `id` and `seeds`
+    **verbatim** from the recorded plan; this function never calls
+    `shard_seeds()`, because re-deriving ids over a failed subset is the
+    exact landmine `write_plan()`'s refusal exists to guard against — the
+    guard does no good if the caller handing it ids re-minted them first.
+
+    A shard present in `plan` and sealed-complete needs no relaunch. One
+    present-but-unsealed relaunches with `reason: "incomplete"`, carrying the
+    missing evidence paths `split_complete()` already found. One that never
+    arrived at all — planned, but absent from both `complete` and
+    `incomplete` — relaunches with `reason: "missing"`: it is a genuinely
+    different fact from an unsealed straggler, and collapsing the two into
+    one flat list would tell an operator to relaunch a shard whose sealed
+    stamp only needs refetching.
+
+    A shard that arrived and sealed but was never in the plan merges
+    normally and is reported under `unplanned` instead — never as a
+    relaunch entry, and never able to make `complete` false; refusing an
+    unplanned-but-sealed shard would contradict `write_plan()`'s own
+    amendability (a shard can legitimately be added to a running campaign).
+
+    `plan is None` is the honest unknown: nothing was ever recorded, so
+    `planRecorded` is `False` and `complete` is `None` — never `True` or
+    `False`, both of which would claim a fact nobody ever measured.
+    """
+    if plan is None:
+        return {"planRecorded": False, "complete": None, "unplanned": [], "shards": []}
+
+    planned = {entry["id"]: entry for entry in plan.get("shards", [])}
+    arrived_ids = {entry["shard"] for entry in complete}
+    incomplete_by_id = {entry["id"]: entry for entry in incomplete}
+
+    relaunch_shards = []
+    for shard_id, entry in planned.items():
+        if shard_id in arrived_ids:
+            continue
+        if shard_id in incomplete_by_id:
+            relaunch_shards.append({
+                "id": shard_id, "seeds": list(entry["seeds"]),
+                "reason": "incomplete", "missing": incomplete_by_id[shard_id]["missing"],
+            })
+        else:
+            relaunch_shards.append({
+                "id": shard_id, "seeds": list(entry["seeds"]),
+                "reason": "missing", "missing": [],
+            })
+
+    unplanned = sorted(shard_id for shard_id in arrived_ids if shard_id not in planned)
+
+    return {
+        "planRecorded": True,
+        "complete": not relaunch_shards,
+        "unplanned": unplanned,
+        "shards": relaunch_shards,
+    }
+
+
 def partition(dimensions: dict, dist: dict) -> tuple[list[str], list[str], list[str]]:
     """Which dimensions pool across machines, which are read one machine at a
     time, and which belong to no wider scope than the run that produced them.
