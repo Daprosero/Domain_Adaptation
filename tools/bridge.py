@@ -102,8 +102,24 @@ def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, li
     reduction["seeds"] = merged["seeds"]
 
     grid = merged["grid"]
-    per_transfer = {label: verdict.judge(harness.ladder_rows(cell, label))
-                     for label, cell in grid.items()}
+    # `grid` is the POOLED grid `shards.merge()` returns -- `perRun`
+    # dimensions (`seconds`, `peakMiB`) are machine-described and were
+    # never averaged into it (see this module's own docstring); reading
+    # `ladder_rows` with the full, unfiltered `config.DIMENSIONS` against
+    # this grid raises `KeyError` on the first perRun dimension it tries.
+    # `ladder_rows` stays strict by default (`tests/test_shards.py`'s own
+    # locked "reachable red" proves it), so the caller filters instead.
+    poolable_and_per_environment = (
+        list(dist.get("poolable") or []) + list(dist.get("perEnvironment") or [])
+    )
+    merge_dimensions = {
+        dimension: better for dimension, better in config.DIMENSIONS.items()
+        if dimension in poolable_and_per_environment
+    }
+    per_transfer = {
+        label: verdict.judge(harness.ladder_rows(cell, label, dimensions=merge_dimensions))
+        for label, cell in grid.items()
+    }
 
     summary = {
         "kind": "smokeMerge",
