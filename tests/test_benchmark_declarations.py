@@ -595,12 +595,29 @@ def test_run_campaign_shard_is_callable_with_json_alone() -> None:
     assert all(p.default is not inspect.Parameter.empty for p in parameters.values())
 
 
-def test_run_campaign_shard_runs_at_full_scale_never_the_pilots() -> None:
+def test_run_campaign_shard_runs_at_full_scale_never_the_pilots(
+        tmp_path, monkeypatch) -> None:
     """A shard is a slice of the campaign, not a cheaper version of it. The
     seed axis is what splits across machines; the epoch count is not a dial,
     for the same reason it is not one on the search.
+
+    `config.CEILINGS_RECORD` is pinned to an isolated `tmp_path` record so
+    this test can never reach the real `Results/Benchmark/ceilings.json` —
+    which does not exist on disk — and the tripwire below turns any future
+    unpinning of that record into a named, millisecond-long failure instead
+    of a real ceiling search running inside the unit suite.
     """
     from MIL_CREDA_Benchmark import harness
+
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "creda": {"ceiling": 1e-4, "atRequiredScale": True},
+        "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    monkeypatch.setattr(config, "CEILINGS", {})
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
+        "the unit suite reached the real ceiling search"))
 
     seen = {}
 
@@ -608,12 +625,8 @@ def test_run_campaign_shard_runs_at_full_scale_never_the_pilots() -> None:
         seen["reduction"], seen["shard"] = reduction, shard
         return {}
 
-    original = harness.campaign
-    harness.campaign = _spy
-    try:
-        harness.run_campaign_shard(shard="a", seeds=[3, 4])
-    finally:
-        harness.campaign = original
+    monkeypatch.setattr(harness, "campaign", _spy)
+    harness.run_campaign_shard(shard="a", seeds=[3, 4])
 
     assert seen["reduction"].epochs == config.FULL_EPOCHS
     assert seen["reduction"].seeds == [3, 4]
