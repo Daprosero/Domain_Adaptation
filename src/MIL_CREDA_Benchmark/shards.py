@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 from MIL_CREDA_Benchmark import config, harness
@@ -72,6 +73,20 @@ class ShardIncomplete(SystemExit):
     died mid-way, or a stamp written before evidence stamping existed. Both
     are refused the same way and for the same reason: what merge produces is
     only as trustworthy as what it was allowed to include.
+    """
+
+
+class PlanConflict(SystemExit):
+    """Raised instead of persisting or launching a shard id under seeds that
+    disagree with what was already recorded for that same id.
+
+    Neither `ShardsDisagree` nor `ShardIncomplete` fits: the shards here have
+    not even run yet, or one of them already has and a relaunch is about to
+    re-mint its id. `shard_paths()` keys a shard's entire on-disk home on its
+    id string alone, and a relaunch that recomputes ids positionally over a
+    failed subset lands back on `s00`. Without this refusal that collision is
+    silent: `campaign()` opens `runs.jsonl` `"w"` and rewrites `shard.json`
+    unconditionally, discarding a shard that already succeeded.
     """
 
 
@@ -132,6 +147,100 @@ def read_shards(root: Path | None = None) -> list[dict]:
     """
     home = root if root is not None else config.RESULTS / harness.SHARDS_DIR
     return _shard_io.read_shards(home)
+
+
+def split_complete(found: list[dict],
+                    required: list[str] | None = None) -> tuple[list[dict], list[dict]]:
+    """Partition `read_shards()` output into sealed-complete and incomplete,
+    before anything is handed to `merge()`.
+
+    Deliberately asymmetric: `complete` entries are the original
+    `{"shard", "stamp", "runs"}` dicts, unmodified and directly passable to
+    `merge()`; `incomplete` entries are reshaped to `{"id", "missing"}` —
+    never the same shape. Same shape would let an incomplete entry reach
+    `merge()` by a caller's mistake and be pooled as an unproven run; a
+    different shape turns that mistake into a `KeyError` at the boundary
+    instead. `merge()` itself is not called here — this is the same
+    `completeness()` check it performs internally (line 224), lifted out so
+    a caller can act on the split before `merge()` ever aborts on it.
+    """
+    required = required if required is not None else REQUIRED_EVIDENCE
+    complete: list[dict] = []
+    incomplete: list[dict] = []
+    for entry in found:
+        result = completeness(entry["stamp"], required)
+        if result["complete"]:
+            complete.append(entry)
+        else:
+            incomplete.append({"id": entry["shard"], "missing": result["missing"]})
+    return complete, incomplete
+
+
+def plan_path(root: Path | None = None) -> Path:
+    """Where a campaign's plan lives: a sibling of every shard directory,
+    never one itself — `shard_io.read_shards()` iterates `iterdir()` filtered
+    to `is_dir()`, so this file is structurally invisible to the shard
+    reader.
+    """
+    home = root if root is not None else config.RESULTS / harness.SHARDS_DIR
+    return home / "plan.json"
+
+
+def read_plan(root: Path | None = None) -> dict | None:
+    """The recorded plan, or `None` when none was ever written.
+
+    `None`, never `{}` and never a plan synthesized from what arrived: a
+    missing plan is an honest "nobody recorded intent," and a caller that
+    treated it as an empty plan or invented one from the shards that showed
+    up would be unable to tell "nothing was ever launched" apart from
+    "everything launched came back."
+    """
+    path = plan_path(root)
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_plan(record: dict, root: Path | None = None) -> Path:
+    """Record `record["shards"]` into the plan, amendable and union-by-id.
+
+    Identical `id -> seeds` is idempotent — it only refreshes `writtenAt`.
+    A new `id` is appended. A conflicting `id` — the same id recorded once
+    already, now mapped to different seeds — refuses outright: this is the
+    one guard standing between a naive relaunch and silently overwriting a
+    shard that already succeeded, since `harness.shard_paths()` keys that
+    shard's entire on-disk home on the id string alone. `epochs` and
+    `accelerator` are last-write-wins — they describe the campaign, not any
+    one shard's identity, and `merge()`'s own `identicalAcrossShards` check
+    is what actually holds `epochs` to account, against the stamps
+    themselves rather than against intent.
+    """
+    path = plan_path(root)
+    existing = read_plan(root) or {}
+    existing_shards = {entry["id"]: entry for entry in existing.get("shards", [])}
+
+    for entry in record.get("shards", []):
+        prior = existing_shards.get(entry["id"])
+        if prior is not None and list(prior["seeds"]) != list(entry["seeds"]):
+            raise PlanConflict(
+                f"refusing to record shard {entry['id']!r} under seeds "
+                f"{list(entry['seeds'])!r}: already recorded under "
+                f"{list(prior['seeds'])!r}.\n"
+                f"  {entry['id']!r} may already hold a succeeded shard on disk; "
+                "relaunching it under a different seed list would silently "
+                "overwrite that directory. Relaunch the recorded id under its "
+                "own seeds, or mint a genuinely new id for the new seeds."
+            )
+        existing_shards[entry["id"]] = entry
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "shards": list(existing_shards.values()),
+        "epochs": record.get("epochs", existing.get("epochs")),
+        "accelerator": record.get("accelerator", existing.get("accelerator")),
+        "writtenAt": datetime.now(timezone.utc).isoformat(),
+    }, indent=2), encoding="utf-8")
+    return path
 
 
 def partition(dimensions: dict, dist: dict) -> tuple[list[str], list[str], list[str]]:
