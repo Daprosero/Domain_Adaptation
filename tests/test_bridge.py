@@ -274,6 +274,66 @@ def test_the_summary_declares_itself_plumbing_not_a_result() -> None:
     assert "run_smoke" in summary["provenance"] or "smoke" in summary["provenance"].lower()
 
 
+def test_smoke_shards_get_the_smoke_note_byte_identical_and_kind_smokemerge() -> None:
+    """`PROVENANCE_NOTE` must be reused verbatim for shards that actually
+    are smoke shards -- nothing about the classification may reword the
+    note this codebase already ships for the case it was written for."""
+    found = [_shard("a", 0, 0.5, 0.8, epochs=2)]
+    summary, _ = bridge.build_summary(found)
+
+    assert summary["kind"] == "smokeMerge"
+    assert summary["provenance"] == bridge.PROVENANCE_NOTE
+
+
+def test_full_campaign_shards_get_the_honest_full_campaign_note() -> None:
+    """`distribute.py::run_shard` only ever calls `harness.campaign()` at
+    `FULL_EPOCHS` -- a shard set agreeing on `epochs=20` (the only mixed
+    case `identicalAcrossShards` structurally forbids is smoke-vs-full) must
+    read as a full-campaign merge, with a note describing what actually
+    ran, not the smoke note's now-false claim about a skipped search."""
+    ceilings = {"creda": 0.42, "milcreda": 0.37}
+    assert ceilings != bridge.harness.SMOKE_CEILINGS
+    found = [
+        _rung_shard("a", 0, 0.4, 0.8, epochs=20, ceilings=ceilings),
+        _rung_shard("b", 1, 0.6, 0.6, epochs=20, ceilings=ceilings),
+    ]
+    summary, _ = bridge.build_summary(found)
+
+    assert summary["kind"] == "campaignMerge"
+    note = summary["provenance"]
+    assert note != bridge.PROVENANCE_NOTE
+    assert "full campaigns" in note
+    assert "FULL_EPOCHS" in note
+    assert "not smoke rehearsals" in note
+    assert "Arms: F, G" in note
+    assert "transfers: M->U" in note
+    assert "epochs per shard: 20" in note
+    assert "ceiling search: present" in note
+    assert "seeds: 2" in note
+    assert "not been promoted, scale-checked, or certified" in note
+    assert "MIL-CREDA/Results/Benchmark/" in note
+
+
+def test_full_campaign_note_says_ceiling_search_absent_when_ceilings_are_the_smoke_default() -> None:
+    """The ceiling-search field is read from the shard's own stamp, not
+    inferred from `epochs` alone: a full-epoch shard that never actually
+    ran a search (still carrying the declared neutral) must say so."""
+    found = [
+        _rung_shard("a", 0, 0.4, 0.8, epochs=20, ceilings=dict(bridge.harness.SMOKE_CEILINGS)),
+    ]
+    summary, _ = bridge.build_summary(found)
+
+    assert "ceiling search: absent" in summary["provenance"]
+
+
+def test_full_campaign_note_never_claims_self_certification() -> None:
+    found = [_rung_shard("a", 0, 0.4, 0.8, epochs=20, ceilings={"creda": 0.9, "milcreda": 0.9})]
+    summary, _ = bridge.build_summary(found)
+
+    assert "not been promoted" in summary["provenance"]
+    assert "no scientific claim beyond what is stated here" in summary["provenance"]
+
+
 # -------------------------------------------------------------------------- write
 
 def test_write_scratch_writes_summary_runs_and_a_readable_provenance_marker(
@@ -286,6 +346,19 @@ def test_write_scratch_writes_summary_runs_and_a_readable_provenance_marker(
     lines = written["runs"].read_text().splitlines()
     assert len(lines) == len(runs)
     assert "PLUMBING" in written["provenance"].read_text().upper()
+
+
+def test_write_scratch_provenance_file_matches_a_full_campaign_summary_too(tmp_path) -> None:
+    """`write_scratch` must never write `PROVENANCE_NOTE` unconditionally --
+    the marker file has to carry the SAME text `summary["provenance"]` does,
+    whichever branch produced it."""
+    found = [_rung_shard("a", 0, 0.4, 0.8, epochs=20, ceilings={"creda": 0.5, "milcreda": 0.5})]
+    summary, runs = bridge.build_summary(found)
+    written = bridge.write_scratch(summary, runs, root=tmp_path)
+
+    assert summary["kind"] == "campaignMerge"
+    assert written["provenance"].read_text() == summary["provenance"] + "\n"
+    assert "PLUMBING" not in written["provenance"].read_text()
 
 
 def test_the_bridge_refuses_when_no_shards_came_back() -> None:

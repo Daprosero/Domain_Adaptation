@@ -59,6 +59,12 @@ from MIL_CREDA_Benchmark import config, harness, shards, verdict  # noqa: E402
 #: shards on disk, not part of this repository's record.
 SCRATCH = REPOSITORY / ".scratch" / "distributed-smoke-merge"
 
+#: Kept verbatim for a merge of `run_smoke()` shards. Its prohibition is
+#: justified entirely through `run_smoke()` never running a ceiling search —
+#: which is exactly the fact that stops holding for a full-campaign merge
+#: (see `FULL_CAMPAIGN_PROVENANCE` below and `_classify_provenance`). A
+#: structure whose stated reason has expired is corrected, never silently
+#: kept, so this note is never reused for shards it does not describe.
 PROVENANCE_NOTE = (
     "PLUMBING, NOT A RESULT.\n\n"
     "This directory holds the output of tools/bridge.py, merging shards each "
@@ -72,6 +78,64 @@ PROVENANCE_NOTE = (
     "Never copy these files into MIL-CREDA/Results/Benchmark/, and never "
     "quote a number from them as a campaign result."
 )
+
+#: `distribute.py::run_shard` only ever calls `harness.campaign()` at
+#: `FULL_EPOCHS` -- it never calls `run_smoke()` -- so a real distributed
+#: campaign's shards reach this module too, and `PROVENANCE_NOTE` above
+#: would be a factually wrong description of them: it blames a ceiling
+#: search that a full campaign actually ran. This is the honest
+#: replacement, never a silently dropped safety note: the surviving
+#: invariant is that no merge output may be quoted as a campaign result on
+#: the strength of the merge tool alone, and this text says so explicitly.
+#: Exact text specified by this change's spec; do not alter it.
+FULL_CAMPAIGN_PROVENANCE = (
+    "This summary merges {shards_arrived} shards produced by full campaigns "
+    "(`harness.campaign()` at `FULL_EPOCHS`), not smoke rehearsals. Arms: "
+    "{arms}; transfers: {transfers}; epochs per shard: {epochs}; ceiling "
+    "search: {ceiling_search}; seeds: {seed_count}. This merge combines real "
+    "per-machine results but has not been promoted, scale-checked, or "
+    "certified as a canonical benchmark result; it carries no scientific "
+    "claim beyond what is stated here on the strength of the merge tool "
+    "alone. Promotion into `MIL-CREDA/Results/Benchmark/` remains a manual, "
+    "out-of-scope step."
+)
+
+
+def _classify_provenance(
+    *, shards_arrived: int, grid: dict, reduction: dict, stamps: list[dict],
+) -> tuple[str, str]:
+    """`(kind, provenance)` for one merge, derived from the shards actually
+    on hand -- never a caller flag.
+
+    `identicalAcrossShards: ["epochs"]` (`shards.declaration()`) means
+    `shards.merge()` already refused a shard set whose epochs disagree, so
+    every merge that reaches this function agrees on one epoch count: there
+    is no mixed smoke/full case to classify, and this needs no argument
+    naming which one it is. `epochs >= config.FULL_EPOCHS` (20) is a full
+    campaign; `run_smoke()` always runs exactly 2.
+    """
+    epochs = reduction["epochs"]
+    if epochs < config.FULL_EPOCHS:
+        return "smokeMerge", PROVENANCE_NOTE
+
+    arms = sorted({arm for cell in grid.values() for arm in cell})
+    transfers = sorted(grid)
+    # Not part of `identicalAcrossShards`, so read directly off the first
+    # shard's own stamp rather than off `reduction` -- an observed fact
+    # about this merge, not a mechanically-verified agreement the way
+    # `epochs` is.
+    observed_ceilings = dict(stamps[0].get("ceilings") or {})
+    ceiling_search_present = observed_ceilings != dict(harness.SMOKE_CEILINGS)
+
+    provenance = FULL_CAMPAIGN_PROVENANCE.format(
+        shards_arrived=shards_arrived,
+        arms=", ".join(arms),
+        transfers=", ".join(transfers),
+        epochs=epochs,
+        ceiling_search="present" if ceiling_search_present else "absent",
+        seed_count=len(reduction["seeds"]),
+    )
+    return "campaignMerge", provenance
 
 
 def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, list[dict]]:
@@ -121,9 +185,13 @@ def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, li
         for label, cell in grid.items()
     }
 
+    kind, provenance = _classify_provenance(
+        shards_arrived=merged["shardsArrived"], grid=grid, reduction=reduction, stamps=stamps,
+    )
+
     summary = {
-        "kind": "smokeMerge",
-        "provenance": PROVENANCE_NOTE,
+        "kind": kind,
+        "provenance": provenance,
         "shardsArrived": merged["shardsArrived"],
         "shardsExpected": merged["shardsExpected"],
         "missing": merged["missing"],
@@ -167,7 +235,10 @@ def write_scratch(summary: dict, runs: list[dict], root: Path | None = None) -> 
     with runs_path.open("w", encoding="utf-8") as handle:
         for run in runs:
             handle.write(json.dumps(run) + "\n")
-    provenance_path.write_text(PROVENANCE_NOTE + "\n", encoding="utf-8")
+    # The SAME text `summary["provenance"]` carries, never `PROVENANCE_NOTE`
+    # unconditionally -- a full-campaign merge's marker file must read the
+    # honest full-campaign note, not the smoke one.
+    provenance_path.write_text(summary["provenance"] + "\n", encoding="utf-8")
 
     return {"summary": summary_path, "runs": runs_path, "provenance": provenance_path}
 
