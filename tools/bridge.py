@@ -138,30 +138,70 @@ def _classify_provenance(
     return "campaignMerge", provenance
 
 
-def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, list[dict]]:
+def build_summary(found: list[dict], dist: dict | None = None,
+                  plan: dict | None = None) -> tuple[dict, list[dict]]:
     """The campaign()-shaped `summary` and the flat `runs` list beside it.
 
     `dist` defaults to the module's own real `shards.declaration()`; a caller
     may pass a different one (tests do), but the shape this function builds
     stays exactly as data-driven as `shards.merge()` itself is.
 
-    Raises exactly what `shards.merge()` raises — `ShardsDisagree` or
-    `ShardIncomplete` — unweakened: this function reshapes a merge that
-    succeeded, and refuses nothing of its own.
+    `plan` defaults to `None` and this function never reads one from disk —
+    `None` here means exactly what it says, "no plan," never "go find one."
+    A caller that wants the plan `distribute.py plan` actually wrote reads it
+    itself (`bridge()` below does) and passes it in; keeping this function
+    itself pure is what keeps every existing caller's behaviour, plan or no
+    plan, a decision this function's own arguments make and not one this
+    function's own I/O makes for them.
+
+    Raises exactly what `shards.merge()` raises — `ShardsDisagree` — and one
+    thing `shards.merge()` itself never gets the chance to: if EVERY shard
+    handed in is incomplete, this function raises `shards.ShardIncomplete`
+    itself, before indexing a stamp that does not exist, naming every
+    incomplete id and its own missing evidence. A partial batch — some
+    complete, some not — never raises at all: the straggler is filtered out
+    before `merge()` ever sees it, and `merge()` receives and pools only
+    what was actually sealed.
     """
     dist = dist if dist is not None else shards.declaration()
     classified = (list(dist.get("poolable") or []) + list(dist.get("perEnvironment") or [])
                   + list(dist.get("perRun") or []))
+
+    # The shared pre-filter: an unsealed straggler must not abort merging
+    # every shard that DID seal. `merge()` itself still refuses any
+    # incomplete entry it is handed (its own contract, unweakened) — the fix
+    # is in never handing it one, not in loosening what it refuses.
+    complete, incomplete = shards.split_complete(found)
+    if not complete and incomplete:
+        detail = "; ".join(
+            f"{entry['id']!r}: missing {', '.join(entry['missing'])}"
+            for entry in incomplete
+        )
+        raise shards.ShardIncomplete(
+            f"refusing to merge: every shard here is incomplete ({detail}).\n"
+            "  A shard whose run died mid-way is never sealed, and a stamp "
+            "written before evidence stamping existed was never proven "
+            "finished either way. Re-run the shard, or fetch its sealed "
+            "stamp again."
+        )
+
+    # A6: an absent plan is an honest unknown, never a synthesized one.
+    # `merge()` computes `missing = max(0, (expected or len(arrived)) -
+    # len(arrived))`, which collapses to `0` when `expected is None` —
+    # `merge()` may not be edited, so the collapse is blocked here instead:
+    # `shardsExpected`/`missing` are set to `None` directly, never copied
+    # from what `merge()` returned, whenever no plan was recorded.
+    expected = len(plan["shards"]) if plan is not None else None
     # `config.DIMENSIONS` in full, unrestricted: with every dimension now
     # classified into `poolable`, `perEnvironment` or `perRun`, there is no
     # gap left to narrow around. A `dist` that still leaves one out is not
     # papered over here — `shards.merge()`'s own `partition()` refuses it,
     # exactly as it would refuse a shard that disagrees on
     # `identicalAcrossShards` or is not sealed.
-    merged = shards.merge(found, dimensions=config.DIMENSIONS, dist=dist)
+    merged = shards.merge(complete, expected=expected, dimensions=config.DIMENSIONS, dist=dist)
 
     identical = list(dist.get("identicalAcrossShards") or [])
-    stamps = [entry["stamp"] for entry in found]
+    stamps = [entry["stamp"] for entry in complete]
     reduction = {field: stamps[0][field] for field in identical if field in stamps[0]}
     reduction["seeds"] = merged["seeds"]
 
@@ -193,8 +233,10 @@ def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, li
         "kind": kind,
         "provenance": provenance,
         "shardsArrived": merged["shardsArrived"],
-        "shardsExpected": merged["shardsExpected"],
-        "missing": merged["missing"],
+        # `None`, not `merged["shardsExpected"]`/`merged["missing"]`, when no
+        # plan was recorded — see the A6 note above the `expected` line.
+        "shardsExpected": merged["shardsExpected"] if plan is not None else None,
+        "missing": merged["missing"] if plan is not None else None,
         "environments": merged["environments"],
         "reduction": reduction,
         "verdictsMeaningful": merged["verdictsMeaningful"],
@@ -217,8 +259,12 @@ def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, li
         # empty — a smoke run keeps no weights, so there was never a
         # selection to report, empty or otherwise.
         "unclassifiedDimensions": sorted(set(config.DIMENSIONS) - set(classified)),
+        # Which planned ids still need relaunching, and whether the plan
+        # already stands fully satisfied — `None`/`False` unless a plan was
+        # actually recorded (see `shards.relaunch()`'s own docstring).
+        "relaunch": shards.relaunch(plan, complete, incomplete),
     }
-    runs = [run for entry in found for run in entry["runs"]]
+    runs = [run for entry in complete for run in entry["runs"]]
     return summary, runs
 
 
@@ -243,12 +289,23 @@ def write_scratch(summary: dict, runs: list[dict], root: Path | None = None) -> 
     return {"summary": summary_path, "runs": runs_path, "provenance": provenance_path}
 
 
-def bridge(found: list[dict] | None = None, root: Path | None = None) -> dict:
-    """Read what came back, build the report's shape, write it to scratch."""
+def bridge(found: list[dict] | None = None, root: Path | None = None,
+          plan: dict | None = None) -> dict:
+    """Read what came back, build the report's shape, write it to scratch.
+
+    `plan` defaults to `None`, meaning "read whatever `distribute.py plan`
+    actually recorded" — read here, once, and threaded through, rather than
+    inside `build_summary()` itself, which stays pure. `shards.read_plan()`
+    is a read-only lookup: an absent `plan.json` returns `None` and touches
+    nothing on disk, so a caller with no recorded plan pays no I/O cost
+    beyond the one `Path.exists()` check.
+    """
     found = found if found is not None else shards.read_shards()
     if not found:
         raise SystemExit("no shards came back yet; nothing to bridge")
-    summary, runs = build_summary(found)
+    if plan is None:
+        plan = shards.read_plan()
+    summary, runs = build_summary(found, plan=plan)
     return write_scratch(summary, runs, root)
 
 
