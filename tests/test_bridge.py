@@ -71,6 +71,15 @@ def _rung_shard(name, seed, target, source, seconds=10.0, epochs=2, env="e1", **
                      for arm in ("F", "G")]}
 
 
+def _straggler(name, seed, target, source, **stamp):
+    """A shard whose run died mid-way: present, but never sealed — no
+    `evidence` key at all, exactly what a crash before `seal_shard_stamp()`
+    leaves behind."""
+    entry = _rung_shard(name, seed, target, source, **stamp)
+    entry["stamp"] = {k: v for k, v in entry["stamp"].items() if k != "evidence"}
+    return entry
+
+
 # --------------------------------------------------------------- scratch location
 
 def test_the_scratch_location_never_lands_under_a_real_results_directory() -> None:
@@ -345,6 +354,95 @@ def test_full_campaign_note_never_claims_self_certification() -> None:
 
     assert "not been promoted" in summary["provenance"]
     assert "no scientific claim beyond what is stated here" in summary["provenance"]
+
+
+# --------------------------------------------------------------- relaunch wiring
+
+def test_a_straggler_no_longer_aborts_the_batch_and_is_reported_in_relaunch() -> None:
+    """A1: `merge()` must receive only the sealed-complete shards -- the
+    straggler is filtered out before `merge()` ever sees it, so the batch
+    succeeds instead of raising `ShardIncomplete` for everything. Reported,
+    not silently dropped: `summary["relaunch"]["shards"]` names it, with
+    `reason: "incomplete"` and its own missing evidence paths."""
+    plan = {"shards": [{"id": "a", "seeds": [0]}, {"id": "b", "seeds": [1]},
+                       {"id": "c", "seeds": [2]}]}
+    found = [_rung_shard("a", 0, 0.4, 0.8, epochs=20, ceilings={"creda": 0.5, "milcreda": 0.5}),
+             _rung_shard("b", 1, 0.5, 0.7, epochs=20, ceilings={"creda": 0.5, "milcreda": 0.5}),
+             _straggler("c", 2, 0.6, 0.6, epochs=20, ceilings={"creda": 0.5, "milcreda": 0.5})]
+
+    summary, _ = bridge.build_summary(found, plan=plan)
+
+    assert sorted(summary["shardsArrived"]) == ["a", "b"]
+    relaunch_ids = {entry["id"]: entry for entry in summary["relaunch"]["shards"]}
+    assert relaunch_ids["c"]["reason"] == "incomplete"
+    assert relaunch_ids["c"]["seeds"] == [2]
+    assert "evidence.commit" in relaunch_ids["c"]["missing"]
+
+
+def test_all_incomplete_shards_raise_shardincomplete_not_indexerror() -> None:
+    """A11: naming every incomplete id and its missing evidence, raised
+    directly from `build_summary` before it ever indexes `stamps[0]` --
+    which does not exist when every shard here is unsealed."""
+    found = [_straggler("a", 0, 0.4, 0.8, epochs=20),
+             _straggler("b", 1, 0.5, 0.7, epochs=20)]
+
+    with pytest.raises(shards.ShardIncomplete) as raised:
+        bridge.build_summary(found)
+    message = str(raised.value)
+    assert "a" in message and "b" in message
+    assert "evidence.commit" in message
+
+
+def test_an_absent_plan_reports_unknown_never_zero() -> None:
+    """A6: `merge()` collapses `missing` to `0` when `expected is None` --
+    `merge()` may not be edited, so `build_summary` must set
+    `shardsExpected`/`missing` to `None` itself rather than copy `merge()`'s
+    own values through, or the honest "not recorded" becomes a false
+    "nothing missing"."""
+    found = [_shard("a", 0, 0.5, 0.8)]
+    summary, _ = bridge.build_summary(found)
+
+    assert summary["shardsExpected"] is None
+    assert summary["missing"] is None
+    assert summary["relaunch"] == {
+        "planRecorded": False, "complete": None, "unplanned": [], "shards": []}
+
+
+def test_a_recorded_plan_yields_integer_shardsexpected_and_missing() -> None:
+    plan = {"shards": [{"id": "a", "seeds": [0]}, {"id": "b", "seeds": [1]}]}
+    found = [_shard("a", 0, 0.5, 0.8)]
+    summary, _ = bridge.build_summary(found, plan=plan)
+
+    assert summary["shardsExpected"] == 2
+    assert summary["missing"] == 1
+    assert summary["relaunch"]["planRecorded"] is True
+
+
+def test_relaunch_key_carries_verbatim_ids_and_seeds_from_the_plan() -> None:
+    """A7: never re-derived through `shard_seeds()` -- sourced from the
+    plan exactly as recorded."""
+    plan = {"shards": [{"id": "a", "seeds": [0]}, {"id": "s02", "seeds": [12, 13]}]}
+    found = [_shard("a", 0, 0.5, 0.8)]
+    summary, _ = bridge.build_summary(found, plan=plan)
+
+    assert summary["relaunch"]["shards"] == [
+        {"id": "s02", "seeds": [12, 13], "reason": "missing", "missing": []}]
+
+
+def test_bridge_reads_the_plan_from_disk_and_threads_it_through(tmp_path, monkeypatch) -> None:
+    """`bridge()` itself resolves `shards.read_plan()` -- `build_summary()`
+    stays pure and never reads one on its own."""
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    shards.write_plan({"shards": [{"id": "a", "seeds": [0]}, {"id": "b", "seeds": [1]}]})
+
+    found = [_shard("a", 0, 0.5, 0.8)]
+    written = bridge.bridge(found=found, root=tmp_path / "scratch")
+    summary = json.loads(written["summary"].read_text())
+
+    assert summary["shardsExpected"] == 2
+    assert summary["missing"] == 1
+    assert summary["relaunch"]["shards"] == [
+        {"id": "b", "seeds": [1], "reason": "missing", "missing": []}]
 
 
 # -------------------------------------------------------------------------- write
