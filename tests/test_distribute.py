@@ -183,6 +183,22 @@ def test_run_shard_stamps_through_the_same_campaign_no_local_exemption():
     assert "seal_shard_stamp" not in source
 
 
+def test_run_shard_obtains_the_ceilings_before_it_runs_the_campaign():
+    """The same join `run_pilot()`, `run_search()` and `run_campaign_shard()`
+    are already held to: `harness.campaign()` refuses outright without
+    `reduction.ceilings` already populated, and `run_shard()` was copied from
+    `run_campaign_shard()` before that join existed there either.
+
+    Source-only, like its neighbour above: never execute `run_shard()` for
+    real, or this would recreate the exact hermeticity landmine removed
+    elsewhere in this change.
+    """
+    import inspect
+
+    source = inspect.getsource(distribute.run_shard)
+    assert source.index("ceilings_in_force(") < source.index("harness.campaign(")
+
+
 def test_distribute_py_makes_no_direct_service_call_itself():
     """The forge's adapter is the one place allowed to shell out to a
     service or its accounts CLI; this launcher delegates entirely and

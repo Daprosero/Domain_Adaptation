@@ -29,6 +29,7 @@ import argparse
 import importlib.util
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -221,6 +222,7 @@ def run_shard(shard: str, seeds: list[int]) -> dict:
     reduction = harness.Reduction(
         seeds=list(seeds), epochs=config.FULL_EPOCHS,
         device=str(device), environment=harness.environment())
+    reduction = replace(reduction, ceilings=harness.ceilings_in_force(reduction, device))
     return harness.campaign(reduction, device, shard=shard)
 
 
