@@ -242,10 +242,34 @@ def main() -> int:
 
     args = parser.parse_args()
     if args.command == "plan":
-        print(json.dumps(plan(args.shards), indent=2))
+        drawn = plan(args.shards)
+        # Persisted here, in `main()`, never inside `plan()` itself: `plan()`
+        # stays a pure projection so it can be called directly (as the test
+        # suite's own `test_the_plan_says_the_request_is_not_a_guarantee`
+        # does) without dropping a file into a real, tracked results
+        # directory on every call.
+        shards.write_plan(drawn)
+        print(json.dumps(drawn, indent=2))
         return 0
     if args.command == "run":
         seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
+        # Refuse before touching this shard's directory at all: a recorded
+        # id under different seeds is the exact collision that would
+        # silently overwrite a shard that already succeeded, since
+        # `harness.shard_paths()` keys that directory on the id string
+        # alone. A recorded id under the SAME seeds, or an id never
+        # recorded at all, proceeds unchanged.
+        recorded = shards.read_plan()
+        for entry in (recorded.get("shards", []) if recorded is not None else []):
+            if entry["id"] == args.shard and list(entry["seeds"]) != seeds:
+                raise shards.PlanConflict(
+                    f"refusing to run shard {args.shard!r} under seeds {seeds!r}: "
+                    f"already recorded under {list(entry['seeds'])!r}.\n"
+                    f"  {args.shard!r} may already hold a succeeded shard on disk; "
+                    "running it under a different seed list would silently "
+                    "overwrite that directory. Run the recorded id under its own "
+                    "seeds, or choose a different id."
+                )
         run_shard(args.shard, seeds)
         return 0
     found = shards.read_shards()
@@ -255,10 +279,28 @@ def main() -> int:
     # `bridge.py` is what turns `shards.merge()`'s own shape into what
     # `Benchmark_Phase1_Report.ipynb` reads, written to its own scratch
     # location and never into `config.RESULTS` — see its module docstring.
-    written = bridge.bridge(found)
+    # Called in two steps rather than through `bridge.bridge()` so the
+    # in-memory `summary` (and its `relaunch` key) stays available here for
+    # the copy-pasteable hint below; `bridge.bridge()` itself only returns
+    # written file paths.
+    recorded_plan = shards.read_plan()
+    summary, runs = bridge.build_summary(found, plan=recorded_plan)
+    written = bridge.write_scratch(summary, runs)
     print(f"written to {written['summary'].parent}:")
     for name, path in written.items():
         print(f"  {name}: {path.relative_to(REPOSITORY)}")
+
+    # `shards.relaunch()` names which ids and seeds still need launching;
+    # this file is the one that knows what a CLI invocation looks like, so
+    # the hint is built here, from `relaunch["shards"]` alone — never a
+    # command string returned by `shards.py` itself.
+    to_relaunch = (summary.get("relaunch") or {}).get("shards") or []
+    if to_relaunch:
+        print("relaunch:")
+        for entry in to_relaunch:
+            seeds_csv = ",".join(str(seed) for seed in entry["seeds"])
+            print(f"  python tools/distribute.py run --shard {entry['id']} "
+                 f"--seeds {seeds_csv}  # {entry['reason']}")
     return 0
 
 
