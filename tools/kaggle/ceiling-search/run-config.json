@@ -1,10 +1,17 @@
 {
+  "accelerator": {
+    "architectures": [
+      "sm_60",
+      "sm_75"
+    ],
+    "kind": "cuda"
+  },
   "clonePaths": [
     "src/MIL_CREDA_Benchmark",
     "src/CREDA",
     "src/MIL_CREDA"
   ],
-  "commit": "72f8a1750eac92ef20e85ddba98b5bb6cd5deb30",
+  "commit": "05d4b72368f4dc019c7d5522b018a89b0ad17f0b",
   "jobName": "ceiling-search",
   "product": "MIL-CREDA",
   "repo": {
@@ -36,7 +43,7 @@
   "runnerTemplate": [
     {
       "path": "assets/runner_bootstrap.py",
-      "sha256": "22476df65dee9932a3957c765dbd7d06e360ebecb1b8a973b263149575600d7e"
+      "sha256": "406eebcd1268d74c0fa8dcca01ea50171394c6d458df75f9a0d1da8f32e6f83b"
     },
     {
       "path": "assets/runner_invoke.py",
