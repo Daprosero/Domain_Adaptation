@@ -443,13 +443,23 @@ def summarize(runs: list[dict]) -> dict:
             for dimension in config.DIMENSIONS}
 
 
-def ladder_rows(cell: dict, transfer: str) -> list[dict]:
-    """One row per rung and dimension, with the arm on the right as `new`."""
+def ladder_rows(cell: dict, transfer: str, dimensions: dict | None = None) -> list[dict]:
+    """One row per rung and dimension, with the arm on the right as `new`.
+
+    `dimensions` defaults to `config.DIMENSIONS` (every declared dimension) --
+    `campaign()`'s own call below relies on that default, and so does this
+    function's own strictness: a `cell` missing a dimension it was told to
+    read still raises `KeyError`, unweakened. A caller reading a POOLED
+    grid (perRun dimensions like `seconds`/`peakMiB` were never averaged
+    across machines and do not exist there) passes the narrower set it
+    actually has -- see `tools/bridge.py::build_summary`.
+    """
+    dimensions = config.DIMENSIONS if dimensions is None else dimensions
     rows = []
     for left, right, reading in config.LADDER:
         if left not in cell or right not in cell:
             continue
-        for dimension, better in config.DIMENSIONS.items():
+        for dimension, better in dimensions.items():
             rows.append({
                 "dimension": f"{left}->{right} {dimension}",
                 "rung": f"{left}->{right}",

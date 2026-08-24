@@ -54,6 +54,23 @@ def _shard(name, seed, target, source, seconds=10.0, epochs=2, env="e1", **stamp
             "runs": [_run("G", "M->U", seed, env, target, source, seconds)]}
 
 
+def _rung_shard(name, seed, target, source, seconds=10.0, epochs=2, env="e1", **stamp):
+    """Like `_shard`, but with BOTH arms of a real `config.LADDER` rung
+    (`F`->`G`) -- `_shard`'s own single-arm fixture never reaches a rung
+    at all (`ladder_rows` skips a pair unless both sides are present), so
+    it cannot exercise `build_summary`'s own call into `ladder_rows` on
+    the POOLED grid. This is the shape `tests/test_shards.py`'s own
+    `_shard` already uses, for the same reason.
+    """
+    base = {"env": env, "epochs": epochs, "seeds": [seed],
+            "environment": {"device": {"name": "x86_64", "kind": "cpu"}, "torch": "2.10.0"},
+            "evidence": _evidence()}
+    base.update(stamp)
+    return {"shard": name, "stamp": base,
+            "runs": [_run(arm, "M->U", seed, env, target, source, seconds)
+                     for arm in ("F", "G")]}
+
+
 # --------------------------------------------------------------- scratch location
 
 def test_the_scratch_location_never_lands_under_a_real_results_directory() -> None:
@@ -127,6 +144,32 @@ def test_the_real_declaration_now_leaves_nothing_unclassified() -> None:
     assert "peakMiB" not in summary["grid"]["M->U"]["G"]
 
 
+def test_merge_completes_without_keyerror() -> None:
+    """`build_summary`'s own call into `harness.ladder_rows` reads the
+    POOLED grid `shards.merge()` returns -- `perRun` dimensions
+    (`seconds`, `peakMiB`) were never averaged into it and do not exist
+    there, so an unfiltered `ladder_rows(cell, label)` call (every
+    dimension in `config.DIMENSIONS`) used to raise `KeyError: 'seconds'`
+    the instant a real rung (both arms present) reached a `perTransfer`
+    computation -- exactly the shape `distribute.py merge` hits in
+    practice. `_shard`'s own single-arm fixture used elsewhere in this
+    file never reaches a rung at all, which is why this defect passed
+    every OTHER test here; `_rung_shard` is what actually exercises it.
+    """
+    found = [_rung_shard("a", 0, target=0.4, source=0.8),
+             _rung_shard("b", 1, target=0.6, source=0.6)]
+    summary, _ = bridge.build_summary(found)
+
+    per_transfer = summary["perTransfer"]["M->U"]
+    assert per_transfer, "ladder_rows produced no rows for a real F->G rung"
+    assert summary["tally"]["M->U"]
+    # The pooled grid itself must still carry none of the perRun dims --
+    # `ladder_rows` succeeding here is because it was handed the NARROWER
+    # set, not because the pooled grid quietly grew `seconds`/`peakMiB`.
+    cell = summary["grid"]["M->U"]["G"]
+    assert "seconds" not in cell and "peakMiB" not in cell
+
+
 def test_the_bridge_reads_the_distribution_it_is_given_not_a_hardcoded_one() -> None:
     """Data-driven, not a copy of the real declaration re-typed into the
     bridge: a caller-supplied `dist` with a different poolable set changes
@@ -160,6 +203,30 @@ def test_a_dimension_the_given_distribution_leaves_out_still_refuses() -> None:
     with pytest.raises(shards.ShardsDisagree) as raised:
         bridge.build_summary(found, dist=incomplete)
     assert "peakMiB" in str(raised.value)
+
+
+def test_ladder_rows_default_dimensions_unchanged() -> None:
+    """`harness.campaign()`'s own call
+    (`ladder_rows(cell, label)`, two positional arguments, no `dimensions=`
+    at all) must keep reading every dimension in `config.DIMENSIONS` by
+    default -- the new optional parameter is additive, not a change to
+    the single-machine path's own behaviour. A cell genuinely carrying
+    every dimension (one environment's own grid, never the pooled one)
+    still produces one row per rung-dimension pair; a cell missing one
+    still raises `KeyError`, exactly as before this change.
+    """
+    full_cell = {
+        dimension: {"mean": 1.0, "stdev": 0.0, "n": 1}
+        for dimension in bridge.config.DIMENSIONS
+    }
+    rows = bridge.harness.ladder_rows({"F": full_cell, "G": full_cell}, "M->U")
+    assert rows
+    assert {row["metric"] for row in rows} == set(bridge.config.DIMENSIONS)
+
+    redacted_cell = dict(full_cell)
+    redacted_cell.pop("seconds", None)
+    with pytest.raises(KeyError):
+        bridge.harness.ladder_rows({"F": redacted_cell, "G": redacted_cell}, "M->U")
 
 
 def test_the_summary_carries_gridperrun_for_the_report_to_read() -> None:
