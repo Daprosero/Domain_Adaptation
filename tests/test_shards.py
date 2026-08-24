@@ -410,3 +410,65 @@ def test_write_plan_refuses_a_recorded_id_under_different_seeds(tmp_path):
 
     # Refused, so the record itself must be untouched.
     assert shards.read_plan(tmp_path)["shards"] == [{"id": "s00", "seeds": [1, 2, 3]}]
+
+
+# ------------------------------------------------------- relaunch computation
+
+def test_relaunch_names_an_incomplete_shard_with_its_missing_evidence_paths():
+    plan = {"shards": [{"id": "s01", "seeds": [12, 13]}]}
+    incomplete = [{"id": "s01", "missing": ["evidence.commit", "evidence.outputs"]}]
+
+    result = shards.relaunch(plan, complete=[], incomplete=incomplete)
+    assert result["shards"] == [{"id": "s01", "seeds": [12, 13], "reason": "incomplete",
+                                 "missing": ["evidence.commit", "evidence.outputs"]}]
+
+
+def test_relaunch_names_a_never_arrived_shard_as_missing():
+    plan = {"shards": [{"id": "s02", "seeds": [20, 21]}]}
+
+    result = shards.relaunch(plan, complete=[], incomplete=[])
+    assert result["shards"] == [{"id": "s02", "seeds": [20, 21], "reason": "missing",
+                                 "missing": []}]
+
+
+def test_relaunch_entries_copy_id_and_seeds_verbatim_never_re_derived():
+    """A9/A7: the entry's seeds must be sourced from the plan exactly as
+    recorded, never recomputed via `shard_seeds()` over a subset."""
+    plan = {"shards": [{"id": "s02", "seeds": [12, 13]}]}
+    result = shards.relaunch(plan, complete=[], incomplete=[])
+    assert result["shards"][0]["id"] == "s02"
+    assert result["shards"][0]["seeds"] == [12, 13]
+
+
+def test_relaunch_with_no_plan_recorded_is_an_honest_unknown():
+    """Never `True` or `False` — both would claim a fact nobody measured."""
+    result = shards.relaunch(None, complete=[], incomplete=[])
+    assert result == {"planRecorded": False, "complete": None, "unplanned": [], "shards": []}
+
+
+def test_relaunch_reports_an_unplanned_arrived_shard_separately():
+    """A10: an arrived, sealed shard whose id is not in the plan merges
+    normally -- reported under `unplanned`, never as a relaunch entry, and
+    never able to make `complete` false."""
+    plan = {"shards": [{"id": "s00", "seeds": [1, 2, 3]}]}
+    complete = [{"shard": "s00", "stamp": {}, "runs": []},
+               {"shard": "extra", "stamp": {}, "runs": []}]
+
+    result = shards.relaunch(plan, complete=complete, incomplete=[])
+    assert result["unplanned"] == ["extra"]
+    assert result["shards"] == []
+    assert result["complete"] is True
+
+
+def test_relaunch_complete_is_true_only_when_every_planned_id_is_sealed():
+    plan = {"shards": [{"id": "s00", "seeds": [1]}, {"id": "s01", "seeds": [2]}]}
+    complete = [{"shard": "s00", "stamp": {}, "runs": []}]
+
+    partial = shards.relaunch(plan, complete=complete, incomplete=[])
+    assert partial["complete"] is False
+    assert [entry["id"] for entry in partial["shards"]] == ["s01"]
+
+    complete.append({"shard": "s01", "stamp": {}, "runs": []})
+    full = shards.relaunch(plan, complete=complete, incomplete=[])
+    assert full["complete"] is True
+    assert full["shards"] == []
