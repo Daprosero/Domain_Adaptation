@@ -8,6 +8,7 @@ that keep a merge from quietly becoming an average.
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -472,3 +473,67 @@ def test_relaunch_complete_is_true_only_when_every_planned_id_is_sealed():
     full = shards.relaunch(plan, complete=complete, incomplete=[])
     assert full["complete"] is True
     assert full["shards"] == []
+
+
+# -------------------------------------- the load-bearing inversion, both halves
+
+def _digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_write_plan_s_refusal_is_load_bearing_a_bypassed_relaunch_overwrites_s00(
+        tmp_path, monkeypatch):
+    """Both halves, in one box, never against real results and never
+    through `harness.campaign()` itself:
+
+    Half one -- the guard: `s00` already recorded and sealed under seeds
+    `[1, 2, 3]`. A second `write_plan()` mapping `s00` to `[7, 8, 9]` must
+    refuse, naming both seed lists, and leave `s00`'s own files untouched
+    (both digests unchanged).
+
+    Half two -- what the guard is protecting against: a `campaign()`-shaped
+    stand-in (`runs.jsonl` opened `\"w\"`, `shard.json` rewritten -- exactly
+    what `harness.campaign()`'s own docstring says a real run does)
+    executed directly against `harness.shard_paths(\"s00\")`, bypassing the
+    guard entirely. Both digests change. This is what makes half one
+    load-bearing: without this half, a refusal test alone would never show
+    that the fact it refuses to lose was worth losing.
+    """
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+
+    paths = harness.shard_paths("s00")
+    paths["stamp"].parent.mkdir(parents=True, exist_ok=True)
+    sealed_stamp = _shard("s00", "e1", [1, 2, 3])["stamp"]
+    paths["stamp"].write_text(json.dumps(sealed_stamp, indent=2), encoding="utf-8")
+    with paths["runs"].open("w", encoding="utf-8") as handle:
+        for seed in (1, 2, 3):
+            handle.write(json.dumps(_run("G", "M->U", seed, "e1", 0.9, 10.0)) + "\n")
+
+    shards.write_plan({"shards": [{"id": "s00", "seeds": [1, 2, 3]}]})
+
+    stamp_before = _digest(paths["stamp"])
+    runs_before = _digest(paths["runs"])
+
+    # Half one: the guard refuses, and s00's own files are untouched.
+    with pytest.raises(shards.PlanConflict) as raised:
+        shards.write_plan({"shards": [{"id": "s00", "seeds": [7, 8, 9]}]})
+    message = str(raised.value)
+    assert "s00" in message
+    assert "[1, 2, 3]" in message
+    assert "[7, 8, 9]" in message
+    assert _digest(paths["stamp"]) == stamp_before
+    assert _digest(paths["runs"]) == runs_before
+
+    # Half two: what would have happened without the guard. No
+    # `harness.campaign()` call, no training, nothing against Kaggle --
+    # only the two writes its own docstring documents, executed directly
+    # against the SAME paths a naive relaunch over seeds [7, 8, 9] would
+    # resolve to, since `shard_paths()` keys them on the id string alone.
+    with paths["runs"].open("w", encoding="utf-8") as handle:
+        for seed in (7, 8, 9):
+            handle.write(json.dumps(_run("G", "M->U", seed, "e1", 0.1, 99.0)) + "\n")
+    relaunched_stamp = _shard("s00", "e1", [7, 8, 9])["stamp"]
+    paths["stamp"].write_text(json.dumps(relaunched_stamp, indent=2), encoding="utf-8")
+
+    assert _digest(paths["stamp"]) != stamp_before
+    assert _digest(paths["runs"]) != runs_before
