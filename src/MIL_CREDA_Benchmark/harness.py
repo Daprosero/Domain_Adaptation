@@ -798,6 +798,25 @@ def search_ceilings(reduction: Reduction, device: torch.device,
     if measured:
         done = sum(len(cells) for cells in measured.values())
         progress(f"  resuming: {done} cell(s) already measured, skipping them")
+        # A partial is a file on disk; the grid is a line in config.py. Nothing
+        # keeps them in step, so a grid edited after a partial was written left
+        # a bare KeyError at aggregation, hours in. Refuse by name instead,
+        # eagerly, before any family measures another cell.
+        grid_set = set(grid)
+        for family, cells in measured.items():
+            stale = sorted({c for scores in cells.values() for c in scores
+                            if c not in grid_set})
+            if stale:
+                names = ", ".join(f"{c:g}" for c in stale)
+                raise SystemExit(
+                    "refusing to resume a search measured at ceilings the "
+                    "grid no longer has:\n"
+                    f"  {family} measured {names}, and CEILING_GRID is now "
+                    f"{grid}.\n"
+                    f"  Delete {partial} to search again under the current "
+                    f"grid, or restore {names} to config.CEILING_GRID to "
+                    "keep the cells already measured."
+                )
     found: dict[str, dict] = {}
     for family, arm_id in config.SEARCH_ARMS.items():
         # Material outermost, ceilings innermost. Two reasons, and the second is
