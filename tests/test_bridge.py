@@ -326,6 +326,19 @@ def test_full_campaign_note_says_ceiling_search_absent_when_ceilings_are_the_smo
     assert "ceiling search: absent" in summary["provenance"]
 
 
+def test_the_provenance_note_renders_a_count_not_a_list() -> None:
+    """`_classify_provenance`'s `shards_arrived` parameter must receive an
+    integer count, never `merged["shardsArrived"]` itself -- passing the
+    list renders as `"This summary merges ['a', 'b', 'c'] shards"`."""
+    found = [
+        _rung_shard("a", 0, 0.4, 0.8, epochs=20, ceilings={"creda": 0.5, "milcreda": 0.5}),
+        _rung_shard("b", 1, 0.5, 0.7, epochs=20, ceilings={"creda": 0.5, "milcreda": 0.5}),
+        _rung_shard("c", 2, 0.6, 0.6, epochs=20, ceilings={"creda": 0.5, "milcreda": 0.5}),
+    ]
+    summary, _ = bridge.build_summary(found)
+    assert "This summary merges 3 shards" in summary["provenance"]
+
+
 def test_full_campaign_note_never_claims_self_certification() -> None:
     found = [_rung_shard("a", 0, 0.4, 0.8, epochs=20, ceilings={"creda": 0.9, "milcreda": 0.9})]
     summary, _ = bridge.build_summary(found)

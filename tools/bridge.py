@@ -186,7 +186,7 @@ def build_summary(found: list[dict], dist: dict | None = None) -> tuple[dict, li
     }
 
     kind, provenance = _classify_provenance(
-        shards_arrived=merged["shardsArrived"], grid=grid, reduction=reduction, stamps=stamps,
+        shards_arrived=len(merged["shardsArrived"]), grid=grid, reduction=reduction, stamps=stamps,
     )
 
     summary = {
