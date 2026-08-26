@@ -197,6 +197,15 @@ FULL_SEARCH_SEEDS = 3
 #: Filled in at the end of this file, once the paths it reads from exist.
 CEILINGS: dict[str, float] = {}
 
+#: The ceiling of each family on each transfer the search actually measured.
+#: Empty for a transfer the search never saw, and that emptiness is the rule:
+#: `ceiling_for` falls back to `CEILINGS` there, which is the pooled winner of
+#: the searched transfers applied out of sample. Kept apart from `CEILINGS`
+#: rather than folded into it so the two readings stay distinguishable in the
+#: record — a value chosen by looking at that transfer and one inherited from
+#: two others are the same number and not the same evidence.
+CEILINGS_BY_TRANSFER: dict[str, dict[str, float]] = {}
+
 #: Which transfers the search runs on. This is cost and not insulation: the
 #: selection role is what keeps the search away from the verdict's material, so
 #: the search may look at any transfer it likes as long as it looks at validation
@@ -479,7 +488,24 @@ def ceilings_on_record() -> dict[str, float]:
     return {family: entry["ceiling"] for family, entry in found.items()}
 
 
+def ceilings_by_transfer_on_record() -> dict[str, dict[str, float]]:
+    """The per-transfer picks, read from the same record.
+
+    A record written before this key existed simply has none, and that is not an
+    error: an absent mapping makes every transfer fall back to the pooled winner,
+    which is exactly what such a record meant when it was written. Read on every
+    call, for the same reason `ceilings_on_record` is.
+    """
+    if not CEILINGS_RECORD.exists():
+        return {}
+    import json as _json
+    found = _json.loads(CEILINGS_RECORD.read_text(encoding="utf-8"))
+    return {family: dict(entry.get("byTransfer") or {})
+            for family, entry in found.items()}
+
+
 CEILINGS.update(ceilings_on_record())
+CEILINGS_BY_TRANSFER.update(ceilings_by_transfer_on_record())
 
 # All three are ignored by git: this is a preliminary phase for deciding whether
 # the strategy holds, not part of the paper's record.
