@@ -70,6 +70,7 @@ __benchmark__ = {
             # scores and one that wins by a real difference are the same number and
             # not the same evidence.
             "tables.render_ceilings",
+            "tables.render_ceilings_by_transfer",
         ],
         "conclusions": [
             "tables.conclusion",
@@ -81,6 +82,7 @@ __benchmark__ = {
             "tables.conclusion_attention",
             "tables.conclusion_correspondence",
             "tables.conclusion_ceilings",
+            "tables.conclusion_ceilings_by_transfer",
         ],
         # One call that takes a record and returns {label: text}. It exists so the
         # verification can run every conclusion over permuted numbers without
@@ -237,7 +239,12 @@ __benchmark__ = {
     # such dimension as every run's own reading rather than averaging it —
     # see `merge()`'s own docstring for why a mean is not offered here.
     #
-    # `identicalAcrossShards`: only `epochs`. `commit` and `codeDigest` were
+    # `identicalAcrossShards`: `epochs`, `ceilings` and `ceilingsByTransfer`.
+    # The ceilings are here because the search is what most recently changed
+    # them: two shards straddling that search would merge into one table with
+    # adaptation inert on one half and not on the other, and nothing would
+    # object. Both are real flat top-level fields of every stamp, which is the
+    # property the next paragraph is about. `commit` and `codeDigest` were
     # approved alongside it, but neither is a name `shards.disagreements()`
     # can actually check: both live nested at `evidence.commit` /
     # `evidence.codeDigest` on a shard's stamp, and `disagreements()` (the
@@ -275,7 +282,7 @@ __benchmark__ = {
                      "supervised", "adaptationShare", "parameters"],
         "perEnvironment": [],
         "perRun": ["seconds", "peakMiB"],
-        "identicalAcrossShards": ["epochs"],
+        "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer"],
     },
     # Which module carries the runtime, so a reading about this repository's
     # environment is about the module that actually imports it. The same two

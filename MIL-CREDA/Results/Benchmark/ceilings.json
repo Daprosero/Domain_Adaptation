@@ -1,0 +1,148 @@
+{
+  "creda": {
+    "arm": "D",
+    "ceiling": 0.0001,
+    "criterion": "targetAccuracy",
+    "grid": [
+      {
+        "ceiling": 0.0001,
+        "targetAccuracy": 0.8583333333333334,
+        "paired": 0.125,
+        "n": 6
+      },
+      {
+        "ceiling": 0.001,
+        "targetAccuracy": 0.8583333333333334,
+        "paired": 0.125,
+        "n": 6
+      },
+      {
+        "ceiling": 0.01,
+        "targetAccuracy": 0.8583333333333334,
+        "paired": 0.125,
+        "n": 6
+      },
+      {
+        "ceiling": 0.1,
+        "targetAccuracy": 0.5916666666666667,
+        "paired": -0.1416666666666667,
+        "n": 6
+      },
+      {
+        "ceiling": 1.0,
+        "targetAccuracy": 0.5,
+        "paired": -0.2333333333333333,
+        "n": 6
+      }
+    ],
+    "tied": [
+      0.0001,
+      0.001,
+      0.01
+    ],
+    "decidedByTieBreak": true,
+    "tieRule": "smallest ceiling among the tied: the same outcome for less adaptation is the weaker claim",
+    "comparison": "paired within (seed, transfer): every ceiling measured on the same material, so the cell's own difficulty cancels instead of drowning the effect",
+    "perSeedPick": {
+      "0": 0.0001,
+      "1": 0.01,
+      "2": 0.0001
+    },
+    "seedsAgree": false,
+    "role": "valid",
+    "epochs": 20,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "atRequiredScale": true,
+    "requiredScale": {
+      "epochs": 20,
+      "seeds": 3
+    },
+    "transfers": [
+      "M->U",
+      "S->M"
+    ],
+    "neutral": 1.0,
+    "byTransfer": {
+      "M->U": 0.0001,
+      "S->M": 0.0001
+    },
+    "inheritanceRule": "a transfer the search measured runs at its own pick; one it never saw runs at `ceiling`, the pooled winner, applied out of sample",
+    "byTransferSource": "recomputed from the per-cell scores this same search printed, verified against the pooled grid and winner already in this record"
+  },
+  "milcreda": {
+    "arm": "G",
+    "ceiling": 0.01,
+    "criterion": "targetAccuracy",
+    "grid": [
+      {
+        "ceiling": 0.0001,
+        "targetAccuracy": 0.4583333333333333,
+        "paired": -0.04500000000000001,
+        "n": 6
+      },
+      {
+        "ceiling": 0.001,
+        "targetAccuracy": 0.47500000000000003,
+        "paired": -0.02833333333333335,
+        "n": 6
+      },
+      {
+        "ceiling": 0.01,
+        "targetAccuracy": 0.6,
+        "paired": 0.09666666666666666,
+        "n": 6
+      },
+      {
+        "ceiling": 0.1,
+        "targetAccuracy": 0.55,
+        "paired": 0.04666666666666667,
+        "n": 6
+      },
+      {
+        "ceiling": 1.0,
+        "targetAccuracy": 0.43333333333333335,
+        "paired": -0.07000000000000002,
+        "n": 6
+      }
+    ],
+    "tied": [
+      0.01
+    ],
+    "decidedByTieBreak": false,
+    "tieRule": "smallest ceiling among the tied: the same outcome for less adaptation is the weaker claim",
+    "comparison": "paired within (seed, transfer): every ceiling measured on the same material, so the cell's own difficulty cancels instead of drowning the effect",
+    "perSeedPick": {
+      "0": 0.01,
+      "1": 0.01,
+      "2": 0.01
+    },
+    "seedsAgree": true,
+    "role": "valid",
+    "epochs": 20,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "atRequiredScale": true,
+    "requiredScale": {
+      "epochs": 20,
+      "seeds": 3
+    },
+    "transfers": [
+      "M->U",
+      "S->M"
+    ],
+    "neutral": 1.0,
+    "byTransfer": {
+      "M->U": 0.01,
+      "S->M": 0.0001
+    },
+    "inheritanceRule": "a transfer the search measured runs at its own pick; one it never saw runs at `ceiling`, the pooled winner, applied out of sample",
+    "byTransferSource": "recomputed from the per-cell scores this same search printed, verified against the pooled grid and winner already in this record"
+  }
+}

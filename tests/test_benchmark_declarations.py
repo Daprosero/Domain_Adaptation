@@ -49,6 +49,14 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
     stable *on* that machine, which the control disproves) and into
     `perRun` (a value that belongs to one execution and nothing wider).
 
+    `ceilings` and `ceilingsByTransfer` joined `epochs` when the ceiling
+    stopped being one number per family. They are the parameter the search
+    most recently changed, so two shards straddling that search would merge
+    into one table with adaptation inert on one half and not on the other,
+    and nothing would object. Both are flat top-level fields of every stamp
+    (`harness.write_shard_stamp`), which is exactly the property the next
+    paragraph is about.
+
     `commit` and `codeDigest` are not named under `identicalAcrossShards`
     even though they were approved alongside `epochs` — both live at
     `evidence.commit` / `evidence.codeDigest` on a shard's stamp, and
@@ -71,7 +79,7 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
                      "supervised", "adaptationShare", "parameters"],
         "perEnvironment": [],
         "perRun": ["seconds", "peakMiB"],
-        "identicalAcrossShards": ["epochs"],
+        "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer"],
     }
 
 
@@ -1319,3 +1327,190 @@ def test_a_checkout_with_no_git_history_never_produces_a_complete_shard(
     result = shards.completeness(stored, shards.REQUIRED_EVIDENCE)
     assert result["complete"] is False
     assert "evidence.commit" in result["missing"]
+
+
+# ---------------------------------------------------------------------------
+# The ceiling in force on one transfer, which is two readings and not one.
+
+
+def test_a_measured_transfer_keeps_its_own_pick_over_the_pooled_one() -> None:
+    """The whole point of separating the two readings.
+
+    Inverted, this is the failure the change exists to prevent: the pooled
+    winner applied to a transfer the search actually measured and disagreed on.
+    That failure is silent — the run proceeds and prints a number — so the only
+    thing that catches it is asking the resolver directly.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    reduction = harness.Reduction(
+        ceilings={"milcreda": 1e-2},
+        ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
+    )
+    assert harness.ceiling_for(reduction, "milcreda", ("S", "M")) == 1e-4
+    # and the pooled winner still governs everywhere it was never measured
+    assert harness.ceiling_for(reduction, "milcreda", ("M", "U")) == 1e-2
+    assert harness.ceiling_for(reduction, "milcreda", ("U", "S")) == 1e-2
+
+
+def test_a_family_with_no_per_transfer_picks_falls_back_everywhere() -> None:
+    """A record written before the key existed means what it meant then.
+
+    An absent mapping is not a defect to refuse: it is a record whose every
+    transfer ran at the pooled winner, and reading it as anything else would
+    invent a distinction that run never made.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    reduction = harness.Reduction(ceilings={"creda": 1e-4}, ceilingsByTransfer={})
+    for transfer in config.TRANSFERS:
+        assert harness.ceiling_for(reduction, "creda", transfer) == 1e-4
+
+
+def test_a_floor_gets_the_neutral_and_never_a_families_ceiling() -> None:
+    """An arm with no adaptation term has no ceiling to inherit."""
+    from MIL_CREDA_Benchmark import harness
+
+    reduction = harness.Reduction(
+        ceilings={"milcreda": 1e-2},
+        ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
+    )
+    assert harness.ceiling_for(reduction, None, ("S", "M")) == config.RAMP_CEILING
+
+
+def _synthetic_bagset(domain: str) -> object:
+    """A `BagSet` with the shape the harness reads and none of the material.
+
+    Built rather than downloaded so this test stays offline like the rest of the
+    file. Nothing here is trained on: the run is stopped at the moment the
+    ceiling is resolved, which is the only thing being checked.
+    """
+    from MIL_CREDA_Benchmark import bags
+
+    bagcount, per_bag = 12, 2
+    return bags.BagSet(
+        domain=domain,
+        images=torch.zeros(bagcount * per_bag, 3, 32, 32),
+        members=torch.arange(bagcount * per_bag).reshape(bagcount, per_bag),
+        labels=torch.arange(bagcount) % config.CLASSES,
+        train_idx=torch.arange(0, 6),
+        valid_idx=torch.arange(6, 9),
+        eval_idx=torch.arange(9, 12),
+        manifest={},
+    )
+
+
+class _StopAtCeiling(Exception):
+    """Raised from the `ramp` spy so nothing past the lookup ever runs."""
+
+
+def test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given(monkeypatch) -> None:
+    """The resolver reaching the training loop, not merely existing beside it.
+
+    Testing `ceiling_for` alone verifies the lookup and never the wiring, and the
+    wiring is the half that decides what the campaign computes: a `run_one` still
+    holding the old family-only expression would leave every test above green
+    while the two measured transfers ran at the pooled winner.
+
+    So this reads the coefficient out of `ramp` exactly as `run_one` calls it, and
+    stops there. `wiring.build` is stubbed because constructing the real backbone
+    would reach for pretrained weights, and what is being checked is which number
+    arrives at the ramp — not what the model does with it afterwards.
+    """
+    from MIL_CREDA_Benchmark import harness, wiring
+
+    seen: list[float] = []
+
+    def spy(epoch, epochs, family, ceiling):
+        seen.append(ceiling)
+        raise _StopAtCeiling
+
+    monkeypatch.setattr(harness, "ramp", spy)
+    monkeypatch.setattr(wiring, "build", lambda *a, **k: torch.nn.Linear(1, 1))
+
+    reduction = harness.Reduction(
+        epochs=1, seeds=[0],
+        ceilings={"milcreda": 1e-2},
+        ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
+    )
+    material = {"source": _synthetic_bagset("S"), "target": _synthetic_bagset("M")}
+    device = torch.device("cpu")
+
+    for transfer, expected in ((("S", "M"), 1e-4), (("M", "U"), 1e-2)):
+        seen.clear()
+        with pytest.raises(_StopAtCeiling):
+            harness.run_one("G", transfer, 0, reduction, device, material,
+                            role="valid")
+        assert seen == [expected], (transfer, seen)
+
+def test_the_campaign_refuses_when_the_record_has_picks_and_the_run_does_not(
+        tmp_path, monkeypatch) -> None:
+    """The stale-field case, refused by name instead of running the old rule.
+
+    A caller that sets `ceilings=` alone leaves `ceilingsByTransfer` holding
+    whatever `config` was imported with. Every transfer then falls back to the
+    pooled winner and the run looks entirely ordinary, which is why this has to
+    refuse rather than warn.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "milcreda": {"ceiling": 1e-2, "byTransfer": {"S->M": 1e-4}},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+
+    stale = harness.Reduction(ceilings={"milcreda": 1e-2}, ceilingsByTransfer={})
+    with pytest.raises(SystemExit) as raised:
+        harness.campaign(stale, torch.device("cpu"), arms=["G"])
+    assert "per-transfer ceilings left behind" in str(raised.value)
+    assert "milcreda" in str(raised.value)
+
+
+def test_the_ceilings_are_what_has_to_agree_across_shards() -> None:
+    """Both readings, and both reachable by a flat top-level lookup.
+
+    `disagreements()` compares `stamp.get(field)`, so a declared name that is
+    not a flat key on the stamp resolves to `None` on every shard and passes
+    whatever the shards actually did — a guarantee that was never enforced.
+    """
+    declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["identicalAcrossShards"]
+    assert "ceilings" in declared
+    assert "ceilingsByTransfer" in declared
+
+
+def test_the_per_transfer_conclusion_can_come_out_different() -> None:
+    """A conclusion tied to nothing is a conclusion measuring nothing.
+
+    The same reading the report contract applies to every other conclusion: run
+    it over two records that differ in the one fact it is about, and the two
+    texts must differ.
+    """
+    from MIL_CREDA_Benchmark import tables
+
+    transfers = ["M->U", "S->M", "U->S"]
+    agrees = {"f": {"ceiling": 1e-2, "byTransfer": {"M->U": 1e-2, "S->M": 1e-2}}}
+    differs = {"f": {"ceiling": 1e-2, "byTransfer": {"M->U": 1e-2, "S->M": 1e-4}}}
+
+    said_agrees = tables.conclusion_ceilings_by_transfer(agrees, transfers)
+    said_differs = tables.conclusion_ceilings_by_transfer(differs, transfers)
+    assert said_agrees != said_differs
+    assert "S->M" in said_differs and "S->M" not in said_agrees
+
+
+def test_the_per_transfer_table_marks_measured_apart_from_inherited() -> None:
+    """Without the mark all six cells read as if all six had been measured."""
+    from MIL_CREDA_Benchmark import tables
+
+    record = {"f": {"ceiling": 1e-2, "byTransfer": {"S->M": 1e-4}}}
+    rendered = tables.render_ceilings_by_transfer(
+        record, ["M->U", "S->M"], markdown=True)
+    assert "**0.0001**" in rendered          # measured on S->M
+    assert "| 0.01 |" in rendered            # inherited on M->U, unmarked
+
+
+def test_the_per_transfer_ceilings_reach_the_written_report() -> None:
+    """Declared in the contract, so the report is checked against it."""
+    report = MIL_CREDA_Benchmark.__benchmark__["report"]
+    assert "tables.render_ceilings_by_transfer" in report["renderers"]
+    assert "tables.conclusion_ceilings_by_transfer" in report["conclusions"]

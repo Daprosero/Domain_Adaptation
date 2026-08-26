@@ -260,6 +260,16 @@ def objective(key: str, markdown: bool = True) -> str:
             f"confirma la normalización por medición y no por argumento. Lo que "
             f"invalida la elección es una rejilla plana —ahí el ganador lo elige la "
             f"regla de desempate y no el criterio— o semillas que no coinciden.",
+        "ceilings.byTransfer":
+            f"**Buscamos saber cuántas de las {transferencias} transferencias "
+            f"corren a un techo elegido mirándolas.** La búsqueda mide "
+            f"{len(config.SEARCH_TRANSFERS)}; las otras "
+            f"{transferencias - len(config.SEARCH_TRANSFERS)} heredan, y esa "
+            f"herencia es una aplicación fuera de muestra. Lo que hay que ver es "
+            f"si alguna de las medidas se aparta del ganador agrupado: si ninguna "
+            f"lo hace, separar las dos lecturas no cambió nada y la familia sigue "
+            f"corriendo a un coeficiente único; si alguna se aparta, deja de "
+            f"hacerlo y su promedio entre transferencias mezcla dos escalares.",
     }
     texto = metas.get(key)
     if texto is None:
@@ -357,6 +367,98 @@ def conclusion_ceilings(record: dict | None) -> str:
             f"La rejilla no se inclinó para {', '.join(sorted(plano))}: el techo lo "
             f"puso la regla de desempate y no el criterio, así que sostiene menos de "
             f"lo que un número elegido parece sostener.")
+    return " ".join(partes)
+
+
+def render_ceilings_by_transfer(record: dict | None, transfers: list[str],
+                                markdown: bool = False) -> str:
+    """Qué techo rige en cada transferencia, una fila por familia.
+
+    Los brazos no entran: dentro de una familia todos heredan el mismo techo en
+    la misma transferencia, así que una fila por brazo repetiría seis veces la
+    misma medición y daría a entender que son seis decisiones.
+
+    La marca distingue las dos lecturas. Una transferencia que la búsqueda midió
+    corre a su propio ganador; una que nunca vio corre al ganador agrupado, fuera
+    de muestra. Es la diferencia entre un número elegido mirando esa
+    transferencia y uno heredado de otras dos, y sin la marca las seis celdas se
+    leen como si todas se hubieran medido.
+    """
+    if not record:
+        return ("Sin búsqueda de techos: ninguna transferencia tiene techo elegido.")
+    columns = ["Familia", *transfers]
+
+    def cells(entrada: dict) -> list[str]:
+        medidos = entrada.get("byTransfer") or {}
+        out = []
+        for label in transfers:
+            valor = medidos.get(label, entrada["ceiling"])
+            texto = f"{valor:g}"
+            if label in medidos:
+                texto = f"**{texto}**" if markdown else f"[{texto}]"
+            out.append(texto)
+        return out
+
+    if markdown:
+        head = ["| " + " | ".join(columns) + " |",
+                "|" + "|".join(["---"] * len(columns)) + "|"]
+        for familia, entrada in sorted(record.items()):
+            head.append("| " + " | ".join([f"`{familia}`", *cells(entrada)]) + " |")
+        return "\n".join(head)
+
+    width = max(14, max((len(f) for f in record), default=14) + 2)
+    out = [f"{'Familia':<{width}}" + "".join(f"{c:>10}" for c in transfers)]
+    for familia, entrada in sorted(record.items()):
+        out.append(f"{familia:<{width}}"
+                   + "".join(f"{c:>10}" for c in cells(entrada)))
+    return "\n".join(out)
+
+
+def conclusion_ceilings_by_transfer(record: dict | None,
+                                    transfers: list[str]) -> str:
+    """La regla que reparte los techos, y qué transferencias se apartan.
+
+    La regla se escribe porque es una decisión y nadie puede deducirla de la
+    tabla. Lo que la acompaña se calcula: cuántas transferencias se midieron,
+    cuántas heredan, y cuáles de las medidas eligieron algo distinto del ganador
+    agrupado. Esa última es la que importa — si ninguna se aparta, separar las
+    dos lecturas no cambió un solo número y decirlo es más honesto que dejar la
+    marca sugiriendo que sí.
+    """
+    if not record:
+        return "Sin búsqueda: no hay regla que aplicar todavía."
+    regla = ("En las transferencias que la búsqueda midió rige el ganador de esa "
+             "transferencia, por la misma lectura apareada y el mismo desempate. "
+             "En las restantes rige el ganador de las medidas tomadas juntas: es "
+             "una aplicación fuera de muestra y se declara como tal, porque ese "
+             "escalar no se eligió mirándolas.")
+    partes = [regla]
+    for familia, entrada in sorted(record.items()):
+        medidos = entrada.get("byTransfer") or {}
+        if not medidos:
+            partes.append(
+                f"**{familia}**: el registro no trae elecciones por transferencia, "
+                f"así que las {len(transfers)} corren al ganador agrupado "
+                f"({entrada['ceiling']:g}).")
+            continue
+        aparte = sorted(l for l, v in medidos.items() if v != entrada["ceiling"])
+        heredan = len([l for l in transfers if l not in medidos])
+        if aparte:
+            detalle = ", ".join(f"`{l}` a {medidos[l]:g}" for l in aparte)
+            partes.append(
+                f"**{familia}**: {len(medidos)} medida(s), {heredan} heredada(s) a "
+                f"{entrada['ceiling']:g}, y {len(aparte)} de las medidas elige otro "
+                f"techo — {detalle}. Ahí la familia deja de correr a un coeficiente "
+                f"único, así que su promedio entre transferencias mezcla dos "
+                f"escalares; dentro de cada transferencia todos los brazos siguen "
+                f"compartiendo el techo, que es lo que mantiene atribuible cada "
+                f"peldaño.")
+        else:
+            partes.append(
+                f"**{familia}**: {len(medidos)} medida(s) y {heredan} heredada(s), "
+                f"todas en {entrada['ceiling']:g}. Ninguna transferencia medida se "
+                f"aparta del ganador agrupado, así que separar las dos lecturas no "
+                f"cambió ningún techo de esta familia.")
     return " ".join(partes)
 
 

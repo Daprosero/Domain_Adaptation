@@ -258,6 +258,13 @@ class Reduction:
     #: search has run, and then carried beside every number it produced — a
     #: coefficient chosen by measurement is part of the bounds, not a detail.
     ceilings: dict = field(default_factory=lambda: dict(config.CEILINGS))
+    #: The ceiling of each family on each transfer the search actually measured.
+    #: A transfer absent from here inherits `ceilings`, and that fallback is the
+    #: declared rule rather than a default: the four transfers the search never
+    #: saw run at the winner of the two it did, out of sample.
+    ceilingsByTransfer: dict = field(
+        default_factory=lambda: {family: dict(picks) for family, picks
+                                 in config.CEILINGS_BY_TRANSFER.items()})
     ceilingSearch: dict = field(default_factory=dict)
     rampDelta: float = config.RAMP_DELTA
     device: str = "cpu"
@@ -293,6 +300,37 @@ def pool_of(bagset: bags.BagSet, positions: torch.Tensor, device: torch.device) 
         members=bagset.members[positions].to(device),
         labels=bagset.labels[positions].to(device),
     )
+
+
+def transfer_label(transfer: tuple[str, str]) -> str:
+    """The one spelling of a transfer used as a key anywhere.
+
+    Written once because the record, the search's progress lines and the ceiling
+    lookup all have to agree on it. Two of them agreeing and the third not would
+    make a per-transfer ceiling silently fall back to the pooled one, which is
+    the failure that reads as success: the run proceeds and reports a number.
+    """
+    return f"{transfer[0]}->{transfer[1]}"
+
+
+def ceiling_for(reduction: Reduction, family: str | None,
+                transfer: tuple[str, str]) -> float:
+    """The ceiling in force for one family on one transfer.
+
+    Two readings, and which one applies is the rule the report states. On a
+    transfer the search measured, the winner of that transfer. On one it never
+    saw, the winner pooled over the searched transfers — an out-of-sample
+    application, declared as such, because the scalar was not chosen by looking
+    at that transfer.
+
+    A family with no adaptation term has no ceiling and gets the neutral; the
+    coefficient it multiplies is not in its objective at all.
+    """
+    if family is None:
+        return config.RAMP_CEILING
+    pooled = reduction.ceilings.get(family, config.RAMP_CEILING)
+    return (reduction.ceilingsByTransfer.get(family, {})
+            .get(transfer_label(transfer), pooled))
 
 
 def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
@@ -348,9 +386,11 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     model.train()
     for epoch in range(reduction.epochs):
         family = config.ARMS_BY_ID[arm_id]["adaptation"]
-        # The family's ceiling, or the one this call was handed. Never a global:
-        # each family keeps what it searched, and its derivations inherit it.
-        top = (reduction.ceilings.get(family, config.RAMP_CEILING)
+        # The family's ceiling on this transfer, or the one this call was
+        # handed. Never a global: each family keeps what it searched, its
+        # derivations inherit it, and a transfer the search measured keeps its
+        # own pick rather than the pooled one.
+        top = (ceiling_for(reduction, family, transfer)
                if ceiling is None else ceiling)
         coefficient = ramp(epoch, reduction.epochs, family, ceiling=top)
         for group in optimizer.param_groups:
@@ -661,6 +701,8 @@ def write_shard_stamp(shard: str | None, reduction: Reduction) -> Path:
         "epochs": reduction.epochs,
         "revision": reduction.revision,
         "ceilings": dict(reduction.ceilings),
+        "ceilingsByTransfer": {family: dict(picks) for family, picks
+                               in reduction.ceilingsByTransfer.items()},
         "evidence": _evidence(),
     }, indent=2), encoding="utf-8")
     return path
@@ -765,6 +807,22 @@ def ceilings_in_force(reduction: Reduction, device: torch.device,
     return config.ceilings_on_record()
 
 
+def with_ceilings_in_force(reduction: Reduction, device: torch.device,
+                           progress=print, shard: str | None = None) -> Reduction:
+    """`reduction`, rebuilt with both readings of the ceiling from the record.
+
+    The one call a notebook should make. `ceilings_in_force` returns the pooled
+    mapping alone, and a caller that sets only that leaves `ceilingsByTransfer`
+    holding whatever `config` was imported with — empty, if the record did not
+    exist yet. Every transfer would then fall back to the pooled winner, which
+    is the old behaviour arriving silently: the run proceeds, the numbers look
+    ordinary, and the two measured transfers quietly ran at the wrong ceiling.
+    """
+    pooled = ceilings_in_force(reduction, device, progress=progress, shard=shard)
+    return replace(reduction, ceilings=pooled,
+                   ceilingsByTransfer=config.ceilings_by_transfer_on_record())
+
+
 def search_ceilings(reduction: Reduction, device: torch.device,
                     progress=print, shard: str | None = None) -> dict:
     """Each family's ceiling, found on the selection transfers and kept for its
@@ -829,7 +887,7 @@ def search_ceilings(reduction: Reduction, device: torch.device,
             drawn = {code: bags.build(code, config.DATA_CACHE, seed)
                      for code in config.DOMAINS}
             for transfer in config.SEARCH_TRANSFERS:
-                label = f"{transfer[0]}->{transfer[1]}"
+                label = transfer_label(transfer)
                 material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
                 if (seed, label) in measured.get(family, {}):
                     cells[(seed, label)] = measured[family][(seed, label)]
@@ -903,9 +961,31 @@ def search_ceilings(reduction: Reduction, device: torch.device,
                   "paired": sum(s[c] - sum(s.values()) / len(s) for s in of_seed)
                             / len(of_seed)}
                  for c in grid])["ceiling"]
+        # What each transfer would have picked on its own, by the same paired
+        # rule. These govern the two transfers the search measured; the pooled
+        # winner governs the four it never saw. Computed here because the runs
+        # are already done — the two readings cost nothing to separate now and
+        # cannot be recovered from the pooled grid afterwards.
+        by_transfer: dict[str, float] = {}
+        for label in sorted({lab for _, lab in cells}):
+            of_transfer = [scores for (_, lab), scores in cells.items()
+                           if lab == label]
+            by_transfer[label] = pick(
+                [{"ceiling": c,
+                  "paired": sum(s[c] - sum(s.values()) / len(s)
+                                for s in of_transfer) / len(of_transfer)}
+                 for c in grid])["ceiling"]
+
         found[family] = {
             "arm": arm_id,
             "ceiling": best["ceiling"],
+            # The rule, in the record rather than only in the report: a reader
+            # holding this file alone can tell an inherited ceiling from a
+            # measured one without knowing which transfers were searched.
+            "byTransfer": by_transfer,
+            "inheritanceRule": "a transfer the search measured runs at its own "
+                               "pick; one it never saw runs at `ceiling`, the "
+                               "pooled winner, applied out of sample",
             "criterion": config.SEARCH_CRITERION,
             "grid": rows,
             # How many grid points scored the same. A ceiling chosen between four
@@ -931,7 +1011,7 @@ def search_ceilings(reduction: Reduction, device: torch.device,
                                 and len(reduction.seeds) >= config.FULL_SEARCH_SEEDS),
             "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
                               "seeds": config.FULL_SEARCH_SEEDS},
-            "transfers": [f"{a}->{b}" for a, b in config.SEARCH_TRANSFERS],
+            "transfers": [transfer_label(t) for t in config.SEARCH_TRANSFERS],
             # The neutral it is read against, so a searched value that lands on it
             # confirms the normalization by measurement rather than by argument.
             "neutral": config.RAMP_CEILING,
@@ -970,6 +1050,25 @@ def campaign(reduction: Reduction, device: torch.device,
             f"{config.SEARCH_EPOCHS} epochs, before any campaign.\n"
             "  Run `harness.search_ceilings(...)` and load its record, or pass "
             "`ceilings=` explicitly."
+        )
+
+    # The record has per-transfer picks and this `Reduction` does not. That is
+    # not a difference of opinion, it is a stale field: `config` was imported
+    # before the record existed, so the default was empty and a caller set only
+    # `ceilings`. Running anyway would apply the pooled winner to the two
+    # transfers the search measured — the old rule, arriving with no sign that
+    # anything was skipped. Refuse by name instead.
+    on_record = config.ceilings_by_transfer_on_record()
+    missing = sorted(family for family, picks in on_record.items()
+                     if picks and not reduction.ceilingsByTransfer.get(family))
+    if missing:
+        raise SystemExit(
+            "refusing to run with the per-transfer ceilings left behind:\n"
+            f"  the record has picks for {', '.join(missing)} and this run "
+            "carries none, so every transfer would fall back to the pooled "
+            "winner.\n"
+            "  Build the reduction with `harness.with_ceilings_in_force(...)` "
+            "rather than setting `ceilings=` alone."
         )
     # And not a ceiling searched below the scale its answer needs. Missing is the
     # obvious failure; this is the quiet one — someone lowers the search to test
@@ -1105,7 +1204,7 @@ def run_pilot(epochs: int = config.EPOCHS, seeds: list[int] | None = None) -> di
     reduction = Reduction(
         seeds=list(seeds) if seeds is not None else list(config.SEEDS),
         epochs=epochs, device=str(device), environment=environment())
-    reduction = replace(reduction, ceilings=ceilings_in_force(reduction, device))
+    reduction = with_ceilings_in_force(reduction, device)
     return campaign(reduction, device)
 
 
@@ -1199,8 +1298,7 @@ def run_campaign_shard(shard: str | None = None,
     reduction = Reduction(
         seeds=list(seeds) if seeds is not None else list(config.FULL_SEEDS),
         epochs=config.FULL_EPOCHS, device=str(device), environment=environment())
-    reduction = replace(reduction, ceilings=ceilings_in_force(reduction, device,
-                                                              shard=shard))
+    reduction = with_ceilings_in_force(reduction, device, shard=shard)
     return campaign(reduction, device, shard=shard)
 
 
