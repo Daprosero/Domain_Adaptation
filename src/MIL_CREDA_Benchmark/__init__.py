@@ -352,8 +352,19 @@ __levels__: list = ["none", "pilot", "remote"]
 # una aprobación humana por envío. Un paso local que lo corriera sería
 # exactamente la vuelta que esa aprobación existe para impedir.
 __steps__: dict = {
-    "verification": {"module": "MIL_CREDA_Benchmark.steps", "function": "verificacion"},
-    "search": {"module": "MIL_CREDA_Benchmark.steps", "function": "busqueda"},
-    "report": {"module": "MIL_CREDA_Benchmark.steps", "function": "informe"},
-    "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente"},
+    "verification": {"module": "MIL_CREDA_Benchmark.steps", "function": "verificacion",
+                     "advances": 1},
+    "search-pilot": {"module": "MIL_CREDA_Benchmark.steps",
+                     "function": "ensayo_de_busqueda",
+                     "advances": 2},
+    "campaign-local": {"module": "MIL_CREDA_Benchmark.steps",
+                       "function": "campana",
+                     "advances": 4},
+    "search-report": {"module": "MIL_CREDA_Benchmark.steps",
+                      "function": "informe_de_busqueda",
+                     "advances": 3},
+    "report": {"module": "MIL_CREDA_Benchmark.steps", "function": "informe",
+                     "advances": 5},
+    "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente",
+                     "advances": 6},
 }

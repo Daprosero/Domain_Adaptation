@@ -50,8 +50,63 @@ def verificacion() -> str:
     return _ejecutar("verification.ipynb")
 
 
-def busqueda() -> str:
-    """La búsqueda de techos, con su propio registro."""
+def ensayo_de_busqueda() -> dict:
+    """Corre la búsqueda de techos a escala de ensayo y devuelve su registro.
+
+    `pilot=True` y sin manera de pedir otra cosa. La búsqueda a escala completa
+    es una decisión con su propia autorización, y un paso local que aceptara un
+    argumento para elegirla dejaría esa decisión en manos de quien escribe la
+    invocación. Escribe `ceilings.pilot.json`, que el registro completo siempre
+    le gana cuando existe.
+
+    Existe porque no existía: la única forma de correr esta búsqueda era un
+    `python -c` a mano contra `harness`, por fuera de la skill y sin dejar
+    rastro en el ledger. Un paso que falta no es disciplina que falta.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    return harness.run_search(pilot=True)
+
+
+def campana() -> dict:
+    """Corre la campaña en esta máquina, a la escala que declara `config`.
+
+    Arma la reducción igual que el cuaderno de campaña -- dispositivo,
+    ambiente, y los techos vigentes -- y llama a `harness.campaign()`. Lo que
+    la vuelve un ensayo no es un parámetro de acá sino `config`: las épocas y
+    las semillas que el repositorio declara. Este paso no las elige, y por eso
+    no toma argumentos.
+
+    No hay que ordenar nada acá: `campaign()` se niega sola sin un registro de
+    techos buscado, así que la búsqueda va antes por construcción y no por
+    convención.
+
+    Esto NO envía nada al servicio remoto. `Benchmark_Campaign_v1.ipynb` sigue
+    fuera de `__steps__` por eso mismo: un envío necesita una aprobación humana
+    por lanzamiento, y ningún paso local puede dársela.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    dispositivo = harness.resolve_device()
+    reduccion = harness.Reduction(device=str(dispositivo),
+                                  environment=harness.environment())
+    reduccion = harness.with_ceilings_in_force(reduccion, dispositivo)
+    return harness.campaign(reduccion, dispositivo)
+
+
+def informe_de_busqueda() -> str:
+    """El INFORME de la búsqueda de techos, no la búsqueda.
+
+    El cuaderno lee un registro que ya existe (`harness.search_record()`) y lo
+    presenta; la llamada que corre la búsqueda está comentada adentro, a
+    propósito -- un cuaderno de informe que además ejecutara horas de cómputo
+    haría que abrirlo cueste lo que cuesta correrlo.
+
+    El nombre dice cuál de las dos cosas es. La primera versión de esta función
+    se llamaba `busqueda` y prometía en su docstring "la búsqueda de techos",
+    que es exactamente lo que NO hace: un lector la habría llamado esperando un
+    registro nuevo y habría recibido el viejo, presentado.
+    """
     return _ejecutar("Benchmark_Search_v1.ipynb")
 
 
