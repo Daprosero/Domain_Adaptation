@@ -222,6 +222,32 @@ already existed: they are two halves of one contract and they live in one. -->
 - [ ] The full grid — 30 seeds, 20 epochs — is not launched without an explicit authorization. Neither a clean verification nor a green pilot is permission.
 - [ ] While the run stands at pilot scale, its numbers are not quoted as results: not in the report, not in the summary, not in conversation.
 
+
+## The trials search
+
+Agreed 2026-08-26/27, while replacing the grid engine. Every item here is
+carried by code and by a test that dies when the code is mutated, except the one
+marked open, which is open because the run has not happened.
+
+- [x] The search measures **every one of the six transfers**. Nothing inherits: the pooled fallback in `ceiling_for` is no longer reachable. The grid measured two and four inherited out of sample, and both of `MIL-CREDA`'s significant losses fell on inherited transfers.
+- [x] Searching transfers the verdict also judges leaks nothing. What keeps the material disjoint is the **role** — the search reads `valid`, the verdict reads `eval` — and that holds identically on all six. `search_ceilings`' docstring claimed the transfer split did that work; it was false as configured and is corrected.
+- [x] Only the **full arms** are searched, `D` and `G`. The ceiling is per family and per transfer, **never per arm**: `ceiling_for(reduction, family, transfer)` takes no arm, so a per-arm ceiling is not expressible. If it were, the term and the coefficient could not be told apart.
+- [x] The **growth rate is still not searched**, and the reason is new: the two families' objectives already sit an order of magnitude apart in `adaptationShare`, so a second free dimension amplifies that imbalance rather than resolving it. Ceiling and growth rate are also confounded — a high ceiling reached slowly and a low one reached fast give similar trajectories.
+- [x] **One seed per trial, declared.** Two trials on different seeds would measure the ceiling and the draw at once. The material is drawn once per family and every trial of a transfer runs on it.
+- [x] **A sampler seed per study**, derived from `(family, transfer)` with CRC32. Sharing one seed made all twelve studies visit the same four ceilings, and with a wide plateau the winner is the smallest *visited* point — so the record showed an agreement across transfers that was an artifact of the seed. Found by the local pilot, not by reading.
+- [x] **The plateau is the instrument's resolution**, `1/VALID_BAGS`, and not the GP's own noise estimate. Two ceilings that differ by less than one bag are not distinguishable by the measurement, whatever the model thinks; using a fitted quantity would make the plateau's width depend on how well the model fitted.
+- [x] **Within the plateau the smallest ceiling wins** — the same rule the tie-break had, and the same reason: the same outcome for less adaptation is the weaker claim.
+- [x] The **grid engine stays reachable** by configuration. It wrote the record that governs the campaign of 1800 runs, and an engine that can no longer be run is a record that can no longer be reproduced.
+- [x] The **pilot search writes its own record** and the full record always outranks it. With one file, a rehearsal's answer would have been consumed by a full campaign without a word.
+- [ ] **The trials search has not run at full scale.** The ceilings governing the campaign come from the grid search, so `probe` reports `search-first` and it is right: the current declaration has no record yet. No new campaign is launched from this declaration until it does.
+
+## Reading the campaign
+
+- [x] The gains table is **paired within each transfer**, against each method's own floor, and reports four things because no single one of them is honest alone: the mean in points with its **between-transfer** error, the mean of the percentages, the span, and the agreement in words. The two means can disagree in sign on the same data — `+0.56` and `-3.61` — because the floors run from 23% to 81%.
+- [x] The error of that mean is **between transfers, not over the pooled pairs**. A transfer is a setting and not a repetition; pooling claimed a stability across settings nobody measured, and understated the uncertainty by a factor of three.
+- [x] **Phase two rests on 3 repetitions, not 30.** `CHECKPOINTS` keeps three per cell, so every latent claim sits on the verdict floor by construction, however long phase one ran.
+- [x] Promotion never moves an arm's own median. Seeds added to keep a floor comparison possible, or to let a figure draw, are kept in separate fields and **never enter a marginal average**: a floor's extras were chosen by the dependent arms' orderings, so they are a biased sample of that floor.
+
 ## Reversed
 
 What was agreed and later changed, and what replaced it. Written rather than deleted: an agreement that was turned over is part of the record, and removing it would lose exactly what this file exists to keep. No bullets, because the parser counts items and this is not one.
@@ -231,3 +257,19 @@ What was agreed and later changed, and what replaced it. Written rather than del
 **"The sweep is a sensitivity reading and not a selection, because there is no validation role."** Both halves changed. It is a selection now, and there is a validation role: it was carved, funded with new material so evaluation lost nothing.
 
 **"The report says CREDA runs at the shared ceiling and not at its published 1e-4."** There is no shared ceiling any more. What the report has to say now is which ceiling each family found, on which role, over how many repetitions, and whether the seeds agreed.
+
+**"No adaptive sampling. With 20 points the exhaustive grid is affordable and gives strictly more evidence: pruning biases against slow deltas, and sparse sampling destroys the tie structure, which here is a finding."** Reversed on 2026-08-27 for Optuna with `GPSampler`, 30 trials per `(family, transfer)` over a continuous range. Two halves of the old reason, and they did not fare the same. *Pruning biases against slow deltas* does not apply: nothing is pruned, every trial runs to its full epoch count. *Sparse sampling destroys the tie structure* was right, and the structure is not recovered — over a continuous range two evaluations never land on the same ceiling, so `tied` and `seedsAgree` cannot exist. What replaces them is the **plateau**: how many visited ceilings the criterion cannot tell apart. It carries the same finding — a wide plateau means the rule chose and not the criterion, which is what exposed CREDA's ceiling — but it is a different measurement and not a stronger one. The claim that the grid gives *strictly more evidence* was not tested before reversing it, and this file should say so rather than imply the trade was proven.
+
+This reversal was made **without reading this file**, which is the failure the file exists to prevent. It is recorded here rather than quietly folded into the section above.
+
+<!-- position revision=research-concept-r17.md sha256=92519350fabdfedc134b6a683a8855fff4a65443a792502c2d851a1590219280 derivedAt=2026-08-28T05:15:47Z session=shard-cleanup target=pilot -->
+- [ ] 1. The invariants hold against the tree as it stands: the suite is green and the verification notebook ran against this exact source. Two-state on purpose -- it runs here and nowhere else, and giving it a rung would be the position asserting a state it does not have. Nothing below is worth reading until this is ticked: every later step measures something, and a broken tree makes every measurement a description of the break. `@notebook Notebooks/verification.ipynb`
+- [ ] 2. A ceiling record exists at the scale the search declares for itself. Below that scale the search is a rehearsal: the ramp saturates by the second epoch, every ceiling is reached almost at once, and no value it chose is quotable. This is two-state because the record either meets its own declared scale or it does not. `@record`
+- [ ] 3. The search's own report is current against this source, so what it says about how each ceiling was chosen -- by a difference in the criterion, or by the rule inside a plateau -- describes the code that is here. Its rung is the rung of the record behind it: a report is only ever as trustworthy about scale as the record it read. `@notebook:level Notebooks/Benchmark_Search_v1.ipynb`
+- [ ] 4. The campaign ran and left evidence, at whichever rung it reached. Read this one knowing two things it cannot see: a campaign run here at pilot scale leaves no shard at all, so this reads as the floor even when a pilot did run; and an arrived shard says nothing about which search governed it, so a shard from a retired engine still reads as the top rung. Both are gaps in the witness, not in the campaign. `@shard:level s00`
+- [ ] 5. The report is current against this source and reads the merged record rather than a rehearsal's leftovers. This is the step the whole position exists for: a report executed against a pilot record once printed sixty runs beside an eighteen-hundred-run record with every other check green, and the rung is what makes that visible without anyone having to remember to doubt it. `@notebook:level Notebooks/Benchmark_Report_v1.ipynb`
+- [ ] 6. The latent analysis is current and measured the checkpoints the campaign promoted, not an earlier run's. Its own claims rest on three repetitions per cell whatever the campaign ran, because only three are kept -- so its rung describes the record it read, never the power of what it says. `@notebook:level Notebooks/Benchmark_Latent_v1.ipynb`
+<!-- /position -->
+
+
+

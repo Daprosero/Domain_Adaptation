@@ -532,7 +532,7 @@ def _phase_one_run() -> list[dict]:
     It renders nothing and writes no report — only the records the reporting
     notebook reads back from disk.
     """
-    return _notebook_code_cells("Benchmark_Phase1_Run.ipynb")
+    return _notebook_code_cells("Benchmark_Campaign_v1.ipynb")
 
 
 def _phase_one_report() -> list[dict]:
@@ -541,7 +541,7 @@ def _phase_one_report() -> list[dict]:
     It trains and searches nothing; every number in it comes from
     `summary.json`, `runs.jsonl` and the ceiling search's own record.
     """
-    return _notebook_code_cells("Benchmark_Phase1_Report.ipynb")
+    return _notebook_code_cells("Benchmark_Report_v1.ipynb")
 
 
 def test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign() -> None:
@@ -693,25 +693,32 @@ def test_run_search_is_callable_with_json_alone() -> None:
     from MIL_CREDA_Benchmark import harness
 
     parameters = inspect.signature(harness.run_search).parameters
-    assert list(parameters) == ["shard"]
-    assert parameters["shard"].default is None
+    assert "shard" in parameters and parameters["shard"].default is None
+    # La intencion, y no una lista de nombres: cada parametro tiene que ser
+    # JSON-nativo y opcional. Una lista exacta declaraba lo mismo mientras hubo
+    # uno solo, y despues prohibia agregar un segundo que cumple la regla.
+    for name, param in parameters.items():
+        assert param.default is not inspect.Parameter.empty, name
+        assert isinstance(param.default, (str, int, float, bool, type(None))), name
 
 
-def test_run_search_offers_no_scale_dial_because_a_cheap_search_settles_nothing() -> None:
-    """`run_pilot()` takes `epochs` on purpose: a pilot is allowed to be
-    cheap and says so. The search is not, and the asymmetry is the point.
-    `search_ceilings()` overwrites epochs and seeds on its own reduction,
-    so a dial here would be accepted, ignored, and still write its answer
-    to the file the full-scale answer goes to — a knob that only looks like
-    it worked is worse than no knob.
+def test_run_search_offers_no_scale_dial_and_pilot_is_not_one() -> None:
+    """La razon por la que no hay dial es el **destino**, no la escala.
+
+    Un `epochs` suelto seria aceptado, ignorado por `search_ceilings()` y su
+    respuesta escrita igual al archivo donde va la respuesta completa: un
+    knob que solo parece funcionar. `pilot=True` no es ese knob — cambia el
+    archivo. Corre a su propia escala declarada y escribe a
+    `CEILINGS_PILOT_RECORD`, al que el registro completo le gana siempre.
     """
     import inspect
 
-    from MIL_CREDA_Benchmark import harness
+    from MIL_CREDA_Benchmark import config, harness
 
     assert "epochs" not in inspect.signature(harness.run_search).parameters
     assert "seeds" not in inspect.signature(harness.run_search).parameters
     assert "epochs" in inspect.signature(harness.run_pilot).parameters
+    assert config.CEILINGS_PILOT_RECORD != config.CEILINGS_RECORD
 
 
 def test_run_search_runs_at_the_declared_scale_and_never_the_pilots(monkeypatch) -> None:
@@ -725,12 +732,13 @@ def test_run_search_runs_at_the_declared_scale_and_never_the_pilots(monkeypatch)
 
     seen = {}
 
-    def _spy(reduction, device, progress=print, shard=None):
+    def _spy(reduction, device, progress=print, shard=None, pilot=False):
         seen["reduction"] = reduction
+        seen["pilot"] = pilot
         return {}
 
     monkeypatch.setattr(harness, "ceilings_in_force", _spy)
-    monkeypatch.setattr(harness, "search_record", lambda: {"creda": {}})
+    monkeypatch.setattr(harness, "search_record", lambda pilot=False: {"creda": {}})
 
     harness.run_search()
 
@@ -750,7 +758,7 @@ def test_run_search_refuses_to_report_success_with_no_record_on_disk() -> None:
     original_force = harness.ceilings_in_force
     original_record = harness.search_record
     harness.ceilings_in_force = lambda *a, **k: {}
-    harness.search_record = lambda: None
+    harness.search_record = lambda pilot=False: None
     try:
         with pytest.raises(SystemExit) as raised:
             harness.run_search()
@@ -1013,6 +1021,10 @@ def test_a_resumed_ceiling_the_grid_no_longer_has_refuses_by_name(
     used to surface as a bare `KeyError` at aggregation, hours in. It has to
     refuse by name instead, before anything else measures.
     """
+    # Este test es del motor de rejilla, que sigue existiendo pero ya no es
+    # el que `search_ceilings` despacha por defecto. Fijarlo acá dice qué
+    # se está probando; sin esto el test pasaba a medir Optuna sin decirlo.
+    monkeypatch.setattr(config, "SEARCH_ENGINE", "grid")
     from MIL_CREDA_Benchmark import harness
 
     monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
@@ -1038,6 +1050,10 @@ def test_the_stale_resume_refuses_before_it_measures_anything(
     """Eagerness is the point: a stale key must refuse before a single
     further cell trains, not once some other family's grid has already run.
     """
+    # Este test es del motor de rejilla, que sigue existiendo pero ya no es
+    # el que `search_ceilings` despacha por defecto. Fijarlo acá dice qué
+    # se está probando; sin esto el test pasaba a medir Optuna sin decirlo.
+    monkeypatch.setattr(config, "SEARCH_ENGINE", "grid")
     from MIL_CREDA_Benchmark import harness
 
     monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")

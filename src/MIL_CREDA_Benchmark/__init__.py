@@ -40,14 +40,29 @@ __benchmark__ = {
     # on the material the verdict rests on, or by a tie nobody wrote a rule for,
     # is indistinguishable from one that was measured.
     "search": {
-        "what": "the ceiling of the adaptation coefficient, one per family, "
-                "inherited by that family's derivations. The growth rate is not "
-                "searched: it stays at RAMP_DELTA, which is CREDA's own",
-        "requiredScale": {"epochs": 20, "seeds": 3},
+        "what": "the ceiling of the adaptation coefficient, measured on every "
+                "transfer and shared by all arms of that family within a "
+                "transfer -- never per arm, or the term and the coefficient "
+                "could not be told apart. Nothing is inherited: the six are each "
+                "measured, so the pooled fallback is unreachable. The growth "
+                "rate is not searched: it stays at RAMP_DELTA, which is CREDA's "
+                "own, because a second free dimension amplifies the imbalance "
+                "between the two families rather than resolving it, and ceiling "
+                "and growth rate are confounded -- a high ceiling reached slowly "
+                "and a low one reached fast give similar trajectories",
+        "requiredScale": {"epochs": 20, "trials": 30},
         "role": "valid",
-        "tieRule": "the smallest ceiling among the tied: the same outcome for less "
-                   "adaptation is the weaker claim, and a search should not hand a "
-                   "term more weight than the measurement asked for",
+        # Reemplaza al desempate, que sobre un rango continuo no se activaria
+        # nunca: dos evaluaciones no dan el mismo numero, asi que el ganador lo
+        # pondria el ultimo decimal. La meseta la define la resolucion del
+        # instrumento -- una bolsa de las veinte del rol de busqueda.
+        "tieRule": "within the plateau the smallest ceiling wins: the same "
+                   "outcome for less adaptation is the weaker claim, and a "
+                   "search should not hand a term more weight than the "
+                   "measurement asked for. The plateau is what the criterion "
+                   "cannot tell apart -- one bag out of the search role's "
+                   "twenty -- and not an exact tie, which on a continuous range "
+                   "would never occur",
         "record": "Results/Benchmark/ceilings.json",
     },
     # What the protocol assumes about the prediction being measured. These are what
@@ -124,6 +139,12 @@ __benchmark__ = {
         "selections": {
             "SEEDS": "el piloto: un prefijo de FULL_SEEDS, y las dos escalas se "
                      "informan juntas en cada tabla",
+            "PILOT_SEARCH_SEEDS": "la escala del ensayo de la búsqueda: una "
+                                  "semilla, fijada antes de medir nada y sin "
+                                  "mirar ningún resultado. No elige un techo — "
+                                  "escribe a `ceilings.pilot.json`, al que el "
+                                  "registro completo le gana siempre — así que "
+                                  "no hay outcome que pudiera haberla fijado",
             "LATENT_PANELS": "los métodos que alinean, elegidos por lo que computan "
                              "y no por lo que puntúan; los pisos entran por medición",
             "BAG_PANELS": "el peldaño donde vive el término local: piso, sin el "
@@ -208,11 +229,19 @@ __benchmark__ = {
     # runs on one machine, so no rung's subtraction ever crosses a hardware
     # boundary.
     #
-    # The four groups below are not a guess: a replication (`A` on
-    # Trayectoria51, `B` on Daprosero, `C` back on Trayectoria51 as a
-    # same-machine control — one arm, `G`, one transfer, `M->U`, seed 7)
-    # measured all eight of `config.DIMENSIONS` three times and compared the
-    # parsed JSON floats with exact `==`.
+    # The four groups below are not a guess: a replication (`A` on one
+    # machine, `B` on a second, `C` back on the first as a same-machine
+    # control — one arm, `G`, one transfer, `M->U`, seed 7) measured all eight
+    # of `config.DIMENSIONS` three times and compared the parsed JSON floats
+    # with exact `==`.
+    #
+    # Which machines those were is deliberately not written here. What the
+    # replication established is a relation — two runs on one machine, one on
+    # another — and that relation is the whole argument; the identities added
+    # nothing to it. Naming them by hand would also be this comment claiming a
+    # distribution nobody has decided for the current experiment, when the
+    # record of what ran where belongs to whatever actually distributes the
+    # work and not to a paragraph beside the declaration.
     #
     # `poolable`: `sourceAccuracy`, `targetAccuracy`, `contribution`,
     # `supervised`, `adaptationShare` and `parameters` came back bit-identical
@@ -291,4 +320,40 @@ __benchmark__ = {
         "module": "MIL_CREDA_Benchmark.harness",
         "function": "run_pilot",
     },
+}
+
+# La escalera de escalones que un paso de la sección de posición puede
+# alcanzar, en las palabras de este repositorio. Tres, y el primero no es un
+# adorno: `_record_scale_level` usa el escalón más bajo para decir «todavía no
+# corrió nada», y coloca «corrió, pero corto de la escala declarada» un escalón
+# debajo del tope solo si la escalera tiene tres o más. Con dos, «no hay
+# búsqueda» y «la búsqueda corrió en ensayo» caerían en el mismo escalón.
+#
+# `none`   -- no corrió nada. Es un escalón, no la ausencia de uno: «no miramos»
+#             es otra cosa y la forja la reporta aparte, sin medir.
+# `pilot`  -- corrió acá, a escala de ensayo. Prueba que el cable lleva
+#             corriente y no habilita a citar ningún número.
+# `remote` -- corrió a la escala que el protocolo declara. Es el único escalón
+#             cuyos resultados se reportan.
+#
+# El orden es el de la lista y lo compara la forja por posición, sin conocer
+# ninguno de los tres nombres. Una primera pasada apunta a `pilot` y ahí
+# termina; pasar de `pilot` a `remote` es una decisión aparte, con su
+# autorización y su porqué.
+__levels__: list = ["none", "pilot", "remote"]
+
+# Los pasos locales que la forja puede ejecutar sola, en el venv de este
+# repositorio. Literal aparte de `__benchmark__` por la misma razón que
+# `__levels__`: declararlos no vuelve "declarado" un repositorio que todavía no
+# lo está.
+#
+# `Benchmark_Campaign_v1.ipynb` NO está acá, y la ausencia es la decisión: ese
+# cuaderno lanza al servicio remoto, y un lanzamiento remoto no se ejecuta sin
+# una aprobación humana por envío. Un paso local que lo corriera sería
+# exactamente la vuelta que esa aprobación existe para impedir.
+__steps__: dict = {
+    "verification": {"module": "MIL_CREDA_Benchmark.steps", "function": "verificacion"},
+    "search": {"module": "MIL_CREDA_Benchmark.steps", "function": "busqueda"},
+    "report": {"module": "MIL_CREDA_Benchmark.steps", "function": "informe"},
+    "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente"},
 }

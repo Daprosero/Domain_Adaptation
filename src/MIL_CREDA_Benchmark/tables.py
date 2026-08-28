@@ -31,11 +31,13 @@ pena decir una vez:
 
 from __future__ import annotations
 
+import collections
+
 import math
 import re
 from typing import Iterable
 
-from MIL_CREDA_Benchmark import config
+from MIL_CREDA_Benchmark import ceiling_record, config
 
 #: Métricas que se informan como porcentaje en lugar de como fracción.
 PERCENT = ("targetAccuracy", "sourceAccuracy")
@@ -61,6 +63,13 @@ DOMAIN_CHANCE = 1.0 / 2
 #: A partir de acá se dice que la atención dejó de repartir. Es un umbral de
 #: lectura, no una medición: va escrito una vez y se lo puede discutir.
 UNIFORM_ATTENTION = 0.99
+
+#: Cuántos puntos porcentuales tienen que separar los dos cambios relativos para
+#: leerlos como distintos. Por debajo de esto las dos distancias se movieron
+#: parejo y lo que cambió fue la escala del espacio, no su geometría. Declarado
+#: acá y no repetido en la conclusión: el objetivo lo anuncia y la conclusión lo
+#: aplica, y si fueran dos números el informe prometería un umbral y usaría otro.
+SCALE_TOLERANCE = 1.0
 
 
 def spread(values: list[float]) -> dict:
@@ -227,15 +236,42 @@ def objective(key: str, markdown: bool = True) -> str:
             "**Buscamos que los dos dominios se mezclen dentro de cada clase y que "
             "las clases sigan separadas entre sí.** Mezclar todo también junta los "
             "dominios, y eso no es alinear sino colapsar.",
+        "gains":
+            f"**Buscamos que la fuente no caiga y que el destino suba**, las dos "
+            f"contra el propio piso del método —el mismo brazo con la adaptación "
+            f"apagada— y dentro de cada transferencia. Es lo que un regularizador "
+            f"tiene que dar: si baja la fuente, lo que hubo no fue adaptación sino "
+            f"un intercambio. **Y buscamos acuerdo antes que magnitud**: las "
+            f"{transferencias} transferencias inclinándose para el mismo lado. "
+            f"Ninguno de los dos promedios decide por sí solo, y por eso van los "
+            f"dos: el de puntos dice cuánto suma en una transferencia típica, el "
+            f"de porcentajes cuánto suma **relativo a la dificultad de cada una** "
+            f"—los pisos van de 23% a 81%— y pueden salir con signos opuestos "
+            f"sobre los mismos datos. Cuando eso pasa, el rango es lo que hay que "
+            f"leer: un `de +15 a -5` dice que el promedio no es la historia.",
         "geometry.ratio":
             "**Buscamos que tienda a cero**, y solo vale si el denominador se "
             "sostiene: por debajo de 1.000 la misma clase está más junta entre "
             "dominios que dos clases distintas dentro de uno, que es lo que se "
             "quiere. Pero una razón también cae si todo colapsa.",
         "geometry.distances":
-            "**Buscamos que la primera caiga y la segunda se sostenga.** Si las dos "
-            "bajan juntas, la razón de arriba mejoró por degeneración; el par es lo "
-            "único que distingue alinear de colapsar.",
+            f"**Buscamos que la primera baje más que la segunda**, y el «más» es "
+            f"lo único que se puede leer: una distancia en un embedding no tiene "
+            f"escala fija, así que ninguno de los dos números significa nada por "
+            f"su valor absoluto ni se compara entre métodos. Las tablas de abajo "
+            f"están en esas unidades sin escala y se leen **contra el piso del "
+            f"propio método, transferencia por transferencia**: `CREDA` y `CREDA*` "
+            f"contra `Baseline`, toda la familia `MIL-` contra `MIL-Baseline`. La "
+            f"conclusión reporta esos dos cambios en porcentaje respecto de ese "
+            f"piso, y llama alineación a que el de la misma clase entre dominios "
+            f"quede **más de {SCALE_TOLERANCE:g} punto porcentual por debajo** del "
+            f"de las clases distintas. Dentro de ese punto las dos se movieron "
+            f"parejo: cambió la escala del espacio y la razón de arriba no tenía "
+            f"por qué moverse. Ojo con lo que esto **no** dice: no pide que la "
+            f"segunda se quede quieta. Puede caer mucho y aun así haber "
+            f"alineación, siempre que la primera caiga más — que la segunda se "
+            f"desplome es un colapso y se cuenta aparte, en la conclusión de la "
+            f"razón.",
         "domainSeparability":
             f"**Buscamos que se acerque a {DOMAIN_CHANCE:.3f}**, que es el azar de "
             f"decidir entre dos dominios. No más bajo: por debajo del azar la regla "
@@ -255,11 +291,17 @@ def objective(key: str, markdown: bool = True) -> str:
             f"cualquier lectura de la masa de arriba queda en duda. Es descriptivo, "
             f"no se disputa, pero condiciona lo anterior.",
         "ceilings":
-            f"**Buscamos que la rejilla se incline**, no un número en particular. "
+            f"**Buscamos que el criterio se incline**, no un número en particular. "
             f"El neutro es {config.RAMP_CEILING:g}: un techo que aterriza ahí "
             f"confirma la normalización por medición y no por argumento. Lo que "
-            f"invalida la elección es una rejilla plana —ahí el ganador lo elige la "
-            f"regla de desempate y no el criterio— o semillas que no coinciden.",
+            f"invalida la elección es que la búsqueda no distinga —ahí el ganador "
+            f"lo pone la regla y no el criterio—, y la tabla lo dice en la columna "
+            f"que corresponda a su motor: una rejilla plana con semillas que no "
+            f"coinciden, o una meseta ancha. **Meseta uno significa que el criterio "
+            f"decidió.** Sobre el rango continuo la meseta la define la resolución "
+            f"del instrumento, {config.SEARCH_RESOLUTION:g}, que es una bolsa de "
+            f"las {config.VALID_BAGS} del rol de búsqueda: dos techos que difieren "
+            f"en menos que eso no son distinguibles por la medición.",
         "ceilings.byTransfer":
             f"**Buscamos saber cuántas de las {transferencias} transferencias "
             f"corren a un techo elegido mirándolas.** La búsqueda mide "
@@ -286,6 +328,14 @@ def render_ceilings(record: dict | None, markdown: bool = False) -> str:
     puntajes idénticos y uno elegido por una diferencia real son el mismo número y
     no la misma evidencia, así que la fila muestra la rejilla y marca cuál ganó.
     """
+    # Dos formas, dos tablas. Una rejilla tiene columnas: los mismos techos en
+    # todas las familias, así que la fila se lee de izquierda a derecha y la
+    # inclinación se ve. Una búsqueda por trials no las tiene — cada familia y
+    # cada transferencia visitaron puntos distintos de un rango continuo — y
+    # forzarla a columnas inventaría un eje compartido que nadie midió.
+    if record and all(ceiling_record.kind_of(e) == ceiling_record.KIND_OPTUNA
+                      for e in record.values()):
+        return _render_ceilings_trials(record, markdown=markdown)
     if not record:
         return ("Sin búsqueda de techos: no hay rejilla que mostrar. La campaña se "
                 "niega a correr hasta que exista.")
@@ -325,8 +375,72 @@ def render_ceilings(record: dict | None, markdown: bool = False) -> str:
     return "\n".join(lines)
 
 
+def _render_ceilings_trials(record: dict, markdown: bool = False) -> str:
+    """La búsqueda por trials, una fila por familia y transferencia.
+
+    Lo que hay que poder leer de un vistazo no es el techo: es **cuán ancha fue
+    la meseta**. Un techo elegido entre uno es una medición; el mismo número
+    elegido entre nueve es la regla hablando, y los dos se imprimen igual si la
+    tabla muestra solo el ganador.
+    """
+    filas = []
+    for familia, entrada in sorted(record.items()):
+        detalle = entrada.get("perTransfer") or {}
+        for etiqueta in sorted(detalle):
+            d = detalle[etiqueta]
+            meseta = d.get("plateau") or []
+            filas.append({
+                "familia": familia, "brazo": entrada.get("arm", "?"),
+                "transferencia": etiqueta,
+                "techo": d.get("ceiling"),
+                "valor": d.get("value"),
+                "mejor": d.get("best"),
+                "meseta": len(meseta),
+                "regla": bool(d.get("decidedByFlatRule")),
+                "trials": d.get("trials"),
+            })
+    if not filas:
+        return "(la búsqueda por trials no dejó detalle por transferencia)"
+
+    columnas = ["Familia", "Brazo", "Transferencia", "Techo", "Criterio",
+                "Meseta", "Trials"]
+
+    def celda(f) -> list[str]:
+        techo = "—" if f["techo"] is None else f"{f['techo']:g}"
+        if f["regla"]:
+            techo = f"**{techo}**" if markdown else f"[{techo}]"
+        valor = "—" if f["valor"] is None else f"{_scaled(f['valor'], 'targetAccuracy'):.1f}"
+        # El ancho de la meseta y no un si/no: «1» dice que el criterio decidio,
+        # y «9» dice cuanto no distinguio, que es informacion que un booleano
+        # tira.
+        return [f"`{f['familia']}`", f"`{f['brazo']}`", f["transferencia"],
+                techo, valor, str(f["meseta"]), str(f["trials"] or "—")]
+
+    if markdown:
+        lineas = ["| " + " | ".join(columnas) + " |",
+                  "|" + "|".join(["---"] * len(columnas)) + "|"]
+        lineas += ["| " + " | ".join(celda(f)) + " |" for f in filas]
+        lineas += ["", "En negrita el techo que puso la regla de meseta y no el "
+                       "criterio. **Meseta** es cuántos techos el ruido estimado no "
+                       "distinguió del mejor: uno significa que el criterio decidió."]
+        return "\n".join(lineas)
+
+    anchos = [max(len(c), *(len(celda(f)[i]) for f in filas)) + 2
+              for i, c in enumerate(columnas)]
+    out = ["".join(c.ljust(w) for c, w in zip(columnas, anchos))]
+    out += ["".join(v.ljust(w) for v, w in zip(celda(f), anchos)) for f in filas]
+    return "\n".join(out)
+
+
 def conclusion_ceilings(record: dict | None) -> str:
-    """Si la rejilla eligió el techo o lo eligió la regla de desempate.
+    """Si el criterio eligió el techo o lo eligió la regla.
+
+    Vale para las dos formas de registro y las dice distinto a propósito. Una
+    rejilla repite semillas y puede informar si coincidieron; una búsqueda por
+    trials no repite nada y en su lugar informa el ruido que el GP estimó, que es
+    lo que hace su papel. Normalizar los dos a un vocabulario común haría que un
+    lector comparara tres repeticiones con treinta evaluaciones de puntos
+    distintos como si fueran la misma cantidad de evidencia.
 
     Calculada y no escrita: es la lectura que decide si el escalar que va a gobernar
     toda la campaña se apoya en una medición o en un criterio de escritorio, y esa
@@ -340,18 +454,37 @@ def conclusion_ceilings(record: dict | None) -> str:
     """
     if not record:
         return "Sin búsqueda: ningún techo está elegido y nada de abajo puede correr."
-    partes = []
+    partes, por_regla = [], []
     for familia, entrada in sorted(record.items()):
-        if "decidedByTieBreak" not in entrada:
+        elec = ceiling_record.choice_of(entrada)
+        rejilla = elec["kind"] == ceiling_record.KIND_GRID
+        if rejilla and "decidedByTieBreak" not in entrada:
             como = "sin que el registro diga cómo se desempató"
-        elif entrada["decidedByTieBreak"]:
-            como = f"por desempate entre {len(entrada['tied'])} techos empatados"
+        elif elec["byRule"]:
+            como = (f"por desempate entre {elec['amongst']} techos empatados" if rejilla
+                    else f"por la regla de meseta, entre {elec['amongst']} techos que "
+                         f"el ruido estimado no distingue")
         else:
             como = "por una diferencia en el criterio"
-        acuerdo = {True: "y las semillas coinciden",
-                   False: "y las semillas **no** coinciden entre sí",
-                   None: "y el registro no dice si las semillas coincidieron",
-                   }[entrada.get("seedsAgree")]
+        if rejilla:
+            evidencia = (f"{elec['count']} repetición(es) de "
+                         f"{entrada.get('epochs', '?')} épocas")
+            acuerdo = {True: " y las semillas coinciden",
+                       False: " y las semillas **no** coinciden entre sí",
+                       None: " y el registro no dice si las semillas coincidieron",
+                       }[elec["agreement"]]
+        else:
+            evidencia = (f"{elec['count']} trial(s) de "
+                         f"{entrada.get('epochs', '?')} épocas")
+            # Nunca «las semillas coinciden»: no hay semillas. Lo que ocupa ese
+            # lugar es la resolución del criterio, y hay que nombrarla por lo que
+            # es. Esta línea decía «el GP estimó un ruido de …» — falso: el ancho
+            # de la meseta sale del instrumento y no del modelo, que fue la
+            # decisión explícita de no hacerlo depender de qué tan bien ajustó.
+            # Una frase que sobrevive al cambio de su propio mecanismo describe
+            # el que ya no está.
+            acuerdo = ("" if elec["noise"] is None
+                       else f" y la resolución del criterio es {elec['noise']:.4g}")
         escala = ("" if entrada.get("atRequiredScale")
                   else ", **por debajo de la escala que su respuesta necesita**")
         neutro = (" — que es el neutro, así que la normalización queda confirmada "
@@ -359,14 +492,16 @@ def conclusion_ceilings(record: dict | None) -> str:
         partes.append(
             f"**{familia}** se queda en {entrada['ceiling']:g}{neutro}, elegido {como} "
             f"sobre el rol `{entrada.get('role', '?')}` con "
-            f"{len(entrada.get('seeds') or [])} repetición(es) de "
-            f"{entrada.get('epochs', '?')} épocas {acuerdo}{escala}.")
-    plano = [f for f, e in record.items() if e.get("decidedByTieBreak")]
-    if plano:
+            f"{evidencia}{acuerdo}{escala}.")
+        if elec["byRule"]:
+            por_regla.append((familia, rejilla))
+    if por_regla:
+        nombres = ", ".join(sorted(f for f, _ in por_regla))
+        cual = ("la rejilla no se inclinó" if all(r for _, r in por_regla)
+                else "la búsqueda no distinguió")
         partes.append(
-            f"La rejilla no se inclinó para {', '.join(sorted(plano))}: el techo lo "
-            f"puso la regla de desempate y no el criterio, así que sostiene menos de "
-            f"lo que un número elegido parece sostener.")
+            f"Para {nombres} {cual}: el techo lo puso la regla y no el criterio, "
+            f"así que sostiene menos de lo que un número elegido parece sostener.")
     return " ".join(partes)
 
 
@@ -802,7 +937,7 @@ def render_readings(readings: Iterable[dict], path: str, title: str,
     readings = list(readings)
     labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
     gathered: dict[tuple[str, str], list[float]] = {}
-    for reading in readings:
+    for reading in _own_medians(readings):
         value = _reach(reading, path)
         if value is not None:
             gathered.setdefault((reading["arm"], reading["transfer"]), []).append(value)
@@ -908,6 +1043,159 @@ def _agreement(differences: list[tuple[str, float]], tolerance: float) -> str:
             f"nada' y estaría tapando que una transferencia sí se movió")
 
 
+def paired_gains(runs: Iterable[dict], dimension: str) -> list[dict]:
+    """Cada método contra su propio piso, apareado dentro de cada transferencia.
+
+    Apareado y no crudo: una transferencia donde todos sacan 0.23 y otra donde
+    todos sacan 0.81 no son comparables sumadas, y la diferencia dentro de cada
+    una cancela esa dificultad. Cada par comparte transferencia **y** semilla, o
+    sea el mismo sorteo y la misma partición.
+
+    Tres resúmenes, y ninguno alcanza solo:
+
+    * `mean` — puntos porcentuales, con su error **entre transferencias**. No es
+      el error de juntar los 180 pares: la transferencia es un escenario y no una
+      repetición, y agruparlos afirma una estabilidad entre escenarios que nadie
+      midió. Sobre esta campaña los dos difieren por un factor de tres.
+    * `pct` — la media de las ganancias relativas. Dice otra cosa y puede decirla
+      con el signo contrario: los pisos van de 23% a 81%, así que una pérdida de
+      cinco puntos sobre el piso más bajo pesa cuatro veces más como razón que
+      como diferencia. Sobre esta campaña la media de puntos da `+0.56` y la de
+      porcentajes `-3.61`. Se reportan las dos porque elegir una es elegir una
+      respuesta.
+    * `span` y el acuerdo — de cuánto a cuánto, y en cuántas transferencias gana,
+      pierde o empata. El rango es lo que frena a un lector que solo mira el
+      promedio: `de +15.1 a -5.5` se entiende en una lectura y ya avisa que la
+      media no es la historia.
+    """
+    rows = runs if isinstance(runs, list) else list(runs)
+    idx = {(r["arm"], r["transfer"], r["seed"]): r for r in rows}
+    labels = [f"{a}->{b}" for a, b in config.VERDICT_TRANSFERS]
+
+    out = []
+    for arm, floor in config.FLOOR_OF.items():
+        per: dict[str, dict] = {}
+        for label in labels:
+            deltas, floors = [], []
+            for (a, t, seed), row in idx.items():
+                if a != arm or t != label:
+                    continue
+                base = idx.get((floor, t, seed))
+                if base is None or dimension not in row or dimension not in base:
+                    continue
+                deltas.append(100.0 * (float(row[dimension]) - float(base[dimension])))
+                floors.append(100.0 * float(base[dimension]))
+            if not deltas:
+                continue
+            mean, err = _spread_of(deltas)
+            base_mean = sum(floors) / len(floors)
+            per[label] = {"mean": mean, "error": err, "n": len(deltas),
+                          "pct": (100.0 * mean / base_mean) if base_mean else None,
+                          "verdict": ("gana" if mean > 2 * err else
+                                      "pierde" if mean < -2 * err else "empata")}
+        if not per:
+            continue
+        means = [c["mean"] for c in per.values()]
+        pcts = [c["pct"] for c in per.values() if c["pct"] is not None]
+        counted = collections.Counter(c["verdict"] for c in per.values())
+        out.append({
+            "arm": arm, "floor": floor, "cells": per,
+            "mean": sum(means) / len(means),
+            # Entre transferencias, nunca sobre los pares agrupados.
+            "error": _spread_of(means)[1],
+            "pct": (sum(pcts) / len(pcts)) if pcts else None,
+            "span": (max(means), min(means)),
+            "agreement": {k: counted.get(k, 0) for k in ("gana", "pierde", "empata")},
+            "transfers": len(per),
+        })
+    return out
+
+
+def _spread_of(values: list[float]) -> tuple[float, float]:
+    """Media y error estándar de la media. Con un solo valor el error es cero y
+    se devuelve como tal: es un hecho sobre la muestra, no un veredicto."""
+    n = len(values)
+    mean = sum(values) / n
+    if n < 2:
+        return mean, 0.0
+    var = sum((v - mean) ** 2 for v in values) / (n - 1)
+    return mean, math.sqrt(var) / math.sqrt(n)
+
+
+def render_gains(runs: Iterable[dict], dimension: str, title: str,
+                 markdown: bool = False) -> str:
+    """La tabla de ganancias: cada método menos su propio piso.
+
+    Va después de la tabla de exactitud y no en lugar de ella. Aquella dice
+    dónde está cada método; esta dice qué agregó el término, que es la pregunta
+    que la primera no puede contestar porque los pisos de las dos familias están
+    separados por diecisiete puntos.
+    """
+    rows = paired_gains(runs, dimension)
+    if not rows:
+        return f"(sin pares para {dimension})"
+    labels = [f"{a}->{b}" for a, b in config.VERDICT_TRANSFERS]
+
+    def cell(entry) -> str:
+        if entry is None:
+            return "—"
+        body = f"{entry['mean']:+.2f} ± {entry['error']:.2f}"
+        if entry["verdict"] != "empata":
+            body = f"**{body}**" if markdown else body
+        pct = "" if entry["pct"] is None else f"{entry['pct']:+.1f}%"
+        return f"{body}<br>{pct}" if markdown else f"{body}"
+
+    def summary(row) -> tuple[str, str, str]:
+        pct = "—" if row["pct"] is None else f"{row['pct']:+.2f}%"
+        hi, lo = row["span"]
+        # La misma regla que en las celdas. Poner la media siempre en negrita
+        # contradice la leyenda que las explica: el lector la aplica y lee como
+        # significativo un promedio que no lo es.
+        body = f"{row['mean']:+.2f} ± {row['error']:.2f}"
+        if markdown and abs(row["mean"]) > 2 * row["error"]:
+            body = f"**{body}**"
+        return (body, pct, f"de {hi:+.1f} a {lo:+.1f}")
+
+    def words(row) -> str:
+        ag, n = row["agreement"], row["transfers"]
+        return (f"gana en {ag['gana']} de {n}, pierde en {ag['pierde']}, "
+                f"empata en {ag['empata']}")
+
+    ordered = sorted(rows, key=lambda r: config.ARM_ORDER.index(r["arm"]))
+    if markdown:
+        columns = ["Método vs su piso"] + labels + ["Media (pts)", "% medio",
+                                                    "Rango", "Acuerdo"]
+        lines = [f"**{title}**", "",
+                 "| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for row in ordered:
+            m, pct, span = summary(row)
+            lines.append("| " + " | ".join([
+                f"`{config.NAME_OF[row['arm']]}` vs `{config.NAME_OF[row['floor']]}`",
+                *(cell(row["cells"].get(l)) for l in labels),
+                m, pct, span, words(row)]) + " |")
+        lines += ["", "En negrita lo que supera dos errores estándar. El error de "
+                      "la media es **entre transferencias**, no sobre los pares "
+                      "agrupados: la transferencia es un escenario y no una "
+                      "repetición. Los dos promedios pueden discrepar en el signo "
+                      "— el de puntos y el de porcentajes miden cosas distintas — "
+                      "y por eso van los dos."]
+        return "\n".join(lines)
+
+    width = max(len(f"{config.NAME_OF[r['arm']]} vs {config.NAME_OF[r['floor']]}")
+                for r in ordered) + 2
+    lines = [title, "",
+             f"{'Método vs su piso':<{width}}" + "".join(f"{l:>16}" for l in labels)
+             + f"{'Media':>16}{'% medio':>10}{'Rango':>20}  Acuerdo"]
+    for row in ordered:
+        m, pct, span = summary(row)
+        name = f"{config.NAME_OF[row['arm']]} vs {config.NAME_OF[row['floor']]}"
+        lines.append(f"{name:<{width}}"
+                     + "".join(f"{cell(row['cells'].get(l)):>16}" for l in labels)
+                     + f"{m:>16}{pct:>10}{span:>20}  {words(row)}")
+    return "\n".join(lines)
+
+
 def conclusion_geometry(readings: Iterable[dict]) -> str:
     """Qué dice la grilla, sacado de las mediciones y no de mirarla.
 
@@ -920,7 +1208,7 @@ def conclusion_geometry(readings: Iterable[dict]) -> str:
     si el espacio entero se encogió. Se llama colapso cuando la distancia entre
     clases cayó fuerte **y** la razón no mejoró: ahí lo que se juntó fue todo.
     """
-    readings = list(readings)
+    readings = _own_medians(readings)
     ratio: dict[str, dict[str, float]] = {}
     apart: dict[str, dict[str, float]] = {}
     for reading in readings:
@@ -963,16 +1251,19 @@ def conclusion_geometry(readings: Iterable[dict]) -> str:
     lines.append("Lo que carga peso no es el promedio sino que las transferencias "
                  "coincidan: un método que alinea en una y empeora en otra no está "
                  "diciendo nada todavía.")
-    if len(config.SEEDS) < len(config.FULL_SEEDS):
-        lines.append(f"Piloto de {len(config.SEEDS)} repetición(es): estimación "
-                     f"puntual, todavía no un veredicto.")
+    _pilot_note(lines, readings)
     return "\n".join(lines)
 
 
 def _by_arm(readings: Iterable[dict], path: str) -> dict[str, dict[str, float]]:
-    """{brazo: {transferencia: valor}} promediando los checkpoints de cada celda."""
+    """{brazo: {transferencia: valor}} promediando los checkpoints de cada celda.
+
+    Solo la mediana propia de cada celda. Los extras que una promoción apareada
+    le agrega a un piso los eligió el orden de accuracy de otro brazo, así que
+    promediar la fila del piso sobre ellos no la estima mejor: estima otra cosa.
+    """
     gathered: dict[tuple[str, str], list[float]] = {}
-    for reading in readings:
+    for reading in _own_medians(readings):
         value = _reach(reading, path)
         if value is not None:
             gathered.setdefault((reading["arm"], reading["transfer"]), []).append(value)
@@ -982,9 +1273,55 @@ def _by_arm(readings: Iterable[dict], path: str) -> dict[str, dict[str, float]]:
     return by_arm
 
 
-def _pilot_note(lines: list[str]) -> list[str]:
-    if len(config.SEEDS) < len(config.FULL_SEEDS):
-        lines.append(f"Piloto de {len(config.SEEDS)} repetición(es): estimación "
+def _own_medians(readings: Iterable[dict]) -> list[dict]:
+    """Solo los checkpoints que son la mediana de su propia celda.
+
+    Una promoción apareada agrega a cada piso las semillas que eligieron los
+    brazos que dependen de él, para que la diferencia apareada exista. Esas
+    semillas las eligió el orden de accuracy de **otro** brazo, así que no son una
+    muestra imparcial de las corridas del piso: promediar la fila del piso sobre
+    ellas no la estima mejor, estima otra cosa.
+
+    Un checkpoint sin la marca se conserva. Una corrida de una sola máquina no
+    tiene registro de promoción, y ahí todo lo que hay en disco es la mediana de
+    su celda porque `keep_median()` es lo único que lo escribió.
+    """
+    return [r for r in readings if r.get("median", True)]
+
+
+def _repetitions(readings: Iterable[dict]) -> int:
+    """Cuántas repeticiones sostiene de verdad la tabla que se está sellando.
+
+    Contadas de los datos, nunca de la configuración. `len(config.SEEDS)` es lo
+    que se pidió; esto es lo que llegó, que es la única cifra que un sello puede
+    afirmar. Cuando las celdas no coinciden se reporta el **mínimo**, porque la
+    celda más flaca es la que acota la afirmación.
+    """
+    per_cell: dict[tuple, set] = {}
+    for reading in readings:
+        per_cell.setdefault((reading["arm"], reading["transfer"]), set()).add(
+            reading["seed"])
+    return min((len(seeds) for seeds in per_cell.values()), default=0)
+
+
+def _pilot_note(lines: list[str], readings: Iterable[dict] | None = None,
+                repetitions: int | None = None) -> list[str]:
+    """El sello, cuando la corrida no alcanza la escala que el protocolo declara.
+
+    `readings` o `repetitions`, y ninguno de los dos es opcional en la práctica:
+    llamarlo sin datos no puede contar nada, así que no sella en vez de sellar un
+    número inventado.
+    """
+    if repetitions is None:
+        if readings is None:
+            # No poder contar no es haber contado bien. Un sello ausente se lee
+            # como una corrida a escala completa, que es lo contrario del hecho.
+            lines.append("Escala no verificable: esta conclusión no recibió las "
+                         "mediciones con las que contar repeticiones.")
+            return lines
+        repetitions = _repetitions(_own_medians(readings))
+    if repetitions and repetitions < len(config.FULL_SEEDS):
+        lines.append(f"Piloto de {repetitions} repetición(es): estimación "
                      f"puntual, todavía no un veredicto.")
     return lines
 
@@ -1022,9 +1359,9 @@ def conclusion_distances(readings: Iterable[dict]) -> str:
             continue
         near_avg = 100 * sum(near) / len(near)
         far_avg = 100 * sum(far) / len(far)
-        if near_avg < far_avg - 1.0:
+        if near_avg < far_avg - SCALE_TOLERANCE:
             verdict = "la misma clase se juntó más de lo que se encogió el espacio"
-        elif abs(near_avg - far_avg) <= 1.0:
+        elif abs(near_avg - far_avg) <= SCALE_TOLERANCE:
             verdict = ("las dos se movieron parejo: el espacio cambió de escala y "
                        "la razón no tendría por qué haberse movido")
         else:
@@ -1035,7 +1372,7 @@ def conclusion_distances(readings: Iterable[dict]) -> str:
 
     if not lines:
         return "Ningún método comparte transferencias con su piso: nada que separar."
-    return " ".join(_pilot_note(lines))
+    return " ".join(_pilot_note(lines, readings))
 
 
 def conclusion_separability(readings: Iterable[dict]) -> str:
@@ -1066,7 +1403,7 @@ def conclusion_separability(readings: Iterable[dict]) -> str:
         return "Ningún método comparte transferencias con su piso: nada que aparear."
     lines.insert(0, "Una diferencia negativa es mejor: la regla de dominio quedó "
                     "más cerca del azar que en el mismo método sin adaptación.")
-    return " ".join(_pilot_note(lines))
+    return " ".join(_pilot_note(lines, readings))
 
 
 def conclusion_mass(readings: Iterable[dict]) -> str:
@@ -1096,7 +1433,7 @@ def conclusion_mass(readings: Iterable[dict]) -> str:
     ordered = sorted((a for a in values), key=lambda a: -_mean(values[a]))
     lines.insert(0, f"La masa más alta es la de **{config.NAME_OF[ordered[0]]}**, "
                     f"contra un azar de {chance:.3f}.")
-    return " ".join(_pilot_note(lines))
+    return " ".join(_pilot_note(lines, readings))
 
 
 def _mean(by_transfer: dict) -> float:
@@ -1131,7 +1468,7 @@ def conclusion_attention(readings: Iterable[dict]) -> str:
         lines.append(f"{config.NAME_OF[arm]} {reading}")
     lines.insert(0, "La entropía está normalizada, así que su máximo es uno y ahí "
                     "la atención no estaría haciendo nada. Cómo quedó cada uno:")
-    return " ".join(_pilot_note(lines))
+    return " ".join(_pilot_note(lines, readings))
 
 
 def _computes(arm: str) -> str:
@@ -1207,7 +1544,8 @@ def render_correspondence(scored: Iterable[dict], markdown: bool = False) -> str
     return "\n".join(lines)
 
 
-def conclusion_correspondence(scored: Iterable[dict]) -> str:
+def conclusion_correspondence(scored: Iterable[dict],
+                              readings: Iterable[dict] | None = None) -> str:
     """Qué dice la figura de bolsas, sacado de sus propios aciertos y masas."""
     scored = list(scored)
     if not scored:
@@ -1250,9 +1588,9 @@ def conclusion_correspondence(scored: Iterable[dict]) -> str:
         lines.append(f"El término local, aislado como {config.NAME_OF[with_local]} "
                      f"contra {config.NAME_OF[without]}: "
                      f"{_agreement(_paired(mass, without, with_local), 0.02)}.")
-    if len(config.SEEDS) < len(config.FULL_SEEDS):
-        lines.append(f"Piloto de {len(config.SEEDS)} repetición(es): estimación "
-                     f"puntual, todavía no un veredicto.")
+    # `scored` ya está agregado por celda y no lleva semilla, así que la
+    # cuenta sale de las mismas mediciones que sellan a todas las demás.
+    _pilot_note(lines, readings)
     return " ".join(lines)
 
 

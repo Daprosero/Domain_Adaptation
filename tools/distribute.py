@@ -277,7 +277,7 @@ def main() -> int:
         print("no shards came back yet; nothing to merge", file=sys.stderr)
         return 1
     # `bridge.py` is what turns `shards.merge()`'s own shape into what
-    # `Benchmark_Phase1_Report.ipynb` reads, written to its own scratch
+    # `Benchmark_Report_v1.ipynb` reads, written to its own scratch
     # location and never into `config.RESULTS` — see its module docstring.
     # Called in two steps rather than through `bridge.bridge()` so the
     # in-memory `summary` (and its `relaunch` key) stays available here for

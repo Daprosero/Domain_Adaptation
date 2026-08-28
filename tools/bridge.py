@@ -2,7 +2,7 @@
 
 `shards.merge()` refuses or agrees; it does not shape its answer for a reader.
 Its own shape — `shardsArrived`, `gridByEnvironment`, `poolable`,
-`perEnvironment`, … — shares no keys with what `Benchmark_Phase1_Report.ipynb`
+`perEnvironment`, … — shares no keys with what `Benchmark_Report_v1.ipynb`
 reads: `summary["reduction"]`, `summary["grid"]`, `summary["gridPerRun"]`,
 `summary["perTransfer"]`, plus `runs.jsonl` beside it. This module is the join
 between the two. `gridPerRun` travels through untouched — the merge already

@@ -1,7 +1,7 @@
 """The bridge: merged shard data into what the report notebook can actually read.
 
 `shards.merge()`'s own shape — `shardsArrived`, `gridByEnvironment`, `poolable`,
-`perEnvironment`, … — shares no keys with what `Benchmark_Phase1_Report.ipynb`
+`perEnvironment`, … — shares no keys with what `Benchmark_Report_v1.ipynb`
 reads: `summary["reduction"]`, `summary["grid"]`, `summary["perTransfer"]`, plus
 `runs.jsonl`. `tools/bridge.py` is what turns one into the other, and these tests
 hold the two things that make its output honest rather than merely shaped right:

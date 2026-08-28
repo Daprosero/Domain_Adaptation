@@ -3,9 +3,11 @@
 A campaign split across machines produces records that are identical in shape and
 not interchangeable in meaning. Accuracy is a property of the method and pools
 freely; wall time and peak memory turned out to be a property of neither — a
-same-machine control run (`A` and `C`, both on Trayectoria51) produced three
+same-machine control run (`A` and `C`, both on one machine) produced three
 different values for `seconds` and `peakMiB` across three runs of the identical
-arm, transfer and seed. Averaging them across shards would claim a stable value
+arm, transfer and seed. Which machine that was is not recorded here on purpose:
+the relation is the argument, and the identities belong to the record of what
+was actually distributed. Averaging them across shards would claim a stable value
 the method does not have; averaging them per machine would claim a stable value
 the machine does not have either.
 

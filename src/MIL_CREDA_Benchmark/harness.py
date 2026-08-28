@@ -25,6 +25,7 @@ import re
 import subprocess
 import sys
 import time
+import zlib
 import tracemalloc
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
@@ -33,7 +34,7 @@ import torch
 import torch.nn as nn
 
 from CREDA.schedules import creda_ramp
-from MIL_CREDA_Benchmark import bags, config, report_digest, wiring
+from MIL_CREDA_Benchmark import bags, ceiling_record, config, report_digest, wiring
 from MIL_CREDA_Benchmark.schedules import milcreda_ramp
 from MIL_CREDA_Benchmark.verdict import judge, render, standard_error, tally
 
@@ -615,7 +616,7 @@ PARTIAL_SUFFIX = ".partial.json"
 SHARDS_DIR = "shards"
 
 
-def shard_paths(shard: str | None) -> dict:
+def shard_paths(shard: str | None, pilot: bool = False) -> dict:
     """Where one shard writes, so no two shards write to the same place.
 
     Without this there is one `runs.jsonl`, opened `"w"` and truncated on every
@@ -630,9 +631,9 @@ def shard_paths(shard: str | None) -> dict:
     exist yet.
     """
     if shard is None:
+        record = config.ceilings_record_for(pilot)
         return {"runs": config.RESULTS / "runs.jsonl",
-                "partial": config.CEILINGS_RECORD.with_name(
-                    config.CEILINGS_RECORD.stem + PARTIAL_SUFFIX),
+                "partial": record.with_name(record.stem + PARTIAL_SUFFIX),
                 "stamp": config.RESULTS / "shard.json"}
     home = config.RESULTS / SHARDS_DIR / shard
     return {"runs": home / "runs.jsonl",
@@ -772,20 +773,22 @@ def _write_partial(family: str, arm_id: str, cells: dict, minutes: float,
     path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
 
 
-def search_record() -> dict | None:
+def search_record(pilot: bool = False) -> dict | None:
     """The ceiling search's own record, whole, or None when it has not run.
 
     Read from disk and not carried in memory: `config.CEILINGS` keeps only the
     winners, and the winner alone cannot say whether it was searched at scale or
     whether the seeds agreed on it.
     """
-    if not config.CEILINGS_RECORD.exists():
+    record = config.ceilings_record_for(pilot)
+    if not record.exists():
         return None
-    return json.loads(config.CEILINGS_RECORD.read_text(encoding="utf-8"))
+    return json.loads(record.read_text(encoding="utf-8"))
 
 
 def ceilings_in_force(reduction: Reduction, device: torch.device,
-                      progress=print, shard: str | None = None) -> dict[str, float]:
+                      progress=print, shard: str | None = None,
+                      pilot: bool = False) -> dict[str, float]:
     """The ceilings the campaign will run at: searched once if no record exists.
 
     The campaign refuses without them, and `config.CEILINGS` is filled at import
@@ -801,9 +804,10 @@ def ceilings_in_force(reduction: Reduction, device: torch.device,
     refusal exists to prevent. Under-scale is not fixed here either: `campaign`
     reads `atRequiredScale` itself and says which record to delete.
     """
-    if search_record() is None:
+    if search_record(pilot=pilot) is None:
         progress("no ceiling record: searching, once, before anything is compared")
-        search_ceilings(reduction, device, progress=progress, shard=shard)
+        search_ceilings(reduction, device, progress=progress, shard=shard,
+                        pilot=pilot)
     return config.ceilings_on_record()
 
 
@@ -823,21 +827,156 @@ def with_ceilings_in_force(reduction: Reduction, device: torch.device,
                    ceilingsByTransfer=config.ceilings_by_transfer_on_record())
 
 
+def search_ceilings_trials(reduction: Reduction, device: torch.device,
+                           progress=print, shard: str | None = None,
+                           pilot: bool = False) -> dict:
+    """El techo de cada familia en cada transferencia, por búsqueda con trials.
+
+    Reemplaza a la rejilla y **no reemplaza lo que se mide**: cada trial llama al
+    mismo `run_one` con el mismo rol y el mismo criterio. Lo que cambia es quién
+    elige dónde mirar — cinco puntos fijos repetidos sobre tres semillas, contra
+    treinta puntos que un GP propone sobre un rango continuo.
+
+    **Una sola semilla, declarada.** Dos trials sobre semillas distintas medirían
+    el techo y el sorteo a la vez, que es la confusión que la lectura apareada de
+    la rejilla existía para cancelar. Acá se cancela por construcción: los treinta
+    trials de una transferencia corren sobre el material idéntico, dibujado una
+    vez.
+
+    **Las seis transferencias, cada una con su propia búsqueda.** La rejilla medía
+    dos y las otras cuatro heredaban; las dos derrotas significativas de la
+    familia `milcreda` están las dos en transferencias heredadas. Con las seis
+    medidas la rama agrupada de `ceiling_for` deja de ser alcanzable.
+
+    **La meseta la define el instrumento, no el GP.** `SEARCH_RESOLUTION` es la
+    diferencia más chica que el criterio puede expresar sobre el rol de búsqueda:
+    con veinte bolsas, una bolsa. Dos techos que difieren en menos que eso no son
+    distinguibles por la medición, opine lo que opine el modelo — y usar una
+    cantidad ajustada por el GP haría que el ancho de la meseta dependiera de qué
+    tan bien ajustó, que es la propiedad equivocada.
+    """
+    import optuna
+    from optuna.samplers import GPSampler
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    n_trials = config.PILOT_SEARCH_TRIALS if pilot else config.SEARCH_TRIALS
+    low, high = config.CEILING_RANGE
+    seed = config.SEARCH_SEED
+    ruido = config.SEARCH_RESOLUTION
+
+    found: dict[str, dict] = {}
+    for family, arm_id in config.SEARCH_ARMS.items():
+        # El material se dibuja una vez por familia y se reusa en cada trial:
+        # `bags.build` decodifica miles de imágenes y rehacerlo por trial costaría
+        # treinta sorteos por transferencia para nada. Además es lo que hace que
+        # los treinta trials sean comparables entre sí.
+        drawn = {code: bags.build(code, config.DATA_CACHE, seed)
+                 for code in config.DOMAINS}
+        per_transfer: dict[str, dict] = {}
+        for transfer in config.SEARCH_TRANSFERS:
+            label = transfer_label(transfer)
+            material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
+            started = time.perf_counter()
+
+            def objective(trial, _t=transfer, _m=material, _a=arm_id):
+                ceiling = trial.suggest_float("ceiling", low, high, log=True)
+                run = run_one(_a, _t, seed, reduction, device, _m,
+                              ceiling=ceiling, role=config.SEARCH_ROLE)
+                return run[config.SEARCH_CRITERION]
+
+            # Una semilla por estudio, derivada y no compartida. Con
+            # `seed=config.SEARCH_SEED` en los doce, las propuestas de arranque
+            # son idénticas y los doce visitan los mismos puntos: medido en el
+            # ensayo local, las seis transferencias de `creda` recorrieron los
+            # mismos cuatro techos. Cuando la meseta es ancha el ganador es el
+            # más chico *visitado*, así que el registro habría mostrado un
+            # acuerdo entre transferencias que era artefacto de la semilla.
+            # Derivada de `(familia, transferencia)` con CRC32 —determinista
+            # entre corridas, a diferencia de `hash()`, que va salado— para que
+            # sigan siendo reproducibles y dejen de ser la misma.
+            semilla_estudio = (seed + zlib.crc32(f"{family}|{label}".encode())) % (2 ** 31)
+            study = optuna.create_study(direction="maximize",
+                                        sampler=GPSampler(seed=semilla_estudio))
+            study.optimize(objective, n_trials=n_trials)
+            visitados = [{"ceiling": t.params["ceiling"], "value": t.value}
+                         for t in study.trials if t.value is not None]
+            elegido = ceiling_record.choose(visitados, ruido)
+            elegido["minutes"] = (time.perf_counter() - started) / 60
+            per_transfer[label] = elegido
+            progress(f"  search {family:>8} {label}: techo={elegido['ceiling']:.4g} "
+                     f"criterio={elegido['value']:.3f} meseta={len(elegido['plateau'])} "
+                     f"[{elegido['minutes']:.1f} min]")
+
+        # El agrupado es un repliegue que con las seis medidas nadie alcanza:
+        # `ceiling_for` solo lo usa para una transferencia que la búsqueda no vio.
+        # Se calcula igual, con la misma regla sobre las seis elecciones, para que
+        # el registro no tenga un campo que nadie sabe de dónde salió.
+        agrupado = ceiling_record.choose(
+            [{"ceiling": d["ceiling"], "value": d["best"]}
+             for d in per_transfer.values()], ruido)
+        found[family] = {
+            "arm": arm_id,
+            "ceiling": agrupado["ceiling"],
+            "criterion": config.SEARCH_CRITERION,
+            "role": config.SEARCH_ROLE,
+            "epochs": reduction.epochs,
+            # Al nivel de la familia, donde `epochs` y `seeds` ya vivian: es el
+            # nivel que el lector de escala recorre, y dejarlo solo adentro de
+            # `search` lo haria ilegible para el chequeo que compara la escala
+            # corrida contra la declarada.
+            "trials": n_trials,
+            "search": {"kind": "optuna", "sampler": "GPSampler",
+                       "trials": n_trials, "seed": seed,
+                       "perStudySeed": "crc32(familia|transferencia) + seed",
+                       "space": {"low": low, "high": high, "log": True},
+                       "resolution": ruido},
+            "decidedByFlatRule": agrupado["decidedByFlatRule"],
+            "plateau": agrupado["plateau"],
+            "noise": ruido,
+            "flatRule": ceiling_record.FLAT_RULE,
+            "atRequiredScale": (reduction.epochs >= config.FULL_SEARCH_EPOCHS
+                                and n_trials >= config.SEARCH_TRIALS),
+            "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
+                              "trials": config.SEARCH_TRIALS},
+            "transfers": [transfer_label(t) for t in config.SEARCH_TRANSFERS],
+            "neutral": config.RAMP_CEILING,
+            # La forma que los consumidores viejos ya leen: etiqueta -> float.
+            "byTransfer": {k: d["ceiling"] for k, d in per_transfer.items()},
+            "perTransfer": per_transfer,
+            "inheritanceRule": "ninguna: las seis transferencias se midieron",
+        }
+
+    record = config.ceilings_record_for(pilot)
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps(found, indent=2), encoding="utf-8")
+    return found
+
+
 def search_ceilings(reduction: Reduction, device: torch.device,
-                    progress=print, shard: str | None = None) -> dict:
+                    progress=print, shard: str | None = None,
+                    pilot: bool = False) -> dict:
     """Each family's ceiling, found on the selection transfers and kept for its
     derivations.
+
+    Despacha al motor que `config.SEARCH_ENGINE` declare. La rejilla queda entera
+    y no por cortesía: escribió el registro que gobierna la campaña vigente, y un
+    motor que ya no se puede correr es un registro que ya no se puede reproducir.
 
     A shared ceiling equalizes the coefficient and unequalizes the balance: the
     two objectives sit a factor of B_src apart, so one number puts adaptation at
     most of one objective and a tenth of the other. This equalizes where each
     method operates instead.
 
-    It runs on `SEARCH_TRANSFERS` and never on the ones the verdict is read from.
-    Choosing by outcome on the material the verdict uses would make the verdict
-    read a decision it already made, and splitting the roles by transfer costs no
-    bags — the evaluation role keeps all 36 and the resolution the campaign was
-    sized for.
+    **What keeps the search out of the verdict is the role, not the transfer.**
+    The search reads `valid` (20 bags) and the verdict reads `eval` (36); the two
+    are disjoint material, and they stay disjoint whichever transfers each looks
+    at. This paragraph used to claim the search ran on transfers the verdict never
+    saw, and that was false as configured — `SEARCH_TRANSFERS` was a subset of
+    `VERDICT_TRANSFERS`, so both searched transfers were also judged. Nothing
+    leaked, because the role split was doing the work the sentence credited to the
+    transfer split. Saying it correctly matters now: the sentence would otherwise
+    be read as forbidding a search over every transfer, which is exactly what
+    removes the out-of-sample inheritance.
 
     At pilot scale this exercises the pipeline and settles nothing: the ramp runs
     on the fraction of training elapsed, so with three epochs it is saturated by
@@ -845,13 +984,23 @@ def search_ceilings(reduction: Reduction, device: torch.device,
     same program at both scales, which is the point; only its answer is worth
     reading at the scale the protocol declares.
     """
+    if config.SEARCH_ENGINE == "optuna":
+        reduction = replace(
+            reduction,
+            epochs=(config.PILOT_SEARCH_EPOCHS if pilot else config.SEARCH_EPOCHS),
+            seeds=[config.SEARCH_SEED])
+        return search_ceilings_trials(reduction, device, progress=progress,
+                                      shard=shard, pilot=pilot)
+
     # Its own scale, and not the caller's. The search is one experiment run once
     # at the scale the campaign runs at; borrowing the pilot's three epochs would
     # answer about a landscape nothing else trains in.
-    reduction = replace(reduction, epochs=config.SEARCH_EPOCHS,
-                        seeds=list(config.SEARCH_SEEDS))
+    reduction = replace(
+        reduction,
+        epochs=(config.PILOT_SEARCH_EPOCHS if pilot else config.SEARCH_EPOCHS),
+        seeds=list(config.PILOT_SEARCH_SEEDS if pilot else config.SEARCH_SEEDS))
     grid = list(config.CEILING_GRID)
-    partial = shard_paths(shard)['partial']
+    partial = shard_paths(shard, pilot=pilot)['partial']
     measured = _read_partial(partial)
     if measured:
         done = sum(len(cells) for cells in measured.values())
@@ -1016,8 +1165,13 @@ def search_ceilings(reduction: Reduction, device: torch.device,
             # confirms the normalization by measurement rather than by argument.
             "neutral": config.RAMP_CEILING,
         }
-    config.CEILINGS_RECORD.parent.mkdir(parents=True, exist_ok=True)
-    config.CEILINGS_RECORD.write_text(json.dumps(found, indent=2), encoding="utf-8")
+    # A su propio registro. Un ensayo nunca escribe donde va la respuesta que la
+    # campana consume: ese archivo separado es lo que hace admisible el dial de
+    # escala de mas arriba, y sin el volveria a ser lo que la version anterior
+    # de este modulo prohibia con razon.
+    record = config.ceilings_record_for(pilot)
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(json.dumps(found, indent=2), encoding="utf-8")
     # The scratch file goes only once the answer exists. Leaving it would let a
     # later relaunch resume from cells that already produced a finished record.
     partial.unlink(missing_ok=True)
@@ -1181,7 +1335,7 @@ def campaign(reduction: Reduction, device: torch.device,
 
 def run_pilot(epochs: int = config.EPOCHS, seeds: list[int] | None = None) -> dict:
     """One single-machine campaign, headless: exactly what
-    `Benchmark_Phase1_Run.ipynb`'s own pilot cells run, callable with plain
+    `Benchmark_Campaign_v1.ipynb`'s own pilot cells run, callable with plain
     JSON-native arguments instead of from a notebook.
 
     `ceilings_in_force()` obtains what `campaign()` refuses to run
@@ -1208,7 +1362,7 @@ def run_pilot(epochs: int = config.EPOCHS, seeds: list[int] | None = None) -> di
     return campaign(reduction, device)
 
 
-def run_search(shard: str | None = None) -> dict:
+def run_search(shard: str | None = None, pilot: bool = False) -> dict:
     """The ceiling search alone, headless, and nothing after it.
 
     `search_ceilings()` takes a `Reduction` and a `torch.device`, neither of
@@ -1228,14 +1382,18 @@ def run_search(shard: str | None = None) -> dict:
     because a later caller wanted a different answer is the silent
     refunding `campaign()`'s own refusal exists to prevent.
 
-    **There is deliberately no `epochs` dial**, and that is the difference
-    from `run_pilot()` rather than an omission. `run_pilot()` offers one
-    because a pilot is allowed to be cheap — it says so. The search is not:
-    `search_ceilings()` sets `config.SEARCH_EPOCHS` and `config.SEARCH_SEEDS`
-    on its own reduction and ignores whatever the caller passed, because a
-    ceiling found at pilot scale settles nothing and would still be written
-    to the same file the full-scale answer goes to. Any dial here would only
-    look like it worked.
+    **There is no `epochs` dial, and `pilot=True` is not one.** The dial this
+    function refused had one destination: a ceiling found at pilot scale
+    settles nothing and would still have been written to the file the
+    full-scale answer goes to, so it would only have looked like it worked.
+    That objection was about the destination, and the destination changed —
+    `pilot=True` runs at `config.PILOT_SEARCH_EPOCHS` and writes to
+    `config.CEILINGS_PILOT_RECORD`, a separate file the full record always
+    outranks. It rehearses the program and its answer is still not quotable:
+    the ramp runs on the fraction of training elapsed, so at pilot scale it
+    saturates by the second epoch and every ceiling is reached almost at
+    once. What it settles is whether the search *runs*, which is the only
+    question a rehearsal is entitled to answer.
 
     `shard` names this call's own shard namespace, the same parameter
     `run_smoke()` and `distribute.run_shard()` take, so a search split across
@@ -1247,17 +1405,19 @@ def run_search(shard: str | None = None) -> dict:
     # anyway, because a `Reduction` that says three epochs while the run it
     # describes does twenty is a record that lies about itself.
     reduction = Reduction(
-        seeds=list(config.SEARCH_SEEDS), epochs=config.SEARCH_EPOCHS,
+        seeds=list(config.PILOT_SEARCH_SEEDS if pilot else config.SEARCH_SEEDS),
+        epochs=(config.PILOT_SEARCH_EPOCHS if pilot else config.SEARCH_EPOCHS),
         device=str(device), environment=environment())
-    ceilings_in_force(reduction, device, shard=shard)
+    ceilings_in_force(reduction, device, shard=shard, pilot=pilot)
     # Read back from disk, never from what the search returned, for the reason
     # `ceilings_in_force` already gives: what the campaign will run at is what
     # the record says, and the record is the thing a later session reads.
-    record = search_record()
+    record = search_record(pilot=pilot)
     if record is None:
         raise SystemExit(
             "the search ran and left no record at "
-            f"{config.CEILINGS_RECORD}. Nothing downstream can read a ceiling "
+            f"{config.CEILINGS_PILOT_RECORD if pilot else config.CEILINGS_RECORD}. "
+            "Nothing downstream can read a ceiling "
             "that was never written down, and a run that reports success "
             "without one would be claiming an answer it cannot show."
         )
