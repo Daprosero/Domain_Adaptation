@@ -32,14 +32,146 @@ from MIL_CREDA.local_term import total_correspondence
 from MIL_CREDA_Benchmark import bags, config, figures, wiring
 
 
+#: What `tools/promote.py` leaves beside the checkpoints it promoted, naming
+#: which seeds of each cell are that cell's own median and which were added only
+#: to make a dependant arm's paired comparison possible.
+PROMOTION_RECORD = "PROMOTION.json"
+
+
+def _median_seeds() -> dict | None:
+    """Which promoted seeds are each cell's own median, or `None` if unrecorded.
+
+    `None` and "an empty set" are different answers and must not collapse: a
+    single-machine run has no promotion record at all, and there every checkpoint
+    on disk is its cell's median by construction, because `keep_median()` is what
+    put it there and it writes nothing else.
+    """
+    record = config.MODELS / PROMOTION_RECORD
+    if not record.exists():
+        return None
+    chosen = json.loads(record.read_text(encoding="utf-8")).get("chosen") or {}
+    return {cell: set(entry.get("chosen") or []) for cell, entry in chosen.items()}
+
+
 def available() -> list[dict]:
-    """Every checkpoint phase one kept, with what it is."""
+    """Every checkpoint phase one kept, with what it is.
+
+    Each entry carries `median`: whether this seed is its own cell's median, or
+    was promoted only so that some other arm could be read against this one at
+    the same seed.
+
+    **Tagged and not filtered**, deliberately. Dropping the extras here would
+    make every caller see only medians, including `against_floor()`, whose whole
+    purpose is the paired difference those extras exist for — and it would lose
+    them silently, which is the one failure mode nothing downstream could detect.
+    Each consumer decides instead: a marginal average over a cell reads only the
+    medians, a paired difference reads everything.
+
+    The distinction is not tidiness. A floor's extras were selected by the
+    *dependant* arms' accuracy orderings, not by its own, so they are a biased
+    sample of that floor's outcomes. Averaging a floor's row over them does not
+    estimate that row better; it estimates something else.
+    """
+    medians = _median_seeds()
     found = []
     for manifest_path in sorted(config.MODELS.glob("*.manifest.json")):
         record = json.loads(manifest_path.read_text(encoding="utf-8"))
         weights = manifest_path.with_name(manifest_path.name.replace(".manifest.json", ".pt"))
-        if weights.exists():
-            found.append({**record, "weights": weights, "manifest": manifest_path})
+        if not weights.exists():
+            continue
+        if medians is None:
+            is_median = True
+        else:
+            cell = f"{record['arm']}|{record['transfer']}"
+            is_median = record["seed"] in medians.get(cell, set())
+        found.append({**record, "weights": weights, "manifest": manifest_path,
+                      "median": is_median})
+    return found
+
+
+class CheckpointsDisagree(RuntimeError):
+    """The checkpoints on disk were not produced by the run recorded beside them.
+
+    Separate from "there are no checkpoints": that one is loud and stops the
+    notebook at its first cell. This one is silent by construction — a directory
+    full of valid checkpoints from an earlier, smaller run loads, measures and
+    renders exactly like the right ones, under the record's stamp.
+    """
+
+
+#: The one field of a `reduction` that is expected to differ, and an exclusion
+#: rather than an oversight. A checkpoint's manifest records the seeds of the
+#: shard that produced it; the record's carries the union across every shard that
+#: arrived. Requiring equality there would refuse every distributed run. The seed
+#: itself is held to the record instead, one field over: it has to be one the
+#: record says was actually run.
+PER_SHARD = "seeds"
+
+
+def disagreements(found: list[dict], summary: dict) -> list[dict]:
+    """Where the checkpoints and the record they are read beside disagree.
+
+    Compared field by field over what the two `reduction`s *both* carry, because
+    they are not the same shape: a manifest holds a full `Reduction`, while the
+    record holds only what merging actually proved. Comparing the union would
+    refuse on fields the record never claimed; comparing nothing at all is what
+    let a three-epoch pilot be measured under a twenty-epoch stamp.
+
+    Returns the findings rather than raising, so the refusal can be tested apart
+    from the message that carries it — `bound()` is what refuses.
+    """
+    record = summary.get("reduction") or {}
+    ran = set(record.get(PER_SHARD) or [])
+    found_out: list[dict] = []
+    for entry in found:
+        mine = entry.get("reduction") or {}
+        name = Path(entry["manifest"]).name if entry.get("manifest") else "?"
+        for field in sorted((set(mine) & set(record)) - {PER_SHARD}):
+            if mine[field] != record[field]:
+                found_out.append({"checkpoint": name, "field": field,
+                                  "checkpoint_says": mine[field],
+                                  "record_says": record[field]})
+        if ran and entry.get("seed") not in ran:
+            found_out.append({"checkpoint": name, "field": "seed",
+                              "checkpoint_says": entry.get("seed"),
+                              "record_says": sorted(ran)})
+    return found_out
+
+
+def bound(found: list[dict], summary: dict) -> list[dict]:
+    """`found`, once it is established that the record describes it.
+
+    A record with no `reduction`, or one sharing no field with the manifests,
+    refuses too. An unprovable precondition is not a satisfied one: passing there
+    would make this check silent in exactly the state where nothing is known.
+    """
+    record = summary.get("reduction") or {}
+    if not found:
+        raise CheckpointsDisagree(
+            "refusing to measure: there are no checkpoints to bind to the record.")
+    comparable = {f for entry in found
+                  for f in (set(entry.get("reduction") or {}) & set(record))} - {PER_SHARD}
+    if not comparable:
+        raise CheckpointsDisagree(
+            "refusing to measure: the record carries no `reduction` field the "
+            "checkpoints also carry, so whether they came from this run cannot be "
+            "established at all.\n"
+            "  An unchecked precondition is not a satisfied one."
+        )
+    clashes = disagreements(found, summary)
+    if clashes:
+        fields = sorted({c["field"] for c in clashes})
+        first = clashes[0]
+        raise CheckpointsDisagree(
+            f"refusing to measure: {len(clashes)} checkpoint(s) disagree with the "
+            f"record on {', '.join(fields)}.\n"
+            f"  e.g. {first['checkpoint']}: {first['field']} is "
+            f"{first['checkpoint_says']!r} but the record says "
+            f"{first['record_says']!r}.\n"
+            "  These checkpoints were produced by a different run than the one "
+            "`summary.json` describes. Promote the ones this record came from "
+            "(`tools/promote.py`) rather than measuring these under its stamp."
+        )
     return found
 
 

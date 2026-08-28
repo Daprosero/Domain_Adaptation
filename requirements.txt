@@ -5,6 +5,10 @@ ipykernel
 gdown
 matplotlib
 # NumPy 1.26.4 and pandas 2.2.3 provide compatible CPython 3.11/3.12 wheels.
+# La busqueda de v2 elige el techo con Optuna y su GPSampler. GPSampler
+# necesita torch y scipy, que ya estan; se declara igual porque un
+# requisito que se cumple por casualidad deja de cumplirse sin aviso.
+optuna
 numpy==1.26.4
 pandas==2.2.3
 scikit-image

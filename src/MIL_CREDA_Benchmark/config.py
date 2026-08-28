@@ -211,7 +211,44 @@ CEILINGS_BY_TRANSFER: dict[str, dict[str, float]] = {}
 #: the search may look at any transfer it likes as long as it looks at validation
 #: bags. Two is what it costs to pick one scalar, and one easy transfer with one
 #: hard one keeps the choice from being fitted to a single difficulty.
-SEARCH_TRANSFERS = [("M", "U"), ("S", "M")]
+#: Todas. La rejilla medía dos y las otras cuatro heredaban su techo sin que
+#: nadie lo comprobara ahí, y las dos derrotas significativas de `MIL-CREDA`
+#: están las dos en transferencias heredadas. Medir las seis elimina la
+#: aplicación fuera de muestra: `ceiling_for` deja de tener rama agrupada
+#: alcanzable.
+#:
+#: Buscar sobre transferencias que el veredicto también juzga no filtra nada. Lo
+#: que mantiene disjunto el material es el **rol** —la búsqueda lee `valid`, el
+#: veredicto lee `eval`— y eso vale igual para las seis.
+SEARCH_TRANSFERS = list(TRANSFERS)   # las mismas que VERDICT_TRANSFERS
+
+#: Qué motor elige el techo. `grid` es la rejilla de techos fijos repetida sobre
+#: semillas, y sigue existiendo porque escribió el registro que gobierna la
+#: campaña vigente. `optuna` busca sobre un rango continuo con trials.
+SEARCH_ENGINE = "optuna"
+
+#: El rango sobre el que se busca, en escala logarítmica. Son los extremos de la
+#: rejilla que reemplaza: lo que cambia es que adentro ya no hay cinco puntos
+#: sino un continuo.
+CEILING_RANGE = (1e-4, 1.0)
+
+#: Cuántas evaluaciones por `(familia, transferencia)`. Una por trial: la
+#: repetición que daban las semillas la reemplaza el término de ruido que el GP
+#: estima para decidir dónde mirar.
+SEARCH_TRIALS = 30
+PILOT_SEARCH_TRIALS = 4
+
+#: La única semilla que cada trial evalúa. Declarada y no sorteada: dos trials
+#: sobre semillas distintas medirían el techo y el sorteo a la vez, que es la
+#: confusión que la comparación apareada de la rejilla existía para evitar.
+SEARCH_SEED = 0
+
+#: La diferencia más chica que el criterio puede expresar sobre el rol de
+#: búsqueda: con `VALID_BAGS` bolsas, la exactitud se mueve de a `1/VALID_BAGS`.
+#: Es lo que define la meseta, y es una propiedad del instrumento y no una
+#: cantidad ajustada — dos techos que difieren en menos de una bolsa no son
+#: distinguibles por la medición, opine lo que opine el GP.
+SEARCH_RESOLUTION = 1.0 / VALID_BAGS
 
 #: And the verdict keeps all six. An earlier draft withheld the two the search
 #: used, which was the right instinct against the wrong leak: with the roles
@@ -468,6 +505,76 @@ DATA_CACHE = REPOSITORY / ".benchmark-data"
 #: word. Every path here hangs off a constant that says where it points.
 CEILINGS_RECORD = RESULTS / "ceilings.json"
 
+#: Donde escribe el ensayo local de la busqueda, separado del registro real y con
+#: su propio nombre. Dos archivos y no uno, porque son dos experimentos: este
+#: corre a `PILOT_SEARCH_EPOCHS` epocas y su respuesta no se puede citar. A escala
+#: piloto la rampa se satura en la segunda epoca y todo techo se alcanza casi
+#: enseguida, asi que contesta sobre un paisaje donde nada mas entrena. Escribirlo
+#: sobre `CEILINGS_RECORD` haria que una campana completa consumiera ese valor sin
+#: una palabra, que es exactamente la falla que el sello de piloto existe para
+#: impedir, un experimento mas arriba.
+CEILINGS_PILOT_RECORD = RESULTS / "ceilings.pilot.json"
+
+#: La escala propia del ensayo. Declarada aparte de `SEARCH_EPOCHS`/`SEARCH_SEEDS`
+#: y nunca derivada de ellas: bajarle la escala a la busqueda real seria cambiar
+#: el experimento; esto es un experimento distinto que comparte su programa.
+PILOT_SEARCH_EPOCHS = EPOCHS
+PILOT_SEARCH_SEEDS = [0]
+
+
+def ceilings_record_for(pilot: bool) -> "Path":
+    """El archivo al que le corresponde escribir a esta corrida de la busqueda.
+
+    Un solo lugar donde `pilot` se convierte en un camino, y todo lo que elige
+    destino pasa por aca: el escritor, el parcial y el lector. Estaba repetido
+    en los tres, y un test que mockeaba el del medio dejaba pasar una mutacion
+    en el escritor — cada mitad verificada contra su propio fixture y la union
+    entre ellas sin verificar, que es la unica cosa que la regla decia.
+    """
+    return CEILINGS_PILOT_RECORD if pilot else CEILINGS_RECORD
+
+
+def ceilings_record_in_force() -> tuple["Path | None", str]:
+    """Que registro de techos rige, y a que titulo.
+
+    `("full"|"pilot"|"none")`, y el archivo. El completo gana siempre que exista:
+    un ensayo no desplaza una medicion. Cuando solo esta el ensayo, rige — para
+    que un piloto local pueda correr sin haber gastado Kaggle — y su procedencia
+    viaja con la reduccion, para que ninguna tabla cite un techo de ensayo como
+    si lo hubiera medido la busqueda.
+
+    Devuelve la procedencia y no solo el camino, porque "de donde salio este
+    escalar" es la pregunta que el registro tiene que poder contestar. Un
+    resolutor que devolviera el mapping a secas haria indistinguibles los dos
+    casos justo donde importa.
+    """
+    if CEILINGS_RECORD.exists():
+        return CEILINGS_RECORD, "full"
+    if CEILINGS_PILOT_RECORD.exists():
+        return CEILINGS_PILOT_RECORD, "pilot"
+    return None, "none"
+
+
+def ceilings_provenance() -> dict:
+    """De donde salieron los techos vigentes, para estampar en la reduccion."""
+    record, kind = ceilings_record_in_force()
+    out = {"source": kind, "record": str(record) if record else None,
+           "epochs": None, "seeds": None}
+    if record is None:
+        return out
+    import json as _json
+    found = _json.loads(record.read_text(encoding="utf-8"))
+    # Las claves que la busqueda ya escribe por familia, no una envoltura
+    # inventada aca: `epochs`, `seeds` y `atRequiredScale` viven al nivel de cada
+    # familia desde que el registro existe.
+    entry = next((e for e in found.values() if isinstance(e, dict)), None)
+    if entry:
+        out["epochs"] = entry.get("epochs")
+        out["seeds"] = len(entry.get("seeds") or [])
+        out["atRequiredScale"] = entry.get("atRequiredScale")
+        out["requiredScale"] = entry.get("requiredScale")
+    return out
+
 
 def ceilings_on_record() -> dict[str, float]:
     """The searched ceilings, read from the record the search wrote.
@@ -481,10 +588,11 @@ def ceilings_on_record() -> dict[str, float]:
     is the only place that ever does — would otherwise hold the empty mapping this
     module was imported with and hand it to a campaign that refuses it.
     """
-    if not CEILINGS_RECORD.exists():
+    record, _ = ceilings_record_in_force()
+    if record is None:
         return {}
     import json as _json
-    found = _json.loads(CEILINGS_RECORD.read_text(encoding="utf-8"))
+    found = _json.loads(record.read_text(encoding="utf-8"))
     return {family: entry["ceiling"] for family, entry in found.items()}
 
 
@@ -496,10 +604,11 @@ def ceilings_by_transfer_on_record() -> dict[str, dict[str, float]]:
     which is exactly what such a record meant when it was written. Read on every
     call, for the same reason `ceilings_on_record` is.
     """
-    if not CEILINGS_RECORD.exists():
+    record, _ = ceilings_record_in_force()
+    if record is None:
         return {}
     import json as _json
-    found = _json.loads(CEILINGS_RECORD.read_text(encoding="utf-8"))
+    found = _json.loads(record.read_text(encoding="utf-8"))
     return {family: dict(entry.get("byTransfer") or {})
             for family, entry in found.items()}
 
@@ -538,9 +647,25 @@ def search_sizing() -> dict:
     Its epoch count is its own — `SEARCH_EPOCHS`, never the pilot's — so a caller
     scaling from a timed pilot run has to know the ratio rather than assume it.
     """
+    # En los ejes que el motor tiene, no en los de la rejilla traducidos. Una
+    # busqueda por trials no visita cinco techos tres veces: visita treinta puntos
+    # una vez cada uno, y reportar `ceilings: 5` sobre eso seria describir una
+    # rejilla que no corrio.
+    if SEARCH_ENGINE == "optuna":
+        runs = len(SEARCH_ARMS) * len(SEARCH_TRANSFERS) * SEARCH_TRIALS
+        return {
+            "engine": SEARCH_ENGINE,
+            "families": len(SEARCH_ARMS),
+            "transfers": len(SEARCH_TRANSFERS),
+            "trials": SEARCH_TRIALS,
+            "runs": runs,
+            "epochs": SEARCH_EPOCHS,
+            "atRequiredScale": SEARCH_EPOCHS >= FULL_SEARCH_EPOCHS,
+        }
     runs = (len(SEARCH_ARMS) * len(CEILING_GRID)
             * len(SEARCH_TRANSFERS) * len(SEARCH_SEEDS))
     return {
+        "engine": SEARCH_ENGINE,
         "families": len(SEARCH_ARMS),
         "ceilings": len(CEILING_GRID),
         "transfers": len(SEARCH_TRANSFERS),
