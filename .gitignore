@@ -55,3 +55,7 @@ MIL-CREDA/Models/Benchmark/*.pt
 # not a fact anyone reproducing the benchmark needs: the campaign's own
 # record is what lands under Results/, not this queue's bookkeeping.
 .remote-execution/
+
+# El ledger de proposal-implementation: contiene autorizaciones de lanzamiento,
+# que no deben viajar en un clon. Ver "What this skill has not written down".
+.implementation/
