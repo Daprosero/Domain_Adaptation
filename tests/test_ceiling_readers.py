@@ -57,6 +57,20 @@ def test_un_registro_de_trials_informa_el_ruido_en_lugar_del_acuerdo():
     assert "GP estimó" not in texto
 
 
+def test_la_regla_que_el_registro_se_lleva_adentro_no_le_atribuye_la_meseta_al_gp():
+    """La mitad protegida no probaba la otra.
+
+    `conclusion_ceilings` ya tenia su guarda y pasaba; `FLAT_RULE` -- la frase que
+    cada entrada del registro se lleva adentro, y la que el lector del informe
+    encuentra -- seguia diciendo que la meseta la definia el ruido que el GP
+    estimo. Es la misma afirmacion falsa, en el lugar donde nadie la leia: el
+    codigo pasa `SEARCH_RESOLUTION`, que es una bolsa de `VALID_BAGS`, y usar una
+    cantidad ajustada haria que el ancho dependiera de que tan bien ajusto.
+    """
+    assert "GP estimó" not in cr.FLAT_RULE
+    assert "resolución del criterio" in cr.FLAT_RULE
+
+
 def test_la_rejilla_sigue_diciendo_lo_que_siempre_dijo():
     """No es compatibilidad de cortesía: es el registro que gobierna la campaña."""
     texto = tables.conclusion_ceilings(REJILLA)

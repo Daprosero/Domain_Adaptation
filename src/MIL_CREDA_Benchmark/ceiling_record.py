@@ -34,10 +34,12 @@ KIND_OPTUNA = "optuna"
 FLAT_RULE = (
     "dentro de la meseta gana el techo más chico: el mismo resultado con menos "
     "adaptación es la afirmación más débil, y una búsqueda no debería darle a un "
-    "término más peso del que la medición pidió. La meseta la define el ruido de "
-    "observación que el propio GP estimó, no una igualdad exacta — sobre un rango "
-    "continuo dos evaluaciones nunca empatan y una regla de empate exacto no se "
-    "activaría jamás"
+    "término más peso del que la medición pidió. La meseta la define la resolución "
+    "del criterio sobre el rol de búsqueda — una bolsa de las que tiene — y no una "
+    "cantidad que el GP ajustó: atribuírsela al modelo haría que el ancho de la "
+    "meseta dependiera de qué tan bien ajustó, que es la propiedad equivocada. "
+    "Tampoco es una igualdad exacta: sobre un rango continuo dos evaluaciones nunca "
+    "empatan y una regla de empate exacto no se activaría jamás"
 )
 
 
@@ -66,7 +68,7 @@ def kind_of(entry: dict) -> str:
 
 
 def plateau(trials: list[dict], noise: float) -> list[dict]:
-    """Los trials que el ruido estimado no distingue del mejor.
+    """Los trials que la resolución del criterio no distingue del mejor.
 
     `trials` son `{"ceiling": float, "value": float}` y el criterio se maximiza.
     Con `noise` cero la meseta es el máximo exacto, que es el caso degenerado y
@@ -82,8 +84,8 @@ def plateau(trials: list[dict], noise: float) -> list[dict]:
 def choose(trials: list[dict], noise: float) -> dict:
     """El techo elegido y por qué, aplicando `FLAT_RULE`.
 
-    Devuelve el detalle y no solo el número, porque «cuál ganó» y «el GP pudo
-    distinguir algo» son dos hechos distintos y el segundo es el que dice cuánto
+    Devuelve el detalle y no solo el número, porque «cuál ganó» y «la medición
+    pudo distinguir algo» son dos hechos distintos y el segundo es el que dice cuánto
     sostiene el primero. Un techo elegido dentro de una meseta ancha sostiene
     mucho menos de lo que un número elegido aparenta, y ese fue exactamente el
     caso de `creda` con la rejilla.
