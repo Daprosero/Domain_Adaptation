@@ -133,10 +133,22 @@ EPSILON = 1e-8
 #:
 #: CREDA's own published ceiling for these domains is `creda_lambda_special`
 #: = 1e-4, and running it there was measured to be inert: at 1e-4, 1e-2 and 1e-1
-#: every adapted arm scored exactly what its own floor scored. A comparison
+#: every adapted arm scored exactly what its own floor scored. That measurement
+#: was taken against the UN-NORMALIZED objective — before Eq. (18) was divided
+#: by its own supremum B_src and the three terms of Eq. (39) were brought onto a
+#: common scale — so it is historical record and not a reading of the objective
+#: this comment describes above. What it established still stands: a comparison
 #: against a CREDA whose term changes no decision is a comparison against the
-#: source-only floor with extra wall time, so both sides run at this ceiling and
-#: the report says so rather than leaving it to whoever knows CREDA to notice.
+#: source-only floor with extra wall time.
+#:
+#: What it no longer supports is the closing clause it used to carry, which had
+#: the two families sharing this one ceiling. They share none: each searches its
+#: own and its derivations inherit it, and
+#: `harness.ceiling_for(reduction, family, transfer)` is where any arm's
+#: coefficient is read from. This constant is the neutral that search is read
+#: against, not the value either family runs at. The report prints the ceiling
+#: each family actually found rather than leaving it to whoever knows CREDA
+#: to notice.
 RAMP_CEILING = 1.0
 
 # --------------------------------------------------------- the ceiling search
