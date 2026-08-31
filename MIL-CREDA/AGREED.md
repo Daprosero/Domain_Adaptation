@@ -69,7 +69,7 @@ these is raised, not resolved in passing.
 - [x] **One table per cell**, each preceded by three short lines — what is
       measured, why, and which direction is better — and followed by the most
       relevant conclusion.
-- [x] That conclusion is **computed from the table**, never written by hand: a
+- [x] That conclusion is **computed from the table**, never written by hand: a `test_the_conclusion_is_not_tied_to_nothing`
       hand-written conclusion is a second source of truth and goes stale in
       silence.
 - [x] A rung is named `Baseline → MIL-Baseline`, never `A->B`. An identifier is
@@ -87,13 +87,13 @@ these is raised, not resolved in passing.
       across-arm mean target accuracy is the median. Panels drawn from each arm's
       own median seed would differ in the method *and* in the draw, and — because
       the seed fixes the partition — would not even share their bags.
-- [x] Artefacts are **median, never best**. The best of N grows with the arm's
+- [x] Artefacts are **median, never best**. The best of N grows with the arm's `test_median_seeds_is_the_selection_rule_on_its_own`
       dispersion, so best-vs-best flatters the noisiest arm by the most.
 - [x] **Three transfers in every figure, not six.** Six rows at a legible panel
       size do not fit on a page and the tables already carry all six. Fixed in
       `FIGURE_TRANSFER_COUNT` and `FIGURE_TRANSFER_RULE` by a rule that looks at
       no outcome: each domain appears once as source and once as target.
-- [x] **Which three is computed, not fixed**: the transfers where the methods
+- [x] **Which three is computed, not fixed**: the transfers where the methods `test_the_figure_transfer_rule_ranks_by_the_outcome_it_declares`
       reach the highest mean target accuracy. It is a choice made by the outcome,
       so it is declared in every caption. What makes it defensible here is that
       the latent space of a transfer where everything sits near chance is a
@@ -104,7 +104,7 @@ these is raised, not resolved in passing.
       themselves before any model — shared because preprocessing already brings
       both domains to one tensor shape — sampled representatively and stratified
       by class.
-- [x] **Both floors stay, because the measurement says they are not redundant.**
+- [x] **Both floors stay, because the measurement says they are not redundant.** `test_both_floors_stay_in_the_grid_until_a_measurement_removes_one`
       Drawn at the instance level on the pilot, `Baseline` and `MIL-Baseline`
       differ by up to 0.38 in distance ratio and 0.07 in domain separability.
       They train the same encoder through different objectives — per instance
@@ -142,7 +142,7 @@ these is raised, not resolved in passing.
 
 ## Removed on purpose
 
-- [x] The adaptation-term scale table (`min`/`max`/`width`). What it checked —
+- [x] The adaptation-term scale table (`min`/`max`/`width`). What it checked — `test_local_loss_in_unit_interval`
       that MIL-CREDA's terms stay in `[0, 1]` while the prior work's is bounded
       only by `ln n` — is guaranteed by the construction in Section 5 and already
       covered by the invariant suite. A table restating a proved bound is a third
@@ -167,52 +167,52 @@ already existed: they are two halves of one contract and they live in one. -->
 
 ## The objective and its coefficient
 
-- [x] The supervised term of Eq. (18) is divided by its own supremum `B_src`, so the three terms of Eq. (39) live in [0, 1) and are read on a common scale.
+- [x] The supervised term of Eq. (18) is divided by its own supremum `B_src`, so the three terms of Eq. (39) live in [0, 1) and are read on a common scale. `test_source_loss_in_unit_interval`
 - [x] The bag-unit arms call `source_loss` and `total_objective`. No supervised term written inline in the benchmark.
-- [x] Each family searches **its own** ceiling and passes it to its derivations. A shared ceiling equalizes the coefficient and unequalizes the balance: the two objectives sit a factor of `B_src` apart, so one number puts adaptation at 85% of one and 10% of the other.
-- [x] One search per family, on the complete method — D and G — and inherited. If every arm searched its own, B→E would differ in two things and no rung would be attributable. Declared consequence: E and F carry no local term, so the ceiling found on the complete method is not necessarily theirs.
+- [x] Each family searches **its own** ceiling and passes it to its derivations. A shared ceiling equalizes the coefficient and unequalizes the balance: the two objectives sit a factor of `B_src` apart, so one number puts adaptation at 85% of one and 10% of the other. `test_the_search_uses_the_complete_method_of_each_family`
+- [x] One search per family, on the complete method — D and G — and inherited. If every arm searched its own, B→E would differ in two things and no rung would be attributable. Declared consequence: E and F carry no local term, so the ceiling found on the complete method is not necessarily theirs. `test_solo_busca_sobre_los_metodos_completos`
 - [x] The 1.0 stops being the value and becomes **the neutral the searched value is read against**. If MIL-CREDA's ceiling lands there, the normalization argument is confirmed by measurement rather than by reasoning.
 - [x] `RAMP_CEILING`'s comment states that argument, not r16's scale one. The old 1e-4 measurement stays as historical record, marked as taken against the un-normalized objective.
 
 ## Prior work
 
 - [x] CREDA is used as it is: per-instance cross-entropy, its own single-term objective, never edited to make the comparison work.
-- [x] The 1e-4 leaves where it was and becomes the ceiling of CREDA's own ramp, with `creda_lambda_special` as the default. `train_creda` still reads it from the notebook's `cfg`, because it is not always 1e-4.
-- [x] `get_lambda` is untouched. DANN, ADDA and CDAN+E still read it at full strength: lowering their coefficient would switch CDAN+E's domain adversary off rather than attenuate it.
+- [x] The 1e-4 leaves where it was and becomes the ceiling of CREDA's own ramp, with `creda_lambda_special` as the default. `train_creda` still reads it from the notebook's `cfg`, because it is not always 1e-4. `test_credas_default_ceiling_is_its_published_coefficient`
+- [x] `get_lambda` is untouched. DANN, ADDA and CDAN+E still read it at full strength: lowering their coefficient would switch CDAN+E's domain adversary off rather than attenuate it. `test_the_untouched_loops_still_see_the_schedule_they_saw_before`
 - [x] The notebooks under `CREDA/Notebooks/` remain functional, verified statically without executing them.
 - [x] The cost of moving the coefficient is measured and bounded, not denied: the product's reassociation stays within 2 ULP and the gradients come out bit-identical.
 
 ## The two ramps
 
-- [x] Each method names its own ramp and carries its own default: `creda_ramp` at 1e-4, `milcreda_ramp` at 1.0. The defaults serve each method's own runs; the benchmark never uses them, it always passes explicit values.
-- [x] A floor with no adaptation term gets a coefficient of zero, not the curve. It has no coefficient, and handing it one would suggest a term it does not carry.
-- [x] The experiment hands both the same `delta` and the same `ceiling`, explicitly.
-- [x] The curve is written once. `milcreda_ramp` binds to `creda_ramp` rather than copying it, and a test pins them to the same numbers.
+- [x] Each method names its own ramp and carries its own default: `creda_ramp` at 1e-4, `milcreda_ramp` at 1.0. The defaults serve each method's own runs; the benchmark never uses them, it always passes explicit values. `test_each_family_keeps_the_default_its_own_method_was_defined_with`
+- [x] A floor with no adaptation term gets a coefficient of zero, not the curve. It has no coefficient, and handing it one would suggest a term it does not carry. `test_a_floor_gets_no_coefficient_rather_than_one_it_does_not_carry`
+- [x] The experiment hands both the same `delta` and the same `ceiling`, explicitly. `test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given`
+- [x] The curve is written once. `milcreda_ramp` binds to `creda_ramp` rather than copying it, and a test pins them to the same numbers. `test_the_two_families_get_the_same_curve_for_the_same_arguments`
 
 ## The record and the report
 
-- [x] The benchmark declares revision r17 and which sections each arm exercises.
-- [x] The record keeps the supervised term's magnitude and the ratio between terms, not only the contribution. Without a denominator, "the term commanded nothing" and "the term was scaled to nothing" print alike.
+- [x] The benchmark declares revision r17 and which sections each arm exercises. `test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration`
+- [x] The record keeps the supervised term's magnitude and the ratio between terms, not only the contribution. Without a denominator, "the term commanded nothing" and "the term was scaled to nothing" print alike. `test_the_distribution_declares_exactly_what_was_approved`
 - [x] The benchmark declares `components` in its report contract.
 - [ ] The report says which ceiling each family found, on which role, over how many repetitions, and whether the seeds agreed. That CREDA does not run at its published 1e-4 is a consequence of the search and has to be read there, not in a comment in `config.py`.
 - [ ] The report marks the three cross-family rungs — C→E, D→F, D→G — with whatever remains of the confound **after** the search. With per-family ceilings the balance is partly equalized, so the magnitude has to be measured again rather than repeating the `B_src` factor that came from the shared ceiling. The within-family rungs stay attributable.
-- [x] On the two transfers the search measured, the ceiling in force is the one that won **on that transfer**, by the same paired rule and the same tie-break. On the remaining four it is the one that won pooled across the two searched transfers. The report states that rule where the ceilings are shown, because the scalar of those four was not chosen by looking at them.
-- [x] The record carries the per-transfer picks beside the pooled one. A record holding only the pooled winner cannot express the rule above, and a run reading it would silently apply the pooled value everywhere.
-- [x] `identicalAcrossShards` names the ceilings. They are the parameter the search just changed, so two shards straddling the search would merge into one table with adaptation inert on one half and not on the other, and nothing would refuse.
+- [x] On the two transfers the search measured, the ceiling in force is the one that won **on that transfer**, by the same paired rule and the same tie-break. On the remaining four it is the one that won pooled across the two searched transfers. The report states that rule where the ceilings are shown, because the scalar of those four was not chosen by looking at them. `test_a_measured_transfer_keeps_its_own_pick_over_the_pooled_one`
+- [x] The record carries the per-transfer picks beside the pooled one. A record holding only the pooled winner cannot express the rule above, and a run reading it would silently apply the pooled value everywhere. `test_el_registro_sale_con_la_forma_que_los_lectores_esperan`
+- [x] `identicalAcrossShards` names the ceilings. They are the parameter the search just changed, so two shards straddling the search would merge into one table with adaptation inert on one half and not on the other, and nothing would refuse. `test_the_ceilings_are_what_has_to_agree_across_shards`
 - [x] MIL-CREDA no longer runs at one coefficient across transfers, so its row averaged over transfers mixes two scalars. Within a transfer every arm still shares the ceiling, which is what keeps each rung attributable; the report says which of the two readings it is giving.
 
 
 ## The ceiling search
 
-- [x] Three material roles, disjoint: 64 training / 20 selection / 36 evaluation. The search reads selection and the verdict reads evaluation, and `run_one` measures one **or** the other — a role the search cannot see is a stronger guarantee than one it agrees not to use.
+- [x] Three material roles, disjoint: 64 training / 20 selection / 36 evaluation. The search reads selection and the verdict reads evaluation, and `run_one` measures one **or** the other — a role the search cannot see is a stronger guarantee than one it agrees not to use. `test_the_three_roles_partition_the_bags_exactly`
 - [x] The selection role is funded with **new material**, not taken from training: 12 bags per class instead of 10. Evaluation keeps its 36 and the three-point resolution the campaign was sized for. USPS is what binds, at 18 bags per class.
-- [x] The search runs at 20 epochs and 3 seeds, and **never at pilot scale**. The ramp climbs on the fraction of training elapsed, so at three epochs it is saturated by the second and a ceiling found there describes a landscape the campaign never trains in.
-- [x] Its required scale is declared apart from the one it runs at, and `atRequiredScale` goes into the record. With only one of them, a cheaply-found ceiling and the configuration agree with each other.
+- [x] The search runs at 20 epochs and 3 seeds, and **never at pilot scale**. The ramp climbs on the fraction of training elapsed, so at three epochs it is saturated by the second and a ceiling found there describes a landscape the campaign never trains in. `test_the_required_search_scale_is_declared_apart_from_the_running_one`
+- [x] Its required scale is declared apart from the one it runs at, and `atRequiredScale` goes into the record. With only one of them, a cheaply-found ceiling and the configuration agree with each other. `test_la_procedencia_dice_cual_y_a_que_escala`
 - [x] The campaign **refuses** without ceilings, and with ceilings searched below scale. Funding your own coefficient out of the run you are about to report is choosing and judging in one pass.
 - [x] Ceilings are compared **paired** by cell (seed, transfer): every ceiling is measured on the same material, so the cell's difficulty cancels instead of drowning the effect.
 - [x] Whether each seed would have chosen the same on its own is recorded. Three seeds on three different ceilings and three on the same one produce the same winner and are not the same evidence.
 - [x] The tie rule is written down: the **smallest** ceiling among the tied wins. Below some point a term is inert and everything ties, so there the tie-break is what actually chooses.
-- [x] The grid runs between the two declared defaults, 1e-4 and 1.0, so nothing outside what was already defensible can come out.
+- [x] The grid runs between the two declared defaults, 1e-4 and 1.0, so nothing outside what was already defensible can come out. `test_the_search_grid_runs_between_the_two_declared_defaults`
 - [x] The **growth rate is not searched**: it stays at `RAMP_DELTA = 20`, CREDA's own, shared by both sides. Searching it too would have turned the run into a 2D grid of three to five hours.
 - [x] No adaptive sampling. With 20 points the exhaustive grid is affordable and gives strictly more evidence: pruning biases against slow deltas, and sparse sampling destroys the tie structure, which here is a finding.
 - [x] The verdict is read over **all six** transfers. Withholding the two that funded the search bought nothing with the roles already disjoint by bag, and cost a third of the units the paired reading rests on.
@@ -230,24 +230,47 @@ carried by code and by a test that dies when the code is mutated, except the one
 marked open, which is open because the run has not happened.
 
 - [ ] The trials search has not run at full scale, and this declaration holds no ceiling record at all: the grid's was retired with the campaign it governed. No campaign is launched from this declaration until the search runs.
-- [x] The search measures **every one of the six transfers**. Nothing inherits: the pooled fallback in `ceiling_for` is no longer reachable. The grid measured two and four inherited out of sample, and both of `MIL-CREDA`'s significant losses fell on inherited transfers.
-- [x] Searching transfers the verdict also judges leaks nothing. What keeps the material disjoint is the **role** — the search reads `valid`, the verdict reads `eval` — and that holds identically on all six. `search_ceilings`' docstring claimed the transfer split did that work; it was false as configured and is corrected.
-- [x] Only the **full arms** are searched, `D` and `G`. The ceiling is per family and per transfer, **never per arm**: `ceiling_for(reduction, family, transfer)` takes no arm, so a per-arm ceiling is not expressible. If it were, the term and the coefficient could not be told apart.
+- [x] The search measures **every one of the six transfers**. Nothing inherits: the pooled fallback in `ceiling_for` is no longer reachable. The grid measured two and four inherited out of sample, and both of `MIL-CREDA`'s significant losses fell on inherited transfers. `test_busca_en_todas_las_transferencias`
+- [x] Searching transfers the verdict also judges leaks nothing. What keeps the material disjoint is the **role** — the search reads `valid`, the verdict reads `eval` — and that holds identically on all six. `search_ceilings`' docstring claimed the transfer split did that work; it was false as configured and is corrected. `test_la_busqueda_y_el_veredicto_se_separan_por_rol_no_por_transferencia`
+- [x] Only the **full arms** are searched, `D` and `G`. The ceiling is per family and per transfer, **never per arm**: `ceiling_for(reduction, family, transfer)` takes no arm, so a per-arm ceiling is not expressible. If it were, the term and the coefficient could not be told apart. `test_solo_busca_sobre_los_metodos_completos`
 - [x] The **growth rate is still not searched**, and the reason is new: the two families' objectives already sit an order of magnitude apart in `adaptationShare`, so a second free dimension amplifies that imbalance rather than resolving it. Ceiling and growth rate are also confounded — a high ceiling reached slowly and a low one reached fast give similar trajectories.
-- [x] **One seed per trial, declared.** Two trials on different seeds would measure the ceiling and the draw at once. The material is drawn once per family and every trial of a transfer runs on it.
-- [x] **A sampler seed per study**, derived from `(family, transfer)` with CRC32. Sharing one seed made all twelve studies visit the same four ceilings, and with a wide plateau the winner is the smallest *visited* point — so the record showed an agreement across transfers that was an artifact of the seed. Found by the local pilot, not by reading.
+- [x] **One seed per trial, declared.** Two trials on different seeds would measure the ceiling and the draw at once. The material is drawn once per family and every trial of a transfer runs on it. `test_una_sola_semilla_declarada_en_todos_los_trials`
+- [x] **A sampler seed per study**, derived from `(family, transfer)` with CRC32. Sharing one seed made all twelve studies visit the same four ceilings, and with a wide plateau the winner is the smallest *visited* point — so the record showed an agreement across transfers that was an artifact of the seed. Found by the local pilot, not by reading. `test_cada_estudio_explora_puntos_propios_y_no_los_del_vecino`
 - [x] **The plateau is the instrument's resolution**, `1/VALID_BAGS`, and not the GP's own noise estimate. Two ceilings that differ by less than one bag are not distinguishable by the measurement, whatever the model thinks; using a fitted quantity would make the plateau's width depend on how well the model fitted.
-- [x] **Within the plateau the smallest ceiling wins** — the same rule the tie-break had, and the same reason: the same outcome for less adaptation is the weaker claim.
-- [x] The **grid engine stays reachable** by configuration. It wrote the record that governs the campaign of 1800 runs, and an engine that can no longer be run is a record that can no longer be reproduced.
-- [x] The **pilot search writes its own record** and the full record always outranks it. With one file, a rehearsal's answer would have been consumed by a full campaign without a word.
+- [x] **Within the plateau the smallest ceiling wins** — the same rule the tie-break had, and the same reason: the same outcome for less adaptation is the weaker claim. `test_dentro_de_la_meseta_gana_el_mas_chico`
+- [x] The **grid engine stays reachable** by configuration. It wrote the record that governs the campaign of 1800 runs, and an engine that can no longer be run is a record that can no longer be reproduced. `test_a_resumed_ceiling_the_grid_no_longer_has_refuses_by_name`
+- [x] The **pilot search writes its own record** and the full record always outranks it. With one file, a rehearsal's answer would have been consumed by a full campaign without a word. `test_el_registro_completo_le_gana_siempre_al_ensayo`
 - [ ] **The trials search has not run at full scale.** The ceilings governing the campaign come from the grid search, so `probe` reports `search-first` and it is right: the current declaration has no record yet. No new campaign is launched from this declaration until it does.
 
 ## Reading the campaign
 
-- [x] The gains table is **paired within each transfer**, against each method's own floor, and reports four things because no single one of them is honest alone: the mean in points with its **between-transfer** error, the mean of the percentages, the span, and the agreement in words. The two means can disagree in sign on the same data — `+0.56` and `-3.61` — because the floors run from 23% to 81%.
-- [x] The error of that mean is **between transfers, not over the pooled pairs**. A transfer is a setting and not a repetition; pooling claimed a stability across settings nobody measured, and understated the uncertainty by a factor of three.
-- [x] **Phase two rests on 3 repetitions, not 30.** `CHECKPOINTS` keeps three per cell, so every latent claim sits on the verdict floor by construction, however long phase one ran.
-- [x] Promotion never moves an arm's own median. Seeds added to keep a floor comparison possible, or to let a figure draw, are kept in separate fields and **never enter a marginal average**: a floor's extras were chosen by the dependent arms' orderings, so they are a biased sample of that floor.
+- [x] The gains table is **paired within each transfer**, against each method's own floor, and reports four things because no single one of them is honest alone: the mean in points with its **between-transfer** error, the mean of the percentages, the span, and the agreement in words. The two means can disagree in sign on the same data — `+0.56` and `-3.61` — because the floors run from 23% to 81%. `test_the_difference_is_paired_within_a_transfer`
+- [x] The error of that mean is **between transfers, not over the pooled pairs**. A transfer is a setting and not a repetition; pooling claimed a stability across settings nobody measured, and understated the uncertainty by a factor of three. `test_the_error_is_between_transfers_not_over_the_pooled_pairs`
+- [x] **Phase two rests on 3 repetitions, not 30.** `CHECKPOINTS` keeps three per cell, so every latent claim sits on the verdict floor by construction, however long phase one ran. `test_median_seeds_is_the_selection_rule_on_its_own`
+- [x] Promotion never moves an arm's own median. Seeds added to keep a floor comparison possible, or to let a figure draw, are kept in separate fields and **never enter a marginal average**: a floor's extras were chosen by the dependent arms' orderings, so they are a biased sample of that floor. `test_an_arms_own_median_is_never_moved_to_match_its_floor`
+
+## Label noise
+
+- [x] The diagnostic runs at rho 0.4, the cap of the declared range, fixed now rather than after the curve. At the extreme the coefficient is under the most pressure: a re-searched ceiling that recovers nothing there recovers nothing anywhere, so the reading does not depend on where anyone chose to look. The cap is fixed by the range and not by a result.
+- [x] That notebook is diagnostic and never a verdict. Its numbers do not enter the verdict tables, and what it decides is one thing: whether per-level ceilings are worth restructuring the code for.
+- [x] It needs three points and only pays for one. D and G at the chosen level under the clean ceiling come out of the campaign at no extra cost; what is run is the ceiling searched at that level, and D and G under it. A re-searched ceiling that recovers the loss says it was the coefficient; one that does not says it was the term.
+- [x] The diagnostic notebook runs on M to U — the same transfer as the degradation curve, so it reads against a curve that exists — with only D (CREDA) and G (MIL-CREDA), the two complete methods, one per family, and the only two carrying the coefficient. A and B have no adaptation term to re-search a ceiling for; C, E and F are ablations that would multiply the search without adding diagnosis.
+- [x] What a fixed ceiling costs is that a degradation cannot be attributed: the term failing and the coefficient being too small look identical. That question is answered afterwards by a cheap diagnostic rung and not by paying for five searches up front.
+- [x] The ceilings are searched at rho 0 and held fixed across all five levels. The curve is declared as the coefficient chosen clean, applied dirty — which is also the practical situation, since nobody recalibrates per noise level. Searching per level would multiply 2 families x 6 transfers x 30 trials x 20 epochs by five, another whole campaign before the campaign.
+- [ ] The contaminated level those two notebooks show is rho 0.2, fixed as the midpoint of the declared range before anything runs. Choosing it after seeing the degradation curve would put the noise level most favourable to the method in the headline table, chosen by outcome; the midpoint is arithmetic and nothing that comes out of the run can have decided it.
+- [x] The degradation notebook shows the whole curve over the five levels, so it chooses nothing. Accuracy against rho for every arm, and `adaptationShare` against rho for every arm that carries an adaptation term. Both instruments already exist and are already recorded: no new measurement is needed, only the axis.
+- [x] The degradation notebook runs on M to U, fixed by the smallest domain gap and not by which transfer came out best. The rule is about the instrument: a transfer already near its floor at rho 0 has no room to fall and cannot show a curve, and the gap is a property of the material rather than of any measurement. It costs 10 arms x 1 transfer x 30 seeds x 5 levels = 1500 runs.
+- [ ] The report and latent notebooks show each table twice: at rho 0 and at one contaminated level, each with its own conclusion. A second conclusion that enumerates the numbers of its own table comes back as `restated`, which is the finding already open on `Benchmark_Latent_v1`.
+- [x] One contamination draw, shared by all ten arms. Arms that saw differently corrupted material differ in the draw as well as in what they compute. The manifest records which instance slots were replaced and by which image indices, beside the `imageIndices` it already writes, so the material can be rebuilt without trusting a permutation to be stable.
+- [x] The levels are 0, 0.1, 0.2, 0.3 and 0.4, capped there. With 30 instances and contaminants drawn from the other nine classes the drawn class stays the plurality while rho is below 0.5; past that the bag label stops being defensible and the curve measures nothing. `test_every_declared_level_sits_under_the_cap_and_is_exact`
+- [ ] The target is the sharper half and not an afterthought. Target training is unsupervised — `pseudolabel` (Eq. 22) and `confidences` (Eq. 24) — so contaminating its bags is not label noise at all: it corrupts the conditional the adaptation term aligns to and poisons the pseudo-labels the weighting is computed from. D against C, and F and G against E, differ exactly in that weighting, and at rho 0 that rung has almost nothing to separate it.
+- [x] One rate, the same for source and target, applied only to `train_idx`. `valid_idx` and `eval_idx` are never contaminated: the first is where the search reads its criterion, the second is the answer key of the verdict. Train dirty, measure clean. Two separate rates would make the sweep two-dimensional and multiply a campaign that already costs 1800 runs; which of the two domains hurts more is a rung of its own, later, on one transfer. `test_the_other_two_roles_are_untouched`
+- [x] The same contamination is two perturbations, and the report says so. `wiring.py` broadcasts the bag label to all 30 instances, so for A, C and D those k instances carry a genuinely wrong label; for the bag-unit arms the label stays at the bag and the contaminants are witnesses the attention may downweight. Read as one perturbation the table would say "same noise, different robustness" when it says "one contamination, two consequences the formulations imply".
+- [x] Contamination replaces k of the `INSTANCES_PER_BAG` instances of a bag with images of another class and never touches the bag label. Bags are pure and no instance carries a label, so there is no label to flip: what is corrupted is the evidence, not the answer. `test_every_training_bag_loses_exactly_the_declared_count`
+- [ ] Noise enters as a declared axis with 0 as its first level, over the notebooks that already exist. No v2 duplicates: two copies of four notebooks differing in one parameter fork from the first day, and there is no clean campaign to protect — `Results/Benchmark/` is empty and the v1 grid was retired with its record.
+The campaign as it stands runs on clean material, so nothing in it can show whether
+the formulation mitigates the corruption it claims to. Noise enters as a declared
+axis over the same notebooks rather than as a duplicated set of them.
 
 ## Reversed
 
