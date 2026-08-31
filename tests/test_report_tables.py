@@ -261,6 +261,27 @@ def _metric_of(arguments: str) -> str | None:
     return None
 
 
+#: Which renderer draws each metric's level table. Not a preference: `seconds` is
+#: `perRun` in the benchmark's own declaration, so `tables.render` refuses it and
+#: `render_per_run` is the only form left. The other two pool and are printed by
+#: `render`. The claims below -- the reading order, and that every level table is
+#: followed by its own conclusion -- are about the section, not about which
+#: function drew it, so they read the renderer from here instead of assuming one.
+LEVEL_RENDERER = {"seconds": "render_per_run",
+                  "sourceAccuracy": "render",
+                  "targetAccuracy": "render"}
+
+
+def _levels(notebook) -> list[str]:
+    """The metrics whose level table the notebook shows, in the printed order."""
+    shown = []
+    for name, args in _shown(notebook):
+        metric = _metric_of(args)
+        if metric and name == LEVEL_RENDERER[metric]:
+            shown.append(metric)
+    return shown
+
+
 def test_the_report_shows_the_target_table_and_its_source_complement() -> None:
     """Two tables, and the second is not optional.
 
@@ -271,8 +292,7 @@ def test_the_report_shows_the_target_table_and_its_source_complement() -> None:
     Reachable red: delete either `render(runs, "…Accuracy", …)` call from the
     notebook, or show target before source.
     """
-    levels = [_metric_of(args) for name, args in _shown(REPORT) if name == "render"]
-    levels = [metric for metric in levels if metric]
+    levels = _levels(REPORT)
 
     assert levels.count("sourceAccuracy") == 1, "the source complement is not shown once"
     assert levels.count("targetAccuracy") == 1, "the headline is not shown once"
@@ -359,7 +379,7 @@ def test_each_level_table_is_followed_by_its_own_computed_conclusion() -> None:
     """
     shown = [(name, _metric_of(args)) for name, args in _shown(REPORT)]
     for metric in ("seconds", "sourceAccuracy", "targetAccuracy"):
-        level = shown.index(("render", metric))
+        level = shown.index((LEVEL_RENDERER[metric], metric))
         concluded = next(((name, seen) for name, seen in shown[level + 1:]
                           if name.startswith("conclusion")), None)
         assert concluded is not None, f"the {metric} table concludes nothing"
@@ -370,8 +390,10 @@ def test_each_level_table_is_followed_by_its_own_computed_conclusion() -> None:
 def test_a_cell_shows_one_table_and_not_two() -> None:
     """One table per cell, so the framing above it belongs to one reading.
 
-    A cell whose renders sit in the two branches of one `if` still shows one:
-    that is the wall-time cell, which prints per-run or pooled and never both.
+    A cell whose renders sit in the two branches of one `if` still shows one.
+    The wall-time cell used to be that case -- per-run or pooled, never both --
+    and stopped being it when `seconds` lost its pooled branch; the allowance
+    stays because a cell is entitled to one table however it chooses it.
 
     Reachable red: add a second `show(tables.render(...))` to any cell.
     """
@@ -569,3 +591,73 @@ def test_the_benchmark_declares_the_components_its_objective_is_made_of() -> Non
     assert written, "the run record was not found in the harness"
     for name in [*components["terms"], components["share"]]:
         assert name in written, f"{name} is declared and never written"
+
+
+# ------------------------------------------- what the declaration forbids pooling
+
+def test_render_refuses_a_dimension_the_declaration_calls_per_run() -> None:
+    """`render_per_run`'s argument, enforced instead of only written down.
+
+    No reading of `seconds`/`peakMiB` was stable enough to stand for the method,
+    or even for one machine across two of its own runs, so a `mean ± stdev` over
+    them describes none of the runs behind it and reads exactly as rigorous as
+    one that does. That argument lived in `render_per_run`'s docstring, which is
+    the one function that was never going to pool them; `render` checked nothing
+    and pooled whatever it was handed.
+
+    Read from the declaration and not listed here: which dimensions do not pool
+    is the target's own statement, and a copy of the list in this file would be a
+    second source of truth that ages in silence.
+
+    Reachable red: delete the guard and `render` prints the pooled table again,
+    ± and all.
+    """
+    declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["perRun"]
+    assert declared, "the declaration names no per-run dimension to refuse"
+    assert tables.per_run_dimensions() == list(declared), \
+        "the renderer's idea of what does not pool is not the declaration's"
+
+    for metric in declared:
+        runs = _runs({("G", LABELS[0]): [10.0, 30.0]}, metric=metric)
+        with pytest.raises(ValueError) as raised:
+            tables.render(runs, metric, _reduction(seeds=2))
+        said = str(raised.value)
+        assert metric in said and "perRun" in said, \
+            f"the refusal does not say which dimension it is about: {said}"
+        assert "render_per_run" in said, "the refusal names no way forward"
+
+    # And it still renders what the same declaration says does pool, so the
+    # guard is a refusal and not an outage.
+    pooled = MIL_CREDA_Benchmark.__benchmark__["distribution"]["poolable"]
+    assert "targetAccuracy" in pooled
+    assert tables.render(_runs({("G", LABELS[0]): [0.8, 0.9]}),
+                         "targetAccuracy", _reduction(seeds=2))
+
+
+def test_the_report_asks_for_no_pooled_table_of_a_per_run_dimension() -> None:
+    """The other half: the guard refuses, and the notebook stopped asking.
+
+    A refusal the report walks into on every run is a broken notebook, not a
+    protected one -- the pooled `seconds` block was written three times across
+    two cells, and `render_per_run` beside it was already the form the
+    declaration permits.
+
+    Scanned over every cell and not only the shown ones: the cell that writes
+    the report to disk builds its blocks in a list, and two of the three calls
+    lived there.
+
+    Reachable red: put `tables.render(runs, "seconds", ...)` back into any cell.
+    """
+    cells = json.loads(REPORT.read_text(encoding="utf-8"))["cells"]
+    for metric in tables.per_run_dimensions():
+        asked = []
+        for index, cell in enumerate(cells):
+            if cell["cell_type"] != "code":
+                continue
+            source = "".join(cell["source"])
+            for match in re.finditer(r"tables\.(\w+)\(([^)]*)", source):
+                if match.group(1) == "render" and f'"{metric}"' in match.group(2):
+                    asked.append(index)
+        assert not asked, \
+            f"the report pools `{metric}` in cell(s) {asked}: the declaration " \
+            f"calls it perRun and `render` refuses it"
