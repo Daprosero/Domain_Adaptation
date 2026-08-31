@@ -313,6 +313,81 @@ def test_three_checkpoints_are_kept_per_arm_per_cell_for_every_arm(campana) -> N
     assert one["reduction"]["seeds"] == [0, 1, 2, 3]
 
 
+def _run_one_with_clock(seconds_of):
+    """`run_one`'s shape, with the wall time of each run under the test's hand.
+
+    The shared `_fake_run_one` returns a constant `0.01` for every arm, which
+    is exactly the fixture that would let a "the slowest arm is named" claim
+    pass while naming nothing: with every reading identical, any arm is a
+    correct answer. Here the slowest is a different arm in every cell.
+    """
+    def run_one(arm_id, transfer, seed, reduction, device, material, **kwargs):
+        label = harness.transfer_label(transfer)
+        return {
+            "arm": arm_id, "transfer": label, "seed": seed,
+            "env": "test-env", "targetAccuracy": 0.5 + seed / 100,
+            "sourceAccuracy": 0.5, "seconds": seconds_of(arm_id, seed),
+            "peakMiB": 1.0, "parameters": 4, "contribution": 0.1,
+            "supervised": 0.2, "adaptationShare": 0.3,
+            "curve": [], "epochs": [{"epoch": 0}], "state": None,
+        }
+    return run_one
+
+
+def test_progress_prints_one_line_per_cell_and_names_that_cells_slowest_arm(
+        campana, monkeypatch) -> None:
+    """One line per (seed, transfer), not one per run, and it names the slowest.
+
+    Six transfers over thirty seeds is 180 lines; the same call inside the arm
+    loop prints 1800, and 1800 lines of a run measured in hours is a report
+    nobody reads rather than the sign of life it is kept for.
+
+    The slowest arm rides along because the cell granularity is what would
+    otherwise hide it. Printed per run, an arm taking ten times its neighbours
+    was visible while it was still the only thing that had happened; summarised
+    per cell it would surface only once the cell closed, unless the summary
+    says which arm spent the time.
+
+    Reachable red, both halves: move `progress` back inside the arm loop and the
+    count lands on arms x transfers x seeds; drop the `slowest` clause and the
+    arm this cell actually spent its time on is nowhere in the line.
+    """
+    arm_ids = [arm["id"] for arm in config.ARMS]
+
+    def seconds_of(arm_id: str, seed: int) -> float:
+        # A rotation, so no cell shares a slowest arm with the next and a line
+        # that named a fixed arm would be wrong five times out of six.
+        return 1.0 + (arm_ids.index(arm_id) + seed) % len(arm_ids)
+
+    monkeypatch.setattr(harness, "run_one", _run_one_with_clock(seconds_of))
+    lines: list[str] = []
+    seeds = [0, 1, 2]
+    harness.campaign(
+        harness.Reduction(seeds=seeds, epochs=1,
+                          ceilings={"creda": 1e-4, "milcreda": 1.0},
+                          ceilingsByTransfer={}),
+        torch.device("cpu"), progress=lines.append)
+
+    labels = [harness.transfer_label(t) for t in config.VERDICT_TRANSFERS]
+    cells = [line for line in lines if " arms  " in line]
+    assert len(cells) == len(seeds) * len(labels), (
+        f"{len(cells)} progress lines for {len(seeds) * len(labels)} cells of "
+        f"{len(arm_ids)} arms -- one per run would be "
+        f"{len(seeds) * len(labels) * len(arm_ids)}")
+
+    for seed in seeds:
+        slowest = arm_ids[(len(arm_ids) - 1 - seed) % len(arm_ids)]
+        spent = seconds_of(slowest, seed)
+        for label in labels:
+            of_cell = [line for line in cells
+                       if f"{label} seed {seed}:" in line]
+            assert len(of_cell) == 1, \
+                f"{len(of_cell)} lines for the cell {label} seed {seed}"
+            assert f"slowest {slowest:>2} {spent:.1f}s" in of_cell[0], \
+                (f"the line for {label} seed {seed} does not name {slowest}, "
+                 f"which spent {spent:.1f}s of it: {of_cell[0]!r}")
+
+
 # ------------------------------------------------------- what funds the third role
 
 def test_the_selection_role_is_funded_by_new_material_and_takes_nothing(

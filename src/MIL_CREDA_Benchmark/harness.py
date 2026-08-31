@@ -1267,6 +1267,7 @@ def campaign(reduction: Reduction, device: torch.device,
             material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
             manifests[(label, seed)] = {"source": material["source"].manifest,
                                         "target": material["target"].manifest}
+            of_cell: list[dict] = []
             for arm_id in arm_ids:
                 run = run_one(arm_id, transfer, seed, reduction, device, material)
                 state = run.pop("state")
@@ -1277,10 +1278,26 @@ def campaign(reduction: Reduction, device: torch.device,
                 records.write(json.dumps(run) + "\n")
                 records.flush()
                 cells.setdefault((label, arm_id), []).append(run)
-                progress(f"  {arm_id:>2} {label} seed {seed}: "
-                         f"target {run['targetAccuracy']:.3f}  "
-                         f"source {run['sourceAccuracy']:.3f}  "
-                         f"{run['seconds']:.1f}s")
+                of_cell.append(run)
+            # One line per (seed, transfer) cell, written once its arms are
+            # done, and not one per run: six transfers over thirty seeds is
+            # 180 lines where a line per run would be 1800, and 1800 lines is
+            # a report nobody reads rather than a sign of life.
+            #
+            # The slowest arm and its seconds ride along because that is what
+            # the cell granularity would otherwise cost. Printed per run, an
+            # arm taking ten times its neighbours showed up while it was still
+            # the only thing that had happened; summarised per cell, it would
+            # be invisible until the cell closed unless the summary names it.
+            # `runs.jsonl` keeps every reading either way -- this line is
+            # progress, not the record.
+            if of_cell:
+                slowest = max(of_cell, key=lambda r: r["seconds"])
+                targets = [r["targetAccuracy"] for r in of_cell]
+                progress(f"  {label} seed {seed}: {len(of_cell)} arms  "
+                         f"target {min(targets):.3f}-{max(targets):.3f}  "
+                         f"slowest {slowest['arm']:>2} {slowest['seconds']:.1f}s  "
+                         f"cell {sum(r['seconds'] for r in of_cell):.1f}s")
         del drawn
 
     records.close()
