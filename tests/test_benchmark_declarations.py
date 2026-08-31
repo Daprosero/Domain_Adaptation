@@ -7,8 +7,8 @@ change oblige the bench to change*. Adding an arm to one and forgetting the othe
 leaves both files internally consistent and the pair wrong — the kind of omission
 that arrives as a silence.
 
-Everything here is config-level and imports no torch, so the suite still runs with
-no network and no model weights.
+Nothing here trains: what is not config-level drives the harness with a fake
+`run_one`, so the suite still runs with no network and no model weights.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import json
 import pytest
 import torch
 
-from MIL_CREDA_Benchmark import config
+from MIL_CREDA_Benchmark import config, harness
 
 
 def test_every_arm_declares_which_sections_it_exercises() -> None:
@@ -364,51 +364,98 @@ def test_the_search_uses_the_complete_method_of_each_family() -> None:
 
 # ---------------------------------------------------- the ceiling selection
 
-def _rows(scores: dict[float, list[float]]) -> list[dict]:
-    """Rows as the search builds them, from (seed, transfer) cells."""
+def _search_entry(scores: dict[float, list[float]], monkeypatch, tmp_path) -> dict:
+    """One family's search entry, given one score per (cell, ceiling).
+
+    Drives `harness.search_ceilings` itself with a fake `run_one`, in the shape
+    `test_search_engine.py` uses for the trials engine: the centring and the
+    tie-break under test are the ones the campaign runs. This file used to carry
+    its own copy of both, and a copy proves nothing — the real rule could be
+    deleted from `harness.py` with these two tests still green.
+
+    Each list is read cell by cell: one cell per seed, over a single transfer,
+    which is the same `(seed, transfer)` cell the search centres on.
+    """
     grid = sorted(scores)
-    cells = [{c: scores[c][i] for c in grid} for i in range(len(scores[grid[0]]))]
-    out = []
-    for c in grid:
-        centred = [cell[c] - sum(cell.values()) / len(cell) for cell in cells]
-        out.append({"ceiling": c, "paired": sum(centred) / len(centred)})
-    return out
+    seeds = list(range(len(scores[grid[0]])))
+    monkeypatch.setattr(config, "SEARCH_ENGINE", "grid")
+    monkeypatch.setattr(config, "CEILING_GRID", grid)
+    monkeypatch.setattr(config, "SEARCH_SEEDS", seeds)
+    monkeypatch.setattr(config, "SEARCH_ARMS", {"milcreda": "G"})
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "ceilings.pilot.json")
+
+    class _Bags:
+        pass
+
+    def _build(code, cache, seed, noise=0.0):
+        return _Bags()
+
+    def _run_one(arm, transfer, seed, reduction, device, material, *, ceiling, role):
+        return {config.SEARCH_CRITERION: scores[ceiling][seeds.index(seed)]}
+
+    monkeypatch.setattr(harness.bags, "build", _build)
+    monkeypatch.setattr(harness, "run_one", _run_one)
+    found = harness.search_ceilings(
+        harness.Reduction(seeds=seeds, epochs=config.SEARCH_EPOCHS),
+        "cpu", progress=lambda *_: None,
+        transfers=[config.SEARCH_TRANSFERS[0]])
+    return found["milcreda"]
 
 
-def _pick(rows: list[dict]) -> float:
-    top = max(r["paired"] for r in rows)
-    tied = [r for r in rows if r["paired"] == top]
-    return min(tied, key=lambda r: r["ceiling"])["ceiling"]
+def _by_ceiling(entry: dict, key: str) -> dict[float, float]:
+    """One reading of the searched grid, keyed by ceiling, as the record holds it."""
+    return {row["ceiling"]: row[key] for row in entry["grid"]}
 
 
-def test_the_pairing_survives_a_cell_that_is_simply_harder() -> None:
+def test_the_pairing_survives_a_cell_that_is_simply_harder(monkeypatch, tmp_path) -> None:
     """What pairing buys, in the case that motivates it.
 
-    Two cells, one far harder than the other, and ceiling 0.1 wins both by two
-    points. Comparing bare means lets the hard cell's difficulty dominate and
-    drown the effect; centring each cell on its own mean lets the effect survive,
-    because every ceiling was measured on the same material.
+    Two searches over the same two ceilings, differing only in how hard the
+    second cell is: ceiling 0.1 wins every cell of both by the same two points.
+    The bare mean carries the cell's own difficulty into the reading and moves
+    twenty-two points between the two; centring each cell on its own mean reports
+    the effect and nothing else, identically in both, because every ceiling was
+    measured on exactly the same material.
 
-    Reachable red: picking by bare mean, 0.01 wins.
+    The claim is about the reading and not about the winner, and that is not a
+    weaker test but the honest one: the centring subtracts the same number from
+    every ceiling of a cell, so on a complete grid it can never move the argmax.
+    A pick-only assertion here would survive the pairing being deleted.
+
+    Reachable red: with `paired` read off the bare values, the two searches stop
+    agreeing and the effect is buried under the difficulty.
     """
-    scores = {0.01: [0.90, 0.20], 0.1: [0.92, 0.22]}
-    crudo = {c: sum(v) / len(v) for c, v in scores.items()}
-    assert _pick(_rows(scores)) == 0.1
-    # the bare mean happens to agree here too; what changes is the margin
-    assert crudo[0.1] > crudo[0.01]
+    facil = _search_entry({0.01: [0.90, 0.50], 0.1: [0.92, 0.52]}, monkeypatch, tmp_path)
+    dificil = _search_entry({0.01: [0.90, 0.05], 0.1: [0.92, 0.07]}, monkeypatch, tmp_path)
 
-    # now a hard, noisy cell, where the bare mean loses its way
-    scores = {0.01: [0.90, 0.05], 0.1: [0.92, 0.01]}
-    crudo = {c: sum(v) / len(v) for c, v in scores.items()}
-    assert crudo[0.01] > crudo[0.1], "the bare mean picks the wrong ceiling"
-    assert _pick(_rows(scores)) == 0.01, "y el pareado coincide: aca no hay efecto"
+    assert facil["ceiling"] == dificil["ceiling"] == 0.1
+
+    # the effect, centred on each cell's own mean: two points, and nothing of
+    # where the cell sat
+    apareado = _by_ceiling(dificil, "paired")
+    assert apareado == pytest.approx({0.01: -0.01, 0.1: 0.01})
+    assert _by_ceiling(facil, "paired") == pytest.approx(apareado)
+
+    # the bare mean of those same two searches, which is what pairing avoids
+    crudo_facil = _by_ceiling(facil, config.SEARCH_CRITERION)
+    crudo_dificil = _by_ceiling(dificil, config.SEARCH_CRITERION)
+    assert crudo_facil[0.1] - crudo_dificil[0.1] == pytest.approx(0.225), \
+        "el crudo se mueve con la dificultad de la celda"
 
 
-def test_a_tie_goes_to_the_smallest_ceiling() -> None:
+def test_a_tie_goes_to_the_smallest_ceiling(monkeypatch, tmp_path) -> None:
     """Below some point a term is inert and everything ties; on that stretch the
-    tie-break is what actually chooses, so it is declared."""
+    tie-break is what actually chooses, so it is declared.
+
+    Reachable red: the largest of the tied ceilings wins instead.
+    """
     scores = {1e-4: [0.5, 0.5], 1e-3: [0.5, 0.5], 1e-2: [0.5, 0.5]}
-    assert _pick(_rows(scores)) == 1e-4
+    entry = _search_entry(scores, monkeypatch, tmp_path)
+    # the tie is real and the record says so, so the pick below is the tie-break's
+    assert entry["tied"] == sorted(scores) and entry["decidedByTieBreak"]
+    assert entry["ceiling"] == 1e-4
 
 
 def test_the_required_search_scale_is_declared_apart_from_the_running_one() -> None:
