@@ -597,6 +597,22 @@ def conclusion_ceilings_by_transfer(record: dict | None,
     return " ".join(partes)
 
 
+def per_run_dimensions() -> list[str]:
+    """Las dimensiones que la declaración del propio banco dice que no se agrupan.
+
+    Se lee de la declaración y no se lista acá, igual que `shards.partition()`:
+    quién es `perRun` lo decide el repositorio que mide, no el módulo que
+    imprime. Copiar la lista sería una segunda fuente de verdad que envejece en
+    silencio, que es exactamente el error del que trata este archivo.
+
+    Importado adentro para no arrastrar `harness` — y con él `torch` — a un
+    módulo que hoy sólo formatea; es el mismo patrón que usan las tablas de la
+    curva de ruido más abajo.
+    """
+    from MIL_CREDA_Benchmark import shards
+    return list(shards.declaration().get("perRun") or [])
+
+
 def render(runs: Iterable[dict], metric: str, reduction: dict,
            markdown: bool = False) -> str:
     """Una fila por método: sus seis transferencias y, al final, el promedio.
@@ -609,7 +625,24 @@ def render(runs: Iterable[dict], metric: str, reduction: dict,
 
     El promedio va último porque es un resumen: se lee después de aquello que
     resume, no antes.
+
+    Y se niega de plano ante una dimensión declarada `perRun`. `render_per_run`
+    explica por qué ninguna media de `seconds`/`peakMiB` es defendible; sin esta
+    guarda ese argumento vivía en un docstring que la función de al lado no lee,
+    y agrupar quedaba a un `else` de distancia. Un promedio que la declaración
+    prohíbe se imprime igual de convincente que uno que permite.
     """
+    prohibidas = per_run_dimensions()
+    if metric in prohibidas:
+        raise ValueError(
+            f"refusing to pool `{metric}`: the benchmark declares it `perRun` "
+            f"({', '.join(prohibidas)}).\n"
+            "  No reading of it was stable enough to stand for the method, or "
+            "even for one machine across two of its own runs, so a "
+            "`mean ± stdev` here would describe none of the runs behind it.\n"
+            "  Use `render_per_run(summary['gridPerRun'], ...)`, which prints "
+            "every reading with the run that produced it."
+        )
     rows = table(runs, metric)
     labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
     title, unit = SPANISH.get(metric, (metric, ""))
