@@ -1,0 +1,361 @@
+"""The figures, executed rather than described.
+
+Nothing in `figures.py` and none of the grids in `latent.py` was ever run by a
+test: every claim about them rested on the constants they read. A constant naming
+three arms does not make a grid draw three columns, and `LATENT_PANELS` being
+right while `latent_grid` drops the shared original column are the same green
+suite.
+
+The drawing itself is stubbed exactly twice -- the UMAP embedding and the trained
+checkpoints -- because those need a run on disk and a fitted model, and neither is
+what any claim here is about. What is not stubbed is the layout: how many panels,
+in which order, out of how many figures, and which column comes from a model at
+all.
+"""
+
+from __future__ import annotations
+
+import json
+
+import numpy
+import pytest
+import torch
+
+from MIL_CREDA_Benchmark import config, figures, latent
+
+TRANSFERS = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS[:3]]
+
+
+# --------------------------------------------------------------- the noise axis
+
+def _levels(tmp_path, monkeypatch, per_level: dict[float, dict[str, dict[str, float]]]):
+    """A results tree per declared level, in the shape the sweep writes one."""
+    monkeypatch.setattr(config, "PRODUCT", tmp_path)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    for rate, per_arm in per_level.items():
+        root = config.results_for(rate, "curve")
+        root.mkdir(parents=True, exist_ok=True)
+        lines = []
+        for arm, values in per_arm.items():
+            lines.append(json.dumps({"arm": arm, "transfer": "M->U", **values}))
+        (root / "runs.jsonl").write_text("\n".join(lines), encoding="utf-8")
+        (root / "summary.json").write_text(
+            json.dumps({"reduction": {"labelNoise": rate}, "grid": {}}),
+            encoding="utf-8")
+
+
+def _drawn(figure) -> dict[str, tuple[list[float], list[float]]]:
+    """Every labelled series of a one-panel figure, by its legend label."""
+    axis = figure.axes[0]
+    return {line.get_label(): (list(line.get_xdata()), list(line.get_ydata()))
+            for line in axis.lines if not line.get_label().startswith("_")}
+
+
+def test_the_degradation_figure_draws_the_share_against_rho_and_not_only_accuracy(
+        tmp_path, monkeypatch) -> None:
+    """Two instruments over one axis, and the second is the one that says which
+    of the two failures happened.
+
+    Accuracy against rho for every arm says that something fell. The share of the
+    objective the adaptation term commanded, against the same rho, is what
+    separates a term that stopped working from a term that was never given any
+    weight to work with -- and both instruments are already recorded, so the axis
+    is the only thing being added.
+
+    Reachable red: draw `targetAccuracy` whatever the caller asked for, and the
+    share series comes out as the accuracy one.
+    """
+    _levels(tmp_path, monkeypatch, {
+        0.0: {"A": {"targetAccuracy": 0.80, "adaptationShare": 0.0},
+              "G": {"targetAccuracy": 0.82, "adaptationShare": 0.10}},
+        0.2: {"A": {"targetAccuracy": 0.60, "adaptationShare": 0.0},
+              "G": {"targetAccuracy": 0.75, "adaptationShare": 0.30}},
+        0.4: {"A": {"targetAccuracy": 0.40, "adaptationShare": 0.0},
+              "G": {"targetAccuracy": 0.70, "adaptationShare": 0.55}},
+    })
+
+    accuracy = _drawn(figures.noise_curves("targetAccuracy"))
+    assert accuracy[config.NAME_OF["G"]] == ([0.0, 0.2, 0.4], [0.82, 0.75, 0.70])
+    assert accuracy[config.NAME_OF["A"]] == ([0.0, 0.2, 0.4], [0.80, 0.60, 0.40])
+
+    share = _drawn(figures.noise_curves("adaptationShare"))
+    assert share[config.NAME_OF["G"]] == ([0.0, 0.2, 0.4], [0.10, 0.30, 0.55])
+    # every arm that carries the term is on the share figure, and the axis is
+    # the same rate axis the accuracy figure ran over
+    for arm in (a["id"] for a in config.ARMS if a["adaptation"]):
+        if config.NAME_OF[arm] in accuracy:
+            assert config.NAME_OF[arm] in share
+
+
+def test_the_degradation_figure_never_draws_a_level_that_did_not_run(
+        tmp_path, monkeypatch) -> None:
+    """A blank axis reads as a flat result, so a figure with nothing behind it
+    says so in words instead of drawing."""
+    _levels(tmp_path, monkeypatch, {})
+    figure = figures.noise_curves("targetAccuracy")
+    assert not _drawn(figure)
+    assert any("ningún nivel" in text.get_text() for text in figure.axes[0].texts)
+
+
+def test_the_figure_is_written_where_it_is_asked_for_and_only_as_a_pdf(
+        tmp_path, monkeypatch) -> None:
+    """One extension, so two versions of one figure cannot coexist unnoticed."""
+    _levels(tmp_path, monkeypatch,
+            {0.0: {"G": {"targetAccuracy": 0.8, "adaptationShare": 0.1}}})
+    figures.noise_curves("targetAccuracy", path=tmp_path / "curva" / "ruido.png")
+    written = sorted(p.name for p in (tmp_path / "curva").iterdir())
+    assert written == ["ruido.pdf"]
+
+
+def test_the_contribution_panel_reports_the_realized_share_arm_by_arm(
+        tmp_path) -> None:
+    """The coefficient is fixed at the neutral for every arm, and fixing the
+    coefficient does not fix the share: what each term actually commands of its
+    own objective has to be reported per arm, or a term scaled to irrelevance is
+    inferred rather than seen.
+
+    The curve is the median across seeds with an interquartile band -- never one
+    seed's trajectory, which cannot say whether the shape is the method's or the
+    draw's.
+
+    Reachable red: drop an arm from the panel, or draw `supervised` where the
+    realized contribution belongs.
+    """
+    runs = tmp_path / "runs.jsonl"
+    steps = 4
+    shares = {"C": 0.03, "D": 0.20, "G": 0.99}
+    with runs.open("w", encoding="utf-8") as handle:
+        for arm, share in shares.items():
+            for seed in range(3):
+                curve = [{"contribution": share + seed / 100,
+                          "supervised": 1.0 - share,
+                          "adaptation": share} for _ in range(steps)]
+                handle.write(json.dumps(
+                    {"transfer": "M->U", "arm": arm, "seed": seed,
+                     "curve": curve}) + "\n")
+
+    figure = figures.contribution_curves(tmp_path / "contribution.pdf",
+                                         arms=tuple(shares), runs=runs)
+    drawn = {line.get_label(): list(line.get_ydata())
+             for line in figure.axes[0].lines if not line.get_label().startswith("_")}
+
+    assert set(drawn) == {config.NAME_OF[a] for a in shares}
+    for arm, share in shares.items():
+        # the median of the three seeds, and the whole trajectory rather than a
+        # single number
+        assert drawn[config.NAME_OF[arm]] == [pytest.approx(share + 0.01)] * steps
+    # a term at 0.03 beside one at 0.99 is the reading the panel exists for
+    assert min(min(v) for v in drawn.values()) < 0.1 < max(max(v) for v in drawn.values())
+
+
+# ------------------------------------------------------------- the display seed
+
+def test_the_display_seed_is_the_median_of_the_across_arm_mean() -> None:
+    """One draw for the whole grid, chosen by a rule that favours no arm.
+
+    Each arm's own median seed would differ in the method *and* in the draw --
+    and because the seed fixes the partition, two panels would not even share
+    their bags. So the rule reads every arm at once: the seed whose across-arm
+    mean is the median.
+
+    The fixture is built so the two rules disagree. `G`'s own median seed is 2
+    and the across-arm median is seed 1, which is what the grid has to draw.
+
+    Reachable red: take the best seed instead of the median, or rank by the
+    headline arm's own accuracy.
+    """
+    runs = [
+        {"seed": 0, "arm": "A", "targetAccuracy": 0.10},
+        {"seed": 0, "arm": "G", "targetAccuracy": 0.20},   # mean 0.15  (lowest)
+        {"seed": 1, "arm": "A", "targetAccuracy": 0.55},
+        {"seed": 1, "arm": "G", "targetAccuracy": 0.65},   # mean 0.60  (median)
+        {"seed": 2, "arm": "A", "targetAccuracy": 0.95},
+        {"seed": 2, "arm": "G", "targetAccuracy": 0.55},   # mean 0.75  (highest)
+    ]
+    assert latent.display_seed(runs) == 1
+    # G's own ordering would have named a different draw, which is the rule this
+    # one replaces rather than a coincidence of the fixture.
+    only_g = sorted((r for r in runs if r["arm"] == "G"),
+                    key=lambda r: r["targetAccuracy"])
+    assert only_g[len(only_g) // 2]["seed"] == 2
+
+    # and it does not depend on the order the runs arrive in
+    assert latent.display_seed(list(reversed(runs))) == 1
+
+
+def test_without_a_single_run_there_is_no_seed_to_display() -> None:
+    """Zero is a seed the campaign ran, so returning it would be a wrong answer
+    rather than a missing one."""
+    with pytest.raises(ValueError):
+        latent.display_seed([])
+
+
+# ------------------------------------------------------ the grid drawn stratified
+
+def test_every_panel_draws_the_same_budget_stratified_by_class() -> None:
+    """A bag-unit arm contributes one row per subject and an instance-unit arm
+    one per instance, so without this the CREDA columns arrive with thirty times
+    the points and the eye reads density as coverage.
+
+    Stratified, and that is the half a head-slice would silently drop: a panel
+    missing a class is not a sparser panel, it is a different measurement.
+
+    Reachable red: keep the first `budget` rows instead of drawing per class.
+    """
+    labels = torch.cat([torch.full((count,), class_id)
+                        for class_id, count in enumerate([200, 90, 10])])
+    rows = torch.arange(len(labels), dtype=torch.float32).reshape(-1, 1)
+
+    kept_rows, kept_labels = latent.equalize(rows, labels, budget=30, seed=7)
+    counts = {int(c): int((kept_labels == c).sum()) for c in kept_labels.unique()}
+    assert counts == {0: 10, 1: 10, 2: 10}
+    assert len(kept_rows) == len(kept_labels) == 30
+    # drawn from the whole class and not from its head
+    assert kept_rows.max() > 250
+
+
+def test_a_class_with_less_than_its_share_is_taken_whole_and_never_padded() -> None:
+    labels = torch.cat([torch.zeros(50, dtype=torch.long), torch.ones(3, dtype=torch.long)])
+    rows = torch.arange(len(labels), dtype=torch.float32).reshape(-1, 1)
+    _, kept = latent.equalize(rows, labels, budget=20, seed=7)
+    assert int((kept == 1).sum()) == 3
+
+
+# --------------------------------------------------------------- the latent grid
+
+@pytest.fixture
+def stubbed(monkeypatch):
+    """The two things a grid needs from a finished run, and nothing else.
+
+    `_embed` is UMAP and `load` is a trained checkpoint; both are replaced because
+    no claim here is about either. Everything the claims ARE about -- how many
+    panels, which columns, which of them comes from a model -- runs for real.
+    """
+    seen = {"loaded": [], "original": [], "pairs": []}
+
+    def _checkpoint_for(arm, transfer, seed, rate=0.0, pilot=False):
+        return {"arm": arm, "transfer": transfer, "seed": seed,
+                "source": {}, "target": {}, "weights": "none"}
+
+    class _Bagset:
+        eval_idx = torch.arange(4)
+
+    def _load(record, device):
+        seen["loaded"].append((record["arm"], record["transfer"]))
+        return object(), _Bagset(), _Bagset()
+
+    def _represent(model, bagset, positions, device, unit=None):
+        return torch.arange(40.0).reshape(20, 2), torch.arange(20) % config.CLASSES
+
+    def _original_rows(record, budget, seed):
+        seen["original"].append(record["transfer"])
+        rows = torch.arange(40.0).reshape(20, 2)
+        labels = torch.arange(20) % config.CLASSES
+        return rows, labels, rows, labels
+
+    def _embed(rows, seed):
+        return numpy.asarray(rows).reshape(len(rows), -1)[:, :2]
+
+    monkeypatch.setattr(latent, "checkpoint_for", _checkpoint_for)
+    monkeypatch.setattr(latent, "load", _load)
+    monkeypatch.setattr(latent, "represent", _represent)
+    monkeypatch.setattr(latent, "original_rows", _original_rows)
+    monkeypatch.setattr(latent, "_embed", _embed)
+    return seen
+
+
+def test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_method(
+        stubbed, tmp_path) -> None:
+    """`Original` is the images themselves, before any model, and it is the
+    reference every trained column is read against: "aligned" cannot be seen
+    without a "not aligned" beside it.
+
+    Three things are asserted together because each alone passes while the figure
+    is wrong: the column exists, it is first, and it is the only one no model was
+    loaded for.
+
+    Reachable red: drop the original column, move it to the end, or draw it from
+    a checkpoint like the rest.
+    """
+    figure = latent.latent_grid(tmp_path / "grid.pdf", config.LATENT_PANELS,
+                                TRANSFERS, seed=3, device=torch.device("cpu"))
+    axes = figure.axes
+    columns = 1 + len(config.LATENT_PANELS)
+    assert len(axes) == len(TRANSFERS) * columns
+
+    titles = [axis.get_title() for axis in axes[:columns]]
+    assert titles == ["Original", *[config.NAME_OF[a] for a in config.LATENT_PANELS]]
+
+    # one model per (arm, transfer) and not one more: the first column is the
+    # material, so nothing was fitted to it
+    assert sorted(stubbed["loaded"]) == sorted(
+        (arm, transfer) for transfer in TRANSFERS for arm in config.LATENT_PANELS)
+    assert stubbed["original"] == TRANSFERS
+
+    # rows are transfers, and each row says which one it is
+    assert [axes[row * columns].get_ylabel() for row in range(len(TRANSFERS))] == TRANSFERS
+
+
+def test_the_latent_grid_keeps_both_floors_as_its_first_trained_columns(
+        stubbed, tmp_path) -> None:
+    """Whether the two floors are redundant is a measurement `latent.floors_agree`
+    makes, and only it may retire one of these columns."""
+    figure = latent.latent_grid(tmp_path / "grid.pdf", config.LATENT_PANELS,
+                                TRANSFERS[:1], seed=3, device=torch.device("cpu"))
+    titles = [axis.get_title() for axis in figure.axes]
+    floors = [config.NAME_OF[arm["id"]] for arm in config.ARMS
+              if arm["adaptation"] is None and arm["id"] in config.LATENT_PANELS]
+    assert len(floors) == 2
+    for name in floors:
+        assert name in titles
+
+
+# ---------------------------------------------------------- the bag correspondence
+
+def test_the_bag_figure_is_one_figure_of_three_columns_by_three_rows(
+        stubbed, tmp_path, monkeypatch) -> None:
+    """One figure, not one file per transfer.
+
+    Three columns instead of six separate files is what makes the panels large
+    enough to read, and it is also what lets a reader follow one subject across
+    the rung: floor, the same method without the local term, and the complete
+    one, side by side in one row.
+
+    Reachable red: emit one figure per transfer -- three files land in the
+    directory and the axes of the returned one collapse to a single row.
+    """
+    def _bag_pairs(model, source, target, device):
+        rows = torch.arange(20.0).reshape(10, 2)
+        labels = torch.arange(10)
+        return {"sourceRows": rows, "targetRows": rows,
+                "sourceLabels": labels, "targetLabels": labels,
+                "nearest": torch.arange(10), "mass": torch.linspace(0.1, 1.0, 10)}
+
+    monkeypatch.setattr(latent, "bag_pairs", _bag_pairs)
+    produced = latent.correspondence_grid(tmp_path / "bolsas.pdf", config.BAG_PANELS,
+                                          TRANSFERS, seed=3,
+                                          device=torch.device("cpu"))
+
+    assert len(config.BAG_PANELS) == 3 and len(TRANSFERS) == 3
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["bolsas.pdf"]
+    assert len(produced["figure"].axes) == 9
+    assert len(produced["scored"]) == 9
+    assert {row["arm"] for row in produced["scored"]} == set(config.BAG_PANELS)
+    assert {row["transfer"] for row in produced["scored"]} == set(TRANSFERS)
+
+    titles = [axis.get_title() for axis in produced["figure"].axes[:3]]
+    assert titles == [config.NAME_OF[a] for a in config.BAG_PANELS]
+
+
+def test_the_highlighted_subject_is_the_median_of_its_class_and_never_the_best() -> None:
+    """The best subject of a class pairs cleanly under every arm, including the
+    floor that learned no correspondence at all, and a figure that cannot come
+    out wrong is not measuring anything.
+
+    Reachable red: take the last of the ordering instead of its middle.
+    """
+    reference = {"targetLabels": torch.tensor([0, 0, 0, 1, 1, 1]),
+                 "mass": torch.tensor([0.9, 0.1, 0.5, 0.2, 0.8, 0.4])}
+    chosen = latent.median_bag_per_class(reference)
+    assert chosen[0] == 2 and chosen[1] == 5
+    assert chosen[0] != 0, "the best of the class was highlighted"
