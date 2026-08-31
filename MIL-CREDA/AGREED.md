@@ -77,7 +77,7 @@ these is raised, not resolved in passing.
 - [x] Notebook prose and table headings in Spanish; identifiers, JSON keys and `test_the_headings_are_spanish_and_the_keys_of_the_record_are_english`
       method names stay English, because they are a data contract rather than
       prose.
-- [x] Progress during the run prints one line per transfer, not one per run. It is
+- [x] Progress during the run prints one line per transfer, not one per run. It is `test_progress_prints_one_line_per_cell_and_names_that_cells_slowest_arm`
       the only sign of life in a run measured in hours, so it is kept — but it is
       progress, not a report.
 
@@ -132,7 +132,7 @@ these is raised, not resolved in passing.
       joined by a line so the correspondence survives UMAP's distortion.
 - [x] The measured correspondence hit rate is printed with the figure, so it `test_the_measured_correspondence_hit_rate_is_printed_with_the_figure`
       carries a number and not an impression.
-- [x] **Every figure carries the same three lines as a table**: what is looked at,
+- [x] **Every figure carries the same three lines as a table**: what is looked at, `test_every_figure_carries_the_same_three_lines_a_table_does`
       what is being sought, and the conclusion — and the conclusion is **computed
       from the results**. A sentence written by hand under a figure fixes itself:
       the figure is regenerated from other data and the sentence stays.
@@ -172,7 +172,7 @@ already existed: they are two halves of one contract and they live in one. -->
 - [x] Each family searches **its own** ceiling and passes it to its derivations. A shared ceiling equalizes the coefficient and unequalizes the balance: the two objectives sit a factor of `B_src` apart, so one number puts adaptation at 85% of one and 10% of the other. `test_the_search_uses_the_complete_method_of_each_family`
 - [x] One search per family, on the complete method — D and G — and inherited. If every arm searched its own, B→E would differ in two things and no rung would be attributable. Declared consequence: E and F carry no local term, so the ceiling found on the complete method is not necessarily theirs. `test_solo_busca_sobre_los_metodos_completos`
 - [x] The 1.0 stops being the value and becomes **the neutral the searched value is read against**. If MIL-CREDA's ceiling lands there, the normalization argument is confirmed by measurement rather than by reasoning. `test_el_registro_escribe_el_neutro_al_lado_del_techo_que_encontro`
-- [x] `RAMP_CEILING`'s comment states that argument, not r16's scale one. The old 1e-4 measurement stays as historical record, marked as taken against the un-normalized objective.
+- [x] `RAMP_CEILING`'s comment states that argument, not r16's scale one. The old 1e-4 measurement stays as historical record, marked as taken against the un-normalized objective. `test_el_comentario_del_neutro_fecha_el_1e_4_y_no_promete_un_techo_comun`
 
 ## Prior work
 

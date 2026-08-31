@@ -16,6 +16,7 @@ all.
 from __future__ import annotations
 
 import json
+import re
 
 import numpy
 import pytest
@@ -761,3 +762,89 @@ def test_the_bag_figure_keeps_the_projection_and_never_becomes_a_bipartite_diagr
         source_x = projection[:cut, 0]
         target_x = projection[cut:, 0]
         assert min(source_x.max(), target_x.max()) > max(source_x.min(), target_x.min())
+
+
+# ------------------------------------- the three lines a figure carries above it
+
+LATENT = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / "Benchmark_Latent_v1.ipynb"
+
+
+def test_every_figure_carries_the_same_three_lines_a_table_does() -> None:
+    """What is looked at, what is being sought, and a conclusion below it.
+
+    The other half of this claim -- that the conclusion is *computed* and not
+    typed -- is `test_every_conclusion_the_report_produces_is_read_off_its_own
+    _numbers`, which permutes the record and demands every sentence move. That
+    one never looks at a notebook, so nothing until now said the three lines
+    are there at all: a figure could be displayed bare, with the sentence it
+    needs living in a function the notebook never calls, and both suites stay
+    green.
+
+    Read from the phase-two notebook, which is where this agreement sits and
+    where the figures it names are drawn. `latent_grid`'s own docstring is the
+    reason it is a notebook property and not a module one: the figure carries
+    no title and no footer on purpose, because "the framing sits directly above
+    the figure" -- so the framing is only ever a fact about the cells around it.
+
+    Phase one is out of scope on purpose and not by oversight: the report's
+    three curve figures carry the first two lines and no conclusion at all --
+    `tables` has no `conclusion_*` for a curve, and the report calls none after
+    cells 74, 79 and 84. Asserting the third line over them would fail for
+    being right about a gap this agreement's own section does not cover.
+
+    Reachable red: drop a key from `objective`'s `metas` and the figure it
+    frames is declared by a placeholder; move a `show(tables.objective(...))`
+    below the figure it frames and nothing states what is being sought before
+    the picture is already read.
+    """
+    cells = json.loads(LATENT.read_text(encoding="utf-8"))["cells"]
+    sources = ["".join(cell["source"]) for cell in cells]
+
+    # A figure is what reaches `figures.inline`. The notebook also calls
+    # `latent.floors_agree`, `latent.analyse` and `latent.bound`, which compute
+    # and never draw, so the display is what tells a figure from a helper.
+    drawn = [index for index, cell in enumerate(cells)
+             if cell["cell_type"] == "code" and "figures.inline(" in sources[index]]
+    produced = {name for index in drawn
+                for name in re.findall(r"latent\.(\w+_grid)\(", sources[index])}
+    assert {"latent_grid", "correspondence_grid"} <= produced, \
+        f"the phase-two notebook draws neither of its own figures: {produced}"
+
+    framings = []
+    for position, index in enumerate(drawn):
+        # 2 · what is being sought -- the figure's own declared objective, and
+        #     directly above it, so it is read before the picture is.
+        asked = re.findall(r'tables\.objective\(\s*"([^"]+)"\s*\)', sources[index - 1])
+        assert len(asked) == 1, \
+            f"the figure in cell {index} has no objective in the cell above it"
+        key = asked[0]
+        framings.append(key)
+
+        stated = tables.objective(key)
+        assert "sin objetivo declarado" not in stated, \
+            f"the figure framed by `{key}` is declared by a placeholder"
+        assert "Buscamos" in stated, f"`{key}` never says which way is better"
+        assert len(stated) > 80, f"`{key}` is framed by a line too short to say it"
+
+        # 1 · what is looked at -- the section's own prose, above the objective
+        prose = cells[index - 2]
+        assert prose["cell_type"] == "markdown", \
+            f"the figure in cell {index} opens no section that says what it shows"
+        text = "".join(prose["source"])
+        assert text.lstrip().startswith("#"), "the framing is not a section of its own"
+        body = text.split("\n", 1)[1] if "\n" in text else ""
+        assert len(body.strip()) > 200, \
+            f"the figure framed by `{key}` is headed but never described"
+
+        # 3 · the conclusion -- below the figure, and before the next one, so it
+        #     belongs to this figure and not to the one after it.
+        end = drawn[position + 1] if position + 1 < len(drawn) else len(cells)
+        concluded = [name for source in sources[index + 1:end]
+                     for name in re.findall(r"tables\.(conclusion\w*)\(", source)]
+        assert concluded, f"the figure framed by `{key}` concludes nothing"
+        for name in concluded:
+            assert callable(getattr(tables, name, None)), \
+                f"`{name}` is a name the notebook alone knows"
+
+    assert len(set(framings)) == len(framings), \
+        f"two figures are framed by one declaration: {framings}"
