@@ -471,7 +471,7 @@ def test_every_conclusion_the_report_produces_is_read_off_its_own_numbers() -> N
     produced = tables.conclusions(_record())
     permuted = tables.conclusions(_record(swap=True))
 
-    expected = {"niveles:seconds", "niveles:sourceAccuracy", "niveles:targetAccuracy",
+    expected = {"niveles:sourceAccuracy", "niveles:targetAccuracy",
                 "geometría", "distancias", "separabilidad", "masa", "atención",
                 "correspondencia"}
     assert expected <= set(produced), f"nothing concluded for {expected - set(produced)}"
@@ -632,6 +632,142 @@ def test_render_refuses_a_dimension_the_declaration_calls_per_run() -> None:
     assert "targetAccuracy" in pooled
     assert tables.render(_runs({("G", LABELS[0]): [0.8, 0.9]}),
                          "targetAccuracy", _reduction(seeds=2))
+
+
+#: Every way this module collapses a caller-supplied dimension into one number,
+#: with a fixture in the shape that entry point actually reads. Written as a list
+#: and driven in one loop on purpose: the defect this covers was a guard put on
+#: `render` alone while seven siblings went on pooling the same numbers, and a
+#: test that named one function per case would have been written the same way.
+#:
+#: `render_per_run` and `conclusion_per_run` are deliberately absent -- they are
+#: the forms the declaration permits, and a guard on them would leave `seconds`
+#: with no way to be printed at all.
+def _pooling_calls(metric: str):
+    """One callable per aggregating entry point, ready to invoke with `metric`."""
+    runs = _runs({(arm, label): [10.0 + index, 30.0 + index]
+                  for index, arm in enumerate(("A", "B", "D", "G"))
+                  for label in LABELS[:2]}, metric=metric)
+    cell = {arm: {metric: {"mean": 0.5 + index / 10, "stdev": 0.01, "n": 2}}
+            for index, arm in enumerate(config.ARMS_BY_ID)}
+    summary = {"grid": {label: cell for label in LABELS[:2]},
+               "reduction": _reduction(seeds=2)}
+    return {
+        "cells": lambda: tables.cells(runs, metric),
+        "table": lambda: tables.table(runs, metric),
+        "render": lambda: tables.render(runs, metric, _reduction(seeds=2)),
+        "conclusion": lambda: tables.conclusion(runs, metric, _reduction(seeds=2)),
+        "ranking": lambda: tables.ranking(runs, metric),
+        "best_transfers": lambda: tables.best_transfers(runs, metric=metric),
+        "render_rungs": lambda: tables.render_rungs(summary, metric),
+        "conclusion_rungs": lambda: tables.conclusion_rungs(summary, metric),
+        "paired_gains": lambda: tables.paired_gains(runs, metric),
+        "render_gains": lambda: tables.render_gains(runs, metric, "t"),
+    }
+
+
+def test_no_function_that_pools_a_dimension_accepts_one_the_declaration_forbids() -> None:
+    """The class, not the instance: every aggregator refuses, not only `render`.
+
+    `render` was guarded and `conclusion` was not, and `conclusion` sorts the
+    same cells by their average and prints the extremes of it. A refusal that
+    covers the table and leaves the sentence beneath it open has not removed the
+    pooled number from the report, it has moved it one function to the right --
+    and the sentence is the half a reader quotes.
+
+    Which dimensions are refused is read from the declaration, never listed
+    here. Which functions have to refuse is the list above, and it is the part
+    that has to grow when a new aggregator is written.
+
+    Reachable red: delete `_refuse_pooling`'s call from any one of `cells`,
+    `render`, `render_rungs`, `conclusion_rungs` or `paired_gains`, and the
+    entry points that reach the number through it stop refusing.
+    """
+    declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["perRun"]
+    assert declared, "the declaration names no per-run dimension to refuse"
+
+    for metric in declared:
+        for name, call in _pooling_calls(metric).items():
+            # `pytest.raises` on its own reports `DID NOT RAISE ValueError` and
+            # names nothing: with ten entry points in one loop that failure tells
+            # whoever broke a guard only that one of them is open. The point of
+            # driving the family together is lost if the red does not say which.
+            try:
+                call()
+            except ValueError as refusal:
+                said = str(refusal)
+            else:
+                pytest.fail(f"`{name}` pooled `{metric}` instead of refusing it")
+            assert metric in said and "perRun" in said, \
+                f"`{name}` refused without saying which dimension: {said}"
+            assert "render_per_run" in said, \
+                f"`{name}` refuses and names no way forward: {said}"
+
+
+def test_the_same_functions_still_pool_what_the_declaration_says_pools() -> None:
+    """The other half, and the one that makes the refusal mean something.
+
+    A guard proved only by what it rejects is indistinguishable from a function
+    that raises on everything, and it is also indistinguishable from one whose
+    fixture was too thin to produce a number in the first place. So every entry
+    point above is driven again on a `poolable` dimension and has to come back
+    with a number: the refusal is a refusal, not an outage, and the path behind
+    it really does collapse runs into one.
+
+    A number and not merely a non-empty result, because four of these answer an
+    unmeasurable fixture with a sentence -- `(sin peldaños medibles)`, `(sin
+    pares para ...)`, `Sin corridas`, `Sin peldaños medibles` -- and every one
+    of those is truthy. Matched at the start of the string and not anywhere in
+    it: a rung's own reading says «sin ponderar», and looking for the word
+    loose failed a table that had just printed twelve rows of numbers. A
+    fixture that stopped producing rows would leave both halves of this file
+    green: the refusal proved against nothing, and the pooling proved against a
+    string that says nothing was pooled.
+
+    Reachable red: make `_refuse_pooling` raise unconditionally, or thin the
+    fixture until no arm has two transfers.
+    """
+    pooled = MIL_CREDA_Benchmark.__benchmark__["distribution"]["poolable"]
+    assert "targetAccuracy" in pooled
+
+    for name, call in _pooling_calls("targetAccuracy").items():
+        produced = call()
+        assert produced, f"`{name}` produced nothing on a dimension that pools"
+        if isinstance(produced, str):
+            assert re.search(r"\d", produced), \
+                f"`{name}` came back with prose and no number: {produced!r}"
+            assert not produced.lstrip().lower().startswith(("(sin", "sin ")), \
+                f"`{name}` reported nothing measurable, so nothing was pooled: " \
+                f"{produced!r}"
+
+
+def test_the_reports_conclusions_ask_for_no_per_run_dimension() -> None:
+    """`conclusions()` asked for `seconds` on every run, and got it.
+
+    It is the single entry point the report and the verification both go
+    through, and its metric list was written by hand: `("seconds",
+    "sourceAccuracy", "targetAccuracy")`. So the one pooled reading the
+    declaration forbids was not merely reachable, it was requested -- best
+    average and worst average over numbers that do not describe one machine
+    across two of its own runs.
+
+    Read off `per_run_dimensions()` rather than checking for the word
+    `seconds`: the list that put it there was a hand-written one, and a test
+    with its own hand-written list ages the same way.
+
+    Reachable red: put any per-run dimension back into that loop.
+    """
+    produced = tables.conclusions(_record())
+    # Not merely "no forbidden key": a record that concluded no level at all
+    # would satisfy that and prove nothing. The loop below has to be looking at
+    # a `conclusions` that did produce levels.
+    assert [key for key in produced if key.startswith("niveles:")], \
+        "no level was concluded, so there was nothing for this to check"
+    for metric in tables.per_run_dimensions():
+        offending = [key for key in produced if key.endswith(f":{metric}")]
+        assert not offending, \
+            f"the report concludes {offending} over a dimension the declaration " \
+            f"calls perRun"
 
 
 def test_the_report_asks_for_no_pooled_table_of_a_per_run_dimension() -> None:

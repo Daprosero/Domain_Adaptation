@@ -83,7 +83,16 @@ def spread(values: list[float]) -> dict:
 
 
 def cells(runs: Iterable[dict], metric: str) -> dict:
-    """{(brazo, transferencia): spread} sobre cada repetición de esa celda."""
+    """{(brazo, transferencia): spread} sobre cada repetición de esa celda.
+
+    Es el único lugar por donde pasa toda tabla que sale de las corridas crudas
+    —`table`, y detrás de ella `render`, `conclusion`, `ranking` y
+    `best_transfers`—, así que la negativa a agrupar una dimensión `perRun` va
+    acá y no repetida en cada una. Puesta sólo en las de arriba, la próxima
+    función que lea corridas nacería sin ella y nadie lo notaría hasta ver el
+    número impreso.
+    """
+    _refuse_pooling(metric)
     gathered: dict[tuple[str, str], list[float]] = {}
     for run in runs:
         gathered.setdefault((run["arm"], run["transfer"]), []).append(float(run[metric]))
@@ -613,6 +622,34 @@ def per_run_dimensions() -> list[str]:
     return list(shards.declaration().get("perRun") or [])
 
 
+def _refuse_pooling(metric: str) -> None:
+    """La negativa, escrita una vez, para toda función que agrupe lo que le pasan.
+
+    La guarda nació sobre `render` sola, y `render` no era la única que agrupaba:
+    `conclusion` promedia las mismas celdas y las imprime como «mejor y peor»,
+    los peldaños restan dos medias, y las ganancias apareadas sacan media, error
+    y rango. Una sola de esas protegida se lee como la clase entera cubierta, que
+    es la forma exacta en que el hueco se vuelve invisible.
+
+    Por eso la negativa vive acá y no repetida en cada sitio: un texto copiado
+    cinco veces son cinco textos que pueden separarse, y el que se quede viejo
+    seguirá sonando igual de firme. Quién es `perRun` lo sigue leyendo
+    `per_run_dimensions()` de la declaración del banco, sin una segunda lista.
+    """
+    prohibidas = per_run_dimensions()
+    if metric not in prohibidas:
+        return
+    raise ValueError(
+        f"refusing to pool `{metric}`: the benchmark declares it `perRun` "
+        f"({', '.join(prohibidas)}).\n"
+        "  No reading of it was stable enough to stand for the method, or "
+        "even for one machine across two of its own runs, so a "
+        "`mean ± stdev` here would describe none of the runs behind it.\n"
+        "  Use `render_per_run(summary['gridPerRun'], ...)`, which prints "
+        "every reading with the run that produced it."
+    )
+
+
 def render(runs: Iterable[dict], metric: str, reduction: dict,
            markdown: bool = False) -> str:
     """Una fila por método: sus seis transferencias y, al final, el promedio.
@@ -627,22 +664,16 @@ def render(runs: Iterable[dict], metric: str, reduction: dict,
     resume, no antes.
 
     Y se niega de plano ante una dimensión declarada `perRun`. `render_per_run`
-    explica por qué ninguna media de `seconds`/`peakMiB` es defendible; sin esta
-    guarda ese argumento vivía en un docstring que la función de al lado no lee,
+    explica por qué ninguna media de `seconds`/`peakMiB` es defendible; sin esa
+    guarda el argumento vivía en un docstring que la función de al lado no lee,
     y agrupar quedaba a un `else` de distancia. Un promedio que la declaración
     prohíbe se imprime igual de convincente que uno que permite.
+
+    La negativa ya no está escrita acá sino en `cells`, por donde esta función
+    pasa antes de imprimir nada. Repetida en las dos era una guarda que no se
+    podía probar: quitarla de acá dejaba la suite entera en verde, porque la de
+    abajo la tapaba — un candado idéntico a uno vivo y que no cierra nada.
     """
-    prohibidas = per_run_dimensions()
-    if metric in prohibidas:
-        raise ValueError(
-            f"refusing to pool `{metric}`: the benchmark declares it `perRun` "
-            f"({', '.join(prohibidas)}).\n"
-            "  No reading of it was stable enough to stand for the method, or "
-            "even for one machine across two of its own runs, so a "
-            "`mean ± stdev` here would describe none of the runs behind it.\n"
-            "  Use `render_per_run(summary['gridPerRun'], ...)`, which prints "
-            "every reading with the run that produced it."
-        )
     rows = table(runs, metric)
     labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
     title, unit = SPANISH.get(metric, (metric, ""))
@@ -687,6 +718,11 @@ def conclusion(runs: Iterable[dict], metric: str, reduction: dict) -> str:
     Una conclusión escrita a mano es una segunda fuente de verdad: se desactualiza
     en silencio y se le cree igual. Esta se recalcula con la tabla, así que no
     puede alejarse de lo que describe.
+
+    Se niega ante una dimensión `perRun` por la misma vía que la tabla: ordena
+    por `avg`, que es el promedio que `render` no imprime, y decirlo en prosa no
+    lo vuelve defendible. La guarda está en `cells`, una sola vez, y llega hasta
+    acá por `table`.
     """
     rows = table(runs, metric)
     if not rows:
@@ -761,7 +797,14 @@ def render_rungs(summary: dict, metric: str, markdown: bool = False) -> str:
     derecha — así que un valor **negativo** significa que el de la derecha quedó
     por encima. El nombre del peldaño dice `izquierda → derecha`, y restar al revés
     obligaba a invertir mentalmente cada celda contra el título de su propia fila.
+
+    No pasa por `cells`: lee la grilla ya reducida, así que la negativa a agrupar
+    una dimensión `perRun` tiene que decirse acá. Y hace falta de verdad — en una
+    corrida de una sola máquina `harness.summarize` promedia **todas** las
+    dimensiones declaradas, `seconds` incluida, así que sin esto la resta de dos
+    medias prohibidas salía impresa sin que nada fallara.
     """
+    _refuse_pooling(metric)
     grid = summary["grid"]
     labels = [t for t in [f"{s}->{d}" for s, d in config.VERDICT_TRANSFERS] if t in grid]
     title, unit = SPANISH.get(metric, (metric, ""))
@@ -897,7 +940,13 @@ def conclusion_per_run(metric: str) -> str:
 
 
 def conclusion_rungs(summary: dict, metric: str) -> str:
-    """Qué peldaño se movió más y cuál coincidió en todas las transferencias."""
+    """Qué peldaño se movió más y cuál coincidió en todas las transferencias.
+
+    Misma negativa que su tabla, y por separado: cada una llega a la grilla por
+    su cuenta. Proteger la tabla y dejar la conclusión abierta imprime en prosa
+    exactamente el promedio que la tabla acaba de negarse a mostrar.
+    """
+    _refuse_pooling(metric)
     grid = summary["grid"]
     labels = [t for t in [f"{s}->{d}" for s, d in config.VERDICT_TRANSFERS] if t in grid]
     readings = []
@@ -1100,7 +1149,14 @@ def paired_gains(runs: Iterable[dict], dimension: str) -> list[dict]:
       pierde o empata. El rango es lo que frena a un lector que solo mira el
       promedio: `de +15.1 a -5.5` se entiende en una lectura y ya avisa que la
       media no es la historia.
+
+    Lee las corridas crudas sin pasar por `cells`, así que la negativa va acá
+    también. Apareado no es lo mismo que defendible: restar dos lecturas de
+    `seconds` dentro de una transferencia sigue promediando después entre las
+    seis, y `span` y `pct` son dos resúmenes más sobre lo mismo. Cubre a
+    `render_gains` y, con él, a `render_gains_at`.
     """
+    _refuse_pooling(dimension)
     rows = runs if isinstance(runs, list) else list(runs)
     idx = {(r["arm"], r["transfer"], r["seed"]): r for r in rows}
     labels = [f"{a}->{b}" for a, b in config.VERDICT_TRANSFERS]
@@ -1645,7 +1701,14 @@ def conclusions(record: dict) -> dict:
     runs = record.get("runs")
     reduction = record.get("reduction") or {}
     if isinstance(runs, list) and runs:
-        for metric in ("seconds", "sourceAccuracy", "targetAccuracy"):
+        # `seconds` estaba en esta lista y no volvió: la declaración lo llama
+        # `perRun` y `conclusion` ahora se niega, así que pedirlo acá no era una
+        # conclusión de más sino la única llamada del informe que todavía
+        # agrupaba lo prohibido — «mejor promedio / peor promedio» sobre unos
+        # segundos que no describen ni a una máquina consigo misma. Lo que el
+        # informe imprime en su lugar es `conclusion_per_run`, corrida por
+        # corrida. Los niveles que quedan son los que la declaración sí agrupa.
+        for metric in ("sourceAccuracy", "targetAccuracy"):
             produced[f"niveles:{metric}"] = conclusion(runs, metric, reduction)
     # El panorama sigue en el registro y ya no se concluye. Promediar cada peldaño
     # sobre las seis transferencias a la vez respondía una pregunta que las tablas
