@@ -38,7 +38,7 @@ from MIL_CREDA_Benchmark import bags, config, figures, wiring
 PROMOTION_RECORD = "PROMOTION.json"
 
 
-def _median_seeds() -> dict | None:
+def _median_seeds(rate: float = 0.0, pilot: bool = False) -> dict | None:
     """Which promoted seeds are each cell's own median, or `None` if unrecorded.
 
     `None` and "an empty set" are different answers and must not collapse: a
@@ -46,15 +46,22 @@ def _median_seeds() -> dict | None:
     on disk is its cell's median by construction, because `keep_median()` is what
     put it there and it writes nothing else.
     """
-    record = config.MODELS / PROMOTION_RECORD
+    record = config.models_for(rate, pilot) / PROMOTION_RECORD
     if not record.exists():
         return None
     chosen = json.loads(record.read_text(encoding="utf-8")).get("chosen") or {}
     return {cell: set(entry.get("chosen") or []) for cell, entry in chosen.items()}
 
 
-def available() -> list[dict]:
-    """Every checkpoint phase one kept, with what it is.
+def available(rate: float = 0.0, pilot: bool = False) -> list[dict]:
+    """Every checkpoint phase one kept at one contamination rate, with what it is.
+
+    `rate` defaults to the clean campaign, which is where every checkpoint on
+    disk lived before the noise axis existed. It is a parameter and not a global
+    because this globs a directory: a caller reading the clean tree while the
+    campaign it means to analyse wrote elsewhere would measure the wrong run and
+    `bound()` would only catch it if the two records happened to disagree on a
+    field they share.
 
     Each entry carries `median`: whether this seed is its own cell's median, or
     was promoted only so that some other arm could be read against this one at
@@ -72,9 +79,10 @@ def available() -> list[dict]:
     sample of that floor's outcomes. Averaging a floor's row over them does not
     estimate that row better; it estimates something else.
     """
-    medians = _median_seeds()
+    medians = _median_seeds(rate, pilot)
     found = []
-    for manifest_path in sorted(config.MODELS.glob("*.manifest.json")):
+    for manifest_path in sorted(
+            config.models_for(rate, pilot).glob("*.manifest.json")):
         record = json.loads(manifest_path.read_text(encoding="utf-8"))
         weights = manifest_path.with_name(manifest_path.name.replace(".manifest.json", ".pt"))
         if not weights.exists():
@@ -452,9 +460,15 @@ def display_seed(runs: list[dict]) -> int:
     return ordered[len(ordered) // 2]
 
 
-def checkpoint_for(arm: str, transfer: str, seed: int) -> dict | None:
-    """The kept checkpoint of one cell, or nothing if that cell kept none."""
-    for record in available():
+def checkpoint_for(arm: str, transfer: str, seed: int,
+                   rate: float = 0.0, pilot: bool = False) -> dict | None:
+    """The kept checkpoint of one cell, or nothing if that cell kept none.
+
+    `rate`/`pilot` eligen de qué corrida. Sin ellos una figura contaminada se
+    dibujaba con los pesos limpios: correcta en forma, de la corrida
+    equivocada, y sin un solo error que lo delatara.
+    """
+    for record in available(rate, pilot):
         if (record["arm"] == arm and record["transfer"] == transfer
                 and int(record["seed"]) == seed):
             return record
@@ -682,7 +696,8 @@ def median_bag_per_class(reference: dict) -> dict:
 
 
 def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
-                        device: torch.device) -> dict:
+                        device: torch.device, rate: float = 0.0,
+                        pilot: bool = False) -> dict:
     """Rows are transfers, columns are arms: one figure, not one file per transfer.
 
     The panels are chosen by the mechanism rather than by the ranking: the floor,
@@ -710,7 +725,7 @@ def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed:
     for row, transfer in enumerate(transfers):
         readings, present = {}, []
         for arm in arms:
-            record = checkpoint_for(arm, transfer, seed)
+            record = checkpoint_for(arm, transfer, seed, rate, pilot)
             if record is None:
                 continue
             model, source, target = load(record, device)

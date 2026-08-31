@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 CUADERNOS = Path(__file__).resolve().parents[2] / "MIL-CREDA" / "Notebooks"
@@ -87,10 +88,23 @@ def campana() -> dict:
     """
     from MIL_CREDA_Benchmark import harness
 
+    from MIL_CREDA_Benchmark import config
+
     dispositivo = harness.resolve_device()
-    reduccion = harness.Reduction(device=str(dispositivo),
-                                  environment=harness.environment())
-    reduccion = harness.with_ceilings_in_force(reduccion, dispositivo)
+    # `with_ceilings_in_force` era lo que estaba acá y es una trampa: sin
+    # `ceilings.json` lanza la búsqueda COMPLETA --- 2 familias x 6
+    # transferencias x 30 trials a 20 épocas, unas nueve horas y media --- sin
+    # anunciarlo y sin que nadie la haya autorizado. Un paso local no puede ser
+    # la puerta por la que entra la corrida larga.
+    if harness.search_record() is None and harness.search_record(pilot=True) is None:
+        raise SystemExit(
+            "no hay registro de techos. Corré primero la búsqueda: una campaña "
+            "sin techos mide el método y la falta de coeficiente a la vez.")
+    reduccion = replace(
+        harness.Reduction(device=str(dispositivo),
+                          environment=harness.environment(), pilot=True),
+        ceilings=config.ceilings_on_record(),
+        ceilingsByTransfer=config.ceilings_by_transfer_on_record())
     return harness.campaign(reduccion, dispositivo)
 
 
@@ -118,3 +132,124 @@ def informe() -> str:
 def latente() -> str:
     """El análisis latente sobre los checkpoints promovidos."""
     return _ejecutar("Benchmark_Latent_v1.ipynb")
+
+
+def diagnostico_de_ruido() -> dict:
+    """Re-busca el techo al nivel de diagnóstico y corre ahí los dos completos.
+
+    El experimento que separa *falló el término* de *le faltó coeficiente*, y
+    que existe porque los techos de la campaña se buscaron en limpio y se
+    mantienen fijos en los cinco niveles. Esa decisión hace que una caída no se
+    pueda atribuir, y este paso es lo barato que la atribuye.
+
+    Necesita tres puntos y paga uno solo. Los dos brazos a este nivel bajo el
+    techo limpio ya salen de la campaña contaminada; lo que se corre acá es la
+    búsqueda al nivel de diagnóstico y los dos brazos debajo de ella. Si el
+    techo re-buscado recupera lo perdido, fue el coeficiente; si no lo
+    recupera, fue el término.
+
+    `D` y `G`, y nadie más: son los dos métodos completos, uno por familia, y
+    los únicos que llevan el coeficiente. `A` y `B` no tienen término de
+    adaptación al que re-buscarle un techo, y `C`, `E` y `F` son ablaciones que
+    multiplicarían la búsqueda sin agregar diagnóstico.
+
+    Sus números son de diagnóstico y no entran en las tablas del veredicto: lo
+    único que deciden es si vale reestructurar para techos por nivel.
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import config, contamination, harness
+
+    tasa = config.NOISE_DIAGNOSTIC_LEVEL
+    dispositivo = harness.resolve_device()
+    reduccion = harness.Reduction(device=str(dispositivo),
+                                  environment=harness.environment(),
+                                  labelNoise=tasa, pilot=True)
+
+    # El techo buscado SOBRE material contaminado: es el punto que la campaña no
+    # tiene y la única razón por la que este paso cuesta algo.
+    # Sobre la transferencia de la curva y ninguna otra. Buscar sobre las seis
+    # costaría seis veces lo que el diagnóstico vale y mediría cinco
+    # transferencias que la curva nunca recorrió, así que no habría contra qué
+    # leerlas.
+    buscado = harness.search_ceilings(reduccion, dispositivo, noise=tasa,
+                                      transfers=[config.NOISE_TRANSFER],
+                                      pilot=True)
+
+    registro = {
+        "level": tasa,
+        "transfer": "{}->{}".format(*config.NOISE_TRANSFER),
+        "arms": list(config.NOISE_DIAGNOSTIC_ARMS),
+        "searchedUnderNoise": buscado,
+        # El otro extremo, leído y no vuelto a correr: si esta celda y el
+        # barrido dijeran cosas distintas habría dos versiones del mismo número.
+        # Del BARRIDO y no de una campaña: a este nivel no hay campaña completa
+        # --- sólo 0.0 y NOISE_REPORTED la tienen --- y la comparación es sobre
+        # la transferencia del barrido de todos modos.
+        "cleanCeilingRun": (contamination.load(tasa, kind="curve") or {}).get("summary"),
+        "revision": config.REVISION,
+        "diagnosticOnly": ("estos números no entran en las tablas del veredicto; "
+                           "deciden si vale reestructurar para techos por nivel"),
+    }
+    # Bajo la raíz de ESTA corrida y no bajo `Results/` a secas: un diagnóstico
+    # de ensayo escrito donde va el de la campaña completa la pisa, y lo pisa con
+    # números que no se pueden citar.
+    destino = config.results_for(0.0, "curve", True).parents[1]
+    destino.mkdir(parents=True, exist_ok=True)
+    (destino / "diagnostic.json").write_text(
+        json.dumps(registro, indent=2, default=str), encoding="utf-8")
+    return registro
+
+
+def barrido_de_ruido() -> dict:
+    """Corre la campaña sobre UNA transferencia, en cada nivel declarado.
+
+    Este es el ejercicio del ruido, y es una forma distinta de una campaña, no
+    una campaña más chica: una transferencia recorriendo los cinco niveles
+    contra seis transferencias en un nivel. Por eso escribe bajo `kind="curve"`
+    -- las dos pueden pararse en la misma tasa, y `runs.jsonl` se abre en `"w"`.
+
+    Los techos salen de la búsqueda en limpio y se mantienen fijos en los cinco
+    niveles: la curva es el coeficiente elegido sin contaminación aplicado con
+    ella. Lo que eso cuesta lo separa después `diagnostico_de_ruido`.
+
+    No guarda pesos en ningún nivel. La curva se lee de los `runs.jsonl`, y un
+    nivel que escribiera 8 GB que nadie abre dejaría un directorio que parece
+    evidencia.
+    """
+    from MIL_CREDA_Benchmark import config, harness
+
+    dispositivo = harness.resolve_device()
+    # Los techos que YA estén en el registro, sin buscar nada acá. Llamar a
+    # `with_ceilings_in_force` era el reflejo obvio y es una trampa: cuando no
+    # existe `ceilings.json` esa función lanza la búsqueda COMPLETA --- 2
+    # familias x 6 transferencias x 30 trials a 20 épocas, unas nueve horas y
+    # media --- sin decir que lo está haciendo y sin que nadie la haya
+    # autorizado. Un barrido a escala de ensayo no puede ser la puerta por la
+    # que entra la corrida larga.
+    #
+    # Sin registro no corre: un barrido con techos vacíos mediría el ruido y la
+    # falta de coeficiente a la vez.
+    if harness.search_record() is None and harness.search_record(pilot=True) is None:
+        raise SystemExit(
+            "no hay registro de techos. Corré primero la búsqueda "
+            "(`search-pilot` a escala de ensayo, o la completa con su "
+            "autorización): un barrido sin techos mide dos cosas a la vez.")
+    base = replace(
+        harness.Reduction(device=str(dispositivo),
+                          environment=harness.environment(), pilot=True),
+        ceilings=config.ceilings_on_record(),
+        ceilingsByTransfer=config.ceilings_by_transfer_on_record())
+
+    corridos = {}
+    for tasa in config.NOISE_LEVELS:
+        reduccion = replace(base, labelNoise=tasa)
+        corridos[f"{tasa:g}"] = harness.campaign(
+            replace(reduccion, kind="curve"), dispositivo,
+            transfers=[config.NOISE_TRANSFER])
+    return corridos
+
+
+def informe_de_ruido() -> str:
+    """La curva de degradación sobre los niveles que dejaron registro."""
+    return _ejecutar("Benchmark_Noise_v1.ipynb")

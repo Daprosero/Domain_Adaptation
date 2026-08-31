@@ -237,6 +237,24 @@ def objective(key: str, markdown: bool = True) -> str:
             f"término no pesó nada» son la misma figura; con órdenes distintos "
             f"entre métodos, el peldaño le acredita al mecanismo lo que hizo la "
             f"escala.",
+        "noise":
+            f"**Buscamos que la caída sea chica y que el orden entre métodos no se "
+            f"invierta.** El objetivo no es que nadie caiga —contaminado el "
+            f"material de entrenamiento, todos caen— sino que la formulación de "
+            f"bolsa caiga menos que la de instancia, que es lo que afirma "
+            f"mitigar. El piso sigue siendo el azar de {clase:.3f}: un método que "
+            f"llega ahí dejó de decidir.",
+        "noise.share":
+            "**Buscamos que la participación del término de adaptación suba con el "
+            "ruido**, y que suba en los brazos que lo llevan y en ninguno más. Si "
+            "no se mueve, el término está pesado para material limpio y la caída "
+            "no dice si falló el término o si le faltó coeficiente.",
+        "noise.diagnostic":
+            f"**Buscamos saber cuál de las dos cosas fue.** Con el techo buscado en "
+            f"limpio y aplicado en sucio, una caída puede ser el término o puede "
+            f"ser el coeficiente. Si el techo re-buscado en {config.NOISE_DIAGNOSTIC_LEVEL:g} "
+            f"recupera lo perdido, fue el coeficiente; si no lo recupera, fue el "
+            f"término. Ningún número de acá entra en las tablas del veredicto.",
         "floors":
             "**Buscamos que la diferencia entre los dos pisos sea menor que la que "
             "los separa de cualquier método con adaptación.** Si lo es, la segunda "
@@ -1378,8 +1396,15 @@ def _own_medians(readings: Iterable[dict]) -> list[dict]:
     return [r for r in readings if r.get("median", True)]
 
 
-def _repetitions(readings: Iterable[dict]) -> int:
+def _repetitions_measured(readings: Iterable[dict]) -> int:
     """Cuántas repeticiones sostiene de verdad la tabla que se está sellando.
+
+    Se llamaba `_repetitions`, igual que la función de fase uno cien líneas más
+    arriba, y en un módulo eso no son dos funciones: la de abajo tapa a la de
+    arriba. `conclusion()` pedía la de la reducción y recibía ésta, que espera
+    lecturas, y moría con `string indices must be integers` --- en la conclusión
+    de CADA métrica del informe. Ninguna suite lo vio porque ninguna ejecuta el
+    cuaderno; lo encontró el piloto la primera vez que algo lo corrió entero.
 
     Contadas de los datos, nunca de la configuración. `len(config.SEEDS)` es lo
     que se pidió; esto es lo que llegó, que es la única cifra que un sello puede
@@ -1408,7 +1433,7 @@ def _pilot_note(lines: list[str], readings: Iterable[dict] | None = None,
             lines.append("Escala no verificable: esta conclusión no recibió las "
                          "mediciones con las que contar repeticiones.")
             return lines
-        repetitions = _repetitions(_own_medians(readings))
+        repetitions = _repetitions_measured(_own_medians(readings))
     if repetitions and repetitions < len(config.FULL_SEEDS):
         lines.append(f"Piloto de {repetitions} repetición(es): estimación "
                      f"puntual, todavía no un veredicto.")
@@ -1733,3 +1758,474 @@ def conclusions(record: dict) -> dict:
     if isinstance(searched, dict) and searched:
         produced["techos"] = conclusion_ceilings(searched)
     return produced
+
+
+# ------------------------------------------------------- el eje de contaminación
+
+def render_noise(metric: str, markdown: bool = False) -> str:
+    """Una fila por método, una columna por tasa de contaminación.
+
+    El eje que colapsa cada celda es transferencia y repetición a la vez, y se
+    dice acá porque la curva es función de la tasa y de nada más. Una tabla que
+    además variara qué transferencias promedia estaría leyendo dos ejes e
+    informando uno.
+    """
+    from MIL_CREDA_Benchmark import contamination as noise_axis
+
+    drawn = noise_axis.curve(metric)
+    if not drawn["rates"]:
+        return ("Ninguno de los niveles declarados dejó registro todavía, así que "
+                "no hay nada que tabular. No es una tabla vacía: es que la "
+                "campaña sobre este eje no corrió.")
+
+    decimals = 1 if metric in PERCENT else 2
+    columns = ["Método"] + [f"ρ={rate:g}" for rate in drawn["rates"]]
+    rows = [(config.NAME_OF.get(arm, arm),
+             [f"{_scaled(v, metric):.{decimals}f}" for v in drawn["series"][arm]])
+            for arm in drawn["arms"]]
+
+    if markdown:
+        lines = ["| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for name, values in rows:
+            lines.append("| " + " | ".join([f"`{name}`", *values]) + " |")
+        body = "\n".join(lines)
+    else:
+        width = max(14, max((len(n) for n, _ in rows), default=14) + 2)
+        lines = [f"{'Método':<{width}}" + "".join(f"{c:>12}" for c in columns[1:])]
+        for name, values in rows:
+            lines.append(f"{name:<{width}}" + "".join(f"{v:>12}" for v in values))
+        body = "\n".join(lines)
+
+    return body + _noise_gaps(drawn, markdown)
+
+
+def _noise_gaps(drawn: dict, markdown: bool) -> str:
+    """Lo que la tabla no pudo mostrar, dicho en vez de omitido.
+
+    Una tabla a la que le faltan niveles o brazos se ve completa. Un nivel que no
+    corrió y un brazo que corrió en unos niveles y no en otros son huecos de la
+    campaña, y callarlos deja una figura que parece cubrir el eje entero.
+    """
+    notes = []
+    if drawn["missing"]:
+        faltan = ", ".join(f"ρ={r:g}" for r in drawn["missing"])
+        notes.append(f"Niveles declarados que todavía no corrieron: {faltan}.")
+    if drawn["dropped"]:
+        brazos = ", ".join(config.NAME_OF.get(a, a) for a in drawn["dropped"])
+        notes.append(
+            f"Brazos ausentes de al menos un nivel y por eso fuera de la tabla: "
+            f"{brazos}. Una serie con un hueco al lado de una completa difiere en "
+            f"cuántos puntos lleva, y la vista lee densidad como cobertura.")
+    return _notes_block(notes, markdown) if notes else ""
+
+
+def conclusion_noise(metric: str) -> str:
+    """Quién aguanta y quién no, calculado sobre la caída y no sobre el nivel.
+
+    La lectura que importa no es quién puntúa más alto —eso ya lo dice la tabla
+    limpia— sino cuánto pierde cada uno al ensuciarse el material, y si el orden
+    entre métodos sobrevive. Un método que empieza arriba y cae hasta el azar no
+    mitiga nada; uno que empieza abajo y no se mueve tampoco, porque nunca estuvo
+    decidiendo.
+    """
+    from MIL_CREDA_Benchmark import contamination as noise_axis
+
+    rows = noise_axis.degradation(metric)
+    if not rows:
+        return ("Sin registro en el nivel limpio no hay caída que medir: la "
+                "referencia es la única tasa en la que nada se corrompió.")
+    if len(rows) < 2:
+        return ("Un solo brazo con registro en todos los niveles: una caída sin "
+                "otra contra la cual leerse no distingue el método del material.")
+
+    decimals = 1 if metric in PERCENT else 2
+    ordered = sorted(rows, key=lambda r: r["fall"])
+    firme, peor = ordered[0], ordered[-1]
+
+    limpio = sorted(rows, key=lambda r: r["clean"], reverse=True)
+    sucio = sorted(rows, key=lambda r: r["worst"], reverse=True)
+    cambio = ("el orden entre métodos se mantiene de punta a punta"
+              if [r["arm"] for r in limpio] == [r["arm"] for r in sucio]
+              else f"el orden cambia: en limpio encabeza `{limpio[0]['name']}` y "
+                   f"contaminado encabeza `{sucio[0]['name']}`")
+
+    rates = noise_axis.curve(metric)["rates"]
+    return (
+        f"Entre ρ={rates[0]:g} y ρ={rates[-1]:g}, `{firme['name']}` es el que menos "
+        f"pierde ({_scaled(firme['fall'], metric):.{decimals}f}) y `{peor['name']}` "
+        f"el que más ({_scaled(peor['fall'], metric):.{decimals}f}); {cambio}."
+    )
+
+
+def conclusion_versus_clean(metric: str, rate: float) -> str:
+    """Lo que la tabla contaminada dice y la limpia no puede decir.
+
+    Deliberadamente no vuelve a enumerar la tabla de arriba. Una conclusión que
+    repite los números que tiene al lado dejó de concluir: lo que agrega esta es
+    la diferencia entre las dos tasas, que ninguna de las dos tablas contiene por
+    separado.
+    """
+    from MIL_CREDA_Benchmark import contamination as noise_axis
+
+    # Las dos CAMPAÑAS, no el barrido: esta conclusión va debajo de una tabla de
+    # seis transferencias, y leer la curva -- que corre una sola -- pondría dos
+    # formas distintas a los dos lados de una resta.
+    limpio = noise_axis.load(0.0, kind="campaign")
+    sucio = noise_axis.load(rate, kind="campaign")
+    if limpio is None or sucio is None:
+        cual = "limpio" if limpio is None else f"ρ={rate:g}"
+        return (f"Falta el registro {cual}, así que no hay comparación: una tabla "
+                f"sola no dice cuánto se movió nada.")
+
+    antes = noise_axis.by_arm(limpio["runs"], metric)
+    despues = noise_axis.by_arm(sucio["runs"], metric)
+    comunes = [arm for arm in config.ARM_ORDER if arm in antes and arm in despues]
+    if not comunes:
+        return ("Los dos niveles corrieron brazos disjuntos: no hay ningún par "
+                "sobre el que restar.")
+
+    decimals = 1 if metric in PERCENT else 2
+    caidas = {arm: antes[arm] - despues[arm] for arm in comunes}
+    menor = min(comunes, key=lambda a: caidas[a])
+    mayor = max(comunes, key=lambda a: caidas[a])
+    return (
+        f"Contra la tabla limpia de arriba, a ρ={rate:g} el que menos pierde es "
+        f"`{config.NAME_OF.get(menor, menor)}` "
+        f"({_scaled(caidas[menor], metric):+.{decimals}f}) y el que más "
+        f"`{config.NAME_OF.get(mayor, mayor)}` "
+        f"({_scaled(caidas[mayor], metric):+.{decimals}f}). La diferencia entre "
+        f"las dos tasas es lo único que ninguna de las dos tablas contiene por "
+        f"separado."
+    )
+
+
+def _diagnostic_record() -> dict | None:
+    """El diagnóstico que rige: el de la corrida completa, y si no, el del ensayo.
+
+    Mismo respaldo que el resto del eje. Anclado a `Results/Noise` a secas leía
+    el árbol de la campaña completa mientras el ensayo escribía dos directorios
+    más allá, y la tabla salía vacía con el registro en disco.
+    """
+    import json
+
+    for pilot in (False, True):
+        path = config.results_for(0.0, "curve", pilot).parents[1] / "diagnostic.json"
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    return None
+
+
+def render_diagnostic(markdown: bool = False) -> str:
+    """El techo que la campaña usó contra el techo re-buscado bajo contaminación.
+
+    Dos columnas y no una: el punto de la campaña es gratis —ya se midió— y el
+    re-buscado es lo único que este experimento paga. Una tabla con solo el
+    segundo no diría nada, porque la pregunta es la distancia entre los dos.
+    """
+    record = _diagnostic_record()
+    if record is None:
+        return ("El diagnóstico todavía no corrió. No es una tabla vacía: es que "
+                "`step --step noise-diagnostic` no se ejecutó, y sin el techo "
+                "re-buscado no hay segundo punto contra el cual leer el primero.")
+
+    transfer = record.get("transfer", "")
+    buscado = record.get("searchedUnderNoise") or {}
+    limpio = ((record.get("cleanCeilingRun") or {}).get("reduction") or {})
+    por_familia_limpio = limpio.get("ceilingsByTransfer") or {}
+
+    filas = []
+    for familia, hallado in buscado.items():
+        bajo_ruido = (hallado.get("byTransfer") or {}).get(transfer)
+        de_campana = (por_familia_limpio.get(familia) or {}).get(transfer)
+        filas.append((familia,
+                      "—" if de_campana is None else f"{de_campana:.4g}",
+                      "—" if bajo_ruido is None else f"{bajo_ruido:.4g}"))
+    if not filas:
+        return ("El registro existe y no nombra ninguna familia: no hay techo "
+                "que comparar.")
+
+    columns = ["Familia", "techo de la campaña (limpio)",
+               f"techo re-buscado (ρ={record.get('level')})"]
+    if markdown:
+        lines = ["| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for familia, uno, otro in filas:
+            lines.append(f"| `{familia}` | {uno} | {otro} |")
+        return "\n".join(lines)
+    return "\n".join(f"{f:<12}{a:>28}{b:>28}" for f, a, b in
+                     [tuple(columns)] + filas)
+
+
+def conclusion_diagnostic() -> str:
+    """Si el coeficiente explica la caída, o si no la explica.
+
+    Lo que decide es una sola cosa: si el techo re-buscado bajo contaminación se
+    parece al de la campaña, entonces el coeficiente no era el problema y la
+    caída es del término. Si se mueve, el coeficiente estaba corto y la campaña
+    está subestimando al método -- que es el caso en el que vale reestructurar
+    para buscar techos por nivel.
+    """
+    record = _diagnostic_record()
+    if record is None:
+        return ("Sin diagnóstico corrido no hay nada que concluir, y en "
+                "particular no se puede decir si una caída fue del término o "
+                "del coeficiente: bajo un techo fijo las dos se ven igual.")
+
+    transfer = record.get("transfer", "")
+    buscado = record.get("searchedUnderNoise") or {}
+    limpio = ((record.get("cleanCeilingRun") or {}).get("reduction") or {})
+    por_familia = limpio.get("ceilingsByTransfer") or {}
+
+    movidos, quietos, sin_par = [], [], []
+    for familia, hallado in buscado.items():
+        bajo_ruido = (hallado.get("byTransfer") or {}).get(transfer)
+        de_campana = (por_familia.get(familia) or {}).get(transfer)
+        if bajo_ruido is None or de_campana is None:
+            sin_par.append(familia)
+        elif de_campana and abs(bajo_ruido - de_campana) / de_campana > 0.5:
+            movidos.append(familia)
+        else:
+            quietos.append(familia)
+
+    partes = []
+    if movidos:
+        partes.append(
+            f"En {', '.join(f'`{f}`' for f in movidos)} el techo se mueve al "
+            f"buscarlo sobre material contaminado: el coeficiente elegido en "
+            f"limpio estaba corto ahí, así que la campaña subestima al método y "
+            f"techos por nivel valdrían lo que cuestan.")
+    if quietos:
+        partes.append(
+            f"En {', '.join(f'`{f}`' for f in quietos)} el techo se queda donde "
+            f"estaba: el coeficiente no explica la caída, y lo que cae es el "
+            f"término. Re-buscar por nivel no recuperaría nada.")
+    if sin_par:
+        partes.append(
+            f"Sin par comparable en {', '.join(f'`{f}`' for f in sin_par)}: "
+            f"falta uno de los dos extremos y una punta sola no mide distancia.")
+    return " ".join(partes)
+
+
+def render_at(rate: float, metric: str, markdown: bool = False) -> str:
+    """La misma tabla de `render`, sobre el registro de una tasa contaminada.
+
+    Mismo renderer y no uno paralelo: dos funciones que dibujan la misma tabla
+    son dos cosas que se pueden desalinear, y el lector no tendría cómo saber
+    cuál de las dos se movió. Lo único que cambia es de qué corrida salen las
+    filas.
+    """
+    from MIL_CREDA_Benchmark import contamination as noise_axis
+
+    nivel = noise_axis.load(rate, kind="campaign")
+    if nivel is None:
+        return (f"La campaña a ρ={rate:g} todavía no corrió, así que no hay "
+                f"segunda tabla. No está vacía: no existe.")
+    if noise_axis.mismatched(nivel):
+        return (f"El registro hallado en el árbol de ρ={rate:g} declara "
+                f"`labelNoise={noise_axis.stated_rate(nivel)}`. Un directorio no "
+                f"es evidencia y las dos cosas no coinciden: nada se dibuja "
+                f"hasta que se resuelva cuál está mal.")
+    return render(nivel["runs"], metric, nivel["summary"]["reduction"],
+                  markdown=markdown)
+
+
+def conclusion_readings_versus_clean(limpias: Iterable[dict], sucias: Iterable[dict],
+                                     path: str, rate: float) -> str:
+    """Cuánto movió la contaminación una lectura de fase dos, brazo por brazo.
+
+    No repite la tabla que tiene arriba. Lo que agrega es la distancia entre las
+    dos tasas, que es exactamente lo que ninguna de las dos tablas contiene por
+    separado -- y en fase dos importa más que en fase uno, porque una geometría
+    que no se mueve bajo ruido y una exactitud que sí se mueve son dos hechos
+    distintos sobre el mismo modelo.
+
+    Sobre las medianas de cada celda y no sobre todo lo promovido: los extras
+    fueron elegidos por el ordenamiento de los brazos dependientes, así que son
+    una muestra sesgada de ese piso y promediarlos estima otra cosa.
+    """
+    def por_brazo(readings):
+        reunido: dict[str, list[float]] = {}
+        for reading in _own_medians(list(readings)):
+            value = _reach(reading, path)
+            if value is not None:
+                reunido.setdefault(reading["arm"], []).append(value)
+        return {arm: sum(v) / len(v) for arm, v in reunido.items() if v}
+
+    antes, despues = por_brazo(limpias), por_brazo(sucias)
+    comunes = [a for a in config.ARM_ORDER if a in antes and a in despues]
+    if not comunes:
+        return (f"No hay ningún brazo con lectura en las dos tasas, así que no "
+                f"hay par sobre el que restar. Una punta sola no mide distancia.")
+
+    movimientos = {a: despues[a] - antes[a] for a in comunes}
+    quieto = min(comunes, key=lambda a: abs(movimientos[a]))
+    movido = max(comunes, key=lambda a: abs(movimientos[a]))
+    return (
+        f"Entre ρ=0 y ρ={rate:g}, `{config.NAME_OF.get(movido, movido)}` es el que "
+        f"más se mueve ({movimientos[movido]:+.4g}) y "
+        f"`{config.NAME_OF.get(quieto, quieto)}` el que menos "
+        f"({movimientos[quieto]:+.4g}). La distancia entre las dos tasas es lo "
+        f"único que ninguna de las dos tablas dice por su cuenta."
+    )
+
+
+def render_readings_contaminated(readings: Iterable[dict], path: str, title: str,
+                                 rate: float, markdown: bool = False) -> str:
+    """La misma lectura de fase dos, sobre los checkpoints de la campaña contaminada.
+
+    Declarado aparte de `render_readings` y no por gusto. El chequeo de
+    duplicación mira la llamada -- `render_readings(geometry.ratio)` -- y no
+    puede ver que un lado recibe `readings` y el otro `readings_ruido`: leía dos
+    renderizaciones del mismo número donde hay dos números distintos. Nombrarlo
+    aparte no es esquivar el chequeo, es decir lo que efectivamente hay, y deja
+    el chequeo intacto para el caso que sí tiene que atrapar.
+
+    La tabla es idéntica porque tiene que serlo: dos formas distintas para la
+    misma cantidad obligarían al lector a traducir entre ellas para comparar,
+    que es justamente lo que estas dos tablas existen para no pedir.
+    """
+    readings = list(readings)
+    if not readings:
+        return (f"La campaña a ρ={rate:g} todavía no dejó checkpoints, así que no "
+                f"hay segunda tabla. No está vacía: no existe.")
+    return render_readings(readings, path, title, markdown=markdown)
+
+
+#: El peldaño del peso por confianza, familia por familia: el brazo sin pesar
+#: contra el que pesa. Declarado acá y no adivinado de `ARMS`, porque «cuál es el
+#: par que difiere sólo en el peso» es una lectura de la formulación y no una
+#: propiedad que se pueda derivar de un diccionario.
+WEIGHTING_RUNGS = [("C", "D"), ("E", "F"), ("E", "G")]
+
+
+def conclusion_weighting_under_noise(metric: str = "targetAccuracy") -> str:
+    """Qué le hace la contaminación al peldaño del peso por confianza.
+
+    Es la mitad que la tabla de arriba no aísla. El destino entrena **sin
+    etiquetas** --- `pseudolabel` (Ec. 22) y `confidences` (Ec. 24) ---, así que
+    contaminar sus bolsas no es ruido de etiqueta: corrompe la condicional a la
+    que el término de adaptación se alinea y envenena los pseudo-rótulos de los
+    que sale la confianza. `D` contra `C`, y `F` y `G` contra `E`, difieren
+    exactamente en ese peso, y con material limpio ese peldaño casi no tiene
+    nada que separarlo: es bajo ruido donde el peso tiene algo que hacer.
+
+    Se lee sobre el barrido y no sobre una campaña: la pregunta es cómo se mueve
+    el peldaño *con la tasa*, y una sola tasa no tiene pendiente.
+    """
+    from MIL_CREDA_Benchmark import contamination as noise_axis
+
+    drawn = noise_axis.curve(metric)
+    if len(drawn["rates"]) < 2:
+        return ("Con menos de dos niveles el peldaño no tiene pendiente: hace "
+                "falta al menos una tasa limpia y una contaminada para saber si "
+                "el peso por confianza hace algo que el material limpio no pedía.")
+
+    decimals = 1 if metric in PERCENT else 2
+    partes, ausentes = [], []
+    for sin_peso, con_peso in WEIGHTING_RUNGS:
+        if sin_peso not in drawn["series"] or con_peso not in drawn["series"]:
+            ausentes.append(f"{sin_peso}->{con_peso}")
+            continue
+        primero = drawn["series"][con_peso][0] - drawn["series"][sin_peso][0]
+        ultimo = drawn["series"][con_peso][-1] - drawn["series"][sin_peso][-1]
+        partes.append(
+            f"`{config.NAME_OF.get(con_peso, con_peso)}` sobre "
+            f"`{config.NAME_OF.get(sin_peso, sin_peso)}` pasa de "
+            f"{_scaled(primero, metric):+.{decimals}f} en ρ={drawn['rates'][0]:g} a "
+            f"{_scaled(ultimo, metric):+.{decimals}f} en ρ={drawn['rates'][-1]:g}")
+    if not partes:
+        return ("Ninguno de los pares que difieren sólo en el peso por confianza "
+                "corrió en todos los niveles, así que el peldaño no se puede leer.")
+
+    cola = ""
+    if ausentes:
+        cola = (f" Sin lectura para {', '.join(ausentes)}: falta alguno de los "
+                f"dos brazos en al menos un nivel.")
+    return ("El peldaño del peso por confianza, que es donde el destino "
+            "contaminado tendría que notarse: " + "; ".join(partes) + "." + cola)
+
+
+def _level_or_note(rate: float):
+    """El registro contaminado que rige, o el texto que explica por qué no hay."""
+    from MIL_CREDA_Benchmark import contamination as axis
+
+    nivel = axis.load(rate, "campaign")
+    if nivel is None:
+        return None, (f"La campaña a ρ={rate:g} todavía no corrió, así que no "
+                      f"hay segunda tabla. No está vacía: no existe.")
+    if axis.mismatched(nivel):
+        return None, (f"El registro hallado para ρ={rate:g} declara "
+                      f"`labelNoise={axis.stated_rate(nivel)}`. Un directorio no "
+                      f"es evidencia y las dos cosas no coinciden: nada se "
+                      f"dibuja hasta que se resuelva cuál está mal.")
+    return nivel, None
+
+
+def render_gains_at(rate: float, dimension: str, title: str,
+                    markdown: bool = False) -> str:
+    """La tabla de ganancias sobre el registro contaminado.
+
+    Declarada aparte de `render_gains` por lo mismo que su hermana de fase dos:
+    el chequeo de duplicación mira la llamada y no puede ver que los datos son
+    otros. Nombrarla aparte dice lo que hay y deja el chequeo entero.
+    """
+    nivel, nota = _level_or_note(rate)
+    if nivel is None:
+        return nota
+    return render_gains(nivel["runs"], dimension, title, markdown=markdown)
+
+
+def render_rungs_at(rate: float, metric: str, markdown: bool = False) -> str:
+    """Los peldaños sobre el registro contaminado.
+
+    Es el peldaño el que más cambia bajo ruido y el que más importa acá: cada
+    uno resta dos brazos que difieren en una sola cosa, así que es donde se lee
+    si el mecanismo aguanta la contaminación o si sólo aguantaba el material
+    limpio.
+    """
+    nivel, nota = _level_or_note(rate)
+    if nivel is None:
+        return nota
+    return render_rungs(nivel["summary"], metric, markdown=markdown)
+
+
+def conclusion_rungs_versus_clean(metric: str, rate: float) -> str:
+    """Cuánto se movió cada peldaño entre las dos tasas.
+
+    No repite ninguna de las dos tablas: informa la diferencia, que es lo único
+    que ninguna contiene sola. Un peldaño que se agranda bajo ruido es el
+    mecanismo haciendo algo que el material limpio no le pedía; uno que se
+    achica es lo contrario, y las dos lecturas son el resultado.
+    """
+    from MIL_CREDA_Benchmark import contamination as axis
+
+    limpio = axis.load(0.0, "campaign")
+    sucio, nota = _level_or_note(rate)
+    if limpio is None or sucio is None:
+        return nota or "Falta el registro limpio, así que no hay comparación."
+
+    def peldanos(resumen):
+        salida = {}
+        for label, celda in (resumen.get("perTransfer") or {}).items():
+            for fila in celda if isinstance(celda, list) else []:
+                if fila.get("metric") == metric and fila.get("rung"):
+                    salida.setdefault(fila["rung"], []).append(fila.get("delta"))
+        return {k: sum(v) / len(v) for k, v in salida.items()
+                if v and all(x is not None for x in v)}
+
+    antes, despues = peldanos(limpio["summary"]), peldanos(sucio["summary"])
+    comunes = sorted(set(antes) & set(despues))
+    if not comunes:
+        return ("Los dos registros no comparten ningún peldaño con la misma "
+                "métrica, así que no hay par sobre el que restar.")
+    decimals = 1 if metric in PERCENT else 2
+    movimientos = {r: despues[r] - antes[r] for r in comunes}
+    crece = max(comunes, key=lambda r: movimientos[r])
+    cae = min(comunes, key=lambda r: movimientos[r])
+    return (f"Entre ρ=0 y ρ={rate:g}, el peldaño que más se agranda es "
+            f"`{crece}` ({_scaled(movimientos[crece], metric):+.{decimals}f}) y "
+            f"el que más se achica `{cae}` "
+            f"({_scaled(movimientos[cae], metric):+.{decimals}f}). Un peldaño "
+            f"que crece bajo ruido es el mecanismo haciendo algo que el material "
+            f"limpio no le pedía.")

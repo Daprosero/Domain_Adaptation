@@ -57,6 +57,13 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
     (`harness.write_shard_stamp`), which is exactly the property the next
     paragraph is about.
 
+    `labelNoise` joined them with the noise axis, and it is the entry no
+    averaging could ever repair: two shards contaminated at different rates are
+    two experiments, not one experiment on two machines, and a table drawn over
+    both is a table nobody can attribute. It is written flat and top-level onto
+    every stamp by `harness.write_shard_stamp` precisely so `disagreements()`
+    can see it, which is the property the paragraph below is about.
+
     `commit` and `codeDigest` are not named under `identicalAcrossShards`
     even though they were approved alongside `epochs` — both live at
     `evidence.commit` / `evidence.codeDigest` on a shard's stamp, and
@@ -79,7 +86,8 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
                      "supervised", "adaptationShare", "parameters"],
         "perEnvironment": [],
         "perRun": ["seconds", "peakMiB"],
-        "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer"],
+        "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
+                                  "labelNoise"],
     }
 
 
