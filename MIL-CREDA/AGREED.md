@@ -54,17 +54,13 @@ these is raised, not resolved in passing.
 - [x] **Two tables**: target accuracy as the headline, source accuracy as the `test_the_report_shows_the_target_table_and_its_source_complement`
       complement. A method that wins on target by wrecking source is the
       degenerate case, and one table cannot distinguish it from a success.
-- [x] A `max` column beside `mean ± stdev`, so the peak is documented where a
       peak is a number rather than a picture.
-- [x] A `share` column: the realized contribution of the adaptation term.
 - [x] The ladder table stays, directly below. Levels say who is ahead; only the `test_each_level_table_is_followed_by_the_ladder_of_that_same_metric`
       rungs say which piece did the work.
 - [x] Below the declared repetition floor, no verdicts are granted, the reason is `test_below_the_repetition_floor_the_reason_is_stamped_and_the_table_still_prints`
       stamped in the header, and the table is printed anyway.
-- [x] **The wall-time table comes first**, in the same shape, times instead of
       accuracy. It replaces the per-run listing, which repeated in prose what the
       tables say in a grid.
-- [x] **Reading order**: time, source, source rungs, target, target rungs, and the
       transversal reading last.
 - [x] **One table per cell**, each preceded by three short lines — what is `test_a_cell_shows_one_table_and_not_two`
       measured, why, and which direction is better — and followed by the most
@@ -83,13 +79,14 @@ these is raised, not resolved in passing.
 
 ## Figures — phase 2
 
+- [ ] Bag figure highlights **the same bags in every panel**: the median bag of each class by correspondence mass, one colour each, and every other bag in its own class colour.
+- [ ] **Three transfers in every figure, not six.** Six rows at a legible panel size do not fit on a page and the tables already carry all six. Fixed in `FIGURE_TRANSFER_COUNT`; which three is the bullet below.
 - [x] **One display seed for every comparative grid**, chosen as the seed whose `test_the_display_seed_is_the_median_of_the_across_arm_mean`
       across-arm mean target accuracy is the median. Panels drawn from each arm's
       own median seed would differ in the method *and* in the draw, and — because
       the seed fixes the partition — would not even share their bags.
 - [x] Artefacts are **median, never best**. The best of N grows with the arm's `test_median_seeds_is_the_selection_rule_on_its_own`
       dispersion, so best-vs-best flatters the noisiest arm by the most.
-- [x] **Three transfers in every figure, not six.** Six rows at a legible panel
       size do not fit on a page and the tables already carry all six. Fixed in
       `FIGURE_TRANSFER_COUNT` and `FIGURE_TRANSFER_RULE` by a rule that looks at
       no outcome: each domain appears once as source and once as target.
@@ -125,7 +122,6 @@ these is raised, not resolved in passing.
       transfer: `MIL-Baseline` + `MIL-CREDA*` + `MIL-CREDA`, chosen by the
       mechanism rather than by the ranking — that is the rung the local
       correspondence lives on, so the figure can fail.
-- [x] Bag figure highlights **the same bags in every panel**: the median bag of
       each class by correspondence mass, one colour each, everything else grey.
 - [x] The nearest source bag is found with the **bag kernel in the representation `test_the_nearest_source_bag_is_found_with_the_bag_kernel_in_the_representation_space`
       space**, never Euclidean and never in the 2-D projection, and the pair is
@@ -179,7 +175,6 @@ already existed: they are two halves of one contract and they live in one. -->
 - [x] CREDA is used as it is: per-instance cross-entropy, its own single-term objective, never edited to make the comparison work. `test_creda_keeps_its_per_instance_cross_entropy`
 - [x] The 1e-4 leaves where it was and becomes the ceiling of CREDA's own ramp, with `creda_lambda_special` as the default. `train_creda` still reads it from the notebook's `cfg`, because it is not always 1e-4. `test_credas_default_ceiling_is_its_published_coefficient`
 - [x] `get_lambda` is untouched. DANN, ADDA and CDAN+E still read it at full strength: lowering their coefficient would switch CDAN+E's domain adversary off rather than attenuate it. `test_the_untouched_loops_still_see_the_schedule_they_saw_before`
-- [x] The notebooks under `CREDA/Notebooks/` remain functional, verified statically without executing them.
 - [x] The cost of moving the coefficient is measured and bounded, not denied: the product's reassociation stays within 2 ULP and the gradients come out bit-identical. `test_and_the_gradient_comes_out_bit_identical`
 
 ## The two ramps
@@ -214,7 +209,6 @@ already existed: they are two halves of one contract and they live in one. -->
 - [x] The tie rule is written down: the **smallest** ceiling among the tied wins. Below some point a term is inert and everything ties, so there the tie-break is what actually chooses. `test_a_tie_goes_to_the_smallest_ceiling`
 - [x] The grid runs between the two declared defaults, 1e-4 and 1.0, so nothing outside what was already defensible can come out. `test_the_search_grid_runs_between_the_two_declared_defaults`
 - [x] The **growth rate is not searched**: it stays at `RAMP_DELTA = 20`, CREDA's own, shared by both sides. Searching it too would have turned the run into a 2D grid of three to five hours. `test_la_rejilla_no_busca_la_velocidad_de_crecimiento`
-- [x] No adaptive sampling. With 20 points the exhaustive grid is affordable and gives strictly more evidence: pruning biases against slow deltas, and sparse sampling destroys the tie structure, which here is a finding.
 - [x] The verdict is read over **all six** transfers. Withholding the two that funded the search bought nothing with the roles already disjoint by bag, and cost a third of the units the paired reading rests on. `test_the_campaign_runs_every_one_of_the_six_transfers_and_withholds_none`
 
 ## The full run
@@ -285,6 +279,20 @@ What was agreed and later changed, and what replaced it. Written rather than del
 **"No adaptive sampling. With 20 points the exhaustive grid is affordable and gives strictly more evidence: pruning biases against slow deltas, and sparse sampling destroys the tie structure, which here is a finding."** Reversed on 2026-08-27 for Optuna with `GPSampler`, 30 trials per `(family, transfer)` over a continuous range. Two halves of the old reason, and they did not fare the same. *Pruning biases against slow deltas* does not apply: nothing is pruned, every trial runs to its full epoch count. *Sparse sampling destroys the tie structure* was right, and the structure is not recovered — over a continuous range two evaluations never land on the same ceiling, so `tied` and `seedsAgree` cannot exist. What replaces them is the **plateau**: how many visited ceilings the criterion cannot tell apart. It carries the same finding — a wide plateau means the rule chose and not the criterion, which is what exposed CREDA's ceiling — but it is a different measurement and not a stronger one. The claim that the grid gives *strictly more evidence* was not tested before reversing it, and this file should say so rather than imply the trade was proven.
 
 This reversal was made **without reading this file**, which is the failure the file exists to prevent. It is recorded here rather than quietly folded into the section above.
+
+**"A `max` column beside `mean ± stdev`, so the peak is documented where a"** **"A `max` column beside `mean ± stdev`, so the peak is documented where a peak is a number rather than a picture."** Never built, and the reason is in `render`'s own docstring: the maximum of N repetitions grows with the arm's own dispersion, so printed beside a mean it rewards the noisiest arm -- the same reason the median artefact is kept and never the best. The value is still computed by `tables.table`; nothing reads it.
+
+**"A `share` column: the realized contribution of the adaptation term."** **"A `share` column: the realized contribution of the adaptation term."** The column was never built. What stands in its place is a figure: `figures.contribution_curves` reports the realized share arm by arm, and that figure now carries a witness. A column beside a mean would have invited the comparison the curve makes honestly.
+
+**"**The wall-time table comes first**, in the same shape, times instead of"** **"The wall-time table comes first, in the same shape, times instead of accuracy. It replaces the per-run listing."** Both halves are gone. The contract declares `seconds` as `perRun`, and pooling it prints a number that describes none of the runs behind it -- so the pooled table was removed and `render` now refuses any `perRun` dimension outright. The per-run listing is what stands, and it is the form the contract permits.
+
+**"**Reading order**: time, source, source rungs, target, target rungs, and the"** **"Reading order: time, source, source rungs, target, target rungs, and the transversal reading last."** The first five hold. The sixth does not: the transversal reading was removed on 2026-08-14, `render_panorama` deleted with it, and only `summary["panorama"]` survives in the record, rendered nowhere. The removal was never written down here, which is the failure this section exists to prevent.
+
+**"**Three transfers in every figure, not six.** Six rows at a legible panel"** **"Three transfers in every figure, not six. ...Fixed in `FIGURE_TRANSFER_COUNT` and `FIGURE_TRANSFER_RULE` by a rule that looks at no outcome: each domain appears once as source and once as target."** The count holds; the rule does not. The three are chosen by the outcome -- where the methods reach highest -- and declared in every figure's own caption, because a latent space in which every method sits near chance is a picture of a model that did not learn and says nothing about alignment. The no-outcome safeguard did not die, it moved: it now governs which seed is displayed, which is where a figure can still be made to look better than it is.
+
+**"Bag figure highlights **the same bags in every panel**: the median bag of"** **"Bag figure highlights the same bags in every panel: the median bag of each class by correspondence mass, one colour each, everything else grey."** Three of the four clauses hold. The grey does not: every background bag now carries its own class colour, because in grey the correspondence was unreadable -- the colour is the only thing left to judge it by.
+
+**"The notebooks under `CREDA/Notebooks/` remain functional, verified statically without executing them."** **"The notebooks under `CREDA/Notebooks/` remain functional, verified statically without executing them."** Out of this record's scope. `CREDA/` is prior work this project never edits, so nothing here can make the claim true or false, and an agreement nobody can act on is noise.
 
 <!-- position revision=research-concept-r17.md sha256=92519350fabdfedc134b6a683a8855fff4a65443a792502c2d851a1590219280 derivedAt=2026-08-30T00:54:48Z session=session_01LuUGww9xngXMTEUD4tzMnK target=pilot -->
 - [x] 1. The invariants hold against the tree as it stands: the suite is green and the verification notebook ran against this exact source. Two-state on purpose -- it runs here and nowhere else, and giving it a rung would be the position asserting a state it does not have. Nothing below is worth reading until this is ticked: every later step measures something, and a broken tree makes every measurement a description of the break. `@notebook Notebooks/verification.ipynb`
