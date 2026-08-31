@@ -18,10 +18,12 @@ from __future__ import annotations
 import json
 import re
 import statistics
+from pathlib import Path
 
 import pytest
 
-from MIL_CREDA_Benchmark import config, tables
+import MIL_CREDA_Benchmark
+from MIL_CREDA_Benchmark import config, harness, tables
 
 NOTEBOOKS = config.REPOSITORY / "MIL-CREDA" / "Notebooks"
 REPORT = NOTEBOOKS / "Benchmark_Report_v1.ipynb"
@@ -477,3 +479,93 @@ def test_the_figure_conclusions_name_the_method_the_measurement_favours() -> Non
     said = tables.conclusion_attention(readings)
     assert "casi por igual" in said
     assert said.index(config.NAME_OF["B"]) < said.index("casi por igual")
+
+
+# ---------------------------------------------------- what a decimal can mean
+
+def test_the_printed_precision_is_the_granularity_of_the_instrument() -> None:
+    """One decimal, and the number that justifies it computed rather than typed.
+
+    Thirty-six evaluation bags make accuracy a count out of thirty-six: it moves
+    in steps of `100 / 36 = 2.78` points and can take no value in between. A
+    second decimal would print hundredths of a point on a scale whose smallest
+    real step is nearly three points -- false precision, and the kind a reader
+    believes because it is printed.
+
+    Both halves are asserted together because either alone passes while the
+    report is wrong: the stamp can state the granularity while the table prints
+    four decimals, and the table can print one decimal while the stamp claims a
+    resolution the run does not have.
+
+    Reachable red: print a second decimal for an accuracy, or let the stamp
+    state a granularity it did not compute from `EVAL_BAGS`.
+    """
+    assert config.EVAL_BAGS == 36
+    granularity = 100 / config.EVAL_BAGS
+    assert granularity == pytest.approx(2.7777, abs=1e-4)
+
+    # the stamp says it, and says it from the constant
+    stamped = tables.stamp(_reduction())
+    assert f"{granularity:.2f}" in stamped
+    assert f"{config.EVAL_BAGS} bolsas de evaluación" in stamped
+
+    # the table prints one decimal for an accuracy: a value with more resolution
+    # than the instrument has comes out rounded to the instrument
+    runs = _runs({("G", label): [0.123456, 0.123456] for label in LABELS})
+    printed = tables.render(runs, "targetAccuracy", _reduction(seeds=2),
+                            markdown=True)
+    assert "12.3" in printed
+    assert "12.35" not in printed and "12.3456" not in printed
+
+    # and the granularity is coarser than the decimal that was NOT printed, which
+    # is the whole reason there is only one
+    assert granularity > 0.1
+
+    # a descriptive quantity is not an accuracy and keeps its two decimals: the
+    # rule is about the instrument, not about the renderer's taste
+    assert "targetAccuracy" in tables.PERCENT and "seconds" not in tables.PERCENT
+
+
+def test_the_benchmark_declares_the_components_its_objective_is_made_of() -> None:
+    """The two terms an arm's objective is made of, and the dimension carrying
+    their ratio, named in the report contract.
+
+    `contribution` alone is a numerator: a term that commanded nothing and a term
+    that was scaled to nothing both print small, and only the share separates
+    them. So the contract names both terms and the share, and every name it uses
+    has to be a field the record actually carries -- a declared component that no
+    run writes is a contract describing a different experiment.
+
+    Two terms and not three: the harness applies one shared coefficient to the
+    global and local terms together, so `supervised` and `contribution` are what
+    the objective is made of here. Splitting them would need two coefficients,
+    which is a change to the experiment and not a declaration.
+
+    Reachable red: drop `components` from the contract, or declare a term the run
+    record does not write.
+    """
+    import ast
+
+    report = MIL_CREDA_Benchmark.__benchmark__["report"]
+    components = report["components"]
+    assert components["terms"] == ["supervised", "contribution"]
+    assert components["share"] == "adaptationShare"
+
+    # every declared name is a dimension the contract already knows how to read
+    for name in [*components["terms"], components["share"]]:
+        assert name in report["dimensions"]
+
+    # and every one is a field the harness actually writes on a run, read from
+    # the record's own literal rather than from a list kept by hand
+    tree = ast.parse(Path(harness.__file__).read_text(encoding="utf-8"))
+    written = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        keys = {k.value for k in node.keys
+                if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+        if {"targetAccuracy", "curve", "seed"} <= keys:
+            written = keys
+    assert written, "the run record was not found in the harness"
+    for name in [*components["terms"], components["share"]]:
+        assert name in written, f"{name} is declared and never written"
