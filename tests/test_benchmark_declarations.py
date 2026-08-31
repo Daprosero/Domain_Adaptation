@@ -1548,6 +1548,19 @@ def test_the_per_transfer_conclusion_can_come_out_different() -> None:
     The same reading the report contract applies to every other conclusion: run
     it over two records that differ in the one fact it is about, and the two
     texts must differ.
+
+    And the two texts are not interchangeable prose: they are the two readings
+    the family's average across transfers can be. Once a measured transfer picks
+    a ceiling of its own the family stops running at one coefficient, so the row
+    averaged over transfers mixes two scalars -- and the report has to say that
+    is what it is giving, rather than leaving the reader to assume the single
+    coefficient that no longer exists. When none of them departs, separating the
+    two readings changed no number at all, and saying so is more honest than a
+    mark suggesting it did.
+
+    Differing texts alone would pass with the two swapped, which is the failure
+    that matters here: the report would be announcing the mixture exactly where
+    there is none.
     """
     from MIL_CREDA_Benchmark import tables
 
@@ -1559,6 +1572,16 @@ def test_the_per_transfer_conclusion_can_come_out_different() -> None:
     said_differs = tables.conclusion_ceilings_by_transfer(differs, transfers)
     assert said_agrees != said_differs
     assert "S->M" in said_differs and "S->M" not in said_agrees
+
+    # which of the two readings the row is, named in the text and not inferred
+    assert "mezcla dos escalares" in said_differs
+    assert "mezcla dos escalares" not in said_agrees
+    assert "no cambió ningún techo" in said_agrees
+    assert "no cambió ningún techo" not in said_differs
+
+    # and within a transfer every arm still shares the ceiling, which is what
+    # keeps each rung attributable -- said in the same breath as the mixture
+    assert "dentro de cada transferencia" in said_differs
 
 
 def test_the_per_transfer_table_marks_measured_apart_from_inherited() -> None:
