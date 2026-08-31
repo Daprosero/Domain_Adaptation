@@ -77,6 +77,36 @@ def test_moving_the_coefficient_to_the_ceiling_costs_at_most_two_ulp():
     assert worst <= 2 ** -51, f"reassociation drifted to {worst}"
 
 
+def test_and_the_gradient_comes_out_bit_identical():
+    """The other half of what the move cost, and it cost nothing at all.
+
+    The bound above is on the value; this is on what the optimizer actually
+    consumes. Under the published association the loss reaches the parameters
+    multiplied by `get_lambda(...)` and then by `lambda_`; under this one it is
+    multiplied once, by the ceiling the schedule already carries. Multiplication
+    is commutative bit for bit in IEEE-754, so the two derivatives are the same
+    float and not merely the same number -- which is why this is asserted by hex
+    representation and not by a tolerance: a tolerance here would accept exactly
+    the drift the claim denies.
+
+    Reachable red: build the ceiling by a division instead of the product --
+    `curve / (1 / ceiling)` is the same quantity in arithmetic and a different
+    float, and the gradient stops matching at the first row.
+    """
+    torch = pytest.importorskip("torch")
+
+    for row in GOLDEN:
+        for lambda_ in (1e-4, 1e-3, 1e-2, 1.0):
+            ceiling = ramp(row["epoch"], row["epochs"], row["delta"], ceiling=lambda_)
+            for value in (1e-4, 0.37, 2.5, 9.99):
+                published = torch.tensor(value, dtype=torch.float64, requires_grad=True)
+                (row["shared"] * (lambda_ * published)).backward()
+                now = torch.tensor(value, dtype=torch.float64, requires_grad=True)
+                (ceiling * now).backward()
+                assert float(published.grad).hex() == float(now.grad).hex(), (
+                    f"epoch {row['epoch']}, lambda {lambda_}: the gradient moved")
+
+
 def test_credas_default_ceiling_is_its_published_coefficient():
     """A caller that passes no ceiling gets `creda_lambda_special`, not one.
 
