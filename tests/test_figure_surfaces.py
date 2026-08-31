@@ -20,8 +20,11 @@ import json
 import numpy
 import pytest
 import torch
+import torch.nn as nn
 
-from MIL_CREDA_Benchmark import config, figures, latent
+from MIL_CREDA_Benchmark import bags, config, figures, latent, tables, wiring
+
+REPORT = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / "Benchmark_Report_v1.ipynb"
 
 TRANSFERS = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS[:3]]
 
@@ -231,7 +234,7 @@ def stubbed(monkeypatch):
     no claim here is about either. Everything the claims ARE about -- how many
     panels, which columns, which of them comes from a model -- runs for real.
     """
-    seen = {"loaded": [], "original": [], "pairs": []}
+    seen = {"loaded": [], "original": [], "pairs": [], "units": []}
 
     def _checkpoint_for(arm, transfer, seed, rate=0.0, pilot=False):
         return {"arm": arm, "transfer": transfer, "seed": seed,
@@ -245,6 +248,7 @@ def stubbed(monkeypatch):
         return object(), _Bagset(), _Bagset()
 
     def _represent(model, bagset, positions, device, unit=None):
+        seen["units"].append(unit)
         return torch.arange(40.0).reshape(20, 2), torch.arange(20) % config.CLASSES
 
     def _original_rows(record, budget, seed):
@@ -359,3 +363,401 @@ def test_the_highlighted_subject_is_the_median_of_its_class_and_never_the_best()
     chosen = latent.median_bag_per_class(reference)
     assert chosen[0] == 2 and chosen[1] == 5
     assert chosen[0] != 0, "the best of the class was highlighted"
+
+
+# ------------------------------------------------ the band, and the third panel
+
+def test_a_loss_curve_is_the_median_across_seeds_with_an_interquartile_band() -> None:
+    """The curve a reader sees is the median of the repetitions, and the shading
+    around it is the interquartile range of the same repetitions at each step.
+
+    One seed's trajectory cannot say whether a shape is the method's or the
+    draw's, and concatenating the repetitions would draw thirty runs as one that
+    took thirty times as long. So the reduction happens step by step, across
+    seeds, and the quantiles are asserted against numbers computed by hand rather
+    than against a second implementation of the same interpolation -- which would
+    only prove the two agree.
+
+    Three repetitions, sorted `[a, b, c]` at every step: the median is `b`, and
+    the quartiles fall midway to each neighbour because the interpolation walks
+    `fraction * (n - 1)` positions along the sorted values.
+
+    Reachable red: return the mean where the median belongs, or widen the band
+    to the extremes.
+    """
+    curves = [[{"supervised": 1.0}, {"supervised": 10.0}],
+              [{"supervised": 2.0}, {"supervised": 20.0}],
+              [{"supervised": 6.0}, {"supervised": 60.0}]]
+
+    low, mid, high = figures.band(curves, "supervised")
+
+    # step 0 over [1, 2, 6]: q1 = 1 + (2-1)/2, median = 2, q3 = 2 + (6-2)/2
+    # step 1 over [10, 20, 60]: the same interpolation, ten times over
+    assert mid == [2.0, 20.0]
+    assert low == [1.5, 15.0]
+    assert high == [4.0, 40.0]
+
+    # the median is not the mean, and the band is not the extremes: this fixture
+    # is skewed on purpose so the two rules cannot agree by accident
+    assert mid != [pytest.approx(3.0), pytest.approx(30.0)]
+    assert (low, high) != ([1.0, 10.0], [6.0, 60.0])
+
+    # ordering across seeds is a reduction, not a lookup
+    assert figures.band(list(reversed(curves)), "supervised") == (low, mid, high)
+
+
+def test_a_repetition_that_stopped_early_truncates_the_band_and_never_extends_it() -> None:
+    """Extending the short one would invent steps nobody ran."""
+    low, mid, high = figures.band(
+        [[{"k": 1.0}, {"k": 2.0}, {"k": 3.0}], [{"k": 5.0}]], "k")
+    # one step, because the shorter repetition only reached one -- and the two
+    # readings at that step are [1, 5], interpolated exactly as above
+    assert (low, mid, high) == ([2.0], [3.0], [4.0])
+
+
+def test_the_contribution_panel_is_shown_beside_the_other_two_curve_figures() -> None:
+    """The third panel is not optional and it is not somewhere else.
+
+    Without it, "the term had no effect" and "the term had no weight" are the
+    same picture: the supervised and adaptation curves show the trajectories and
+    neither says what share of the objective the term actually commanded. The
+    panel is beside them -- the same notebook, after both -- because it is read
+    against them and not on its own.
+
+    Read from the notebook itself, which is the only place that decides which
+    figures the report shows and in what order.
+
+    Reachable red: drop the contribution cell, or move it above the two curves
+    it is meant to be read beside.
+    """
+    cells = json.loads(REPORT.read_text(encoding="utf-8"))["cells"]
+    shown = []
+    for cell in cells:
+        if cell["cell_type"] != "code":
+            continue
+        source = "".join(cell["source"])
+        for name in ("supervised_curves", "adaptation_curves", "contribution_curves"):
+            if f"figures.{name}(" in source:
+                shown.append(name)
+
+    assert "contribution_curves" in shown, "the report shows no contribution panel"
+    assert {"supervised_curves", "adaptation_curves"} <= set(shown)
+    # beside them and after them: the share is read against the trajectories
+    assert shown.index("contribution_curves") > shown.index("supervised_curves")
+    assert shown.index("contribution_curves") > shown.index("adaptation_curves")
+    # and it is a real panel of the module, not a name the notebook alone knows
+    assert callable(figures.contribution_curves)
+
+
+# ------------------------------------------------------- what one cell draws with
+
+def _reference_marker(marker: str):
+    """The vertices matplotlib gives that marker, so the assertion names the
+    shape rather than an opaque path object."""
+    import matplotlib.pyplot as plt
+
+    axis = plt.subplots()[1]
+    path = axis.scatter([0.0], [0.0], marker=marker).get_paths()[0].vertices
+    plt.close(axis.figure)
+    return path
+
+
+def test_colour_is_the_class_and_the_marker_is_the_domain() -> None:
+    """Two channels carrying two different facts, and never the same one twice.
+
+    A panel of this grid answers one question -- did the two domains come
+    together class by class -- and that needs both facts at once. Colouring by
+    domain would make a perfectly aligned panel and a perfectly collapsed one
+    look identical; drawing one marker would leave a reader unable to say which
+    cloud is which.
+
+    The target is the side being judged, so it carries the heavier ink: larger
+    and edged in dark, against source points that are smaller and
+    semi-transparent. At grid size a shape is harder to read than a colour, and
+    the domain is what the eye is hunting for.
+
+    Reachable red: colour by `domains`, swap the two markers, or draw both
+    domains at one size.
+    """
+    import matplotlib.pyplot as plt
+
+    axis = plt.subplots()[1]
+    embedded = numpy.arange(24.0).reshape(12, 2)
+    labels = numpy.array([0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5])
+    domains = numpy.array([0.0] * 6 + [1.0] * 6)
+
+    latent._draw_cell(axis, embedded, labels, domains)
+
+    source, target = axis.collections
+    assert len(axis.collections) == 2, "one scatter per domain, and only two domains"
+
+    # the marker is the domain
+    assert numpy.allclose(source.get_paths()[0].vertices, _reference_marker("o"))
+    assert numpy.allclose(target.get_paths()[0].vertices, _reference_marker("^"))
+    assert numpy.array_equal(source.get_offsets(), embedded[domains == 0])
+    assert numpy.array_equal(target.get_offsets(), embedded[domains == 1])
+
+    # the colour is the class -- each domain's own slice of the labels, and not
+    # the domain repeated as a colour
+    assert numpy.array_equal(source.get_array(), labels[domains == 0])
+    assert numpy.array_equal(target.get_array(), labels[domains == 1])
+    assert source.cmap.name == target.cmap.name == "tab10"
+
+    # the target carries the heavier ink: larger, opaquer, and edged in dark
+    assert float(target.get_sizes()[0]) > float(source.get_sizes()[0])
+    assert target.get_alpha() > source.get_alpha()
+    assert len(source.get_edgecolors()) == 0, "source points carry no edge"
+    edge = target.get_edgecolors()[0][:3]
+    assert edge.max() < 0.5, "the target edge is dark, or the marker does not read"
+
+    plt.close(axis.figure)
+
+
+def test_every_panel_of_the_grid_is_drawn_at_the_instance_level(
+        stubbed, tmp_path) -> None:
+    """One unit for every column, bag-unit arms included.
+
+    Every arm encodes instances -- Eq. (13) applies identically in both families
+    -- so it is a space they all have, and the only one where every panel carries
+    the same number of points. Drawn in each arm's own unit, one point per
+    subject would sit beside thirty points per subject and the eye would read the
+    statistical unit as coverage.
+
+    Asserted over every panel of the grid and not over the constant: `LATENT_UNIT`
+    being right while one column reads it from somewhere else is the same green
+    suite.
+
+    Reachable red: pass the arm's own unit at either call site, or drop the
+    argument so `represent` falls back to its own default.
+    """
+    latent.latent_grid(tmp_path / "grid.pdf", config.LATENT_PANELS,
+                       TRANSFERS, seed=3, device=torch.device("cpu"))
+
+    # two representations per trained panel -- source and target -- and every one
+    # of them at the instance level
+    assert len(stubbed["units"]) == 2 * len(TRANSFERS) * len(config.LATENT_PANELS)
+    assert set(stubbed["units"]) == {"instance"}
+    assert config.LATENT_UNIT == "instance"
+
+
+# ------------------------------------------- the correspondence, measured for real
+
+class _Encoder(nn.Module):
+    """Something with an `output_dim` that maps an instance to a row.
+
+    The encoder is a pretrained resnet18 and no claim below is about it. The bag
+    kernel, the correspondence and the projection are what run for real.
+    """
+
+    def __init__(self, backbone=None, pretrained=False):
+        super().__init__()
+        self.output_dim = 6
+        self.linear = nn.Linear(3 * 8 * 8, self.output_dim)
+
+    def forward(self, x):
+        return self.linear(x.reshape(x.shape[0], -1))
+
+
+def _domains() -> tuple[bags.BagSet, bags.BagSet]:
+    """Two synthetic domains, one bag per class, the second a shifted first.
+
+    Every class carries a source bag because `total_correspondence` refuses a
+    step where one does not: a target bag whose class has no source counterpart
+    leaves the correspondence undefined rather than empty.
+
+    The target is the source plus noise rather than an independent draw, and
+    that is what makes the correspondence measurable at all. Two unrelated
+    clouds pair at chance, the hit count comes out zero, and a test asserting
+    zero cannot tell a stopped counter from a correct one. At this offset the
+    pairing lands three of ten -- neither nothing nor everything.
+    """
+    count = config.CLASSES
+    source_images = torch.randn(count * config.INSTANCES_PER_BAG, 3, 8, 8,
+                                generator=torch.Generator().manual_seed(1))
+    target_images = source_images + 0.2 * torch.randn(
+        source_images.shape, generator=torch.Generator().manual_seed(7))
+    members = torch.arange(source_images.shape[0]).reshape(
+        count, config.INSTANCES_PER_BAG)
+    positions = torch.arange(count)
+
+    def one(domain: str, images: torch.Tensor) -> bags.BagSet:
+        return bags.BagSet(domain, images, members, torch.arange(count),
+                           positions, positions, positions, {})
+
+    return one("S", source_images), one("T", target_images)
+
+
+@pytest.fixture
+def trained(monkeypatch):
+    """A tiny model over synthetic bags, and the two stubs a grid needs.
+
+    `checkpoint_for` and `load` are replaced because they need a finished run on
+    disk, and `_embed` because it is UMAP -- the projection is asserted through
+    the coordinates it returns rather than through the coordinates it computes.
+    Everything else runs: the encoder, the attention pooling, the bag kernel and
+    the correspondence.
+    """
+    monkeypatch.setattr(wiring, "FeatureExtractor", _Encoder)
+    torch.manual_seed(11)
+    pool = wiring.Pool(torch.randn(300, 3, 8, 8),
+                       torch.arange(300).reshape(10, 30),
+                       torch.arange(10) % config.CLASSES)
+    model = wiring.build("G", config.CLASSES, pool, pool)
+    source, target = _domains()
+
+    seen = {"embedded": []}
+
+    def _checkpoint_for(arm, transfer, seed, rate=0.0, pilot=False):
+        return {"arm": arm, "transfer": transfer, "seed": seed}
+
+    def _load(record, device):
+        return model, source, target
+
+    def _embed(rows, seed):
+        # A deterministic stand-in for UMAP: still a projection of the very rows
+        # it was handed, so what the panel scatters can be compared against it.
+        projected = numpy.asarray(rows.numpy(), dtype=float)[:, :2] * 3.0 + 1.0
+        seen["embedded"].append((rows.shape[0], projected))
+        return projected
+
+    monkeypatch.setattr(latent, "checkpoint_for", _checkpoint_for)
+    monkeypatch.setattr(latent, "load", _load)
+    monkeypatch.setattr(latent, "_embed", _embed)
+    return {"model": model, "source": source, "target": target, "seen": seen}
+
+
+def test_the_nearest_source_bag_is_found_with_the_bag_kernel_in_the_representation_space(
+        trained) -> None:
+    """The pairing is the method's own geometry, and it is not a distance the
+    method never computes.
+
+    Euclidean distance between the bag representations of Eq. (16) is a different
+    quantity from the relevance-weighted bag kernel of Eq. (21), and distance in
+    the two-dimensional projection is a third: that one would illustrate UMAP
+    rather than the correspondence. All three are available at this point in the
+    code, which is why the one that is used has to be asserted rather than
+    assumed -- the fixture is built so the three answers disagree.
+
+    The joining line is NOT what is checked here. It is drawn only for an arm
+    that declares the local term, so two of the three panels of a row carry none
+    and a test over the lines would be asserting the panel choice instead.
+
+    Reachable red: pair by Euclidean distance on `Z`, or take the argmin of the
+    kernel instead of its argmax.
+    """
+    from MIL_CREDA.attention import bag_embedding
+    from MIL_CREDA.bag_kernel import bag_kernel_matrix
+
+    model, source, target = trained["model"], trained["source"], trained["target"]
+    reading = latent.bag_pairs(model, source, target, torch.device("cpu"))
+
+    # the same kernel, rebuilt from the published pieces rather than from the
+    # function under test
+    H_s = model.instance_embeddings(source.images[source.members[source.train_idx]])
+    H_t = model.instance_embeddings(target.images[target.members[target.eval_idx]])
+    pairs_s, pairs_t = model.bags_of(H_s), model.bags_of(H_t)
+    sigma = wiring._median_sigma(torch.cat([torch.cat([H for H, _ in pairs_s]),
+                                            torch.cat([H for H, _ in pairs_t])]))
+    K_st = bag_kernel_matrix(pairs_s, pairs_t, sigma)
+
+    assert torch.equal(reading["nearest"], K_st.argmax(dim=0))
+
+    # and the two geometries the method does not use answer differently, so the
+    # assertion above is separating them rather than restating a coincidence
+    Z_s = torch.stack([bag_embedding(H, w) for H, w in pairs_s])
+    Z_t = torch.stack([bag_embedding(H, w) for H, w in pairs_t])
+    euclidean = torch.cdist(Z_t, Z_s).argmin(dim=1)
+    projected = torch.cdist(Z_t[:, :2], Z_s[:, :2]).argmin(dim=1)
+    assert not torch.equal(reading["nearest"], euclidean)
+    assert not torch.equal(reading["nearest"], projected)
+
+    # nearest, not farthest
+    assert not torch.equal(reading["nearest"], K_st.argmin(dim=0))
+    # the representation space and not the projection: the kernel ran over the
+    # instance embeddings the model produced, in their full width
+    assert H_s.shape[-1] == model.encoder.output_dim > 2
+
+
+def test_the_measured_correspondence_hit_rate_is_printed_with_the_figure(
+        trained, tmp_path) -> None:
+    """A number beside the drawing, so the panel carries a reading and not an
+    impression.
+
+    Whether the highlighted subject landed with its own class is countable, and
+    counted it is comparable from one row to the next -- which is exactly what a
+    reader cannot do by eye across nine panels. The count comes out of the same
+    call that draws them, so the table and the figure cannot describe different
+    runs.
+
+    Reachable red: stop counting the hits in the grid, or drop the column from
+    the table that prints them.
+    """
+    produced = latent.correspondence_grid(
+        tmp_path / "bolsas.pdf", config.BAG_PANELS, TRANSFERS[:1], seed=3,
+        device=torch.device("cpu"))
+
+    scored = produced["scored"]
+    assert scored, "the grid measured nothing to print"
+
+    # what the count has to be, recomputed from the pairing itself: the source
+    # bags are one per class in order, so a highlighted subject of class k is
+    # paired correctly exactly when its nearest source bag is bag k
+    reading = latent.bag_pairs(trained["model"], trained["source"],
+                               trained["target"], torch.device("cpu"))
+    highlighted = latent.median_bag_per_class(reading)
+    expected = sum(int(reading["sourceLabels"][int(reading["nearest"][position])])
+                   == class_id for class_id, position in highlighted.items())
+    for row in scored:
+        assert row["classes"] == len(highlighted)
+        assert row["hits"] == expected
+
+    printed = tables.render_correspondence(scored, markdown=True)
+    for row in scored:
+        assert f"{row['hits']}/{row['classes']}" in printed, printed
+        assert config.NAME_OF[row["arm"]] in printed
+    # and it is the measurement, not a constant: a different count prints
+    # differently
+    moved = [dict(row, hits=(row["hits"] + 1) % (row["classes"] + 1)) for row in scored]
+    assert tables.render_correspondence(moved, markdown=True) != printed
+
+
+def test_the_bag_figure_keeps_the_projection_and_never_becomes_a_bipartite_diagram(
+        trained, tmp_path) -> None:
+    """The panel is a projection of one shared space, not two columns of nodes
+    with edges between them.
+
+    A bipartite diagram fixes the two domains on two axes and draws the pairing
+    as edges. It reads the pairing off cleanly and loses the only thing the
+    figure is for: whether the bags landed near their own class at all. Three
+    columns in one figure already makes the panels large enough to read, so the
+    projection stays; if it is still a knot, the bipartite is next.
+
+    Asserted where it can fail: both domains go through ONE embedding call, and
+    what each panel scatters is exactly the coordinates that call returned --
+    never a layout the drawing invented.
+
+    Reachable red: project the two domains separately, or place them at two
+    fixed abscissae and keep only the edges.
+    """
+    produced = latent.correspondence_grid(
+        tmp_path / "bolsas.pdf", config.BAG_PANELS, TRANSFERS[:1], seed=3,
+        device=torch.device("cpu"))
+
+    embedded = trained["seen"]["embedded"]
+    assert len(embedded) == len(config.BAG_PANELS), "one projection per panel"
+
+    axes = produced["figure"].axes
+    for axis, (count, projection) in zip(axes, embedded):
+        # one call carrying both domains: a bipartite layout has no such shared
+        # space to project into
+        assert count == config.CLASSES * 2
+        assert projection.shape[1] == 2
+        cut = count // 2
+        drawn = numpy.concatenate([axis.collections[0].get_offsets(),
+                                   axis.collections[1].get_offsets()])
+        assert numpy.allclose(drawn, projection)
+        # both clouds live over the same abscissa range -- two fixed columns
+        # would leave the source at one x and the target at another
+        source_x = projection[:cut, 0]
+        target_x = projection[cut:, 0]
+        assert min(source_x.max(), target_x.max()) > max(source_x.min(), target_x.min())
