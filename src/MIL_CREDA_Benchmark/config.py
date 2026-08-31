@@ -90,6 +90,101 @@ TRAIN_BAGS = 64
 VALID_BAGS = 20
 EVAL_BAGS = 36
 
+# ---------------------------------------------------------------- label noise
+
+#: The fraction of a training bag's instances replaced by images of another
+#: class. The bag's label never changes: bags are pure and no instance carries a
+#: label of its own, so there is nothing to flip. What contamination corrupts is
+#: the evidence, not the answer.
+#:
+#: The same replacement is two different perturbations, and that asymmetry is the
+#: experiment rather than a wrinkle in it. `wiring.py` broadcasts the bag's label
+#: to all `INSTANCES_PER_BAG` instances, so for an instance-unit arm those
+#: replaced instances carry a genuinely wrong label; for a bag-unit arm the label
+#: stays at the bag and the replacements are witnesses the attention may learn to
+#: downweight.
+NOISE = 0.0
+
+#: Every level the axis runs over, `0.0` first. The clean campaign is the first
+#: point of the curve rather than a separate document — a second set of notebooks
+#: differing in one parameter forks from the first day.
+NOISE_LEVELS = [0.0, 0.1, 0.2, 0.3, 0.4]
+
+#: Past this the bag's label stops being defensible. Contaminants are drawn from
+#: the other `CLASSES - 1` classes, so the bag's own class remains the plurality
+#: while the rate is under one half; at that point the label is a coin toss and
+#: the curve measures nothing. Declared as a cap and enforced, not left to whoever
+#: edits `NOISE_LEVELS` next.
+NOISE_CAP = 0.5
+
+#: Which roles the noise reaches: training only, in both domains. `valid` is where
+#: the ceiling search reads its criterion and `eval` is the answer key of the
+#: verdict, so contaminating either would corrupt a measurement rather than the
+#: material being measured. Train dirty, measure clean.
+#:
+#: One rate for source and target alike. The two are not the same perturbation --
+#: the target trains unsupervised, through `pseudolabel` (Eq. 22) and
+#: `confidences` (Eq. 24), so contaminating it corrupts the conditional the
+#: adaptation term aligns to rather than any label -- but separating the rates
+#: would make the sweep two-dimensional and multiply a campaign that already
+#: costs `len(ARMS) * len(TRANSFERS) * len(FULL_SEEDS)` runs. Which of the two
+#: domains hurts more is a rung of its own, later, on one transfer.
+NOISE_ROLES = ("train",)
+
+
+def noise_instances(rate: float) -> int:
+    """How many of a bag's instances a rate replaces.
+
+    Exact at every declared level: the levels are tenths and `INSTANCES_PER_BAG`
+    is thirty, so nothing rounds. Refuses above the cap rather than clamping,
+    because a run silently held at 0.5 while its record says 0.7 is a table
+    nobody can attribute.
+    """
+    if not 0.0 <= rate < NOISE_CAP:
+        raise ValueError(
+            f"noise rate {rate} is outside [0, {NOISE_CAP}); past the cap the "
+            f"bag's own class stops being the plurality of its instances and its "
+            f"label stops being defensible"
+        )
+    return round(rate * INSTANCES_PER_BAG)
+
+
+# --------------------------------------------------- the noise axis, on report
+
+#: The contaminated level the report and latent notebooks show beside `0.0`. Both
+#: render each table twice rather than once at a level chosen afterwards: picking
+#: it once the degradation curve exists would put whichever level flatters the
+#: method into the headline table, chosen by outcome. The midpoint of
+#: `NOISE_LEVELS` is arithmetic, and nothing the run produces can have decided it.
+NOISE_REPORTED = NOISE_LEVELS[len(NOISE_LEVELS) // 2]
+
+#: Where the degradation curve is measured. One transfer, and the smallest domain
+#: gap rather than the best result: the rule is about the instrument, since a
+#: transfer already near its floor at `0.0` has no room to fall and cannot show a
+#: curve. The gap is a property of the material and not of any measurement.
+NOISE_TRANSFER = ("M", "U")
+
+#: The diagnostic that separates *the term failed* from *the coefficient was too
+#: small*, once the campaign's ceilings are known to have been searched clean.
+#:
+#: `D` and `G` are the two complete methods, one per family, and the only two
+#: carrying the coefficient at all: `A` and `B` have no adaptation term to
+#: re-search a ceiling for, and `C`, `E` and `F` are ablations that would
+#: multiply the search without adding diagnosis.
+#:
+#: `NOISE_DIAGNOSTIC_LEVEL` is the cap of the range, fixed here rather than after
+#: the curve exists. At the extreme the coefficient is under the most pressure, so
+#: a re-searched ceiling that recovers nothing there recovers nothing anywhere and
+#: the reading does not depend on where anyone chose to look.
+#:
+#: It needs three points and pays for one: the two arms at this level under the
+#: campaign's clean ceiling come out of the campaign, and what is run is the
+#: ceiling searched at this level plus the two arms under it. Its numbers are
+#: diagnostic and never enter the verdict tables; what it decides is whether
+#: per-level ceilings are worth restructuring for.
+NOISE_DIAGNOSTIC_ARMS = ["D", "G"]
+NOISE_DIAGNOSTIC_LEVEL = NOISE_LEVELS[-1]
+
 # -------------------------------------------------------------------- network
 
 BACKBONE = "resnet18"
@@ -532,6 +627,82 @@ CEILINGS_PILOT_RECORD = RESULTS / "ceilings.pilot.json"
 #: el experimento; esto es un experimento distinto que comparte su programa.
 PILOT_SEARCH_EPOCHS = EPOCHS
 PILOT_SEARCH_SEEDS = [0]
+
+
+
+
+#: Which levels keep their weights, and the two are not a preference: they are
+#: exactly the levels the latent notebook renders, so the list is derived from
+#: what the report already declares rather than typed beside it.
+#:
+#: The other levels run and record their runs -- the degradation curve is read
+#: from `runs.jsonl` and needs every level -- but write no checkpoints at all. A
+#: campaign keeps `len(ARMS) * len(TRANSFERS) * 3` weights at roughly 45 MB each,
+#: about 8 GB a level; keeping five would be 40 GB of which three levels would
+#: never be opened by anything.
+CHECKPOINT_LEVELS = [NOISE_LEVELS[0], NOISE_REPORTED]
+
+
+def keeps_checkpoints(rate: float) -> bool:
+    """Whether a campaign at this rate has a reader for the weights it would keep."""
+    return any(abs(rate - level) < 1e-12 for level in CHECKPOINT_LEVELS)
+
+
+def results_for(rate: float, kind: str = "campaign",
+                pilot: bool = False) -> "Path":
+    """Where a run of this shape, at this rate, of this kind, writes.
+
+    Three coordinates and not one, and each was added because two runs collided
+    on the one before it.
+
+    `rate == 0` with `kind == "campaign"` and no pilot returns `RESULTS`
+    unchanged: every path already on disk, every notebook naming one and the
+    `records` block of the declaration point there. The axis is an addition, not
+    a relocation.
+
+    `kind` separates the degradation sweep from the campaign. Both can stand at
+    the same rate and they are not the same experiment -- the sweep is ONE
+    transfer across every level, the campaign is every transfer at one level --
+    and `runs.jsonl` is opened `"w"`, so whichever ran second would truncate the
+    first in silence.
+
+    `pilot` separates a rehearsal from the run it rehearses, for exactly that
+    reason and one worse: when a pilot and a real campaign share a destination,
+    the one that overwrites is the cheap one. Only the ROOT moves; the shape
+    underneath is identical, because a pilot that also rearranged its files
+    would not be the same program as the run it claims to rehearse.
+
+    Everything is derived from `RESULTS` rather than rebuilt from `PRODUCT`, so
+    a caller that redirects `RESULTS` -- every test here does -- redirects all
+    of it and not the clean campaign alone.
+    """
+    if kind not in ("campaign", "curve"):
+        raise ValueError(f"unknown run kind {kind!r}; known: 'campaign', 'curve'")
+    base = RESULTS.parent
+    if pilot:
+        base = base / "Pilot"
+    if kind == "curve":
+        return base / "Noise" / "curve" / f"rho{rate:g}".replace(".", "p")
+    if not rate:
+        return base / RESULTS.name if pilot else RESULTS
+    return base / "Noise" / f"rho{rate:g}".replace(".", "p")
+
+
+def models_for(rate: float, pilot: bool = False) -> "Path":
+    """Where the campaign of this shape keeps its checkpoints.
+
+    Same two coordinates as `results_for` and the same reasons.
+    `latent.available()` globs a directory, so two runs sharing one would hand
+    the analysis a mixed set with no way to tell which run each checkpoint came
+    from -- and unlike a truncated `runs.jsonl`, that failure is silent and
+    renders.
+    """
+    base = MODELS.parent
+    if pilot:
+        base = base / "Pilot"
+    if not rate:
+        return base / MODELS.name if pilot else MODELS
+    return base / "Noise" / f"rho{rate:g}".replace(".", "p")
 
 
 def ceilings_record_for(pilot: bool) -> "Path":

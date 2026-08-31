@@ -62,24 +62,126 @@ def _labels(dataset) -> np.ndarray:
     raise ValueError("the dataset exposes neither `targets` nor `labels`")
 
 
-def _select(labels: np.ndarray, rng: np.random.Generator) -> dict[int, np.ndarray]:
+def _reserve_size(rate: float) -> int:
+    """How many spare images per class the contamination needs.
+
+    Zero when nothing is contaminated, and that zero matters: the reserve is
+    taken from the same permutation the bags are drawn from, so a non-zero
+    reserve at rate 0 would move nothing and cost nothing but would still have to
+    be justified. More to the point, `_select` must draw exactly what it drew
+    before at rate 0 or every clean result stops being comparable to itself.
+
+    Donors are balanced across the `CLASSES - 1` classes that are not the bag's,
+    so no single class supplies the whole contamination; the slack absorbs the
+    remainder of that division. USPS is what binds -- 542 images in its smallest
+    class against the 360 the bags take -- and this fits under it at the cap.
+    """
+    per_bag = config.noise_instances(rate)
+    if per_bag == 0:
+        return 0
+    donors = config.CLASSES - 1
+    return -(-config.TRAIN_BAGS * per_bag // donors) + config.INSTANCES_PER_BAG
+
+
+def _select(labels: np.ndarray, rng: np.random.Generator,
+            reserve: int = 0) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
     """Draw the images each class contributes, refusing rather than shrinking.
 
     A class that cannot fill its quota is an error. Returning a smaller slice
     would produce bags of uneven support and a failure downstream that reads as a
     defect of the method while being a defect of the draw.
+
+    `reserve` is the spare each class holds back for contamination, drawn from the
+    same permutation so a domain that cannot fund both is refused here rather than
+    halfway through the replacement. At `reserve == 0` this draws exactly what it
+    drew before the noise axis existed, image for image.
     """
     needed = config.BAGS_PER_CLASS * config.INSTANCES_PER_BAG
     chosen: dict[int, np.ndarray] = {}
+    spare: dict[int, np.ndarray] = {}
     for class_id in range(config.CLASSES):
         pool = np.flatnonzero(labels == class_id)
-        if pool.size < needed:
+        if pool.size < needed + reserve:
             raise ValueError(
                 f"class {class_id} offers {pool.size} images and the draw needs "
-                f"{needed}; this domain cannot fund the agreed bag count"
+                f"{needed}"
+                + (f" plus {reserve} held back for contamination" if reserve else "")
+                + "; this domain cannot fund the agreed bag count"
             )
-        chosen[class_id] = rng.permutation(pool)[:needed]
-    return chosen
+        drawn = rng.permutation(pool)
+        chosen[class_id] = drawn[:needed]
+        spare[class_id] = drawn[needed:needed + reserve]
+    return chosen, spare
+
+
+def _contaminate(flat: list[int], members: list[list[int]], bag_labels: list[int],
+                 train_positions: list[int], spare: dict[int, np.ndarray],
+                 rate: float, seed: int, code: str) -> dict:
+    """Replace part of every training bag with images of other classes.
+
+    The bag's label is left exactly as it was. Bags are pure and no instance
+    carries a label of its own, so there is nothing to flip: what this corrupts is
+    the evidence a bag offers for its own label, and the two families read that
+    corruption differently by construction -- an instance-unit arm receives the
+    bag's label broadcast to all thirty instances and so is handed genuinely wrong
+    labels, while a bag-unit arm keeps the label at the bag and sees witnesses its
+    attention may learn to downweight.
+
+    It edits `flat` in place, before the images are decoded, so `rebuild` needs to
+    know nothing about noise: the manifest's `imageIndices` already names the
+    contaminants. The record written beside it exists so a reader can tell a
+    contaminated slot from a clean one without re-deriving the draw.
+
+    Only `train_positions` is touched. The selection role is where the ceiling
+    search reads its criterion and the evaluation role is the verdict's answer
+    key; contaminating either would corrupt a measurement rather than the material
+    under measurement.
+    """
+    per_bag = config.noise_instances(rate)
+    if per_bag == 0:
+        return {"rate": rate, "instancesPerBag": 0, "roles": list(config.NOISE_ROLES),
+                "bags": []}
+
+    # A stream of its own, so the clean draw above is bit-identical whether or not
+    # anything is contaminated afterwards. Sharing `rng` would make every seed's
+    # bags depend on the rate and no rate would be comparable to another.
+    rng = np.random.default_rng((seed * 1000 + ord(code)) * 7919 + 104729)
+
+    cursor = {class_id: 0 for class_id in range(config.CLASSES)}
+    record: list[dict] = []
+
+    for position in train_positions:
+        own = bag_labels[position]
+        others = [c for c in range(config.CLASSES) if c != own]
+        # Balanced rather than uniform: an unbalanced draw would let one class
+        # donate most of the contamination and create a systematic confusion pair
+        # nobody declared. The rotation keeps consecutive bags from all leaning on
+        # the same donors, and the shuffle keeps the slot a donor lands in from
+        # being a function of its class.
+        donors = [others[(position + i) % len(others)] for i in range(per_bag)]
+        rng.shuffle(donors)
+        slots = sorted(int(s) for s in
+                       rng.permutation(config.INSTANCES_PER_BAG)[:per_bag])
+
+        replaced: list[int] = []
+        for slot, donor in zip(slots, donors):
+            available = spare[donor]
+            if cursor[donor] >= available.size:
+                raise ValueError(
+                    f"class {donor} ran out of spare images while contaminating "
+                    f"at rate {rate}; the reserve is sized for the declared cap "
+                    f"and this draw asked for more"
+                )
+            image = int(available[cursor[donor]])
+            cursor[donor] += 1
+            flat[members[position][slot]] = image
+            replaced.append(image)
+
+        record.append({"bag": position, "label": own, "slots": slots,
+                       "donorClasses": donors, "imageIndices": replaced})
+
+    return {"rate": rate, "instancesPerBag": per_bag,
+            "roles": list(config.NOISE_ROLES), "bags": record}
 
 
 def _share(total: int, rng: np.random.Generator) -> dict[int, int]:
@@ -160,13 +262,20 @@ class BagDataset(Dataset):
         return instances, label
 
 
-def build(code: str, root: Path, seed: int) -> BagSet:
-    """Every bag of one domain, and the record of how they were drawn."""
+def build(code: str, root: Path, seed: int, noise: float | None = None) -> BagSet:
+    """Every bag of one domain, and the record of how they were drawn.
+
+    `noise` is the fraction of each *training* bag replaced by images of other
+    classes, defaulting to whatever `config.NOISE` currently declares. At 0 this
+    draws exactly what it drew before the noise axis existed -- same permutation,
+    same images, same split -- so the clean campaign stays comparable to itself.
+    """
+    rate = config.NOISE if noise is None else noise
     dataset = _raw_dataset(code, root)
     labels = _labels(dataset)
     rng = np.random.default_rng(seed * 1000 + ord(code))
 
-    selected = _select(labels, rng)
+    selected, spare = _select(labels, rng, _reserve_size(rate))
     train_share, valid_share = _split_counts(rng)
 
     flat: list[int] = []
@@ -192,6 +301,11 @@ def build(code: str, root: Path, seed: int) -> BagSet:
             else:
                 eval_positions.append(position)
 
+    # Before the images are decoded, so `rebuild` needs to know nothing about
+    # noise: `imageIndices` below already names whatever replaced what.
+    contamination = _contaminate(flat, members, bag_labels, train_positions,
+                                 spare, rate, seed, code)
+
     images = torch.stack([dataset[i][0] for i in flat])
 
     manifest = {
@@ -209,6 +323,11 @@ def build(code: str, root: Path, seed: int) -> BagSet:
         "evalBags": eval_positions,
         "trainShareByClass": train_share,
         "validShareByClass": valid_share,
+        # Which slots stopped supporting their bag's label, and what replaced
+        # them. `imageIndices` already carries the contaminants, so this is not
+        # what makes the material rebuildable -- it is what lets a reader tell a
+        # contaminated slot from a clean one without re-deriving the draw.
+        "contamination": contamination,
         "revision": config.REVISION,
     }
 

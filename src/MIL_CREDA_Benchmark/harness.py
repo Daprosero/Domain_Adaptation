@@ -253,6 +253,22 @@ class Reduction:
     searchRole: str = config.SEARCH_ROLE
     epochs: int = config.EPOCHS
     seeds: list[int] = field(default_factory=lambda: list(config.SEEDS))
+    #: La fracción de cada bolsa de ENTRENAMIENTO reemplazada por imágenes de
+    #: otras clases. Va en las cotas y no en una bandera de módulo: una tabla de
+    #: exactitudes no dice nada sin la tasa que llevaba el material, y una tasa
+    #: que sólo viviera en `config` llegaría a la corrida y nunca al registro de
+    #: al lado. Los roles de selección y evaluación están limpios en toda tasa.
+    labelNoise: float = config.NOISE
+    #: Si esta corrida es un ensayo. Decide dónde escribe, y un registro que no
+    #: dice que es de ensayo es exactamente cómo un número de piloto termina
+    #: citado como resultado. La escala sigue siendo `epochs`/`seeds`.
+    pilot: bool = False
+    #: Qué forma de corrida es: `"campaign"` (cada transferencia a una tasa) o
+    #: `"curve"` (una transferencia a través de cada nivel). Acá y no como
+    #: argumento suelto, porque es la tercera coordenada del destino y las tres
+    #: tienen que llegar juntas a cada escritor: mientras `kind` viajaba aparte,
+    #: la campaña escribía sus corridas en un árbol y su sello en otro.
+    kind: str = "campaign"
     #: The neutral each family's searched ceiling is read against.
     rampCeiling: float = config.RAMP_CEILING
     #: What each family searched and kept for its derivations. Empty until the
@@ -586,15 +602,20 @@ def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
     """
     keep = median_seeds(cell_runs, arm_id)
 
+    # El directorio de esta tasa y esta forma, sacado de las mismas cotas bajo
+    # las que corrió. Leer `config.MODELS` acá mientras la campaña escribió en
+    # otro lado no borraría nada y no promovería nada, en silencio.
+    pesos = config.models_for(reduction.labelNoise, reduction.pilot)
+
     kept: list[str] = []
     for run in cell_runs:
         stem = f"{arm_id}_{transfer.replace('->', '-')}_seed{run['seed']}"
-        weights = config.MODELS / f"{stem}.pt"
+        weights = pesos / f"{stem}.pt"
         if run["seed"] not in keep:
             weights.unlink(missing_ok=True)
             continue
         bags.write_manifest(
-            config.MODELS / f"{stem}.manifest.json",
+            pesos / f"{stem}.manifest.json",
             arm=arm_id, transfer=transfer, seed=run["seed"],
             targetAccuracy=run["targetAccuracy"],
             sourceAccuracy=run["sourceAccuracy"],
@@ -616,7 +637,8 @@ PARTIAL_SUFFIX = ".partial.json"
 SHARDS_DIR = "shards"
 
 
-def shard_paths(shard: str | None, pilot: bool = False) -> dict:
+def shard_paths(shard: str | None, pilot: bool = False,
+                noise: float = 0.0, kind: str = "campaign") -> dict:
     """Where one shard writes, so no two shards write to the same place.
 
     Without this there is one `runs.jsonl`, opened `"w"` and truncated on every
@@ -630,12 +652,19 @@ def shard_paths(shard: str | None, pilot: bool = False) -> dict:
     and moving them would break a working repository to serve one that does not
     exist yet.
     """
+    root = config.results_for(noise, kind, pilot)
     if shard is None:
         record = config.ceilings_record_for(pilot)
-        return {"runs": config.RESULTS / "runs.jsonl",
+        # El registro sigue a la raíz cuando la tasa o la forma la movieron, y
+        # NO cuando la movió el piloto: la búsqueda de ensayo ya se distingue
+        # por su nombre de archivo, y moverla además de árbol la separaría de su
+        # parcial, que es el escritor de la búsqueda a medias.
+        if root != config.results_for(0.0, "campaign", pilot):
+            record = root / record.name
+        return {"runs": root / "runs.jsonl",
                 "partial": record.with_name(record.stem + PARTIAL_SUFFIX),
-                "stamp": config.RESULTS / "shard.json"}
-    home = config.RESULTS / SHARDS_DIR / shard
+                "stamp": root / "shard.json"}
+    home = root / SHARDS_DIR / shard
     return {"runs": home / "runs.jsonl",
             "partial": home / f"ceilings{PARTIAL_SUFFIX}",
             "stamp": home / "shard.json"}
@@ -691,7 +720,8 @@ def write_shard_stamp(shard: str | None, reduction: Reduction) -> Path:
     fact written a thousand times is one that can disagree with itself. This is
     where the handle resolves.
     """
-    path = shard_paths(shard)["stamp"]
+    path = shard_paths(shard, noise=reduction.labelNoise,
+                       kind=reduction.kind, pilot=reduction.pilot)["stamp"]
     path.parent.mkdir(parents=True, exist_ok=True)
     stamp = reduction.environment or environment()
     path.write_text(json.dumps({
@@ -700,6 +730,13 @@ def write_shard_stamp(shard: str | None, reduction: Reduction) -> Path:
         "environment": stamp,
         "seeds": list(reduction.seeds),
         "epochs": reduction.epochs,
+        # Planos y de primer nivel porque es la única forma que
+        # `disagreements()` puede comparar --- lee `stamp.get(field)` y nunca una
+        # ruta con puntos --- y dos shards contaminados a tasas distintas son un
+        # experimento distinto, no hardware distinto.
+        "labelNoise": reduction.labelNoise,
+        "pilot": reduction.pilot,
+        "kind": reduction.kind,
         "revision": reduction.revision,
         "ceilings": dict(reduction.ceilings),
         "ceilingsByTransfer": {family: dict(picks) for family, picks
@@ -709,7 +746,9 @@ def write_shard_stamp(shard: str | None, reduction: Reduction) -> Path:
     return path
 
 
-def seal_shard_stamp(shard: str | None) -> Path:
+def seal_shard_stamp(shard: str | None, noise: float = 0.0,
+                     kind: str = "campaign",
+                     pilot: bool = False) -> Path:
     """Add `outputs` to an already-written stamp, atomically, once the run ends.
 
     Two-phase because `outputs` cannot be known when `write_shard_stamp` runs:
@@ -724,7 +763,7 @@ def seal_shard_stamp(shard: str | None) -> Path:
     refuses it. That refusal is the entire enforcement mechanism — there is no
     separate "did it finish" flag a caller could forget to check.
     """
-    path = shard_paths(shard)["stamp"]
+    path = shard_paths(shard, noise=noise, kind=kind, pilot=pilot)["stamp"]
     stamp = json.loads(path.read_text(encoding="utf-8"))
     outputs = sorted(p.name for p in path.parent.iterdir() if p.is_file())
     stamp.setdefault("evidence", {})["outputs"] = outputs
@@ -804,6 +843,7 @@ def ceilings_in_force(reduction: Reduction, device: torch.device,
     refusal exists to prevent. Under-scale is not fixed here either: `campaign`
     reads `atRequiredScale` itself and says which record to delete.
     """
+    reduction = replace(reduction, pilot=pilot)
     if search_record(pilot=pilot) is None:
         progress("no ceiling record: searching, once, before anything is compared")
         search_ceilings(reduction, device, progress=progress, shard=shard,
@@ -829,7 +869,8 @@ def with_ceilings_in_force(reduction: Reduction, device: torch.device,
 
 def search_ceilings_trials(reduction: Reduction, device: torch.device,
                            progress=print, shard: str | None = None,
-                           pilot: bool = False) -> dict:
+                           pilot: bool = False, noise: float = 0.0,
+                           transfers: list | None = None) -> dict:
     """El techo de cada familia en cada transferencia, por búsqueda con trials.
 
     Reemplaza a la rejilla y **no reemplaza lo que se mide**: cada trial llama al
@@ -859,6 +900,7 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
     from optuna.samplers import GPSampler
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
+    reduction = replace(reduction, labelNoise=noise, pilot=pilot)
     n_trials = config.PILOT_SEARCH_TRIALS if pilot else config.SEARCH_TRIALS
     low, high = config.CEILING_RANGE
     seed = config.SEARCH_SEED
@@ -870,10 +912,10 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
         # `bags.build` decodifica miles de imágenes y rehacerlo por trial costaría
         # treinta sorteos por transferencia para nada. Además es lo que hace que
         # los treinta trials sean comparables entre sí.
-        drawn = {code: bags.build(code, config.DATA_CACHE, seed)
+        drawn = {code: bags.build(code, config.DATA_CACHE, seed, noise)
                  for code in config.DOMAINS}
         per_transfer: dict[str, dict] = {}
-        for transfer in config.SEARCH_TRANSFERS:
+        for transfer in (transfers or config.SEARCH_TRANSFERS):
             label = transfer_label(transfer)
             material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
             started = time.perf_counter()
@@ -932,13 +974,19 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
                        "resolution": ruido},
             "decidedByFlatRule": agrupado["decidedByFlatRule"],
             "plateau": agrupado["plateau"],
+            # `noise` acá es el término de resolución del GP y precede al eje de
+            # ruido de etiqueta; `labelNoise` es la tasa a la que se contaminó el
+            # material. Dos cantidades que la palabra sola no separa, así que la
+            # nueva se lleva el nombre largo y la vieja no cambia bajo quienes ya
+            # la leen.
             "noise": ruido,
+            "labelNoise": noise,
             "flatRule": ceiling_record.FLAT_RULE,
             "atRequiredScale": (reduction.epochs >= config.FULL_SEARCH_EPOCHS
                                 and n_trials >= config.SEARCH_TRIALS),
             "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
                               "trials": config.SEARCH_TRIALS},
-            "transfers": [transfer_label(t) for t in config.SEARCH_TRANSFERS],
+            "transfers": [transfer_label(t) for t in (transfers or config.SEARCH_TRANSFERS)],
             "neutral": config.RAMP_CEILING,
             # La forma que los consumidores viejos ya leen: etiqueta -> float.
             "byTransfer": {k: d["ceiling"] for k, d in per_transfer.items()},
@@ -954,7 +1002,8 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
 
 def search_ceilings(reduction: Reduction, device: torch.device,
                     progress=print, shard: str | None = None,
-                    pilot: bool = False) -> dict:
+                    pilot: bool = False, noise: float = 0.0,
+                    transfers: list | None = None) -> dict:
     """Each family's ceiling, found on the selection transfers and kept for its
     derivations.
 
@@ -988,9 +1037,10 @@ def search_ceilings(reduction: Reduction, device: torch.device,
         reduction = replace(
             reduction,
             epochs=(config.PILOT_SEARCH_EPOCHS if pilot else config.SEARCH_EPOCHS),
-            seeds=[config.SEARCH_SEED])
+            seeds=[config.SEARCH_SEED], labelNoise=noise, pilot=pilot)
         return search_ceilings_trials(reduction, device, progress=progress,
-                                      shard=shard, pilot=pilot)
+                                      shard=shard, pilot=pilot, noise=noise,
+                                      transfers=transfers)
 
     # Its own scale, and not the caller's. The search is one experiment run once
     # at the scale the campaign runs at; borrowing the pilot's three epochs would
@@ -998,7 +1048,8 @@ def search_ceilings(reduction: Reduction, device: torch.device,
     reduction = replace(
         reduction,
         epochs=(config.PILOT_SEARCH_EPOCHS if pilot else config.SEARCH_EPOCHS),
-        seeds=list(config.PILOT_SEARCH_SEEDS if pilot else config.SEARCH_SEEDS))
+        seeds=list(config.PILOT_SEARCH_SEEDS if pilot else config.SEARCH_SEEDS),
+        labelNoise=noise, pilot=pilot)
     grid = list(config.CEILING_GRID)
     partial = shard_paths(shard, pilot=pilot)['partial']
     measured = _read_partial(partial)
@@ -1033,9 +1084,9 @@ def search_ceilings(reduction: Reduction, device: torch.device,
         # reading below to cancel anything.
         cells: dict[tuple[int, str], dict[float, float]] = {}
         for seed in reduction.seeds:
-            drawn = {code: bags.build(code, config.DATA_CACHE, seed)
+            drawn = {code: bags.build(code, config.DATA_CACHE, seed, noise)
                      for code in config.DOMAINS}
-            for transfer in config.SEARCH_TRANSFERS:
+            for transfer in (transfers or config.SEARCH_TRANSFERS):
                 label = transfer_label(transfer)
                 material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
                 if (seed, label) in measured.get(family, {}):
@@ -1160,7 +1211,7 @@ def search_ceilings(reduction: Reduction, device: torch.device,
                                 and len(reduction.seeds) >= config.FULL_SEARCH_SEEDS),
             "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
                               "seeds": config.FULL_SEARCH_SEEDS},
-            "transfers": [transfer_label(t) for t in config.SEARCH_TRANSFERS],
+            "transfers": [transfer_label(t) for t in (transfers or config.SEARCH_TRANSFERS)],
             # The neutral it is read against, so a searched value that lands on it
             # confirms the normalization by measurement rather than by argument.
             "neutral": config.RAMP_CEILING,
@@ -1180,8 +1231,15 @@ def search_ceilings(reduction: Reduction, device: torch.device,
 
 def campaign(reduction: Reduction, device: torch.device,
              arms: list[str] | None = None, progress=print,
-             shard: str | None = None) -> dict:
-    """The whole grid: every arm, every transfer, every repetition.
+             shard: str | None = None, transfers: list | None = None) -> dict:
+    """The whole grid: every arm, every declared transfer, every repetition.
+
+    `transfers` narrows it, and the degradation sweep is the reason: that one
+    walks every noise level over a SINGLE transfer, which is a different shape
+    from a campaign and not a smaller one. `reduction.kind` keeps the two apart
+    on disk --- both can stand at the same rate, and `runs.jsonl` is opened
+    `"w"`.
+
 
     The search runs first and its answer is part of the bounds, not a detail:
     every family trains at the ceiling it found, every derivation inherits its
@@ -1191,7 +1249,12 @@ def campaign(reduction: Reduction, device: torch.device,
     """
     arm_ids = arms or [arm["id"] for arm in config.ARMS]
     config.RESULTS.mkdir(parents=True, exist_ok=True)
-    config.MODELS.mkdir(parents=True, exist_ok=True)
+    # Sólo donde algo los va a leer. Un nivel sin lector que igual escribiera
+    # 8 GB de pesos dejaría un directorio que nadie abre y nadie borra, que es
+    # peor que una ausencia: parece evidencia.
+    pesos = config.models_for(reduction.labelNoise, reduction.pilot)
+    if config.keeps_checkpoints(reduction.labelNoise):
+        pesos.mkdir(parents=True, exist_ok=True)
 
     # Consumed, never searched here. A campaign that funded its own coefficient
     # out of the run it is about to report would be choosing and judging in one
@@ -1247,7 +1310,8 @@ def campaign(reduction: Reduction, device: torch.device,
 
     # This shard's own file, so two running at once cannot clobber one another.
     # `None` keeps the single-machine path exactly where it has always been.
-    paths = shard_paths(shard)
+    paths = shard_paths(shard, noise=reduction.labelNoise,
+                        kind=reduction.kind, pilot=reduction.pilot)
     paths["runs"].parent.mkdir(parents=True, exist_ok=True)
     write_shard_stamp(shard, reduction)
     records = paths["runs"].open("w", encoding="utf-8")
@@ -1259,10 +1323,11 @@ def campaign(reduction: Reduction, device: torch.device,
     cells: dict[tuple[str, str], list[dict]] = {}
     manifests: dict[tuple[str, str], dict] = {}
     for seed in reduction.seeds:
-        drawn = {code: bags.build(code, config.DATA_CACHE, seed) for code in config.DOMAINS}
+        drawn = {code: bags.build(code, config.DATA_CACHE, seed, reduction.labelNoise)
+                 for code in config.DOMAINS}
         # Only the transfers the search never looked at. The other two funded the
         # ceiling and cannot also carry the verdict it was chosen to improve.
-        for transfer in config.VERDICT_TRANSFERS:
+        for transfer in (transfers or config.VERDICT_TRANSFERS):
             label = f"{transfer[0]}->{transfer[1]}"
             material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
             manifests[(label, seed)] = {"source": material["source"].manifest,
@@ -1271,10 +1336,12 @@ def campaign(reduction: Reduction, device: torch.device,
             for arm_id in arm_ids:
                 run = run_one(arm_id, transfer, seed, reduction, device, material)
                 state = run.pop("state")
-                if state is not None:
+                # Descartado en vez de escrito donde no hay lector: la curva de
+                # degradación sale de `runs.jsonl`, que todo nivel escribe.
+                if state is not None and config.keeps_checkpoints(reduction.labelNoise):
                     stem = f"{arm_id}_{label.replace('->', '-')}_seed{seed}"
                     torch.save({k: v.cpu() for k, v in state.items()},
-                               config.MODELS / f"{stem}.pt")
+                               pesos / f"{stem}.pt")
                 records.write(json.dumps(run) + "\n")
                 records.flush()
                 cells.setdefault((label, arm_id), []).append(run)
@@ -1306,7 +1373,7 @@ def campaign(reduction: Reduction, device: torch.device,
     checkpoints: dict[str, list[str]] = {}
     for (label, arm_id), cell_runs in cells.items():
         grid.setdefault(label, {})[arm_id] = summarize(cell_runs)
-        if arm_id in config.CHECKPOINTS:
+        if arm_id in config.CHECKPOINTS and config.keeps_checkpoints(reduction.labelNoise):
             checkpoints[f"{arm_id} {label}"] = keep_median(
                 cell_runs, arm_id, label, manifests, reduction)
 
@@ -1321,7 +1388,11 @@ def campaign(reduction: Reduction, device: torch.device,
         "checkpoints": checkpoints,
         "tally": {label: tally(rows) for label, rows in per_transfer.items()},
     }
-    (config.RESULTS / "summary.json").write_text(
+    # Al lado de las corridas que resume, y no en `config.RESULTS`. Anclado ahí
+    # dejaba un ensayo escribiendo sus corridas en el árbol de piloto y su
+    # resumen en el de la corrida completa.
+    destino = paths["runs"].parent
+    (destino / "summary.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8")
 
     # The same record, where the verification looks for it. A correct summary at a
@@ -1329,7 +1400,9 @@ def campaign(reduction: Reduction, device: torch.device,
     # and start over as though this had never run. `targetScale` beside `reduction` is
     # what lets it tell a pilot from a campaign instead of only a revision from a
     # stale one.
-    product_results = config.PRODUCT / "Results" / "Probe_results.json"
+    product_results = (config.results_for(0.0, reduction.kind,
+                                          reduction.pilot).parent
+                       / "Probe_results.json")
     product_results.parent.mkdir(parents=True, exist_ok=True)
     product_results.write_text(json.dumps({
         "kind": summary["kind"],
@@ -1338,15 +1411,16 @@ def campaign(reduction: Reduction, device: torch.device,
         "targetScale": {"epochs": config.FULL_EPOCHS, "seeds": config.FULL_SEEDS},
         "verdictsMeaningful": reduction.verdicts_meaningful,
         "comparison": summary["panorama"],
-        "detail": str((config.RESULTS / "summary.json").relative_to(config.REPOSITORY)),
+        "detail": str((destino / "summary.json").relative_to(config.REPOSITORY)),
         "figures": sorted(str(p.relative_to(config.REPOSITORY))
-                          for p in config.RESULTS.rglob("*.pdf")),
+                          for p in destino.rglob("*.pdf")),
     }, indent=2), encoding="utf-8")
 
     # Sealed last, once every file this shard writes actually exists. A run
     # that raises anywhere above never reaches this line, so its stamp stays
     # unsealed and therefore incomplete — never merge-eligible.
-    seal_shard_stamp(shard)
+    seal_shard_stamp(shard, noise=reduction.labelNoise,
+                     kind=reduction.kind, pilot=reduction.pilot)
     return summary
 
 

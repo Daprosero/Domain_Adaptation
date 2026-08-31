@@ -86,6 +86,16 @@ __benchmark__ = {
             # not the same evidence.
             "tables.render_ceilings",
             "tables.render_ceilings_by_transfer",
+            # El eje de ruido. `render_at` es el MISMO `render` sobre el
+            # registro de una tasa contaminada y no un renderer paralelo: dos
+            # funciones que dibujan la misma tabla son dos cosas que se pueden
+            # desalinear, y el lector no tendría cómo saber cuál se movió.
+            "tables.render_at",
+            "tables.render_noise",
+            "tables.render_diagnostic",
+            "tables.render_readings_contaminated",
+            "tables.render_gains_at",
+            "tables.render_rungs_at",
         ],
         "conclusions": [
             "tables.conclusion",
@@ -98,6 +108,16 @@ __benchmark__ = {
             "tables.conclusion_correspondence",
             "tables.conclusion_ceilings",
             "tables.conclusion_ceilings_by_transfer",
+            # `conclusion_versus_clean` informa la diferencia entre las dos
+            # tasas, que es lo único que ninguna de las dos tablas contiene por
+            # separado. Nunca enumera la tabla que tiene al lado: una conclusión
+            # que repite su propia tabla dejó de concluir.
+            "tables.conclusion_noise",
+            "tables.conclusion_versus_clean",
+            "tables.conclusion_diagnostic",
+            "tables.conclusion_readings_versus_clean",
+            "tables.conclusion_weighting_under_noise",
+            "tables.conclusion_rungs_versus_clean",
         ],
         # One call that takes a record and returns {label: text}. It exists so the
         # verification can run every conclusion over permuted numbers without
@@ -127,6 +147,7 @@ __benchmark__ = {
             "figures.adaptation_curves",
             "figures.supervised_curves",
             "figures.contribution_curves",
+            "figures.noise_curves",
             "latent.latent_grid",
             "latent.correspondence_grid",
             "latent.projection",
@@ -145,6 +166,27 @@ __benchmark__ = {
                                   "escribe a `ceilings.pilot.json`, al que el "
                                   "registro completo le gana siempre — así que "
                                   "no hay outcome que pudiera haberla fijado",
+            "NOISE_REPORTED": "el nivel contaminado que report y latent muestran "
+                              "al lado de 0.0: el punto medio de NOISE_LEVELS, "
+                              "aritmética y no resultado. Elegido después de ver "
+                              "la curva sería el nivel que más favorece al método",
+            "NOISE_TRANSFER": "donde se mide la curva de degradación: una sola "
+                              "transferencia, la de menor brecha de dominio. La "
+                              "regla es del instrumento — una transferencia ya "
+                              "cerca de su piso en 0.0 no tiene de dónde caer — y "
+                              "la brecha es propiedad del material, no de ninguna "
+                              "medición",
+            "NOISE_DIAGNOSTIC_ARMS": "los dos métodos completos, uno por familia, "
+                                     "y los únicos que llevan el coeficiente: A y "
+                                     "B no tienen término de adaptación al que "
+                                     "re-buscarle un techo, y C, E y F son "
+                                     "ablaciones que multiplicarían la búsqueda "
+                                     "sin agregar diagnóstico",
+            "NOISE_DIAGNOSTIC_LEVEL": "el tope del rango, fijado antes de que la "
+                                      "curva exista. En el extremo el coeficiente "
+                                      "está bajo la máxima presión, así que un "
+                                      "techo re-buscado que no recupera nada ahí "
+                                      "no recupera nada en ningún lado",
             "LATENT_PANELS": "los métodos que alinean, elegidos por lo que computan "
                              "y no por lo que puntúan; los pisos entran por medición",
             "BAG_PANELS": "el peldaño donde vive el término local: piso, sin el "
@@ -177,6 +219,13 @@ __benchmark__ = {
             "Results/Benchmark",
             "Results/Benchmark/ceilings.json",
             "Results/local_distance_bound.pdf",
+            # The noise axis leaves its own artefacts, and naming them here is
+            # what stops `undeclaredRecords` from reporting them as a second
+            # experiment nobody accounted for -- which, until they are named, is
+            # exactly what they are.
+            "Results/Noise",
+            "Results/Noise/degradation.json",
+            "Results/Noise/diagnostic.json",
         ],
         # The terms Eq. (39) combines, and the dimension carrying their share.
         #
@@ -311,7 +360,12 @@ __benchmark__ = {
                      "supervised", "adaptationShare", "parameters"],
         "perEnvironment": [],
         "perRun": ["seconds", "peakMiB"],
-        "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer"],
+        # `labelNoise` refuses the merge that no averaging could repair: two shards
+    # contaminated at different rates are two experiments, and one table drawn
+    # over both is a table nobody can attribute. It is a flat top-level field of
+    # every stamp, which is what `disagreements()` needs to be able to see it.
+    "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
+                              "labelNoise"],
     },
     # Which module carries the runtime, so a reading about this repository's
     # environment is about the module that actually imports it. The same two
@@ -367,4 +421,14 @@ __steps__: dict = {
                      "advances": 5},
     "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente",
                      "advances": 6},
+    # El eje de ruido. `noise-report` sólo lee y dibuja; `noise-diagnostic` sí
+    # corre -- una búsqueda sobre una transferencia y dos brazos -- y está acá
+    # porque es local y barato, a diferencia de la campaña contaminada, que es
+    # un envío y necesita su propia autorización por lanzamiento.
+    "noise-sweep": {"module": "MIL_CREDA_Benchmark.steps",
+                    "function": "barrido_de_ruido"},
+    "noise-report": {"module": "MIL_CREDA_Benchmark.steps",
+                     "function": "informe_de_ruido"},
+    "noise-diagnostic": {"module": "MIL_CREDA_Benchmark.steps",
+                         "function": "diagnostico_de_ruido"},
 }

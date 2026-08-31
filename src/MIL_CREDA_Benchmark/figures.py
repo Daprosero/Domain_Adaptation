@@ -125,7 +125,8 @@ def band(repetitions: list[list[dict]], key: str) -> tuple[list[float], list[flo
 
 def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
               shade_unit: bool = False,
-              ylim: tuple[float, float] | None = None) -> plt.Figure:
+              ylim: tuple[float, float] | None = None,
+              runs: Path | None = None) -> plt.Figure:
     """One panel per transfer, one median-with-band per arm. The shape all three share.
 
     Carries no title and no footer. The heading above the figure already says what
@@ -133,7 +134,12 @@ def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
     under; repeating either here is the same measurement in two places, which is
     the failure the duplication rule exists for — in two media instead of one.
     """
-    curves = load_curves()
+    # `runs` explícito, porque `config.RESULTS` es el árbol de la corrida
+    # completa y un informe de ensayo dibuja las curvas de OTRA corrida: el
+    # cuaderno resuelve de cuál lee y lo pasa. Sin esto la figura salía del
+    # árbol equivocado o no salía --- y en un repositorio con las dos, habría
+    # salido de la equivocada en silencio.
+    curves = load_curves(runs)
     transfers = list(curves)
     columns = min(3, len(transfers)) or 1
     rows = -(-len(transfers) // columns)
@@ -209,7 +215,8 @@ def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
 
 
 def adaptation_curves(path: Path,
-                      arms: tuple[str, ...] = ("C", "D", "E", "F", "G")) -> plt.Figure:
+                      arms: tuple[str, ...] = ("C", "D", "E", "F", "G"),
+                      runs: Path | None = None) -> plt.Figure:
     """Each adaptation term across training, one panel per transfer.
 
     The shaded band is [0, 1]. Section 5 normalizes MIL-CREDA's terms onto exactly
@@ -217,22 +224,25 @@ def adaptation_curves(path: Path,
     stays inside the band, and whether it occupies the same part of it from one
     transfer to the next, is the claim itself rather than an illustration of it.
     """
-    return _panelled(path, arms, "adaptation", "adaptation term", shade_unit=True)
+    return _panelled(path, arms, "adaptation", "adaptation term",
+                     shade_unit=True, runs=runs)
 
 
 def supervised_curves(path: Path,
-                      arms: tuple[str, ...] = ("A", "D", "B", "G")) -> plt.Figure:
+                      arms: tuple[str, ...] = ("A", "D", "B", "G"),
+                      runs: Path | None = None) -> plt.Figure:
     """The supervised term beside the adaptation one.
 
     This is where an adaptation term that destabilizes the fit shows up. Reading the
     adaptation curve alone would call a term well-behaved while the classification it
     shares an objective with comes apart underneath it.
     """
-    return _panelled(path, arms, "supervised", "supervised term")
+    return _panelled(path, arms, "supervised", "supervised term", runs=runs)
 
 
 def contribution_curves(path: Path,
-                        arms: tuple[str, ...] = ("C", "D", "E", "F", "G")) -> plt.Figure:
+                        arms: tuple[str, ...] = ("C", "D", "E", "F", "G"),
+                        runs: Path | None = None) -> plt.Figure:
     """What share of the objective each declared term actually commands.
 
     Without this panel, "the term had no effect" and "the term had no weight" are
@@ -241,4 +251,45 @@ def contribution_curves(path: Path,
     by an order of magnitude between arms is a difference nobody declared, and a
     rung that ignores it credits the mechanism with what the scale did.
     """
-    return _panelled(path, arms, "contribution", "lambda x adaptation")
+    return _panelled(path, arms, "contribution", "lambda x adaptation",
+                     runs=runs)
+
+
+def noise_curves(metric: str = "targetAccuracy", path: Path | None = None):
+    """Cada método contra la tasa de contaminación, en un solo panel.
+
+    Un panel y no una rejilla: el eje es la tasa, y separar por transferencia
+    pondría dos ejes en una figura que afirma ser función de uno. Las
+    transferencias ya están colapsadas dentro de cada punto, y `contamination.by_arm`
+    nombra ese colapso donde ocurre.
+
+    El azar se dibuja porque es el piso real de la lectura: un método que llega
+    ahí dejó de decidir, y sin la línea eso se lee como una caída más entre
+    otras. No lleva título — el encabezado de arriba ya dice qué se mide — ni
+    repite las cotas, que el sello ya declaró una vez.
+    """
+    from MIL_CREDA_Benchmark import config, contamination as noise_axis
+
+    drawn = noise_axis.curve(metric)
+    figure, axis = plt.subplots(figsize=(6.4, 4.2))
+    if not drawn["rates"]:
+        # Decirlo dentro de la figura y no dibujar ejes vacíos: una figura en
+        # blanco se lee como un resultado plano.
+        axis.text(0.5, 0.5, "ningún nivel declarado dejó registro todavía",
+                  ha="center", va="center", transform=axis.transAxes)
+        axis.set_axis_off()
+        return emit(figure, path) if path else figure
+
+    for arm in drawn["arms"]:
+        axis.plot(drawn["rates"], drawn["series"][arm], marker="o",
+                  label=config.NAME_OF.get(arm, arm))
+    axis.axhline(1.0 / config.CLASSES, linestyle=":", linewidth=1, color="0.5")
+    axis.annotate(f"azar ({1.0 / config.CLASSES:.2f})",
+                  xy=(drawn["rates"][0], 1.0 / config.CLASSES),
+                  xytext=(2, 3), textcoords="offset points", fontsize=8, color="0.4")
+    axis.set_xlabel("tasa de contaminación ρ")
+    axis.set_ylabel(metric)
+    axis.set_xticks(drawn["rates"])
+    axis.legend(fontsize=8, ncol=2)
+    figure.tight_layout()
+    return emit(figure, path) if path else figure

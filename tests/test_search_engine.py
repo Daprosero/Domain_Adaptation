@@ -24,11 +24,16 @@ def motor(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SEARCH_ENGINE", "optuna")
     monkeypatch.setattr(config, "PILOT_SEARCH_TRIALS", 5)
     vistos = []
+    vistos_ruido = []
 
     class _Bolsa:
         pass
 
-    def _build(code, cache, seed):
+    def _build(code, cache, seed, noise=0.0):
+        # La tasa llega hasta acá aunque el doble no la use: la firma es parte de
+        # lo que el motor de búsqueda espera, y un doble más angosto que el real
+        # deja pasar exactamente el error que rompería la corrida.
+        vistos_ruido.append(noise)
         return _Bolsa()
 
     def _run_one(arm, transfer, seed, reduction, device, material, *,
