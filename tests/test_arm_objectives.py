@@ -336,3 +336,222 @@ def test_the_selection_role_is_funded_by_new_material_and_takes_nothing(
     assert config.TRAIN_BAGS + config.EVAL_BAGS == 10 * config.CLASSES
     # the resolution the campaign was sized for is the evaluation role's, untouched
     assert 100 / config.EVAL_BAGS == pytest.approx(2.78, abs=0.01)
+
+
+# ----------------------------------------------- the objective, assembled or written
+
+def _unit_branch():
+    """The two halves of `training_step`, read from the source tree.
+
+    Which branch an arm takes is asserted by running it; which functions a branch
+    is ALLOWED to call is a property of the code, and the only place it can be
+    read is the code.
+    """
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse(Path(wiring.__file__).read_text(encoding="utf-8"))
+    step = next(node for node in ast.walk(tree)
+                if isinstance(node, ast.FunctionDef) and node.name == "training_step")
+    branch = next(node for node in step.body
+                  if isinstance(node, ast.If) and "unit" in ast.dump(node.test))
+
+    def called(nodes) -> set[str]:
+        names = set()
+        for statement in nodes:
+            for node in ast.walk(statement):
+                if isinstance(node, ast.Call):
+                    function = node.func
+                    names.add(function.attr if isinstance(function, ast.Attribute)
+                              else getattr(function, "id", ""))
+        return names
+
+    return called(branch.body), called(branch.orelse)
+
+
+def test_the_bag_unit_arms_assemble_the_objective_and_never_write_a_term_inline(
+        encoder) -> None:
+    """Eq. (18) and Eq. (39) as the revision states them, called and not restated.
+
+    A supervised term written inline in the benchmark is a second copy of an
+    equation the proposal already owns: it stops moving when the proposal moves,
+    and nothing tells anyone. So the bag branch calls `source_loss` for its
+    supervised term and `total_objective` for the sum, and the value each returns
+    is asserted against the functions themselves.
+
+    The inline cross-entropy at the other side of the branch is prior work's own,
+    and it belongs to the instance unit alone. That is asserted too, because "no
+    term written inline" is only meaningful beside the one place a term IS
+    written inline on purpose.
+
+    Reachable red: write Eq. (18) or Eq. (39) out by hand in the bag branch, or
+    let the bag branch fall through to the instance one's cross-entropy.
+    """
+    from MIL_CREDA.objective import source_loss, total_objective
+
+    arm = _arm("G")
+    assert config.ARMS_BY_ID["G"]["unit"] == "bag"
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+    ramp = 0.5
+    step = arm.training_step(x, y, ramp, torch.Generator().manual_seed(3))
+
+    embeddings = arm.instance_embeddings(x)
+    Z, _ = arm.bag_representations(embeddings)
+    scores = F.softmax(arm.head(Z), dim=1)
+    supervised = source_loss(scores, F.one_hot(y, CLASSES).to(scores.dtype),
+                             config.EPSILON)
+    assert step["supervised"] == pytest.approx(float(supervised.detach()), abs=1e-6)
+
+    target = arm.target.take(arm._draw_target(torch.Generator().manual_seed(3)))
+    global_term, local_term = arm._milcreda_term(embeddings, y, target)
+    assembled = total_objective(supervised, global_term, local_term, ramp, ramp)
+    assert float(step["loss"].detach()) == pytest.approx(
+        float(assembled.detach()), abs=1e-6)
+
+    # and both equations are called rather than restated
+    bag, instance = _unit_branch()
+    assert {"source_loss", "one_hot", "softmax"} <= bag
+    assert "cross_entropy" not in bag, "a supervised term written inline"
+    assert "cross_entropy" in instance, "prior work's own term left the branch"
+    assert "source_loss" not in instance, "Eq. (18) applied to prior work"
+    assert "total_objective" in _milcreda_calls()
+
+
+def _milcreda_calls() -> set[str]:
+    """Everything the MIL-CREDA arm of `training_step` calls to build its total."""
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse(Path(wiring.__file__).read_text(encoding="utf-8"))
+    step = next(node for node in ast.walk(tree)
+                if isinstance(node, ast.FunctionDef) and node.name == "training_step")
+    branch = next(node for node in ast.walk(step)
+                  if isinstance(node, ast.If) and "milcreda" in ast.dump(node.test))
+    return {node.func.attr if isinstance(node.func, ast.Attribute)
+            else getattr(node.func, "id", "")
+            for statement in branch.body for node in ast.walk(statement)
+            if isinstance(node, ast.Call)}
+
+
+class _SpyF:
+    """`torch.nn.functional` with one call recorded. Everything else passes through."""
+
+    def __init__(self, seen):
+        self._seen = seen
+
+    def __getattr__(self, name):
+        return getattr(F, name)
+
+    def cross_entropy(self, scores, target, *args, **kwargs):
+        self._seen.append(target)
+        return F.cross_entropy(scores, target, *args, **kwargs)
+
+
+def test_the_bag_label_reaches_thirty_instances_in_one_unit_and_one_bag_in_the_other(
+        encoder, monkeypatch) -> None:
+    """One contamination, two perturbations -- asserted as the mechanism and not
+    as its consequence.
+
+    `wiring` broadcasts the bag's label to all thirty of its instances for an
+    instance-unit arm, so a contaminated instance there carries a genuinely wrong
+    label. A bag-unit arm never expands it: the label stays at the bag and the
+    contaminants arrive as witnesses inside it. That is one perturbation entering
+    two objectives differently, and it is why a robustness table cannot read the
+    two families as the same experiment.
+
+    What is asserted is the broadcast itself -- how many supervised targets one
+    bag's label becomes. Whether a wrong label and a downweightable witness
+    differ in kind is the reading the report makes of this, and it stays an
+    argument rather than becoming an assertion.
+
+    Reachable red: drop the `repeat_interleave`, or expand the label in the bag
+    branch as well.
+    """
+    per_instance, per_bag = [], []
+    monkeypatch.setattr(wiring, "F", _SpyF(per_instance))
+
+    real_source_loss = wiring.source_loss
+
+    def _spy_source_loss(scores, onehot, epsilon):
+        per_bag.append(onehot)
+        return real_source_loss(scores, onehot, epsilon)
+
+    monkeypatch.setattr(wiring, "source_loss", _spy_source_loss)
+
+    B = config.BAGS_PER_STEP
+    m = config.INSTANCES_PER_BAG
+
+    instance_arm = _arm("D")
+    assert config.ARMS_BY_ID["D"]["unit"] == "instance"
+    x = instance_arm.source.take(torch.arange(B))
+    y = instance_arm.source.labels[:B]
+    instance_arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+
+    assert per_instance, "the instance unit computed no supervised term"
+    # one target per instance: the bag's single label, thirty times over
+    assert per_instance[0].shape == (B * m,)
+    assert torch.equal(per_instance[0], y.repeat_interleave(m))
+    assert per_bag == [], "the instance unit reached Eq. (18)"
+
+    per_instance.clear()
+    bag_arm = _arm("G")
+    assert config.ARMS_BY_ID["G"]["unit"] == "bag"
+    x = bag_arm.source.take(torch.arange(B))
+    y = bag_arm.source.labels[:B]
+    bag_arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+
+    assert per_bag, "the bag unit computed no supervised term"
+    # one target per bag, unexpanded: the label never leaves the subject
+    assert per_bag[0].shape == (B, CLASSES)
+    assert torch.equal(per_bag[0].argmax(dim=1), y)
+    assert per_instance == [], "the bag unit broadcast the label anyway"
+
+    # thirty supervised targets against one is what "two perturbations" names,
+    # and the factor between them is the bag's own cardinality
+    assert m == config.INSTANCES_PER_BAG > 1
+
+
+def test_the_arbitrary_selection_draws_from_a_generator_of_its_own(encoder) -> None:
+    """`SA`'s ten positions are drawn, and the draw costs the run nothing.
+
+    Consuming the training generator would shift every later draw of the run --
+    the target batches, the shuffling, everything downstream -- and the rung
+    `SA->SK` would then be crediting the selection rule with what the offset did.
+    A rung that cannot be attributed is not a rung.
+
+    Two things have to hold at once and each passes while the other is broken:
+    the positions come out of `SELECTION_SEED` and nothing else, and building the
+    arm leaves the surrounding generator exactly where it found it. The second is
+    asserted against `SU`, whose positions are computed rather than drawn, so the
+    two builds are identical in everything except this draw.
+
+    Reachable red: drop the dedicated generator and let `randperm` fall through
+    to the global one.
+    """
+    def positions_of(arm_id: str, seed: int) -> torch.Tensor:
+        torch.manual_seed(seed)
+        return wiring.build(arm_id, CLASSES, _pool(1), _pool(2)).positions.clone()
+
+    def after_building(arm_id: str, seed: int) -> torch.Tensor:
+        torch.manual_seed(seed)
+        wiring.build(arm_id, CLASSES, _pool(1), _pool(2))
+        return torch.randn(4)
+
+    # the draw is reproducible off the declared seed and off nothing else: two
+    # different surrounding seeds give the same ten positions
+    assert torch.equal(positions_of("SA", 11), positions_of("SA", 4242))
+
+    expected = torch.randperm(
+        config.INSTANCES_PER_BAG,
+        generator=torch.Generator().manual_seed(config.SELECTION_SEED)
+    )[:config.SELECT_K].sort().values
+    assert torch.equal(positions_of("SA", 11), expected)
+
+    # and it takes nothing from the generator around it: after building `SA` the
+    # next draw is the same one that follows building `SU`, which draws nothing
+    assert torch.equal(after_building("SA", 11), after_building("SU", 11))
+
+    # the rule really is a draw and not the even stride `SU` walks
+    assert not torch.equal(positions_of("SA", 11), positions_of("SU", 11))
+    assert len(positions_of("SA", 11)) == config.SELECT_K
