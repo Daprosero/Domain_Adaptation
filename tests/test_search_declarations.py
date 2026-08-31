@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 import pytest
 import torch
@@ -277,3 +278,56 @@ def test_la_campana_se_niega_sin_techos(tmp_path, monkeypatch) -> None:
     dicho = str(levantado.value)
     assert "refusing to run without the searched ceilings" in dicho
     assert str(config.SEARCH_EPOCHS) in dicho, "el rechazo no dice a qué escala se busca"
+
+
+# ------------------------------------------------- el neutro y lo que se dijo de él
+
+def _comentario_de(nombre: str) -> str:
+    """El bloque `#:` pegado arriba de una constante de `config.py`.
+
+    Leído del archivo y no de un docstring porque una constante no tiene uno: lo
+    que documenta a `RAMP_CEILING` es ese bloque, y es donde vive la promesa que
+    esta prueba sostiene.
+    """
+    lineas = Path(config.__file__).read_text(encoding="utf-8").splitlines()
+    n = next(i for i, l in enumerate(lineas) if l.startswith(f"{nombre} ="))
+    bloque = []
+    while n and lineas[n - 1].startswith("#:"):
+        n -= 1
+        bloque.append(lineas[n])
+    assert bloque, f"{nombre} no lleva comentario"
+    return "\n".join(reversed(bloque))
+
+
+def test_el_comentario_del_neutro_fecha_el_1e_4_y_no_promete_un_techo_comun(
+) -> None:
+    """Dos cosas que el comentario decía y ya no son ciertas del mismo modo.
+
+    La medición vieja — a 1e-4, 1e-2 y 1e-1 todo brazo adaptado puntuó lo que su
+    propio piso — se tomó contra el objetivo **sin normalizar**, antes de que la
+    Ec. (18) se dividiera por `B_src`. Sin esa marca se lee como una lectura del
+    objetivo que el mismo comentario describe arriba, que es otro objetivo.
+
+    Y la cláusula de cierre decía que *ambos lados corren en este techo*. Dejó de
+    ser cierta cuando cada familia empezó a buscar el suyo: acá no se lee que la
+    frase no esté, se mide por qué era falsa — `ceiling_for` devuelve techos
+    distintos para las dos familias en la misma transferencia.
+
+    Rojo alcanzable: volver a poner la cláusula, o sacar la marca `un-normalized`.
+    """
+    comentario = _comentario_de("RAMP_CEILING")
+    assert "1e-4" in comentario, "el comentario ya no fecha la medición vieja"
+    assert "un-normalized" in comentario.lower(), \
+        "la medición de 1e-4 no está marcada como tomada sin normalizar"
+    assert "both sides run at this ceiling" not in comentario.lower(), \
+        "el comentario sigue prometiendo un techo común para las dos familias"
+
+    # Por qué esa promesa era falsa, ejecutado y no leído.
+    reduccion = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0},
+                                  ceilingsByTransfer={})
+    transferencia = config.SEARCH_TRANSFERS[0]
+    assert (harness.ceiling_for(reduccion, "creda", transferencia)
+            != harness.ceiling_for(reduccion, "milcreda", transferencia)), \
+        "las dos familias corrieron en el mismo techo: la cláusula vieja era cierta"
+    assert "ceiling_for" in comentario, \
+        "el comentario no nombra de dónde sale el coeficiente de cada brazo"
