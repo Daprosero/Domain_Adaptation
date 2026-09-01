@@ -895,6 +895,34 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
     distinguibles por la medición, opine lo que opine el modelo — y usar una
     cantidad ajustada por el GP haría que el ancho de la meseta dependiera de qué
     tan bien ajustó, que es la propiedad equivocada.
+
+    **El registro se cronometra a sí mismo, al lado de la escala que declara.**
+    `atRequiredScale` dice si esta búsqueda vale como respuesta; `seconds` dice
+    cuánto costó llegar hasta acá. Los dos juntos son lo único que permite
+    proyectar lo que cuesta la corrida completa: con `epochs`, `search.trials` y
+    `requiredScale` ya en la entrada, la proyección es aritmética sobre los ejes
+    que la entrada misma nombra, y sin el tiempo no hay nada que multiplicar. Un
+    ensayo que corre en minutos y una búsqueda completa que corre en horas se ven
+    idénticos en el registro anterior a este campo, y el número no se recupera
+    después: hay que volver a correr la búsqueda entera para medirlo.
+
+    **Toda la búsqueda de la familia, no la suma de sus transferencias.** Los
+    `minutes` que ya viven adentro de `perTransfer` cronometran solo el
+    `study.optimize` de cada transferencia y dejan afuera el sorteo del material
+    — `bags.build` decodifica miles de imágenes una vez por familia, antes del
+    primer trial. Una proyección construida sobre esa suma subestima el costo por
+    exactamente ese sorteo, que es trabajo real de la búsqueda. `seconds` abarca
+    la familia entera y por construcción es mayor que la suma de sus
+    transferencias.
+
+    **En segundos, y al nivel de la familia.** En segundos porque es la unidad en
+    la que el resto del registro ya cronometra (`perRun` trae `seconds`), así que
+    un lector que sume el costo de una búsqueda y el de una campaña no convierte
+    nada; los `minutes` de `perTransfer` son para la línea de progreso, que la lee
+    una persona. Al nivel de la familia porque el archivo es un mapeo
+    familia -> entrada y nada más: una clave total al nivel de arriba rompería
+    `config.ceilings_on_record`, que lee `entry["ceiling"]` de *cada* valor. Quien
+    quiera el total suma las dos familias, que además cuestan distinto.
     """
     import optuna
     from optuna.samplers import GPSampler
@@ -908,6 +936,10 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
 
     found: dict[str, dict] = {}
     for family, arm_id in config.SEARCH_ARMS.items():
+        # Arranca antes del sorteo, no antes del primer trial: el sorteo es
+        # trabajo de la búsqueda y dejarlo afuera haría que el número proyectado
+        # sea menor que el que se va a pagar.
+        arrancada = time.perf_counter()
         # El material se dibuja una vez por familia y se reusa en cada trial:
         # `bags.build` decodifica miles de imágenes y rehacerlo por trial costaría
         # treinta sorteos por transferencia para nada. Además es lo que hace que
@@ -986,6 +1018,12 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
                                 and n_trials >= config.SEARCH_TRIALS),
             "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
                               "trials": config.SEARCH_TRIALS},
+            # Al lado de la escala declarada, porque es con ella que se lee: la
+            # escala dice si esta respuesta vale, el tiempo dice cuánto costó, y
+            # la proyección a `requiredScale` es el producto de los dos. Abarca
+            # el sorteo del material además de los trials, así que es mayor que
+            # la suma de los `minutes` de `perTransfer` y no se deriva de ellos.
+            "seconds": time.perf_counter() - arrancada,
             "transfers": [transfer_label(t) for t in (transfers or config.SEARCH_TRANSFERS)],
             "neutral": config.RAMP_CEILING,
             # La forma que los consumidores viejos ya leen: etiqueta -> float.
@@ -1211,6 +1249,16 @@ def search_ceilings(reduction: Reduction, device: torch.device,
                                 and len(reduction.seeds) >= config.FULL_SEARCH_SEEDS),
             "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
                               "seeds": config.FULL_SEARCH_SEEDS},
+            # Sin `seconds`, a diferencia del motor por trials, y no por olvido.
+            # Esta búsqueda reanuda: `measured` devuelve celdas que ya estaban en
+            # el parcial y que esta corrida no pagó, así que un solo reloj sobre
+            # la familia mediría lo que costó *esta sesión* y se leería como lo
+            # que costó la búsqueda. Un número que miente sobre lo que nombra es
+            # peor que su ausencia, justo donde se lo usaría para proyectar. Lo
+            # que esta forma sí puede cronometrar honestamente es la celda, y ya
+            # lo hace: `minutesPerCell` en el parcial, una entrada por celda
+            # efectivamente medida.
+
             "transfers": [transfer_label(t) for t in (transfers or config.SEARCH_TRANSFERS)],
             # The neutral it is read against, so a searched value that lands on it
             # confirms the normalization by measurement rather than by argument.
