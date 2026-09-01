@@ -186,6 +186,8 @@ already existed: they are two halves of one contract and they live in one. -->
 
 ## The record and the report
 
+- [ ] The seconds dimension is never dumped run by run in the notebook. Inline it is the median with its min-max range per method and environment, collapsing the seed axis and naming it; every row stays in the written record, which is what a record is for.
+- [ ] Every table framing states the equation its quantity comes from and what it means for the instance-unit family against the bag-unit family, before the table and never after.
 - [x] The benchmark declares revision r17 and which sections each arm exercises. `test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration`
 - [x] The record keeps the supervised term's magnitude and the ratio between terms, not only the contribution. Without a denominator, "the term commanded nothing" and "the term was scaled to nothing" print alike. `test_the_distribution_declares_exactly_what_was_approved`
 - [x] The benchmark declares `components` in its report contract. `test_the_benchmark_declares_the_components_its_objective_is_made_of`
@@ -223,6 +225,7 @@ Agreed 2026-08-26/27, while replacing the grid engine. Every item here is
 carried by code and by a test that dies when the code is mutated, except the one
 marked open, which is open because the run has not happened.
 
+- [ ] The search record writes its own wall time beside its declared scale. Without it nothing can project what the full search costs, and a gate is asked to authorize a run whose price nobody measured.
 - [ ] The trials search has not run at full scale, and this declaration holds no ceiling record at all: the grid's was retired with the campaign it governed. No campaign is launched from this declaration until the search runs.
 - [x] The search measures **every one of the six transfers**. Nothing inherits: the pooled fallback in `ceiling_for` is no longer reachable. The grid measured two and four inherited out of sample, and both of `MIL-CREDA`'s significant losses fell on inherited transfers. `test_busca_en_todas_las_transferencias`
 - [x] Searching transfers the verdict also judges leaks nothing. What keeps the material disjoint is the **role** — the search reads `valid`, the verdict reads `eval` — and that holds identically on all six. `search_ceilings`' docstring claimed the transfer split did that work; it was false as configured and is corrected. `test_la_busqueda_y_el_veredicto_se_separan_por_rol_no_por_transferencia`
@@ -238,6 +241,8 @@ marked open, which is open because the run has not happened.
 
 ## Reading the campaign
 
+- [ ] The geometry uses uniform weights for every arm, so two arms differ in the space and never in the ruler. Attention keeps its own effect where it is already its own claim, in attentionSpread and correspondence.
+- [ ] Phase-two geometry is measured in the RKHS the method aligns in, not on the Euclidean embedding of Eq. (16): the class mean is Eq. (20) at uniform weights, its inner product Eq. (21) over the kernel of Eq. (19), and the reading is d = 1 - K_AB / sqrt(K_AA * K_BB), bounded to [0, 1] by Cauchy-Schwarz because the kernel is PSD. Raw distances stay in the record and are never rendered.
 - [x] The gains table is **paired within each transfer**, against each method's own floor, and reports four things because no single one of them is honest alone: the mean in points with its **between-transfer** error, the mean of the percentages, the span, and the agreement in words. The two means can disagree in sign on the same data — `+0.56` and `-3.61` — because the floors run from 23% to 81%. `test_the_difference_is_paired_within_a_transfer`
 - [x] The error of that mean is **between transfers, not over the pooled pairs**. A transfer is a setting and not a repetition; pooling claimed a stability across settings nobody measured, and understated the uncertainty by a factor of three. `test_the_error_is_between_transfers_not_over_the_pooled_pairs`
 - [x] **Phase two rests on 3 repetitions, not 30.** `CHECKPOINTS` keeps three per cell, so every latent claim sits on the verdict floor by construction, however long phase one ran. `test_median_seeds_is_the_selection_rule_on_its_own`
