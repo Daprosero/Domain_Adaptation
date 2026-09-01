@@ -8,6 +8,7 @@ la que hace comparable un registro con el otro.
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -163,3 +164,107 @@ def test_la_semilla_de_cada_estudio_es_reproducible(motor):
     primera = _correr()
     segunda = _correr()
     assert (primera["creda"]["byTransfer"] == segunda["creda"]["byTransfer"])
+
+
+#: Lo que cada brazo tarda en el motor cronometrado, en segundos por trial. Son
+#: distintos a propósito: un registro que escribiera una constante — cero, el
+#: reloj mal leído, un campo copiado — pasaría cualquier test que solo pidiera
+#: «que haya un número». Con dos costos separados, el registro tiene que
+#: distinguirlos para pasar.
+COSTO_POR_TRIAL = {"D": 0.001, "G": 0.011}
+
+#: Lo que cuesta dibujar el material, por dominio. Vive afuera de los trials y es
+#: lo que separa «cronometré la búsqueda» de «sumé los `minutes` que ya estaban».
+COSTO_POR_SORTEO = 0.02
+
+
+@pytest.fixture
+def motor_cronometrado(motor, monkeypatch):
+    """El mismo motor, con costos reales y desiguales adentro.
+
+    Un `run_one` que devuelve al instante hace que «el registro trae el tiempo»
+    pase mientras el registro trae cero. El costo lo pone el doble, no el modelo,
+    y lo pone distinto por brazo para que el número quede atado a lo que
+    efectivamente corrió.
+    """
+    corrida, sorteo = harness.run_one, harness.bags.build
+
+    def _lenta(arm, *args, **kwargs):
+        time.sleep(COSTO_POR_TRIAL[arm])
+        return corrida(arm, *args, **kwargs)
+
+    def _sorteo_lento(*args, **kwargs):
+        time.sleep(COSTO_POR_SORTEO)
+        return sorteo(*args, **kwargs)
+
+    monkeypatch.setattr(harness, "run_one", _lenta)
+    monkeypatch.setattr(harness.bags, "build", _sorteo_lento)
+    return motor
+
+
+def test_el_registro_se_lleva_cuanto_costo_la_busqueda_que_lo_escribio(
+        motor_cronometrado):
+    """Al lado de la escala declarada, y sin eso no hay nada que proyectar.
+
+    `atRequiredScale` dice si esta respuesta vale; `seconds` dice cuánto costó
+    llegar a ella. Con los dos, y con `epochs` y `search.trials` que ya estaban,
+    proyectar la corrida completa es aritmética sobre los ejes que la entrada
+    misma nombra. Sin el tiempo, un ensayo de minutos y una búsqueda de horas se
+    escriben idénticos y el número solo se recupera volviendo a correrla entera.
+
+    Tres cosas se verifican, y ninguna la pasa un cero ni una constante: que cada
+    familia supere el piso que su propio costo impone, que la familia cara quede
+    separada de la barata por la diferencia que se le puso, y que el total sea
+    mayor que la suma de los `minutes` por transferencia — porque el sorteo del
+    material corre afuera de esos relojes y adentro de este.
+    """
+    _correr()
+    found = _correr()
+    transferencias = len(config.SEARCH_TRANSFERS)
+    sorteo = COSTO_POR_SORTEO * len(config.DOMAINS)
+
+    for family, arm in config.SEARCH_ARMS.items():
+        entrada = found[family]
+        piso = config.PILOT_SEARCH_TRIALS * transferencias * COSTO_POR_TRIAL[arm]
+        assert isinstance(entrada["seconds"], float)
+        assert entrada["seconds"] >= piso + sorteo, (
+            f"{family}: el registro dice {entrada['seconds']:.3f}s sobre una "
+            f"búsqueda que durmió al menos {piso + sorteo:.3f}s")
+        # El sorteo está adentro. Un `seconds` derivado de `perTransfer` daría
+        # exactamente la suma y se quedaría corto por lo que cuesta el material.
+        suma = sum(d["minutes"] * 60 for d in entrada["perTransfer"].values())
+        assert entrada["seconds"] - suma >= sorteo / 2, (
+            f"{family}: {entrada['seconds']:.3f}s no cubre el sorteo por encima "
+            f"de los {suma:.3f}s de sus transferencias")
+
+    # Y distingue una familia de la otra: una constante las escribiría iguales.
+    diferencia = found["milcreda"]["seconds"] - found["creda"]["seconds"]
+    esperada = (config.PILOT_SEARCH_TRIALS * transferencias
+                * (COSTO_POR_TRIAL["G"] - COSTO_POR_TRIAL["D"]))
+    assert diferencia >= esperada / 2, (
+        f"las dos familias costaron {diferencia:.3f}s de diferencia sobre "
+        f"{esperada:.3f}s dormidos: el registro no las está distinguiendo")
+
+
+def test_el_tiempo_es_aditivo_y_ningun_lector_del_registro_se_entera(motor):
+    """Una clave nueva al lado de las viejas, y no una forma nueva.
+
+    Los seis consumidores del registro leen claves por nombre; agregar una no
+    los toca, pero eso hay que verlo y no suponerlo — sobre todo `ceilings_on_record`,
+    que recorre *todos* los valores del archivo y por eso el total no puede vivir
+    al nivel de arriba.
+    """
+    found = _correr()
+    assert all("seconds" in e for e in found.values())
+    assert cr.kind_of(found["creda"]) == cr.KIND_OPTUNA
+    assert cr.scale_of(found["creda"]) == {
+        "epochs": config.PILOT_SEARCH_EPOCHS,
+        "trials": config.PILOT_SEARCH_TRIALS}
+    assert set(config.ceilings_on_record()) == set(config.SEARCH_ARMS)
+    procedencia = config.ceilings_provenance()
+    assert procedencia["source"] == "pilot"
+    assert procedencia["atRequiredScale"] is False
+    assert procedencia["requiredScale"] == {"epochs": config.FULL_SEARCH_EPOCHS,
+                                            "trials": config.SEARCH_TRIALS}
+    from MIL_CREDA_Benchmark import tables
+    assert tables.conclusion_ceilings(found)
