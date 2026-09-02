@@ -645,6 +645,10 @@ def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
     import matplotlib.pyplot as plt
 
     columns = ["Original"] + [config.NAME_OF[a] for a in arms]
+    # El mismo tope que las curvas del informe: cuántas transferencias entran es
+    # de la figura, cuáles son es de `best_transfers`. Acá salían tres porque el
+    # cuaderno llamaba a `best_transfers`, no porque la figura lo sostuviera.
+    transfers = figures.bounded_transfers(transfers)
     figure, axes = plt.subplots(len(transfers), len(columns),
                                 figsize=(2.15 * len(columns), 2.3 * len(transfers)),
                                 squeeze=False)
@@ -819,6 +823,10 @@ def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    # El mismo tope que las curvas del informe: cuántas transferencias entran es
+    # de la figura, cuáles son es de `best_transfers`. Acá salían tres porque el
+    # cuaderno llamaba a `best_transfers`, no porque la figura lo sostuviera.
+    transfers = figures.bounded_transfers(transfers)
     figure, axes = plt.subplots(len(transfers), len(arms),
                                 figsize=(3.5 * len(arms), 3.5 * len(transfers)),
                                 squeeze=False)

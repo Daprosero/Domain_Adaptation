@@ -124,10 +124,49 @@ def band(repetitions: list[list[dict]], key: str) -> tuple[list[float], list[flo
     return low, mid, high
 
 
+def bounded_transfers(available: list[str],
+                      requested: list[str] | None = None) -> list[str]:
+    """Cuántas transferencias entran en una figura, y quién elige cuáles.
+
+    Dos reglas que se confunden fácil y tienen dueños distintos. **Cuántas** es
+    de la figura: seis paneles a un tamaño legible no entran en una página, y
+    las tablas ya llevan las seis, así que el tope vive en
+    `FIGURE_TRANSFER_COUNT` y se aplica acá. **Cuáles** no es de la figura: es
+    `tables.best_transfers`, por el resultado y declarado en el epígrafe. Por eso
+    se niega en lugar de recortar --- recortar elegiría por orden de aparición,
+    que es una elección disfrazada de detalle de implementación.
+
+    El tope existía en `config` y no lo miraba ninguna figura. Que la rejilla
+    latente saliera con tres era una propiedad del cuaderno, que llama a
+    `best_transfers`; las tres figuras de curvas del informe salían con seis.
+
+    Una transferencia pedida que el registro no corrió también se niega. Pasa de
+    verdad ---la campaña contaminada puede haber corrido menos que la limpia, y
+    el cuaderno les pasa la misma lista a las dos--- y dibujar la intersección
+    dejaría dos figuras con distinto número de paneles, que el ojo compara como
+    si fueran comparables.
+    """
+    chosen = list(available if requested is None else requested)
+    if requested is not None:
+        missing = [t for t in requested if t not in available]
+        if missing:
+            raise ValueError(
+                f"el registro no dejó curvas de {', '.join(missing)}, así que la "
+                f"figura tendría menos paneles que la que se le compara al lado.")
+    if len(chosen) > config.FIGURE_TRANSFER_COUNT:
+        raise ValueError(
+            f"una figura lleva {config.FIGURE_TRANSFER_COUNT} transferencias "
+            f"(`FIGURE_TRANSFER_COUNT`) y se le pasaron {len(chosen)}. Cuáles no "
+            f"lo decide la figura: `tables.best_transfers(runs)` las elige por el "
+            f"resultado, y el epígrafe lo declara.")
+    return chosen
+
+
 def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
               shade_unit: bool = False,
               ylim: tuple[float, float] | None = None,
-              runs: Path | None = None) -> plt.Figure:
+              runs: Path | None = None,
+              transfers: list[str] | None = None) -> plt.Figure:
     """One panel per transfer, one median-with-band per arm. The shape all three share.
 
     Carries no title and no footer. The heading above the figure already says what
@@ -141,7 +180,7 @@ def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
     # árbol equivocado o no salía --- y en un repositorio con las dos, habría
     # salido de la equivocada en silencio.
     curves = load_curves(runs)
-    transfers = list(curves)
+    transfers = bounded_transfers(list(curves), transfers)
     columns = min(3, len(transfers)) or 1
     rows = -(-len(transfers) // columns)
     figure, axes = plt.subplots(rows, columns, figsize=(4.4 * columns, 3.2 * rows),
@@ -217,7 +256,8 @@ def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
 
 def adaptation_curves(path: Path,
                       arms: tuple[str, ...] = ("C", "D", "E", "F", "G"),
-                      runs: Path | None = None) -> plt.Figure:
+                      runs: Path | None = None,
+                      transfers: list[str] | None = None) -> plt.Figure:
     """Each adaptation term across training, one panel per transfer.
 
     The shaded band is [0, 1]. Section 5 normalizes MIL-CREDA's terms onto exactly
@@ -226,24 +266,27 @@ def adaptation_curves(path: Path,
     transfer to the next, is the claim itself rather than an illustration of it.
     """
     return _panelled(path, arms, "adaptation", "adaptation term",
-                     shade_unit=True, runs=runs)
+                     shade_unit=True, runs=runs, transfers=transfers)
 
 
 def supervised_curves(path: Path,
                       arms: tuple[str, ...] = ("A", "D", "B", "G"),
-                      runs: Path | None = None) -> plt.Figure:
+                      runs: Path | None = None,
+                      transfers: list[str] | None = None) -> plt.Figure:
     """The supervised term beside the adaptation one.
 
     This is where an adaptation term that destabilizes the fit shows up. Reading the
     adaptation curve alone would call a term well-behaved while the classification it
     shares an objective with comes apart underneath it.
     """
-    return _panelled(path, arms, "supervised", "supervised term", runs=runs)
+    return _panelled(path, arms, "supervised", "supervised term", runs=runs,
+                     transfers=transfers)
 
 
 def contribution_curves(path: Path,
                         arms: tuple[str, ...] = ("C", "D", "E", "F", "G"),
-                        runs: Path | None = None) -> plt.Figure:
+                        runs: Path | None = None,
+                      transfers: list[str] | None = None) -> plt.Figure:
     """What share of the objective each declared term actually commands.
 
     Without this panel, "the term had no effect" and "the term had no weight" are
@@ -253,7 +296,7 @@ def contribution_curves(path: Path,
     rung that ignores it credits the mechanism with what the scale did.
     """
     return _panelled(path, arms, "contribution", "lambda x adaptation",
-                     runs=runs)
+                     runs=runs, transfers=transfers)
 
 
 def noise_curves(metric: str = "targetAccuracy", path: Path | None = None):
