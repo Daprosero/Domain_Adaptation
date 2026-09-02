@@ -737,14 +737,108 @@ class TestNoTwoFunctionsShareAName:
 
     def test_the_conclusion_that_broke_now_runs(self):
         """El polo concreto: la función que quedaba tapada era la que
-        `conclusion()` necesitaba, y sin ella el informe no tenía conclusiones."""
+        `conclusion()` necesitaba, y sin ella el informe no tenía conclusiones.
+
+        Corría sobre `seconds` y salteaba cuando no había campaña en disco, así
+        que el polo no se probaba nunca. Y `seconds` es `perRun`: el día que
+        hubiera campaña la llamada se habría negado ---`conclusion` pasa por
+        `cells`--- y el rojo habría parecido de otra cosa. Va sobre una
+        dimensión agrupable y sobre corridas construidas acá, porque el defecto
+        era del módulo y no del árbol de resultados.
+        """
         from MIL_CREDA_Benchmark import tables
 
-        from MIL_CREDA_Benchmark import contamination as eje
-
-        vigente = eje.in_force(0.0, "campaign")
-        if vigente is None:
-            pytest.skip("no hay campaña en disco contra la cual concluir")
-        texto = tables.conclusion(vigente["runs"], "seconds",
-                                  vigente["summary"]["reduction"])
+        runs = [{"arm": arm, "transfer": f"{source}->{target}", "seed": 0,
+                 "targetAccuracy": value, "contribution": 0.1}
+                for arm, value in (("A", 0.60), ("G", 0.80))
+                for source, target in config.VERDICT_TRANSFERS]
+        texto = tables.conclusion(runs, "targetAccuracy", {"seeds": [0]})
+        assert config.NAME_OF["G"] in texto
         assert "repetición" in texto
+
+
+class TestTheNoiseAxisRefusesToPoolAPerRunDimension:
+    """La guarda llegaba a la familia del veredicto y no a la del ruido.
+
+    `cells` la lleva, y por ahí pasan `table`, `render`, `conclusion`, los
+    peldaños y las ganancias apareadas. La familia del ruido no pasa por ahí:
+    agrega por `contamination.by_arm`, que promedia sobre transferencia y
+    repetición juntas. Con eso, `conclusion_versus_clean("seconds", ρ)`
+    promediaba tiempo de pared sobre transferencias, repeticiones y ---si hay
+    shards--- máquinas, y después imprimía quién pierde menos. No era
+    hipotético: la celda 506 de `Benchmark_Report_v1` lo llamaba con esa
+    métrica.
+
+    Cada entrada pública se prueba **con el árbol vacío**, y eso es lo que hace
+    que la prueba mida algo. Todas vuelven temprano cuando no hay registro
+    ---`curve` ni siquiera llega a `by_arm`, `conclusion_versus_clean` corta en
+    «falta el registro»---, así que una guarda puesta sólo en el punto de
+    agregación las dejaría pasar acá y la suite quedaría verde sin que nada se
+    hubiera negado. Un candado más débil sobrevive a la prueba que trae datos;
+    ésta sólo pasa si la negativa está antes del retorno temprano.
+    """
+
+    def _entries(self):
+        """Cada entrada pública que agrupa, con la forma mínima de llamarla.
+
+        Derivadas a mano y no del árbol de sintaxis a propósito: lo que hace
+        falta acá no es «toda función con un parámetro `metric`» ---
+        `render_per_run` lo tiene y existe justamente para NO agrupar--- sino
+        las que reducen varias corridas a un número.
+        """
+        from MIL_CREDA_Benchmark import contamination as axis
+        from MIL_CREDA_Benchmark import figures, tables
+
+        return {
+            "contamination.by_arm": lambda m: axis.by_arm([], m),
+            "contamination.curve": lambda m: axis.curve(m),
+            "contamination.degradation": lambda m: axis.degradation(m),
+            "tables.render_noise": lambda m: tables.render_noise(m),
+            "tables.conclusion_noise": lambda m: tables.conclusion_noise(m),
+            "tables.conclusion_versus_clean":
+                lambda m: tables.conclusion_versus_clean(m, config.NOISE_REPORTED),
+            "tables.conclusion_weighting_under_noise":
+                lambda m: tables.conclusion_weighting_under_noise(m),
+            "tables.conclusion_rungs_versus_clean":
+                lambda m: tables.conclusion_rungs_versus_clean(
+                    m, config.NOISE_REPORTED),
+            "figures.noise_curves": lambda m: figures.noise_curves(m),
+        }
+
+    def _empty_tree(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(config, "PRODUCT", tmp_path)
+        monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+
+    def test_the_refused_set_comes_from_the_declaration(self):
+        """Ni una lista literal acá ni una lista literal allá: quién es `perRun`
+        lo dice el banco, y una segunda copia envejece en silencio."""
+        from MIL_CREDA_Benchmark import pooling
+
+        declared = pooling.per_run_dimensions()
+        assert declared, "el banco no declara ninguna dimensión `perRun`"
+        assert set(declared) == set(
+            (__import__("MIL_CREDA_Benchmark").__benchmark__["distribution"]
+             ["perRun"]))
+
+    def test_every_public_noise_entry_refuses_every_declared_per_run_dimension(
+            self, tmp_path, monkeypatch):
+        from MIL_CREDA_Benchmark import pooling
+
+        self._empty_tree(tmp_path, monkeypatch)
+        declared = pooling.per_run_dimensions()
+        for name, call in self._entries().items():
+            for metric in declared:
+                with pytest.raises(ValueError, match="perRun"):
+                    call(metric)
+                    pytest.fail(f"{name} agrupó `{metric}` sin negarse")
+
+    def test_a_poolable_dimension_still_goes_through(
+            self, tmp_path, monkeypatch):
+        """El polo contrario. Sin él, una guarda que se negara a todo pasaría
+        la prueba de arriba entera y nadie lo notaría hasta ver la tabla vacía."""
+        from MIL_CREDA_Benchmark import contamination as axis
+        from MIL_CREDA_Benchmark import tables
+
+        self._empty_tree(tmp_path, monkeypatch)
+        assert axis.by_arm([], "targetAccuracy") == {}
+        assert isinstance(tables.render_noise("targetAccuracy"), str)

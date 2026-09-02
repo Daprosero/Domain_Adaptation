@@ -90,7 +90,19 @@ __benchmark__ = {
             # registro de una tasa contaminada y no un renderer paralelo: dos
             # funciones que dibujan la misma tabla son dos cosas que se pueden
             # desalinear, y el lector no tendría cómo saber cuál se movió.
+            # La sección de tiempo, sus dos formas. Ninguna de las dos estaba
+            # declarada, así que la mitad del informe que MEJOR se porta --- la
+            # que se niega a promediar `seconds` y saca fila por corrida --- era
+            # justo la que ningún control miraba. Declarar sólo la contaminada
+            # la dejaba sin conclusión a los ojos del contrato, que es como
+            # apareció.
+            "tables.render_per_run",
             "tables.render_at",
+            # Y su gemela por corrida, que NO es la misma tabla: `render_at`
+            # promedia y `cells` se niega ante una dimensión `perRun`, así que
+            # la sección contaminada de `seconds` no tenía tabla que imprimir
+            # mientras su conclusión sí promediaba.
+            "tables.render_per_run_at",
             "tables.render_noise",
             "tables.render_diagnostic",
             "tables.render_readings_contaminated",
@@ -113,6 +125,11 @@ __benchmark__ = {
             # separado. Nunca enumera la tabla que tiene al lado: una conclusión
             # que repite su propia tabla dejó de concluir.
             "tables.conclusion_noise",
+            # No computa nada y esa es su afirmación: `render_per_run` ya se
+            # negó a promediar, y una conclusión que después imprimiera
+            # «mejor/peor» sobre las mismas lecturas devolvería en prosa lo que
+            # la tabla acaba de declinar en números.
+            "tables.conclusion_per_run",
             "tables.conclusion_versus_clean",
             "tables.conclusion_diagnostic",
             "tables.conclusion_readings_versus_clean",

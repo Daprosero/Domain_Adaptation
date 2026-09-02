@@ -25,6 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from MIL_CREDA_Benchmark import config
+from MIL_CREDA_Benchmark import pooling
 
 
 def emit(figure: plt.Figure, path: Path) -> plt.Figure:
@@ -268,6 +269,7 @@ def noise_curves(metric: str = "targetAccuracy", path: Path | None = None):
     otras. No lleva título — el encabezado de arriba ya dice qué se mide — ni
     repite las cotas, que el sello ya declaró una vez.
     """
+    pooling.refuse(metric)
     from MIL_CREDA_Benchmark import config, contamination as noise_axis
 
     drawn = noise_axis.curve(metric)
