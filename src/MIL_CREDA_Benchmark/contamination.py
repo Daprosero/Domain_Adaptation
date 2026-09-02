@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 
 from MIL_CREDA_Benchmark import config
+from MIL_CREDA_Benchmark import pooling
 
 
 #: Which run the axis reads. The degradation sweep is ONE transfer across every
@@ -100,6 +101,7 @@ def by_arm(runs, metric: str) -> dict[str, float]:
     nothing else. A curve that also varied in which transfers it averaged would be
     reading two axes and reporting one.
     """
+    pooling.refuse(metric)
     totals: dict[str, list[float]] = {}
     for run in runs:
         value = run.get(metric)
@@ -117,6 +119,7 @@ def curve(metric: str, levels: list[float] | None = None) -> dict:
     with a hole in it drawn beside a complete one differs in how many points it
     carries, and the eye reads density as coverage.
     """
+    pooling.refuse(metric)
     wanted = config.NOISE_LEVELS if levels is None else levels
     loaded = [(rate, load(rate)) for rate in wanted]
     present = [(rate, level) for rate, level in loaded if level is not None]
@@ -150,6 +153,7 @@ def degradation(metric: str, levels: list[float] | None = None) -> list[dict]:
     distance between two contaminations. An arm the clean level never ran gets no
     row rather than a fall computed from nothing.
     """
+    pooling.refuse(metric)
     drawn = curve(metric, levels)
     if not drawn["rates"] or drawn["rates"][0] != config.NOISE_LEVELS[0]:
         return []
