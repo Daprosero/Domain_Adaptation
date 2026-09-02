@@ -80,7 +80,7 @@ these is raised, not resolved in passing.
 ## Figures — phase 2
 
 - [ ] Bag figure highlights **the same bags in every panel**: the median bag of each class by correspondence mass, one colour each, and every other bag in its own class colour.
-- [ ] **Three transfers in every figure, not six.** Six rows at a legible panel size do not fit on a page and the tables already carry all six. Fixed in `FIGURE_TRANSFER_COUNT`; which three is the bullet below.
+- [x] **Three transfers in every figure, not six.** Six rows at a legible panel size do not fit on a page and the tables already carry all six. Fixed in `FIGURE_TRANSFER_COUNT`; which three is the bullet below. `test_no_figure_draws_more_transfers_than_the_count_fixes`
 - [x] **One display seed for every comparative grid**, chosen as the seed whose `test_the_display_seed_is_the_median_of_the_across_arm_mean`
       across-arm mean target accuracy is the median. Panels drawn from each arm's
       own median seed would differ in the method *and* in the draw, and — because
@@ -186,7 +186,7 @@ already existed: they are two halves of one contract and they live in one. -->
 
 ## The record and the report
 
-- [ ] The seconds dimension is never dumped run by run in the notebook. Inline it is the median with its min-max range per method and environment, collapsing the seed axis and naming it; every row stays in the written record, which is what a record is for.
+- [x] The seconds dimension is never dumped run by run in the notebook. Inline it is the median with its min-max range per method and environment, collapsing the seed axis and naming it; every row stays in the written record, which is what a record is for. `test_the_inline_seconds_table_collapses_the_seed_axis_and_names_it`
 - [ ] Every table framing states the equation its quantity comes from and what it means for the instance-unit family against the bag-unit family, before the table and never after.
 - [x] The benchmark declares revision r17 and which sections each arm exercises. `test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration`
 - [x] The record keeps the supervised term's magnitude and the ratio between terms, not only the contribution. Without a denominator, "the term commanded nothing" and "the term was scaled to nothing" print alike. `test_the_distribution_declares_exactly_what_was_approved`
