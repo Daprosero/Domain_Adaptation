@@ -848,3 +848,90 @@ def test_every_figure_carries_the_same_three_lines_a_table_does() -> None:
 
     assert len(set(framings)) == len(framings), \
         f"two figures are framed by one declaration: {framings}"
+
+
+def test_the_crowded_labels_are_measured_and_not_assumed(tmp_path) -> None:
+    """Que dos números se pisen es una afirmación sobre los datos, y el código
+    que dibuja la mide.
+
+    Es el polo doble: dos etiquetas en el MISMO punto tienen que quedar neutras,
+    y dos separadas tienen que conservar el color de su clase. Con solo la
+    primera mitad, pintar todo de gris pasaría la prueba y la figura perdería la
+    codificación entera; con solo la segunda, no neutralizar nunca también.
+
+    Rojo alcanzable: devolver 0 sin medir, o neutralizar toda la lista.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from MIL_CREDA_Benchmark import latent as modulo
+
+    figure, axis = plt.subplots(figsize=(4, 4))
+    axis.set_xlim(0, 10)
+    axis.set_ylim(0, 10)
+
+    encimadas = [axis.annotate("3", xy=(5, 5), xytext=(4.5, 4.5),
+                               textcoords="offset points", color="red"),
+                 axis.annotate("8", xy=(5, 5), xytext=(4.5, 4.5),
+                               textcoords="offset points", color="blue")]
+    aparte = [axis.annotate("1", xy=(0.5, 0.5), xytext=(4.5, 4.5),
+                            textcoords="offset points", color="green"),
+              axis.annotate("2", xy=(9.5, 9.5), xytext=(4.5, 4.5),
+                            textcoords="offset points", color="purple")]
+
+    contadas = modulo._neutralise_crowded_labels(figure, encimadas + aparte)
+
+    assert contadas == 2, "las dos que se pisan, y solo ésas"
+    for etiqueta in encimadas:
+        assert etiqueta.get_color() == modulo.CROWDED_LABEL_COLOUR
+    assert aparte[0].get_color() == "green"
+    assert aparte[1].get_color() == "purple"
+    plt.close(figure)
+
+
+def test_only_the_arm_that_asserts_numbers_the_two_ends_of_its_line(
+        trained, tmp_path) -> None:
+    """El número de clase va en las dos puntas, y solo donde hay afirmación.
+
+    Dos cosas que se pueden romper por separado. Numerar una sola punta deja
+    ilegible el emparejamiento errado ---la línea punteada dice «mal» y no
+    contra qué---; numerar los tres paneles le presta a los brazos sin término
+    local el gesto que solo el término local se ganó, que es exactamente la
+    regla por la que la línea tampoco se dibuja ahí.
+
+    Rojo alcanzable: anotar una sola punta, mover el `annotate` fuera del
+    `if asserts`, o dibujar el número de la bolsa destino en las dos puntas.
+    """
+    produced = latent.correspondence_grid(
+        tmp_path / "bolsas.pdf", config.BAG_PANELS, TRANSFERS[:1], seed=3,
+        device=torch.device("cpu"))
+
+    afirman = [arm for arm in config.BAG_PANELS if config.ARMS_BY_ID[arm]["local"]]
+    assert afirman, "ningún panel afirma: la figura no tiene qué numerar"
+
+    reading = latent.bag_pairs(trained["model"], trained["source"],
+                               trained["target"], torch.device("cpu"))
+    highlighted = latent.median_bag_per_class(reading)
+
+    # dos por clase destacada y por brazo que afirma, ni una más
+    assert produced["labels"] == 2 * len(highlighted) * len(afirman)
+
+    for axis, arm in zip(produced["figure"].axes, config.BAG_PANELS):
+        numeros = [t for t in axis.texts if t.get_text().isdigit()]
+        if config.ARMS_BY_ID[arm]["local"]:
+            assert len(numeros) == 2 * len(highlighted), arm
+        else:
+            assert numeros == [], f"{arm} no afirma emparejamiento y numeró"
+
+    # y el segundo número es el de la pareja, no el de la bolsa destacada: en un
+    # emparejamiento errado los dos difieren, y ahí está toda la lectura
+    esperados = sorted(
+        [str(class_id) for class_id in highlighted]
+        + [str(int(reading["sourceLabels"][int(reading["nearest"][position])]))
+           for position in highlighted.values()])
+    for axis, arm in zip(produced["figure"].axes, config.BAG_PANELS):
+        if not config.ARMS_BY_ID[arm]["local"]:
+            continue
+        assert sorted(t.get_text() for t in axis.texts
+                      if t.get_text().isdigit()) == esperados
