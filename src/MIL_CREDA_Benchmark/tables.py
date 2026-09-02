@@ -928,6 +928,87 @@ def render_per_run(grid_per_run: dict, metric: str, markdown: bool = False) -> s
     return "\n".join(lines)
 
 
+_PER_RUN_SUMMARY_NOTE = (
+    "la mediana entre semillas DENTRO de un entorno, con su rango min-max; "
+    "el eje colapsado es la semilla y nada más --- método, transferencia y "
+    "entorno siguen siendo claves. Todas las corridas están en el registro")
+
+
+def render_per_run_summary(grid_per_run: dict, metric: str,
+                           markdown: bool = False) -> str:
+    """La forma inline de una dimensión `perRun`: mediana y rango, no cada corrida.
+
+    `render_per_run` deja una fila por corrida y esa es la forma correcta para el
+    REGISTRO, que existe para tenerlas todas. Adentro del cuaderno son treinta
+    filas por celda que nadie lee, y el lector termina calculando la mediana de
+    cabeza --- que es exactamente el resumen que el docstring de al lado le pide
+    construir «a la vista de cuántas máquinas». Acá se lo construye, y la vista
+    se conserva.
+
+    **No llama a `refuse`, y es la única función de este módulo que agrupa sin
+    hacerlo.** Escrito fuerte porque una función que se saltea la guarda es
+    justamente lo que esta guarda existe para impedir. Lo que la hace defendible
+    son dos cosas medidas, no argumentadas: el entorno es una CLAVE y no se
+    colapsa nunca ---la mitad de por qué la dimensión es `perRun` es que la
+    máquina decide el número--- y lo que se imprime es la mediana con su min-max
+    de verdad, no un `mean ± stdev` que insinúa una estabilidad entre corridas
+    que nadie midió. Las dos tienen su prueba.
+
+    Y colapsa UN eje. El acuerdo dice «colapsando el eje de semillas», en
+    singular, y juntar además las transferencias daría una tabla con la misma
+    forma y otro significado: seis corridas de distinta dificultad leídas como
+    una. Por eso la transferencia sigue siendo una clave aunque el acuerdo hable
+    de «método y entorno» --- es lo que hace verdadera su propia cláusula.
+    """
+    title, unit = SPANISH.get(metric, (metric, ""))
+    decimals = 1 if metric in PERCENT else 2
+
+    grouped: dict[tuple, list[float]] = {}
+    for transfer, cell in grid_per_run.items():
+        for arm in config.ARM_ORDER:
+            for reading in cell.get(arm, {}).get(metric) or []:
+                grouped.setdefault(
+                    (config.NAME_OF.get(arm, arm), transfer, reading["env"]),
+                    []).append(_scaled(reading["value"], metric))
+    if not grouped:
+        return "(sin corridas medidas)"
+
+    rows = []
+    for (arm, transfer, env), values in grouped.items():
+        ordered = sorted(values)
+        middle = len(ordered) // 2
+        median = (ordered[middle] if len(ordered) % 2
+                  else (ordered[middle - 1] + ordered[middle]) / 2)
+        rows.append({"arm": arm, "transfer": transfer, "env": env,
+                     "n": len(ordered), "median": median,
+                     "min": ordered[0], "max": ordered[-1]})
+
+    note = _notes_block([_PER_RUN_SUMMARY_NOTE], markdown)
+    reading = f"{title} ({unit})" if unit else title
+    columns = ["Método", "Transferencia", "Entorno", "Semillas",
+               f"{reading}: mediana", "min", "max"]
+    if markdown:
+        lines = [note, "",
+                 "| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for row in rows:
+            lines.append("| " + " | ".join([
+                f"`{row['arm']}`", row["transfer"], f"`{row['env']}`",
+                str(row["n"]), f"{row['median']:.{decimals}f}",
+                f"{row['min']:.{decimals}f}", f"{row['max']:.{decimals}f}"]) + " |")
+        return "\n".join(lines)
+
+    width = max(14, max(len(r["arm"]) for r in rows) + 2)
+    lines = [note, "",
+             f"{'Método':<{width}}{'Transferencia':<16}{'Entorno':<16}"
+             f"{'Semillas':>9}{'mediana':>12}{'min':>12}{'max':>12}"]
+    for row in rows:
+        lines.append(f"{row['arm']:<{width}}{row['transfer']:<16}{row['env']:<16}"
+                     f"{row['n']:>9}{row['median']:>12.{decimals}f}"
+                     f"{row['min']:>12.{decimals}f}{row['max']:>12.{decimals}f}")
+    return "\n".join(lines)
+
+
 def conclusion_per_run(metric: str) -> str:
     """Why this section prints no best/worst, unlike `conclusion`.
 
@@ -2020,8 +2101,9 @@ def render_at(rate: float, metric: str, markdown: bool = False) -> str:
                   markdown=markdown)
 
 
-def render_per_run_at(rate: float, metric: str, markdown: bool = False) -> str:
-    """La tabla corrida-por-corrida, sobre la campaña contaminada.
+def render_per_run_summary_at(rate: float, metric: str,
+                              markdown: bool = False) -> str:
+    """La forma inline de una dimensión `perRun`, sobre la campaña contaminada.
 
     Un renderer paralelo a `render_at` y no la misma tabla sobre otro registro,
     que es lo que la nota de la declaración desaconseja: acá las dos formas son
@@ -2047,8 +2129,8 @@ def render_per_run_at(rate: float, metric: str, markdown: bool = False) -> str:
                 f"`labelNoise={noise_axis.stated_rate(nivel)}`. Un directorio no "
                 f"es evidencia y las dos cosas no coinciden: nada se dibuja "
                 f"hasta que se resuelva cuál está mal.")
-    return render_per_run(nivel["summary"].get("gridPerRun") or {}, metric,
-                          markdown=markdown)
+    return render_per_run_summary(nivel["summary"].get("gridPerRun") or {}, metric,
+                                  markdown=markdown)
 
 
 def conclusion_readings_versus_clean(limpias: Iterable[dict], sucias: Iterable[dict],
