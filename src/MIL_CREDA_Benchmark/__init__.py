@@ -97,12 +97,17 @@ __benchmark__ = {
             # la dejaba sin conclusión a los ojos del contrato, que es como
             # apareció.
             "tables.render_per_run",
+            # Y su forma inline: mediana con rango min-max, colapsando el eje de
+            # semillas dentro de un entorno. Dos renderers y no un parámetro
+            # porque son dos afirmaciones distintas, y el contrato nombra cuál
+            # se usó.
+            "tables.render_per_run_summary",
             "tables.render_at",
             # Y su gemela por corrida, que NO es la misma tabla: `render_at`
             # promedia y `cells` se niega ante una dimensión `perRun`, así que
             # la sección contaminada de `seconds` no tenía tabla que imprimir
             # mientras su conclusión sí promediaba.
-            "tables.render_per_run_at",
+            "tables.render_per_run_summary_at",
             "tables.render_noise",
             "tables.render_diagnostic",
             "tables.render_readings_contaminated",

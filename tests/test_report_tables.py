@@ -263,11 +263,14 @@ def _metric_of(arguments: str) -> str | None:
 
 #: Which renderer draws each metric's level table. Not a preference: `seconds` is
 #: `perRun` in the benchmark's own declaration, so `tables.render` refuses it and
-#: `render_per_run` is the only form left. The other two pool and are printed by
-#: `render`. The claims below -- the reading order, and that every level table is
-#: followed by its own conclusion -- are about the section, not about which
-#: function drew it, so they read the renderer from here instead of assuming one.
-LEVEL_RENDERER = {"seconds": "render_per_run",
+#: only the per-run forms are left. Inline it is `render_per_run_summary` --- the
+#: median with its min-max range, collapsing the seed axis within one environment
+#: and never across two; the written record keeps `render_per_run`, one row per
+#: run. The other two pool and are printed by `render`. The claims below -- the
+#: reading order, and that every level table is followed by its own conclusion --
+#: are about the section, not about which function drew it, so they read the
+#: renderer from here instead of assuming one.
+LEVEL_RENDERER = {"seconds": "render_per_run_summary",
                   "sourceAccuracy": "render",
                   "targetAccuracy": "render"}
 
@@ -797,3 +800,103 @@ def test_the_report_asks_for_no_pooled_table_of_a_per_run_dimension() -> None:
         assert not asked, \
             f"the report pools `{metric}` in cell(s) {asked}: the declaration " \
             f"calls it perRun and `render` refuses it"
+
+
+def _grid_per_run(readings):
+    """`{transfer: {arm: {metric: [{env, seed, value}, ...]}}}`, la forma que
+    `shards.merge` deja bajo `gridPerRun`."""
+    grid = {}
+    for transfer, arm, env, seed, value in readings:
+        (grid.setdefault(transfer, {}).setdefault(arm, {})
+             .setdefault("seconds", []).append(
+                 {"env": env, "seed": seed, "value": value}))
+    return grid
+
+
+def test_the_inline_seconds_table_collapses_the_seed_axis_and_names_it():
+    """Inline es la mediana con su rango min-max; el registro escrito se queda
+    con todas las filas.
+
+    Volcar corrida por corrida adentro del cuaderno son treinta filas por celda
+    que nadie lee, y el lector termina construyendo la mediana de cabeza --- que
+    es exactamente el resumen que `render_per_run` le pide que construya «a la
+    vista de cuántas máquinas». A la vista sigue estando: el entorno es una
+    columna y el rango es el min-max de verdad, no un `±` que insinúa una
+    estabilidad que nadie midió.
+
+    Rojo alcanzable: imprimir una media, o un `±`, o esconder el rango.
+    """
+    # 10/20/60: mediana 20, media 30. Con 10/20/30 las dos dan 20 y una media
+    # impresa en lugar de la mediana pasaría la prueba --- el fixture sería igual
+    # al mutante, que es una prueba que no puede salir mal.
+    grid = _grid_per_run([
+        ("M->U", "G", "T4", 0, 10.0), ("M->U", "G", "T4", 1, 60.0),
+        ("M->U", "G", "T4", 2, 20.0),
+    ])
+    rendered = tables.render_per_run_summary(grid, "seconds", markdown=True)
+
+    assert "20.00" in rendered, "la mediana de 10/20/60"
+    assert "30.00" not in rendered, "eso sería la media, no la mediana"
+    assert "10.00" in rendered and "60.00" in rendered, "el rango completo"
+    assert "±" not in rendered, "un ± afirma una dispersión que no se midió así"
+    assert "semilla" in rendered.lower(), "el eje colapsado se nombra"
+
+
+def test_the_inline_seconds_table_never_puts_two_environments_in_one_row():
+    """La máquina no se colapsa: es la mitad de por qué la dimensión es `perRun`.
+
+    Es lo único que hace defendible resumir acá. Una fila por método y entorno
+    colapsa las semillas dentro de una máquina; una fila por método a secas
+    promediaría entre máquinas, que es justo lo que `_refuse_pooling` impide en
+    el resto del informe.
+    """
+    # Tres por entorno y asimétricas: con dos lecturas la mediana ES la media, y
+    # la prueba no distinguiría una de otra.
+    grid = _grid_per_run([
+        ("M->U", "G", "T4", 0, 10.0), ("M->U", "G", "T4", 1, 12.0),
+        ("M->U", "G", "T4", 2, 44.0),
+        ("M->U", "G", "P100", 0, 40.0), ("M->U", "G", "P100", 1, 42.0),
+        ("M->U", "G", "P100", 2, 104.0),
+    ])
+    rendered = tables.render_per_run_summary(grid, "seconds", markdown=True)
+
+    filas = [l for l in rendered.splitlines() if l.startswith("| `")]
+    assert len(filas) == 2, filas
+    assert any("T4" in f and "12.00" in f for f in filas), filas
+    assert any("P100" in f and "42.00" in f for f in filas), filas
+    # y la mediana de las seis juntas, que es lo que saldría al colapsar el
+    # entorno, no aparece en ninguna fila
+    assert not any("26.00" in f for f in filas), filas
+
+
+def test_the_inline_seconds_table_collapses_one_axis_and_not_two():
+    """La transferencia sigue siendo una clave, no otro eje colapsado.
+
+    El acuerdo dice «colapsando el eje de semillas» en singular, y la regla que
+    lo gobierna pide que cada agregación nombre UN eje. Juntar además las
+    transferencias produciría algo con la misma forma y otro significado: seis
+    corridas de distinta dificultad leídas como una.
+    """
+    grid = _grid_per_run([
+        ("M->U", "G", "T4", 0, 10.0), ("M->U", "G", "T4", 1, 10.0),
+        ("U->M", "G", "T4", 0, 90.0), ("U->M", "G", "T4", 1, 90.0),
+    ])
+    rendered = tables.render_per_run_summary(grid, "seconds", markdown=True)
+
+    filas = [l for l in rendered.splitlines() if l.startswith("| `")]
+    assert len(filas) == 2, filas
+    assert any("M->U" in f and "10.00" in f for f in filas), filas
+    assert any("U->M" in f and "90.00" in f for f in filas), filas
+
+
+def test_the_written_record_still_carries_every_row():
+    """El otro polo del acuerdo. Sin él, resumir inline pasaría la prueba de
+    arriba y el registro perdería las corridas, que es para lo que existe."""
+    grid = _grid_per_run([
+        ("M->U", "G", "T4", 0, 10.0), ("M->U", "G", "T4", 1, 60.0),
+        ("M->U", "G", "T4", 2, 20.0),
+    ])
+    completo = tables.render_per_run(grid, "seconds", markdown=True)
+
+    filas = [l for l in completo.splitlines() if l.startswith("| `")]
+    assert len(filas) == 3, "el registro se queda con una fila por corrida"
