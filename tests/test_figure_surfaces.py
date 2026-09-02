@@ -935,3 +935,124 @@ def test_only_the_arm_that_asserts_numbers_the_two_ends_of_its_line(
             continue
         assert sorted(t.get_text() for t in axis.texts
                       if t.get_text().isdigit()) == esperados
+
+
+def _curves_over(path, transfers, arms=("C", "D", "G"), steps=4):
+    """Un archivo de curvas con tantas transferencias como se le pidan."""
+    import json
+
+    with path.open("w", encoding="utf-8") as handle:
+        for transfer in transfers:
+            for arm in arms:
+                for seed in range(2):
+                    curve = [{"contribution": 0.2, "supervised": 0.8,
+                              "adaptation": 0.2} for _ in range(steps)]
+                    handle.write(json.dumps({"transfer": transfer, "arm": arm,
+                                             "seed": seed, "curve": curve}) + "\n")
+    return path
+
+
+TODAS = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
+
+
+def test_no_figure_draws_more_transfers_than_the_count_fixes(tmp_path) -> None:
+    """Seis paneles a un tamaño legible no entran en una página, y las tablas ya
+    llevan las seis.
+
+    El conteo estaba en `FIGURE_TRANSFER_COUNT` y no lo miraba ninguna figura:
+    `_panelled` tomaba `list(curves)`, o sea todas las que hubiera en el archivo,
+    y las tres figuras de curvas del informe salían con seis. Que la rejilla
+    latente saliera con tres era una propiedad del cuaderno ---llama a
+    `best_transfers`--- y no de la figura, así que nada lo sostenía.
+
+    Se niega en lugar de recortar: recortar elegiría tres por orden de aparición,
+    y cuáles tres es una decisión que ya tiene dueño --- `best_transfers`, por el
+    resultado y declarada en el epígrafe.
+
+    Rojo alcanzable: volver a `list(curves)`, o recortar en silencio.
+    """
+    runs = _curves_over(tmp_path / "runs.jsonl", TODAS)
+    assert len(TODAS) > config.FIGURE_TRANSFER_COUNT, \
+        "con seis o menos transferencias esta prueba no probaría nada"
+
+    for nombre in ("adaptation_curves", "supervised_curves", "contribution_curves"):
+        with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
+            getattr(figures, nombre)(tmp_path / f"{nombre}.pdf",
+                                     arms=("C", "D", "G"), runs=runs)
+
+
+def test_the_count_is_the_declared_one_and_not_a_number_written_twice(tmp_path) -> None:
+    """Con exactamente las que el conteo fija, dibuja; con una más, se niega.
+
+    El polo doble. Sin la primera mitad, negarse siempre pasaría la prueba de
+    arriba entera.
+    """
+    justas = TODAS[:config.FIGURE_TRANSFER_COUNT]
+    runs = _curves_over(tmp_path / "justas.jsonl", justas)
+    figura = figures.contribution_curves(tmp_path / "ok.pdf", arms=("C", "D", "G"),
+                                         runs=runs)
+    dibujados = [axis for axis in figura.axes if axis.has_data()]
+    assert len(dibujados) == config.FIGURE_TRANSFER_COUNT
+
+    una_mas = _curves_over(tmp_path / "una_mas.jsonl",
+                           TODAS[:config.FIGURE_TRANSFER_COUNT + 1])
+    with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
+        figures.contribution_curves(tmp_path / "no.pdf", arms=("C", "D", "G"),
+                                    runs=una_mas)
+
+
+def test_the_caller_chooses_which_three_and_the_figure_only_bounds_how_many(
+        tmp_path) -> None:
+    """La elección tiene dueño y no es la figura.
+
+    Pasarle tres de las seis dibuja esas tres, en ese orden. Es lo que deja al
+    cuaderno usar `best_transfers` ---por el resultado, declarado en el
+    epígrafe--- sin que la figura invente un criterio propio.
+    """
+    runs = _curves_over(tmp_path / "runs.jsonl", TODAS)
+    elegidas = [TODAS[4], TODAS[0], TODAS[2]]
+
+    figura = figures.contribution_curves(tmp_path / "elegidas.pdf",
+                                         arms=("C", "D", "G"), runs=runs,
+                                         transfers=elegidas)
+    titulos = [axis.get_title() for axis in figura.axes if axis.has_data()]
+    assert titulos == elegidas
+
+
+def test_a_requested_transfer_the_record_never_ran_refuses(tmp_path) -> None:
+    """Dos figuras que deberían mostrar las mismas tres y muestran distinto
+    número de paneles difieren en algo que nadie declaró.
+
+    Pasa de verdad: la campaña contaminada puede haber corrido menos
+    transferencias que la limpia, y el cuaderno les pasa la misma lista a las
+    dos. Callarlo dibujaría dos figuras que el ojo compara como si fueran
+    comparables.
+    """
+    runs = _curves_over(tmp_path / "runs.jsonl", TODAS[:2])
+    with pytest.raises(ValueError, match="no dejó curvas"):
+        figures.contribution_curves(tmp_path / "falta.pdf", arms=("C", "D", "G"),
+                                    runs=runs, transfers=[TODAS[0], TODAS[5]])
+
+
+def test_the_latent_grids_are_bounded_by_the_same_count(tmp_path) -> None:
+    """Las dos rejillas llevan la transferencia como fila, así que el mismo tope
+    las gobierna.
+
+    Que salieran con tres era una propiedad del cuaderno ---llama a
+    `best_transfers`--- y no de la figura. Con la lista puesta a mano, o con una
+    transferencia agregada a `VERDICT_TRANSFERS` después, salían con seis y nada
+    lo decía.
+
+    Se niega antes de cargar un solo checkpoint, que es lo que deja probarlo sin
+    entrenar nada.
+
+    Rojo alcanzable: sacar la llamada a `bounded_transfers` de cualquiera de las
+    dos.
+    """
+    demasiadas = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
+    assert len(demasiadas) > config.FIGURE_TRANSFER_COUNT
+
+    for dibujo in (latent.latent_grid, latent.correspondence_grid):
+        with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
+            dibujo(tmp_path / "grid.pdf", config.BAG_PANELS, demasiadas,
+                   seed=3, device=torch.device("cpu"))
