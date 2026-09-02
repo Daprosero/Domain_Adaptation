@@ -21,6 +21,7 @@ the space that produced the accuracy.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import torch
@@ -232,30 +233,35 @@ def represent(model, bagset: bags.BagSet, positions: torch.Tensor,
     return torch.cat(rows).float().cpu(), torch.cat(labels).cpu()
 
 
-def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
-    """Conditional alignment, or collapse, told apart.
+def _class_rows(rows, labels) -> dict:
+    """Las filas de cada clase presente, sin promediar todavía.
 
-    Raw distances are not comparable between two models: the embedding has no
-    fixed scale and each run settles on its own. The ratio is, which is why the
-    verdict is read from it and the two distances are reported beside it rather
-    than instead of it.
+    Separado de `geometry` porque las dos lecturas ---la del kernel y la
+    euclidiana--- parten de las mismas particiones, y calcularlas dos veces era
+    la puerta para que una se quedara con otra definición de «clase presente».
     """
-    def centroids(rows, labels):
-        return {int(c): rows[labels == c].mean(dim=0)
-                for c in labels.unique() if int((labels == c).sum()) > 0}
+    return {int(c): rows[labels == c] for c in labels.unique()
+            if int((labels == c).sum()) > 0}
 
-    mu_s, mu_t = centroids(source_rows, source_labels), centroids(target_rows, target_labels)
-    shared = sorted(set(mu_s) & set(mu_t))
-    cross = [float(torch.norm(mu_s[c] - mu_t[c])) for c in shared]
 
-    def between(mu):
-        keys = sorted(mu)
-        return [float(torch.norm(mu[a] - mu[b]))
+def _conditional_reading(distance, source_classes: dict, target_classes: dict,
+                         shared: list) -> dict:
+    """La misma agregación, sobre cualquier distancia entre dos conjuntos de filas.
+
+    Una función y no dos copias: la lectura del kernel y la euclidiana tienen que
+    diferir EXACTAMENTE en la distancia. Escritas aparte, cualquier otra cosa
+    podría separarse también ---qué pares entran, cómo se promedia--- y la
+    comparación entre ambas dejaría de decir qué cambió.
+    """
+    cross = [distance(source_classes[c], target_classes[c]) for c in shared]
+
+    def between(classes: dict) -> list:
+        keys = sorted(classes)
+        return [distance(classes[a], classes[b])
                 for i, a in enumerate(keys) for b in keys[i + 1:]]
 
-    within_source, within_target = between(mu_s), between(mu_t)
+    apart = between(source_classes) + between(target_classes)
     mean_cross = sum(cross) / len(cross) if cross else float("nan")
-    apart = within_source + within_target
     mean_apart = sum(apart) / len(apart) if apart else float("nan")
     return {
         "crossDomainSameClass": mean_cross,
@@ -264,8 +270,67 @@ def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
         # class, than different classes sit to one another. That is the shape
         # conditional alignment has; a collapse moves both and leaves it flat.
         "ratio": mean_cross / mean_apart if mean_apart else float("nan"),
-        "classes": len(shared),
     }
+
+
+def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
+    """Conditional alignment, or collapse, told apart --- in the space the method
+    actually aligns in.
+
+    Se leía con `torch.norm` entre centroides, que es la distancia euclidiana
+    sobre el embedding z de la Ec. (16). El método no alinea ahí: alinea en el
+    RKHS que induce el kernel de la Ec. (19), donde una clase se representa por
+    la Ec. (20) y dos representaciones se comparan por la Ec. (21). Las dos
+    lecturas se imprimen igual ---un número por celda, más bajo mejor--- y
+    responden preguntas distintas, y la euclidiana responde una que el método
+    nunca hizo.
+
+    La distancia es `d = 1 - K_AB / sqrt(K_AA * K_BB)`, y cae en [0, 1] por
+    Cauchy-Schwarz sobre un kernel PSD con entradas positivas. No se recorta a
+    ese intervalo: un valor afuera significaría que los pesos, el ancho de banda
+    o la raíz están mal, y recortarlo escondería exactamente eso. Lo afirma una
+    prueba, que es donde una cota se comprueba y no se cita.
+
+    Nada de esto se reimplementa acá. El kernel de bolsa es
+    `MIL_CREDA.bag_kernel`, que declara su provenance sobre las Ecs. (20) y
+    (21); una clase entra como una bolsa a pesos uniformes, que es lo que hace
+    de la Ec. (20) una media de clase. Uniformes **entre instancias**, no
+    «que sumen uno»: la normalización cancela cualquier factor común, así que
+    `1/n` y `1` dan idénticamente el mismo número. El `1/n` queda porque es la
+    media que la Ec. (20) nombra; quien lo vea como redundante y lo saque no
+    rompe nada, y quien crea que la normalización es la que acota el intervalo
+    se equivoca --- eso lo hace Cauchy-Schwarz. El ancho de banda sale de la misma regla
+    que ya usan los dos kernels de este módulo, sobre las filas de los dos
+    dominios juntas.
+
+    Las distancias crudas quedan bajo `euclidean`: siguen en el registro, y no
+    se dibujan porque la declaración no las nombra como dimensión. Sacarlas
+    borraría la única forma de ver que la lectura cambió de espacio.
+    """
+    from MIL_CREDA.bag_kernel import bag_kernel
+
+    source_classes = _class_rows(source_rows, source_labels)
+    target_classes = _class_rows(target_rows, target_labels)
+    shared = sorted(set(source_classes) & set(target_classes))
+    sigma = wiring._median_sigma(torch.cat([source_rows, target_rows]))
+
+    def in_rkhs(A, B) -> float:
+        """Ec. (20) a pesos uniformes; Ec. (21) como su producto interno."""
+        weights_a = torch.full((len(A),), 1.0 / len(A), dtype=A.dtype, device=A.device)
+        weights_b = torch.full((len(B),), 1.0 / len(B), dtype=B.dtype, device=B.device)
+        k_ab = float(bag_kernel(A, weights_a, B, weights_b, sigma))
+        k_aa = float(bag_kernel(A, weights_a, A, weights_a, sigma))
+        k_bb = float(bag_kernel(B, weights_b, B, weights_b, sigma))
+        return 1.0 - k_ab / math.sqrt(k_aa * k_bb)
+
+    def in_embedding(A, B) -> float:
+        return float(torch.norm(A.mean(dim=0) - B.mean(dim=0)))
+
+    reading = _conditional_reading(in_rkhs, source_classes, target_classes, shared)
+    reading["classes"] = len(shared)
+    reading["euclidean"] = _conditional_reading(in_embedding, source_classes,
+                                                target_classes, shared)
+    return reading
 
 
 def separability(source_rows, target_rows, seed: int) -> float:
