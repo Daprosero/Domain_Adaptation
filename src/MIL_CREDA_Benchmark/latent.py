@@ -21,6 +21,7 @@ the space that produced the accuracy.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import torch
@@ -232,30 +233,35 @@ def represent(model, bagset: bags.BagSet, positions: torch.Tensor,
     return torch.cat(rows).float().cpu(), torch.cat(labels).cpu()
 
 
-def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
-    """Conditional alignment, or collapse, told apart.
+def _class_rows(rows, labels) -> dict:
+    """Las filas de cada clase presente, sin promediar todavía.
 
-    Raw distances are not comparable between two models: the embedding has no
-    fixed scale and each run settles on its own. The ratio is, which is why the
-    verdict is read from it and the two distances are reported beside it rather
-    than instead of it.
+    Separado de `geometry` porque las dos lecturas ---la del kernel y la
+    euclidiana--- parten de las mismas particiones, y calcularlas dos veces era
+    la puerta para que una se quedara con otra definición de «clase presente».
     """
-    def centroids(rows, labels):
-        return {int(c): rows[labels == c].mean(dim=0)
-                for c in labels.unique() if int((labels == c).sum()) > 0}
+    return {int(c): rows[labels == c] for c in labels.unique()
+            if int((labels == c).sum()) > 0}
 
-    mu_s, mu_t = centroids(source_rows, source_labels), centroids(target_rows, target_labels)
-    shared = sorted(set(mu_s) & set(mu_t))
-    cross = [float(torch.norm(mu_s[c] - mu_t[c])) for c in shared]
 
-    def between(mu):
-        keys = sorted(mu)
-        return [float(torch.norm(mu[a] - mu[b]))
+def _conditional_reading(distance, source_classes: dict, target_classes: dict,
+                         shared: list) -> dict:
+    """La misma agregación, sobre cualquier distancia entre dos conjuntos de filas.
+
+    Una función y no dos copias: la lectura del kernel y la euclidiana tienen que
+    diferir EXACTAMENTE en la distancia. Escritas aparte, cualquier otra cosa
+    podría separarse también ---qué pares entran, cómo se promedia--- y la
+    comparación entre ambas dejaría de decir qué cambió.
+    """
+    cross = [distance(source_classes[c], target_classes[c]) for c in shared]
+
+    def between(classes: dict) -> list:
+        keys = sorted(classes)
+        return [distance(classes[a], classes[b])
                 for i, a in enumerate(keys) for b in keys[i + 1:]]
 
-    within_source, within_target = between(mu_s), between(mu_t)
+    apart = between(source_classes) + between(target_classes)
     mean_cross = sum(cross) / len(cross) if cross else float("nan")
-    apart = within_source + within_target
     mean_apart = sum(apart) / len(apart) if apart else float("nan")
     return {
         "crossDomainSameClass": mean_cross,
@@ -264,8 +270,67 @@ def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
         # class, than different classes sit to one another. That is the shape
         # conditional alignment has; a collapse moves both and leaves it flat.
         "ratio": mean_cross / mean_apart if mean_apart else float("nan"),
-        "classes": len(shared),
     }
+
+
+def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
+    """Conditional alignment, or collapse, told apart --- in the space the method
+    actually aligns in.
+
+    Se leía con `torch.norm` entre centroides, que es la distancia euclidiana
+    sobre el embedding z de la Ec. (16). El método no alinea ahí: alinea en el
+    RKHS que induce el kernel de la Ec. (19), donde una clase se representa por
+    la Ec. (20) y dos representaciones se comparan por la Ec. (21). Las dos
+    lecturas se imprimen igual ---un número por celda, más bajo mejor--- y
+    responden preguntas distintas, y la euclidiana responde una que el método
+    nunca hizo.
+
+    La distancia es `d = 1 - K_AB / sqrt(K_AA * K_BB)`, y cae en [0, 1] por
+    Cauchy-Schwarz sobre un kernel PSD con entradas positivas. No se recorta a
+    ese intervalo: un valor afuera significaría que los pesos, el ancho de banda
+    o la raíz están mal, y recortarlo escondería exactamente eso. Lo afirma una
+    prueba, que es donde una cota se comprueba y no se cita.
+
+    Nada de esto se reimplementa acá. El kernel de bolsa es
+    `MIL_CREDA.bag_kernel`, que declara su provenance sobre las Ecs. (20) y
+    (21); una clase entra como una bolsa a pesos uniformes, que es lo que hace
+    de la Ec. (20) una media de clase. Uniformes **entre instancias**, no
+    «que sumen uno»: la normalización cancela cualquier factor común, así que
+    `1/n` y `1` dan idénticamente el mismo número. El `1/n` queda porque es la
+    media que la Ec. (20) nombra; quien lo vea como redundante y lo saque no
+    rompe nada, y quien crea que la normalización es la que acota el intervalo
+    se equivoca --- eso lo hace Cauchy-Schwarz. El ancho de banda sale de la misma regla
+    que ya usan los dos kernels de este módulo, sobre las filas de los dos
+    dominios juntas.
+
+    Las distancias crudas quedan bajo `euclidean`: siguen en el registro, y no
+    se dibujan porque la declaración no las nombra como dimensión. Sacarlas
+    borraría la única forma de ver que la lectura cambió de espacio.
+    """
+    from MIL_CREDA.bag_kernel import bag_kernel
+
+    source_classes = _class_rows(source_rows, source_labels)
+    target_classes = _class_rows(target_rows, target_labels)
+    shared = sorted(set(source_classes) & set(target_classes))
+    sigma = wiring._median_sigma(torch.cat([source_rows, target_rows]))
+
+    def in_rkhs(A, B) -> float:
+        """Ec. (20) a pesos uniformes; Ec. (21) como su producto interno."""
+        weights_a = torch.full((len(A),), 1.0 / len(A), dtype=A.dtype, device=A.device)
+        weights_b = torch.full((len(B),), 1.0 / len(B), dtype=B.dtype, device=B.device)
+        k_ab = float(bag_kernel(A, weights_a, B, weights_b, sigma))
+        k_aa = float(bag_kernel(A, weights_a, A, weights_a, sigma))
+        k_bb = float(bag_kernel(B, weights_b, B, weights_b, sigma))
+        return 1.0 - k_ab / math.sqrt(k_aa * k_bb)
+
+    def in_embedding(A, B) -> float:
+        return float(torch.norm(A.mean(dim=0) - B.mean(dim=0)))
+
+    reading = _conditional_reading(in_rkhs, source_classes, target_classes, shared)
+    reading["classes"] = len(shared)
+    reading["euclidean"] = _conditional_reading(in_embedding, source_classes,
+                                                target_classes, shared)
+    return reading
 
 
 def separability(source_rows, target_rows, seed: int) -> float:
@@ -580,6 +645,10 @@ def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
     import matplotlib.pyplot as plt
 
     columns = ["Original"] + [config.NAME_OF[a] for a in arms]
+    # El mismo tope que las curvas del informe: cuántas transferencias entran es
+    # de la figura, cuáles son es de `best_transfers`. Acá salían tres porque el
+    # cuaderno llamaba a `best_transfers`, no porque la figura lo sostuviera.
+    transfers = figures.bounded_transfers(transfers)
     figure, axes = plt.subplots(len(transfers), len(columns),
                                 figsize=(2.15 * len(columns), 2.3 * len(transfers)),
                                 squeeze=False)
@@ -695,6 +764,44 @@ def median_bag_per_class(reference: dict) -> dict:
 
 
 
+#: El color al que caen los números que se pisan. No es el gris de `tab10`
+#: ---que es la clase 7 y sería un número mintiendo sobre su clase--- sino uno
+#: bastante más oscuro, para que se lea como «acá hay varios» y no como una
+#: clase más.
+CROWDED_LABEL_COLOUR = "0.25"
+
+
+def _neutralise_crowded_labels(figure, labels, colour: str = CROWDED_LABEL_COLOUR) -> int:
+    """Los números que se pisan pasan a un color neutro, medido y no supuesto.
+
+    Que dos etiquetas se traslapen es una afirmación sobre los datos ---sobre
+    dónde cayeron los puntos en esta proyección, con esta semilla--- y no una
+    decisión de diseño. Dejarla como creencia la vuelve falsa en cuanto cambia
+    la corrida: se pintarían de neutro números que no se pisan, o se dejarían
+    de colores números apilados. Así que se mide: se dibuja, se piden las cajas
+    reales en coordenadas de pantalla y se neutraliza exactamente lo que se
+    superpone.
+
+    Va después de `tight_layout` y no antes. El acomodo mueve los ejes, y una
+    caja pedida antes describe una figura que ya no existe --- la medición
+    saldría igual de convincente y sería sobre otra imagen.
+    """
+    if len(labels) < 2:
+        return 0
+    figure.canvas.draw()
+    renderer = figure.canvas.get_renderer()
+    boxes = [label.get_window_extent(renderer) for label in labels]
+    crowded = set()
+    for i in range(len(boxes)):
+        for j in range(i + 1, len(boxes)):
+            if boxes[i].overlaps(boxes[j]):
+                crowded.add(i)
+                crowded.add(j)
+    for i in crowded:
+        labels[i].set_color(colour)
+    return len(crowded)
+
+
 def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
                         device: torch.device, rate: float = 0.0,
                         pilot: bool = False) -> dict:
@@ -716,11 +823,16 @@ def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    # El mismo tope que las curvas del informe: cuántas transferencias entran es
+    # de la figura, cuáles son es de `best_transfers`. Acá salían tres porque el
+    # cuaderno llamaba a `best_transfers`, no porque la figura lo sostuviera.
+    transfers = figures.bounded_transfers(transfers)
     figure, axes = plt.subplots(len(transfers), len(arms),
                                 figsize=(3.5 * len(arms), 3.5 * len(transfers)),
                                 squeeze=False)
     palette = plt.get_cmap("tab10")
     scored: list[dict] = []
+    etiquetas = []  # los números de clase, para medirles el traslape al final
 
     for row, transfer in enumerate(transfers):
         readings, present = {}, []
@@ -813,6 +925,32 @@ def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed:
                 axis.scatter(*s_xy[partner], color=colour, marker="o", s=80,
                              edgecolors="0.15", linewidths=0.7, zorder=3)
 
+                # El número de clase en CADA punta de la línea, del color de su
+                # propio punto. El color ya marca la clase, pero son diez sobre
+                # `tab10` en un panel de 3.5 pulgadas: dos azules distintos son
+                # dos clases distintas y el ojo no las separa, así que el color
+                # solo alcanza para decir «parecidas» y no «cuál».
+                #
+                # Y en las dos puntas, no en una. Cuando el emparejamiento es
+                # correcto los dos números coinciden y el segundo no agrega
+                # nada; cuando es errado ---la línea punteada--- es lo único que
+                # dice CONTRA QUÉ clase se emparejó, que es el hallazgo entero.
+                # Un solo número deja al lector con «esta se emparejó mal» y sin
+                # con qué, que es la mitad de la lectura.
+                #
+                # Solo en la columna que afirma, como la línea misma: los otros
+                # dos paneles no trazan emparejamiento, así que numerar sus
+                # puntas les prestaría el gesto que solo el término local se ganó.
+                for punto, klass in ((t_xy[position], class_id),
+                                     (s_xy[partner],
+                                      int(reading["sourceLabels"][partner]))):
+                    etiquetas.append(axis.annotate(
+                        str(int(klass)),
+                        xy=(float(punto[0]), float(punto[1])),
+                        xytext=(4.5, 4.5), textcoords="offset points",
+                        fontsize=7, fontweight="bold",
+                        color=palette(int(klass) % 10), zorder=4))
+
             share = float(reading["mass"].mean())
             scored.append({"arm": arm, "transfer": transfer, "hits": hits,
                            "classes": len(highlighted), "mass": share})
@@ -822,8 +960,18 @@ def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed:
     # No reserved strips left: the top one held a suptitle and the bottom one a
     # caption, and both moved into the framing above the figure.
     figure.tight_layout()
+    # Medido acá y no adentro del bucle: `tight_layout` mueve los ejes, así que
+    # una caja pedida antes describe una figura que ya no existe. Y una sola
+    # pasada sobre toda la figura en lugar de una por panel --- el traslape se
+    # mide en coordenadas de pantalla, donde dos números de paneles vecinos que
+    # se pisan se pisan igual.
+    crowded = _neutralise_crowded_labels(figure, etiquetas)
     drawn = figures.emit(figure, path)
-    return {"path": path.with_suffix(".pdf"), "figure": drawn, "scored": scored}
+    return {"path": path.with_suffix(".pdf"), "figure": drawn, "scored": scored,
+            # Informado y no callado: cuántos números quedaron neutros es cuánto
+            # se apretó la proyección, y un lector que ve grises tiene que poder
+            # saber que son eso y no una clase.
+            "labels": len(etiquetas), "crowdedLabels": crowded}
 
 
 @torch.no_grad()

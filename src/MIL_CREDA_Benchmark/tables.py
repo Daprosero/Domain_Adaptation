@@ -38,6 +38,7 @@ import re
 from typing import Iterable
 
 from MIL_CREDA_Benchmark import ceiling_record, config
+from MIL_CREDA_Benchmark import pooling as _pooling
 
 #: Métricas que se informan como porcentaje en lugar de como fracción.
 PERCENT = ("targetAccuracy", "sourceAccuracy")
@@ -627,21 +628,15 @@ def conclusion_ceilings_by_transfer(record: dict | None,
 def per_run_dimensions() -> list[str]:
     """Las dimensiones que la declaración del propio banco dice que no se agrupan.
 
-    Se lee de la declaración y no se lista acá, igual que `shards.partition()`:
-    quién es `perRun` lo decide el repositorio que mide, no el módulo que
-    imprime. Copiar la lista sería una segunda fuente de verdad que envejece en
-    silencio, que es exactamente el error del que trata este archivo.
-
-    Importado adentro para no arrastrar `harness` — y con él `torch` — a un
-    módulo que hoy sólo formatea; es el mismo patrón que usan las tablas de la
-    curva de ruido más abajo.
+    Reexportada desde `pooling`, que es donde vive ahora. Sigue acá porque los
+    llamadores de este módulo la piden por este nombre, y porque una tabla que
+    quiere saber qué no puede promediar la tiene a mano.
     """
-    from MIL_CREDA_Benchmark import shards
-    return list(shards.declaration().get("perRun") or [])
+    return _pooling.per_run_dimensions()
 
 
 def _refuse_pooling(metric: str) -> None:
-    """La negativa, escrita una vez, para toda función que agrupe lo que le pasan.
+    """La negativa, para toda función de este módulo que agrupe lo que le pasan.
 
     La guarda nació sobre `render` sola, y `render` no era la única que agrupaba:
     `conclusion` promedia las mismas celdas y las imprime como «mejor y peor»,
@@ -649,23 +644,15 @@ def _refuse_pooling(metric: str) -> None:
     y rango. Una sola de esas protegida se lee como la clase entera cubierta, que
     es la forma exacta en que el hueco se vuelve invisible.
 
-    Por eso la negativa vive acá y no repetida en cada sitio: un texto copiado
-    cinco veces son cinco textos que pueden separarse, y el que se quede viejo
-    seguirá sonando igual de firme. Quién es `perRun` lo sigue leyendo
-    `per_run_dimensions()` de la declaración del banco, sin una segunda lista.
+    El texto ya no está escrito acá sino en `pooling`, y la mudanza tiene su
+    propia razón: cubierta la familia del veredicto, la del ruido seguía sin
+    guardia porque agrega por `contamination.by_arm` y nunca pasa por `cells`.
+    Dejar la negativa en un módulo que formatea obligaba a `contamination` y a
+    `figures` a importarlo para conseguir una regla que es de la declaración, o
+    a copiar el párrafo --- y cinco copias son cinco textos que pueden
+    separarse.
     """
-    prohibidas = per_run_dimensions()
-    if metric not in prohibidas:
-        return
-    raise ValueError(
-        f"refusing to pool `{metric}`: the benchmark declares it `perRun` "
-        f"({', '.join(prohibidas)}).\n"
-        "  No reading of it was stable enough to stand for the method, or "
-        "even for one machine across two of its own runs, so a "
-        "`mean ± stdev` here would describe none of the runs behind it.\n"
-        "  Use `render_per_run(summary['gridPerRun'], ...)`, which prints "
-        "every reading with the run that produced it."
-    )
+    _pooling.refuse(metric)
 
 
 def render(runs: Iterable[dict], metric: str, reduction: dict,
@@ -938,6 +925,87 @@ def render_per_run(grid_per_run: dict, metric: str, markdown: bool = False) -> s
     for row in rows:
         lines.append(f"{row['arm']:<{width}}{row['transfer']:<16}{row['env']:<16}"
                      f"{row['seed']:>8}{row['value']:>16.{decimals}f}")
+    return "\n".join(lines)
+
+
+_PER_RUN_SUMMARY_NOTE = (
+    "la mediana entre semillas DENTRO de un entorno, con su rango min-max; "
+    "el eje colapsado es la semilla y nada más --- método, transferencia y "
+    "entorno siguen siendo claves. Todas las corridas están en el registro")
+
+
+def render_per_run_summary(grid_per_run: dict, metric: str,
+                           markdown: bool = False) -> str:
+    """La forma inline de una dimensión `perRun`: mediana y rango, no cada corrida.
+
+    `render_per_run` deja una fila por corrida y esa es la forma correcta para el
+    REGISTRO, que existe para tenerlas todas. Adentro del cuaderno son treinta
+    filas por celda que nadie lee, y el lector termina calculando la mediana de
+    cabeza --- que es exactamente el resumen que el docstring de al lado le pide
+    construir «a la vista de cuántas máquinas». Acá se lo construye, y la vista
+    se conserva.
+
+    **No llama a `refuse`, y es la única función de este módulo que agrupa sin
+    hacerlo.** Escrito fuerte porque una función que se saltea la guarda es
+    justamente lo que esta guarda existe para impedir. Lo que la hace defendible
+    son dos cosas medidas, no argumentadas: el entorno es una CLAVE y no se
+    colapsa nunca ---la mitad de por qué la dimensión es `perRun` es que la
+    máquina decide el número--- y lo que se imprime es la mediana con su min-max
+    de verdad, no un `mean ± stdev` que insinúa una estabilidad entre corridas
+    que nadie midió. Las dos tienen su prueba.
+
+    Y colapsa UN eje. El acuerdo dice «colapsando el eje de semillas», en
+    singular, y juntar además las transferencias daría una tabla con la misma
+    forma y otro significado: seis corridas de distinta dificultad leídas como
+    una. Por eso la transferencia sigue siendo una clave aunque el acuerdo hable
+    de «método y entorno» --- es lo que hace verdadera su propia cláusula.
+    """
+    title, unit = SPANISH.get(metric, (metric, ""))
+    decimals = 1 if metric in PERCENT else 2
+
+    grouped: dict[tuple, list[float]] = {}
+    for transfer, cell in grid_per_run.items():
+        for arm in config.ARM_ORDER:
+            for reading in cell.get(arm, {}).get(metric) or []:
+                grouped.setdefault(
+                    (config.NAME_OF.get(arm, arm), transfer, reading["env"]),
+                    []).append(_scaled(reading["value"], metric))
+    if not grouped:
+        return "(sin corridas medidas)"
+
+    rows = []
+    for (arm, transfer, env), values in grouped.items():
+        ordered = sorted(values)
+        middle = len(ordered) // 2
+        median = (ordered[middle] if len(ordered) % 2
+                  else (ordered[middle - 1] + ordered[middle]) / 2)
+        rows.append({"arm": arm, "transfer": transfer, "env": env,
+                     "n": len(ordered), "median": median,
+                     "min": ordered[0], "max": ordered[-1]})
+
+    note = _notes_block([_PER_RUN_SUMMARY_NOTE], markdown)
+    reading = f"{title} ({unit})" if unit else title
+    columns = ["Método", "Transferencia", "Entorno", "Semillas",
+               f"{reading}: mediana", "min", "max"]
+    if markdown:
+        lines = [note, "",
+                 "| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for row in rows:
+            lines.append("| " + " | ".join([
+                f"`{row['arm']}`", row["transfer"], f"`{row['env']}`",
+                str(row["n"]), f"{row['median']:.{decimals}f}",
+                f"{row['min']:.{decimals}f}", f"{row['max']:.{decimals}f}"]) + " |")
+        return "\n".join(lines)
+
+    width = max(14, max(len(r["arm"]) for r in rows) + 2)
+    lines = [note, "",
+             f"{'Método':<{width}}{'Transferencia':<16}{'Entorno':<16}"
+             f"{'Semillas':>9}{'mediana':>12}{'min':>12}{'max':>12}"]
+    for row in rows:
+        lines.append(f"{row['arm']:<{width}}{row['transfer']:<16}{row['env']:<16}"
+                     f"{row['n']:>9}{row['median']:>12.{decimals}f}"
+                     f"{row['min']:>12.{decimals}f}{row['max']:>12.{decimals}f}")
     return "\n".join(lines)
 
 
@@ -1770,6 +1838,7 @@ def render_noise(metric: str, markdown: bool = False) -> str:
     además variara qué transferencias promedia estaría leyendo dos ejes e
     informando uno.
     """
+    _refuse_pooling(metric)
     from MIL_CREDA_Benchmark import contamination as noise_axis
 
     drawn = noise_axis.curve(metric)
@@ -1829,6 +1898,7 @@ def conclusion_noise(metric: str) -> str:
     mitiga nada; uno que empieza abajo y no se mueve tampoco, porque nunca estuvo
     decidiendo.
     """
+    _refuse_pooling(metric)
     from MIL_CREDA_Benchmark import contamination as noise_axis
 
     rows = noise_axis.degradation(metric)
@@ -1866,6 +1936,7 @@ def conclusion_versus_clean(metric: str, rate: float) -> str:
     la diferencia entre las dos tasas, que ninguna de las dos tablas contiene por
     separado.
     """
+    _refuse_pooling(metric)
     from MIL_CREDA_Benchmark import contamination as noise_axis
 
     # Las dos CAMPAÑAS, no el barrido: esta conclusión va debajo de una tabla de
@@ -2030,6 +2101,38 @@ def render_at(rate: float, metric: str, markdown: bool = False) -> str:
                   markdown=markdown)
 
 
+def render_per_run_summary_at(rate: float, metric: str,
+                              markdown: bool = False) -> str:
+    """La forma inline de una dimensión `perRun`, sobre la campaña contaminada.
+
+    Un renderer paralelo a `render_at` y no la misma tabla sobre otro registro,
+    que es lo que la nota de la declaración desaconseja: acá las dos formas son
+    distintas a propósito. `render_at` promedia --- pasa por `render`, y ahí por
+    `cells`, que se niega ante una dimensión `perRun` --- así que la sección
+    contaminada de `seconds` no tenía forma de imprimirse. La tabla se negaba y
+    la conclusión de al lado no: `conclusion_versus_clean` no pasa por `cells` y
+    promediaba igual, de modo que la mitad numérica de la sección declinaba
+    afirmar lo que la mitad en prosa afirmaba a continuación.
+
+    `gridPerRun` sólo existe en el resumen de una campaña distribuida. Una
+    corrida de una sola máquina no tiene grilla por corrida, y lo honesto ahí es
+    ninguna fila y no una media que la declaración prohíbe.
+    """
+    from MIL_CREDA_Benchmark import contamination as noise_axis
+
+    nivel = noise_axis.load(rate, kind="campaign")
+    if nivel is None:
+        return (f"La campaña a ρ={rate:g} todavía no corrió, así que no hay "
+                f"segunda tabla. No está vacía: no existe.")
+    if noise_axis.mismatched(nivel):
+        return (f"El registro hallado en el árbol de ρ={rate:g} declara "
+                f"`labelNoise={noise_axis.stated_rate(nivel)}`. Un directorio no "
+                f"es evidencia y las dos cosas no coinciden: nada se dibuja "
+                f"hasta que se resuelva cuál está mal.")
+    return render_per_run_summary(nivel["summary"].get("gridPerRun") or {}, metric,
+                                  markdown=markdown)
+
+
 def conclusion_readings_versus_clean(limpias: Iterable[dict], sucias: Iterable[dict],
                                      path: str, rate: float) -> str:
     """Cuánto movió la contaminación una lectura de fase dos, brazo por brazo.
@@ -2113,6 +2216,7 @@ def conclusion_weighting_under_noise(metric: str = "targetAccuracy") -> str:
     Se lee sobre el barrido y no sobre una campaña: la pregunta es cómo se mueve
     el peldaño *con la tasa*, y una sola tasa no tiene pendiente.
     """
+    _refuse_pooling(metric)
     from MIL_CREDA_Benchmark import contamination as noise_axis
 
     drawn = noise_axis.curve(metric)
@@ -2198,6 +2302,7 @@ def conclusion_rungs_versus_clean(metric: str, rate: float) -> str:
     mecanismo haciendo algo que el material limpio no le pedía; uno que se
     achica es lo contrario, y las dos lecturas son el resultado.
     """
+    _refuse_pooling(metric)
     from MIL_CREDA_Benchmark import contamination as axis
 
     limpio = axis.load(0.0, "campaign")

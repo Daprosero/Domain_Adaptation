@@ -80,7 +80,7 @@ these is raised, not resolved in passing.
 ## Figures — phase 2
 
 - [ ] Bag figure highlights **the same bags in every panel**: the median bag of each class by correspondence mass, one colour each, and every other bag in its own class colour.
-- [ ] **Three transfers in every figure, not six.** Six rows at a legible panel size do not fit on a page and the tables already carry all six. Fixed in `FIGURE_TRANSFER_COUNT`; which three is the bullet below.
+- [x] **Three transfers in every figure, not six.** Six rows at a legible panel size do not fit on a page and the tables already carry all six. Fixed in `FIGURE_TRANSFER_COUNT`; which three is the bullet below. `test_no_figure_draws_more_transfers_than_the_count_fixes`
 - [x] **One display seed for every comparative grid**, chosen as the seed whose `test_the_display_seed_is_the_median_of_the_across_arm_mean`
       across-arm mean target accuracy is the median. Panels drawn from each arm's
       own median seed would differ in the method *and* in the draw, and — because
@@ -186,7 +186,7 @@ already existed: they are two halves of one contract and they live in one. -->
 
 ## The record and the report
 
-- [ ] The seconds dimension is never dumped run by run in the notebook. Inline it is the median with its min-max range per method and environment, collapsing the seed axis and naming it; every row stays in the written record, which is what a record is for.
+- [x] The seconds dimension is never dumped run by run in the notebook. Inline it is the median with its min-max range per method and environment, collapsing the seed axis and naming it; every row stays in the written record, which is what a record is for. `test_the_inline_seconds_table_collapses_the_seed_axis_and_names_it`
 - [ ] Every table framing states the equation its quantity comes from and what it means for the instance-unit family against the bag-unit family, before the table and never after.
 - [x] The benchmark declares revision r17 and which sections each arm exercises. `test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration`
 - [x] The record keeps the supervised term's magnitude and the ratio between terms, not only the contribution. Without a denominator, "the term commanded nothing" and "the term was scaled to nothing" print alike. `test_the_distribution_declares_exactly_what_was_approved`
@@ -242,7 +242,7 @@ marked open, which is open because the run has not happened.
 ## Reading the campaign
 
 - [ ] The geometry uses uniform weights for every arm, so two arms differ in the space and never in the ruler. Attention keeps its own effect where it is already its own claim, in attentionSpread and correspondence.
-- [ ] Phase-two geometry is measured in the RKHS the method aligns in, not on the Euclidean embedding of Eq. (16): the class mean is Eq. (20) at uniform weights, its inner product Eq. (21) over the kernel of Eq. (19), and the reading is d = 1 - K_AB / sqrt(K_AA * K_BB), bounded to [0, 1] by Cauchy-Schwarz because the kernel is PSD. Raw distances stay in the record and are never rendered.
+- [x] Phase-two geometry is measured in the RKHS the method aligns in, not on the Euclidean embedding of Eq. (16): the class mean is Eq. (20) at uniform weights, its inner product Eq. (21) over the kernel of Eq. (19), and the reading is d = 1 - K_AB / sqrt(K_AA * K_BB), bounded to [0, 1] by Cauchy-Schwarz because the kernel is PSD. Raw distances stay in the record and are never rendered. `test_the_reading_is_the_kernel_distance_the_method_aligns_in`
 - [x] The gains table is **paired within each transfer**, against each method's own floor, and reports four things because no single one of them is honest alone: the mean in points with its **between-transfer** error, the mean of the percentages, the span, and the agreement in words. The two means can disagree in sign on the same data — `+0.56` and `-3.61` — because the floors run from 23% to 81%. `test_the_difference_is_paired_within_a_transfer`
 - [x] The error of that mean is **between transfers, not over the pooled pairs**. A transfer is a setting and not a repetition; pooling claimed a stability across settings nobody measured, and understated the uncertainty by a factor of three. `test_the_error_is_between_transfers_not_over_the_pooled_pairs`
 - [x] **Phase two rests on 3 repetitions, not 30.** `CHECKPOINTS` keeps three per cell, so every latent claim sits on the verdict floor by construction, however long phase one ran. `test_median_seeds_is_the_selection_rule_on_its_own`
