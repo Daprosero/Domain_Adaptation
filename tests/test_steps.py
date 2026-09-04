@@ -96,6 +96,199 @@ class PasosDeclaradosTests(unittest.TestCase):
             steps._ejecutar("no_existe.ipynb")
 
 
+class RaicesDeclaradasTests(unittest.TestCase):
+    """Qué escribe cada paso, declarado donde la forja lo lee.
+
+    La forja fotografía la carpeta de producto antes y después de cada corrida
+    y grada lo que cambió contra las raíces que el paso declara. Un paso sin
+    `produces` no se grada: una corrida que no escribió nada se lee igual que
+    una que produjo todo, y una que escribió en el árbol del vecino igual que
+    una que se quedó en el suyo. Las dos fallas ya pasaron acá, las dos en
+    silencio y las dos reportando `outcome: "returned"`.
+
+    Las cuatro afirmaciones se derivan --- de `__steps__`, del árbol de
+    `steps.py` y de `config` --- y ninguna lleva una lista escrita a mano: una
+    lista acá sería el mismo defecto una indirección más allá.
+    """
+
+    def test_cada_paso_declara_las_raices_que_escribe(self):
+        """Presente y con forma, para los diez, sin nombrar a ninguno.
+
+        La forma es la que `cmd_step` valida del otro lado: una lista NO vacía
+        de cadenas no vacías. La lista vacía no es "este paso no escribe nada"
+        --- la forja la rechaza con `STEP_MALFORMED` y `verify` la cuenta como
+        no declarada --- así que un paso que no escribiera nada no tendría
+        cómo decirlo y no hay ninguno acá.
+
+        Rojo alcanzable: agregar un paso sin `produces`, o vaciarle la lista a
+        cualquiera de los diez.
+        """
+        self.assertTrue(paquete.__steps__, "no hay pasos declarados")
+        for nombre, entrada in paquete.__steps__.items():
+            with self.subTest(paso=nombre):
+                raices = entrada.get("produces")
+                self.assertIsInstance(raices, list,
+                                      f"{nombre} no declara qué escribe")
+                self.assertTrue(raices, f"{nombre} declara una lista vacía")
+                for raiz in raices:
+                    self.assertIsInstance(raiz, str)
+                    self.assertTrue(raiz.strip(), f"{nombre} declara una raíz vacía")
+
+    def test_ninguna_raiz_declarada_sale_de_la_carpeta_de_producto(self):
+        """Relativa a `<producto>/` y sin salirse, medido y no leído.
+
+        No se inspeccionan los caracteres de la cadena: se compone contra
+        `config.PRODUCT` y se comprueba que el resultado siga adentro. Un
+        `..` en el medio, una raíz absoluta o un `/` al principio se caen ahí,
+        que es la misma prueba que hace la forja antes de correr el paso.
+
+        Rojo alcanzable: declarar `/tmp/algo`, `../otro-repo/Results` o
+        `/Results/Benchmark`.
+        """
+        from MIL_CREDA_Benchmark import config
+
+        producto = config.PRODUCT.resolve()
+        for nombre, raiz in _raices_declaradas():
+            with self.subTest(paso=nombre, raiz=raiz):
+                self.assertFalse(Path(raiz).is_absolute(),
+                                 "una raíz absoluta no es relativa a nada")
+                self.assertNotIn("..", Path(raiz).parts, "la raíz se sale trepando")
+                self.assertIn(producto, (producto / raiz).resolve().parents,
+                              f"{raiz} cae fuera de {producto}")
+
+    def test_ninguna_raiz_es_de_dos_pasos(self):
+        """La colisión que toda esta declaración existe para hacer visible.
+
+        No alcanza con que las cadenas sean distintas: la forja decide la
+        pertenencia por SEGMENTOS (`_owns`), así que una raíz que contiene a la
+        de otro paso se traga sus escrituras y las lee como propias. Eso es lo
+        que pasó de verdad --- el barrido escribiendo en el directorio de
+        checkpoints de la campaña --- y por eso acá se prohíbe la contención y
+        no sólo la igualdad.
+
+        `Results/Benchmark/latent` y `Results/Benchmark/latent.json` conviven
+        justamente porque la lectura es por segmentos y no por prefijo de
+        cadena.
+
+        Rojo alcanzable: copiarle las raíces al paso de al lado, o declarar el
+        directorio padre de una raíz ajena.
+        """
+        declaradas = _raices_declaradas()
+        colisiones = [f"{paso} declara {raiz}, que se come {otra} de {otro_paso}"
+                      for paso, raiz in declaradas
+                      for otro_paso, otra in declaradas
+                      if paso != otro_paso and _contiene(raiz, otra)]
+        self.assertEqual(colisiones, [], "dos pasos se disputan una raíz")
+
+    def test_el_cuaderno_que_corre_cada_paso_esta_entre_sus_raices(self):
+        """Se ejecuta `--inplace`, así que el cuaderno es producto suyo.
+
+        Los dos lados se derivan: qué cuaderno corre cada paso sale del árbol
+        de `steps.py` (`_cuadernos_nombrados_por_los_pasos`), y las raíces de
+        la declaración. Un paso que copiara las raíces del vecino queda con el
+        cuaderno del vecino declarado y el suyo no, y eso se ve acá aunque las
+        cadenas copiadas fueran únicas.
+
+        Rojo alcanzable: declarar `Notebooks/` a secas, nombrar el cuaderno del
+        vecino, u olvidarse del cuaderno en un paso que lo ejecuta.
+        """
+        for cuaderno, funcion in _cuadernos_nombrados_por_los_pasos().items():
+            paso = next(nombre for nombre, entrada in paquete.__steps__.items()
+                        if entrada["function"] == funcion)
+            with self.subTest(paso=paso, cuaderno=cuaderno):
+                self.assertIn(f"Notebooks/{cuaderno}",
+                              paquete.__steps__[paso]["produces"],
+                              f"{paso} ejecuta {cuaderno} en el lugar y no lo declara")
+
+    def test_las_raices_de_las_corridas_son_las_que_compone_config(self):
+        """Cada destino, recompuesto desde el helper que lo elige.
+
+        Ninguna de estas rutas está escrita acá: salen de `results_for`,
+        `models_for` y `ceilings_record_for`, que son la autoridad sobre dónde
+        cae una corrida. Si alguien mueve el segmento `Pilot/`, cambia
+        `NOISE_REPORTED` o le cambia el formato a `rho{...}`, la declaración
+        deja de nombrar el lugar donde el paso escribe y esto se pone en rojo
+        --- que es la única forma de que un literal en `__init__.py` siga
+        siendo verdad.
+
+        La escala es específica a propósito: los cuatro pasos que computan
+        fijan `pilot=True` en su código y declaran sólo el árbol de ensayo,
+        mientras que los cuadernos, que dibujan sobre la corrida vigente,
+        declaran las dos escalas. No hay una raíz que cubra las dos sin cubrir
+        también el árbol de todos los demás pasos.
+
+        Rojo alcanzable: declarar la raíz completa donde el paso escribe la de
+        ensayo, o al revés.
+        """
+        from MIL_CREDA_Benchmark import config
+
+        def relativa(ruta) -> str:
+            return ruta.relative_to(config.PRODUCT).as_posix()
+
+        rho = config.NOISE_REPORTED
+        ensayo = config.results_for(0.0, "campaign", True)
+        curva = config.results_for(0.0, "curve", True).parent
+
+        esperado = {
+            "search-pilot": [relativa(config.ceilings_record_for(True))],
+            "campaign-local": [f"{relativa(ensayo)}/runs.jsonl",
+                               f"{relativa(ensayo)}/summary.json",
+                               f"{relativa(ensayo)}/shard.json",
+                               f"{relativa(ensayo.parent)}/Probe_results.json",
+                               relativa(config.models_for(0.0, "campaign", True))],
+            "noise-sweep": [relativa(curva),
+                            relativa(config.models_for(0.0, "curve", True).parent)],
+            "noise-diagnostic": [
+                f"{relativa(config.results_for(0.0, 'curve', True).parents[1])}"
+                "/diagnostic.json"],
+        }
+        for paso, raices in esperado.items():
+            with self.subTest(paso=paso):
+                self.assertEqual(paquete.__steps__[paso]["produces"], raices)
+
+        # Las dos escalas de los cuadernos, cada una compuesta por el helper.
+        for pilot in (False, True):
+            raiz = relativa(config.results_for(0.0, "campaign", pilot))
+            with self.subTest(cuaderno="report", pilot=pilot):
+                for hoja in ("curves", "report.txt", "report.md"):
+                    self.assertIn(f"{raiz}/{hoja}",
+                                  paquete.__steps__["report"]["produces"])
+            with self.subTest(cuaderno="report", pilot=pilot, rho=rho):
+                self.assertIn(
+                    f"{relativa(config.results_for(rho, 'campaign', pilot))}/curves",
+                    paquete.__steps__["report"]["produces"])
+            with self.subTest(cuaderno="latent", pilot=pilot, rho=rho):
+                self.assertIn(
+                    f"{relativa(config.results_for(rho, 'campaign', pilot))}/latent",
+                    paquete.__steps__["latent"]["produces"])
+
+        # La mitad limpia del latente escribe en el árbol COMPLETO aunque lea
+        # los pesos del ensayo: el cuaderno nombra `config.RESULTS` a secas.
+        completo = relativa(config.RESULTS)
+        for hoja in ("latent", "latent.json", "latent.md"):
+            self.assertIn(f"{completo}/{hoja}",
+                          paquete.__steps__["latent"]["produces"])
+
+
+def _raices_declaradas() -> list[tuple[str, str]]:
+    """`[(paso, raíz)]` para todo lo que `__steps__` declara, en orden."""
+    return [(nombre, raiz)
+            for nombre, entrada in paquete.__steps__.items()
+            for raiz in entrada.get("produces", [])]
+
+
+def _contiene(raiz: str, otra: str) -> bool:
+    """Si `otra` cae bajo `raiz`, por segmentos y nunca por prefijo de cadena.
+
+    La misma lectura que hace `_owns` del otro lado, escrita acá porque la
+    forja no es importable desde este intérprete: `Results/one` no se come a
+    `Results/one-more`, y esa diferencia es la que separa un guarda de una
+    comparación de cadenas con forma de guarda.
+    """
+    partes, otras = Path(raiz).parts, Path(otra).parts
+    return otras[:len(partes)] == partes
+
+
 def _cuadernos_nombrados_por_los_pasos() -> dict[str, str]:
     """Qué cuaderno corre cada paso DECLARADO: `{cuaderno: función}`.
 
