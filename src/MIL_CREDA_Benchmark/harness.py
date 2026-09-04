@@ -868,6 +868,32 @@ def with_ceilings_in_force(reduction: Reduction, device: torch.device,
                    ceilingsByTransfer=config.ceilings_by_transfer_on_record())
 
 
+def governs_the_ceilings_record(noise: float = 0.0,
+                               transfers: list | None = None) -> bool:
+    """Whether the search that just ran is the one whose record the campaign reads.
+
+    The rule was already written beside one writer -- "un ensayo nunca escribe
+    donde va la respuesta que la campana consume" -- and applied to the `pilot`
+    axis alone. `noise` never got it, so the diagnostic's re-search at rate 0.4
+    over a single transfer overwrote the clean six-transfer record and nothing
+    raised. At full scale that call destroys a record costing nine and a half
+    hours to reproduce.
+
+    Derived from the arguments the writer already holds rather than from a flag
+    a caller passes: a flag someone must remember is the same defect one
+    indirection further away, and this module has been bitten by exactly that.
+
+    Two ways a search fails to govern, and they are different failures. Under
+    contamination the ceiling answers a question the campaign never asked. Over
+    fewer transfers it answers the right question about one corner of a record
+    whose every other corner it would erase.
+    """
+    if noise:
+        return False
+    chosen = [transfer_label(t) for t in (transfers or config.SEARCH_TRANSFERS)]
+    return chosen == [transfer_label(t) for t in config.SEARCH_TRANSFERS]
+
+
 def search_ceilings_trials(reduction: Reduction, device: torch.device,
                            progress=print, shard: str | None = None,
                            pilot: bool = False, noise: float = 0.0,
@@ -1033,9 +1059,10 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
             "inheritanceRule": "ninguna: las seis transferencias se midieron",
         }
 
-    record = config.ceilings_record_for(pilot)
-    record.parent.mkdir(parents=True, exist_ok=True)
-    record.write_text(json.dumps(found, indent=2), encoding="utf-8")
+    if governs_the_ceilings_record(noise, transfers):
+        record = config.ceilings_record_for(pilot)
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(json.dumps(found, indent=2), encoding="utf-8")
     return found
 
 
@@ -1269,9 +1296,10 @@ def search_ceilings(reduction: Reduction, device: torch.device,
     # campana consume: ese archivo separado es lo que hace admisible el dial de
     # escala de mas arriba, y sin el volveria a ser lo que la version anterior
     # de este modulo prohibia con razon.
-    record = config.ceilings_record_for(pilot)
-    record.parent.mkdir(parents=True, exist_ok=True)
-    record.write_text(json.dumps(found, indent=2), encoding="utf-8")
+    if governs_the_ceilings_record(noise, transfers):
+        record = config.ceilings_record_for(pilot)
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(json.dumps(found, indent=2), encoding="utf-8")
     # The scratch file goes only once the answer exists. Leaving it would let a
     # later relaunch resume from cells that already produced a finished record.
     partial.unlink(missing_ok=True)
