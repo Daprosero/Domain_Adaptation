@@ -688,18 +688,29 @@ def results_for(rate: float, kind: str = "campaign",
     return base / "Noise" / f"rho{rate:g}".replace(".", "p")
 
 
-def models_for(rate: float, pilot: bool = False) -> "Path":
-    """Where the campaign of this shape keeps its checkpoints.
+def models_for(rate: float, kind: str = "campaign",
+               pilot: bool = False) -> "Path":
+    """Where the run of this shape keeps its checkpoints.
 
-    Same two coordinates as `results_for` and the same reasons.
+    The same three coordinates as `results_for`, mirroring its destinations
+    exactly, and the same reasons. It took two for a while, and its docstring
+    said "the same two as `results_for`" while `results_for` took three: a
+    pilot sweep then wrote its rate-0 level -- the one level where a curve and
+    a campaign agree on every other coordinate -- straight into the campaign's
+    own checkpoint directory, relabelling ten manifests `"kind": "curve"`. The
+    weights were byte-identical, so nothing raised and nothing was reported.
     `latent.available()` globs a directory, so two runs sharing one would hand
     the analysis a mixed set with no way to tell which run each checkpoint came
     from -- and unlike a truncated `runs.jsonl`, that failure is silent and
     renders.
     """
+    if kind not in ("campaign", "curve"):
+        raise ValueError(f"unknown run kind {kind!r}; known: 'campaign', 'curve'")
     base = MODELS.parent
     if pilot:
         base = base / "Pilot"
+    if kind == "curve":
+        return base / "Noise" / "curve" / f"rho{rate:g}".replace(".", "p")
     if not rate:
         return base / MODELS.name if pilot else MODELS
     return base / "Noise" / f"rho{rate:g}".replace(".", "p")

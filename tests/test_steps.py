@@ -240,7 +240,7 @@ def test_los_numeros_del_diagnostico_no_entran_en_las_tablas_del_veredicto(
         for pilot in (False, True):
             assert not config.results_for(nivel, kind, pilot).exists()
     assert not config.keeps_checkpoints(nivel)
-    assert not config.models_for(nivel, True).exists()
+    assert not config.models_for(nivel, pilot=True).exists()
 
     # y lo dice de sí mismo, en el propio registro
     assert "diagnosticOnly" in registro
