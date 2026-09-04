@@ -418,6 +418,19 @@ __benchmark__ = {
 # autorización y su porqué.
 __levels__: list = ["none", "pilot", "remote"]
 
+# Los registros que un testigo con nivel puede direccionar por nombre. Literal
+# aparte de `__benchmark__` por la misma razón que `__levels__` y `__steps__`.
+#
+# Hay una sola entrada y su escala es la COMPLETA, a propósito: la forja gradúa
+# una entrada contra su propia escala declarada, así que el registro del ensayo
+# --que existe pero queda corto-- alcanza el peldaño intermedio, y sólo el de
+# escala completa llega al tope. Declarar el ensayo con su propia escala chica
+# lo haría cumplirla y marcaría el tope, que es exactamente lo contrario.
+__records__: dict = {
+    "ceilings": {"path": "MIL-CREDA/Results/Benchmark/ceilings.json",
+                 "requiredScale": {"epochs": 20, "trials": 30}},
+}
+
 # Los pasos locales que la forja puede ejecutar sola, en el venv de este
 # repositorio. Literal aparte de `__benchmark__` por la misma razón que
 # `__levels__`: declararlos no vuelve "declarado" un repositorio que todavía no
