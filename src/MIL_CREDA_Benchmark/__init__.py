@@ -456,14 +456,24 @@ __steps__: dict = {
                      "advances": 5},
     "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente",
                      "advances": 6},
-    # El eje de ruido. `noise-report` sólo lee y dibuja; `noise-diagnostic` sí
-    # corre -- una búsqueda sobre una transferencia y dos brazos -- y está acá
-    # porque es local y barato, a diferencia de la campaña contaminada, que es
-    # un envío y necesita su propia autorización por lanzamiento.
+    # El eje de ruido. `noise-report` y `noise-diagnostic-report` sólo leen y
+    # dibujan; `noise-diagnostic` sí corre -- una búsqueda sobre una
+    # transferencia y dos brazos -- y está acá porque es local y barato, a
+    # diferencia de la campaña contaminada, que es un envío y necesita su propia
+    # autorización por lanzamiento.
+    #
+    # Ninguna de las cuatro lleva `advances`, y la ausencia es la misma decisión
+    # en las cuatro: el eje del ruido no es un peldaño de la secuencia del
+    # ensayo sino un ejercicio al costado, y numerarlo lo metería en un orden que
+    # el veredicto no recorre. `noise-diagnostic-report` hereda esa decisión de
+    # su eje, no de su forma: `report` y `latent` también sólo dibujan y sí
+    # avanzan, porque los suyos son los cuadernos del veredicto.
     "noise-sweep": {"module": "MIL_CREDA_Benchmark.steps",
                     "function": "barrido_de_ruido"},
     "noise-report": {"module": "MIL_CREDA_Benchmark.steps",
                      "function": "informe_de_ruido"},
     "noise-diagnostic": {"module": "MIL_CREDA_Benchmark.steps",
                          "function": "diagnostico_de_ruido"},
+    "noise-diagnostic-report": {"module": "MIL_CREDA_Benchmark.steps",
+                                "function": "informe_del_diagnostico"},
 }

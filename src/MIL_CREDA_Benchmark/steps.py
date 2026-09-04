@@ -27,6 +27,20 @@ from pathlib import Path
 
 CUADERNOS = Path(__file__).resolve().parents[2] / "MIL-CREDA" / "Notebooks"
 
+# Los cuadernos que este módulo NO corre, cada uno con su razón al lado.
+#
+# Un nombre pelado en una lista y un olvido se leen igual, y ese fue el defecto:
+# `Benchmark_Noise_Diagnostic_v1.ipynb` estuvo cinco celdas sin ejecutar ni una
+# sola, computado y sin dibujar, sin que nada lo notara. La prueba deriva los
+# cuadernos que sí se corren del código y le resta el disco; lo que sobra tiene
+# que estar acá, y estar acá cuesta escribir por qué. El próximo que se excluya
+# tiene que decir lo suyo.
+CUADERNOS_SIN_PASO: dict[str, str] = {
+    "Benchmark_Campaign_v1.ipynb": (
+        "lanza al servicio remoto, y un envío necesita una aprobación humana "
+        "por lanzamiento que ningún paso local puede darle"),
+}
+
 
 def _ejecutar(nombre: str) -> str:
     """Ejecuta un cuaderno en el lugar y devuelve su ruta.
@@ -253,3 +267,15 @@ def barrido_de_ruido() -> dict:
 def informe_de_ruido() -> str:
     """La curva de degradación sobre los niveles que dejaron registro."""
     return _ejecutar("Benchmark_Noise_v1.ipynb")
+
+
+def informe_del_diagnostico() -> str:
+    """La tabla y la conclusión que separan el término del coeficiente.
+
+    Sólo lee: `diagnostico_de_ruido` ya escribió `diagnostic.json` y este
+    cuaderno lo presenta. No estaba, y la ausencia no era una decisión sino un
+    hueco: el eje era el único con un paso que computa y ninguno que dibuje, y
+    lo que decide si vale reestructurar para techos por nivel quedaba computado
+    y sin que nadie pudiera leerlo.
+    """
+    return _ejecutar("Benchmark_Noise_Diagnostic_v1.ipynb")
