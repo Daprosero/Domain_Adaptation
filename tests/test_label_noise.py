@@ -904,3 +904,65 @@ class TestTheTwoDestinationRootsAgree:
                     == models.relative_to(config.MODELS.parent / "Pilot"), (
                     f"{kind} at {rate}: results land at {results} and weights at "
                     f"{models}; the two roots must mirror each other")
+
+
+class TestAContaminatedSearchNeverWritesTheGoverningRecord:
+    """The record the campaign reads is written only by the search that governs it.
+
+    The rule is already stated one line above the writer -- "un ensayo nunca
+    escribe donde va la respuesta que la campana consume" -- and it was applied
+    to the `pilot` axis alone. `noise` got the same treatment nowhere, so the
+    diagnostic's re-search at rate 0.4 over one transfer overwrote the clean
+    six-transfer record: 189 lines gone, `labelNoise` 0.0 -> 0.4, and the
+    campaign's own ceilings replaced by a number searched under contamination.
+    Nothing raised. At full scale the same call destroys the real record, which
+    costs nine and a half hours to reproduce.
+
+    Derived from the arguments the writer already receives, never from a flag a
+    caller has to remember to pass: a caller that forgets a flag is the same
+    defect one indirection further away.
+    """
+
+    def test_a_clean_full_search_governs(self):
+        from MIL_CREDA_Benchmark import harness
+
+        assert harness.governs_the_ceilings_record(0.0, None) is True
+        assert harness.governs_the_ceilings_record(
+            0.0, list(config.SEARCH_TRANSFERS)) is True
+
+    def test_a_contaminated_search_does_not_govern(self):
+        from MIL_CREDA_Benchmark import harness
+
+        for rate in config.NOISE_LEVELS[1:]:
+            assert harness.governs_the_ceilings_record(rate, None) is False
+
+    def test_a_search_over_fewer_transfers_does_not_govern(self):
+        """The diagnostic's own shape: one transfer, so its ceiling describes
+        one corner of a record whose every other corner it would erase."""
+        from MIL_CREDA_Benchmark import harness
+
+        assert harness.governs_the_ceilings_record(
+            0.0, [config.SEARCH_TRANSFERS[0]]) is False
+
+    def test_every_writer_of_that_record_is_guarded(self):
+        """Derived from the module, so a third writer added later lands here.
+
+        The previous shape of this rule lived in a comment beside one writer.
+        A comment cannot go red, and the second writer carried the same comment
+        and the same hole.
+        """
+        import inspect
+        from MIL_CREDA_Benchmark import harness
+
+        unguarded = []
+        for name, obj in vars(harness).items():
+            if not inspect.isfunction(obj) or name.startswith("_"):
+                continue
+            source = inspect.getsource(obj)
+            if "ceilings_record_for" not in source or "write_text" not in source:
+                continue
+            if "governs_the_ceilings_record" not in source:
+                unguarded.append(name)
+        assert not unguarded, (
+            f"these write the governing ceilings record without asking whether "
+            f"the search that produced it governs: {unguarded}")

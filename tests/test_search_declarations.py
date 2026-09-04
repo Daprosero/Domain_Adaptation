@@ -73,8 +73,13 @@ def test_el_registro_escribe_el_neutro_al_lado_del_techo_que_encontro(
     Rojo alcanzable: sacar `neutral` del registro, o escribirlo desde otra cosa
     que no sea `RAMP_CEILING`.
     """
+    # Las seis transferencias y no la de la fixture por defecto: el registro que
+    # la campana lee lo escribe unicamente una busqueda que lo gobierna, y una
+    # sobre una sola transferencia no lo hace. Antes de ese guardian esta prueba
+    # leia un archivo que una busqueda de una transferencia nunca debio escribir.
     entrada = _grid_search({0.01: [0.50, 0.52], 1.0: [0.90, 0.92]},
-                           monkeypatch, tmp_path)
+                           monkeypatch, tmp_path,
+                           transfers=len(config.SEARCH_TRANSFERS))
     assert entrada["neutral"] == config.RAMP_CEILING == 1.0
     assert entrada["ceiling"] == 1.0
 
