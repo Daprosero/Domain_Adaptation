@@ -440,22 +440,120 @@ __records__: dict = {
 # cuaderno lanza al servicio remoto, y un lanzamiento remoto no se ejecuta sin
 # una aprobación humana por envío. Un paso local que lo corriera sería
 # exactamente la vuelta que esa aprobación existe para impedir.
+# `produces`: las raíces que cada paso escribe, relativas a la carpeta de
+# producto. La forja fotografía el producto antes de lanzar el paso y después
+# de que reporta, y contrasta lo que cambió contra estas raíces. Sin ellas las
+# dos lecturas quedan apagadas: una corrida que volvió sin haber escrito nada
+# se lee igual que una que produjo toda su salida, y una que escribió en el
+# árbol de OTRO paso se lee igual que una que se quedó en el suyo. Las dos
+# fallas se midieron acá el mismo día --- el barrido escribió su nivel limpio
+# en el directorio de checkpoints de la campaña y le reetiquetó diez
+# manifiestos, y la re-búsqueda del diagnóstico pisó el registro de techos
+# vigente con una búsqueda contaminada de una sola transferencia --- y ninguna
+# de las dos levantó nada: las dos reportaron `outcome: "returned"`.
+#
+# Cada raíz sale de leer a dónde escribe el paso --- `config.results_for`,
+# `config.models_for`, `config.ceilings_record_for`, `harness.shard_paths`, y
+# las celdas del cuaderno que ejecuta --- y nunca de copiar la del vecino.
+#
+# **La escala va adentro de la raíz, y no hay una sola raíz que cubra las
+# dos.** `results_for` mete el segmento `Pilot/` ARRIBA de la forma compartida
+# (`base = RESULTS.parent`, y recién ahí `/ "Pilot"`), así que el único
+# ancestro común de `Results/Benchmark` y `Results/Pilot/Benchmark` es
+# `Results/`, que además contiene el árbol de todos los demás pasos:
+# declararlo volvería `own` a cualquier escritura en cualquier lado y apagaría
+# el guarda sin decir que lo apagó. Entonces la declaración es específica de
+# escala. Los pasos que fijan `pilot=True` en su propio código
+# (`search-pilot`, `campaign-local`, `noise-sweep`, `noise-diagnostic`)
+# declaran la raíz de ENSAYO y ninguna otra --- el día que uno escriba a
+# escala completa eso es `foreign`, que es exactamente lo que hay que ver ---
+# y los cuadernos, que dibujan sobre la corrida que esté vigente y por lo
+# tanto pueden caer de cualquiera de los dos lados, declaran las dos, una por
+# escala.
+#
+# Las raíces son literales porque la forja lee este archivo con `ast` y sin
+# importarlo. Las que llevan un `rho` adentro salen de `config.NOISE_REPORTED`
+# (0.2) y del formato de `results_for` (`f"rho{rate:g}".replace(".", "p")`);
+# `tests/test_steps.py` las vuelve a componer desde `config` y se pone en rojo
+# si alguna de las dos cosas cambia.
 __steps__: dict = {
+    # Corre la suite adentro del cuaderno y dibuja la cota local. Dos clases de
+    # raíz: el dato que produce y el cuaderno que ejecuta en el lugar.
+    # `ROOT / "MIL-CREDA" / "Results" / "local_distance_bound"` en la celda de
+    # la cota, con el `.pdf` que le pone `figures.emit`.
     "verification": {"module": "MIL_CREDA_Benchmark.steps", "function": "verificacion",
-                     "advances": 1},
+                     "advances": 1,
+                     "produces": ["Results/local_distance_bound.pdf",
+                                  "Notebooks/verification.ipynb"]},
+    # `harness.run_search(pilot=True)` -> `ceilings_in_force` -> el motor
+    # `optuna`, que escribe un solo archivo: `config.ceilings_record_for(True)`,
+    # o sea `CEILINGS_PILOT_RECORD`. Es OTRO árbol que el de `results_for`: el
+    # registro de ensayo se separa por nombre de archivo y no por directorio
+    # (ver el comentario de `shard_paths`), así que cae al lado del registro
+    # completo y no bajo `Results/Pilot/`. El motor por grilla dejaría además un
+    # `.partial.json` acá; no está declarado porque no es el motor que
+    # `config.SEARCH_ENGINE` nombra.
     "search-pilot": {"module": "MIL_CREDA_Benchmark.steps",
                      "function": "ensayo_de_busqueda",
-                     "advances": 2},
+                     "advances": 2,
+                     "produces": ["Results/Benchmark/ceilings.pilot.json"]},
+    # `harness.campaign()` con `pilot=True` y `kind="campaign"`:
+    # `shard_paths(None, pilot=True)` da `runs.jsonl` y `shard.json` bajo
+    # `results_for(0.0, "campaign", True)`, al lado va `summary.json`, y
+    # `Probe_results.json` sale un directorio más arriba
+    # (`results_for(...).parent`). Los tres archivos y no el directorio: el
+    # informe escribe sus figuras y su `report.md` adentro de esta misma raíz, y
+    # declarar el directorio entero haría que un `report.md` escrito por la
+    # campaña --- que no lo escribe --- se leyera como suyo.
+    # Los pesos sí son un directorio: `keep_median` los nombra por brazo,
+    # transferencia y semilla, y `keeps_checkpoints(0.0)` es verdadero.
     "campaign-local": {"module": "MIL_CREDA_Benchmark.steps",
                        "function": "campana",
-                     "advances": 4},
+                     "advances": 4,
+                     "produces": ["Results/Pilot/Benchmark/runs.jsonl",
+                                  "Results/Pilot/Benchmark/summary.json",
+                                  "Results/Pilot/Benchmark/shard.json",
+                                  "Results/Pilot/Probe_results.json",
+                                  "Models/Pilot/Benchmark"]},
+    # Sólo lee y presenta --- la llamada que corre la búsqueda está comentada
+    # adentro del cuaderno --- y aun así escribe: se ejecuta `--inplace`, así
+    # que su propio cuaderno es su raíz y la única.
     "search-report": {"module": "MIL_CREDA_Benchmark.steps",
                       "function": "informe_de_busqueda",
-                     "advances": 3},
+                     "advances": 3,
+                     "produces": ["Notebooks/Benchmark_Search_v1.ipynb"]},
+    # Dibuja sobre la corrida vigente (`contamination.in_force(0.0,
+    # "campaign")["root"]`), que es la completa si existe y el ensayo si no:
+    # por eso las dos escalas. Escribe `curves/*.pdf`, `report.txt` y
+    # `report.md` en esa raíz, y una segunda tanda de curvas bajo
+    # `results_for(RHO, "campaign", ES_ENSAYO)` con `RHO = NOISE_REPORTED`.
     "report": {"module": "MIL_CREDA_Benchmark.steps", "function": "informe",
-                     "advances": 5},
+                     "advances": 5,
+                     "produces": ["Results/Benchmark/curves",
+                                  "Results/Benchmark/report.txt",
+                                  "Results/Benchmark/report.md",
+                                  "Results/Pilot/Benchmark/curves",
+                                  "Results/Pilot/Benchmark/report.txt",
+                                  "Results/Pilot/Benchmark/report.md",
+                                  "Results/Noise/rho0p2/curves",
+                                  "Results/Pilot/Noise/rho0p2/curves",
+                                  "Notebooks/Benchmark_Report_v1.ipynb"]},
+    # La mitad limpia va a `config.RESULTS` a secas --- `latent/grid.pdf`,
+    # `latent/correspondence.pdf`, `latent.json`, `latent.md` --- y no a
+    # `results_for(0.0, "campaign", ES_ENSAYO)`: el cuaderno LEE los pesos por
+    # escala y ESCRIBE siempre en el árbol completo. Queda declarado como está
+    # escrito y no como uno querría que estuviera; el día que el cuaderno pase
+    # a escribir por escala, esta raíz es la que hay que mover.
+    # La mitad contaminada sí es por escala: `results_for(RHO, "campaign",
+    # ES_ENSAYO) / "latent"`, con `RHO = NOISE_REPORTED`.
     "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente",
-                     "advances": 6},
+                     "advances": 6,
+                     "produces": ["Results/Benchmark/latent",
+                                  "Results/Benchmark/latent.json",
+                                  "Results/Benchmark/latent.md",
+                                  "Results/Noise/rho0p2/latent",
+                                  "Results/Pilot/Noise/rho0p2/latent",
+                                  "Notebooks/Benchmark_Latent_v1.ipynb"]},
     # El eje de ruido. `noise-report` y `noise-diagnostic-report` sólo leen y
     # dibujan; `noise-diagnostic` sí corre -- una búsqueda sobre una
     # transferencia y dos brazos -- y está acá porque es local y barato, a
@@ -468,12 +566,40 @@ __steps__: dict = {
     # el veredicto no recorre. `noise-diagnostic-report` hereda esa decisión de
     # su eje, no de su forma: `report` y `latent` también sólo dibujan y sí
     # avanzan, porque los suyos son los cuadernos del veredicto.
+    # Una campaña por nivel, todas con `kind="curve"` y `pilot=True`: el
+    # directorio `curve/` de `results_for` cubre los cinco `rho*` y el
+    # `Probe_results.json` que `campaign()` deja en su padre. Los pesos también
+    # son un directorio y no un vacío: `keeps_checkpoints` es verdadero en 0.0 y
+    # en 0.2, así que dos de los cinco niveles sí escriben checkpoints --- lo
+    # contrario de lo que dice la docstring del paso, que quedó vieja.
     "noise-sweep": {"module": "MIL_CREDA_Benchmark.steps",
-                    "function": "barrido_de_ruido"},
+                    "function": "barrido_de_ruido",
+                    "produces": ["Results/Pilot/Noise/curve",
+                                 "Models/Pilot/Noise/curve"]},
+    # Sólo lee y dibuja, y aun así deja tres cosas: su cuaderno ejecutado y las
+    # dos que escriben sus celdas, `degradation.pdf` (por `figures.noise_curves`
+    # sobre `PRODUCT / "Results" / "Noise" / "degradation"`, con el `.pdf` de
+    # `emit`) y `degradation.json`. Las dos van al árbol COMPLETO aunque el
+    # barrido que resumen haya corrido en ensayo: el cuaderno compone esa ruta a
+    # mano y no por `results_for`.
     "noise-report": {"module": "MIL_CREDA_Benchmark.steps",
-                     "function": "informe_de_ruido"},
+                     "function": "informe_de_ruido",
+                     "produces": ["Results/Noise/degradation.pdf",
+                                  "Results/Noise/degradation.json",
+                                  "Notebooks/Benchmark_Noise_v1.ipynb"]},
+    # Un solo archivo, y es todo lo que escribe: la re-búsqueda que paga NO
+    # gobierna ningún registro (`governs_the_ceilings_record` es falso bajo
+    # contaminación y sobre una transferencia sola) y el motor `optuna` no deja
+    # parcial. El destino es `results_for(0.0, "curve", True).parents[1]`, la
+    # raíz del ENSAYO: escrito bajo `Results/Noise/` a secas pisaría el
+    # diagnóstico de la corrida completa con números de ensayo.
     "noise-diagnostic": {"module": "MIL_CREDA_Benchmark.steps",
-                         "function": "diagnostico_de_ruido"},
+                         "function": "diagnostico_de_ruido",
+                         "produces": ["Results/Pilot/Noise/diagnostic.json"]},
+    # Presenta el `diagnostic.json` que ya existe y no computa nada, así que su
+    # cuaderno ejecutado es su única raíz.
     "noise-diagnostic-report": {"module": "MIL_CREDA_Benchmark.steps",
-                                "function": "informe_del_diagnostico"},
+                                "function": "informe_del_diagnostico",
+                                "produces": [
+                                    "Notebooks/Benchmark_Noise_Diagnostic_v1.ipynb"]},
 }
