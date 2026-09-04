@@ -605,7 +605,8 @@ def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
     # El directorio de esta tasa y esta forma, sacado de las mismas cotas bajo
     # las que corrió. Leer `config.MODELS` acá mientras la campaña escribió en
     # otro lado no borraría nada y no promovería nada, en silencio.
-    pesos = config.models_for(reduction.labelNoise, reduction.pilot)
+    pesos = config.models_for(reduction.labelNoise, reduction.kind,
+                             reduction.pilot)
 
     kept: list[str] = []
     for run in cell_runs:
@@ -1300,7 +1301,8 @@ def campaign(reduction: Reduction, device: torch.device,
     # Sólo donde algo los va a leer. Un nivel sin lector que igual escribiera
     # 8 GB de pesos dejaría un directorio que nadie abre y nadie borra, que es
     # peor que una ausencia: parece evidencia.
-    pesos = config.models_for(reduction.labelNoise, reduction.pilot)
+    pesos = config.models_for(reduction.labelNoise, reduction.kind,
+                             reduction.pilot)
     if config.keeps_checkpoints(reduction.labelNoise):
         pesos.mkdir(parents=True, exist_ok=True)
 

@@ -47,7 +47,7 @@ def _median_seeds(rate: float = 0.0, pilot: bool = False) -> dict | None:
     on disk is its cell's median by construction, because `keep_median()` is what
     put it there and it writes nothing else.
     """
-    record = config.models_for(rate, pilot) / PROMOTION_RECORD
+    record = config.models_for(rate, pilot=pilot) / PROMOTION_RECORD
     if not record.exists():
         return None
     chosen = json.loads(record.read_text(encoding="utf-8")).get("chosen") or {}
@@ -83,7 +83,7 @@ def available(rate: float = 0.0, pilot: bool = False) -> list[dict]:
     medians = _median_seeds(rate, pilot)
     found = []
     for manifest_path in sorted(
-            config.models_for(rate, pilot).glob("*.manifest.json")):
+            config.models_for(rate, pilot=pilot).glob("*.manifest.json")):
         record = json.loads(manifest_path.read_text(encoding="utf-8"))
         weights = manifest_path.with_name(manifest_path.name.replace(".manifest.json", ".pt"))
         if not weights.exists():

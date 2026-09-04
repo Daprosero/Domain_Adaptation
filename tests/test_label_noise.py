@@ -442,7 +442,7 @@ class TestThePilotWritesWhereTheRealRunDoesNot:
             for kind in ("campaign", "curve"):
                 assert (config.results_for(rate, kind, pilot=True)
                         != config.results_for(rate, kind, pilot=False))
-            assert config.models_for(rate, True) != config.models_for(rate, False)
+            assert config.models_for(rate, pilot=True) != config.models_for(rate, pilot=False)
 
     def test_the_pilot_keeps_the_shape_and_moves_only_the_root(self):
         """Un piloto que además reordenara sus archivos no sería el mismo
@@ -842,3 +842,65 @@ class TestTheNoiseAxisRefusesToPoolAPerRunDimension:
         self._empty_tree(tmp_path, monkeypatch)
         assert axis.by_arm([], "targetAccuracy") == {}
         assert isinstance(tables.render_noise("targetAccuracy"), str)
+
+
+class TestTheTwoDestinationRootsAgree:
+    """`results_for` and `models_for` are one run's two roots, so they take the
+    same coordinates or one of them writes somewhere the other does not.
+
+    Written after a pilot sweep overwrote the campaign's ten `M->U seed0`
+    manifests: `results_for` sent every curve level to `Noise/curve/rho...`
+    while `models_for`, which never received `kind`, sent the level at rate 0
+    straight into the campaign's own checkpoint directory and relabelled its
+    manifests `"kind": "curve"`. The weights happened to be byte-identical, so
+    nothing failed and nothing was reported -- the only symptom was one string
+    inside a JSON nobody opens.
+
+    Derived from the signatures rather than asserted about them. `models_for`'s
+    own docstring already claimed "Same two coordinates as `results_for`" while
+    `results_for` took three, and a sentence cannot go red. The class-wide rule
+    the reduction states -- "las tres tienen que llegar juntas a cada escritor"
+    -- is not asserted here for every function, because `ceilings_record_for`,
+    `search_record` and `run_search` take `pilot` alone on purpose: ceilings are
+    searched clean even for a contaminated campaign. These two are siblings by
+    construction, which is what makes their agreement checkable without a
+    hand-written roster of exemptions.
+    """
+
+    DESTINATION_COORDINATES = ("rate", "kind", "pilot")
+
+    def _coordinates(self, function):
+        import inspect
+
+        params = {p.lower() for p in inspect.signature(function).parameters}
+        return {c for c in self.DESTINATION_COORDINATES if c in params}
+
+    def test_both_roots_take_the_same_coordinates(self):
+        results = self._coordinates(config.results_for)
+        models = self._coordinates(config.models_for)
+        assert results == models, (
+            f"`results_for` takes {sorted(results)} and `models_for` takes "
+            f"{sorted(models)}; one run's two roots disagreeing on a coordinate "
+            "is how a curve level lands in the campaign's tree")
+
+    def test_a_curve_keeps_its_checkpoints_out_of_the_campaign_tree(self):
+        """The pole that matters, at the rate where the collision happens.
+
+        Rate 0 is the only level where a curve and a campaign share every other
+        coordinate, so it is the only one where a missing `kind` is invisible.
+        """
+        campaign = config.models_for(0.0, "campaign", pilot=True)
+        curve = config.models_for(0.0, "curve", pilot=True)
+        assert campaign != curve
+
+    def test_the_checkpoint_root_follows_the_results_root(self):
+        """Same shape, same relative destination -- the two roots move together
+        or the analysis reads one run's weights beside another's records."""
+        for kind in ("campaign", "curve"):
+            for rate in (0.0, config.NOISE_REPORTED):
+                results = config.results_for(rate, kind, pilot=True)
+                models = config.models_for(rate, kind, pilot=True)
+                assert results.relative_to(config.RESULTS.parent / "Pilot") \
+                    == models.relative_to(config.MODELS.parent / "Pilot"), (
+                    f"{kind} at {rate}: results land at {results} and weights at "
+                    f"{models}; the two roots must mirror each other")
