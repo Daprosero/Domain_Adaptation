@@ -1,0 +1,3025 @@
+{
+  "kind": "bounded",
+  "reduction": {
+    "setting": "trained",
+    "revision": "research-concept-r17.md",
+    "backbone": "resnet18",
+    "instancesPerBag": 30,
+    "bagsPerDomain": 120,
+    "trainBags": 64,
+    "validBags": 20,
+    "evalBags": 36,
+    "searchRole": "valid",
+    "epochs": 3,
+    "seeds": [
+      0
+    ],
+    "labelNoise": 0.1,
+    "pilot": true,
+    "kind": "curve",
+    "rampCeiling": 1.0,
+    "ceilings": {
+      "creda": 0.00030276471390845917,
+      "milcreda": 0.0005821960846533309
+    },
+    "ceilingsByTransfer": {
+      "creda": {
+        "M->U": 0.0001356661411177182,
+        "U->M": 0.00030276471390845917,
+        "M->S": 0.002821673073227557,
+        "S->M": 0.00016502467969081887,
+        "U->S": 0.00010535238182112257,
+        "S->U": 0.0012179535784210785
+      },
+      "milcreda": {
+        "M->U": 0.00515442432837486,
+        "U->M": 0.0005821960846533309,
+        "M->S": 0.0006439610517135079,
+        "S->M": 0.0005588881465031164,
+        "U->S": 0.003504803896982994,
+        "S->U": 0.0003084761579844385
+      }
+    },
+    "ceilingSearch": {},
+    "rampDelta": 20,
+    "device": "mps",
+    "environment": {
+      "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+      "python": "3.12.13",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "torch": "2.13.0",
+      "selfHosted": true,
+      "power": {
+        "source": "mains",
+        "charge": 61
+      },
+      "device": {
+        "name": "mps",
+        "kind": "mps"
+      }
+    }
+  },
+  "verdictsMeaningful": false,
+  "grid": {
+    "M->U": {
+      "A": {
+        "targetAccuracy": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 4.780604500000209,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.7751082352229527,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.053173065185546875,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "C": {
+        "targetAccuracy": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 8.587318958000196,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 3.997136965543697e-06,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.7751078492119199,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 5.1568518586987854e-06,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.0781097412109375,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "D": {
+        "targetAccuracy": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 8.245522124999752,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 1.703289732783257e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.7751117859567914,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 2.197427951783869e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.08270072937011719,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "B": {
+        "targetAccuracy": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 4.8404585840003165,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.03185890695922786,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.056854248046875,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "E": {
+        "targetAccuracy": {
+          "mean": 0.4444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 11.321330708000005,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0009545321809127927,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.03186144908180549,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.02908741851328461,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.2220134735107422,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "F": {
+        "targetAccuracy": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 11.561399209000228,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0007163227862855863,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.03185587779929241,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.02199184499074812,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.22478961944580078,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "G": {
+        "targetAccuracy": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 12.5916676249999,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0009312490112192574,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.031859078854765924,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.02840011283282355,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.2646951675415039,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "SU": {
+        "targetAccuracy": {
+          "mean": 0.5555555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 12.557006875000297,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0018978637332717578,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.03979361521834064,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.04552162170774608,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.2664785385131836,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "SA": {
+        "targetAccuracy": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 12.254345583000031,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.002043356764174643,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.04465856115400259,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.043753165935382955,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.26794910430908203,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "SK": {
+        "targetAccuracy": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.8055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "seconds": {
+          "mean": 12.711520916999689,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0010204277766336287,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.03355944877867365,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.029509294950823488,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "peakMiB": {
+          "mean": 0.2645559310913086,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "perTransfer": {
+    "M->U": [
+      {
+        "dimension": "A->B targetAccuracy",
+        "rung": "A->B",
+        "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.24999999999999994,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "A->B sourceAccuracy",
+        "rung": "A->B",
+        "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.2777777777777778,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "A->B seconds",
+        "rung": "A->B",
+        "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 4.780604500000209,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 4.8404585840003165,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 0.05985408400010783,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "A->B contribution",
+        "rung": "A->B",
+        "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->B supervised",
+        "rung": "A->B",
+        "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.7751082352229527,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03185890695922786,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->B adaptationShare",
+        "rung": "A->B",
+        "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->B peakMiB",
+        "rung": "A->B",
+        "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.053173065185546875,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.056854248046875,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->B parameters",
+        "rung": "A->B",
+        "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->C targetAccuracy",
+        "rung": "A->C",
+        "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "A->C sourceAccuracy",
+        "rung": "A->C",
+        "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "A->C seconds",
+        "rung": "A->C",
+        "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 4.780604500000209,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 8.587318958000196,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 3.8067144579999876,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "A->C contribution",
+        "rung": "A->C",
+        "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 3.997136965543697e-06,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->C supervised",
+        "rung": "A->C",
+        "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.7751082352229527,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.7751078492119199,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->C adaptationShare",
+        "rung": "A->C",
+        "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 5.1568518586987854e-06,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->C peakMiB",
+        "rung": "A->C",
+        "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.053173065185546875,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0781097412109375,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "A->C parameters",
+        "rung": "A->C",
+        "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->D targetAccuracy",
+        "rung": "C->D",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "C->D sourceAccuracy",
+        "rung": "C->D",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "C->D seconds",
+        "rung": "C->D",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 8.587318958000196,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 8.245522124999752,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": -0.34179683300044417,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "C->D contribution",
+        "rung": "C->D",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 3.997136965543697e-06,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 1.703289732783257e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->D supervised",
+        "rung": "C->D",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.7751078492119199,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.7751117859567914,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->D adaptationShare",
+        "rung": "C->D",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 5.1568518586987854e-06,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 2.197427951783869e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->D peakMiB",
+        "rung": "C->D",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.0781097412109375,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.08270072937011719,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->D parameters",
+        "rung": "C->D",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E targetAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.4444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.027777777777777735,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E sourceAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E seconds",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 4.8404585840003165,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11.321330708000005,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 6.4808721239996885,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E contribution",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0009545321809127927,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E supervised",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.03185890695922786,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03186144908180549,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E adaptationShare",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02908741851328461,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E peakMiB",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.056854248046875,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2220134735107422,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E parameters",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F targetAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.4444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.027777777777777735,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F sourceAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F seconds",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 11.321330708000005,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11.561399209000228,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 0.24006850100022348,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F contribution",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0009545321809127927,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0007163227862855863,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F supervised",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.03186144908180549,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03185587779929241,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F adaptationShare",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.02908741851328461,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02199184499074812,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F peakMiB",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.2220134735107422,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.22478961944580078,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F parameters",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G targetAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G sourceAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G seconds",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 11.561399209000228,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 12.5916676249999,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 1.0302684159996716,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G contribution",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0007163227862855863,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0009312490112192574,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G supervised",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.03185587779929241,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.031859078854765924,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G adaptationShare",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.02199184499074812,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02840011283282355,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G peakMiB",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.22478961944580078,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2646951675415039,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G parameters",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->E targetAccuracy",
+        "rung": "C->E",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.4444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.2222222222222222,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "C->E sourceAccuracy",
+        "rung": "C->E",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.2777777777777778,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "C->E seconds",
+        "rung": "C->E",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 8.587318958000196,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11.321330708000005,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 2.7340117499998087,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "C->E contribution",
+        "rung": "C->E",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 3.997136965543697e-06,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0009545321809127927,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->E supervised",
+        "rung": "C->E",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.7751078492119199,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03186144908180549,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->E adaptationShare",
+        "rung": "C->E",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 5.1568518586987854e-06,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02908741851328461,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->E peakMiB",
+        "rung": "C->E",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.0781097412109375,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2220134735107422,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "C->E parameters",
+        "rung": "C->E",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->F targetAccuracy",
+        "rung": "D->F",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.24999999999999994,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "D->F sourceAccuracy",
+        "rung": "D->F",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.2777777777777778,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "D->F seconds",
+        "rung": "D->F",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 8.245522124999752,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11.561399209000228,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 3.3158770840004763,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "D->F contribution",
+        "rung": "D->F",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 1.703289732783257e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0007163227862855863,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->F supervised",
+        "rung": "D->F",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.7751117859567914,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03185587779929241,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->F adaptationShare",
+        "rung": "D->F",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 2.197427951783869e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02199184499074812,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->F peakMiB",
+        "rung": "D->F",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.08270072937011719,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.22478961944580078,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->F parameters",
+        "rung": "D->F",
+        "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->G targetAccuracy",
+        "rung": "D->G",
+        "reading": "mano a mano, cada m\u00e9todo completo",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.24999999999999994,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "D->G sourceAccuracy",
+        "rung": "D->G",
+        "reading": "mano a mano, cada m\u00e9todo completo",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9722222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.2777777777777778,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "D->G seconds",
+        "rung": "D->G",
+        "reading": "mano a mano, cada m\u00e9todo completo",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 8.245522124999752,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 12.5916676249999,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 4.346145500000148,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "D->G contribution",
+        "rung": "D->G",
+        "reading": "mano a mano, cada m\u00e9todo completo",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 1.703289732783257e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0009312490112192574,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->G supervised",
+        "rung": "D->G",
+        "reading": "mano a mano, cada m\u00e9todo completo",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.7751117859567914,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.031859078854765924,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->G adaptationShare",
+        "rung": "D->G",
+        "reading": "mano a mano, cada m\u00e9todo completo",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 2.197427951783869e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02840011283282355,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->G peakMiB",
+        "rung": "D->G",
+        "reading": "mano a mano, cada m\u00e9todo completo",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.08270072937011719,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2646951675415039,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "D->G parameters",
+        "rung": "D->G",
+        "reading": "mano a mano, cada m\u00e9todo completo",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11181642.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SU->SK targetAccuracy",
+        "rung": "SU->SK",
+        "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.5555555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.25,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SU->SK sourceAccuracy",
+        "rung": "SU->SK",
+        "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.8055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.13888888888888884,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SU->SK seconds",
+        "rung": "SU->SK",
+        "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 12.557006875000297,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 12.711520916999689,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 0.15451404199939134,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SU->SK contribution",
+        "rung": "SU->SK",
+        "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0018978637332717578,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0010204277766336287,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SU->SK supervised",
+        "rung": "SU->SK",
+        "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.03979361521834064,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03355944877867365,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SU->SK adaptationShare",
+        "rung": "SU->SK",
+        "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.04552162170774608,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.029509294950823488,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SU->SK peakMiB",
+        "rung": "SU->SK",
+        "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.2664785385131836,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2645559310913086,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SU->SK parameters",
+        "rung": "SU->SK",
+        "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SA->SK targetAccuracy",
+        "rung": "SA->SK",
+        "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.1111111111111111,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SA->SK sourceAccuracy",
+        "rung": "SA->SK",
+        "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.8055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.11111111111111116,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SA->SK seconds",
+        "rung": "SA->SK",
+        "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 12.254345583000031,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 12.711520916999689,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": 0.4571753339996576,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SA->SK contribution",
+        "rung": "SA->SK",
+        "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.002043356764174643,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0010204277766336287,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SA->SK supervised",
+        "rung": "SA->SK",
+        "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.04465856115400259,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03355944877867365,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SA->SK adaptationShare",
+        "rung": "SA->SK",
+        "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.043753165935382955,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.029509294950823488,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SA->SK peakMiB",
+        "rung": "SA->SK",
+        "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.26794910430908203,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2645559310913086,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SA->SK parameters",
+        "rung": "SA->SK",
+        "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SK->G targetAccuracy",
+        "rung": "SK->G",
+        "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.1111111111111111,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SK->G sourceAccuracy",
+        "rung": "SK->G",
+        "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.8055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.11111111111111116,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SK->G seconds",
+        "rung": "SK->G",
+        "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+        "transfer": "M->U",
+        "metric": "seconds",
+        "better": "lower",
+        "baseline": {
+          "mean": 12.711520916999689,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 12.5916676249999,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": -0.11985329199978878,
+          "threshold": 0.0,
+          "reason": "lower is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "SK->G contribution",
+        "rung": "SK->G",
+        "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0010204277766336287,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0009312490112192574,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SK->G supervised",
+        "rung": "SK->G",
+        "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.03355944877867365,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.031859078854765924,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SK->G adaptationShare",
+        "rung": "SK->G",
+        "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.029509294950823488,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02840011283282355,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SK->G peakMiB",
+        "rung": "SK->G",
+        "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+        "transfer": "M->U",
+        "metric": "peakMiB",
+        "better": null,
+        "baseline": {
+          "mean": 0.2645559310913086,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2646951675415039,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "SK->G parameters",
+        "rung": "SK->G",
+        "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      }
+    ]
+  },
+  "panorama": [
+    {
+      "rung": "A->B",
+      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.24999999999999994,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "A->B",
+      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.2777777777777778,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "A->C",
+      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "A->C",
+      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "C->D",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "C->D",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.027777777777777735,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 1,
+      "favouringLeft": 0
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.027777777777777735,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.2222222222222222,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.2777777777777778,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.24999999999999994,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.2777777777777778,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.24999999999999994,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.2777777777777778,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.25,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.13888888888888884,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.1111111111111111,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.11111111111111116,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 1,
+      "favouringLeft": 0
+    },
+    {
+      "rung": "SK->G",
+      "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.1111111111111111,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 1,
+      "favouringLeft": 0
+    },
+    {
+      "rung": "SK->G",
+      "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.11111111111111116,
+      "stdev": 0.0,
+      "transfers": 1,
+      "favouringRight": 0,
+      "favouringLeft": 1
+    }
+  ],
+  "checkpoints": {},
+  "tally": {
+    "M->U": {
+      "new": [
+        "C->D seconds",
+        "B->E targetAccuracy",
+        "SA->SK sourceAccuracy",
+        "SK->G targetAccuracy",
+        "SK->G seconds"
+      ],
+      "baseline": [
+        "A->B targetAccuracy",
+        "A->B sourceAccuracy",
+        "A->B seconds",
+        "A->C seconds",
+        "B->E seconds",
+        "E->F targetAccuracy",
+        "E->F seconds",
+        "F->G seconds",
+        "C->E targetAccuracy",
+        "C->E sourceAccuracy",
+        "C->E seconds",
+        "D->F targetAccuracy",
+        "D->F sourceAccuracy",
+        "D->F seconds",
+        "D->G targetAccuracy",
+        "D->G sourceAccuracy",
+        "D->G seconds",
+        "SU->SK targetAccuracy",
+        "SU->SK sourceAccuracy",
+        "SU->SK seconds",
+        "SA->SK targetAccuracy",
+        "SA->SK seconds",
+        "SK->G sourceAccuracy"
+      ],
+      "indistinguishable": [
+        "A->C targetAccuracy",
+        "A->C sourceAccuracy",
+        "C->D targetAccuracy",
+        "C->D sourceAccuracy",
+        "B->E sourceAccuracy",
+        "E->F sourceAccuracy",
+        "F->G targetAccuracy",
+        "F->G sourceAccuracy"
+      ],
+      "not applicable": []
+    }
+  }
+}
