@@ -51,24 +51,78 @@ class PasosDeclaradosTests(unittest.TestCase):
         """
         self.assertTrue((steps.CUADERNOS / "Benchmark_Campaign_v1.ipynb").is_file(),
                         "el cuaderno de campaña no está: esta prueba no probaría nada")
-        nombrados = {Path(fuente).name
-                     for fuente in _cuadernos_nombrados_por_los_pasos()}
-        self.assertNotIn("Benchmark_Campaign_v1.ipynb", nombrados)
+        self.assertNotIn("Benchmark_Campaign_v1.ipynb",
+                         _cuadernos_nombrados_por_los_pasos())
+
+    def test_todo_cuaderno_del_arbol_lo_corre_un_paso_o_dice_por_que_no(self):
+        """El defecto no es un cuaderno sin paso: es que nada lo note.
+
+        `Benchmark_Noise_Diagnostic_v1.ipynb` vivió con cinco celdas y ninguna
+        ejecutada -- la tabla y la conclusión que separan *falló el término* de
+        *le faltó coeficiente*, computadas y sin dibujar -- porque ningún paso
+        lo nombraba y ninguna afirmación miraba el disco. Las dos mitades se
+        derivan: los cuadernos que se corren salen del árbol de `steps` a través
+        de `__steps__`, los que existen salen del directorio, y lo que sobra
+        tiene que ser exactamente lo que `CUADERNOS_SIN_PASO` excluye.
+
+        Una lista de dos nombres escrita acá sería el mismo defecto una
+        indirección más allá. Por eso el resto se compara contra la exclusión
+        declarada, y la exclusión tiene que traer su razón: excluir cuesta
+        escribir por qué, y un nombre pelado no alcanza.
+
+        Rojo alcanzable: sacarle el `_ejecutar` a un paso de informe, agregar un
+        cuaderno de resultados que nadie corra, o excluir uno sin razón.
+        """
+        corridos = _cuadernos_nombrados_por_los_pasos()
+        en_disco = {ruta.name for ruta in steps.CUADERNOS.glob("*.ipynb")}
+        self.assertTrue(en_disco, f"{steps.CUADERNOS} no tiene cuadernos")
+
+        self.assertEqual(en_disco - set(corridos), set(steps.CUADERNOS_SIN_PASO),
+                         "un cuaderno de este árbol no lo corre ningún paso y "
+                         "tampoco está declarado como excluido")
+        # Y al revés: un paso que nombre un cuaderno que no está falla recién al
+        # correrlo, cuando el flujo que lo precede ya se gastó.
+        self.assertEqual(set(corridos) - en_disco, set(),
+                         "un paso corre un cuaderno que no está en el árbol")
+
+        for cuaderno, razon in steps.CUADERNOS_SIN_PASO.items():
+            with self.subTest(cuaderno=cuaderno):
+                self.assertTrue((steps.CUADERNOS / cuaderno).is_file(),
+                                "la exclusión le sobrevivió al cuaderno")
+                self.assertTrue(razon.strip(), "excluido sin decir por qué")
 
     def test_un_cuaderno_ausente_se_rechaza_en_vez_de_correr(self):
         with self.assertRaises(FileNotFoundError):
             steps._ejecutar("no_existe.ipynb")
 
 
-def _cuadernos_nombrados_por_los_pasos() -> list[str]:
-    """Los literales de cuaderno que el módulo de pasos menciona, leídos del
-    código y no de una lista escrita a mano que puede quedar vieja."""
+def _cuadernos_nombrados_por_los_pasos() -> dict[str, str]:
+    """Qué cuaderno corre cada paso DECLARADO: `{cuaderno: función}`.
+
+    Leído del código y no de una lista escrita a mano que puede quedar vieja, y
+    de `__steps__` hacia adentro y no de cualquier literal del módulo: una
+    función que corriera un cuaderno sin estar declarada no lo pone al alcance
+    de nadie, y una mención en una docstring no lo ejecuta.
+    """
     import ast
 
+    declaradas = {entrada["function"] for entrada in paquete.__steps__.values()}
     fuente = Path(steps.__file__).read_text(encoding="utf-8")
-    return [nodo.value for nodo in ast.walk(ast.parse(fuente))
-            if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str)
-            and nodo.value.endswith(".ipynb")]
+    corridos: dict[str, str] = {}
+    for definicion in ast.parse(fuente).body:
+        if (not isinstance(definicion, (ast.FunctionDef, ast.AsyncFunctionDef))
+                or definicion.name not in declaradas):
+            continue
+        for nodo in ast.walk(definicion):
+            if not (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Name)
+                    and nodo.func.id == "_ejecutar"):
+                continue
+            (argumento,) = nodo.args
+            assert isinstance(argumento, ast.Constant), (
+                f"{definicion.name} nombra su cuaderno con algo que no es un "
+                "literal, así que esta lectura dejó de verlo")
+            corridos[argumento.value] = definicion.name
+    return corridos
 
 
 # --------------------------------------------------------------- el eje de ruido
