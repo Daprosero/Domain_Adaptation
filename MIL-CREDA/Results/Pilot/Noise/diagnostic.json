@@ -38,7 +38,7 @@
         "epochs": 20,
         "trials": 30
       },
-      "seconds": 39.82657266699971,
+      "seconds": 41.13066958299987,
       "transfers": [
         "M->U"
       ],
@@ -60,7 +60,7 @@
             0.13038662026200862
           ],
           "decidedByFlatRule": true,
-          "minutes": 0.6087920242999947
+          "minutes": 0.6282069305499893
         }
       },
       "inheritanceRule": "ninguna: las seis transferencias se midieron"
@@ -97,7 +97,7 @@
         "epochs": 20,
         "trials": 30
       },
-      "seconds": 55.71658416700029,
+      "seconds": 56.76659737499995,
       "transfers": [
         "M->U"
       ],
@@ -117,7 +117,7 @@
             0.00515442432837486
           ],
           "decidedByFlatRule": true,
-          "minutes": 0.8811916132000078
+          "minutes": 0.8942652854166682
         }
       },
       "inheritanceRule": "ninguna: las seis transferencias se midieron"
