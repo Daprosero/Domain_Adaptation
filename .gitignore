@@ -25,6 +25,13 @@ __pycache__/
 # results, the figures and the record. What is lost is analysing the latent space
 # without training first — a real cost, stated rather than discovered.
 MIL-CREDA/Models/Benchmark/*.pt
+# The pilot's weights are out for the same reason and with less to argue about:
+# they are the cheapest artefact here to reproduce -- one local run -- and the
+# rule above already excludes the expensive ones. Keeping the pilot's and
+# dropping the campaign's would record 2.5 GB per short run while the long run
+# leaves nothing, which is backwards. The manifests stay, so which images formed
+# every bag is still in the history.
+MIL-CREDA/Models/Pilot/Benchmark/*.pt
 #
 # What stays out is the dataset cache, and only that. It is MNIST, USPS and SVHN
 # exactly as torchvision downloads them: somebody else's data, 243 MB of it, that a
