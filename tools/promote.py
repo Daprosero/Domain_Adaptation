@@ -48,8 +48,12 @@ from MIL_CREDA_Benchmark import config, latent, shards  # noqa: E402
 #: quietly find nothing the day it changes.
 ARTIFACTS = config.PRODUCT / ".remote-execution" / "campaign"
 
-#: Where checkpoints already in place are moved before new ones land.
-SUPERSEDED = config.MODELS.with_name(config.MODELS.name + ".superseded")
+#: Where checkpoints already in place are moved before new ones land. Its three
+#: coordinates are written out rather than inherited from `config.MODELS`: a
+#: promotion is a distributed campaign's, which is full-scale, clean and of
+#: campaign shape by construction.
+_PESOS = config.models_for(0.0, "campaign", False)
+SUPERSEDED = _PESOS.with_name(_PESOS.name + ".superseded")
 
 #: What this tool leaves beside the checkpoints it promoted: which seeds each
 #: cell wanted, which of those existed, and what it fell short by. Without it
@@ -63,7 +67,8 @@ MANIFEST_SUFFIX = ".manifest.json"
 
 def read_runs(path: Path | None = None) -> list[dict]:
     """Every measurement the campaign made, which is what the median is over."""
-    source = path if path is not None else config.RESULTS / "runs.jsonl"
+    source = (path if path is not None else
+              config.results_for(0.0, "campaign", False) / "runs.jsonl")
     if not source.exists():
         raise SystemExit(f"no runs to take a median over: {source} does not exist")
     return [json.loads(line) for line in
@@ -216,7 +221,7 @@ def promote(runs: list[dict] | None = None, root: Path | None = None,
     display = displayed(pairing["chosen"], found, measurements)
     chosen = display["chosen"]
 
-    into = destination if destination is not None else config.MODELS
+    into = destination if destination is not None else _PESOS
     aside = superseded if superseded is not None else SUPERSEDED
     moved = None
     if into.is_dir() and any(into.iterdir()):

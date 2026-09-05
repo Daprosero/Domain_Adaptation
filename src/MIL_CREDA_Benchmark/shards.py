@@ -142,12 +142,17 @@ def read_shards(root: Path | None = None) -> list[dict]:
 
     A thin wrapper, not a reimplementation: the only fact this repository
     adds is where its own shards live when the caller does not say —
-    `config.RESULTS / harness.SHARDS_DIR` — a location the forge's generic
-    reader has no way to know and no business assuming. Everything else,
+    `config.results_for(0.0, "campaign", False) / harness.SHARDS_DIR` — a
+    location the forge's generic reader has no way to know and no business
+    assuming. The three coordinates are written out rather than taken from
+    `config.RESULTS`: a distributed campaign is full-scale, clean and of
+    campaign shape by construction, and that is a claim this line now makes
+    out loud instead of inheriting from a constant. Everything else,
     including "a shard that never arrived is absent here rather than
     reported as empty", is `shard_io.read_shards`'s behavior, unchanged.
     """
-    home = root if root is not None else config.RESULTS / harness.SHARDS_DIR
+    home = (root if root is not None else
+            config.results_for(0.0, "campaign", False) / harness.SHARDS_DIR)
     return _shard_io.read_shards(home)
 
 
@@ -184,7 +189,8 @@ def plan_path(root: Path | None = None) -> Path:
     to `is_dir()`, so this file is structurally invisible to the shard
     reader.
     """
-    home = root if root is not None else config.RESULTS / harness.SHARDS_DIR
+    home = (root if root is not None else
+            config.results_for(0.0, "campaign", False) / harness.SHARDS_DIR)
     return home / "plan.json"
 
 

@@ -774,8 +774,12 @@ def seal_shard_stamp(shard: str | None, noise: float = 0.0,
     return path
 
 
-def _partial_path() -> Path:
-    return shard_paths(None)["partial"]
+def _partial_path(noise: float = 0.0, kind: str = "campaign",
+                  pilot: bool = False) -> Path:
+    """Las tres coordenadas y no ninguna. Tomaba cero y devolvía el parcial de la
+    campaña limpia para cualquier búsqueda: dos búsquedas a tasas distintas se
+    pisaban el archivo a medias, y la que perdía se leía como una que resumía."""
+    return shard_paths(None, noise=noise, kind=kind, pilot=pilot)["partial"]
 
 
 def _read_partial(path: Path | None = None) -> dict:
@@ -1117,7 +1121,12 @@ def search_ceilings(reduction: Reduction, device: torch.device,
         seeds=list(config.PILOT_SEARCH_SEEDS if pilot else config.SEARCH_SEEDS),
         labelNoise=noise, pilot=pilot)
     grid = list(config.CEILING_GRID)
-    partial = shard_paths(shard, pilot=pilot)['partial']
+    # Las tres coordenadas, de la reducción que se acaba de reconciliar arriba.
+    # Con `pilot` solo, la re-búsqueda contaminada del diagnóstico escribía --- y
+    # después borraba, en la última línea de esta función --- el parcial de la
+    # búsqueda limpia: el mismo archivo, dos experimentos.
+    partial = shard_paths(shard, noise=reduction.labelNoise,
+                          kind=reduction.kind, pilot=reduction.pilot)['partial']
     measured = _read_partial(partial)
     if measured:
         done = sum(len(cells) for cells in measured.values())
@@ -1325,7 +1334,12 @@ def campaign(reduction: Reduction, device: torch.device,
     back into the number it was chosen to improve.
     """
     arm_ids = arms or [arm["id"] for arm in config.ARMS]
-    config.RESULTS.mkdir(parents=True, exist_ok=True)
+    # El árbol de ESTA corrida. Era `config.RESULTS` a secas, que es el de la
+    # corrida completa y limpia: un ensayo, o un nivel del barrido, creaba el
+    # directorio de la campaña completa antes de escribir una sola línea en el
+    # suyo --- un directorio vacío donde algo después busca evidencia.
+    config.results_for(reduction.labelNoise, reduction.kind,
+                       reduction.pilot).mkdir(parents=True, exist_ok=True)
     # Sólo donde algo los va a leer. Un nivel sin lector que igual escribiera
     # 8 GB de pesos dejaría un directorio que nadie abre y nadie borra, que es
     # peor que una ausencia: parece evidencia.
@@ -1585,7 +1599,7 @@ def run_search(shard: str | None = None, pilot: bool = False) -> dict:
     if record is None:
         raise SystemExit(
             "the search ran and left no record at "
-            f"{config.CEILINGS_PILOT_RECORD if pilot else config.CEILINGS_RECORD}. "
+            f"{config.ceilings_record_for(pilot)}. "
             "Nothing downstream can read a ceiling "
             "that was never written down, and a run that reports success "
             "without one would be claiming an answer it cannot show."
@@ -1688,10 +1702,12 @@ def run_smoke(seed: int = 0, shard: str | None = None,
     through `campaign()`'s own path — `torch.save({k: v.cpu() for k, v in
     state.items()}, ...)` beside a manifest `keep_median()` writes with
     `bags.write_manifest()` — rather than a bespoke save. Phase 2's
-    `latent.available()`/`latent.load()` read `config.MODELS` in exactly
-    that shape, so a checkpoint proven any other way would not prove the
-    path a real campaign actually uses. `config.CHECKPOINTS[SMOKE_ARM]`
-    asks for three per cell; with exactly one seed here, `median_seeds()`
+    `latent.available()`/`latent.load()` read `config.models_for()` in
+    exactly that shape, so a checkpoint proven any other way would not
+    prove the path a real campaign actually uses — and both sides get the
+    coordinates from this call's own reduction, so they cannot drift
+    apart. `config.CHECKPOINTS[SMOKE_ARM]` asks for three per cell; with
+    exactly one seed here, `median_seeds()`
     degenerates to the only one there is rather than pruning it away. Off by
     default because most rehearsals only need `runs.jsonl`, and a checkpoint
     costs a model's worth of disk on every call that does not ask for one.
@@ -1703,7 +1719,14 @@ def run_smoke(seed: int = 0, shard: str | None = None,
         environment=environment(), ceilings=dict(SMOKE_CEILINGS),
     )
 
-    paths = shard_paths(shard)
+    # De la reducción de arriba y no de los valores por omisión de
+    # `shard_paths`. Coinciden hoy --- este ensayo corre limpio, en forma de
+    # campaña y sin marca de piloto --- y coincidían por casualidad: las tres
+    # coordenadas estaban escritas dos veces, una en la reducción que sella y
+    # otra implícita en el destino, y el día que una se moviera el sello y las
+    # corridas se iban a árboles distintos sin que nada lo dijera.
+    paths = shard_paths(shard, noise=reduction.labelNoise,
+                        kind=reduction.kind, pilot=reduction.pilot)
     paths["runs"].parent.mkdir(parents=True, exist_ok=True)
     write_shard_stamp(shard, reduction)
 
@@ -1714,11 +1737,13 @@ def run_smoke(seed: int = 0, shard: str | None = None,
     state = run.pop("state", None)
 
     if checkpoint and state is not None:
-        config.MODELS.mkdir(parents=True, exist_ok=True)
+        pesos = config.models_for(reduction.labelNoise, reduction.kind,
+                                  reduction.pilot)
+        pesos.mkdir(parents=True, exist_ok=True)
         label = run["transfer"]
         stem = f"{SMOKE_ARM}_{label.replace('->', '-')}_seed{seed}"
         torch.save({k: v.cpu() for k, v in state.items()},
-                   config.MODELS / f"{stem}.pt")
+                   pesos / f"{stem}.pt")
         manifests = {(label, seed): {"source": material["source"].manifest,
                                      "target": material["target"].manifest}}
         keep_median([run], SMOKE_ARM, label, manifests, reduction)
@@ -1726,7 +1751,8 @@ def run_smoke(seed: int = 0, shard: str | None = None,
     with paths["runs"].open("w", encoding="utf-8") as handle:
         handle.write(json.dumps(run) + "\n")
 
-    seal_shard_stamp(shard)
+    seal_shard_stamp(shard, noise=reduction.labelNoise,
+                     kind=reduction.kind, pilot=reduction.pilot)
     return {
         "arm": SMOKE_ARM,
         "transfer": run["transfer"],

@@ -207,8 +207,9 @@ def diagnostico_de_ruido() -> dict:
     }
     # Bajo la raíz de ESTA corrida y no bajo `Results/` a secas: un diagnóstico
     # de ensayo escrito donde va el de la campaña completa la pisa, y lo pisa con
-    # números que no se pueden citar.
-    destino = config.results_for(0.0, "curve", True).parents[1]
+    # números que no se pueden citar. `pilot=True` fijo y no heredado, porque
+    # esta función arma su propia reducción de ensayo, con `pilot=True`, arriba.
+    destino = config.noise_axis_for(True)
     destino.mkdir(parents=True, exist_ok=True)
     (destino / "diagnostic.json").write_text(
         json.dumps(registro, indent=2, default=str), encoding="utf-8")
@@ -227,9 +228,13 @@ def barrido_de_ruido() -> dict:
     niveles: la curva es el coeficiente elegido sin contaminación aplicado con
     ella. Lo que eso cuesta lo separa después `diagnostico_de_ruido`.
 
-    No guarda pesos en ningún nivel. La curva se lee de los `runs.jsonl`, y un
-    nivel que escribiera 8 GB que nadie abre dejaría un directorio que parece
-    evidencia.
+    Guarda pesos en dos de los cinco niveles y en ninguno de los otros tres, y
+    no lo decide este paso: `campaign()` pregunta por `keeps_checkpoints`, que es
+    verdadero exactamente en los niveles que el cuaderno latente dibuja --- 0.0 y
+    `NOISE_REPORTED`. Los otros tres corren y escriben sus `runs.jsonl`, que es
+    de donde sale la curva, y ni un peso: 8 GB por nivel que nadie abre dejarían
+    un directorio que parece evidencia. Esta frase decía «no guarda pesos en
+    ningún nivel», que era falso desde que existe `CHECKPOINT_LEVELS`.
     """
     from MIL_CREDA_Benchmark import config, harness
 

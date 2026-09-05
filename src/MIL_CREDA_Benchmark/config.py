@@ -728,6 +728,22 @@ def ceilings_record_for(pilot: bool) -> "Path":
     return CEILINGS_PILOT_RECORD if pilot else CEILINGS_RECORD
 
 
+def noise_axis_for(pilot: bool) -> "Path":
+    """La raiz del eje de ruido de esta corrida: lo que resume a los cinco niveles.
+
+    El barrido escribe un arbol por nivel (`results_for(rate, "curve", pilot)`);
+    lo que resume a los cinco --- la curva de degradacion, el diagnostico --- no
+    pertenece a ninguno, asi que vive en el padre de todos ellos. La tasa y la
+    forma no son coordenadas de este destino: es uno por corrida del eje, no uno
+    por nivel. `pilot` si lo es, y esa es toda la razon por la que esto existe:
+    la expresion estaba escrita a mano en tres lugares --- el paso, la tabla que
+    la lee y el cuaderno --- y el cuaderno la componia desde `PRODUCT`, sin
+    `pilot` ninguno, asi que el resumen de un barrido de ensayo caia donde va el
+    de la corrida completa.
+    """
+    return results_for(0.0, "curve", pilot).parents[1]
+
+
 def ceilings_record_in_force() -> tuple["Path | None", str]:
     """Que registro de techos rige, y a que titulo.
 
@@ -742,10 +758,11 @@ def ceilings_record_in_force() -> tuple["Path | None", str]:
     resolutor que devolviera el mapping a secas haria indistinguibles los dos
     casos justo donde importa.
     """
-    if CEILINGS_RECORD.exists():
-        return CEILINGS_RECORD, "full"
-    if CEILINGS_PILOT_RECORD.exists():
-        return CEILINGS_PILOT_RECORD, "pilot"
+    completo, ensayo = ceilings_record_for(False), ceilings_record_for(True)
+    if completo.exists():
+        return completo, "full"
+    if ensayo.exists():
+        return ensayo, "pilot"
     return None, "none"
 
 
@@ -805,6 +822,68 @@ def ceilings_by_transfer_on_record() -> dict[str, dict[str, float]]:
     found = _json.loads(record.read_text(encoding="utf-8"))
     return {family: dict(entry.get("byTransfer") or {})
             for family, entry in found.items()}
+
+
+# ------------------------------------------------- las puertas de cada destino
+
+#: Cada puerta por la que una coordenada se vuelve un camino, y bajo que nombre
+#: recibe cada una. `harness.Reduction` declara las tres coordenadas del destino
+#: --- `labelNoise`, `kind`, `pilot` ---; esto dice como se llaman en la puerta.
+#:
+#: Una entrada con menos de las tres es una afirmacion, no un descuido: el
+#: registro de techos se separa por nombre de archivo y no por arbol, y el eje de
+#: ruido es uno por corrida y no uno por nivel, asi que a ninguno de los dos le
+#: corresponde una tasa ni una forma. Lo que no puede pasar es que una puerta
+#: tome una tasa y no tome las otras dos: `models_for` lo hizo, y un nivel limpio
+#: del barrido termino escribiendo en el directorio de checkpoints de la campana
+#: y reetiquetando diez manifiestos, en silencio.
+#:
+#: `tests/test_label_noise.py` lee esto por los dos lados: exige que cada firma
+#: acepte exactamente estas coordenadas, y que ninguna llamada a una de estas
+#: puertas --- en el paquete, en `tools/` o en una celda de cuaderno --- deje una
+#: sin pasar.
+DESTINOS: dict[str, dict[str, str]] = {
+    "results_for": {"labelNoise": "rate", "kind": "kind", "pilot": "pilot"},
+    "models_for": {"labelNoise": "rate", "kind": "kind", "pilot": "pilot"},
+    "ceilings_record_for": {"pilot": "pilot"},
+    "noise_axis_for": {"pilot": "pilot"},
+    "shard_paths": {"labelNoise": "noise", "kind": "kind", "pilot": "pilot"},
+    "seal_shard_stamp": {"labelNoise": "noise", "kind": "kind", "pilot": "pilot"},
+}
+
+#: Los destinos que se componen a mano y no pasan por ninguna puerta, cada uno
+#: con su razon al lado. Estar aca cuesta escribir por que, igual que en
+#: `steps.CUADERNOS_SIN_PASO` y por el mismo motivo: un nombre pelado en una
+#: lista y un olvido se leen igual.
+#:
+#: La prueba deriva los destinos compuestos a mano --- del arbol de sintaxis del
+#: paquete, de `tools/` y de las celdas de los cuadernos, contra las raices que
+#: este modulo declara --- y le resta las puertas; lo que sobra tiene que ser
+#: exactamente esto. Un destino nuevo escrito a mano trae una clave nueva y cae
+#: en rojo hasta que alguien diga por que no lleva escala.
+#:
+#: La clave es el archivo y la expresion tal como la escribe `ast.unparse`, para
+#: que dos destinos distintos en un mismo archivo no compartan una excusa.
+DESTINOS_SIN_COORDENADA: dict[str, str] = {
+    "harness.py: config.CEILINGS_RECORD": (
+        "no es un destino: nombra en un rechazo el registro COMPLETO que "
+        "`search_record()` acaba de leer sin argumentos, y ese rechazo solo "
+        "puede dispararse cuando ese archivo existe y quedo bajo escala. El de "
+        "ensayo no llega ahi, asi que nombrarlo por coordenada seria decir que "
+        "el mensaje puede hablar de dos archivos cuando solo habla de uno"),
+    "steps.py: Path(__file__).resolve().parents[2] / 'MIL-CREDA' / 'Notebooks'": (
+        "los cuadernos son fuente, no producto: hay un arbol por repositorio y "
+        "se ejecutan en el lugar, asi que no existe una version de ensayo y otra "
+        "completa entre las cuales elegir"),
+    "verification.ipynb: ROOT / 'MIL-CREDA' / 'Results' / 'local_distance_bound'": (
+        "dibuja una cota del objetivo medida sobre `tests/sweep.py` y no sobre "
+        "una corrida: no hay material contaminado, ni forma, ni escala que "
+        "llevar, asi que el archivo es uno por repositorio y no uno por corrida"),
+    "promote.py: config.PRODUCT / '.remote-execution' / 'campaign'": (
+        "es donde el backend remoto desempaqueta lo que devuelve, antes de que "
+        "nada haya leido una reduccion: la escala de lo que viene adentro la "
+        "deciden los sellos de cada shard, no el directorio que los recibe"),
+}
 
 
 CEILINGS.update(ceilings_on_record())
