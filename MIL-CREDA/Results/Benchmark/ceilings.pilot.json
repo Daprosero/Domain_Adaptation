@@ -1,0 +1,286 @@
+{
+  "creda": {
+    "arm": "D",
+    "ceiling": 0.00030276471390845917,
+    "criterion": "targetAccuracy",
+    "role": "valid",
+    "epochs": 3,
+    "trials": 4,
+    "search": {
+      "kind": "optuna",
+      "sampler": "GPSampler",
+      "trials": 4,
+      "seed": 0,
+      "perStudySeed": "crc32(familia|transferencia) + seed",
+      "space": {
+        "low": 0.0001,
+        "high": 1.0,
+        "log": true
+      },
+      "resolution": 0.05
+    },
+    "decidedByFlatRule": false,
+    "plateau": [
+      0.00030276471390845917
+    ],
+    "noise": 0.05,
+    "labelNoise": 0.0,
+    "flatRule": "dentro de la meseta gana el techo m\u00e1s chico: el mismo resultado con menos adaptaci\u00f3n es la afirmaci\u00f3n m\u00e1s d\u00e9bil, y una b\u00fasqueda no deber\u00eda darle a un t\u00e9rmino m\u00e1s peso del que la medici\u00f3n pidi\u00f3. La meseta la define la resoluci\u00f3n del criterio sobre el rol de b\u00fasqueda \u2014 una bolsa de las que tiene \u2014 y no una cantidad que el GP ajust\u00f3: atribu\u00edrsela al modelo har\u00eda que el ancho de la meseta dependiera de qu\u00e9 tan bien ajust\u00f3, que es la propiedad equivocada. Tampoco es una igualdad exacta: sobre un rango continuo dos evaluaciones nunca empatan y una regla de empate exacto no se activar\u00eda jam\u00e1s",
+    "atRequiredScale": false,
+    "requiredScale": {
+      "epochs": 20,
+      "trials": 30
+    },
+    "seconds": 199.00743237500137,
+    "transfers": [
+      "M->U",
+      "U->M",
+      "M->S",
+      "S->M",
+      "U->S",
+      "S->U"
+    ],
+    "neutral": 1.0,
+    "byTransfer": {
+      "M->U": 0.0001356661411177182,
+      "U->M": 0.00030276471390845917,
+      "M->S": 0.002821673073227557,
+      "S->M": 0.00016502467969081887,
+      "U->S": 0.00010535238182112257,
+      "S->U": 0.0012179535784210785
+    },
+    "perTransfer": {
+      "M->U": {
+        "ceiling": 0.0001356661411177182,
+        "value": 0.8,
+        "best": 0.8,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.0001356661411177182,
+          0.00021300380075471508,
+          0.010600872964818216,
+          0.13038662026200862
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.5940939826334215
+      },
+      "U->M": {
+        "ceiling": 0.00030276471390845917,
+        "value": 1.0,
+        "best": 1.0,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.00030276471390845917,
+          0.000960832307013348,
+          0.020983233807663877,
+          0.11043309882372403
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.5346342326333494
+      },
+      "M->S": {
+        "ceiling": 0.002821673073227557,
+        "value": 0.1,
+        "best": 0.1,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.002821673073227557,
+          0.009855356535007128,
+          0.023674164010901402,
+          0.03048420432396095
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.5282825513832601
+      },
+      "S->M": {
+        "ceiling": 0.00016502467969081887,
+        "value": 0.75,
+        "best": 0.75,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.00016502467969081887,
+          0.0004484986901257986,
+          0.0004985758300022982
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.5421469930499977
+      },
+      "U->S": {
+        "ceiling": 0.00010535238182112257,
+        "value": 0.2,
+        "best": 0.25,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.00010535238182112257,
+          0.02586236606886015,
+          0.3110157130179432,
+          0.8549089134070393
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.5367834874999972
+      },
+      "S->U": {
+        "ceiling": 0.0012179535784210785,
+        "value": 0.5,
+        "best": 0.5,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.0012179535784210785,
+          0.001740757642032509,
+          0.0035961985017024024,
+          0.013260288830649702
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.5323299847167315
+      }
+    },
+    "inheritanceRule": "ninguna: las seis transferencias se midieron"
+  },
+  "milcreda": {
+    "arm": "G",
+    "ceiling": 0.0005821960846533309,
+    "criterion": "targetAccuracy",
+    "role": "valid",
+    "epochs": 3,
+    "trials": 4,
+    "search": {
+      "kind": "optuna",
+      "sampler": "GPSampler",
+      "trials": 4,
+      "seed": 0,
+      "perStudySeed": "crc32(familia|transferencia) + seed",
+      "space": {
+        "low": 0.0001,
+        "high": 1.0,
+        "log": true
+      },
+      "resolution": 0.05
+    },
+    "decidedByFlatRule": false,
+    "plateau": [
+      0.0005821960846533309
+    ],
+    "noise": 0.05,
+    "labelNoise": 0.0,
+    "flatRule": "dentro de la meseta gana el techo m\u00e1s chico: el mismo resultado con menos adaptaci\u00f3n es la afirmaci\u00f3n m\u00e1s d\u00e9bil, y una b\u00fasqueda no deber\u00eda darle a un t\u00e9rmino m\u00e1s peso del que la medici\u00f3n pidi\u00f3. La meseta la define la resoluci\u00f3n del criterio sobre el rol de b\u00fasqueda \u2014 una bolsa de las que tiene \u2014 y no una cantidad que el GP ajust\u00f3: atribu\u00edrsela al modelo har\u00eda que el ancho de la meseta dependiera de qu\u00e9 tan bien ajust\u00f3, que es la propiedad equivocada. Tampoco es una igualdad exacta: sobre un rango continuo dos evaluaciones nunca empatan y una regla de empate exacto no se activar\u00eda jam\u00e1s",
+    "atRequiredScale": false,
+    "requiredScale": {
+      "epochs": 20,
+      "trials": 30
+    },
+    "seconds": 318.8280264999994,
+    "transfers": [
+      "M->U",
+      "U->M",
+      "M->S",
+      "S->M",
+      "U->S",
+      "S->U"
+    ],
+    "neutral": 1.0,
+    "byTransfer": {
+      "M->U": 0.00515442432837486,
+      "U->M": 0.0005821960846533309,
+      "M->S": 0.0006439610517135079,
+      "S->M": 0.0005588881465031164,
+      "U->S": 0.003504803896982994,
+      "S->U": 0.0003084761579844385
+    },
+    "perTransfer": {
+      "M->U": {
+        "ceiling": 0.00515442432837486,
+        "value": 0.8,
+        "best": 0.8,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.00515442432837486,
+          0.028253370073357105
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.8631781965334084
+      },
+      "U->M": {
+        "ceiling": 0.0005821960846533309,
+        "value": 0.85,
+        "best": 0.9,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.0005821960846533309,
+          0.12384855780587649,
+          0.20329768479672644
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.8469081874999878
+      },
+      "M->S": {
+        "ceiling": 0.0006439610517135079,
+        "value": 0.2,
+        "best": 0.2,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.0006439610517135079,
+          0.0010563751472266413,
+          0.002560155888375668,
+          0.0030676860676691303
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.846426834033385
+      },
+      "S->M": {
+        "ceiling": 0.0005588881465031164,
+        "value": 0.35,
+        "best": 0.35,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.0005588881465031164,
+          0.0008875530880758854,
+          0.009476619950266043,
+          0.5294093950063676
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.9135693111167105
+      },
+      "U->S": {
+        "ceiling": 0.003504803896982994,
+        "value": 0.15,
+        "best": 0.15,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.003504803896982994,
+          0.005083318496157691,
+          0.16601141264131222,
+          0.4207319743614191
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.9292458840332983
+      },
+      "S->U": {
+        "ceiling": 0.0003084761579844385,
+        "value": 0.35,
+        "best": 0.35,
+        "trials": 4,
+        "noise": 0.05,
+        "plateau": [
+          0.0003084761579844385,
+          0.10294579502332135,
+          0.2149860964003429,
+          0.443597579220001
+        ],
+        "decidedByFlatRule": true,
+        "minutes": 0.851760897916635
+      }
+    },
+    "inheritanceRule": "ninguna: las seis transferencias se midieron"
+  }
+}
