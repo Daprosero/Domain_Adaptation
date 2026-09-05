@@ -452,9 +452,10 @@ __records__: dict = {
 # vigente con una búsqueda contaminada de una sola transferencia --- y ninguna
 # de las dos levantó nada: las dos reportaron `outcome: "returned"`.
 #
-# Cada raíz sale de leer a dónde escribe el paso --- `config.results_for`,
-# `config.models_for`, `config.ceilings_record_for`, `harness.shard_paths`, y
-# las celdas del cuaderno que ejecuta --- y nunca de copiar la del vecino.
+# Cada raíz sale de leer a dónde escribe el paso --- las puertas que
+# `config.DESTINOS` declara (`results_for`, `models_for`, `ceilings_record_for`,
+# `noise_axis_for`, `harness.shard_paths`, `harness.seal_shard_stamp`) y las
+# celdas del cuaderno que ejecuta --- y nunca de copiar la del vecino.
 #
 # **La escala va adentro de la raíz, y no hay una sola raíz que cubra las
 # dos.** `results_for` mete el segmento `Pilot/` ARRIBA de la forma compartida
@@ -538,19 +539,22 @@ __steps__: dict = {
                                   "Results/Noise/rho0p2/curves",
                                   "Results/Pilot/Noise/rho0p2/curves",
                                   "Notebooks/Benchmark_Report_v1.ipynb"]},
-    # La mitad limpia va a `config.RESULTS` a secas --- `latent/grid.pdf`,
-    # `latent/correspondence.pdf`, `latent.json`, `latent.md` --- y no a
-    # `results_for(0.0, "campaign", ES_ENSAYO)`: el cuaderno LEE los pesos por
-    # escala y ESCRIBE siempre en el árbol completo. Queda declarado como está
-    # escrito y no como uno querría que estuviera; el día que el cuaderno pase
-    # a escribir por escala, esta raíz es la que hay que mover.
-    # La mitad contaminada sí es por escala: `results_for(RHO, "campaign",
+    # Las dos mitades van por escala. La limpia --- `latent/grid.pdf`,
+    # `latent/correspondence.pdf`, `latent.json`, `latent.md` --- sale de
+    # `results_for(0.0, "campaign", ES_ENSAYO)`, y hasta hace poco salía de
+    # `config.RESULTS` a secas: el cuaderno LEÍA los pesos por escala y ESCRIBÍA
+    # siempre en el árbol completo, así que un análisis de ensayo se dibujaba
+    # encima del de la corrida completa. Por eso están las dos escalas acá.
+    # La mitad contaminada ya era por escala: `results_for(RHO, "campaign",
     # ES_ENSAYO) / "latent"`, con `RHO = NOISE_REPORTED`.
     "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente",
                      "advances": 6,
                      "produces": ["Results/Benchmark/latent",
                                   "Results/Benchmark/latent.json",
                                   "Results/Benchmark/latent.md",
+                                  "Results/Pilot/Benchmark/latent",
+                                  "Results/Pilot/Benchmark/latent.json",
+                                  "Results/Pilot/Benchmark/latent.md",
                                   "Results/Noise/rho0p2/latent",
                                   "Results/Pilot/Noise/rho0p2/latent",
                                   "Notebooks/Benchmark_Latent_v1.ipynb"]},
@@ -578,21 +582,23 @@ __steps__: dict = {
                                  "Models/Pilot/Noise/curve"]},
     # Sólo lee y dibuja, y aun así deja tres cosas: su cuaderno ejecutado y las
     # dos que escriben sus celdas, `degradation.pdf` (por `figures.noise_curves`
-    # sobre `PRODUCT / "Results" / "Noise" / "degradation"`, con el `.pdf` de
-    # `emit`) y `degradation.json`. Las dos van al árbol COMPLETO aunque el
-    # barrido que resumen haya corrido en ensayo: el cuaderno compone esa ruta a
-    # mano y no por `results_for`.
+    # sobre `config.noise_axis_for(ES_ENSAYO) / "degradation"`, con el `.pdf` de
+    # `emit`) y `degradation.json`. Las dos siguen al barrido que resumen, y por
+    # eso están las dos escalas: el cuaderno componía esa ruta a mano desde
+    # `PRODUCT` y el resumen de un barrido de ensayo caía en el árbol completo.
     "noise-report": {"module": "MIL_CREDA_Benchmark.steps",
                      "function": "informe_de_ruido",
                      "produces": ["Results/Noise/degradation.pdf",
                                   "Results/Noise/degradation.json",
+                                  "Results/Pilot/Noise/degradation.pdf",
+                                  "Results/Pilot/Noise/degradation.json",
                                   "Notebooks/Benchmark_Noise_v1.ipynb"]},
     # Un solo archivo, y es todo lo que escribe: la re-búsqueda que paga NO
     # gobierna ningún registro (`governs_the_ceilings_record` es falso bajo
     # contaminación y sobre una transferencia sola) y el motor `optuna` no deja
-    # parcial. El destino es `results_for(0.0, "curve", True).parents[1]`, la
-    # raíz del ENSAYO: escrito bajo `Results/Noise/` a secas pisaría el
-    # diagnóstico de la corrida completa con números de ensayo.
+    # parcial. El destino es `config.noise_axis_for(True)`, la raíz del ENSAYO:
+    # escrito bajo `Results/Noise/` a secas pisaría el diagnóstico de la corrida
+    # completa con números de ensayo.
     "noise-diagnostic": {"module": "MIL_CREDA_Benchmark.steps",
                          "function": "diagnostico_de_ruido",
                          "produces": ["Results/Pilot/Noise/diagnostic.json"]},

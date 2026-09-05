@@ -10,12 +10,117 @@ the zero -- at rate 0 the material has to be what it was before this axis
 existed, image for image, or no clean number stays comparable to itself.
 """
 
+import ast
+import json
 import re
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from MIL_CREDA_Benchmark import bags, config
+
+#: El repositorio, desde este archivo. Los recorridos de abajo leen el disco:
+#: un cuaderno no se importa, y su `source` es el único lugar donde está su
+#: código.
+_REPOSITORIO = Path(__file__).resolve().parents[1]
+
+
+def _fuentes_que_escriben():
+    """`(archivo, código)` de todo lo que puede componer un destino.
+
+    El paquete, `tools/` y CADA celda de código de CADA cuaderno. Los cuadernos
+    entran porque los dos defectos que sobrevivieron a la regla anterior estaban
+    los dos ahí, y la regla anterior sólo recorría `vars(harness)`.
+
+    `tests/` queda afuera: acá se redirige `config.RESULTS` con `monkeypatch` a
+    propósito y en casi todos los fixtures.
+    """
+    for ruta in sorted((_REPOSITORIO / "src" / "MIL_CREDA_Benchmark").glob("*.py")):
+        yield ruta.name, ruta.read_text(encoding="utf-8")
+    for ruta in sorted((_REPOSITORIO / "tools").glob("*.py")):
+        yield ruta.name, ruta.read_text(encoding="utf-8")
+    for cuaderno in sorted((_REPOSITORIO / "MIL-CREDA" / "Notebooks").glob("*.ipynb")):
+        documento = json.loads(cuaderno.read_text(encoding="utf-8"))
+        for celda in documento.get("cells", []):
+            if celda.get("cell_type") != "code":
+                continue
+            # Las mágicas de IPython y los `!` no son Python y romperían el
+            # parseo; nada de lo que decide un destino vive en una de ellas.
+            yield cuaderno.name, "\n".join(
+                linea for linea in "".join(celda.get("source", [])).splitlines()
+                if not linea.lstrip().startswith(("%", "!")))
+
+
+def _raices_de_producto() -> set[str]:
+    """Los nombres de `config` que apuntan adentro del árbol de producto.
+
+    Derivado de los valores y no de una lista: una raíz nueva --- otra carpeta
+    de producto, otro registro --- entra sola.
+    """
+    return {nombre for nombre, valor in vars(config).items()
+            if isinstance(valor, Path)
+            and (valor == config.PRODUCT or config.PRODUCT in valor.parents)}
+
+
+def _segmentos_de_producto() -> set[str]:
+    """Los nombres de directorio del árbol de producto, sacados de él mismo.
+
+    `ROOT / "MIL-CREDA" / "Results"` no nombra ninguna constante y llega al
+    mismo lugar: sin esto, componer el destino con literales lo esquivaba.
+    """
+    return {config.PRODUCT.name, config.RESULTS.parent.name,
+            config.RESULTS.name, config.MODELS.parent.name}
+
+
+def _destinos_a_mano():
+    """Cada expresión que compone un destino sin pasar por una puerta.
+
+    La clave es `"<archivo>: <expresión>"`, con la expresión normalizada por
+    `ast.unparse`, para que dos destinos distintos de un mismo archivo no
+    compartan una excusa y para que la clave sobreviva a un reformateo.
+
+    Se salta lo que es estructuralmente correcto y no una excepción: el cuerpo
+    de las puertas que `config.DESTINOS` declara --- ahí es donde una coordenada
+    SE VUELVE un camino --- y el nivel de módulo de `config.py`, que es donde
+    las raíces nacen.
+    """
+    raices, segmentos = _raices_de_producto(), _segmentos_de_producto()
+    puertas = set(config.DESTINOS)
+    for archivo, fuente in _fuentes_que_escriben():
+        try:
+            arbol = ast.parse(fuente)
+        except SyntaxError:                              # pragma: no cover
+            continue
+        padre: dict = {}
+        dentro: dict = {}
+        for nodo in ast.walk(arbol):
+            for hijo in ast.iter_child_nodes(nodo):
+                padre[hijo] = nodo
+                dentro[hijo] = (nodo.name if isinstance(
+                    nodo, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    else dentro.get(nodo))
+        for nodo in ast.walk(arbol):
+            marcado = (
+                (isinstance(nodo, ast.Attribute) and nodo.attr in raices
+                 and isinstance(nodo.value, ast.Name) and nodo.value.id == "config")
+                or (archivo == "config.py" and isinstance(nodo, ast.Name)
+                    and nodo.id in raices and isinstance(nodo.ctx, ast.Load))
+                or (isinstance(nodo, ast.Constant) and nodo.value in segmentos
+                    and isinstance(padre.get(nodo), ast.BinOp)
+                    and isinstance(padre[nodo].op, ast.Div)))
+            if not marcado:
+                continue
+            lugar = dentro.get(nodo)
+            if lugar in puertas or (archivo == "config.py" and lugar is None):
+                continue
+            # La cadena `/` entera y no el pedazo que se marcó: lo que hay que
+            # declarar --- y leer --- es el destino, no la constante suelta.
+            entero = nodo
+            while isinstance(padre.get(entero), ast.BinOp) and \
+                    isinstance(padre[entero].op, ast.Div):
+                entero = padre[entero]
+            yield f"{archivo}: {ast.unparse(entero)}"
 
 
 @pytest.fixture
@@ -683,6 +788,145 @@ class TestEveryWriterFollowsTheRunAndNotTheTree:
                                            pilot=reduccion.pilot)
         assert sellado == sello
         assert "outputs" in json.loads(sellado.read_text(encoding="utf-8"))["evidence"]
+
+    def test_every_gate_takes_every_coordinate_it_declares(self):
+        """La firma de cada puerta, contra lo que `config.DESTINOS` dice que lleva.
+
+        Ésta es la mitad que la regla de arriba no podía mirar. Aquélla recorre
+        `vars(harness)` y salta a todo lo que no reciba una `reduction`, y así es
+        exactamente como se escapó el defecto: `models_for` vive en `config`, no
+        toma reducción ninguna, y tomaba DOS coordenadas mientras su hermana
+        `results_for` tomaba tres. Un nivel limpio del barrido escribió entonces
+        en el directorio de checkpoints de la campaña y le reetiquetó diez
+        manifiestos, en silencio y reportando éxito.
+
+        Las dos mitades se derivan: las coordenadas salen de los campos de
+        `harness.Reduction` y los nombres de cada puerta salen de la declaración
+        que el propio paquete lleva. Que una entrada tenga menos de las tres es
+        una afirmación --- el registro de techos se separa por nombre de archivo
+        y el eje de ruido es uno por corrida --- y la afirmación se comprueba
+        contra la firma viva, no contra la memoria de quien la escribió.
+
+        Rojo alcanzable: sacarle `kind` a `config.models_for`, o agregar una
+        puerta a `DESTINOS` sin escribirla.
+        """
+        import inspect
+        from MIL_CREDA_Benchmark import harness
+
+        modulos = (config, harness)
+        problemas = {}
+        for puerta, coordenadas in config.DESTINOS.items():
+            funcion = next((getattr(m, puerta) for m in modulos
+                            if hasattr(m, puerta)), None)
+            if funcion is None:
+                problemas[puerta] = "declarada y no existe"
+                continue
+            firma = set(inspect.signature(funcion).parameters)
+            desconocidas = [c for c in coordenadas if c not in self.COORDENADAS]
+            faltan = [nombre for nombre in coordenadas.values()
+                      if nombre not in firma]
+            if desconocidas or faltan:
+                problemas[puerta] = {"no son coordenadas": desconocidas,
+                                     "declaradas y no en la firma": faltan}
+        # Y al revés: una puerta que tome una tasa tiene que tomar las otras dos.
+        # Es la forma exacta del defecto de `models_for`, derivada de la firma y
+        # no de una lista: separar una corrida por tasa y no por forma ni por
+        # escala es lo que hace que dos corridas distintas compartan un árbol.
+        for puerta, coordenadas in config.DESTINOS.items():
+            if "labelNoise" in coordenadas and len(coordenadas) < len(self.COORDENADAS):
+                problemas[puerta] = (
+                    f"lleva una tasa y le faltan "
+                    f"{[c for c in self.COORDENADAS if c not in coordenadas]}")
+        assert not problemas, f"puertas de destino mal declaradas -> {problemas}"
+
+    def test_no_call_to_a_gate_leaves_a_coordinate_behind(self):
+        """Ninguna llamada a una puerta deja una coordenada sin pasar.
+
+        La otra forma del mismo defecto: la puerta toma las tres y quien la
+        llama pasa dos, así que la tercera la decide la firma. Pasó dos veces
+        hoy --- `search_ceilings` pidiendo su parcial con `pilot` solo, y
+        `latent.available` leyendo pesos sin decir la forma --- y las dos veces
+        el destino era legal, existía, y era el de otra corrida.
+
+        Recorre el paquete, `tools/` y las celdas de los siete cuadernos: el
+        `source` de una celda es código, y una escritura en una celda es una
+        escritura. La regla anterior sólo miraba `.py`, y por eso los dos
+        defectos que quedaban vivos estaban los dos en cuadernos.
+
+        `tests/` queda afuera a propósito: acá se redirige `config.RESULTS` con
+        `monkeypatch` en cada fixture, que es justo lo que el paquete no puede
+        hacer.
+
+        Rojo alcanzable: sacarle un argumento a cualquier llamada a
+        `results_for`, `models_for` o `shard_paths`, en un módulo o en una celda.
+        """
+        import inspect
+        from MIL_CREDA_Benchmark import harness
+
+        modulos = (config, harness)
+        firmas = {puerta: list(inspect.signature(
+                      next(getattr(m, puerta) for m in modulos
+                           if hasattr(m, puerta))).parameters)
+                  for puerta in config.DESTINOS}
+        sueltas = {}
+        for archivo, fuente in _fuentes_que_escriben():
+            try:
+                arbol = ast.parse(fuente)
+            except SyntaxError:                     # pragma: no cover
+                continue
+            for nodo in ast.walk(arbol):
+                if not isinstance(nodo, ast.Call):
+                    continue
+                nombre = (nodo.func.attr if isinstance(nodo.func, ast.Attribute)
+                          else getattr(nodo.func, "id", None))
+                if nombre not in config.DESTINOS:
+                    continue
+                atados = (set(firmas[nombre][:len(nodo.args)])
+                          | {kw.arg for kw in nodo.keywords})
+                faltan = [n for n in config.DESTINOS[nombre].values()
+                          if n not in atados]
+                if faltan:
+                    sueltas[f"{archivo}: {ast.unparse(nodo)}"] = faltan
+        assert not sueltas, (
+            f"estas llamadas dejan una coordenada del destino sin pasar, así que "
+            f"la decide la firma y no la corrida -> {sueltas}")
+
+    def test_every_hand_composed_destination_says_why_it_has_no_scale(self):
+        """Todo destino escrito a mano se declara, y declararse cuesta la razón.
+
+        La forma de `steps.CUADERNOS_SIN_PASO`, por el mismo motivo: un nombre
+        pelado en una lista y un olvido se leen igual. Las dos mitades se
+        derivan --- las raíces de producto salen de los `Path` que `config`
+        expone bajo `PRODUCT`, y los sitios salen del árbol de sintaxis del
+        paquete, de `tools/` y de las celdas de los cuadernos --- y lo que sobra
+        después de restar las puertas tiene que ser exactamente
+        `config.DESTINOS_SIN_COORDENADA`.
+
+        Los dos defectos que seguían vivos esta mañana caían acá: el cuaderno
+        latente escribía su mitad limpia en `config.RESULTS` mientras leía los
+        pesos por escala, y el de ruido componía `config.PRODUCT / "Results" /
+        "Noise" / "degradation"` a mano, así que el resumen de un barrido de
+        ensayo se escribía donde va el de la corrida completa.
+
+        Se mira el segmento además de la raíz: `ROOT / "MIL-CREDA" / "Results"`
+        no nombra ninguna constante de `config` y llega al mismo lugar, así que
+        una regla que sólo mirara `config.RESULTS` la dejaría pasar.
+
+        Rojo alcanzable: escribir un destino nuevo a mano, borrarle la razón a
+        una exclusión, o dejar una exclusión que ya no tiene sitio.
+        """
+        encontrados = set(_destinos_a_mano())
+        declarados = set(config.DESTINOS_SIN_COORDENADA)
+
+        assert encontrados - declarados == set(), (
+            "estos destinos se componen a mano y no dicen por qué no llevan "
+            f"escala -> {sorted(encontrados - declarados)}")
+        assert declarados - encontrados == set(), (
+            "estas exclusiones le sobrevivieron a su destino -> "
+            f"{sorted(declarados - encontrados)}")
+        sin_razon = [clave for clave, razon
+                     in config.DESTINOS_SIN_COORDENADA.items() if not razon.strip()]
+        assert not sin_razon, f"excluidos sin decir por qué -> {sin_razon}"
 
     def test_sealing_the_wrong_tree_raises_rather_than_sealing_nothing(
             self, tmp_path, monkeypatch):

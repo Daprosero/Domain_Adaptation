@@ -1981,7 +1981,7 @@ def _diagnostic_record() -> dict | None:
     import json
 
     for pilot in (False, True):
-        path = config.results_for(0.0, "curve", pilot).parents[1] / "diagnostic.json"
+        path = config.noise_axis_for(pilot) / "diagnostic.json"
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))
     return None

@@ -80,7 +80,11 @@ def load_curves(path: Path | None = None) -> dict:
     figure of thirty seeds indistinguishable from a figure of one run that took
     thirty times as long.
     """
-    path = path or (config.RESULTS / "runs.jsonl")
+    # El arbol completo y limpio, dicho con sus tres coordenadas en vez de por
+    # la constante: es lo mismo hoy, y el dia que `results_for` mueva la forma
+    # este repliegue se mueve con ella. Que sea un repliegue y no la regla lo
+    # explica `_panelled`: un informe de ensayo dibuja OTRA corrida y la pasa.
+    path = path or (config.results_for(0.0, "campaign", False) / "runs.jsonl")
     curves: dict[str, dict[str, list[list[dict]]]] = {}
     with path.open(encoding="utf-8") as handle:
         for line in handle:
