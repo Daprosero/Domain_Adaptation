@@ -1,0 +1,343 @@
+{
+  "kind": "bounded",
+  "revision": "research-concept-r17.md",
+  "reduction": {
+    "setting": "trained",
+    "revision": "research-concept-r17.md",
+    "backbone": "resnet18",
+    "instancesPerBag": 30,
+    "bagsPerDomain": 120,
+    "trainBags": 64,
+    "validBags": 20,
+    "evalBags": 36,
+    "searchRole": "valid",
+    "epochs": 3,
+    "seeds": [
+      0
+    ],
+    "labelNoise": 0.0,
+    "pilot": true,
+    "kind": "campaign",
+    "rampCeiling": 1.0,
+    "ceilings": {
+      "creda": 0.00030276471390845917,
+      "milcreda": 0.0005821960846533309
+    },
+    "ceilingsByTransfer": {
+      "creda": {
+        "M->U": 0.0001356661411177182,
+        "U->M": 0.00030276471390845917,
+        "M->S": 0.002821673073227557,
+        "S->M": 0.00016502467969081887,
+        "U->S": 0.00010535238182112257,
+        "S->U": 0.0012179535784210785
+      },
+      "milcreda": {
+        "M->U": 0.00515442432837486,
+        "U->M": 0.0005821960846533309,
+        "M->S": 0.0006439610517135079,
+        "S->M": 0.0005588881465031164,
+        "U->S": 0.003504803896982994,
+        "S->U": 0.0003084761579844385
+      }
+    },
+    "ceilingSearch": {},
+    "rampDelta": 20,
+    "device": "mps",
+    "environment": {
+      "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+      "python": "3.12.13",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "torch": "2.13.0",
+      "selfHosted": true,
+      "power": {
+        "source": "battery",
+        "charge": 27
+      },
+      "device": {
+        "name": "mps",
+        "kind": "mps"
+      }
+    }
+  },
+  "targetScale": {
+    "epochs": 20,
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29
+    ]
+  },
+  "verdictsMeaningful": false,
+  "comparison": [
+    {
+      "rung": "A->B",
+      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.11574074074074071,
+      "stdev": 0.14531433220447637,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "A->B",
+      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08796296296296295,
+      "stdev": 0.08857002995235644,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "A->C",
+      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "A->C",
+      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "C->D",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "C->D",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.023148148148148136,
+      "stdev": 0.044502277187770035,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.01388888888888889,
+      "stdev": 0.03828902431136174,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.004629629629629632,
+      "stdev": 0.011340230290662867,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.004629629629629632,
+      "stdev": 0.011340230290662867,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.09259259259259257,
+      "stdev": 0.14975975273448688,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08796296296296295,
+      "stdev": 0.08857002995235644,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.10648148148148147,
+      "stdev": 0.13655445559030208,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08796296296296295,
+      "stdev": 0.08857002995235644,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.10185185185185185,
+      "stdev": 0.1357042293374908,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08333333333333333,
+      "stdev": 0.09296222517045283,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.10185185185185185,
+      "stdev": 0.13683669038452717,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.04166666666666666,
+      "stdev": 0.07607257743127305,
+      "transfers": 6,
+      "favouringRight": 4,
+      "favouringLeft": 2
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.0787037037037037,
+      "stdev": 0.10002571685782519,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.027777777777777762,
+      "stdev": 0.10243938285880984,
+      "transfers": 6,
+      "favouringRight": 3,
+      "favouringLeft": 3
+    },
+    {
+      "rung": "SK->G",
+      "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.009259259259259254,
+      "stdev": 0.12001371663718259,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "SK->G",
+      "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.027777777777777804,
+      "stdev": 0.07027283689263063,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    }
+  ],
+  "detail": "MIL-CREDA/Results/Pilot/Benchmark/summary.json",
+  "figures": []
+}
