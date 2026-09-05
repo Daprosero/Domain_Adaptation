@@ -1,0 +1,2226 @@
+{
+  "revision": "research-concept-r17.md",
+  "displaySeed": 0,
+  "figureTransfers": [
+    "U->M",
+    "M->U",
+    "S->M"
+  ],
+  "figureTransferRule": "mayor exactitud media en destino sobre todos los m\u00e9todos",
+  "gridPanels": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G"
+  ],
+  "gridUnit": "instance",
+  "bagPanels": [
+    "B",
+    "F",
+    "G"
+  ],
+  "floorsAgree": {
+    "agree": null,
+    "detail": "sin checkpoints de los dos pisos"
+  },
+  "readings": [
+    {
+      "arm": "A",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.08333333333333333,
+      "geometry": {
+        "crossDomainSameClass": 0.28807337886035583,
+        "betweenClasses": 0.23876796698719843,
+        "ratio": 1.2064992741501246,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 27.616589641571046,
+          "betweenClasses": 22.44332625865936,
+          "ratio": 1.2305034166188122
+        }
+      },
+      "domainSeparability": 0.9680555555555556
+    },
+    {
+      "arm": "A",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.7777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.14191504845623443,
+        "betweenClasses": 0.3037189321379376,
+        "ratio": 0.4672578276805675,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 19.603098011016847,
+          "betweenClasses": 31.50346770816379,
+          "ratio": 0.6222520705533922
+        }
+      },
+      "domainSeparability": 0.9166666666666666
+    },
+    {
+      "arm": "A",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.6944444444444444,
+      "geometry": {
+        "crossDomainSameClass": 0.16362866172769414,
+        "betweenClasses": 0.08551511593524642,
+        "ratio": 1.9134472302136232,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.07751750946045,
+          "betweenClasses": 12.36394108666314,
+          "ratio": 1.4621161151407045
+        }
+      },
+      "domainSeparability": 0.9925925925925926
+    },
+    {
+      "arm": "A",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.4722222222222222,
+      "geometry": {
+        "crossDomainSameClass": 0.1690644537046308,
+        "betweenClasses": 0.10856522454870061,
+        "ratio": 1.5572615854425025,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.946066856384277,
+          "betweenClasses": 14.304471609327528,
+          "ratio": 1.3244856135776522
+        }
+      },
+      "domainSeparability": 0.987037037037037
+    },
+    {
+      "arm": "A",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.9444444444444444,
+      "geometry": {
+        "crossDomainSameClass": 0.09949377669259832,
+        "betweenClasses": 0.2912395368018816,
+        "ratio": 0.34162180652100094,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.069178581237793,
+          "betweenClasses": 33.03462063471476,
+          "ratio": 0.5469770269512226
+        }
+      },
+      "domainSeparability": 0.8481481481481481
+    },
+    {
+      "arm": "A",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.16666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.2793114780098074,
+        "betweenClasses": 0.24008017068556514,
+        "ratio": 1.1634091945711909,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 31.638048934936524,
+          "betweenClasses": 25.55985281467438,
+          "ratio": 1.2378024695342746
+        }
+      },
+      "domainSeparability": 0.8597222222222222
+    },
+    {
+      "arm": "B",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.16666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.4232169515888506,
+        "betweenClasses": 0.3385580616093761,
+        "ratio": 1.2500572267487542,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 43.25399055480957,
+          "betweenClasses": 36.03773261706034,
+          "ratio": 1.2002417303671606
+        }
+      },
+      "domainSeparability": 0.7933333333333333,
+      "attentionSpread": 0.6120017456511656
+    },
+    {
+      "arm": "B",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.6111111111111112,
+      "geometry": {
+        "crossDomainSameClass": 0.26178395608564,
+        "betweenClasses": 0.35609208997259234,
+        "ratio": 0.7351580207967803,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 30.441788482666016,
+          "betweenClasses": 37.0759396870931,
+          "ratio": 0.8210658648056717
+        }
+      },
+      "domainSeparability": 0.8495238095238096,
+      "attentionSpread": 0.7198420920305781
+    },
+    {
+      "arm": "B",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.3888888888888889,
+      "geometry": {
+        "crossDomainSameClass": 0.39073874869911107,
+        "betweenClasses": 0.2545024020420029,
+        "ratio": 1.5353047576919285,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 35.82100505828858,
+          "betweenClasses": 27.171824603610567,
+          "ratio": 1.3183143046466124
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.7289067548182275
+    },
+    {
+      "arm": "B",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.34275463107697385,
+        "betweenClasses": 0.27363820317441473,
+        "ratio": 1.2525832544606532,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 39.40096244812012,
+          "betweenClasses": 33.75903576744928,
+          "ratio": 1.1671234545777764
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.6442047912213538
+    },
+    {
+      "arm": "B",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.8055555555555556,
+      "geometry": {
+        "crossDomainSameClass": 0.17876287576266775,
+        "betweenClasses": 0.4135257795642903,
+        "ratio": 0.4322895562908327,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 21.617870998382568,
+          "betweenClasses": 37.52160274717543,
+          "ratio": 0.5761446584264028
+        }
+      },
+      "domainSeparability": 0.8314285714285715,
+      "attentionSpread": 0.7665113318297598
+    },
+    {
+      "arm": "B",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.19444444444444445,
+      "geometry": {
+        "crossDomainSameClass": 0.3915099612596142,
+        "betweenClasses": 0.3420927310991113,
+        "ratio": 1.1444556568089888,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 37.61092643737793,
+          "betweenClasses": 33.62574768596225,
+          "ratio": 1.1185156918630947
+        }
+      },
+      "domainSeparability": 0.8885714285714286,
+      "attentionSpread": 0.7292377410663499
+    },
+    {
+      "arm": "C",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.08333333333333333,
+      "geometry": {
+        "crossDomainSameClass": 0.2879341674470844,
+        "betweenClasses": 0.23859753021789898,
+        "ratio": 1.206777652661068,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 27.60688591003418,
+          "betweenClasses": 22.431573147243924,
+          "ratio": 1.2307155511929009
+        }
+      },
+      "domainSeparability": 0.9671296296296296
+    },
+    {
+      "arm": "C",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.7777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.14191177418390333,
+        "betweenClasses": 0.3037213216640194,
+        "ratio": 0.46724337101656643,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 19.603234672546385,
+          "betweenClasses": 31.50418365266588,
+          "ratio": 0.6222422675246042
+        }
+      },
+      "domainSeparability": 0.9157407407407409
+    },
+    {
+      "arm": "C",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.6944444444444444,
+      "geometry": {
+        "crossDomainSameClass": 0.1636949384257163,
+        "betweenClasses": 0.08555100273020068,
+        "ratio": 1.9134192844232993,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.07731227874756,
+          "betweenClasses": 12.363411304685805,
+          "ratio": 1.4621621681304215
+        }
+      },
+      "domainSeparability": 0.9944444444444445
+    },
+    {
+      "arm": "C",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.4722222222222222,
+      "geometry": {
+        "crossDomainSameClass": 0.16915188996315528,
+        "betweenClasses": 0.10837830592919981,
+        "ratio": 1.560754142749352,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.96773805618286,
+          "betweenClasses": 14.306440178553263,
+          "ratio": 1.3258181503891746
+        }
+      },
+      "domainSeparability": 0.987037037037037
+    },
+    {
+      "arm": "C",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.9444444444444444,
+      "geometry": {
+        "crossDomainSameClass": 0.09950031860624538,
+        "betweenClasses": 0.29121966719374187,
+        "ratio": 0.3416675788591231,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.069925117492676,
+          "betweenClasses": 33.032942369249135,
+          "ratio": 0.5470274163137899
+        }
+      },
+      "domainSeparability": 0.8458333333333334
+    },
+    {
+      "arm": "C",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.16666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.27930338031532376,
+        "betweenClasses": 0.24007005165639742,
+        "ratio": 1.163424502091079,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 31.63976707458496,
+          "betweenClasses": 25.56064444647895,
+          "ratio": 1.2378313520551094
+        }
+      },
+      "domainSeparability": 0.861574074074074
+    },
+    {
+      "arm": "D",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.08333333333333333,
+      "geometry": {
+        "crossDomainSameClass": 0.28827958171523493,
+        "betweenClasses": 0.23882422431260153,
+        "ratio": 1.2070784801875891,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 27.624530124664307,
+          "betweenClasses": 22.443482491705154,
+          "ratio": 1.2308486499309546
+        }
+      },
+      "domainSeparability": 0.9680555555555556
+    },
+    {
+      "arm": "D",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.7777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.14191372336649458,
+        "betweenClasses": 0.30372009994099197,
+        "ratio": 0.4672516682105207,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 19.603234004974365,
+          "betweenClasses": 31.50415359073215,
+          "ratio": 0.622242840091448
+        }
+      },
+      "domainSeparability": 0.9166666666666666
+    },
+    {
+      "arm": "D",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.6944444444444444,
+      "geometry": {
+        "crossDomainSameClass": 0.16354882234746634,
+        "betweenClasses": 0.08547337119692001,
+        "ratio": 1.9134476627892705,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.066893672943117,
+          "betweenClasses": 12.357682789696588,
+          "ratio": 1.461996879221295
+        }
+      },
+      "domainSeparability": 0.9935185185185185
+    },
+    {
+      "arm": "D",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.4722222222222222,
+      "geometry": {
+        "crossDomainSameClass": 0.16888571057136129,
+        "betweenClasses": 0.108273857922544,
+        "ratio": 1.5598013575186105,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.936842346191405,
+          "betweenClasses": 14.284091806411743,
+          "ratio": 1.3257295320442541
+        }
+      },
+      "domainSeparability": 0.985648148148148
+    },
+    {
+      "arm": "D",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.9444444444444444,
+      "geometry": {
+        "crossDomainSameClass": 0.0995000011912846,
+        "betweenClasses": 0.2912355910250107,
+        "ratio": 0.3416478076772552,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 18.069433403015136,
+          "betweenClasses": 33.03390849431356,
+          "ratio": 0.5469965325515629
+        }
+      },
+      "domainSeparability": 0.849537037037037
+    },
+    {
+      "arm": "D",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "instance",
+      "targetAccuracy": 0.16666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.2793026022236362,
+        "betweenClasses": 0.24007055412326747,
+        "ratio": 1.1634188259515763,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 31.63294563293457,
+          "betweenClasses": 25.555990139643352,
+          "ratio": 1.2377898668799543
+        }
+      },
+      "domainSeparability": 0.8578703703703704
+    },
+    {
+      "arm": "E",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.16666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.4233517496645051,
+        "betweenClasses": 0.3384183794866256,
+        "ratio": 1.2509715054682369,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 43.15360736846924,
+          "betweenClasses": 35.95006644990709,
+          "ratio": 1.2003762893901624
+        }
+      },
+      "domainSeparability": 0.78,
+      "attentionSpread": 0.6124937724736002
+    },
+    {
+      "arm": "E",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.7222222222222222,
+      "geometry": {
+        "crossDomainSameClass": 0.2543339753781395,
+        "betweenClasses": 0.36371467081153575,
+        "ratio": 0.6992678486426149,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 29.201504516601563,
+          "betweenClasses": 36.9236733118693,
+          "ratio": 0.7908613065107635
+        }
+      },
+      "domainSeparability": 0.836190476190476,
+      "attentionSpread": 0.7319449252552457
+    },
+    {
+      "arm": "E",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.3888888888888889,
+      "geometry": {
+        "crossDomainSameClass": 0.39001726297235695,
+        "betweenClasses": 0.25415552058894336,
+        "ratio": 1.534561445167853,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 35.774939346313474,
+          "betweenClasses": 27.15002728568183,
+          "ratio": 1.3176759997283753
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.7307381687892808
+    },
+    {
+      "arm": "E",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.34213158845065855,
+        "betweenClasses": 0.2733956924773407,
+        "ratio": 1.251415431422771,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 39.347015953063966,
+          "betweenClasses": 33.73828982247247,
+          "ratio": 1.1662421586898464
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.6445109620690346
+    },
+    {
+      "arm": "E",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.8055555555555556,
+      "geometry": {
+        "crossDomainSameClass": 0.1777227078576849,
+        "betweenClasses": 0.41429197920486666,
+        "ratio": 0.42897935943336557,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 21.55985622406006,
+          "betweenClasses": 37.62643896738688,
+          "ratio": 0.5729975202475922
+        }
+      },
+      "domainSeparability": 0.8314285714285715,
+      "attentionSpread": 0.7664422459072537
+    },
+    {
+      "arm": "E",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2222222222222222,
+      "geometry": {
+        "crossDomainSameClass": 0.39281976619664466,
+        "betweenClasses": 0.34157042719362185,
+        "ratio": 1.1500403282101812,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 37.09280891418457,
+          "betweenClasses": 33.03050988515218,
+          "ratio": 1.1229862646128412
+        }
+      },
+      "domainSeparability": 0.8885714285714286,
+      "attentionSpread": 0.7394943593276871
+    },
+    {
+      "arm": "F",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.16666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.4207993925410367,
+        "betweenClasses": 0.3370320333169926,
+        "ratio": 1.2485442063166068,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 43.098689270019534,
+          "betweenClasses": 35.93097214168972,
+          "ratio": 1.199485755633461
+        }
+      },
+      "domainSeparability": 0.7933333333333333,
+      "attentionSpread": 0.613020322802994
+    },
+    {
+      "arm": "F",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.6388888888888888,
+      "geometry": {
+        "crossDomainSameClass": 0.26070764579426464,
+        "betweenClasses": 0.3615934545706867,
+        "ratio": 0.7209965846970269,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 29.253407287597657,
+          "betweenClasses": 36.19469066196018,
+          "ratio": 0.8082237132735698
+        }
+      },
+      "domainSeparability": 0.836190476190476,
+      "attentionSpread": 0.7313914853665564
+    },
+    {
+      "arm": "F",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.4166666666666667,
+      "geometry": {
+        "crossDomainSameClass": 0.39071070448198597,
+        "betweenClasses": 0.2543792892622447,
+        "ratio": 1.5359375584983042,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 35.76077938079834,
+          "betweenClasses": 27.141372373369006,
+          "ratio": 1.3175744722432186
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.7292689598268933
+    },
+    {
+      "arm": "F",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.34244107774756793,
+        "betweenClasses": 0.27349421110096933,
+        "ratio": 1.2520962559647912,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 39.351914978027345,
+          "betweenClasses": 33.72748024198744,
+          "ratio": 1.1667611898572259
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.6441646582550473
+    },
+    {
+      "arm": "F",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.8055555555555556,
+      "geometry": {
+        "crossDomainSameClass": 0.17771918331963582,
+        "betweenClasses": 0.4139627837690182,
+        "ratio": 0.42931198235153206,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 21.54917707443237,
+          "betweenClasses": 37.54822306103176,
+          "ratio": 0.5739067076331638
+        }
+      },
+      "domainSeparability": 0.8314285714285715,
+      "attentionSpread": 0.7666343814796872
+    },
+    {
+      "arm": "F",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.19444444444444445,
+      "geometry": {
+        "crossDomainSameClass": 0.3936985159150702,
+        "betweenClasses": 0.3422261979769201,
+        "ratio": 1.1504043765276597,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 37.14869918823242,
+          "betweenClasses": 33.02219741079542,
+          "ratio": 1.1249614532341203
+        }
+      },
+      "domainSeparability": 0.8742857142857142,
+      "attentionSpread": 0.7419417864746518
+    },
+    {
+      "arm": "G",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.16666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.4227805961505765,
+        "betweenClasses": 0.33849611834764853,
+        "ratio": 1.2489968813065222,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 42.96742839813233,
+          "betweenClasses": 35.826253498925105,
+          "ratio": 1.199327984418507
+        }
+      },
+      "domainSeparability": 0.7933333333333333,
+      "attentionSpread": 0.6137660580376784,
+      "correspondence": {
+        "massOnTrueClass": 0.164850740352348,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "G",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.6666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.26422591807797496,
+        "betweenClasses": 0.3647349762897122,
+        "ratio": 0.7244326298668379,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 29.232888984680176,
+          "betweenClasses": 36.20606591966417,
+          "ratio": 0.8074030757592823
+        }
+      },
+      "domainSeparability": 0.836190476190476,
+      "attentionSpread": 0.7328682657745149,
+      "correspondence": {
+        "massOnTrueClass": 0.5661815102729533,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "G",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.4166666666666667,
+      "geometry": {
+        "crossDomainSameClass": 0.39065816637981976,
+        "betweenClasses": 0.2543678960682525,
+        "ratio": 1.53579980971733,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 35.78321857452393,
+          "betweenClasses": 27.152362547980413,
+          "ratio": 1.3178675892859082
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.7294522614942657,
+      "correspondence": {
+        "massOnTrueClass": 0.281684669307045,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "G",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.34248644348533697,
+        "betweenClasses": 0.27353338573417557,
+        "ratio": 1.2520827853100578,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 39.36063785552979,
+          "betweenClasses": 33.73790134853787,
+          "ratio": 1.1666593440091257
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.6446421792109808,
+      "correspondence": {
+        "massOnTrueClass": 0.2321301236135898,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "G",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.8055555555555556,
+      "geometry": {
+        "crossDomainSameClass": 0.17742826263127287,
+        "betweenClasses": 0.41427550205350744,
+        "ratio": 0.42828567403040985,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 21.5118465423584,
+          "betweenClasses": 37.495463932885066,
+          "ratio": 0.5737186391629528
+        }
+      },
+      "domainSeparability": 0.8314285714285715,
+      "attentionSpread": 0.7678921951187981,
+      "correspondence": {
+        "massOnTrueClass": 0.7726791193708777,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "G",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.19444444444444445,
+      "geometry": {
+        "crossDomainSameClass": 0.39042523418706454,
+        "betweenClasses": 0.3383093790704168,
+        "ratio": 1.154047916909215,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 36.56163787841797,
+          "betweenClasses": 32.39231440226237,
+          "ratio": 1.128713355408294
+        }
+      },
+      "domainSeparability": 0.8742857142857142,
+      "attentionSpread": 0.7538310198320283,
+      "correspondence": {
+        "massOnTrueClass": 0.22257593166139283,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SA",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2222222222222222,
+      "geometry": {
+        "crossDomainSameClass": 0.41429215949546705,
+        "betweenClasses": 0.3555078763794052,
+        "ratio": 1.165352969714027,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 48.9867449760437,
+          "betweenClasses": 44.023404863145615,
+          "ratio": 1.1127432130324197
+        }
+      },
+      "domainSeparability": 0.9038095238095238,
+      "attentionSpread": 0.438904891980605,
+      "correspondence": {
+        "massOnTrueClass": 0.18865666445769755,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SA",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.4166666666666667,
+      "geometry": {
+        "crossDomainSameClass": 0.33143947253365186,
+        "betweenClasses": 0.3313299755495144,
+        "ratio": 1.0003304771442907,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 41.015625,
+          "betweenClasses": 40.91425212224325,
+          "ratio": 1.0024776910855873
+        }
+      },
+      "domainSeparability": 0.9066666666666666,
+      "attentionSpread": 0.6113138051910533,
+      "correspondence": {
+        "massOnTrueClass": 0.4069687959911082,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SA",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.3856631966734355,
+        "betweenClasses": 0.19026061023059188,
+        "ratio": 2.027025962998961,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 21.998550987243654,
+          "betweenClasses": 14.487261933750576,
+          "ratio": 1.5184754087999357
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.7162651651435428,
+      "correspondence": {
+        "massOnTrueClass": 0.24574663078076103,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SA",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.25,
+      "geometry": {
+        "crossDomainSameClass": 0.30236042764861015,
+        "betweenClasses": 0.22774622967829114,
+        "ratio": 1.3276199042931127,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 25.130595111846922,
+          "betweenClasses": 22.482772143681846,
+          "ratio": 1.1177711961515908
+        }
+      },
+      "domainSeparability": 0.919047619047619,
+      "attentionSpread": 0.644817599405845,
+      "correspondence": {
+        "massOnTrueClass": 0.24971492730805445,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SA",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.75,
+      "geometry": {
+        "crossDomainSameClass": 0.19058961544783726,
+        "betweenClasses": 0.3752580927060334,
+        "ratio": 0.507889421047449,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 26.4408166885376,
+          "betweenClasses": 40.25978136062622,
+          "ratio": 0.656755098883784
+        }
+      },
+      "domainSeparability": 0.8761904761904761,
+      "attentionSpread": 0.6854314307371775,
+      "correspondence": {
+        "massOnTrueClass": 0.7125278983342772,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SA",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.19444444444444445,
+      "geometry": {
+        "crossDomainSameClass": 0.41666872738591965,
+        "betweenClasses": 0.31022293321639766,
+        "ratio": 1.3431267735943628,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 32.787672424316405,
+          "betweenClasses": 26.301782745785182,
+          "ratio": 1.2465950594003206
+        }
+      },
+      "domainSeparability": 0.9457142857142857,
+      "attentionSpread": 0.6612628615564771,
+      "correspondence": {
+        "massOnTrueClass": 0.16787564683747608,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SK",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.38091503673049487,
+        "betweenClasses": 0.32546258822519764,
+        "ratio": 1.1703804077995226,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 33.319972610473634,
+          "betweenClasses": 29.581612873077393,
+          "ratio": 1.1263744391976196
+        }
+      },
+      "domainSeparability": 0.8609523809523809,
+      "attentionSpread": 0.7966400906443596,
+      "correspondence": {
+        "massOnTrueClass": 0.202377107175481,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SK",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.5555555555555556,
+      "geometry": {
+        "crossDomainSameClass": 0.3008409150831423,
+        "betweenClasses": 0.3581004555727053,
+        "ratio": 0.840102017189594,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 34.42409877777099,
+          "betweenClasses": 37.81471378538344,
+          "ratio": 0.910336092272024
+        }
+      },
+      "domainSeparability": 0.9152380952380952,
+      "attentionSpread": 0.8076052458749877,
+      "correspondence": {
+        "massOnTrueClass": 0.45705863592835766,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SK",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.4166666666666667,
+      "geometry": {
+        "crossDomainSameClass": 0.44165115129553917,
+        "betweenClasses": 0.2303162440143915,
+        "ratio": 1.9175857664122997,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 28.66583595275879,
+          "betweenClasses": 18.427898422876993,
+          "ratio": 1.5555672868899737
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.8381711261139976,
+      "correspondence": {
+        "massOnTrueClass": 0.23604938828308755,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SK",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.4444444444444444,
+      "geometry": {
+        "crossDomainSameClass": 0.40111838494037233,
+        "betweenClasses": 0.32216861577601813,
+        "ratio": 1.2450572939086115,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 28.195944690704344,
+          "betweenClasses": 24.301595629586114,
+          "ratio": 1.1602507555667263
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.8182517389456431,
+      "correspondence": {
+        "massOnTrueClass": 0.34241258376277983,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SK",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.6666666666666666,
+      "geometry": {
+        "crossDomainSameClass": 0.22155291371126112,
+        "betweenClasses": 0.3722276549902809,
+        "ratio": 0.5952080957473351,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 25.16728744506836,
+          "betweenClasses": 34.996497832404245,
+          "ratio": 0.7191373138418798
+        }
+      },
+      "domainSeparability": 0.8885714285714286,
+      "attentionSpread": 0.8871274706390169,
+      "correspondence": {
+        "massOnTrueClass": 0.6265498099253617,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SK",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.2222222222222222,
+      "geometry": {
+        "crossDomainSameClass": 0.3881146871368368,
+        "betweenClasses": 0.31852547714588664,
+        "ratio": 1.218472979350025,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 31.43465166091919,
+          "betweenClasses": 26.005540778901842,
+          "ratio": 1.2087674672169078
+        }
+      },
+      "domainSeparability": 0.9466666666666667,
+      "attentionSpread": 0.8976349598831601,
+      "correspondence": {
+        "massOnTrueClass": 0.21306757443946683,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SU",
+      "transfer": "M->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.1111111111111111,
+      "geometry": {
+        "crossDomainSameClass": 0.48152379176274246,
+        "betweenClasses": 0.3280565913639058,
+        "ratio": 1.4678070931627736,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 44.69894886016846,
+          "betweenClasses": 31.74037658373515,
+          "ratio": 1.4082677545506415
+        }
+      },
+      "domainSeparability": 0.9180952380952381,
+      "attentionSpread": 0.7825092482897971,
+      "correspondence": {
+        "massOnTrueClass": 0.12414230751649787,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SU",
+      "transfer": "M->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.25,
+      "geometry": {
+        "crossDomainSameClass": 0.39884252744638904,
+        "betweenClasses": 0.3297966061100959,
+        "ratio": 1.2093591021165437,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 47.49579849243164,
+          "betweenClasses": 40.36336482895745,
+          "ratio": 1.1767056263445421
+        }
+      },
+      "domainSeparability": 0.8895238095238096,
+      "attentionSpread": 0.6467558785031239,
+      "correspondence": {
+        "massOnTrueClass": 0.2750556504939191,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SU",
+      "transfer": "S->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.3055555555555556,
+      "geometry": {
+        "crossDomainSameClass": 0.36534631660163747,
+        "betweenClasses": 0.25991775063154043,
+        "ratio": 1.4056228007280374,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 20.54487009048462,
+          "betweenClasses": 17.288765750990972,
+          "ratio": 1.1883364253059538
+        }
+      },
+      "domainSeparability": 1.0,
+      "attentionSpread": 0.793174672457907,
+      "correspondence": {
+        "massOnTrueClass": 0.24759910007317862,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SU",
+      "transfer": "S->U",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.3888888888888889,
+      "geometry": {
+        "crossDomainSameClass": 0.3767147436168109,
+        "betweenClasses": 0.307674057699049,
+        "ratio": 1.2243955386881984,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 25.11477870941162,
+          "betweenClasses": 23.444510825475056,
+          "ratio": 1.0712434520971805
+        }
+      },
+      "domainSeparability": 0.96,
+      "attentionSpread": 0.8113380960292287,
+      "correspondence": {
+        "massOnTrueClass": 0.25008743804776007,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SU",
+      "transfer": "U->M",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.7777777777777778,
+      "geometry": {
+        "crossDomainSameClass": 0.17199764972581041,
+        "betweenClasses": 0.33278181130098944,
+        "ratio": 0.5168481085351284,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 26.963448143005373,
+          "betweenClasses": 40.777420361836754,
+          "ratio": 0.6612347692361688
+        }
+      },
+      "domainSeparability": 0.7961904761904762,
+      "attentionSpread": 0.5283093991068503,
+      "correspondence": {
+        "massOnTrueClass": 0.7233147963351156,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    },
+    {
+      "arm": "SU",
+      "transfer": "U->S",
+      "seed": 0,
+      "unit": "bag",
+      "targetAccuracy": 0.1388888888888889,
+      "geometry": {
+        "crossDomainSameClass": 0.389325894594074,
+        "betweenClasses": 0.2749519029901613,
+        "ratio": 1.4159781778560936,
+        "classes": 10,
+        "euclidean": {
+          "crossDomainSameClass": 51.72078828811645,
+          "betweenClasses": 39.96550017462836,
+          "ratio": 1.2941358937614598
+        }
+      },
+      "domainSeparability": 0.9057142857142857,
+      "attentionSpread": 0.6178832914576762,
+      "correspondence": {
+        "massOnTrueClass": 0.15603636080198965,
+        "chance": 0.1,
+        "subjects": 36
+      }
+    }
+  ],
+  "againstFloor": [
+    {
+      "arm": "C",
+      "floor": "A",
+      "transfer": "M->S",
+      "seed": 0,
+      "ratio": 1.206777652661068,
+      "floorRatio": 1.2064992741501246,
+      "ratioChange": 0.00027837851094347776,
+      "separability": 0.9671296296296296,
+      "floorSeparability": 0.9680555555555556,
+      "separabilityChange": -0.0009259259259259967
+    },
+    {
+      "arm": "C",
+      "floor": "A",
+      "transfer": "M->U",
+      "seed": 0,
+      "ratio": 0.46724337101656643,
+      "floorRatio": 0.4672578276805675,
+      "ratioChange": -1.4456664001072372e-05,
+      "separability": 0.9157407407407409,
+      "floorSeparability": 0.9166666666666666,
+      "separabilityChange": -0.0009259259259257746
+    },
+    {
+      "arm": "C",
+      "floor": "A",
+      "transfer": "S->M",
+      "seed": 0,
+      "ratio": 1.9134192844232993,
+      "floorRatio": 1.9134472302136232,
+      "ratioChange": -2.7945790323835595e-05,
+      "separability": 0.9944444444444445,
+      "floorSeparability": 0.9925925925925926,
+      "separabilityChange": 0.0018518518518518823
+    },
+    {
+      "arm": "C",
+      "floor": "A",
+      "transfer": "S->U",
+      "seed": 0,
+      "ratio": 1.560754142749352,
+      "floorRatio": 1.5572615854425025,
+      "ratioChange": 0.0034925573068496085,
+      "separability": 0.987037037037037,
+      "floorSeparability": 0.987037037037037,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "C",
+      "floor": "A",
+      "transfer": "U->M",
+      "seed": 0,
+      "ratio": 0.3416675788591231,
+      "floorRatio": 0.34162180652100094,
+      "ratioChange": 4.5772338122140876e-05,
+      "separability": 0.8458333333333334,
+      "floorSeparability": 0.8481481481481481,
+      "separabilityChange": -0.0023148148148146586
+    },
+    {
+      "arm": "C",
+      "floor": "A",
+      "transfer": "U->S",
+      "seed": 0,
+      "ratio": 1.163424502091079,
+      "floorRatio": 1.1634091945711909,
+      "ratioChange": 1.5307519888096977e-05,
+      "separability": 0.861574074074074,
+      "floorSeparability": 0.8597222222222222,
+      "separabilityChange": 0.0018518518518518823
+    },
+    {
+      "arm": "D",
+      "floor": "A",
+      "transfer": "M->S",
+      "seed": 0,
+      "ratio": 1.2070784801875891,
+      "floorRatio": 1.2064992741501246,
+      "ratioChange": 0.0005792060374645303,
+      "separability": 0.9680555555555556,
+      "floorSeparability": 0.9680555555555556,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "D",
+      "floor": "A",
+      "transfer": "M->U",
+      "seed": 0,
+      "ratio": 0.4672516682105207,
+      "floorRatio": 0.4672578276805675,
+      "ratioChange": -6.159470046784854e-06,
+      "separability": 0.9166666666666666,
+      "floorSeparability": 0.9166666666666666,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "D",
+      "floor": "A",
+      "transfer": "S->M",
+      "seed": 0,
+      "ratio": 1.9134476627892705,
+      "floorRatio": 1.9134472302136232,
+      "ratioChange": 4.3257564730225795e-07,
+      "separability": 0.9935185185185185,
+      "floorSeparability": 0.9925925925925926,
+      "separabilityChange": 0.0009259259259258856
+    },
+    {
+      "arm": "D",
+      "floor": "A",
+      "transfer": "S->U",
+      "seed": 0,
+      "ratio": 1.5598013575186105,
+      "floorRatio": 1.5572615854425025,
+      "ratioChange": 0.0025397720761080045,
+      "separability": 0.985648148148148,
+      "floorSeparability": 0.987037037037037,
+      "separabilityChange": -0.001388888888888995
+    },
+    {
+      "arm": "D",
+      "floor": "A",
+      "transfer": "U->M",
+      "seed": 0,
+      "ratio": 0.3416478076772552,
+      "floorRatio": 0.34162180652100094,
+      "ratioChange": 2.6001156254285007e-05,
+      "separability": 0.849537037037037,
+      "floorSeparability": 0.8481481481481481,
+      "separabilityChange": 0.001388888888888884
+    },
+    {
+      "arm": "D",
+      "floor": "A",
+      "transfer": "U->S",
+      "seed": 0,
+      "ratio": 1.1634188259515763,
+      "floorRatio": 1.1634091945711909,
+      "ratioChange": 9.631380385455302e-06,
+      "separability": 0.8578703703703704,
+      "floorSeparability": 0.8597222222222222,
+      "separabilityChange": -0.0018518518518517713
+    },
+    {
+      "arm": "E",
+      "floor": "B",
+      "transfer": "M->S",
+      "seed": 0,
+      "ratio": 1.2509715054682369,
+      "floorRatio": 1.2500572267487542,
+      "ratioChange": 0.0009142787194826862,
+      "separability": 0.78,
+      "floorSeparability": 0.7933333333333333,
+      "separabilityChange": -0.013333333333333308
+    },
+    {
+      "arm": "E",
+      "floor": "B",
+      "transfer": "M->U",
+      "seed": 0,
+      "ratio": 0.6992678486426149,
+      "floorRatio": 0.7351580207967803,
+      "ratioChange": -0.035890172154165345,
+      "separability": 0.836190476190476,
+      "floorSeparability": 0.8495238095238096,
+      "separabilityChange": -0.01333333333333353
+    },
+    {
+      "arm": "E",
+      "floor": "B",
+      "transfer": "S->M",
+      "seed": 0,
+      "ratio": 1.534561445167853,
+      "floorRatio": 1.5353047576919285,
+      "ratioChange": -0.0007433125240754457,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "E",
+      "floor": "B",
+      "transfer": "S->U",
+      "seed": 0,
+      "ratio": 1.251415431422771,
+      "floorRatio": 1.2525832544606532,
+      "ratioChange": -0.0011678230378822096,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "E",
+      "floor": "B",
+      "transfer": "U->M",
+      "seed": 0,
+      "ratio": 0.42897935943336557,
+      "floorRatio": 0.4322895562908327,
+      "ratioChange": -0.0033101968574671403,
+      "separability": 0.8314285714285715,
+      "floorSeparability": 0.8314285714285715,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "E",
+      "floor": "B",
+      "transfer": "U->S",
+      "seed": 0,
+      "ratio": 1.1500403282101812,
+      "floorRatio": 1.1444556568089888,
+      "ratioChange": 0.005584671401192454,
+      "separability": 0.8885714285714286,
+      "floorSeparability": 0.8885714285714286,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "F",
+      "floor": "B",
+      "transfer": "M->S",
+      "seed": 0,
+      "ratio": 1.2485442063166068,
+      "floorRatio": 1.2500572267487542,
+      "ratioChange": -0.001513020432147405,
+      "separability": 0.7933333333333333,
+      "floorSeparability": 0.7933333333333333,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "F",
+      "floor": "B",
+      "transfer": "M->U",
+      "seed": 0,
+      "ratio": 0.7209965846970269,
+      "floorRatio": 0.7351580207967803,
+      "ratioChange": -0.0141614360997534,
+      "separability": 0.836190476190476,
+      "floorSeparability": 0.8495238095238096,
+      "separabilityChange": -0.01333333333333353
+    },
+    {
+      "arm": "F",
+      "floor": "B",
+      "transfer": "S->M",
+      "seed": 0,
+      "ratio": 1.5359375584983042,
+      "floorRatio": 1.5353047576919285,
+      "ratioChange": 0.0006328008063756219,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "F",
+      "floor": "B",
+      "transfer": "S->U",
+      "seed": 0,
+      "ratio": 1.2520962559647912,
+      "floorRatio": 1.2525832544606532,
+      "ratioChange": -0.00048699849586197885,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "F",
+      "floor": "B",
+      "transfer": "U->M",
+      "seed": 0,
+      "ratio": 0.42931198235153206,
+      "floorRatio": 0.4322895562908327,
+      "ratioChange": -0.0029775739393006484,
+      "separability": 0.8314285714285715,
+      "floorSeparability": 0.8314285714285715,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "F",
+      "floor": "B",
+      "transfer": "U->S",
+      "seed": 0,
+      "ratio": 1.1504043765276597,
+      "floorRatio": 1.1444556568089888,
+      "ratioChange": 0.005948719718670947,
+      "separability": 0.8742857142857142,
+      "floorSeparability": 0.8885714285714286,
+      "separabilityChange": -0.014285714285714346
+    },
+    {
+      "arm": "G",
+      "floor": "B",
+      "transfer": "M->S",
+      "seed": 0,
+      "ratio": 1.2489968813065222,
+      "floorRatio": 1.2500572267487542,
+      "ratioChange": -0.0010603454422319913,
+      "separability": 0.7933333333333333,
+      "floorSeparability": 0.7933333333333333,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "G",
+      "floor": "B",
+      "transfer": "M->U",
+      "seed": 0,
+      "ratio": 0.7244326298668379,
+      "floorRatio": 0.7351580207967803,
+      "ratioChange": -0.010725390929942402,
+      "separability": 0.836190476190476,
+      "floorSeparability": 0.8495238095238096,
+      "separabilityChange": -0.01333333333333353
+    },
+    {
+      "arm": "G",
+      "floor": "B",
+      "transfer": "S->M",
+      "seed": 0,
+      "ratio": 1.53579980971733,
+      "floorRatio": 1.5353047576919285,
+      "ratioChange": 0.0004950520254014545,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "G",
+      "floor": "B",
+      "transfer": "S->U",
+      "seed": 0,
+      "ratio": 1.2520827853100578,
+      "floorRatio": 1.2525832544606532,
+      "ratioChange": -0.0005004691505954284,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "G",
+      "floor": "B",
+      "transfer": "U->M",
+      "seed": 0,
+      "ratio": 0.42828567403040985,
+      "floorRatio": 0.4322895562908327,
+      "ratioChange": -0.004003882260422864,
+      "separability": 0.8314285714285715,
+      "floorSeparability": 0.8314285714285715,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "G",
+      "floor": "B",
+      "transfer": "U->S",
+      "seed": 0,
+      "ratio": 1.154047916909215,
+      "floorRatio": 1.1444556568089888,
+      "ratioChange": 0.00959226010022629,
+      "separability": 0.8742857142857142,
+      "floorSeparability": 0.8885714285714286,
+      "separabilityChange": -0.014285714285714346
+    },
+    {
+      "arm": "SA",
+      "floor": "B",
+      "transfer": "M->S",
+      "seed": 0,
+      "ratio": 1.165352969714027,
+      "floorRatio": 1.2500572267487542,
+      "ratioChange": -0.08470425703472717,
+      "separability": 0.9038095238095238,
+      "floorSeparability": 0.7933333333333333,
+      "separabilityChange": 0.1104761904761905
+    },
+    {
+      "arm": "SA",
+      "floor": "B",
+      "transfer": "M->U",
+      "seed": 0,
+      "ratio": 1.0003304771442907,
+      "floorRatio": 0.7351580207967803,
+      "ratioChange": 0.2651724563475104,
+      "separability": 0.9066666666666666,
+      "floorSeparability": 0.8495238095238096,
+      "separabilityChange": 0.05714285714285705
+    },
+    {
+      "arm": "SA",
+      "floor": "B",
+      "transfer": "S->M",
+      "seed": 0,
+      "ratio": 2.027025962998961,
+      "floorRatio": 1.5353047576919285,
+      "ratioChange": 0.49172120530703256,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "SA",
+      "floor": "B",
+      "transfer": "S->U",
+      "seed": 0,
+      "ratio": 1.3276199042931127,
+      "floorRatio": 1.2525832544606532,
+      "ratioChange": 0.0750366498324595,
+      "separability": 0.919047619047619,
+      "floorSeparability": 1.0,
+      "separabilityChange": -0.080952380952381
+    },
+    {
+      "arm": "SA",
+      "floor": "B",
+      "transfer": "U->M",
+      "seed": 0,
+      "ratio": 0.507889421047449,
+      "floorRatio": 0.4322895562908327,
+      "ratioChange": 0.07559986475661634,
+      "separability": 0.8761904761904761,
+      "floorSeparability": 0.8314285714285715,
+      "separabilityChange": 0.04476190476190456
+    },
+    {
+      "arm": "SA",
+      "floor": "B",
+      "transfer": "U->S",
+      "seed": 0,
+      "ratio": 1.3431267735943628,
+      "floorRatio": 1.1444556568089888,
+      "ratioChange": 0.19867111678537408,
+      "separability": 0.9457142857142857,
+      "floorSeparability": 0.8885714285714286,
+      "separabilityChange": 0.05714285714285716
+    },
+    {
+      "arm": "SK",
+      "floor": "B",
+      "transfer": "M->S",
+      "seed": 0,
+      "ratio": 1.1703804077995226,
+      "floorRatio": 1.2500572267487542,
+      "ratioChange": -0.07967681894923162,
+      "separability": 0.8609523809523809,
+      "floorSeparability": 0.7933333333333333,
+      "separabilityChange": 0.06761904761904758
+    },
+    {
+      "arm": "SK",
+      "floor": "B",
+      "transfer": "M->U",
+      "seed": 0,
+      "ratio": 0.840102017189594,
+      "floorRatio": 0.7351580207967803,
+      "ratioChange": 0.10494399639281371,
+      "separability": 0.9152380952380952,
+      "floorSeparability": 0.8495238095238096,
+      "separabilityChange": 0.06571428571428561
+    },
+    {
+      "arm": "SK",
+      "floor": "B",
+      "transfer": "S->M",
+      "seed": 0,
+      "ratio": 1.9175857664122997,
+      "floorRatio": 1.5353047576919285,
+      "ratioChange": 0.3822810087203712,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "SK",
+      "floor": "B",
+      "transfer": "S->U",
+      "seed": 0,
+      "ratio": 1.2450572939086115,
+      "floorRatio": 1.2525832544606532,
+      "ratioChange": -0.007525960552041688,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "SK",
+      "floor": "B",
+      "transfer": "U->M",
+      "seed": 0,
+      "ratio": 0.5952080957473351,
+      "floorRatio": 0.4322895562908327,
+      "ratioChange": 0.16291853945650242,
+      "separability": 0.8885714285714286,
+      "floorSeparability": 0.8314285714285715,
+      "separabilityChange": 0.05714285714285705
+    },
+    {
+      "arm": "SK",
+      "floor": "B",
+      "transfer": "U->S",
+      "seed": 0,
+      "ratio": 1.218472979350025,
+      "floorRatio": 1.1444556568089888,
+      "ratioChange": 0.07401732254103632,
+      "separability": 0.9466666666666667,
+      "floorSeparability": 0.8885714285714286,
+      "separabilityChange": 0.05809523809523809
+    },
+    {
+      "arm": "SU",
+      "floor": "B",
+      "transfer": "M->S",
+      "seed": 0,
+      "ratio": 1.4678070931627736,
+      "floorRatio": 1.2500572267487542,
+      "ratioChange": 0.2177498664140194,
+      "separability": 0.9180952380952381,
+      "floorSeparability": 0.7933333333333333,
+      "separabilityChange": 0.12476190476190474
+    },
+    {
+      "arm": "SU",
+      "floor": "B",
+      "transfer": "M->U",
+      "seed": 0,
+      "ratio": 1.2093591021165437,
+      "floorRatio": 0.7351580207967803,
+      "ratioChange": 0.47420108131976346,
+      "separability": 0.8895238095238096,
+      "floorSeparability": 0.8495238095238096,
+      "separabilityChange": 0.040000000000000036
+    },
+    {
+      "arm": "SU",
+      "floor": "B",
+      "transfer": "S->M",
+      "seed": 0,
+      "ratio": 1.4056228007280374,
+      "floorRatio": 1.5353047576919285,
+      "ratioChange": -0.12968195696389118,
+      "separability": 1.0,
+      "floorSeparability": 1.0,
+      "separabilityChange": 0.0
+    },
+    {
+      "arm": "SU",
+      "floor": "B",
+      "transfer": "S->U",
+      "seed": 0,
+      "ratio": 1.2243955386881984,
+      "floorRatio": 1.2525832544606532,
+      "ratioChange": -0.028187715772454824,
+      "separability": 0.96,
+      "floorSeparability": 1.0,
+      "separabilityChange": -0.040000000000000036
+    },
+    {
+      "arm": "SU",
+      "floor": "B",
+      "transfer": "U->M",
+      "seed": 0,
+      "ratio": 0.5168481085351284,
+      "floorRatio": 0.4322895562908327,
+      "ratioChange": 0.0845585522442957,
+      "separability": 0.7961904761904762,
+      "floorSeparability": 0.8314285714285715,
+      "separabilityChange": -0.03523809523809529
+    },
+    {
+      "arm": "SU",
+      "floor": "B",
+      "transfer": "U->S",
+      "seed": 0,
+      "ratio": 1.4159781778560936,
+      "floorRatio": 1.1444556568089888,
+      "ratioChange": 0.27152252104710484,
+      "separability": 0.9057142857142857,
+      "floorSeparability": 0.8885714285714286,
+      "separabilityChange": 0.017142857142857126
+    }
+  ],
+  "correspondence": [],
+  "reduction": {
+    "setting": "trained",
+    "revision": "research-concept-r17.md",
+    "backbone": "resnet18",
+    "instancesPerBag": 30,
+    "bagsPerDomain": 120,
+    "trainBags": 64,
+    "validBags": 20,
+    "evalBags": 36,
+    "searchRole": "valid",
+    "epochs": 3,
+    "seeds": [
+      0
+    ],
+    "labelNoise": 0.0,
+    "pilot": true,
+    "kind": "campaign",
+    "rampCeiling": 1.0,
+    "ceilings": {
+      "creda": 0.00030276471390845917,
+      "milcreda": 0.0005821960846533309
+    },
+    "ceilingsByTransfer": {
+      "creda": {
+        "M->U": 0.0001356661411177182,
+        "U->M": 0.00030276471390845917,
+        "M->S": 0.002821673073227557,
+        "S->M": 0.00016502467969081887,
+        "U->S": 0.00010535238182112257,
+        "S->U": 0.0012179535784210785
+      },
+      "milcreda": {
+        "M->U": 0.00515442432837486,
+        "U->M": 0.0005821960846533309,
+        "M->S": 0.0006439610517135079,
+        "S->M": 0.0005588881465031164,
+        "U->S": 0.003504803896982994,
+        "S->U": 0.0003084761579844385
+      }
+    },
+    "ceilingSearch": {},
+    "rampDelta": 20,
+    "device": "mps",
+    "environment": {
+      "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+      "python": "3.12.13",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "torch": "2.13.0",
+      "selfHosted": true,
+      "power": {
+        "source": "battery",
+        "charge": 27
+      },
+      "device": {
+        "name": "mps",
+        "kind": "mps"
+      }
+    }
+  },
+  "panorama": [
+    {
+      "rung": "A->B",
+      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.11574074074074071,
+      "stdev": 0.14531433220447637,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "A->B",
+      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08796296296296295,
+      "stdev": 0.08857002995235644,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "A->C",
+      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "A->C",
+      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "C->D",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "C->D",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.023148148148148136,
+      "stdev": 0.044502277187770035,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.01388888888888889,
+      "stdev": 0.03828902431136174,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.0,
+      "stdev": 0.0,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.004629629629629632,
+      "stdev": 0.011340230290662867,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.004629629629629632,
+      "stdev": 0.011340230290662867,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.09259259259259257,
+      "stdev": 0.14975975273448688,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "C->E",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08796296296296295,
+      "stdev": 0.08857002995235644,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.10648148148148147,
+      "stdev": 0.13655445559030208,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "D->F",
+      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08796296296296295,
+      "stdev": 0.08857002995235644,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.10185185185185185,
+      "stdev": 0.1357042293374908,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "D->G",
+      "reading": "mano a mano, cada m\u00e9todo completo",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.08333333333333333,
+      "stdev": 0.09296222517045283,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.10185185185185185,
+      "stdev": 0.13683669038452717,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SU->SK",
+      "reading": "qu\u00e9 compra la selecci\u00f3n por atenci\u00f3n frente a una regular",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.04166666666666666,
+      "stdev": 0.07607257743127305,
+      "transfers": 6,
+      "favouringRight": 4,
+      "favouringLeft": 2
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.0787037037037037,
+      "stdev": 0.10002571685782519,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    },
+    {
+      "rung": "SA->SK",
+      "reading": "qu\u00e9 compra frente a una selecci\u00f3n fija arbitraria",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.027777777777777762,
+      "stdev": 0.10243938285880984,
+      "transfers": 6,
+      "favouringRight": 3,
+      "favouringLeft": 3
+    },
+    {
+      "rung": "SK->G",
+      "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.009259259259259254,
+      "stdev": 0.12001371663718259,
+      "transfers": 6,
+      "favouringRight": 2,
+      "favouringLeft": 4
+    },
+    {
+      "rung": "SK->G",
+      "reading": "qu\u00e9 cuesta quedarse solo con las mejores instancias frente a quedarse con todas",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.027777777777777804,
+      "stdev": 0.07027283689263063,
+      "transfers": 6,
+      "favouringRight": 5,
+      "favouringLeft": 1
+    }
+  ],
+  "conclusions": {
+    "niveles:sourceAccuracy": "Mejor promedio: **Baseline**; peor: MIL-CREDA-U, a 15.3% de distancia. CREDA no se separa de su piso Baseline. MIL-CREDA queda 0.5% por encima de su piso MIL-Baseline. Con 1 repetici\u00f3n(es) esto es una estimaci\u00f3n puntual y no un veredicto: la dispersi\u00f3n es cero por construcci\u00f3n, no por acuerdo. M\u00e1s repeticiones lo refuerzan o lo cambian.",
+    "niveles:targetAccuracy": "Mejor promedio: **Baseline**; peor: MIL-CREDA-U, a 19.4% de distancia. CREDA no se separa de su piso Baseline. MIL-CREDA queda 1.4% por encima de su piso MIL-Baseline. Con 1 repetici\u00f3n(es) esto es una estimaci\u00f3n puntual y no un veredicto: la dispersi\u00f3n es cero por construcci\u00f3n, no por acuerdo. M\u00e1s repeticiones lo refuerzan o lo cambian.",
+    "geometr\u00eda": "Cada m\u00e9todo contra su propio piso, transferencia por transferencia. \u00abAlinea\u00bb = la raz\u00f3n baj\u00f3; \u00abcolapsa\u00bb = la raz\u00f3n no baj\u00f3 y la distancia entre clases cay\u00f3 m\u00e1s del 10%.\n\nM\u00e9todo        piso            alinea  plano  empeora  colapsa\nCREDA         Baseline             0      6        0        0\nMIL-CREDA     MIL-Baseline         0      6        0        0\nMIL-CREDA*    MIL-Baseline         0      6        0        0\nMIL-CREDA**   MIL-Baseline         1      5        0        0\nMIL-CREDA-U   MIL-Baseline         2      0        4        2\nMIL-CREDA-A   MIL-Baseline         1      0        5        2\nMIL-CREDA-K   MIL-Baseline         1      1        4        0\nCREDA*        Baseline             0      6        0        0\n\nLo que carga peso no es el promedio sino que las transferencias coincidan: un m\u00e9todo que alinea en una y empeora en otra no est\u00e1 diciendo nada todav\u00eda.\nPiloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "distancias": "CREDA contra Baseline: misma clase entre dominios -0.0%, clases distintas -0.0% sobre 6 transferencia(s) \u2014 las dos se movieron parejo: el espacio cambi\u00f3 de escala y la raz\u00f3n no tendr\u00eda por qu\u00e9 haberse movido. MIL-CREDA contra MIL-Baseline: misma clase entre dominios -0.0%, clases distintas +0.2% sobre 6 transferencia(s) \u2014 las dos se movieron parejo: el espacio cambi\u00f3 de escala y la raz\u00f3n no tendr\u00eda por qu\u00e9 haberse movido. MIL-CREDA* contra MIL-Baseline: misma clase entre dominios -0.2%, clases distintas +0.2% sobre 6 transferencia(s) \u2014 las dos se movieron parejo: el espacio cambi\u00f3 de escala y la raz\u00f3n no tendr\u00eda por qu\u00e9 haberse movido. MIL-CREDA** contra MIL-Baseline: misma clase entre dominios -0.6%, clases distintas +0.3% sobre 6 transferencia(s) \u2014 las dos se movieron parejo: el espacio cambi\u00f3 de escala y la raz\u00f3n no tendr\u00eda por qu\u00e9 haberse movido. MIL-CREDA-U contra MIL-Baseline: misma clase entre dominios +10.9%, clases distintas -5.8% sobre 6 transferencia(s) \u2014 las clases se juntaron entre s\u00ed m\u00e1s que la misma clase entre dominios. MIL-CREDA-A contra MIL-Baseline: misma clase entre dominios +4.1%, clases distintas -10.4% sobre 6 transferencia(s) \u2014 las clases se juntaron entre s\u00ed m\u00e1s que la misma clase entre dominios. MIL-CREDA-K contra MIL-Baseline: misma clase entre dominios +9.7%, clases distintas -2.0% sobre 6 transferencia(s) \u2014 las clases se juntaron entre s\u00ed m\u00e1s que la misma clase entre dominios. CREDA* contra Baseline: misma clase entre dominios +0.0%, clases distintas -0.0% sobre 6 transferencia(s) \u2014 las dos se movieron parejo: el espacio cambi\u00f3 de escala y la raz\u00f3n no tendr\u00eda por qu\u00e9 haberse movido. Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "separabilidad": "Una diferencia negativa es mejor: la regla de dominio qued\u00f3 m\u00e1s cerca del azar que en el mismo m\u00e9todo sin adaptaci\u00f3n. CREDA contra Baseline, distancia al azar (0.500): plano en todas, dentro de \u00b10.010 (M->S +0.000, M->U +0.000, S->M +0.001, S->U -0.001, U->M +0.001, U->S -0.002). MIL-CREDA contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 0 a favor, 2 en contra, 4 planas (M->S +0.000, M->U -0.013, S->M +0.000, S->U +0.000, U->M +0.000, U->S -0.014). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA* contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 0 a favor, 2 en contra, 4 planas (M->S +0.000, M->U -0.013, S->M +0.000, S->U +0.000, U->M +0.000, U->S -0.014). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA** contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 0 a favor, 2 en contra, 4 planas (M->S -0.013, M->U -0.013, S->M +0.000, S->U +0.000, U->M +0.000, U->S +0.000). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA-U contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 3 a favor, 2 en contra, 1 planas (M->S +0.125, M->U +0.040, S->M +0.000, S->U -0.040, U->M -0.035, U->S +0.017). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA-A contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 4 a favor, 1 en contra, 1 planas (M->S +0.110, M->U +0.057, S->M +0.000, S->U -0.081, U->M +0.045, U->S +0.057). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. MIL-CREDA-K contra MIL-Baseline, distancia al azar (0.500): las transferencias no coinciden \u2014 4 a favor, 0 en contra, 2 planas (M->S +0.068, M->U +0.066, S->M +0.000, S->U +0.000, U->M +0.057, U->S +0.058). Un promedio ac\u00e1 dir\u00eda 'no hace nada' y estar\u00eda tapando que una transferencia s\u00ed se movi\u00f3. CREDA* contra Baseline, distancia al azar (0.500): plano en todas, dentro de \u00b10.010 (M->S -0.001, M->U -0.001, S->M +0.002, S->U +0.000, U->M -0.002, U->S +0.002). Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "masa": "La masa m\u00e1s alta es la de **MIL-CREDA**, contra un azar de 0.100. MIL-CREDA supera el azar en 6 de 6 transferencias MIL-CREDA-U supera el azar en 6 de 6 transferencias MIL-CREDA-A supera el azar en 6 de 6 transferencias MIL-CREDA-K supera el azar en 6 de 6 transferencias Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto.",
+    "atenci\u00f3n": "La entrop\u00eda est\u00e1 normalizada, as\u00ed que su m\u00e1ximo es uno y ah\u00ed la atenci\u00f3n no estar\u00eda haciendo nada. C\u00f3mo qued\u00f3 cada uno: MIL-Baseline reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA** reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA* reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA-U reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA-A reparte de forma desigual sin apoyarse en unas pocas MIL-CREDA-K reparte de forma desigual sin apoyarse en unas pocas Piloto de 1 repetici\u00f3n(es): estimaci\u00f3n puntual, todav\u00eda no un veredicto."
+  },
+  "figures": [
+    "MIL-CREDA/Results/Pilot/Benchmark/latent/grid.pdf",
+    "MIL-CREDA/Results/Pilot/Benchmark/latent/correspondence.pdf"
+  ]
+}
