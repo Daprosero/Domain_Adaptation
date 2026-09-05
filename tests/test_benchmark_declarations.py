@@ -77,9 +77,27 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
     averaging a constant returns the constant, rather than being placed
     somewhere `disagreements()` could never actually check it.
     """
-    from MIL_CREDA_Benchmark import shards
+    from MIL_CREDA_Benchmark import harness, shards
 
-    dist = shards.declaration()
+    dist = dict(shards.declaration())
+
+    # `shardsRoot` joined the block so that a command carrying no `--shards`
+    # flag of its own can measure a `@shard` witness at all. Without it the
+    # witness reads unmeasured FOREVER -- not false -- so the sequence item
+    # behind it can never be marked and every later step refuses on order.
+    # That is not an optional narrowing of a report; it is a dead flow.
+    #
+    # The value is not a new destination and is not chosen here: it is where
+    # `shards.read_shards()` already looks when nobody tells it otherwise.
+    # Asserted by composing that default rather than by repeating the string,
+    # so moving the destination reddens this instead of leaving two spellings
+    # to drift apart -- the failure this repository has already had twice.
+    raiz = dist.pop("shardsRoot")
+    assert (config.PRODUCT.parent / raiz) == (
+        config.results_for(0.0, "campaign", False) / harness.SHARDS_DIR), (
+        "the declared shards root must be the one read_shards() already "
+        "defaults to; a second spelling is a second answer")
+
     assert dist == {
         "axis": "seed",
         "poolable": ["sourceAccuracy", "targetAccuracy", "contribution",

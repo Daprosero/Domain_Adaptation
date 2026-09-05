@@ -388,6 +388,15 @@ __benchmark__ = {
     # every stamp, which is what `disagreements()` needs to be able to see it.
     "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
                               "labelNoise"],
+        # Donde aterriza un shard que volvio. No es una eleccion nueva: es el
+        # mismo lugar que `shards.read_shards()` ya usa cuando quien la llama no
+        # dice otro --- la campana completa, limpia y de forma campania. Lo que
+        # cambia es quien puede leerlo: sin este campo, `gate`, `close` y
+        # `probe` no tienen bandera con que decir donde mirar, y un testigo
+        # `@shard` les queda SIN MEDIR para siempre, que no es lo mismo que
+        # decir que el shard no llego. Declarado una vez, todos comparan contra
+        # la misma respuesta.
+        "shardsRoot": "MIL-CREDA/Results/Benchmark/shards",
     },
     # Which module carries the runtime, so a reading about this repository's
     # environment is about the module that actually imports it. The same two
