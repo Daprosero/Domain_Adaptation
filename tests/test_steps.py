@@ -357,15 +357,24 @@ class RaicesDeclaradasTests(unittest.TestCase):
 
         rho = config.NOISE_REPORTED
         ensayo = config.results_for(0.0, "campaign", True)
+        contaminada = config.results_for(rho, "campaign", True)
         curva = config.results_for(0.0, "curve", True).parent
 
         esperado = {
             "search-pilot": [relativa(config.ceilings_record_for(True))],
+            # Las dos pasadas, cada una con su árbol: la campaña corre la rejilla
+            # entera en `NOISE` y otra vez en `NOISE_REPORTED`, y el segundo árbol
+            # es el que el informe y el latente leen. `Probe_results.json` es uno
+            # solo porque `campaign()` lo ancla en la raíz limpia para las dos.
             "campaign-local": [f"{relativa(ensayo)}/runs.jsonl",
                                f"{relativa(ensayo)}/summary.json",
                                f"{relativa(ensayo)}/shard.json",
+                               f"{relativa(contaminada)}/runs.jsonl",
+                               f"{relativa(contaminada)}/summary.json",
+                               f"{relativa(contaminada)}/shard.json",
                                f"{relativa(ensayo.parent)}/Probe_results.json",
                                relativa(config.models_for(0.0, "campaign", True)),
+                               relativa(config.models_for(rho, "campaign", True)),
                                cuaderno_de("campana")],
             "noise-sweep": [relativa(curva),
                             relativa(config.models_for(0.0, "curve", True).parent)],
@@ -729,6 +738,216 @@ def test_el_barrido_lee_los_techos_una_vez_y_los_mantiene_en_los_cinco_niveles(
     # una sola transferencia y no las seis del veredicto
     assert len(config.VERDICT_TRANSFERS) > 1
     assert _replace  # el paso arma cada nivel por `replace`, no por mutación
+
+
+# --------------------------------------------------- las dos pasadas de la campaña
+#
+# El cuaderno se ejecuta de verdad --- sus celdas, no una lectura de su texto ---
+# con `harness` sustituido: lo que se afirma es a qué niveles corre la campaña, en
+# qué árbol cae cada pasada y de dónde salen los techos con los que corre. Nada de
+# eso se puede leer de las constantes: `NOISE_REPORTED` puede valer 0.2 mientras el
+# cuaderno corre dos veces el nivel limpio, y las dos cosas dan una suite verde.
+
+
+def _correr_las_celdas_de_la_campana(monkeypatch, tmp_path) -> dict:
+    """Ejecuta el cuaderno de la campaña sin máquina, y devuelve lo que pidió.
+
+    Todas las celdas menos la de arranque: ésa busca el repositorio en el disco y
+    manosea `sys.path`, y adentro de la suite el paquete ya está importado. Cuál
+    es se deriva de su contenido y no de un índice --- una celda que se agregue
+    arriba correría el índice y dejaría este helper leyendo otra cosa.
+
+    Las corridas se registran con la lectura de techos que había en el momento de
+    pedirlas, que es lo que permite afirmar «una sola vez, antes del bucle» en vez
+    de «una sola vez en total»: las dos son verdes hoy y se rompen distinto.
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import bags, config, harness
+
+    _sin_maquina(monkeypatch, tmp_path)
+    # `_sin_maquina` deja un ambiente de una sola clave y la celda 2 lo imprime
+    # por campo, así que acá lleva los tres campos que esa celda nombra.
+    monkeypatch.setattr(harness, "environment", lambda: {
+        "platform": "stub", "torch": "stub", "selfHosted": False})
+    monkeypatch.setattr(harness, "search_record", lambda pilot=False: {"stub": True})
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
+        "la campaña lanzó una búsqueda: mediría el método y la falta de "
+        "coeficiente a la vez, y a escala completa son nueve horas y media"))
+    monkeypatch.setattr(harness, "run_search", lambda *a, **k: pytest.fail(
+        "la campaña lanzó una búsqueda"))
+    monkeypatch.setattr(bags, "build", lambda *a, **k: {"stub": True})
+    monkeypatch.setattr(harness, "run_one", lambda *a, **k: {"seconds": 1.0})
+
+    techos = {"milcreda": 1e-2, "creda": 1e-4}
+    por_transferencia = {"milcreda": {"M->U": 1e-2}}
+    lecturas = {"agrupado": 0, "por_transferencia": 0, "en_vigor": 0}
+
+    def _agrupado():
+        lecturas["agrupado"] += 1
+        return techos
+
+    def _por_transferencia():
+        lecturas["por_transferencia"] += 1
+        return por_transferencia
+
+    def _en_vigor(reduccion, dispositivo, **kwargs):
+        from dataclasses import replace as _replace
+
+        lecturas["en_vigor"] += 1
+        return _replace(reduccion, ceilings=techos,
+                        ceilingsByTransfer=por_transferencia)
+
+    monkeypatch.setattr(config, "ceilings_on_record", _agrupado)
+    monkeypatch.setattr(config, "ceilings_by_transfer_on_record", _por_transferencia)
+    monkeypatch.setattr(harness, "with_ceilings_in_force", _en_vigor)
+
+    corridas: list[dict] = []
+
+    def _campaign(reduccion, dispositivo, **kwargs):
+        corridas.append({"reduction": reduccion, "lecturas": dict(lecturas)})
+        return {"stub": reduccion.labelNoise}
+
+    monkeypatch.setattr(harness, "campaign", _campaign)
+
+    # Las corridas que cada pasada va a LEER, escritas acá y no por el doble de
+    # `campaign`: si las escribiera el doble, el cuaderno leería el archivo que
+    # él mismo eligió y la lectura no probaría ningún destino. Con una cantidad
+    # distinta por nivel, lo que imprime dice cuál de los dos árboles abrió.
+    escala = config.is_pilot_scale()
+    lineas = {config.NOISE: 2, config.NOISE_REPORTED: 3}
+    raices = {}
+    for nivel, cuantas in lineas.items():
+        raiz = config.results_for(nivel, "campaign", escala)
+        raiz.mkdir(parents=True, exist_ok=True)
+        (raiz / "runs.jsonl").write_text(
+            "".join(json.dumps({"nivel": nivel, "i": i}) + "\n"
+                    for i in range(cuantas)), encoding="utf-8")
+        raices[nivel] = raiz
+
+    celdas = [c for c in _celdas_de_codigo("Benchmark_Campaign_v1.ipynb")
+              if "find_repository" not in c]
+    ambito: dict = {}
+    exec(compile("\n".join(celdas), "<Benchmark_Campaign_v1>", "exec"), ambito)
+
+    return {"corridas": corridas, "lecturas": lecturas, "raices": raices,
+            "lineas": lineas, "escala": escala, "techos": techos,
+            "porTransferencia": por_transferencia, "ambito": ambito}
+
+
+def test_la_campana_corre_las_dos_pasadas_y_la_segunda_es_la_contaminada(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Dos pasadas, y la segunda al nivel que el informe muestra.
+
+    La campaña es cada transferencia a UNA tasa, así que los dos niveles del
+    informe son dos pasadas de esa misma forma. Corría sólo la limpia, y por eso
+    las celdas contaminadas del informe y la mitad contaminada del latente decían
+    «no hay corridas»: leen `results_for(NOISE_REPORTED, "campaign", ...)`, que
+    ningún paso escribía.
+
+    Lo que se afirma no es «corre a más de un nivel» --- eso lo cumple un cuaderno
+    que repita dos veces el limpio, que es exactamente la segunda pasada que no
+    sirve para nada ---, sino que el segundo nivel es `NOISE_REPORTED`, que es
+    distinto del primero, y que cada pasada abrió el árbol de SU tasa: las dos
+    `runs.jsonl` traen distinta cantidad de líneas, así que lo que el cuaderno
+    imprime dice cuál abrió.
+
+    Y el destino de la contaminada es una raíz declarada de este paso. Sin ese
+    último tramo la campaña podría escribir donde nadie la vigila y la forja lo
+    leería como `foreign`.
+
+    Rojo alcanzable: sacarle el bucle a la celda 7, poner `(config.NOISE,
+    config.NOISE)` en `NIVELES`, componer la raíz desde la constante en vez de
+    desde la reducción de la pasada, o sacarle las raíces contaminadas a
+    `produces`.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    corrido = _correr_las_celdas_de_la_campana(monkeypatch, tmp_path)
+    salida = capsys.readouterr().out
+    corridas = corrido["corridas"]
+
+    # los dos niveles, en orden, y el segundo no es el primero otra vez
+    assert [c["reduction"].labelNoise for c in corridas] == [
+        config.NOISE, config.NOISE_REPORTED]
+    assert config.NOISE_REPORTED != config.NOISE, (
+        "el nivel contaminado es el limpio: no hay segunda pasada que valga")
+    assert len(corridas) == 2
+
+    # la misma forma y la misma escala en las dos: una campaña, no un barrido
+    for corrida in corridas:
+        assert corrida["reduction"].kind == "campaign"
+        assert corrida["reduction"].pilot == corrido["escala"]
+        assert corrida["reduction"].seeds == list(config.SEEDS)
+
+    # cada pasada abrió el árbol de su propia tasa, medido por lo que leyó ahí
+    for nivel, raiz in corrido["raices"].items():
+        assert str(raiz) in salida, f"la pasada a ρ={nivel:g} no nombró {raiz}"
+        assert f"{corrido['lineas'][nivel]} corridas" in salida, (
+            f"la pasada a ρ={nivel:g} leyó otro árbol que el suyo")
+    assert corrido["raices"][config.NOISE] != corrido["raices"][config.NOISE_REPORTED]
+
+    # y el árbol de la contaminada es raíz declarada de este paso
+    contaminada = corrido["raices"][config.NOISE_REPORTED]
+    declaradas = paquete.__steps__["campaign-local"]["produces"]
+    relativa = contaminada.relative_to(config.PRODUCT).as_posix()
+    for hoja in ("runs.jsonl", "summary.json", "shard.json"):
+        assert f"{relativa}/{hoja}" in declaradas, (
+            f"la pasada contaminada escribe {relativa}/{hoja} sin declararlo")
+    assert config.models_for(
+        config.NOISE_REPORTED, "campaign", corrido["escala"]
+    ).relative_to(config.PRODUCT).as_posix() in declaradas
+    assert config.keeps_checkpoints(config.NOISE_REPORTED), (
+        "la pasada contaminada no guardaría pesos y el latente no tendría qué leer")
+
+
+def test_la_pasada_contaminada_reusa_los_techos_limpios_sin_volver_a_buscar(
+        tmp_path, monkeypatch, capsys) -> None:
+    """El coeficiente se elige en limpio una vez, y las dos pasadas corren bajo él.
+
+    Es la decisión que el eje del ruido ya declara --- los techos salen de la
+    búsqueda en limpio y se mantienen fijos --- y lo que esa decisión cuesta lo
+    separa `noise-diagnostic`, que re-busca a su nivel y no gobierna el registro.
+    Acá se afirma la mitad que puede romperse sola: que la segunda pasada no
+    dispare una búsqueda nueva.
+
+    Y no alcanza con contarlas al final. Los techos se leen UNA vez y ARRIBA del
+    bucle: leerlos por pasada daría los mismos números hoy, dejaría la campaña a
+    merced de un registro que cambie a mitad de corrida y --- a escala completa,
+    donde la rama que resuelve techos es `with_ceilings_in_force` --- sería la
+    puerta por la que la búsqueda entera entra sin que nadie la autorice. Por eso
+    cada corrida trae la cuenta de lecturas que había cuando se la pidió: las dos
+    tienen que traer la misma, y esa misma tiene que ser la final.
+
+    Rojo alcanzable: mover la celda de los techos adentro del bucle, armar una
+    `Reduction` nueva por pasada en vez de un `replace`, o buscar techos al nivel
+    contaminado.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    corrido = _correr_las_celdas_de_la_campana(monkeypatch, tmp_path)
+    capsys.readouterr()
+    corridas, lecturas = corrido["corridas"], corrido["lecturas"]
+
+    # una sola resolución de techos en todo el cuaderno...
+    assert sum(lecturas.values()) in (1, 2), lecturas
+    assert lecturas["en_vigor"] + lecturas["agrupado"] == 1, (
+        "los techos se resolvieron más de una vez")
+
+    # ...y ninguna adentro del bucle: las dos pasadas vieron la misma cuenta,
+    # y esa cuenta es la final
+    assert [c["lecturas"] for c in corridas] == [lecturas, lecturas]
+
+    # los mismos techos, el mismo objeto, en las dos pasadas
+    assert len({id(c["reduction"].ceilings) for c in corridas}) == 1
+    for corrida in corridas:
+        assert corrida["reduction"].ceilings == corrido["techos"]
+        assert corrida["reduction"].ceilingsByTransfer == corrido["porTransferencia"]
+
+    # y los techos son los del registro, no unos buscados acá: `search_ceilings`
+    # está sustituida por una falla, así que llegar hasta acá ya lo dice
+    assert corridas[-1]["reduction"].labelNoise == config.NOISE_REPORTED
+    assert corridas[-1]["reduction"].ceilings == corridas[0]["reduction"].ceilings
 
 
 if __name__ == "__main__":

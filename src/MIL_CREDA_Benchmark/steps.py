@@ -109,6 +109,16 @@ def ensayo_de_busqueda() -> dict:
 def campana() -> str:
     """Corre la campaña ejecutando SU cuaderno, a la escala que declara `config`.
 
+    Dos pasadas y una sola ejecución. La campaña es cada transferencia a UNA
+    tasa, así que correr los dos niveles que el informe muestra --- `config.NOISE`
+    y `config.NOISE_REPORTED` --- son dos pasadas de esa misma forma y no un paso
+    nuevo: el bucle vive en la celda 7 del cuaderno, que es donde vive la campaña.
+    Ejecutar el cuaderno dos veces sería la otra forma de pedirlo y es peor:
+    `_ejecutar` corre `--inplace` y la salida ejecutada ES el informe, así que la
+    segunda ejecución borraría lo único que la primera deja. Además el cuaderno
+    resuelve sus techos y paga su pronóstico una vez por ejecución, y las dos
+    cosas se pagarían de nuevo.
+
     Este paso llamaba a `harness.campaign()` en lugar de correr
     `Benchmark_Campaign_v1.ipynb`, y ese era el defecto: el cuaderno que se
     envía era el único que el ensayo nunca ejercitaba. Su primera celda dice de
@@ -123,13 +133,18 @@ def campana() -> str:
     el cuaderno pueda correr sin escribir fuera de las raíces que este paso
     declara:
 
-    * **La escala.** `produces` nombra el árbol de ENSAYO, y el cuaderno elige
-      su árbol con `config.is_pilot_scale()`. A escala completa escribiría en
-      `Results/Benchmark/`, que es de otro, así que acá se niega en vez de
-      mudarse en silencio.
+    * **La escala.** `produces` nombra los dos árboles de ENSAYO --- el limpio y
+      el contaminado ---, y el cuaderno elige su escala con
+      `config.is_pilot_scale()`. A escala completa escribiría en
+      `Results/Benchmark/` y `Results/Noise/rho0p2/`, que son de otro, así que
+      acá se niega en vez de mudarse en silencio.
     * **El registro de techos.** Sin ninguno de los dos archivos, `campaign()`
       se negaría adentro del cuaderno con un mensaje sobre techos vacíos;
-      negarse acá dice qué correr antes. Las dos escalas preguntadas por
+      negarse acá dice qué correr antes. Los techos se resuelven una vez, arriba
+      del bucle, y las dos pasadas corren bajo los mismos: los de la búsqueda EN
+      LIMPIO. La pasada contaminada no re-busca nada --- lo que la contaminación
+      le cuesta al techo lo mide `diagnostico_de_ruido`, que busca a su nivel y
+      no gobierna este registro. Las dos escalas preguntadas por
       separado y las dos dichas: pregunta si existe ALGUNO de los dos archivos,
       no cuál rige. Desde que la omisión significa «el que rige», una llamada
       pelada contestaría por los dos y las dos mitades de la pregunta se
