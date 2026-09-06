@@ -16,11 +16,14 @@ equation of the proposal. Every equation is evaluated in torch, by `src/`.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 import torch
 
 from MIL_CREDA import DTYPE, as_tensor
+from MIL_CREDA_Benchmark import config as _config
 
 SEED = 20260810
 TOL = 1e-10
@@ -112,3 +115,101 @@ def _like(expected, reference: torch.Tensor) -> torch.Tensor:
     if isinstance(expected, torch.Tensor):
         return expected
     return torch.as_tensor(expected, dtype=reference.dtype, device=reference.device)
+
+
+# --------------------------------------------------- the owner's own product tree
+
+#: The real product folder, frozen at import time and never asked for again.
+#:
+#: `config.PRODUCT` is what almost every test here redirects, so asking `config`
+#: for it inside the fixture would hand back whichever scratch the test under
+#: observation installed --- and a guard that watches the scratch watches
+#: nothing. This is the constant as `config` was imported with it, which is the
+#: tree the owner's own runs live in.
+_PRODUCT_TREE = _config.PRODUCT
+
+
+def _product_fingerprint() -> dict[str, tuple[int, int] | None]:
+    """`{path relative to the product tree: (size, mtime_ns)}`; directories `None`.
+
+    **Directories are entries in their own right and not an implementation
+    detail.** `campaign()` calls `results_for(...).mkdir()` and
+    `models_for(...).mkdir()` BEFORE any of its three refusals, so the write a
+    refused campaign actually performs is a directory and nothing else: a
+    fingerprint over files alone walks straight past the defect this exists to
+    catch.
+
+    **Size AND `mtime_ns`, never size alone.** A file rewritten with the same
+    number of bytes --- a marker file retouched, a `runs.jsonl` replaced by
+    another run of the same shape --- is what a size-only reading cannot see,
+    and that is the ordinary shape of an overwrite rather than an exotic one.
+
+    No hashing, and `os.scandir` rather than `os.walk`: gigabytes of
+    checkpoints live under here and this runs twice per test, so a guard that
+    costs a full read --- or even a `Path` per entry --- is a guard somebody
+    switches off.
+    """
+    fingerprint: dict[str, tuple[int, int] | None] = {}
+    if not _PRODUCT_TREE.is_dir():
+        return fingerprint
+    pending = [("", str(_PRODUCT_TREE))]
+    while pending:
+        relative, directory = pending.pop()
+        try:
+            entries = list(os.scandir(directory))
+        except OSError:
+            continue
+        for entry in entries:
+            key = f"{relative}/{entry.name}" if relative else entry.name
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    fingerprint[key] = None
+                    pending.append((key, entry.path))
+                    continue
+                stat = entry.stat(follow_symlinks=False)
+            except OSError:
+                # Gone between the listing and the stat. Recorded as a reading
+                # of its own rather than skipped: a file a test deleted is
+                # exactly what this is looking for.
+                fingerprint[key] = (-1, -1)
+                continue
+            fingerprint[key] = (stat.st_size, stat.st_mtime_ns)
+    return fingerprint
+
+
+@pytest.fixture(autouse=True)
+def product_tree_is_read_only():
+    """No test may leave a mark on the owner's own product tree. Autouse, so
+    there is nothing for a test to remember to opt into.
+
+    Every destination in this repository can be redirected and nearly every
+    test redirects it. The ones that did not were safe only because a refusal
+    fired before the write --- and safety that depends on another guard holding
+    is not safety: the day one of those refusals was switched off to check it
+    was reachable, two tests ran a real campaign into `MIL-CREDA/Results/` and
+    overwrote `runs.jsonl`, `summary.json`, `shard.json`, `Probe_results.json`
+    and six manifests. The suite stayed green throughout, because nothing was
+    watching the tree.
+
+    This watches the tree. It cannot be reasoned around, it asks no
+    cooperation from the test it observes, and it names the paths that moved.
+    """
+    before = _product_fingerprint()
+    yield
+    after = _product_fingerprint()
+    if after == before:
+        return
+    added = sorted(set(after) - set(before))
+    removed = sorted(set(before) - set(after))
+    changed = sorted(key for key in set(before) & set(after)
+                     if before[key] != after[key])
+    raise AssertionError(
+        f"this test wrote into the owner's own product tree at {_PRODUCT_TREE}.\n"
+        f"  added:   {added}\n"
+        f"  removed: {removed}\n"
+        f"  changed: {changed}\n"
+        "  Redirect every destination it reaches before the call: "
+        "`config.PRODUCT`, `config.RESULTS`, `config.MODELS` and the two "
+        "ceiling records are each their own root, and redirecting one does not "
+        "redirect the others."
+    )

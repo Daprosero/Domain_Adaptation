@@ -1609,6 +1609,12 @@ def test_el_ensayo_remoto_no_ablanda_la_guarda_que_gobierna_la_campana(
     from MIL_CREDA_Benchmark import config, harness
 
     monkeypatch.setenv(config.REHEARSAL_ENV, "1")
+    # El árbol de salida fuera del camino, igual que todos los pasos de acá.
+    # `campaign()` hace `results_for(...).mkdir()` y `models_for(...).mkdir()`
+    # antes de sus tres rechazos, y esta reducción es de ENSAYO: sin esto los dos
+    # directorios que se creaban eran justo los que guardan la corrida de ensayo
+    # que este repositorio tiene en disco.
+    _sin_maquina(monkeypatch, tmp_path)
     registro = tmp_path / "ceilings.json"
     registro.write_text(_json.dumps({
         "creda": {"ceiling": 1e-4, "atRequiredScale": False},

@@ -504,6 +504,13 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
         "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    # `campaign()` hace `results_for(...).mkdir()` y `models_for(...).mkdir()`
+    # ANTES de cualquiera de sus tres rechazos, así que un test que sólo
+    # redirige el registro igual crea dos directorios en el árbol del dueño.
+    # Dos raíces y no una: `MODELS` es hermana de `RESULTS` y no se deriva de
+    # ella, así que redirigir una deja la otra apuntando a la corrida real.
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
 
     reduction = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0})
     with pytest.raises(SystemExit) as raised:
@@ -1564,6 +1571,13 @@ def test_the_campaign_refuses_when_the_record_has_picks_and_the_run_does_not(
         "milcreda": {"ceiling": 1e-2, "byTransfer": {"S->M": 1e-4}},
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    # `campaign()` hace `results_for(...).mkdir()` y `models_for(...).mkdir()`
+    # ANTES de cualquiera de sus tres rechazos, así que un test que sólo
+    # redirige el registro igual crea dos directorios en el árbol del dueño.
+    # Dos raíces y no una: `MODELS` es hermana de `RESULTS` y no se deriva de
+    # ella, así que redirigir una deja la otra apuntando a la corrida real.
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
 
     stale = harness.Reduction(ceilings={"milcreda": 1e-2}, ceilingsByTransfer={})
     with pytest.raises(SystemExit) as raised:
