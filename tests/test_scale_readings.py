@@ -157,9 +157,14 @@ class TestCadaLecturaDiceDeQueCorridaSale:
         assert len(puertas) >= 20, (
             f"sólo {len(puertas)} entradas llevan escala; el recorrido no está "
             f"leyendo el paquete")
+        # Contra el disco y no contra un número escrito: `7` quedó viejo el día
+        # que la búsqueda, el barrido y el diagnóstico tuvieron cada uno su
+        # cuaderno propio, y un literal acá vuelve a quedar viejo en el próximo.
+        en_disco = {ruta.name for ruta in
+                    (_REPOSITORIO / "MIL-CREDA" / "Notebooks").glob("*.ipynb")}
         cuadernos = {a for a, _ in _fuentes() if a.endswith(".ipynb")}
-        assert len(cuadernos) == 7, (
-            f"el recorrido ve {len(cuadernos)} cuadernos y en disco hay 7")
+        assert cuadernos == en_disco, (
+            f"el recorrido no ve {sorted(en_disco - cuadernos)}")
 
     def test_ninguna_lectura_deja_la_escala_a_la_firma(self):
         """Lo que quede suelto tiene que estar declarado, y declararse cuesta
