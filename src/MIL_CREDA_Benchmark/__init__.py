@@ -592,7 +592,7 @@ __steps__: dict = {
     # las dos. Correrlo dos veces le pisaría a la primera lo único que deja.
     "campaign-local": {"module": "MIL_CREDA_Benchmark.steps",
                        "function": "campana",
-                     "advances": 4,
+                     "advances": 6,
                      "reads": ["Results/Benchmark/ceilings.json"],
                      "produces": ["Results/Pilot/Benchmark/runs.jsonl",
                                   "Results/Pilot/Benchmark/summary.json",
@@ -618,7 +618,7 @@ __steps__: dict = {
     # `report.md` en esa raíz, y una segunda tanda de curvas bajo
     # `results_for(RHO, "campaign", ES_ENSAYO)` con `RHO = NOISE_REPORTED`.
     "report": {"module": "MIL_CREDA_Benchmark.steps", "function": "informe",
-                     "advances": 5,
+                     "advances": 7,
                      "reads": ["Results/Benchmark/runs.jsonl",
                                "Results/Benchmark/summary.json",
                                "Results/Noise/rho0p2/runs.jsonl",
@@ -641,7 +641,7 @@ __steps__: dict = {
     # La mitad contaminada ya era por escala: `results_for(RHO, "campaign",
     # ES_ENSAYO) / "latent"`, con `RHO = NOISE_REPORTED`.
     "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente",
-                     "advances": 6,
+                     "advances": 8,
                      "reads": ["Results/Benchmark/runs.jsonl",
                                "Results/Benchmark/summary.json",
                                "Models/Benchmark",
@@ -661,13 +661,18 @@ __steps__: dict = {
     # diferencia de la campaña contaminada, que es un envío y necesita su propia
     # autorización por lanzamiento.
     #
-    # Ninguna de las cuatro lleva `advances`. La razón que estaba escrita acá
-    # --- que el eje del ruido es «un ejercicio al costado» y no un peldaño del
-    # ensayo --- la inventó quien escribió el comentario, y no es la del dueño
-    # del repositorio, que sitúa al eje en el medio del recorrido. Queda el
-    # hecho, sin una segunda conjetura encima: hoy estos cuatro pasos no están
-    # numerados, y qué lugar les toca en la secuencia es una decisión que no se
-    # tomó todavía.
+    # Las cuatro llevan `advances`, y el lugar es el que el dueño del
+    # repositorio le da al eje: EN EL MEDIO del recorrido y no al costado. El
+    # barrido y su informe van entre la búsqueda y la campaña ---4 y 5---, y el
+    # diagnóstico y el suyo cierran ---9 y 10---, después del latente. Acá
+    # estuvo escrito lo contrario ---que el eje era «un ejercicio al costado»---
+    # y esa razón no era de nadie: la inventó quien escribió el comentario.
+    #
+    # Los diez ordinales se comprobaron contra la cadena que `steps.predecesores`
+    # DERIVA de `reads` y `produces`, y ninguno deja a un paso adelante de algo
+    # que lee. `tests/test_steps.py` rehace esa cuenta y se pone en rojo si una
+    # de las dos cosas se mueve sin la otra: un ordinal que adelantara a su
+    # predecesor es peor que ningún ordinal, porque el gate lo dejaría correr.
     # Corre `Benchmark_Noise_Sweep_v1.ipynb` y no computa en su lugar. Una campaña
     # por nivel, todas con `kind="curve"` y con el `pilot` que el cuaderno deriva
     # de `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
@@ -683,6 +688,7 @@ __steps__: dict = {
     # los cinco.
     "noise-sweep": {"module": "MIL_CREDA_Benchmark.steps",
                     "function": "barrido_de_ruido",
+                    "advances": 4,
                     "reads": ["Results/Benchmark/ceilings.json"],
                     "produces": ["Results/Pilot/Noise/curve",
                                  "Models/Pilot/Noise/curve",
@@ -695,6 +701,7 @@ __steps__: dict = {
     # `PRODUCT` y el resumen de un barrido de ensayo caía en el árbol completo.
     "noise-report": {"module": "MIL_CREDA_Benchmark.steps",
                      "function": "informe_de_ruido",
+                     "advances": 5,
                      "reads": ["Results/Noise/curve"],
                      "produces": ["Results/Noise/degradation.pdf",
                                   "Results/Noise/degradation.json",
@@ -713,6 +720,7 @@ __steps__: dict = {
     # números de ensayo.
     "noise-diagnostic": {"module": "MIL_CREDA_Benchmark.steps",
                          "function": "diagnostico_de_ruido",
+                         "advances": 9,
                          "reads": ["Results/Noise/curve"],
                          "produces": [
                              "Results/Pilot/Noise/diagnostic.json",
@@ -721,6 +729,7 @@ __steps__: dict = {
     # cuaderno ejecutado es su única raíz.
     "noise-diagnostic-report": {"module": "MIL_CREDA_Benchmark.steps",
                                 "function": "informe_del_diagnostico",
+                                "advances": 10,
                                 "reads": ["Results/Noise/diagnostic.json"],
                                 "produces": [
                                     "Notebooks/Benchmark_Noise_Diagnostic_Report_v1.ipynb"]},
