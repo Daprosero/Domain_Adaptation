@@ -1,9 +1,12 @@
 """Los pasos locales que la forja puede ejecutar por su cuenta.
 
-Cada función de acá ejecuta un cuaderno de este repositorio y nada más. La
-forja las nombra estáticamente en `__steps__` (módulo + función), las resuelve
-sin importarlas, y recién las importa y llama dentro del intérprete de este
-repositorio.
+Casi todas ejecutan un cuaderno de este repositorio y nada más, que es la forma
+que corresponde: el ensayo existe para correr los cuadernos que se van a enviar,
+así que un paso que compute en lugar del suyo prueba la biblioteca y deja sin
+ejercitar el artefacto. Las que todavía computan directo dicen en su propia
+docstring por qué. La forja las nombra estáticamente en `__steps__` (módulo +
+función), las resuelve sin importarlas, y recién las importa y llama dentro del
+intérprete de este repositorio.
 
 **Por qué no se escribe acá el prefijo de `PATH`.** El kernelspec que graban
 los cuadernos arranca un `python` pelado, sin ruta absoluta, así que resuelve
@@ -35,11 +38,14 @@ CUADERNOS = Path(__file__).resolve().parents[2] / "MIL-CREDA" / "Notebooks"
 # cuadernos que sí se corren del código y le resta el disco; lo que sobra tiene
 # que estar acá, y estar acá cuesta escribir por qué. El próximo que se excluya
 # tiene que decir lo suyo.
-CUADERNOS_SIN_PASO: dict[str, str] = {
-    "Benchmark_Campaign_v1.ipynb": (
-        "lanza al servicio remoto, y un envío necesita una aprobación humana "
-        "por lanzamiento que ningún paso local puede darle"),
-}
+#
+# Está vacío, y vacío es una afirmación: hoy todo cuaderno del árbol lo corre un
+# paso. `Benchmark_Campaign_v1.ipynb` estuvo acá con la razón «lanza al servicio
+# remoto», que era falsa contra el archivo --- el cuaderno no importa
+# `remote_cli`, no submite, y sólo menciona `/kaggle/working` para encontrar el
+# repositorio si alguien lo corre allá --- y por esa razón inventada el único
+# cuaderno que de verdad se envía era el único que el ensayo nunca ejercitaba.
+CUADERNOS_SIN_PASO: dict[str, str] = {}
 
 
 def _ejecutar(nombre: str) -> str:
@@ -77,54 +83,79 @@ def ensayo_de_busqueda() -> dict:
     Existe porque no existía: la única forma de correr esta búsqueda era un
     `python -c` a mano contra `harness`, por fuera de la skill y sin dejar
     rastro en el ledger. Un paso que falta no es disciplina que falta.
+
+    **El único paso que computa sin correr un cuaderno, y es a propósito.** La
+    búsqueda no tiene cuaderno propio y no le corresponde tener uno:
+
+    * `Benchmark_Search_v1.ipynb` es el INFORME de la búsqueda y ya lo corre
+      `informe_de_busqueda`. Que este paso lo corriera también dejaría un
+      cuaderno con dos dueños, y `Notebooks/Benchmark_Search_v1.ipynb` ya es
+      raíz declarada de `search-report`: la declaración se pone en rojo sola.
+      Descomentar la llamada de su celda 7 es la misma cosa por dentro, y
+      además haría que abrir el informe cueste lo que cuesta correrlo, que es
+      exactamente por lo que esa línea está comentada.
+    * Un cuaderno nuevo cuyo único contenido fuera esta llamada sería una
+      segunda forma, más débil, de pedir lo mismo: `run_search` existe
+      justamente para que un trabajo remoto pueda nombrar `module.function` y
+      pasarle JSON, y un cuaderno no puede ser eso.
+
+    Lo que sí se ejercita en el recorrido es su informe, un peldaño después.
     """
     from MIL_CREDA_Benchmark import harness
 
     return harness.run_search(pilot=True)
 
 
-def campana() -> dict:
-    """Corre la campaña en esta máquina, a la escala que declara `config`.
+def campana() -> str:
+    """Corre la campaña ejecutando SU cuaderno, a la escala que declara `config`.
 
-    Arma la reducción igual que el cuaderno de campaña -- dispositivo,
-    ambiente, y los techos vigentes -- y llama a `harness.campaign()`. Lo que
-    la vuelve un ensayo no es un parámetro de acá sino `config`: las épocas y
-    las semillas que el repositorio declara. Este paso no las elige, y por eso
-    no toma argumentos.
+    Este paso llamaba a `harness.campaign()` en lugar de correr
+    `Benchmark_Campaign_v1.ipynb`, y ese era el defecto: el cuaderno que se
+    envía era el único que el ensayo nunca ejercitaba. Su primera celda dice de
+    sí mismo que corre «el pronóstico de costo, la búsqueda del techo de cada
+    familia y la campaña completa», y tenía cero celdas ejecutadas. Un ensayo
+    que computa por su cuenta prueba la biblioteca y no prueba el artefacto.
 
-    No hay que ordenar nada acá: `campaign()` se niega sola sin un registro de
-    techos buscado, así que la búsqueda va antes por construcción y no por
-    convención.
+    La biblioteca no se toca: el cuaderno llama a `harness.campaign()` en su
+    celda 7, así que lo que cambió es el cuerpo de este paso y nada más.
 
-    Esto NO envía nada al servicio remoto. `Benchmark_Campaign_v1.ipynb` sigue
-    fuera de `__steps__` por eso mismo: un envío necesita una aprobación humana
-    por lanzamiento, y ningún paso local puede dársela.
+    Las dos guardas son precondiciones, no cómputo, y las dos existen para que
+    el cuaderno pueda correr sin escribir fuera de las raíces que este paso
+    declara:
+
+    * **La escala.** `produces` nombra el árbol de ENSAYO, y el cuaderno elige
+      su árbol con `config.is_pilot_scale()`. A escala completa escribiría en
+      `Results/Benchmark/`, que es de otro, así que acá se niega en vez de
+      mudarse en silencio.
+    * **El registro de techos.** Sin ninguno de los dos archivos, `campaign()`
+      se negaría adentro del cuaderno con un mensaje sobre techos vacíos;
+      negarse acá dice qué correr antes. Las dos escalas preguntadas por
+      separado y las dos dichas: pregunta si existe ALGUNO de los dos archivos,
+      no cuál rige. Desde que la omisión significa «el que rige», una llamada
+      pelada contestaría por los dos y las dos mitades de la pregunta se
+      volverían una sola.
+
+    Esto NO envía nada al servicio remoto, y el cuaderno tampoco: no importa
+    `remote_cli`, no submite, y lo único que lo menciona es su bootstrap, que
+    resuelve el repositorio bajo `/kaggle/working` para poder correr ALLÁ si
+    alguien lo manda. La exclusión anterior decía que «lanza al servicio
+    remoto», y eso era falso contra el archivo.
     """
-    from MIL_CREDA_Benchmark import harness
+    from MIL_CREDA_Benchmark import config, harness
 
-    from MIL_CREDA_Benchmark import config
-
-    dispositivo = harness.resolve_device()
-    # `with_ceilings_in_force` era lo que estaba acá y es una trampa: sin
-    # `ceilings.json` lanza la búsqueda COMPLETA --- 2 familias x 6
-    # transferencias x 30 trials a 20 épocas, unas nueve horas y media --- sin
-    # anunciarlo y sin que nadie la haya autorizado. Un paso local no puede ser
-    # la puerta por la que entra la corrida larga.
-    # Las dos escalas preguntadas por separado y las dos dichas: esta guarda
-    # pregunta si existe ALGUNO de los dos archivos, no cuál rige. Desde que la
-    # omisión significa «el que rige», una llamada pelada contestaría por los dos
-    # y las dos mitades de la pregunta se volverían una sola.
+    if not config.is_pilot_scale():
+        raise SystemExit(
+            f"la escala configurada es la completa ({config.EPOCHS} épocas, "
+            f"{len(config.SEEDS)} semillas). Este paso declara el árbol de "
+            "ensayo y el cuaderno escribiría en el de la corrida completa: "
+            "una campaña a escala completa se lanza con su propia "
+            "autorización, no por acá.")
     if (harness.search_record(pilot=False) is None
             and harness.search_record(pilot=True) is None):
         raise SystemExit(
             "no hay registro de techos. Corré primero la búsqueda: una campaña "
             "sin techos mide el método y la falta de coeficiente a la vez.")
-    reduccion = replace(
-        harness.Reduction(device=str(dispositivo),
-                          environment=harness.environment(), pilot=True),
-        ceilings=config.ceilings_on_record(),
-        ceilingsByTransfer=config.ceilings_by_transfer_on_record())
-    return harness.campaign(reduccion, dispositivo)
+    return _ejecutar("Benchmark_Campaign_v1.ipynb")
 
 
 def informe_de_busqueda() -> str:

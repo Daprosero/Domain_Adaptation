@@ -39,6 +39,26 @@ SEEDS = [0]
 FULL_SEEDS = list(range(30))
 FULL_EPOCHS = 20
 
+
+def is_pilot_scale() -> bool:
+    """Si la escala configurada ahora mismo es la del ensayo y no la completa.
+
+    Una sola lectura de la regla que el encabezado de este modulo ya declara:
+    dos constantes separan al ensayo de la corrida completa, `EPOCHS` y `SEEDS`,
+    y ninguna otra. Escrita de nuevo en cada llamador serian dos ortografias de
+    lo mismo, y la que quede vieja se lee igual de verde que la que no.
+
+    Existe porque `Reduction.pilot` --- que decide DONDE escribe una corrida ---
+    no se derivaba de la escala en ningun lado: `Benchmark_Campaign_v1.ipynb`
+    construia su reduccion sin `pilot`, asi que una corrida de tres epocas y una
+    semilla escribia en `Results/Benchmark/`, el arbol de la corrida completa, y
+    sus numeros quedaban ahi para que alguien los citara. La docstring del campo
+    ya decia que un registro que no dice que es de ensayo es exactamente como un
+    numero de piloto termina citado como resultado.
+    """
+    return EPOCHS < FULL_EPOCHS or len(SEEDS) < len(FULL_SEEDS)
+
+
 # ------------------------------------------------------------------- material
 
 REVISION = "research-concept-r17.md"
