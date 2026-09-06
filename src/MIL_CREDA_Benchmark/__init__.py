@@ -508,24 +508,44 @@ __steps__: dict = {
     # `kind="campaign"` y con el `pilot` que la celda 2 deriva de
     # `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
     # ensayo, así que estas raíces son las de ensayo y no pueden ser otras.
-    # `shard_paths(None, pilot=True)` da `runs.jsonl` y `shard.json` bajo
-    # `results_for(0.0, "campaign", True)`, al lado va `summary.json`, y
-    # `Probe_results.json` sale un directorio más arriba
-    # (`results_for(...).parent`). Los tres archivos y no el directorio: el
-    # informe escribe sus figuras y su `report.md` adentro de esta misma raíz, y
-    # declarar el directorio entero haría que un `report.md` escrito por la
-    # campaña --- que no lo escribe --- se leyera como suyo.
-    # Los pesos sí son un directorio: `keep_median` los nombra por brazo,
-    # transferencia y semilla, y `keeps_checkpoints(0.0)` es verdadero.
-    # Y el cuaderno mismo, que se ejecuta `--inplace`.
+    #
+    # **Dos pasadas y por eso dos árboles.** La celda 7 recorre `NIVELES`, que es
+    # `(config.NOISE, config.NOISE_REPORTED)`: la campaña es cada transferencia a
+    # UNA tasa, así que el nivel contaminado es una segunda pasada de la misma
+    # forma y no un paso nuevo. La limpia cae en `results_for(0.0, "campaign",
+    # True)` y la contaminada en `results_for(NOISE_REPORTED, "campaign", True)`,
+    # que es exactamente la raíz que el informe y el latente leen y que hasta acá
+    # no escribía nadie --- por eso sus celdas contaminadas decían «no hay
+    # corridas». El `rho0p2` de estas rutas sale de `NOISE_REPORTED` y del
+    # formato de `results_for`, y `tests/test_steps.py` lo vuelve a componer.
+    #
+    # `shard_paths(None, pilot=True)` da `runs.jsonl` y `shard.json` bajo la raíz
+    # de cada pasada, al lado va `summary.json`, y `Probe_results.json` sale un
+    # directorio más arriba de la raíz LIMPIA --- `campaign()` lo ancla en
+    # `results_for(0.0, ...)` para las dos, así que es un solo archivo y lo
+    # escribe la última pasada, igual que el barrido con sus cinco niveles. Los
+    # archivos y no el directorio: el informe escribe sus figuras y su
+    # `report.md` adentro de estas mismas raíces, y declarar el directorio entero
+    # haría que un `report.md` escrito por la campaña --- que no lo escribe ---
+    # se leyera como suyo.
+    # Los pesos sí son un directorio, uno por pasada: `keep_median` los nombra
+    # por brazo, transferencia y semilla, y `keeps_checkpoints` es verdadero en
+    # las dos tasas --- son justamente las dos que el latente dibuja.
+    # Y el cuaderno mismo, que se ejecuta `--inplace` una sola vez: las dos
+    # pasadas viven adentro de una ejecución, así que la salida ejecutada muestra
+    # las dos. Correrlo dos veces le pisaría a la primera lo único que deja.
     "campaign-local": {"module": "MIL_CREDA_Benchmark.steps",
                        "function": "campana",
                      "advances": 4,
                      "produces": ["Results/Pilot/Benchmark/runs.jsonl",
                                   "Results/Pilot/Benchmark/summary.json",
                                   "Results/Pilot/Benchmark/shard.json",
+                                  "Results/Pilot/Noise/rho0p2/runs.jsonl",
+                                  "Results/Pilot/Noise/rho0p2/summary.json",
+                                  "Results/Pilot/Noise/rho0p2/shard.json",
                                   "Results/Pilot/Probe_results.json",
                                   "Models/Pilot/Benchmark",
+                                  "Models/Pilot/Noise/rho0p2",
                                   "Notebooks/Benchmark_Campaign_v1.ipynb"]},
     # Sólo lee y presenta --- la llamada que corre la búsqueda está comentada
     # adentro del cuaderno --- y aun así escribe: se ejecuta `--inplace`, así
