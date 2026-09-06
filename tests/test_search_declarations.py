@@ -270,6 +270,11 @@ def test_la_campana_se_niega_sin_techos(tmp_path, monkeypatch) -> None:
     Rojo alcanzable: sacar el `if not reduction.ceilings`.
     """
     monkeypatch.setattr(config, "RESULTS", tmp_path)
+    # `MODELS` también, y no es de más: `campaign()` hace `models_for(...).mkdir()`
+    # antes de este rechazo, y `MODELS` es hermana de `RESULTS` --- no se deriva de
+    # ella --- así que redirigir una sola dejaba el directorio de checkpoints de la
+    # corrida real creándose desde adentro de la suite.
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
     monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
 
     def _nunca(*args, **kwargs):
