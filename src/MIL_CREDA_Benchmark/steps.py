@@ -153,7 +153,7 @@ def campana() -> str:
     Dos pasadas y una sola ejecución. La campaña es cada transferencia a UNA
     tasa, así que correr los dos niveles que el informe muestra --- `config.NOISE`
     y `config.NOISE_REPORTED` --- son dos pasadas de esa misma forma y no un paso
-    nuevo: el bucle vive en la celda 7 del cuaderno, que es donde vive la campaña.
+    nuevo: el bucle vive en la celda 8 del cuaderno, que es donde vive la campaña.
     Ejecutar el cuaderno dos veces sería la otra forma de pedirlo y es peor:
     `_ejecutar` corre `--inplace` y la salida ejecutada ES el informe, así que la
     segunda ejecución borraría lo único que la primera deja. Además el cuaderno
@@ -168,7 +168,7 @@ def campana() -> str:
     que computa por su cuenta prueba la biblioteca y no prueba el artefacto.
 
     La biblioteca no se toca: el cuaderno llama a `harness.campaign()` en su
-    celda 7, así que lo que cambió es el cuerpo de este paso y nada más.
+    celda 8, así que lo que cambió es el cuerpo de este paso y nada más.
 
     Las dos guardas son precondiciones, no cómputo, y las dos existen para que
     el cuaderno pueda correr sin escribir fuera de las raíces que este paso

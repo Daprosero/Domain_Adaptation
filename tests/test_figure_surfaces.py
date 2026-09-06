@@ -789,7 +789,7 @@ def test_every_figure_carries_the_same_three_lines_a_table_does() -> None:
     Phase one is out of scope on purpose and not by oversight: the report's
     three curve figures carry the first two lines and no conclusion at all --
     `tables` has no `conclusion_*` for a curve, and the report calls none after
-    cells 74, 79 and 84. Asserting the third line over them would fail for
+    cells 75, 80 and 85. Asserting the third line over them would fail for
     being right about a gap this agreement's own section does not cover.
 
     Reachable red: drop a key from `objective`'s `metas` and the figure it

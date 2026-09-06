@@ -546,7 +546,7 @@ def _cuadernos_con_escala() -> set[str]:
     El ámbito de un cuaderno es el CUADERNO y no la celda: `ES_ENSAYO` se
     declara una vez, arriba, y se usa quince celdas más abajo. Esta regla
     miraba celda por celda y por eso no veía nada de eso --- la celda de techos
-    de `Benchmark_Campaign_v1` no declara `ES_ENSAYO`, la declara la celda 2 ---
+    de `Benchmark_Campaign_v1` no declara `ES_ENSAYO`, la declara la celda 3 ---
     así que devolverle esa celda a la llamada pelada pasaba por acá sin una
     palabra. Lo agarró otro test, y «otro test lo agarra» no es lo que esta
     regla afirma de sí misma.
