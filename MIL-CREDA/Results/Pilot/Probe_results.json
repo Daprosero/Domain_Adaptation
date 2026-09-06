@@ -337,7 +337,7 @@
       "selfHosted": true,
       "power": {
         "source": "mains",
-        "charge": 86
+        "charge": 100
       },
       "device": {
         "name": "mps",
@@ -624,5 +624,10 @@
     }
   ],
   "detail": "MIL-CREDA/Results/Pilot/Noise/rho0p2/summary.json",
-  "figures": []
+  "figures": [
+    "MIL-CREDA/Results/Pilot/Noise/rho0p2/curves/adaptation.pdf",
+    "MIL-CREDA/Results/Pilot/Noise/rho0p2/curves/contribution.pdf",
+    "MIL-CREDA/Results/Pilot/Noise/rho0p2/curves/supervised.pdf",
+    "MIL-CREDA/Results/Pilot/Noise/rho0p2/latent/correspondence.pdf"
+  ]
 }
