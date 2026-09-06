@@ -336,7 +336,7 @@
       "selfHosted": true,
       "power": {
         "source": "mains",
-        "charge": 80
+        "charge": 57
       },
       "device": {
         "name": "mps",
@@ -359,7 +359,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 6.038418208001531,
+          "mean": 4.529619791006553,
           "stdev": 0.0,
           "n": 1
         },
@@ -379,7 +379,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.05437660217285156,
+          "mean": 0.05590343475341797,
           "stdev": 0.0,
           "n": 1
         },
@@ -401,7 +401,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 10.251295041001868,
+          "mean": 7.400426541003981,
           "stdev": 0.0,
           "n": 1
         },
@@ -421,7 +421,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.08112049102783203,
+          "mean": 0.07998847961425781,
           "stdev": 0.0,
           "n": 1
         },
@@ -443,7 +443,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 10.35216204199969,
+          "mean": 7.457645957998466,
           "stdev": 0.0,
           "n": 1
         },
@@ -463,7 +463,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.08521080017089844,
+          "mean": 0.08405399322509766,
           "stdev": 0.0,
           "n": 1
         },
@@ -485,7 +485,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 6.165024249999988,
+          "mean": 4.67496141599986,
           "stdev": 0.0,
           "n": 1
         },
@@ -505,7 +505,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.05816364288330078,
+          "mean": 0.058196067810058594,
           "stdev": 0.0,
           "n": 1
         },
@@ -527,7 +527,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 11.901294915998733,
+          "mean": 11.313440165999054,
           "stdev": 0.0,
           "n": 1
         },
@@ -547,7 +547,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.22095108032226562,
+          "mean": 0.2206583023071289,
           "stdev": 0.0,
           "n": 1
         },
@@ -569,7 +569,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 11.974999709000258,
+          "mean": 11.307023916000617,
           "stdev": 0.0,
           "n": 1
         },
@@ -589,7 +589,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.2225780487060547,
+          "mean": 0.2224102020263672,
           "stdev": 0.0,
           "n": 1
         },
@@ -611,7 +611,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 12.681093749997672,
+          "mean": 12.11592091700004,
           "stdev": 0.0,
           "n": 1
         },
@@ -631,7 +631,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.2647686004638672,
+          "mean": 0.26650047302246094,
           "stdev": 0.0,
           "n": 1
         },
@@ -653,7 +653,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 12.013297666999279,
+          "mean": 12.011682124997606,
           "stdev": 0.0,
           "n": 1
         },
@@ -673,7 +673,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.26461029052734375,
+          "mean": 0.26747798919677734,
           "stdev": 0.0,
           "n": 1
         },
@@ -695,7 +695,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 11.863788833001308,
+          "mean": 12.013840750005329,
           "stdev": 0.0,
           "n": 1
         },
@@ -715,7 +715,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.2713279724121094,
+          "mean": 0.2681541442871094,
           "stdev": 0.0,
           "n": 1
         },
@@ -737,7 +737,7 @@
           "n": 1
         },
         "seconds": {
-          "mean": 12.07434558300156,
+          "mean": 12.258770792002906,
           "stdev": 0.0,
           "n": 1
         },
@@ -757,7 +757,7 @@
           "n": 1
         },
         "peakMiB": {
-          "mean": 0.2729177474975586,
+          "mean": 0.2764463424682617,
           "stdev": 0.0,
           "n": 1
         },
@@ -827,18 +827,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 6.038418208001531,
+          "mean": 4.529619791006553,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 6.165024249999988,
+          "mean": 4.67496141599986,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 0.12660604199845693,
+          "margin": 0.14534162499330705,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -920,12 +920,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.05437660217285156,
+          "mean": 0.05590343475341797,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.05816364288330078,
+          "mean": 0.058196067810058594,
           "stdev": 0.0,
           "n": 1
         },
@@ -1014,18 +1014,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 6.038418208001531,
+          "mean": 4.529619791006553,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 10.251295041001868,
+          "mean": 7.400426541003981,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 4.212876833000337,
+          "margin": 2.8708067499974277,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -1107,12 +1107,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.05437660217285156,
+          "mean": 0.05590343475341797,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.08112049102783203,
+          "mean": 0.07998847961425781,
           "stdev": 0.0,
           "n": 1
         },
@@ -1201,18 +1201,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 10.251295041001868,
+          "mean": 7.400426541003981,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 10.35216204199969,
+          "mean": 7.457645957998466,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 0.1008670009978232,
+          "margin": 0.05721941699448507,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -1294,12 +1294,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.08112049102783203,
+          "mean": 0.07998847961425781,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.08521080017089844,
+          "mean": 0.08405399322509766,
           "stdev": 0.0,
           "n": 1
         },
@@ -1388,18 +1388,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 6.165024249999988,
+          "mean": 4.67496141599986,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 11.901294915998733,
+          "mean": 11.313440165999054,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 5.736270665998745,
+          "margin": 6.638478749999194,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -1481,12 +1481,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.05816364288330078,
+          "mean": 0.058196067810058594,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.22095108032226562,
+          "mean": 0.2206583023071289,
           "stdev": 0.0,
           "n": 1
         },
@@ -1575,18 +1575,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 11.901294915998733,
+          "mean": 11.313440165999054,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 11.974999709000258,
+          "mean": 11.307023916000617,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "baseline",
-          "margin": 0.0737047930015251,
+          "winner": "new",
+          "margin": -0.006416249998437706,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -1668,12 +1668,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.22095108032226562,
+          "mean": 0.2206583023071289,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.2225780487060547,
+          "mean": 0.2224102020263672,
           "stdev": 0.0,
           "n": 1
         },
@@ -1762,18 +1762,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 11.974999709000258,
+          "mean": 11.307023916000617,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 12.681093749997672,
+          "mean": 12.11592091700004,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 0.7060940409974137,
+          "margin": 0.8088970009994227,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -1855,12 +1855,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.2225780487060547,
+          "mean": 0.2224102020263672,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.2647686004638672,
+          "mean": 0.26650047302246094,
           "stdev": 0.0,
           "n": 1
         },
@@ -1949,18 +1949,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 10.251295041001868,
+          "mean": 7.400426541003981,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 11.901294915998733,
+          "mean": 11.313440165999054,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 1.6499998749968654,
+          "margin": 3.9130136249950738,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -2042,12 +2042,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.08112049102783203,
+          "mean": 0.07998847961425781,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.22095108032226562,
+          "mean": 0.2206583023071289,
           "stdev": 0.0,
           "n": 1
         },
@@ -2136,18 +2136,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 10.35216204199969,
+          "mean": 7.457645957998466,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 11.974999709000258,
+          "mean": 11.307023916000617,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 1.6228376670005673,
+          "margin": 3.849377958002151,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -2229,12 +2229,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.08521080017089844,
+          "mean": 0.08405399322509766,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.2225780487060547,
+          "mean": 0.2224102020263672,
           "stdev": 0.0,
           "n": 1
         },
@@ -2323,18 +2323,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 10.35216204199969,
+          "mean": 7.457645957998466,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 12.681093749997672,
+          "mean": 12.11592091700004,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 2.328931707997981,
+          "margin": 4.658274959001574,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -2416,12 +2416,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.08521080017089844,
+          "mean": 0.08405399322509766,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.2647686004638672,
+          "mean": 0.26650047302246094,
           "stdev": 0.0,
           "n": 1
         },
@@ -2510,18 +2510,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 12.013297666999279,
+          "mean": 12.011682124997606,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 12.07434558300156,
+          "mean": 12.258770792002906,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 0.061047916002280544,
+          "margin": 0.24708866700530052,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -2603,12 +2603,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.26461029052734375,
+          "mean": 0.26747798919677734,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.2729177474975586,
+          "mean": 0.2764463424682617,
           "stdev": 0.0,
           "n": 1
         },
@@ -2697,18 +2697,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 11.863788833001308,
+          "mean": 12.013840750005329,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 12.07434558300156,
+          "mean": 12.258770792002906,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": 0.21055675000025076,
+          "margin": 0.24493004199757706,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -2790,12 +2790,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.2713279724121094,
+          "mean": 0.2681541442871094,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.2729177474975586,
+          "mean": 0.2764463424682617,
           "stdev": 0.0,
           "n": 1
         },
@@ -2884,18 +2884,18 @@
         "metric": "seconds",
         "better": "lower",
         "baseline": {
-          "mean": 12.07434558300156,
+          "mean": 12.258770792002906,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 12.681093749997672,
+          "mean": 12.11592091700004,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "baseline",
-          "margin": 0.6067481669961126,
+          "winner": "new",
+          "margin": -0.1428498750028666,
           "threshold": 0.0,
           "reason": "lower is better and the gap exceeds the combined standard error"
         }
@@ -2977,12 +2977,12 @@
         "metric": "peakMiB",
         "better": null,
         "baseline": {
-          "mean": 0.2729177474975586,
+          "mean": 0.2764463424682617,
           "stdev": 0.0,
           "n": 1
         },
         "new": {
-          "mean": 0.2647686004638672,
+          "mean": 0.26650047302246094,
           "stdev": 0.0,
           "n": 1
         },
@@ -3264,9 +3264,11 @@
     "M->U": {
       "new": [
         "B->E targetAccuracy",
+        "E->F seconds",
         "F->G sourceAccuracy",
         "SU->SK targetAccuracy",
-        "SA->SK sourceAccuracy"
+        "SA->SK sourceAccuracy",
+        "SK->G seconds"
       ],
       "baseline": [
         "A->B targetAccuracy",
@@ -3276,7 +3278,6 @@
         "A->C seconds",
         "C->D seconds",
         "B->E seconds",
-        "E->F seconds",
         "F->G targetAccuracy",
         "F->G seconds",
         "C->E targetAccuracy",
@@ -3291,8 +3292,7 @@
         "SU->SK seconds",
         "SA->SK targetAccuracy",
         "SA->SK seconds",
-        "SK->G targetAccuracy",
-        "SK->G seconds"
+        "SK->G targetAccuracy"
       ],
       "indistinguishable": [
         "A->C targetAccuracy",
