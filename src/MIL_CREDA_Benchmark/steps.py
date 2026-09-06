@@ -110,7 +110,12 @@ def campana() -> dict:
     # transferencias x 30 trials a 20 épocas, unas nueve horas y media --- sin
     # anunciarlo y sin que nadie la haya autorizado. Un paso local no puede ser
     # la puerta por la que entra la corrida larga.
-    if harness.search_record() is None and harness.search_record(pilot=True) is None:
+    # Las dos escalas preguntadas por separado y las dos dichas: esta guarda
+    # pregunta si existe ALGUNO de los dos archivos, no cuál rige. Desde que la
+    # omisión significa «el que rige», una llamada pelada contestaría por los dos
+    # y las dos mitades de la pregunta se volverían una sola.
+    if (harness.search_record(pilot=False) is None
+            and harness.search_record(pilot=True) is None):
         raise SystemExit(
             "no hay registro de techos. Corré primero la búsqueda: una campaña "
             "sin techos mide el método y la falta de coeficiente a la vez.")
@@ -249,7 +254,12 @@ def barrido_de_ruido() -> dict:
     #
     # Sin registro no corre: un barrido con techos vacíos mediría el ruido y la
     # falta de coeficiente a la vez.
-    if harness.search_record() is None and harness.search_record(pilot=True) is None:
+    # Las dos escalas preguntadas por separado y las dos dichas: esta guarda
+    # pregunta si existe ALGUNO de los dos archivos, no cuál rige. Desde que la
+    # omisión significa «el que rige», una llamada pelada contestaría por los dos
+    # y las dos mitades de la pregunta se volverían una sola.
+    if (harness.search_record(pilot=False) is None
+            and harness.search_record(pilot=True) is None):
         raise SystemExit(
             "no hay registro de techos. Corré primero la búsqueda "
             "(`search-pilot` a escala de ensayo, o la completa con su "

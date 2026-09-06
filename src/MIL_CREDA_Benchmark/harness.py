@@ -817,17 +817,79 @@ def _write_partial(family: str, arm_id: str, cells: dict, minutes: float,
     path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
 
 
-def search_record(pilot: bool = False) -> dict | None:
+def search_record(pilot: bool | None = None) -> dict | None:
     """The ceiling search's own record, whole, or None when it has not run.
 
     Read from disk and not carried in memory: `config.CEILINGS` keeps only the
     winners, and the winner alone cannot say whether it was searched at scale or
     whether the seeds agreed on it.
+
+    `pilot=None` significa *el que rige* --- la corrida completa si existe, el
+    ensayo si no --- y es el valor por omisión, la misma forma que
+    `contamination.level_dir` ya tenía para el registro de la campaña y por el
+    mismo motivo: leer el árbol completo a secas es lo que hacía que un ensayo
+    entero apareciera como «no hay búsqueda», y «no corrió» y «corrió y no lo
+    encontré» son la misma tabla vacía para quien la lee. Un informe de ensayo
+    llegaba así a 23 renglones de «no hay nada que mostrar» sobre una búsqueda
+    que sí había corrido.
+
+    Quien necesita un archivo Y NO EL OTRO lo dice: `pilot=False` es la lectura
+    que GOBIERNA --- `campaign` exige `atRequiredScale` sobre el registro
+    completo, y aceptar ahí el del ensayo dejaría que los techos de un ensayo
+    gobernaran una campaña real, que es peor que el defecto que esto arregla.
+    `pilot=True` es el ensayo y nada más. La omisión es para lo que se muestra,
+    nunca para lo que decide.
+
+    No se le pasa la escala de la CAMPAÑA: son dos registros con escalas
+    propias. `config.ceilings_record_in_force` ya declara que el completo gana
+    siempre que exista «para que un piloto local pueda correr sin haber gastado
+    Kaggle», y `steps.campana` construye su reducción de ensayo con
+    `config.ceilings_on_record()`, que lee justamente el vigente. Reenviarle el
+    `ES_ENSAYO` del cuaderno haría que un informe de ensayo dijera «no hay
+    búsqueda» mientras su propia reducción cita techos completos: los números
+    mostrados contradirían a la corrida que los produjo.
     """
-    record = config.ceilings_record_for(pilot)
+    if pilot is None:
+        record, _ = config.ceilings_record_in_force()
+        if record is None:
+            return None
+    else:
+        record = config.ceilings_record_for(pilot)
     if not record.exists():
         return None
     return json.loads(record.read_text(encoding="utf-8"))
+
+
+def search_source_note(pilot: bool | None = None) -> str:
+    """De dónde salieron los techos, en una línea, para encabezar la rejilla.
+
+    El gemelo exacto de `contamination.source_note`, que es el mecanismo que
+    este repositorio ya usa para que una tabla de ensayo no se pueda leer como
+    una completa. No se inventa un segundo aviso: misma forma, mismo lugar
+    ---arriba de los números, no al pie--- y la misma regla de que se escribe
+    SIEMPRE y no sólo en el caso malo, porque un aviso que aparece únicamente
+    cuando algo anda mal no le enseña a nadie qué es lo que vigila, y la primera
+    vez que falta se lee como que no había nada que avisar.
+
+    Los hechos salen de `config.ceilings_provenance()`, que ya los computaba
+    para estampar la reducción; acá sólo se redactan.
+    """
+    if pilot is not None and search_record(pilot=pilot) is None:
+        return ("**Sin registro de techos** para la escala pedida: no hay nada "
+                "que mostrar, que no es lo mismo que una rejilla vacía.")
+    procedencia = config.ceilings_provenance()
+    if procedencia["source"] == "none":
+        return ("**Sin búsqueda de techos.** Ni corrida completa ni ensayo: no "
+                "hay nada que mostrar, que no es lo mismo que una rejilla "
+                "vacía.")
+    if procedencia["source"] == "pilot":
+        return (f"**Estos techos son de un ENSAYO** "
+                f"({procedencia['epochs']} épocas), porque no hay búsqueda "
+                f"completa. El protocolo pide "
+                f"{(procedencia.get('requiredScale') or {}).get('epochs')} "
+                f"épocas: no se citan como resultados, ni en el informe, ni en "
+                f"el resumen, ni en conversación.")
+    return f"Búsqueda completa, {procedencia['epochs']} épocas."
 
 
 def ceilings_in_force(reduction: Reduction, device: torch.device,
@@ -867,7 +929,16 @@ def with_ceilings_in_force(reduction: Reduction, device: torch.device,
     is the old behaviour arriving silently: the run proceeds, the numbers look
     ordinary, and the two measured transfers quietly ran at the wrong ceiling.
     """
-    pooled = ceilings_in_force(reduction, device, progress=progress, shard=shard)
+    # `pilot` de la reducción y no de la firma. `ceilings_in_force` hace
+    # `replace(reduction, pilot=pilot)`, así que omitirlo no dejaba la escala
+    # librada: la SOBRESCRIBÍA con `False`. Una reducción de ensayo entraba acá
+    # y salía buscando ---y escribiendo--- en el registro de la corrida
+    # completa, nueve horas y media que nadie pidió, bajo el nombre del archivo
+    # que la campaña real consume. Hoy los tres sitios que llaman construyen
+    # `Reduction()` sin `pilot`, así que esto no mueve ninguna corrida; lo que
+    # cierra es que la próxima que sí lo lleve no se le dé vuelta en silencio.
+    pooled = ceilings_in_force(reduction, device, progress=progress, shard=shard,
+                               pilot=reduction.pilot)
     return replace(reduction, ceilings=pooled,
                    ceilingsByTransfer=config.ceilings_by_transfer_on_record())
 
@@ -1383,7 +1454,13 @@ def campaign(reduction: Reduction, device: torch.device,
     # obvious failure; this is the quiet one — someone lowers the search to test
     # the pipeline cheaply, `ceilings.json` gets written from three epochs, and
     # every campaign afterwards consumes it without a word.
-    searched = search_record() or {}
+    # `pilot=False` dicho y no heredado de la firma: ésta es la lectura que
+    # GOBIERNA --- dos líneas más abajo se exige `atRequiredScale` sobre ella ---
+    # y desde que la omisión significa «el que rige», una llamada pelada le daría
+    # el registro del ensayo y esta campaña se negaría por una escala que el
+    # ensayo nunca prometió. Un registro de ensayo no gobierna una campaña real:
+    # es exactamente la sustitución que este rechazo existe para impedir.
+    searched = search_record(pilot=False) or {}
     # The whole record travels into the reduction, here and not at the caller's
     # hand. The winner alone cannot say whether the grid leaned or the tie-break
     # chose, and a field a caller has to remember to fill is one that gets filled

@@ -624,8 +624,16 @@ def _draw_cell(axis, embedded, labels, domains):
 
 
 def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
-                device: torch.device) -> "figures.plt.Figure":
+                device: torch.device, rate: float = 0.0,
+                pilot: bool = False) -> "figures.plt.Figure":
     """Rows are transfers, columns are arms, and every panel is the same space.
+
+    `rate`/`pilot` eligen de qué corrida salen los pesos, igual que en
+    `correspondence_grid` y por la misma razón: sin ellos esto globeaba el árbol
+    limpio y COMPLETO mientras el cuaderno escribía su figura en el árbol del
+    ensayo, así que un análisis latente de ensayo no encontraba un solo
+    checkpoint y dibujaba una grilla entera de paneles apagados --- correcta en
+    forma, de la corrida equivocada, y sin un solo error que la delatara.
 
     No title and no footer. What the marks mean and what bounds the run was made
     under are the framing's job, and the framing sits directly above the figure:
@@ -657,8 +665,9 @@ def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
                                 squeeze=False)
 
     for row, transfer in enumerate(transfers):
-        anchor = next((checkpoint_for(a, transfer, seed) for a in arms
-                       if checkpoint_for(a, transfer, seed)), None)
+        anchor = next((checkpoint_for(a, transfer, seed, rate, pilot)
+                       for a in arms
+                       if checkpoint_for(a, transfer, seed, rate, pilot)), None)
         for column in range(len(columns)):
             axis = axes[row][column]
             axis.set_xticks([])
@@ -680,7 +689,7 @@ def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
                     axis.set_title(columns[0], fontsize=9)
                 continue
             arm = arms[column - 1]
-            record = checkpoint_for(arm, transfer, seed)
+            record = checkpoint_for(arm, transfer, seed, rate, pilot)
             if record is None:
                 axis.axis("off")
                 continue
@@ -979,8 +988,16 @@ def correspondence_grid(path: Path, arms: list[str], transfers: list[str], seed:
 
 @torch.no_grad()
 def floors_agree(transfers: list[str], seed: int, device: torch.device,
-                 left: str = "A", right: str = "B") -> dict:
+                 left: str = "A", right: str = "B", rate: float = 0.0,
+                 pilot: bool = False) -> dict:
     """¿Los dos pisos representan lo mismo a nivel de instancia? Medido, no supuesto.
+
+    `rate`/`pilot` eligen de qué corrida salen los pesos, igual que en
+    `correspondence_grid` y por la misma razón: sin ellos esto leía el árbol
+    limpio y COMPLETO mientras la campaña de ensayo escribía en el suyo, así que
+    contestaba `agree: None` por falta de checkpoints mientras el ensayo tenía
+    los suyos dos directorios más allá --- y de esa respuesta depende cuántas
+    columnas dibuja la grilla de al lado.
 
     La pregunta importa porque de la respuesta depende si una columna de la grilla
     es redundante. Y no se puede contestar mirando el código: los dos entrenan el
@@ -997,7 +1014,7 @@ def floors_agree(transfers: list[str], seed: int, device: torch.device,
     for transfer in transfers:
         pair = {}
         for arm in (left, right):
-            record = checkpoint_for(arm, transfer, seed)
+            record = checkpoint_for(arm, transfer, seed, rate, pilot)
             if record is None:
                 continue
             model, source, target = load(record, device)

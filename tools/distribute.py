@@ -222,7 +222,10 @@ def run_shard(shard: str, seeds: list[int]) -> dict:
     reduction = harness.Reduction(
         seeds=list(seeds), epochs=config.FULL_EPOCHS,
         device=str(device), environment=harness.environment())
-    reduction = replace(reduction, ceilings=harness.ceilings_in_force(reduction, device))
+    # `pilot` de la reducción: `ceilings_in_force` lo sobrescribe con el de su
+    # firma, así que omitirlo no era heredarlo sino perderlo.
+    reduction = replace(reduction, ceilings=harness.ceilings_in_force(
+        reduction, device, pilot=reduction.pilot))
     return harness.campaign(reduction, device, shard=shard)
 
 
