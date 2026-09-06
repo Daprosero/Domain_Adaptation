@@ -90,7 +90,7 @@ class PasosDeclaradosTests(unittest.TestCase):
         ser cierto: la búsqueda tiene el suyo, y cada raíz sigue con un dueño.
 
         Las tres mitades, cada una capaz de volver sola: que el paso corra
-        `Benchmark_Search_Pilot_v1.ipynb`, que no compute al lado del cuaderno
+        `Benchmark_Ceiling_Search_v1.ipynb`, que no compute al lado del cuaderno
         que corre, y que el informe siga sin ejecutar ninguna búsqueda ---
         abrirlo tiene que seguir costando lo que cuesta leer, no lo que cuesta
         buscar.
@@ -108,7 +108,7 @@ class PasosDeclaradosTests(unittest.TestCase):
         entrada = paquete.__steps__["search-pilot"]
         self.assertEqual(entrada["function"], "ensayo_de_busqueda")
         corridos = _cuadernos_nombrados_por_los_pasos()
-        self.assertEqual(corridos.get("Benchmark_Search_Pilot_v1.ipynb"),
+        self.assertEqual(corridos.get("Benchmark_Ceiling_Search_v1.ipynb"),
                          "ensayo_de_busqueda",
                          "la búsqueda no corre su propio cuaderno")
         self.assertEqual(corridos.get("Benchmark_Search_Report_v1.ipynb"),
@@ -275,6 +275,23 @@ class PasosDeclaradosTests(unittest.TestCase):
 CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
     "no_existe.ipynb": ("el cuaderno que `_ejecutar` tiene que rechazar; "
                         "que exista sería la falla que ese test mide"),
+    # Los nombres LIBERADOS, que la prosa del repositorio nombra para decir de
+    # dónde viene cada renombre. Están acá y no borrados del texto porque un
+    # nombre liberado que vuelve es peor que uno colgado: una referencia vieja
+    # sigue resolviendo, contra otro artefacto, y nadie ve nada. Declarados así,
+    # `test_toda_exencion_sigue_nombrando_algo_que_de_verdad_no_existe` se pone
+    # en rojo el día que alguien recicle uno.
+    "Benchmark_Search_v1.ipynb": (
+        "liberado: era el INFORME de la búsqueda y hoy se llama "
+        "`Benchmark_Search_Report_v1.ipynb`, porque su nombre prometía la "
+        "búsqueda y lo que hacía era presentarla. No se recicla para el "
+        "cuaderno que sí la corre"),
+    "Benchmark_Search_Pilot_v1.ipynb": (
+        "liberado: era el cuaderno que corre la búsqueda y fijaba `pilot=True` "
+        "adentro, así que su nombre afirmaba una escala que no le toca elegir "
+        "--- y mientras la afirmaba ningún cuaderno podía correr la búsqueda "
+        "completa. Hoy se llama `Benchmark_Ceiling_Search_v1.ipynb` y recibe su "
+        "escala"),
 }
 
 
@@ -860,7 +877,11 @@ def _correr_el_barrido(monkeypatch, tmp_path) -> dict:
     from MIL_CREDA_Benchmark import bags, config, harness
 
     _sin_maquina(monkeypatch, tmp_path)
-    monkeypatch.setattr(harness, "search_record", lambda pilot=False: {"stub": True})
+    def _registro(pilot=None):
+        escalas["registro"].append(pilot)
+        return {"stub": True}
+
+    monkeypatch.setattr(harness, "search_record", _registro)
     monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
         "el barrido lanzó una búsqueda: mediría el ruido y el coeficiente a la vez"))
     monkeypatch.setattr(harness, "with_ceilings_in_force",
@@ -871,15 +892,28 @@ def _correr_el_barrido(monkeypatch, tmp_path) -> dict:
     monkeypatch.setattr(harness, "run_one", lambda *a, **k: {"seconds": 1.0})
 
     lecturas = {"agrupado": 0, "por_transferencia": 0}
+    escalas = {"agrupado": [], "por_transferencia": [], "registro": []}
     corridas = []
 
-    def _agrupado():
-        lecturas["agrupado"] += 1
-        return {"milcreda": 1e-2, "creda": 1e-4}
+    # Un valor DISTINTO por escala en cada mitad. Un doble que contestara lo
+    # mismo por las dos haría verde a un cuaderno que lee el registro
+    # equivocado: la lectura existiría, contaría uno, y el número que llega a
+    # `campaign` sería el correcto por casualidad. Con dos valores, el que llega
+    # dice de qué archivo salió.
+    AGRUPADO = {True: {"milcreda": 1e-2, "creda": 1e-4},
+                False: {"milcreda": 9e-1, "creda": 9e-1}}
+    POR_TRANSFERENCIA = {True: {"milcreda": {"M->U": 1e-2}},
+                         False: {"milcreda": {"M->U": 9e-1}}}
 
-    def _por_transferencia():
+    def _agrupado(pilot=None):
+        lecturas["agrupado"] += 1
+        escalas["agrupado"].append(pilot)
+        return AGRUPADO[bool(pilot)]
+
+    def _por_transferencia(pilot=None):
         lecturas["por_transferencia"] += 1
-        return {"milcreda": {"M->U": 1e-2}}
+        escalas["por_transferencia"].append(pilot)
+        return POR_TRANSFERENCIA[bool(pilot)]
 
     monkeypatch.setattr(config, "ceilings_on_record", _agrupado)
     monkeypatch.setattr(config, "ceilings_by_transfer_on_record", _por_transferencia)
@@ -892,7 +926,9 @@ def _correr_el_barrido(monkeypatch, tmp_path) -> dict:
     monkeypatch.setattr(harness, "campaign", _campaign)
 
     ambito = _correr_las_celdas("Benchmark_Noise_Sweep_v1.ipynb")
-    return {"corridas": corridas, "lecturas": lecturas,
+    return {"corridas": corridas, "lecturas": lecturas, "escalas": escalas,
+            "agrupadoPorEscala": AGRUPADO,
+            "porTransferenciaPorEscala": POR_TRANSFERENCIA,
             "devuelto": ambito["corridos"], "ambito": ambito}
 
 
@@ -954,11 +990,19 @@ def test_el_barrido_lee_los_techos_una_vez_y_los_mantiene_en_los_cinco_niveles(
 
 # ------------------------------------------------- la escala de cada cuaderno
 #
-# Las dos reglas son opuestas y las dos son deliberadas, así que se afirman
-# juntas: el barrido y el diagnóstico DERIVAN su escala de `config.is_pilot_scale()`
-# --- son formas de la campaña y escriben donde la campaña escribe ---, y la
-# búsqueda NO, porque esa lectura habla del tamaño de la campaña y la búsqueda
-# tiene su propia escala declarada aparte.
+# UNA regla y no dos, y antes eran dos opuestas. La escala es un modo del
+# RECORRIDO: los cuatro cuadernos que corren ---la búsqueda, la campaña, el
+# barrido y el diagnóstico--- la derivan de `config.is_pilot_scale()`, y los
+# cuatro pasos que los ejecutan se niegan cuando esa lectura no es la del
+# ensayo, porque sus `produces` nombran la raíz de ensayo y ninguna otra.
+#
+# La búsqueda era la excepción: fijaba `True` adentro de su cuaderno, con el
+# argumento de que derivarla dejaría que el tamaño de la CAMPAÑA decidiera si
+# se lanza la corrida larga. El argumento era bueno y su conclusión costaba más
+# de lo que compraba --- con `True` fijo NINGÚN cuaderno podía correr la
+# búsqueda completa, así que a escala completa los techos salían de la
+# biblioteca y todo el resto del recorrido de un cuaderno ---, y la autorización
+# que ese `True` protegía ya vivía, para los otros tres, en la guarda del paso.
 
 
 def _correr_la_busqueda(monkeypatch, tmp_path, escala_de_ensayo: bool) -> dict:
@@ -982,45 +1026,64 @@ def _correr_la_busqueda(monkeypatch, tmp_path, escala_de_ensayo: bool) -> dict:
         "`ceilings.json` esa llamada ES la búsqueda completa, unas nueve horas y "
         "media que nadie autorizó"))
 
-    ambito = _correr_las_celdas("Benchmark_Search_Pilot_v1.ipynb")
+    ambito = _correr_las_celdas("Benchmark_Ceiling_Search_v1.ipynb")
     return {"pedidas": pedidas, "ambito": ambito}
 
 
-def test_el_cuaderno_de_la_busqueda_ensaya_aunque_la_campana_este_en_la_completa(
+def test_el_cuaderno_de_la_busqueda_sigue_la_escala_configurada_y_su_paso_se_niega(
         tmp_path, monkeypatch, capsys) -> None:
-    """La puerta que el cuaderno de la búsqueda no puede ser.
+    """Las dos mitades, que sólo valen juntas --- la misma forma que el barrido.
 
-    Un cuaderno de búsqueda es el lugar más fácil del árbol para que entre la
-    corrida larga sin que nadie la pida: `ceilings.json` son unas nueve horas y
-    media y es el registro que gobierna toda campaña. Ya pasó una vez, con
-    `with_ceilings_in_force` lanzándola desde una celda sin decirlo.
+    **El cuaderno deriva.** Con la escala configurada en la completa pide la
+    búsqueda COMPLETA y escribe `ceilings.json`; en ensayo pide el ensayo y
+    escribe `ceilings.pilot.json`. Este test afirmaba lo contrario --- que con
+    la escala en la completa el cuaderno seguía pidiendo el ensayo --- y esa era
+    la regla vieja. Lo que costaba está medido: con `True` fijo adentro, ningún
+    cuaderno del árbol podía correr la búsqueda a escala completa, así que a
+    escala completa los techos venían de `harness.run_search` mientras cada otra
+    pieza del recorrido venía de un cuaderno. Es la misma divergencia entre lo
+    que el ensayo ejercita y lo que la corrida real hace, un nivel más abajo.
 
-    Por eso este cuaderno fija su escala en vez de derivarla, y eso es
-    exactamente lo que se mide acá: con la escala configurada puesta en la
-    COMPLETA, sigue pidiendo el ensayo. Un test que sólo corriera a la escala
-    configurada de hoy --- que es la de ensayo --- se quedaría verde con
-    `ES_ENSAYO = config.is_pilot_scale()` adentro del cuaderno, porque hoy esa
-    lectura devuelve `True`: las dos formas dan el mismo número y sólo una de
-    ellas es una puerta.
+    **El paso se niega.** La autorización que aquel `True` protegía no se
+    perdió: vive donde ya vivía para los otros tres, en la guarda del paso, que
+    declara `ceilings.pilot.json` y ninguna otra raíz. Un cuaderno de búsqueda
+    es el lugar más fácil del árbol para que entre la corrida larga sin que
+    nadie la pida ---`ceilings.json` son unas nueve horas y media y gobierna
+    toda campaña---, y ya pasó una vez con `with_ceilings_in_force` lanzándola
+    desde una celda sin decirlo.
 
-    Y el destino sale de la misma respuesta que la escala, no de otra: un
+    Y el destino sale de la MISMA respuesta que la escala, no de otra: un
     cuaderno que ensayara y escribiera igual en `ceilings.json` gastaría la
-    respuesta de la búsqueda con la de un ensayo.
+    respuesta de la búsqueda con la de un ensayo. Por eso las dos escalas se
+    corren acá y no sólo la configurada de hoy: a escala de ensayo un `True`
+    fijo y una lectura derivada dan el mismo número, y sólo una de las dos es
+    una puerta.
 
-    Rojo alcanzable: poner `ES_ENSAYO = config.is_pilot_scale()` en el cuaderno,
-    pasarle `pilot=False` a `run_search`, o componer el destino con `False`.
+    Rojo alcanzable: volver a fijar `ES_ENSAYO` en el cuaderno, componer el
+    destino con una constante en vez de con `ES_ENSAYO`, o sacarle la guarda de
+    escala al paso.
     """
-    from MIL_CREDA_Benchmark import config
+    from MIL_CREDA_Benchmark import config, steps
 
     for escala in (True, False):
         corrido = _correr_la_busqueda(monkeypatch, tmp_path, escala)
         capsys.readouterr()
-        assert corrido["pedidas"] == [{"shard": None, "pilot": True}], (
-            f"con la escala configurada en {escala!r} el cuaderno no pidió el "
-            f"ensayo -> {corrido['pedidas']}")
-        assert corrido["ambito"]["ES_ENSAYO"] is True
-        assert corrido["ambito"]["DESTINO"] == config.ceilings_record_for(True)
-        assert corrido["ambito"]["DESTINO"] != config.ceilings_record_for(False)
+        assert corrido["pedidas"] == [{"shard": None, "pilot": escala}], (
+            f"con la escala configurada en {escala!r} el cuaderno pidió otra "
+            f"cosa -> {corrido['pedidas']}")
+        assert corrido["ambito"]["ES_ENSAYO"] is escala
+        assert corrido["ambito"]["DESTINO"] == config.ceilings_record_for(escala)
+        assert (corrido["ambito"]["DESTINO"]
+                != config.ceilings_record_for(not escala))
+
+    # la mitad del paso: se niega antes de abrir el cuaderno
+    monkeypatch.setattr(config, "is_pilot_scale", lambda: False)
+    monkeypatch.setattr(steps, "_ejecutar", lambda nombre: pytest.fail(
+        f"el paso abrió {nombre} a escala completa, fuera de sus raíces: "
+        "`ceilings.json` es el registro que gobierna toda campaña"))
+    with pytest.raises(SystemExit) as caido:
+        steps.ensayo_de_busqueda()
+    assert "escala" in str(caido.value)
 
 
 def test_el_barrido_y_el_diagnostico_siguen_la_escala_configurada_y_su_paso_se_niega(
@@ -1104,7 +1167,13 @@ def _correr_las_celdas_de_la_campana(monkeypatch, tmp_path) -> dict:
     # por campo, así que acá lleva los tres campos que esa celda nombra.
     monkeypatch.setattr(harness, "environment", lambda: {
         "platform": "stub", "torch": "stub", "selfHosted": False})
-    monkeypatch.setattr(harness, "search_record", lambda pilot=False: {"stub": True})
+    escalas = {"agrupado": [], "por_transferencia": [], "registro": []}
+
+    def _registro(pilot=None):
+        escalas["registro"].append(pilot)
+        return {"stub": True}
+
+    monkeypatch.setattr(harness, "search_record", _registro)
     monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
         "la campaña lanzó una búsqueda: mediría el método y la falta de "
         "coeficiente a la vez, y a escala completa son nueve horas y media"))
@@ -1113,17 +1182,26 @@ def _correr_las_celdas_de_la_campana(monkeypatch, tmp_path) -> dict:
     monkeypatch.setattr(bags, "build", lambda *a, **k: {"stub": True})
     monkeypatch.setattr(harness, "run_one", lambda *a, **k: {"seconds": 1.0})
 
-    techos = {"milcreda": 1e-2, "creda": 1e-4}
-    por_transferencia = {"milcreda": {"M->U": 1e-2}}
+    # Un valor DISTINTO por escala, por el mismo motivo que en el barrido: un
+    # doble que contestara lo mismo por las dos dejaría verde a una campaña de
+    # ensayo corriendo bajo los techos de la búsqueda COMPLETA.
+    AGRUPADO = {True: {"milcreda": 1e-2, "creda": 1e-4},
+                False: {"milcreda": 9e-1, "creda": 9e-1}}
+    POR_TRANSFERENCIA = {True: {"milcreda": {"M->U": 1e-2}},
+                         False: {"milcreda": {"M->U": 9e-1}}}
+    techos = AGRUPADO[True]
+    por_transferencia = POR_TRANSFERENCIA[True]
     lecturas = {"agrupado": 0, "por_transferencia": 0, "en_vigor": 0}
 
-    def _agrupado():
+    def _agrupado(pilot=None):
         lecturas["agrupado"] += 1
-        return techos
+        escalas["agrupado"].append(pilot)
+        return AGRUPADO[bool(pilot)]
 
-    def _por_transferencia():
+    def _por_transferencia(pilot=None):
         lecturas["por_transferencia"] += 1
-        return por_transferencia
+        escalas["por_transferencia"].append(pilot)
+        return POR_TRANSFERENCIA[bool(pilot)]
 
     def _en_vigor(reduccion, dispositivo, **kwargs):
         from dataclasses import replace as _replace
@@ -1163,7 +1241,9 @@ def _correr_las_celdas_de_la_campana(monkeypatch, tmp_path) -> dict:
 
     return {"corridas": corridas, "lecturas": lecturas, "raices": raices,
             "lineas": lineas, "escala": escala, "techos": techos,
-            "porTransferencia": por_transferencia, "ambito": ambito}
+            "porTransferencia": por_transferencia, "escalas": escalas,
+            "agrupadoPorEscala": AGRUPADO,
+            "porTransferenciaPorEscala": POR_TRANSFERENCIA, "ambito": ambito}
 
 
 def test_la_campana_corre_las_dos_pasadas_y_la_segunda_es_la_contaminada(

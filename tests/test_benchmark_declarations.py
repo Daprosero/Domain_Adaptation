@@ -992,8 +992,19 @@ def test_the_campaign_carries_the_whole_search_record_not_only_the_winner() -> N
     from MIL_CREDA_Benchmark import harness
 
     source = inspect.getsource(harness.campaign)
-    assert "ceilingSearch=searched" in source, (
+    assert "ceilingSearch=search_record(pilot=reduction.pilot)" in source, (
         "the campaign does not copy the search record into its reduction")
+
+    # Y de SU escala, que es la otra mitad y la que se rompe sola. El sello
+    # compartía la variable con la lectura que GOBIERNA --- `searched`, que
+    # nombra `pilot=False` porque abajo se le exige `atRequiredScale` --- y son
+    # dos preguntas distintas: una campaña de ensayo se sellaba con la rejilla
+    # de la búsqueda completa mientras corría bajo los techos del ensayo, así
+    # que el informe explicaba cómo se eligió un número que esa corrida no usó.
+    # Las dos lecturas se afirman juntas porque separarlas es justamente el
+    # cambio, y volver a unirlas se lee igual de verde con una sola.
+    assert "searched = search_record(pilot=False)" in source, (
+        "la lectura que gobierna dejó de nombrar la escala completa")
 
 
 def test_an_existing_ceiling_record_is_never_re_searched(tmp_path, monkeypatch) -> None:

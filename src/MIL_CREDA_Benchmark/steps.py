@@ -76,13 +76,21 @@ def verificacion() -> str:
 def ensayo_de_busqueda() -> str:
     """Corre el ENSAYO de la búsqueda de techos ejecutando SU cuaderno.
 
-    `Benchmark_Search_Pilot_v1.ipynb` fija `pilot=True` y no ofrece manera de
-    pedir otra cosa. La búsqueda a escala completa es una decisión con su propia
-    autorización, y un cuaderno que derivara su escala de
-    `config.is_pilot_scale()` --- como sí hace el de la campaña, y con razón ---
-    dejaría esa decisión en manos del tamaño configurado de la CAMPAÑA, que es
-    otra cosa: la búsqueda tiene su propia escala declarada aparte. Escribe
-    `ceilings.pilot.json`, que el registro completo siempre le gana cuando existe.
+    `Benchmark_Ceiling_Search_v1.ipynb` recibe su escala de
+    `config.is_pilot_scale()`, igual que la campaña, el barrido y el
+    diagnóstico, y la guarda de abajo es lo que hace que por ACÁ corra siempre
+    el ensayo. Se llamaba `Benchmark_Search_Pilot_v1.ipynb` y fijaba `pilot=True`
+    adentro, y eso costaba lo que el nombre prometía: **ningún cuaderno podía
+    correr la búsqueda a escala completa**, así que a escala completa los techos
+    salían de `harness.run_search` mientras todo el resto del recorrido salía de
+    un cuaderno --- la misma divergencia entre lo que el ensayo ejercita y lo que
+    la corrida real hace que estos pasos existen para cerrar. La autorización no
+    se perdió: se mudó al único lugar donde ya vivía para los otros tres, que es
+    la guarda de este paso.
+
+    En ensayo escribe `ceilings.pilot.json`, que es la raíz que este paso
+    declara; a escala completa escribiría `ceilings.json`, que es de otro, y por
+    eso la guarda se niega en vez de mudarse en silencio.
 
     Existe porque no existía: la única forma de correr esta búsqueda era un
     `python -c` a mano contra `harness`, por fuera de la skill y sin dejar rastro
@@ -116,8 +124,25 @@ def ensayo_de_busqueda() -> str:
     sus raíces, así que el ensayo los recorría probando la biblioteca y dejando
     sin ejercitar el artefacto. Es el mismo defecto que la campaña ya había
     tenido, tres veces más.
+
+    La guarda es una precondición, no cómputo, y es la misma forma que `campana`,
+    `barrido_de_ruido` y `diagnostico_de_ruido`: `produces` nombra
+    `ceilings.pilot.json` y ninguna otra raíz, y a escala completa el cuaderno
+    escribiría `ceilings.json` --- el registro que gobierna toda campaña, unas
+    nueve horas y media. Que la escala sea un modo del recorrido no significa que
+    la forja pueda elegirla: significa que hay UN lugar donde se declara, y que
+    este paso corre el modo de ensayo.
     """
-    return _ejecutar("Benchmark_Search_Pilot_v1.ipynb")
+    from MIL_CREDA_Benchmark import config
+
+    if not config.is_pilot_scale():
+        raise SystemExit(
+            f"la escala configurada es la completa ({config.EPOCHS} épocas, "
+            f"{len(config.SEEDS)} semillas). Este paso declara "
+            "`ceilings.pilot.json` y el cuaderno escribiría `ceilings.json`, "
+            "que es el registro que gobierna toda campaña: la búsqueda a escala "
+            "completa se lanza con su propia autorización, no por acá.")
+    return _ejecutar("Benchmark_Ceiling_Search_v1.ipynb")
 
 
 def campana() -> str:
@@ -158,11 +183,12 @@ def campana() -> str:
       del bucle, y las dos pasadas corren bajo los mismos: los de la búsqueda EN
       LIMPIO. La pasada contaminada no re-busca nada --- lo que la contaminación
       le cuesta al techo lo mide `diagnostico_de_ruido`, que busca a su nivel y
-      no gobierna este registro. Las dos escalas preguntadas por
-      separado y las dos dichas: pregunta si existe ALGUNO de los dos archivos,
-      no cuál rige. Desde que la omisión significa «el que rige», una llamada
-      pelada contestaría por los dos y las dos mitades de la pregunta se
-      volverían una sola.
+      no gobierna este registro. La escala preguntada es la de ESTE paso, que
+      corre siempre en ensayo porque la guarda de arriba lo obliga: preguntaba
+      si existía ALGUNO de los dos archivos mientras el cuaderno lee el del
+      ensayo, así que con sólo un `ceilings.json` en disco esta precondición
+      decía «adelante» y el cuaderno se negaba adentro por techos vacíos ---
+      pagando el arranque del intérprete para decir lo que acá se sabía.
 
     Esto NO envía nada al servicio remoto, y el cuaderno tampoco: no importa
     `remote_cli`, no submite, y lo único que lo menciona es su bootstrap, que
@@ -179,11 +205,12 @@ def campana() -> str:
             "ensayo y el cuaderno escribiría en el de la corrida completa: "
             "una campaña a escala completa se lanza con su propia "
             "autorización, no por acá.")
-    if (harness.search_record(pilot=False) is None
-            and harness.search_record(pilot=True) is None):
+    if harness.search_record(pilot=True) is None:
         raise SystemExit(
-            "no hay registro de techos. Corré primero la búsqueda: una campaña "
-            "sin techos mide el método y la falta de coeficiente a la vez.")
+            "no hay registro de techos de ENSAYO. Corré primero la búsqueda "
+            "(`search-pilot`): una campaña sin techos mide el método y la falta "
+            "de coeficiente a la vez, y una campaña de ensayo bajo los techos "
+            "de la búsqueda completa mide un coeficiente que no midió acá.")
     return _ejecutar("Benchmark_Campaign_v1.ipynb")
 
 
@@ -204,7 +231,7 @@ def informe_de_busqueda() -> str:
 
     La llamada comentada de su celda 7 tampoco está más. Existía porque era la
     única forma de pedir el ensayo de la búsqueda desde un cuaderno, y esa razón
-    murió con `Benchmark_Search_Pilot_v1.ipynb`: descomentarla ahora le daría dos
+    murió con `Benchmark_Ceiling_Search_v1.ipynb`: descomentarla ahora le daría dos
     dueños al ensayo y haría que abrir este informe cueste lo que cuesta correrlo.
     """
     return _ejecutar("Benchmark_Search_Report_v1.ipynb")
@@ -294,13 +321,13 @@ def barrido_de_ruido() -> str:
       fijada en `True` adentro de esta función, así que a escala completa un
       barrido de veinte épocas y treinta semillas se archivaba bajo `Pilot/`: una
       medición completa etiquetada como ensayo.
-    * **El registro de techos.** Sin ninguno de los dos archivos el cuaderno se
+    * **El registro de techos.** Sin el archivo de esta escala el cuaderno se
       negaría adentro; negarse acá dice qué correr antes, sin pagar el arranque
-      del intérprete del cuaderno. Las dos escalas preguntadas por separado y las
-      dos dichas: pregunta si existe ALGUNO de los dos archivos, no cuál rige.
-      Desde que la omisión significa «el que rige», una llamada pelada
-      contestaría por los dos y las dos mitades de la pregunta se volverían una
-      sola.
+      del intérprete del cuaderno. La escala preguntada es la de ESTE paso, que
+      corre siempre en ensayo porque la guarda de arriba lo obliga, y es la misma
+      que el cuaderno lee: una precondición que preguntara por ALGUNO de los dos
+      archivos dejaría pasar un barrido de ensayo que después corre bajo los
+      techos de la corrida completa.
 
     Lo que el cuaderno NO hace, y es la razón por la que su celda de techos los
     lee en vez de resolverlos: llamar a `with_ceilings_in_force` era el reflejo
@@ -318,12 +345,12 @@ def barrido_de_ruido() -> str:
             "ensayo y el cuaderno escribiría en el de la corrida completa: "
             "un barrido a escala completa se lanza con su propia "
             "autorización, no por acá.")
-    if (harness.search_record(pilot=False) is None
-            and harness.search_record(pilot=True) is None):
+    if harness.search_record(pilot=True) is None:
         raise SystemExit(
-            "no hay registro de techos. Corré primero la búsqueda "
-            "(`search-pilot` a escala de ensayo, o la completa con su "
-            "autorización): un barrido sin techos mide dos cosas a la vez.")
+            "no hay registro de techos de ENSAYO. Corré primero la búsqueda "
+            "(`search-pilot`): un barrido sin techos mide dos cosas a la vez, y "
+            "uno de ensayo bajo los techos de la búsqueda completa mide un "
+            "coeficiente que no midió acá.")
     return _ejecutar("Benchmark_Noise_Sweep_v1.ipynb")
 
 
