@@ -1137,6 +1137,494 @@ def test_el_barrido_y_el_diagnostico_siguen_la_escala_configurada_y_su_paso_se_n
         assert "escala" in str(caido.value)
 
 
+# ----------------------------------------------------------- el ensayo remoto
+#
+# La regla, en las palabras del dueño: el ensayo que ocurre EN EL WORKER tiene
+# que usar únicamente los resultados previos de los cuadernos que corrieron en
+# modo COMPLETO --- salvo el primero, que no depende de ningún otro cuaderno.
+#
+# Lo que estas pruebas tienen que separar es un ensayo que LEYÓ de uno que leyó
+# LO QUE CORRESPONDE. Una afirmación de que «el ensayo leyó algo» la pasa un
+# ensayo que se llevó `SMOKE_CEILINGS` --- el neutral declarado del módulo --- o
+# el registro del ensayo de al lado, que es exactamente lo que la regla prohíbe.
+# Por eso cada doble de acá contesta un valor DISTINTO por escala, y lo que se
+# afirma es cuál de los dos llegó.
+
+
+def _sin_ensayo_remoto(monkeypatch) -> None:
+    """El modo apagado, dicho y no supuesto.
+
+    `config.is_rehearsal()` lee el entorno del proceso, y la suite corre adentro
+    de uno que puede traerlo puesto de afuera --- una consola que ensayó a mano,
+    un `ensayo_remoto` que murió sin restaurar. Sin esto, la mitad de estas
+    pruebas mediría el entorno de quien las corre.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    monkeypatch.delenv(config.REHEARSAL_ENV, raising=False)
+
+
+def test_la_cadena_de_pasos_se_deriva_de_las_dos_listas(monkeypatch) -> None:
+    """Quién depende de quién, leído de `reads` contra `produces` y de nada más.
+
+    Lo que se afirma es la cadena entera y no una arista: la búsqueda no depende
+    de nadie ---escribe el registro de techos y no lo lee--- y `verification`
+    tampoco, porque corre la suite sobre `src/MIL_CREDA`, que viaja con el clon y
+    no lo produce ningún paso. Los dos son los únicos exentos de la regla, y esa
+    lista sale de que su `reads` esté vacío.
+
+    Y se afirma que es DERIVADA: un paso inventado acá, que lea una raíz que
+    `report` escribe, queda encadenado a `report` sin que nadie toque una lista de
+    nombres. Una implementación que llevara la cadena escrita a mano pasaría todo
+    lo de arriba y se caería acá.
+
+    Rojo alcanzable: escribir la cadena a mano, comparar raíces por prefijo de
+    cadena en vez de por segmentos, o dejar de normalizar la escala --- con
+    cualquiera de las tres, `campaign-local` deja de ver a `search-pilot`, porque
+    lo que la búsqueda declara es `ceilings.pilot.json` y lo que la campaña lee es
+    `ceilings.json`.
+    """
+    esperada = {
+        "verification": (),
+        "search-pilot": (),
+        "search-report": ("search-pilot",),
+        "campaign-local": ("search-pilot",),
+        "report": ("campaign-local", "search-pilot"),
+        "latent": ("campaign-local",),
+        "noise-sweep": ("search-pilot",),
+        "noise-report": ("noise-sweep",),
+        "noise-diagnostic": ("noise-sweep",),
+        "noise-diagnostic-report": ("noise-diagnostic",),
+    }
+    assert set(esperada) == set(paquete.__steps__), (
+        "se declaró un paso nuevo y nadie dijo qué consume")
+    for paso, previos in esperada.items():
+        assert steps.predecesores(paso) == previos, paso
+
+    sin_predecesor = [p for p in paquete.__steps__ if not steps.predecesores(p)]
+    assert sin_predecesor == ["verification", "search-pilot"], (
+        "cambió quién está exento de la regla, y eso es una decisión, no un "
+        f"detalle -> {sin_predecesor}")
+
+    # y es derivada: un paso nuevo se encadena solo
+    inventados = dict(paquete.__steps__)
+    inventados["paso-inventado"] = {
+        "module": "MIL_CREDA_Benchmark.steps", "function": "informe",
+        "reads": ["Results/Benchmark/report.md"], "produces": []}
+    monkeypatch.setattr(paquete, "__steps__", inventados)
+    assert steps.predecesores("paso-inventado") == ("report",), (
+        "la cadena no se deriva de las dos listas")
+
+
+def test_la_normalizacion_de_escala_sale_de_las_puertas_y_no_de_una_ortografia(
+) -> None:
+    """Las dos reglas que dejan comparables `produces` y `reads`, recompuestas.
+
+    Las dos listas hablan escalas distintas a propósito: `produces` nombra el
+    árbol de ENSAYO en los cuatro pasos que computan, porque es donde escriben, y
+    `reads` nombra siempre la corrida completa, que es lo único que un ensayo
+    remoto puede consumir. Compararlas pide traducir una a la otra, y la
+    traducción no puede estar deletreada: las dos reglas se recomponen acá desde
+    las puertas de `config` que las deciden.
+
+    Son dos y no una porque la escala vive en dos lugares distintos: `results_for`
+    y `models_for` la meten como un SEGMENTO de directorio, y
+    `ceilings_record_for` la mete en el NOMBRE DEL ARCHIVO, así que la primera
+    regla no lo toca.
+
+    Rojo alcanzable: mover el segmento `Pilot/` a otro nivel en `results_for`, o
+    renombrar `ceilings.pilot.json`, sin mover `raiz_a_escala_completa`.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    producto = config.PRODUCT
+    for puerta in (config.results_for, config.models_for):
+        for tasa, forma in ((0.0, "campaign"), (config.NOISE_REPORTED, "campaign"),
+                            (0.0, "curve")):
+            ensayo = puerta(tasa, forma, True).relative_to(producto).as_posix()
+            completa = puerta(tasa, forma, False).relative_to(producto).as_posix()
+            assert steps.raiz_a_escala_completa(ensayo) == completa, (
+                f"{puerta.__name__}({tasa}, {forma!r}) no se traduce")
+            # ya completa, se queda quieta
+            assert steps.raiz_a_escala_completa(completa) == completa
+
+    ensayo = config.ceilings_record_for(True).relative_to(producto).as_posix()
+    completa = config.ceilings_record_for(False).relative_to(producto).as_posix()
+    assert ensayo != completa, (
+        "el registro de techos dejó de separar sus dos escalas")
+    assert steps.raiz_a_escala_completa(ensayo) == completa
+    assert steps.raiz_a_escala_completa(completa) == completa
+
+
+def test_el_ensayo_remoto_de_la_campana_corre_bajo_los_techos_de_la_busqueda_completa(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Lo que el ensayo remoto de la campaña consume, pinchado a su origen.
+
+    Ésta es la afirmación que la regla pide y la que una versión débil no hace.
+    El doble de `ceilings_on_record` contesta `9e-1` por la corrida completa y
+    `1e-2` por el ensayo, así que el número que llega a `campaign()` dice de qué
+    ARCHIVO salió. Una prueba que sólo mirara que la lectura ocurrió, o que los
+    techos no están vacíos, la pasa un ensayo corriendo bajo `ceilings.pilot.json`
+    --- y la pasa también uno corriendo bajo `harness.SMOKE_CEILINGS`, el neutral
+    declarado del módulo, que es la forma exacta que la regla vino a reemplazar.
+
+    Las dos escalas se corren acá y no sólo la del ensayo remoto: fuera de ese
+    modo la campaña tiene que seguir consumiendo el registro del ENSAYO, que es la
+    regla del recorrido local y el defecto que se cerró antes ---una campaña de
+    ensayo bajo techos medidos a veinte épocas en otro experimento---. Una sola
+    de las dos mitades deja pasar una implementación que lee siempre lo completo.
+
+    La ESCRITURA no se mueve: el ensayo remoto corre a escala reducida y archiva
+    donde archiva un ensayo, que es lo que lo hace un ensayo y no una corrida.
+
+    Rojo alcanzable: leer los techos con `reduction.pilot` en la celda 5, o hacer
+    que `upstream_pilot_scale()` conteste lo mismo en los dos modos.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    _sin_ensayo_remoto(monkeypatch)
+    local = _correr_las_celdas_de_la_campana(monkeypatch, tmp_path)
+    capsys.readouterr()
+    assert local["corridas"], "la campaña no corrió ninguna pasada"
+    for corrida in local["corridas"]:
+        assert corrida["reduction"].ceilings == local["agrupadoPorEscala"][True], (
+            "fuera del ensayo remoto la campaña dejó de consumir el registro "
+            "del ensayo")
+        assert corrida["reduction"].pilot is True
+
+    monkeypatch.setenv(config.REHEARSAL_ENV, "1")
+    remoto = _correr_las_celdas_de_la_campana(monkeypatch, tmp_path)
+    capsys.readouterr()
+    assert remoto["corridas"], "la campaña no corrió ninguna pasada"
+    for corrida in remoto["corridas"]:
+        assert corrida["reduction"].ceilings == remoto["agrupadoPorEscala"][False], (
+            "el ensayo remoto no corrió bajo los techos de la búsqueda COMPLETA")
+        assert corrida["reduction"].ceilings != remoto["agrupadoPorEscala"][True]
+        assert (corrida["reduction"].ceilingsByTransfer
+                == remoto["porTransferenciaPorEscala"][False])
+        assert corrida["reduction"].pilot is True, (
+            "el ensayo remoto archivó fuera del árbol de ensayo")
+    assert remoto["escalas"]["agrupado"] == [False]
+    assert remoto["escalas"]["por_transferencia"] == [False]
+
+
+def test_el_ensayo_remoto_del_barrido_corre_bajo_los_techos_de_la_busqueda_completa(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Lo mismo para el barrido, y su guarda con él.
+
+    El barrido pregunta por el registro antes de leerlo, y las dos mitades tienen
+    que moverse juntas: una guarda que preguntara por el archivo del ensayo
+    negaría cada ensayo remoto por la ausencia de un archivo que ese ensayo no va
+    a abrir, y una que preguntara por «alguno de los dos» dejaría pasar un barrido
+    que después corre bajo un registro que no le pidieron.
+
+    Rojo alcanzable: dejar `pilot=ES_ENSAYO` en cualquiera de las tres lecturas
+    de la celda 3, o desacoplar la guarda de la lectura.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    _sin_ensayo_remoto(monkeypatch)
+    local = _correr_el_barrido(monkeypatch, tmp_path)
+    capsys.readouterr()
+    assert local["escalas"]["registro"] == [True]
+    for corrida in local["corridas"]:
+        assert corrida["reduction"].ceilings == local["agrupadoPorEscala"][True]
+
+    monkeypatch.setenv(config.REHEARSAL_ENV, "1")
+    remoto = _correr_el_barrido(monkeypatch, tmp_path)
+    capsys.readouterr()
+    assert remoto["corridas"], "el barrido no corrió ningún nivel"
+    assert remoto["escalas"]["registro"] == [False], (
+        "la guarda del barrido preguntó por un archivo que el cuaderno no abre")
+    for corrida in remoto["corridas"]:
+        assert corrida["reduction"].ceilings == remoto["agrupadoPorEscala"][False], (
+            "el ensayo remoto del barrido no corrió bajo los techos completos")
+        assert corrida["reduction"].ceilings != remoto["agrupadoPorEscala"][True]
+        assert corrida["reduction"].pilot is True
+
+
+def test_el_ensayo_remoto_del_diagnostico_lee_la_linea_limpia_del_barrido_completo(
+        tmp_path, monkeypatch, capsys) -> None:
+    """La única lectura del diagnóstico, pinchada a la corrida que la produjo.
+
+    El diagnóstico paga UN punto ---la re-búsqueda bajo contaminación--- y saca
+    los otros dos del barrido. Toda la pregunta del cuaderno es la diferencia
+    entre esos dos números, así que de qué corrida sale la línea limpia no es un
+    detalle del destino: es la mitad de la resta.
+
+    El doble contesta un resumen DISTINTO por escala, y lo que se afirma es cuál
+    quedó adentro de `diagnostic.json`. Una prueba que sólo mirara que
+    `cleanCeilingRun` no es nulo la pasa un diagnóstico que se llevó la línea del
+    barrido de ensayo.
+
+    Rojo alcanzable: volver a `pilot=reduccion.pilot` en la celda 7.
+    """
+    from MIL_CREDA_Benchmark import config, contamination, harness
+
+    RESUMEN = {True: {"origen": "ensayo"}, False: {"origen": "completa"}}
+    pedidas: list = []
+
+    def _correr(escala_de_entrada: bool) -> dict:
+        import json as _json
+
+        _sin_maquina(monkeypatch, tmp_path)
+        monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: {
+            "milcreda": {"ceiling": 1e-2, "byTransfer": {"M->U": 1e-2}}})
+        monkeypatch.setattr(harness, "campaign", lambda *a, **k: pytest.fail(
+            "el diagnóstico corrió una campaña"))
+
+        def _load(tasa, kind="campaign", pilot=None):
+            pedidas.append({"kind": kind, "pilot": pilot})
+            return {"summary": RESUMEN[bool(pilot)], "pilot": bool(pilot)}
+
+        monkeypatch.setattr(contamination, "load", _load)
+        ambito = _correr_las_celdas("Benchmark_Noise_Diagnostic_Search_v1.ipynb")
+        capsys.readouterr()
+        (escrito,) = list(tmp_path.rglob("diagnostic.json"))
+        return {"registro": _json.loads(escrito.read_text(encoding="utf-8")),
+                "escrito": escrito, "ambito": ambito}
+
+    _sin_ensayo_remoto(monkeypatch)
+    local = _correr(True)
+    assert local["registro"]["cleanCeilingRun"] == RESUMEN[True], (
+        "fuera del ensayo remoto el diagnóstico dejó de leer el barrido de su "
+        "propia escala")
+
+    pedidas.clear()
+    monkeypatch.setenv(config.REHEARSAL_ENV, "1")
+    remoto = _correr(False)
+    assert pedidas == [{"kind": "curve", "pilot": False}], (
+        f"el diagnóstico leyó otra cosa -> {pedidas}")
+    assert remoto["registro"]["cleanCeilingRun"] == RESUMEN[False], (
+        "el ensayo remoto del diagnóstico se llevó la línea limpia del barrido "
+        "de ENSAYO, que es la mitad equivocada de la resta")
+    assert remoto["registro"]["cleanCeilingRun"] != RESUMEN[True]
+    assert "Pilot" in remoto["escrito"].parts, (
+        "el ensayo remoto escribió fuera del árbol de ensayo")
+
+
+def test_el_ensayo_remoto_se_niega_cuando_falta_una_salida_de_escala_completa(
+        tmp_path, monkeypatch) -> None:
+    """El estado ordinario al principio de un recorrido, y lo que NO se hace con él.
+
+    Que la salida completa del paso de arriba todavía no esté no es un defecto:
+    es lo que pasa hasta que ese paso corre. Lo que no puede pasar es que el
+    ensayo siga igual --- ni cayendo al árbol de ensayo, ni al neutral declarado
+    del módulo ---, porque las dos caídas lo dejan en verde sin haber tocado nada
+    de lo que dice probar, que es justamente la falla que este ensayo existe para
+    no tener.
+
+    Y el mensaje nombra la raíz que falta y el paso que la escribe, porque un
+    rechazo que dijera «falta una entrada» deja al operador buscando cuál.
+
+    Rojo alcanzable: devolver un resultado en vez de negarse, negarse sin nombrar
+    la raíz, o dejar que el paso corra y lea lo que haya.
+    """
+    _sin_ensayo_remoto(monkeypatch)
+    _sin_maquina(monkeypatch, tmp_path)
+    monkeypatch.setattr(steps, "_ejecutar", lambda nombre: pytest.fail(
+        f"el ensayo abrió {nombre} sin la entrada que dice consumir"))
+
+    faltan = steps.entradas_faltantes("campaign-local")
+    assert faltan == [{"root": "Results/Benchmark/ceilings.json",
+                       "producedBy": "search-pilot"}], faltan
+
+    with pytest.raises(SystemExit) as caido:
+        steps.ensayo_remoto("campaign-local")
+    mensaje = str(caido.value)
+    assert "Results/Benchmark/ceilings.json" in mensaje
+    assert "search-pilot" in mensaje
+
+    # y el archivo del ENSAYO no alcanza: es exactamente la sustitución
+    # prohibida. Las dos raíces salen de la declaración y no de una constante
+    # del módulo: `CEILINGS_RECORD` se congela al importar y `_sin_maquina`
+    # redirige `RESULTS`, así que preguntarle a la constante miraría el árbol de
+    # la corrida real desde adentro de un test.
+    (ensayo,) = [r for r in paquete.__steps__["search-pilot"]["produces"]
+                 if r.endswith(".json")]
+    (completa,) = paquete.__steps__["campaign-local"]["reads"]
+    assert steps.raiz_a_escala_completa(ensayo) == completa
+
+    (tmp_path / ensayo).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / ensayo).write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        steps.ensayo_remoto("campaign-local")
+
+    # con la salida COMPLETA en disco deja de faltar
+    (tmp_path / completa).write_text("{}", encoding="utf-8")
+    assert steps.entradas_faltantes("campaign-local") == []
+
+
+def test_el_paso_sin_predecesor_ensaya_el_cable_y_no_abre_ningun_cuaderno(
+        tmp_path, monkeypatch) -> None:
+    """La única rama exenta, y sale de la cadena y no de un nombre.
+
+    Un paso sin nada arriba no tiene qué consumir, así que lo que queda por probar
+    es que el cable lleva corriente en ESTA máquina --- que es lo que `run_smoke`
+    hace, y por qué su independencia de todo registro sigue siendo correcta
+    exactamente acá y en ningún otro paso.
+
+    Se afirma sobre los pasos cuyo `reads` está vacío, tal como la declaración los
+    dice hoy, y no sobre `'search-pilot'` escrito acá: el día que la búsqueda
+    empiece a consumir algo, este test la saca sola de la rama.
+
+    Rojo alcanzable: mandar un paso con predecesores a `run_smoke`, o hacer que el
+    exento abra un cuaderno.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    _sin_ensayo_remoto(monkeypatch)
+    _sin_maquina(monkeypatch, tmp_path)
+    monkeypatch.setattr(steps, "_ejecutar", lambda nombre: pytest.fail(
+        f"un paso sin predecesor abrió {nombre}"))
+    pedidos: list = []
+    monkeypatch.setattr(harness, "run_smoke",
+                        lambda *a, **k: pedidos.append(True) or {"stub": True})
+
+    exentos = [p for p in paquete.__steps__ if not steps.predecesores(p)]
+    assert exentos, "no quedó ningún paso exento y la rama es inalcanzable"
+    for paso in exentos:
+        salida = steps.ensayo_remoto(paso)
+        assert salida["shape"] == "wire" and salida["consumed"] == []
+    assert len(pedidos) == len(exentos)
+
+
+def test_todo_paso_con_predecesor_o_lee_la_escala_de_entrada_o_se_niega(
+        tmp_path, monkeypatch) -> None:
+    """La otra rama, y su negativa cuando el cuaderno todavía no sabe leer.
+
+    Un cuaderno que compone TODAS sus lecturas con su propia escala no puede ser
+    ensayado contra la corrida completa: en el worker abriría el árbol de ensayo,
+    que está vacío, o el completo y escribiría encima. Los dos son peores que
+    negarse, así que se niega y dice qué le falta al cuaderno.
+
+    La lista de cuáles saben no está escrita acá: sale de leer el cuaderno. Por
+    eso convertir uno lo habilita y este test lo sigue solo, en vez de ponerse en
+    rojo por un cambio que es una mejora.
+
+    Los cuatro que computan sí tienen que saber, y ésos sí se nombran: son los que
+    se envían al worker, y son los únicos donde el ensayo compra algo --- los
+    otros leen y dibujan en segundos, sin GPU.
+
+    Rojo alcanzable: sacarle `upstream_pilot_scale` a cualquiera de los cuatro
+    cuadernos que computan, o dejar que un paso que no sabe leer corra igual.
+    """
+    _sin_ensayo_remoto(monkeypatch)
+    _sin_maquina(monkeypatch, tmp_path)
+    abiertos: list = []
+    monkeypatch.setattr(steps, "_ejecutar", lambda nombre: abiertos.append(nombre))
+
+    for paso in ("campaign-local", "noise-sweep", "noise-diagnostic"):
+        assert steps.honra_la_escala_de_entrada(paso), (
+            f"{paso} se envía al worker y su cuaderno no sabe leer la escala de "
+            "entrada")
+
+    for paso in paquete.__steps__:
+        if not steps.predecesores(paso) or steps.honra_la_escala_de_entrada(paso):
+            continue
+        with pytest.raises(SystemExit) as caido:
+            steps.ensayo_remoto(paso)
+        assert steps.cuaderno_de(paso) in str(caido.value), paso
+        assert "upstream_pilot_scale" in str(caido.value), paso
+    assert abiertos == [], f"un paso que no sabe leer abrió su cuaderno -> {abiertos}"
+
+
+def test_el_ensayo_remoto_marca_el_modo_para_el_kernel_y_deja_el_entorno_como_estaba(
+        tmp_path, monkeypatch) -> None:
+    """El modo viaja por el entorno porque quien lo lee es OTRO proceso.
+
+    `_ejecutar` lanza `nbconvert`, y el kernel del cuaderno no hereda ni un
+    argumento de esta llamada: hereda el entorno. Así que la marca tiene que estar
+    puesta MIENTRAS el paso corre --- no antes, no después --- y eso es lo que se
+    afirma, desde adentro del doble que reemplaza a la ejecución.
+
+    Y se restaura lo que hubiera, en vez de borrarse: un `ensayo_remoto` que
+    limpiara a secas apagaría el modo de un ensayo que lo envuelva, y ese apagón
+    se lee igual que un cuaderno que decidió leer el árbol de ensayo.
+
+    Rojo alcanzable: poner la marca antes de la guarda de entradas, borrarla con
+    `pop` incondicional, o pasarle el modo al paso por argumento.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    _sin_ensayo_remoto(monkeypatch)
+    _sin_maquina(monkeypatch, tmp_path)
+    (completa,) = paquete.__steps__["campaign-local"]["reads"]
+    (tmp_path / completa).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / completa).write_text("{}", encoding="utf-8")
+
+    # La precondición del propio paso ---que exista el registro a la escala que
+    # el cuaderno lee--- tiene sus tests aparte; acá se sustituye para que lo
+    # único que decida el resultado sea la marca de modo. La escala con la que se
+    # la pregunta sí se afirma: es la otra mitad del mismo mecanismo.
+    from MIL_CREDA_Benchmark import harness
+
+    preguntas: list = []
+    monkeypatch.setattr(harness, "search_record", lambda pilot=None: (
+        preguntas.append(pilot) or {"stub": True}))
+
+    visto: list = []
+    monkeypatch.setattr(steps, "_ejecutar", lambda nombre: (
+        visto.append(config.is_rehearsal()) or nombre))
+
+    salida = steps.ensayo_remoto("campaign-local")
+    assert visto == [True], "el kernel del cuaderno no habría visto el modo"
+    assert preguntas == [False], (
+        "la precondición del paso preguntó por un registro que el ensayo remoto "
+        f"no va a abrir -> {preguntas}")
+    assert salida["shape"] == "notebook"
+    assert salida["consumed"] == ["Results/Benchmark/ceilings.json"]
+    assert salida["predecessors"] == ["search-pilot"]
+    assert config.is_rehearsal() is False, "el modo quedó puesto después"
+
+    # y lo que hubiera antes se restaura, en vez de borrarse
+    monkeypatch.setenv(config.REHEARSAL_ENV, "1")
+    steps.ensayo_remoto("campaign-local")
+    assert config.is_rehearsal() is True
+
+
+def test_el_ensayo_remoto_no_ablanda_la_guarda_que_gobierna_la_campana(
+        tmp_path, monkeypatch) -> None:
+    """Lo que este modo NO toca, afirmado y no supuesto.
+
+    `campaign()` lee `search_record(pilot=False)` por su nombre y exige
+    `atRequiredScale` sobre ESE archivo, porque un registro de ensayo no gobierna
+    una campaña real. El ensayo remoto empuja las lecturas hacia el registro
+    completo, que es la dirección en la que una implementación descuidada haría
+    esa exigencia relativa a la escala --- «estamos en ensayo, con el techo del
+    ensayo alcanza» --- y ahí la sustitución que el rechazo existe para impedir
+    entra por la puerta de al lado.
+
+    Se corre con el modo PUESTO y con una reducción de ensayo, que es la
+    combinación en la que un aflojamiento sería invisible.
+
+    Rojo alcanzable: derivar el `pilot=False` de `campaign()` de
+    `upstream_pilot_scale()`, o saltear la exigencia cuando la reducción es de
+    ensayo.
+    """
+    import json as _json
+
+    import torch
+
+    from MIL_CREDA_Benchmark import config, harness
+
+    monkeypatch.setenv(config.REHEARSAL_ENV, "1")
+    registro = tmp_path / "ceilings.json"
+    registro.write_text(_json.dumps({
+        "creda": {"ceiling": 1e-4, "atRequiredScale": False},
+        "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", registro)
+
+    reduccion = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0},
+                                  pilot=True)
+    with pytest.raises(SystemExit) as caido:
+        harness.campaign(reduccion, torch.device("cpu"), arms=["A"],
+                         progress=lambda *a: None)
+    assert "below scale" in str(caido.value)
+    assert "creda" in str(caido.value)
+
+
 # --------------------------------------------------- las dos pasadas de la campaña
 #
 # El cuaderno se ejecuta de verdad --- sus celdas, no una lectura de su texto ---
