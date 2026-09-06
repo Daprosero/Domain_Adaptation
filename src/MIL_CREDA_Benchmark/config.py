@@ -15,6 +15,7 @@ the only thing standing between a pilot and a misquote.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 # ---------------------------------------------------------------- scale knobs
@@ -57,6 +58,59 @@ def is_pilot_scale() -> bool:
     numero de piloto termina citado como resultado.
     """
     return EPOCHS < FULL_EPOCHS or len(SEEDS) < len(FULL_SEEDS)
+
+
+#: La variable de entorno que marca esta corrida como un ENSAYO REMOTO: el paso
+#: corriendo a escala reducida en el worker, contra lo que los pasos anteriores
+#: dejaron a escala COMPLETA, para saber que anda antes de gastar la cuota.
+#:
+#: Una variable de entorno y no una constante de este archivo porque el ensayo
+#: no es un modo del REPOSITORIO sino de UNA ejecucion: el mismo commit clonado
+#: en el worker corre primero el ensayo y despues la corrida real, y un archivo
+#: editado entre las dos serian dos pines distintos --- o sea, dos codigos, y la
+#: corrida real dejaria de ser la que el ensayo probo. `steps.ensayo_remoto` es
+#: quien la pone, para el subproceso que ejecuta el cuaderno y para nadie mas.
+REHEARSAL_ENV = "MIL_CREDA_REHEARSAL"
+
+
+def is_rehearsal() -> bool:
+    """Si esta ejecucion es un ensayo remoto.
+
+    Leida del entorno en cada llamada y no fijada al importar: la suite prende y
+    apaga el modo alrededor de un cuaderno que ya corrio otras veces en el mismo
+    proceso, y un valor congelado al importar haria que el primer test decidiera
+    por todos los demas.
+    """
+    return os.environ.get(REHEARSAL_ENV) == "1"
+
+
+def upstream_pilot_scale() -> bool:
+    """El `pilot` con el que se LEE lo que produjo un paso ANTERIOR.
+
+    Dos coordenadas y no una, y hasta ahora era una sola: `is_pilot_scale()`
+    decidia a la vez a que escala corre este paso y de que arbol lee lo que el
+    anterior dejo. Mientras las dos preguntas viven en el mismo recorrido eso es
+    correcto ---en ensayo todo corre y consume lo del ensayo--- y es exactamente
+    lo que el recorrido local hace.
+
+    El ensayo REMOTO es la otra combinacion, y no existia: corre a escala
+    reducida ---asi cuesta minutos y no horas--- y tiene que consumir lo que los
+    pasos anteriores dejaron a escala COMPLETA, porque de eso se trata. Un
+    ensayo que corre contra las salidas de OTRO ensayo prueba que el cable lleva
+    corriente y no prueba nada sobre la corrida que va a seguirlo: el archivo que
+    la corrida real va a abrir es el completo, y es el unico que puede tener la
+    forma equivocada, la version vieja o el brazo que falta.
+
+    Y por eso lee `False` y nunca "el que rija": `contamination.in_force` cae al
+    ensayo cuando no hay corrida completa, en silencio, y un ensayo que se apoya
+    en esa caida pasa sin haber tocado nada de lo que dice probar. Quien se niega
+    cuando la salida completa no esta es `steps.ensayo_remoto`, antes de abrir el
+    cuaderno; esto solo dice de que arbol se lee.
+
+    Fuera del ensayo remoto no cambia nada: es `is_pilot_scale()`, la misma
+    lectura de siempre.
+    """
+    return False if is_rehearsal() else is_pilot_scale()
 
 
 # ------------------------------------------------------------------- material
@@ -952,6 +1006,12 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "dibuja una cota del objetivo medida sobre `tests/sweep.py` y no sobre "
         "una corrida: no hay material contaminado, ni forma, ni escala que "
         "llevar, asi que el archivo es uno por repositorio y no uno por corrida"),
+    "steps.py: config.PRODUCT": (
+        "no es un destino sino la raiz contra la que `entradas_faltantes` "
+        "resuelve las raices que un paso DECLARA en `reads`, que ya vienen "
+        "escritas en la ortografia de la corrida completa: la escala esta "
+        "adentro de la raiz y no al lado de ella, asi que una coordenada aca "
+        "seria una segunda respuesta a una pregunta que la raiz ya contesto"),
     "promote.py: config.PRODUCT / '.remote-execution' / 'campaign'": (
         "es donde el backend remoto desempaqueta lo que devuelve, antes de que "
         "nada haya leido una reduccion: la escala de lo que viene adentro la "

@@ -486,6 +486,38 @@ __records__: dict = {
 # (0.2) y del formato de `results_for` (`f"rho{rate:g}".replace(".", "p")`);
 # `tests/test_steps.py` las vuelve a componer desde `config` y se pone en rojo
 # si alguna de las dos cosas cambia.
+# `reads`: las raíces que cada paso CONSUME y que produjo otro paso, escritas
+# siempre en la ortografía de la corrida COMPLETA. Es la otra mitad de
+# `produces` y existe por el ensayo remoto: el paso corre a escala reducida en
+# el worker, contra lo que los pasos anteriores dejaron a escala completa, y
+# `steps.ensayo_remoto` se niega ---antes de abrir el cuaderno y antes de gastar
+# nada--- cuando alguna de estas raíces todavía no está en disco.
+#
+# **La cadena se DERIVA de las dos listas y no se escribe.** Un paso es
+# predecesor de otro cuando alguna raíz de su `produces` cubre alguna raíz del
+# `reads` del otro, comparado por segmentos y con la escala normalizada
+# (`steps.raiz_a_escala_completa`). Nadie nombra a nadie: el paso sin predecesor
+# ---el único exento de la regla, porque no hay nada arriba suyo que consumir---
+# sale de que su `reads` quede vacío, no de una lista de excepciones. Agregar un
+# paso que lea lo que otro escribe lo encadena solo.
+#
+# Cada raíz sale de leer qué abre el cuaderno del paso ---`harness.search_record`,
+# `config.ceilings_on_record`, `contamination.load`/`in_force`,
+# `latent.available`--- y de resolver a qué archivo apunta esa lectura, nunca de
+# copiar el `produces` del vecino al revés.
+#
+# Lo que NO va acá: lo que el paso escribe (eso es `produces`), lo que lee de su
+# propia corrida ---la campaña relee su `runs.jsonl` recién escrito--- y el
+# código fuente, que viaja con el clon y no lo produce ningún paso. Por eso
+# `verification` lee cero: corre la suite sobre `src/MIL_CREDA` y nada más.
+#
+# Lo que un cuaderno lee bajo un `if ... .exists()` SÍ va acá, y no es un
+# descuido. `report` dibuja su mitad contaminada sólo si hay corridas y sigue
+# adelante si no; el ensayo, en cambio, existe para ejercitar el paso contra sus
+# entradas reales, y uno que corra con la mitad contaminada ausente prueba la
+# mitad del cuaderno y reporta lo mismo que uno completo. No cuesta un rechazo
+# de más: las dos pasadas de la campaña viven adentro de UNA ejecución, así que
+# si `campaign-local` corrió completo están las dos o no está ninguna.
 __steps__: dict = {
     # Corre la suite adentro del cuaderno y dibuja la cota local. Dos clases de
     # raíz: el dato que produce y el cuaderno que ejecuta en el lugar.
@@ -493,6 +525,7 @@ __steps__: dict = {
     # la cota, con el `.pdf` que le pone `figures.emit`.
     "verification": {"module": "MIL_CREDA_Benchmark.steps", "function": "verificacion",
                      "advances": 1,
+                     "reads": [],
                      "produces": ["Results/local_distance_bound.pdf",
                                   "Notebooks/verification.ipynb"]},
     # Corre `Benchmark_Ceiling_Search_v1.ipynb`, que es el cuaderno que CORRE la
@@ -523,6 +556,7 @@ __steps__: dict = {
     "search-pilot": {"module": "MIL_CREDA_Benchmark.steps",
                      "function": "ensayo_de_busqueda",
                      "advances": 2,
+                     "reads": [],
                      "produces": ["Results/Benchmark/ceilings.pilot.json",
                                   "Notebooks/Benchmark_Ceiling_Search_v1.ipynb"]},
     # Corre `Benchmark_Campaign_v1.ipynb`, que es el cuaderno que se envía, y no
@@ -559,6 +593,7 @@ __steps__: dict = {
     "campaign-local": {"module": "MIL_CREDA_Benchmark.steps",
                        "function": "campana",
                      "advances": 4,
+                     "reads": ["Results/Benchmark/ceilings.json"],
                      "produces": ["Results/Pilot/Benchmark/runs.jsonl",
                                   "Results/Pilot/Benchmark/summary.json",
                                   "Results/Pilot/Benchmark/shard.json",
@@ -575,6 +610,7 @@ __steps__: dict = {
     "search-report": {"module": "MIL_CREDA_Benchmark.steps",
                       "function": "informe_de_busqueda",
                      "advances": 3,
+                     "reads": ["Results/Benchmark/ceilings.json"],
                      "produces": ["Notebooks/Benchmark_Search_Report_v1.ipynb"]},
     # Dibuja sobre la corrida vigente (`contamination.in_force(0.0,
     # "campaign")["root"]`), que es la completa si existe y el ensayo si no:
@@ -583,6 +619,10 @@ __steps__: dict = {
     # `results_for(RHO, "campaign", ES_ENSAYO)` con `RHO = NOISE_REPORTED`.
     "report": {"module": "MIL_CREDA_Benchmark.steps", "function": "informe",
                      "advances": 5,
+                     "reads": ["Results/Benchmark/runs.jsonl",
+                               "Results/Benchmark/summary.json",
+                               "Results/Noise/rho0p2/runs.jsonl",
+                               "Results/Benchmark/ceilings.json"],
                      "produces": ["Results/Benchmark/curves",
                                   "Results/Benchmark/report.txt",
                                   "Results/Benchmark/report.md",
@@ -602,6 +642,10 @@ __steps__: dict = {
     # ES_ENSAYO) / "latent"`, con `RHO = NOISE_REPORTED`.
     "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente",
                      "advances": 6,
+                     "reads": ["Results/Benchmark/runs.jsonl",
+                               "Results/Benchmark/summary.json",
+                               "Models/Benchmark",
+                               "Models/Noise/rho0p2"],
                      "produces": ["Results/Benchmark/latent",
                                   "Results/Benchmark/latent.json",
                                   "Results/Benchmark/latent.md",
@@ -639,6 +683,7 @@ __steps__: dict = {
     # los cinco.
     "noise-sweep": {"module": "MIL_CREDA_Benchmark.steps",
                     "function": "barrido_de_ruido",
+                    "reads": ["Results/Benchmark/ceilings.json"],
                     "produces": ["Results/Pilot/Noise/curve",
                                  "Models/Pilot/Noise/curve",
                                  "Notebooks/Benchmark_Noise_Sweep_v1.ipynb"]},
@@ -650,6 +695,7 @@ __steps__: dict = {
     # `PRODUCT` y el resumen de un barrido de ensayo caía en el árbol completo.
     "noise-report": {"module": "MIL_CREDA_Benchmark.steps",
                      "function": "informe_de_ruido",
+                     "reads": ["Results/Noise/curve"],
                      "produces": ["Results/Noise/degradation.pdf",
                                   "Results/Noise/degradation.json",
                                   "Results/Pilot/Noise/degradation.pdf",
@@ -667,6 +713,7 @@ __steps__: dict = {
     # números de ensayo.
     "noise-diagnostic": {"module": "MIL_CREDA_Benchmark.steps",
                          "function": "diagnostico_de_ruido",
+                         "reads": ["Results/Noise/curve"],
                          "produces": [
                              "Results/Pilot/Noise/diagnostic.json",
                              "Notebooks/Benchmark_Noise_Diagnostic_Search_v1.ipynb"]},
@@ -674,6 +721,7 @@ __steps__: dict = {
     # cuaderno ejecutado es su única raíz.
     "noise-diagnostic-report": {"module": "MIL_CREDA_Benchmark.steps",
                                 "function": "informe_del_diagnostico",
+                                "reads": ["Results/Noise/diagnostic.json"],
                                 "produces": [
                                     "Notebooks/Benchmark_Noise_Diagnostic_Report_v1.ipynb"]},
 }

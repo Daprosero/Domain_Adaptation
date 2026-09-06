@@ -1814,6 +1814,24 @@ def run_smoke(seed: int = 0, shard: str | None = None,
     without a `ceilings.json` the search produced; nothing here weakens
     that refusal.
 
+    **That independence is now a property of some rehearsals, not of every
+    one, and this paragraph used to claim otherwise.** It read as the
+    definition of what a rehearsal is: depend on nothing, so it can run
+    before anything exists. The rule that replaced it is narrower and
+    stricter — a rehearsal on the worker consumes what the steps before it
+    left at FULL scale, so that the step is proven against the inputs the
+    real run will open rather than against a stand-in. Reading a declared
+    neutral is exactly the stand-in that rule forbids.
+
+    So this function keeps its independence and loses its monopoly.
+    `steps.ensayo_remoto` routes here for a step with no predecessor — a
+    step whose declared `reads` is empty, which is derived from the chain
+    and never a name written down — because there is nothing upstream for
+    such a step to consume and what is left to prove is that the wire
+    carries current on THIS machine. Every other step's rehearsal runs the
+    step's own notebook against its predecessors' full-scale output, and
+    refuses when that output is not there yet.
+
     `shard` names this call's own shard namespace, the same parameter
     `distribute.run_shard()` takes, passed through to `shard_paths()` so a
     smoke rehearsal never collides with a real shard's files sharing the
