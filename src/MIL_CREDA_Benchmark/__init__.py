@@ -400,7 +400,8 @@ __benchmark__ = {
     },
     # Which module carries the runtime, so a reading about this repository's
     # environment is about the module that actually imports it. The same two
-    # values `tools/kaggle/ceiling-search/run-config.json` already fixes.
+    # values a generated job folder's `run-config.json` fixes under `run`;
+    # `__environment__` below carries the other block that file needs.
     "entry": {
         "module": "MIL_CREDA_Benchmark.harness",
         "function": "run_pilot",
@@ -438,6 +439,49 @@ __levels__: list = ["none", "pilot", "remote"]
 __records__: dict = {
     "ceilings": {"path": "MIL-CREDA/Results/Benchmark/ceilings.json",
                  "requiredScale": {"epochs": 20, "trials": 30}},
+}
+
+# Lo que hay que instalar en el worker antes de que corra nada, en la forma
+# EXACTA del bloque `environment` de `run-config.json`. La forja lo pasa entrada
+# por entrada (`generate-job --environment-requirement`) y el arranque lo corre
+# como `python -m pip install <entradas>`, sin shell: cada entrada es un
+# especificador posicional y uno que empiece con `-` se rechaza, así que no hay
+# forma de meter una bandera acá.
+#
+# **Por qué recién ahora.** Mientras un envío llamaba a una FUNCIÓN este paso
+# del arranque era un no-op y no se notaba: el worker importaba
+# `MIL_CREDA_Benchmark.harness` y lo que esa importación necesita ya venía en la
+# imagen. Ejecutar un CUADERNO agrega requisitos que ninguna de esas corridas
+# ejerció, y la celda 0 se niega cuando no los encuentra --- nombrando
+# justamente esta declaración como el remedio. Sin ella el primer envío se
+# rechaza antes de ejecutar una celda.
+#
+# **Las cuatro, y qué hace cada una.** Las tres primeras son las que la celda 0
+# IMPORTA por su nombre para decidir si el runtime puede ejecutar un cuaderno:
+# `nbformat` lo lee y lo vuelve a escribir, `nbclient` lo ejecuta, y
+# `jupyter-client` es lo que resuelve un NOMBRE de kernel contra un kernelspec
+# instalado. La tercera no sobra por venir de arrastre con la segunda: un
+# runtime puede tener los dos lectores y ningún kernelspec, y ésa es la falla
+# que ya costó un envío entero. `ipykernel` es la cuarta y no la nombra ningún
+# rechazo: es lo que instala el kernelspec `python3`, que es el que los diez
+# cuadernos de este repositorio declaran en su `metadata.kernelspec.name`. Sin
+# él las tres primeras importan y el kernel no arranca igual.
+#
+# **Y nada más, que es la otra mitad de la decisión.** No va `torch`, ni
+# `optuna`, ni nada del stack científico: eso lo satisface la imagen ---medido y
+# no supuesto, por los envíos que corrieron `run_search` importando ese mismo
+# árbol--- y un `pip install torch` encima podría reemplazar la compilación CUDA
+# de la imagen por una rueda de CPU. Declarar de más no es prudencia acá: es
+# cambiarle el entorno al worker sin haber medido que hacía falta.
+#
+# **Sin versiones y sin `indexUrl`, a propósito.** Un instalador ya satisfecho
+# es un no-op y no cuesta nada; uno con pin fuerza una subida o una bajada sobre
+# el stack de Jupyter que la imagen ya trae. Y un espejo sería una decisión
+# sobre el servicio, que no es conocimiento de este repositorio.
+__environment__: dict = {
+    "install": {
+        "requirements": ["nbformat", "nbclient", "jupyter-client", "ipykernel"],
+    },
 }
 
 # Los pasos locales que la forja puede ejecutar sola, en el venv de este
