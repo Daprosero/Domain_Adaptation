@@ -1,12 +1,15 @@
 """Los pasos locales que la forja puede ejecutar por su cuenta.
 
-Casi todas ejecutan un cuaderno de este repositorio y nada más, que es la forma
-que corresponde: el ensayo existe para correr los cuadernos que se van a enviar,
-así que un paso que compute en lugar del suyo prueba la biblioteca y deja sin
-ejercitar el artefacto. Las que todavía computan directo dicen en su propia
-docstring por qué. La forja las nombra estáticamente en `__steps__` (módulo +
-función), las resuelve sin importarlas, y recién las importa y llama dentro del
-intérprete de este repositorio.
+Todas ejecutan un cuaderno de este repositorio y nada más, que es la forma que
+corresponde: el ensayo existe para correr los cuadernos que se van a leer y a
+enviar, así que un paso que compute en lugar del suyo prueba la biblioteca y deja
+sin ejercitar el artefacto. Ya no hay ninguna que compute directo, y esa frase
+--- «las que todavía computan directo dicen en su propia docstring por qué» ---
+llegó a cubrir tres pasos a la vez: la búsqueda, el barrido y el diagnóstico
+tenían cada uno su cuaderno de informe y ninguno que corriera. La forja las
+nombra estáticamente en `__steps__` (módulo + función), las resuelve sin
+importarlas, y recién las importa y llama dentro del intérprete de este
+repositorio.
 
 **Por qué no se escribe acá el prefijo de `PATH`.** El kernelspec que graban
 los cuadernos arranca un `python` pelado, sin ruta absoluta, así que resuelve
@@ -25,7 +28,6 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 CUADERNOS = Path(__file__).resolve().parents[2] / "MIL-CREDA" / "Notebooks"
@@ -71,39 +73,51 @@ def verificacion() -> str:
     return _ejecutar("verification.ipynb")
 
 
-def ensayo_de_busqueda() -> dict:
-    """Corre la búsqueda de techos a escala de ensayo y devuelve su registro.
+def ensayo_de_busqueda() -> str:
+    """Corre el ENSAYO de la búsqueda de techos ejecutando SU cuaderno.
 
-    `pilot=True` y sin manera de pedir otra cosa. La búsqueda a escala completa
-    es una decisión con su propia autorización, y un paso local que aceptara un
-    argumento para elegirla dejaría esa decisión en manos de quien escribe la
-    invocación. Escribe `ceilings.pilot.json`, que el registro completo siempre
-    le gana cuando existe.
+    `Benchmark_Search_Pilot_v1.ipynb` fija `pilot=True` y no ofrece manera de
+    pedir otra cosa. La búsqueda a escala completa es una decisión con su propia
+    autorización, y un cuaderno que derivara su escala de
+    `config.is_pilot_scale()` --- como sí hace el de la campaña, y con razón ---
+    dejaría esa decisión en manos del tamaño configurado de la CAMPAÑA, que es
+    otra cosa: la búsqueda tiene su propia escala declarada aparte. Escribe
+    `ceilings.pilot.json`, que el registro completo siempre le gana cuando existe.
 
     Existe porque no existía: la única forma de correr esta búsqueda era un
-    `python -c` a mano contra `harness`, por fuera de la skill y sin dejar
-    rastro en el ledger. Un paso que falta no es disciplina que falta.
+    `python -c` a mano contra `harness`, por fuera de la skill y sin dejar rastro
+    en el ledger. Un paso que falta no es disciplina que falta.
 
-    **El único paso que computa sin correr un cuaderno, y es a propósito.** La
-    búsqueda no tiene cuaderno propio y no le corresponde tener uno:
+    **Este paso llamaba a `harness.run_search(pilot=True)` en vez de correr un
+    cuaderno.** La razón escrita acá era que la búsqueda no tenía cuaderno propio
+    y no le correspondía tener uno, y se apoyaba en dos argumentos que caían los
+    dos sobre el mismo hecho --- que el único cuaderno de la búsqueda era su
+    INFORME. Ese hecho dejó de ser cierto, y los dos argumentos quedan escritos
+    acá en vez de reemplazados en silencio:
 
-    * `Benchmark_Search_Report_v1.ipynb` es el INFORME de la búsqueda y ya lo corre
-      `informe_de_busqueda`. Que este paso lo corriera también dejaría un
-      cuaderno con dos dueños, y `Notebooks/Benchmark_Search_Report_v1.ipynb` ya es
-      raíz declarada de `search-report`: la declaración se pone en rojo sola.
-      Descomentar la llamada de su celda 7 es la misma cosa por dentro, y
-      además haría que abrir el informe cueste lo que cuesta correrlo, que es
-      exactamente por lo que esa línea está comentada.
-    * Un cuaderno nuevo cuyo único contenido fuera esta llamada sería una
-      segunda forma, más débil, de pedir lo mismo: `run_search` existe
-      justamente para que un trabajo remoto pueda nombrar `module.function` y
-      pasarle JSON, y un cuaderno no puede ser eso.
+    * «`Benchmark_Search_Report_v1.ipynb` es el INFORME de la búsqueda y ya lo
+      corre `informe_de_busqueda`. Que este paso lo corriera también dejaría un
+      cuaderno con dos dueños.» Sigue siendo verdad y ya no aplica: la búsqueda
+      corre el suyo, el informe corre el suyo, y cada raíz declarada sigue
+      teniendo un solo dueño --- que es lo que
+      `test_ninguna_raiz_es_de_dos_pasos` mide.
+    * «Un cuaderno nuevo cuyo único contenido fuera esta llamada sería una
+      segunda forma, más débil, de pedir lo mismo: `run_search` existe justamente
+      para que un trabajo remoto pueda nombrar `module.function` y pasarle JSON, y
+      un cuaderno no puede ser eso.» La premisa se midió y es correcta --- un
+      `run-config.json` nombra `{module, function, kwargs}` y no puede nombrar un
+      `.ipynb`, y por eso `run_search` queda intacta y sigue siendo ese camino ---
+      pero la conclusión no se seguía: las dos formas no compiten. La remota
+      manda una función a otra máquina; ésta ejercita acá el artefacto que un
+      lector abre.
 
-    Lo que sí se ejercita en el recorrido es su informe, un peldaño después.
+    Lo que ese razonamiento costaba está medido: tres de los pasos declarados
+    --- éste, el barrido y el diagnóstico --- no nombraban ningún cuaderno entre
+    sus raíces, así que el ensayo los recorría probando la biblioteca y dejando
+    sin ejercitar el artefacto. Es el mismo defecto que la campaña ya había
+    tenido, tres veces más.
     """
-    from MIL_CREDA_Benchmark import harness
-
-    return harness.run_search(pilot=True)
+    return _ejecutar("Benchmark_Search_Pilot_v1.ipynb")
 
 
 def campana() -> str:
@@ -184,7 +198,14 @@ def informe_de_busqueda() -> str:
     El nombre dice cuál de las dos cosas es. La primera versión de esta función
     se llamaba `busqueda` y prometía en su docstring "la búsqueda de techos",
     que es exactamente lo que NO hace: un lector la habría llamado esperando un
-    registro nuevo y habría recibido el viejo, presentado.
+    registro nuevo y habría recibido el viejo, presentado. El cuaderno arrastraba
+    la misma mentira en su nombre --- se llamaba `Benchmark_Search_v1` --- y por
+    eso ahora lleva `_Report_`.
+
+    La llamada comentada de su celda 7 tampoco está más. Existía porque era la
+    única forma de pedir el ensayo de la búsqueda desde un cuaderno, y esa razón
+    murió con `Benchmark_Search_Pilot_v1.ipynb`: descomentarla ahora le daría dos
+    dueños al ensayo y haría que abrir este informe cueste lo que cuesta correrlo.
     """
     return _ejecutar("Benchmark_Search_Report_v1.ipynb")
 
@@ -199,130 +220,111 @@ def latente() -> str:
     return _ejecutar("Benchmark_Latent_v1.ipynb")
 
 
-def diagnostico_de_ruido() -> dict:
-    """Re-busca el techo al nivel de diagnóstico y corre ahí los dos completos.
+def diagnostico_de_ruido() -> str:
+    """Corre el diagnóstico ejecutando SU cuaderno, a la escala que declara `config`.
 
-    El experimento que separa *falló el término* de *le faltó coeficiente*, y
-    que existe porque los techos de la campaña se buscaron en limpio y se
-    mantienen fijos en los cinco niveles. Esa decisión hace que una caída no se
-    pueda atribuir, y este paso es lo barato que la atribuye.
+    El experimento que separa *falló el término* de *le faltó coeficiente*, y que
+    existe porque los techos de la campaña se buscaron en limpio y se mantienen
+    fijos en los cinco niveles. Esa decisión hace que una caída no se pueda
+    atribuir, y este paso es lo barato que la atribuye.
 
-    Necesita tres puntos y paga uno solo. Los dos brazos a este nivel bajo el
-    techo limpio ya salen de la campaña contaminada; lo que se corre acá es la
-    búsqueda al nivel de diagnóstico y los dos brazos debajo de ella. Si el
-    techo re-buscado recupera lo perdido, fue el coeficiente; si no lo
+    Necesita tres puntos y paga uno solo: la búsqueda del techo al nivel de
+    diagnóstico, sobre material contaminado. Los otros dos ya salen del barrido.
+    Si el techo re-buscado recupera lo perdido, fue el coeficiente; si no lo
     recupera, fue el término.
 
-    `D` y `G`, y nadie más: son los dos métodos completos, uno por familia, y
-    los únicos que llevan el coeficiente. `A` y `B` no tienen término de
-    adaptación al que re-buscarle un techo, y `C`, `E` y `F` son ablaciones que
-    multiplicarían la búsqueda sin agregar diagnóstico.
+    Este paso computaba en lugar de correr un cuaderno, y el eje quedaba con dos
+    mitades desparejas: `informe_del_diagnostico` dibujaba un `diagnostic.json`
+    que ningún cuaderno había escrito. La biblioteca no se toca --- la celda que
+    mide llama a `harness.search_ceilings()` con las mismas tres restricciones
+    que estaban acá ---, así que lo que cambió es el cuerpo de este paso.
 
-    Sus números son de diagnóstico y no entran en las tablas del veredicto: lo
-    único que deciden es si vale reestructurar para techos por nivel.
+    La guarda es una precondición, no cómputo, y existe para que el cuaderno pueda
+    correr sin escribir fuera de las raíces que este paso declara: `produces`
+    nombra el árbol de ENSAYO, y el cuaderno elige su escala con
+    `config.is_pilot_scale()`. A escala completa escribiría en `Results/Noise/`,
+    que es de otro, así que acá se niega en vez de mudarse en silencio --- la
+    misma forma que `campana`. Antes el cuaderno no existía y la escala estaba
+    fijada en `True` adentro de esta función, así que a escala completa un
+    diagnóstico de veinte épocas se archivaba bajo `Pilot/`: una medición
+    completa etiquetada como ensayo, que es la falla inversa y del mismo tamaño.
     """
-    import json
+    from MIL_CREDA_Benchmark import config
 
-    from MIL_CREDA_Benchmark import config, contamination, harness
-
-    tasa = config.NOISE_DIAGNOSTIC_LEVEL
-    dispositivo = harness.resolve_device()
-    reduccion = harness.Reduction(device=str(dispositivo),
-                                  environment=harness.environment(),
-                                  labelNoise=tasa, pilot=True)
-
-    # El techo buscado SOBRE material contaminado: es el punto que la campaña no
-    # tiene y la única razón por la que este paso cuesta algo.
-    # Sobre la transferencia de la curva y ninguna otra. Buscar sobre las seis
-    # costaría seis veces lo que el diagnóstico vale y mediría cinco
-    # transferencias que la curva nunca recorrió, así que no habría contra qué
-    # leerlas.
-    buscado = harness.search_ceilings(reduccion, dispositivo, noise=tasa,
-                                      transfers=[config.NOISE_TRANSFER],
-                                      pilot=True)
-
-    registro = {
-        "level": tasa,
-        "transfer": "{}->{}".format(*config.NOISE_TRANSFER),
-        "arms": list(config.NOISE_DIAGNOSTIC_ARMS),
-        "searchedUnderNoise": buscado,
-        # El otro extremo, leído y no vuelto a correr: si esta celda y el
-        # barrido dijeran cosas distintas habría dos versiones del mismo número.
-        # Del BARRIDO y no de una campaña: a este nivel no hay campaña completa
-        # --- sólo 0.0 y NOISE_REPORTED la tienen --- y la comparación es sobre
-        # la transferencia del barrido de todos modos.
-        "cleanCeilingRun": (contamination.load(tasa, kind="curve") or {}).get("summary"),
-        "revision": config.REVISION,
-        "diagnosticOnly": ("estos números no entran en las tablas del veredicto; "
-                           "deciden si vale reestructurar para techos por nivel"),
-    }
-    # Bajo la raíz de ESTA corrida y no bajo `Results/` a secas: un diagnóstico
-    # de ensayo escrito donde va el de la campaña completa la pisa, y lo pisa con
-    # números que no se pueden citar. `pilot=True` fijo y no heredado, porque
-    # esta función arma su propia reducción de ensayo, con `pilot=True`, arriba.
-    destino = config.noise_axis_for(True)
-    destino.mkdir(parents=True, exist_ok=True)
-    (destino / "diagnostic.json").write_text(
-        json.dumps(registro, indent=2, default=str), encoding="utf-8")
-    return registro
+    if not config.is_pilot_scale():
+        raise SystemExit(
+            f"la escala configurada es la completa ({config.EPOCHS} épocas, "
+            f"{len(config.SEEDS)} semillas). Este paso declara el árbol de "
+            "ensayo y el cuaderno escribiría en el de la corrida completa: "
+            "un diagnóstico a escala completa se lanza con su propia "
+            "autorización, no por acá.")
+    return _ejecutar("Benchmark_Noise_Diagnostic_Search_v1.ipynb")
 
 
-def barrido_de_ruido() -> dict:
-    """Corre la campaña sobre UNA transferencia, en cada nivel declarado.
+def barrido_de_ruido() -> str:
+    """Corre el barrido ejecutando SU cuaderno, a la escala que declara `config`.
 
-    Este es el ejercicio del ruido, y es una forma distinta de una campaña, no
-    una campaña más chica: una transferencia recorriendo los cinco niveles
-    contra seis transferencias en un nivel. Por eso escribe bajo `kind="curve"`
-    -- las dos pueden pararse en la misma tasa, y `runs.jsonl` se abre en `"w"`.
+    Este es el ejercicio del ruido, y es una forma distinta de una campaña, no una
+    campaña más chica: una transferencia recorriendo los cinco niveles contra seis
+    transferencias en un nivel. Por eso el cuaderno escribe bajo `kind="curve"` ---
+    las dos pueden pararse en la misma tasa, y `runs.jsonl` se abre en `"w"`.
 
     Los techos salen de la búsqueda en limpio y se mantienen fijos en los cinco
     niveles: la curva es el coeficiente elegido sin contaminación aplicado con
     ella. Lo que eso cuesta lo separa después `diagnostico_de_ruido`.
 
-    Guarda pesos en dos de los cinco niveles y en ninguno de los otros tres, y
-    no lo decide este paso: `campaign()` pregunta por `keeps_checkpoints`, que es
+    Guarda pesos en dos de los cinco niveles y en ninguno de los otros tres, y no
+    lo decide este paso: `campaign()` pregunta por `keeps_checkpoints`, que es
     verdadero exactamente en los niveles que el cuaderno latente dibuja --- 0.0 y
-    `NOISE_REPORTED`. Los otros tres corren y escriben sus `runs.jsonl`, que es
-    de donde sale la curva, y ni un peso: 8 GB por nivel que nadie abre dejarían
-    un directorio que parece evidencia. Esta frase decía «no guarda pesos en
-    ningún nivel», que era falso desde que existe `CHECKPOINT_LEVELS`.
+    `NOISE_REPORTED`. Los otros tres corren y escriben sus `runs.jsonl`, que es de
+    donde sale la curva, y ni un peso: 8 GB por nivel que nadie abre dejarían un
+    directorio que parece evidencia.
+
+    Este paso computaba en lugar de correr un cuaderno, y el eje quedaba con la
+    mitad que dibuja y sin la que corre. La biblioteca no se toca: el bucle de la
+    celda de la corrida llama a `harness.campaign()` nivel por nivel, igual que la
+    campaña llama al suyo, con los mismos techos leídos UNA vez arriba del bucle.
+
+    Las dos guardas son precondiciones, no cómputo:
+
+    * **La escala.** `produces` nombra el árbol de ENSAYO, y el cuaderno elige su
+      escala con `config.is_pilot_scale()`. A escala completa escribiría en
+      `Results/Noise/curve/`, que es de otro, así que acá se niega en vez de
+      mudarse en silencio --- la misma forma que `campana`. Antes la escala estaba
+      fijada en `True` adentro de esta función, así que a escala completa un
+      barrido de veinte épocas y treinta semillas se archivaba bajo `Pilot/`: una
+      medición completa etiquetada como ensayo.
+    * **El registro de techos.** Sin ninguno de los dos archivos el cuaderno se
+      negaría adentro; negarse acá dice qué correr antes, sin pagar el arranque
+      del intérprete del cuaderno. Las dos escalas preguntadas por separado y las
+      dos dichas: pregunta si existe ALGUNO de los dos archivos, no cuál rige.
+      Desde que la omisión significa «el que rige», una llamada pelada
+      contestaría por los dos y las dos mitades de la pregunta se volverían una
+      sola.
+
+    Lo que el cuaderno NO hace, y es la razón por la que su celda de techos los
+    lee en vez de resolverlos: llamar a `with_ceilings_in_force` era el reflejo
+    obvio y es una trampa --- cuando no existe `ceilings.json` esa función lanza
+    la búsqueda COMPLETA, unas nueve horas y media, sin decir que lo está
+    haciendo. Un barrido a escala de ensayo no puede ser la puerta por la que
+    entra la corrida larga.
     """
     from MIL_CREDA_Benchmark import config, harness
 
-    dispositivo = harness.resolve_device()
-    # Los techos que YA estén en el registro, sin buscar nada acá. Llamar a
-    # `with_ceilings_in_force` era el reflejo obvio y es una trampa: cuando no
-    # existe `ceilings.json` esa función lanza la búsqueda COMPLETA --- 2
-    # familias x 6 transferencias x 30 trials a 20 épocas, unas nueve horas y
-    # media --- sin decir que lo está haciendo y sin que nadie la haya
-    # autorizado. Un barrido a escala de ensayo no puede ser la puerta por la
-    # que entra la corrida larga.
-    #
-    # Sin registro no corre: un barrido con techos vacíos mediría el ruido y la
-    # falta de coeficiente a la vez.
-    # Las dos escalas preguntadas por separado y las dos dichas: esta guarda
-    # pregunta si existe ALGUNO de los dos archivos, no cuál rige. Desde que la
-    # omisión significa «el que rige», una llamada pelada contestaría por los dos
-    # y las dos mitades de la pregunta se volverían una sola.
+    if not config.is_pilot_scale():
+        raise SystemExit(
+            f"la escala configurada es la completa ({config.EPOCHS} épocas, "
+            f"{len(config.SEEDS)} semillas). Este paso declara el árbol de "
+            "ensayo y el cuaderno escribiría en el de la corrida completa: "
+            "un barrido a escala completa se lanza con su propia "
+            "autorización, no por acá.")
     if (harness.search_record(pilot=False) is None
             and harness.search_record(pilot=True) is None):
         raise SystemExit(
             "no hay registro de techos. Corré primero la búsqueda "
             "(`search-pilot` a escala de ensayo, o la completa con su "
             "autorización): un barrido sin techos mide dos cosas a la vez.")
-    base = replace(
-        harness.Reduction(device=str(dispositivo),
-                          environment=harness.environment(), pilot=True),
-        ceilings=config.ceilings_on_record(),
-        ceilingsByTransfer=config.ceilings_by_transfer_on_record())
-
-    corridos = {}
-    for tasa in config.NOISE_LEVELS:
-        reduccion = replace(base, labelNoise=tasa)
-        corridos[f"{tasa:g}"] = harness.campaign(
-            replace(reduccion, kind="curve"), dispositivo,
-            transfers=[config.NOISE_TRANSFER])
-    return corridos
+    return _ejecutar("Benchmark_Noise_Sweep_v1.ipynb")
 
 
 def informe_de_ruido() -> str:
@@ -340,3 +342,4 @@ def informe_del_diagnostico() -> str:
     y sin que nadie pudiera leerlo.
     """
     return _ejecutar("Benchmark_Noise_Diagnostic_Report_v1.ipynb")
+

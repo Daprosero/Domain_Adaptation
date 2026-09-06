@@ -469,10 +469,11 @@ __records__: dict = {
 # `Results/`, que además contiene el árbol de todos los demás pasos:
 # declararlo volvería `own` a cualquier escritura en cualquier lado y apagaría
 # el guarda sin decir que lo apagó. Entonces la declaración es específica de
-# escala. Los pasos que fijan `pilot=True` en su propio código
-# (`search-pilot`, `campaign-local`, `noise-sweep`, `noise-diagnostic`)
-# declaran la raíz de ENSAYO y ninguna otra --- el día que uno escriba a
-# escala completa eso es `foreign`, que es exactamente lo que hay que ver ---
+# escala. Los cuatro pasos de ensayo (`search-pilot`, `campaign-local`,
+# `noise-sweep`, `noise-diagnostic`) declaran la raíz de ENSAYO y ninguna otra
+# --- el día que uno escriba a escala completa eso es `foreign`, que es
+# exactamente lo que hay que ver, y los tres que derivan su escala de
+# `config.is_pilot_scale()` se niegan antes de llegar ahí ---
 # y los cuadernos, que dibujan sobre la corrida que esté vigente y por lo
 # tanto pueden caer de cualquiera de los dos lados, declaran las dos, una por
 # escala.
@@ -491,18 +492,29 @@ __steps__: dict = {
                      "advances": 1,
                      "produces": ["Results/local_distance_bound.pdf",
                                   "Notebooks/verification.ipynb"]},
-    # `harness.run_search(pilot=True)` -> `ceilings_in_force` -> el motor
-    # `optuna`, que escribe un solo archivo: `config.ceilings_record_for(True)`,
-    # o sea `CEILINGS_PILOT_RECORD`. Es OTRO árbol que el de `results_for`: el
-    # registro de ensayo se separa por nombre de archivo y no por directorio
-    # (ver el comentario de `shard_paths`), así que cae al lado del registro
-    # completo y no bajo `Results/Pilot/`. El motor por grilla dejaría además un
-    # `.partial.json` acá; no está declarado porque no es el motor que
-    # `config.SEARCH_ENGINE` nombra.
+    # Corre `Benchmark_Search_Pilot_v1.ipynb`, que es el cuaderno del ENSAYO de la
+    # búsqueda, y no computa en su lugar. Su celda de la corrida llama a
+    # `harness.run_search(pilot=ES_ENSAYO)` con `ES_ENSAYO` fijo en `True` --- no
+    # derivado de `config.is_pilot_scale()` como en la campaña, porque esa lectura
+    # habla del tamaño de la CAMPAÑA y la búsqueda tiene su propia escala
+    # declarada aparte; derivarla haría que este cuaderno lance la corrida larga
+    # cuando la campaña esté configurada en grande.
+    #
+    # `run_search` -> `ceilings_in_force` -> el motor `optuna`, que escribe un solo
+    # archivo: `config.ceilings_record_for(True)`, o sea `CEILINGS_PILOT_RECORD`.
+    # Es OTRO árbol que el de `results_for`: el registro de ensayo se separa por
+    # nombre de archivo y no por directorio (ver el comentario de `shard_paths`),
+    # así que cae al lado del registro completo y no bajo `Results/Pilot/`. El
+    # motor por grilla dejaría además un `.partial.json` acá; no está declarado
+    # porque no es el motor que `config.SEARCH_ENGINE` nombra.
+    #
+    # Y el cuaderno mismo, que se ejecuta `--inplace`: la salida ejecutada ES lo
+    # que queda de esta corrida.
     "search-pilot": {"module": "MIL_CREDA_Benchmark.steps",
                      "function": "ensayo_de_busqueda",
                      "advances": 2,
-                     "produces": ["Results/Benchmark/ceilings.pilot.json"]},
+                     "produces": ["Results/Benchmark/ceilings.pilot.json",
+                                  "Notebooks/Benchmark_Search_Pilot_v1.ipynb"]},
     # Corre `Benchmark_Campaign_v1.ipynb`, que es el cuaderno que se envía, y no
     # computa en su lugar. Su celda 7 llama a `harness.campaign()` con
     # `kind="campaign"` y con el `pilot` que la celda 2 deriva de
@@ -602,16 +614,24 @@ __steps__: dict = {
     # hecho, sin una segunda conjetura encima: hoy estos cuatro pasos no están
     # numerados, y qué lugar les toca en la secuencia es una decisión que no se
     # tomó todavía.
-    # Una campaña por nivel, todas con `kind="curve"` y `pilot=True`: el
-    # directorio `curve/` de `results_for` cubre los cinco `rho*` y el
+    # Corre `Benchmark_Noise_Sweep_v1.ipynb` y no computa en su lugar. Una campaña
+    # por nivel, todas con `kind="curve"` y con el `pilot` que el cuaderno deriva
+    # de `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
+    # ensayo, así que estas raíces son las de ensayo y no pueden ser otras.
+    #
+    # El directorio `curve/` de `results_for` cubre los cinco `rho*` y el
     # `Probe_results.json` que `campaign()` deja en su padre. Los pesos también
     # son un directorio y no un vacío: `keeps_checkpoints` es verdadero en 0.0 y
-    # en 0.2, así que dos de los cinco niveles sí escriben checkpoints --- lo
-    # contrario de lo que dice la docstring del paso, que quedó vieja.
+    # en 0.2, así que dos de los cinco niveles sí escriben checkpoints.
+    #
+    # Y el cuaderno mismo, ejecutado `--inplace` una sola vez: los cinco niveles
+    # viven adentro de una ejecución, así que la salida ejecutada los muestra a
+    # los cinco.
     "noise-sweep": {"module": "MIL_CREDA_Benchmark.steps",
                     "function": "barrido_de_ruido",
                     "produces": ["Results/Pilot/Noise/curve",
-                                 "Models/Pilot/Noise/curve"]},
+                                 "Models/Pilot/Noise/curve",
+                                 "Notebooks/Benchmark_Noise_Sweep_v1.ipynb"]},
     # Sólo lee y dibuja, y aun así deja tres cosas: su cuaderno ejecutado y las
     # dos que escriben sus celdas, `degradation.pdf` (por `figures.noise_curves`
     # sobre `config.noise_axis_for(ES_ENSAYO) / "degradation"`, con el `.pdf` de
@@ -625,15 +645,21 @@ __steps__: dict = {
                                   "Results/Pilot/Noise/degradation.pdf",
                                   "Results/Pilot/Noise/degradation.json",
                                   "Notebooks/Benchmark_Noise_Report_v1.ipynb"]},
-    # Un solo archivo, y es todo lo que escribe: la re-búsqueda que paga NO
-    # gobierna ningún registro (`governs_the_ceilings_record` es falso bajo
-    # contaminación y sobre una transferencia sola) y el motor `optuna` no deja
-    # parcial. El destino es `config.noise_axis_for(True)`, la raíz del ENSAYO:
-    # escrito bajo `Results/Noise/` a secas pisaría el diagnóstico de la corrida
-    # completa con números de ensayo.
+    # Corre `Benchmark_Noise_Diagnostic_Search_v1.ipynb` y no computa en su lugar.
+    # Un solo archivo de datos, y es todo lo que escribe además de su cuaderno: la
+    # re-búsqueda que paga NO gobierna ningún registro
+    # (`governs_the_ceilings_record` es falso bajo contaminación y sobre una
+    # transferencia sola) y el motor `optuna` no deja parcial. El destino es
+    # `config.noise_axis_for(ES_ENSAYO)`, con el `pilot` que el cuaderno deriva de
+    # `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
+    # ensayo, así que la raíz es la de ENSAYO y no puede ser otra --- escrito bajo
+    # `Results/Noise/` a secas pisaría el diagnóstico de la corrida completa con
+    # números de ensayo.
     "noise-diagnostic": {"module": "MIL_CREDA_Benchmark.steps",
                          "function": "diagnostico_de_ruido",
-                         "produces": ["Results/Pilot/Noise/diagnostic.json"]},
+                         "produces": [
+                             "Results/Pilot/Noise/diagnostic.json",
+                             "Notebooks/Benchmark_Noise_Diagnostic_Search_v1.ipynb"]},
     # Presenta el `diagnostic.json` que ya existe y no computa nada, así que su
     # cuaderno ejecutado es su única raíz.
     "noise-diagnostic-report": {"module": "MIL_CREDA_Benchmark.steps",
