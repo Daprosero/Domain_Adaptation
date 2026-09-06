@@ -1093,15 +1093,10 @@ LECTURAS_QUE_NO_REENVIAN: dict[str, str] = {
         "uno dice adónde va a escribir esta corrida, el otro dice qué archivo "
         "gobierna las campañas mientras tanto. Reenviarle la escala haría que "
         "los dos dijeran lo mismo y el segundo dejaría de informar nada"),
-    "Benchmark_Noise_Report_v1.ipynb: contamination.load(t)": (
-        "es la lectura de la que SALE `ES_ENSAYO` en esa misma celda --- "
-        "`any(contamination.load(t)['pilot'] for t in corridos)` ---, así que "
-        "reenviarle la escala sería pedirle la respuesta que todavía no existe. "
-        "El informe del ruido dibuja el barrido que esté en disco y averigua de "
-        "cuál se trata leyéndolo: acá «cuál rige» es literalmente la pregunta"),
     "Benchmark_Noise_Report_v1.ipynb: contamination.load(tasa)": (
-        "relee los MISMOS niveles que la línea de arriba acaba de resolver, "
-        "para contrastar la tasa que cada campaña selló contra el directorio "
+        "relee los MISMOS niveles que `contamination.curve_is_pilot` acaba de "
+        "resolver para esa celda, para contrastar la tasa que cada campaña "
+        "selló contra el directorio "
         "que la contiene. Un resolutor consultado dos veces en una celda "
         "contesta lo mismo; darle la escala derivada de su propia respuesta "
         "sería cerrar el círculo y no agregaría una sola garantía"),

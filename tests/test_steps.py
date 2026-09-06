@@ -977,7 +977,7 @@ def test_los_numeros_del_diagnostico_no_entran_en_las_tablas_del_veredicto(
     fuente = _Path(tables.__file__).read_text(encoding="utf-8")
     assert fuente.count('"diagnostic.json"') == 1
     assert _quien_llama(fuente, "_diagnostic_record") == {
-        "render_diagnostic", "conclusion_diagnostic"}
+        "render_diagnostic", "conclusion_diagnostic", "diagnostic_source_note"}
 
     # y ninguno de los dos llega a un cuaderno del veredicto
     for cuaderno in ("Benchmark_Report_v1.ipynb", "Benchmark_Latent_v1.ipynb"):
@@ -1647,6 +1647,47 @@ def test_todo_paso_con_predecesor_o_lee_la_escala_de_entrada_o_se_niega(
         assert steps.cuaderno_de(paso) in str(caido.value), paso
         assert "upstream_pilot_scale" in str(caido.value), paso
     assert abiertos == [], f"un paso que no sabe leer abrió su cuaderno -> {abiertos}"
+
+
+def test_todo_paso_que_lee_dice_de_que_arbol_salieron_sus_numeros() -> None:
+    """Leer el árbol completo y caer al del ensayo es correcto; hacerlo callado no.
+
+    Los cinco cuadernos locales ---los que dibujan, no los que computan--- ya
+    prefieren la corrida completa y caen al ensayo cuando no hay ninguna. Eso es
+    lo que los hace útiles mientras la campaña completa todavía no volvió del
+    worker: se miran las tablas y las figuras con lo que haya.
+
+    Lo que no puede pasar es que la caída sea invisible. Una figura del ensayo
+    tiene la misma forma que la completa y números que no se citan, así que el
+    único lugar donde la diferencia existe es el encabezado. Sin él, el informe
+    cambia de fuente sin que nadie lo toque y sigue leyéndose igual.
+
+    La partición se DERIVA y no se escribe: quien nombra
+    `config.upstream_pilot_scale()` lee un árbol exacto y no eligió nada; quien
+    no la nombra resolvió su propia fuente y tiene que decir cuál. Un sexto
+    cuaderno de informe entra solo en la mitad exigente.
+
+    Rojo alcanzable: sacarle el `source_note` a cualquiera de los cinco, o
+    agregar un cuaderno que lea y no declare.
+    """
+    assert steps.notas_de_fuente(), (
+        "ninguna función `*source_note` en el paquete: el control no tiene con "
+        "qué reconocer un estampado y estaría en verde por vacío")
+
+    exactos, resuelven = [], []
+    for paso, entrada in paquete.__steps__.items():
+        if not entrada.get("reads"):
+            continue
+        (exactos if steps.honra_la_escala_de_entrada(paso) else resuelven).append(paso)
+
+    assert exactos, "ningún paso compone sus lecturas con la escala del recorrido"
+    assert resuelven, "ningún paso resuelve su propia fuente: la partición no parte"
+
+    callados = [paso for paso in resuelven if not steps.declara_su_fuente(paso)]
+    assert not callados, (
+        "estos pasos eligen entre la corrida completa y el ensayo, y no dicen "
+        "cuál eligieron:\n" + "\n".join(
+            f"  {paso} -- {steps.cuaderno_de(paso)}" for paso in callados))
 
 
 def test_el_ensayo_remoto_marca_el_modo_para_el_kernel_y_deja_el_entorno_como_estaba(

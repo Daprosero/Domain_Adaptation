@@ -182,6 +182,51 @@ def in_force(rate: float = 0.0, kind: str = "campaign") -> dict | None:
     return load(rate, kind)
 
 
+def curve_is_pilot(rates) -> bool:
+    """Si la curva que forman estos niveles no se puede citar.
+
+    `any` y no `all`, y es la parte que importa: un solo nivel de ensayo entre
+    cinco ya hace que la curva entera sea un ensayo. Las cinco marcas se dibujan
+    juntas y se leen como una sola medición, así que la más floja manda ---
+    promediar la procedencia sería exactamente el error que la curva induce.
+
+    Una sola ortografía de esa pregunta: el cuaderno la usa para elegir dónde
+    ESCRIBE y `curve_source_note` para decir de dónde LEYÓ, y si cada uno la
+    calculara por su lado el encabezado podría decir «completa» encima de una
+    figura guardada en el árbol del ensayo.
+    """
+    return any(load(rate)["pilot"] for rate in rates)
+
+
+def curve_source_note(rates) -> str:
+    """De qué árbol salieron los niveles de la curva, dicho para el conjunto.
+
+    Para el conjunto y no nivel por nivel: lo que se mira es una curva, y cinco
+    avisos debajo de una figura son cinco lugares que pueden separarse.
+
+    La MEZCLA se nombra aparte y no se resuelve. Que dos niveles vengan de la
+    corrida completa y tres del ensayo es un estado real ---la campaña volvió a
+    medias--- y una figura que los dibuja juntos sin decirlo muestra una
+    pendiente compuesta por dos escalas distintas, que es la única lectura que
+    esa figura existe para dar. Se dice cuáles, y quien mira decide.
+    """
+    rates = list(rates)
+    if not rates:
+        return ("**Sin ningún nivel corrido.** No hay curva: no es una figura "
+                "vacía, es que el barrido no se ejecutó.")
+    ensayo = [rate for rate in rates if load(rate)["pilot"]]
+    if not ensayo:
+        return f"Corrida completa, {len(rates)} nivel/es de contaminación."
+    if len(ensayo) == len(rates):
+        return (f"**Estos {len(rates)} niveles son de un ENSAYO**, porque no hay "
+                f"corrida completa para ninguno. No se citan como resultados.")
+    return (f"**MEZCLA: {len(ensayo)} de {len(rates)} niveles son de un ENSAYO** "
+            f"(ρ={', '.join(f'{rate:g}' for rate in ensayo)}) y el resto de la "
+            f"corrida completa. La pendiente que se ve abajo junta dos escalas, "
+            f"así que no se cita: o corré los que faltan a escala completa, o "
+            f"leela sabiendo cuáles son cuáles.")
+
+
 def source_note(level: dict | None, rate: float = 0.0) -> str:
     """De dónde salieron los números, en una línea, para encabezar lo que sigue.
 

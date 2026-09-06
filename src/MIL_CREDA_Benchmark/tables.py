@@ -1971,7 +1971,7 @@ def conclusion_versus_clean(metric: str, rate: float) -> str:
     )
 
 
-def _diagnostic_record() -> dict | None:
+def _diagnostic_record() -> "tuple[dict | None, bool | None]":
     """El diagnóstico que rige: el de la corrida completa, y si no, el del ensayo.
 
     Mismo respaldo que el resto del eje. Anclado a `Results/Noise` a secas leía
@@ -1983,8 +1983,31 @@ def _diagnostic_record() -> dict | None:
     for pilot in (False, True):
         path = config.noise_axis_for(pilot) / "diagnostic.json"
         if path.exists():
-            return json.loads(path.read_text(encoding="utf-8"))
-    return None
+            return json.loads(path.read_text(encoding="utf-8")), pilot
+    return None, None
+
+
+def diagnostic_source_note() -> str:
+    """De cuál de los dos árboles salió el diagnóstico, en una línea.
+
+    Se escribe siempre y no sólo cuando es un ensayo, por la misma razón que
+    `contamination.source_note`: un aviso que aparece únicamente en el caso malo
+    no le enseña a nadie qué es lo que vigila, y la primera vez que falta se lee
+    como que no había nada que avisar.
+
+    Lee por `_diagnostic_record` y nunca vuelve a recorrer los dos árboles: una
+    segunda ortografía de esa preferencia es exactamente lo que queda viejo
+    cuando una de las dos cambia, y las dos mitades ---la tabla y su
+    procedencia--- dirían cosas distintas sobre el mismo archivo.
+    """
+    record, pilot = _diagnostic_record()
+    if record is None:
+        return ("**Sin diagnóstico.** Ni corrida completa ni ensayo: no hay de "
+                "qué declarar procedencia.")
+    if pilot:
+        return ("**Este diagnóstico es de un ENSAYO**, porque no hay corrida "
+                "completa que lo haya escrito. No se cita como resultado.")
+    return "Diagnóstico de la corrida completa."
 
 
 def render_diagnostic(markdown: bool = False) -> str:
@@ -1994,7 +2017,7 @@ def render_diagnostic(markdown: bool = False) -> str:
     re-buscado es lo único que este experimento paga. Una tabla con solo el
     segundo no diría nada, porque la pregunta es la distancia entre los dos.
     """
-    record = _diagnostic_record()
+    record, _ = _diagnostic_record()
     if record is None:
         return ("El diagnóstico todavía no corrió. No es una tabla vacía: es que "
                 "`step --step noise-diagnostic` no se ejecutó, y sin el techo "
@@ -2037,7 +2060,7 @@ def conclusion_diagnostic() -> str:
     está subestimando al método -- que es el caso en el que vale reestructurar
     para buscar techos por nivel.
     """
-    record = _diagnostic_record()
+    record, _ = _diagnostic_record()
     if record is None:
         return ("Sin diagnóstico corrido no hay nada que concluir, y en "
                 "particular no se puede decir si una caída fue del término o "
