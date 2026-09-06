@@ -15,6 +15,10 @@ import pytest
 import MIL_CREDA_Benchmark as paquete
 from MIL_CREDA_Benchmark import steps
 
+#: La raíz del repositorio, derivada del módulo que ya la conoce
+#: (`steps.CUADERNOS` es `<raíz>/MIL-CREDA/Notebooks`) y nunca escrita.
+_RAIZ = steps.CUADERNOS.parents[1]
+
 
 class PasosDeclaradosTests(unittest.TestCase):
 
@@ -80,7 +84,7 @@ class PasosDeclaradosTests(unittest.TestCase):
         """Por qué `ensayo_de_busqueda` se queda en biblioteca, medido.
 
         Es el único paso que computa sin correr un cuaderno, y la razón no es
-        que falte uno: `Benchmark_Search_v1.ipynb` es el INFORME de la búsqueda
+        que falte uno: `Benchmark_Search_Report_v1.ipynb` es el INFORME de la búsqueda
         y ya lo corre `informe_de_busqueda`. Apuntar los dos pasos al mismo
         cuaderno le daría dos dueños a una raíz declarada, que es exactamente lo
         que `test_ninguna_raiz_es_de_dos_pasos` prohíbe --- y descomentar la
@@ -107,11 +111,11 @@ class PasosDeclaradosTests(unittest.TestCase):
                       "el ensayo de la búsqueda dejó de correr la búsqueda")
 
         corridos = _cuadernos_nombrados_por_los_pasos()
-        self.assertEqual(corridos.get("Benchmark_Search_v1.ipynb"),
+        self.assertEqual(corridos.get("Benchmark_Search_Report_v1.ipynb"),
                          "informe_de_busqueda",
                          "el cuaderno de la búsqueda es su informe y de nadie más")
 
-        celdas = _celdas_de_codigo("Benchmark_Search_v1.ipynb")
+        celdas = _celdas_de_codigo("Benchmark_Search_Report_v1.ipynb")
         (celda,) = [c for c in celdas if "run_search" in c]
         for linea in celda.splitlines():
             if "run_search" in linea:
@@ -175,7 +179,7 @@ class PasosDeclaradosTests(unittest.TestCase):
     def test_todo_cuaderno_del_arbol_lo_corre_un_paso_o_dice_por_que_no(self):
         """El defecto no es un cuaderno sin paso: es que nada lo note.
 
-        `Benchmark_Noise_Diagnostic_v1.ipynb` vivió con cinco celdas y ninguna
+        `Benchmark_Noise_Diagnostic_Report_v1.ipynb` vivió con cinco celdas y ninguna
         ejecutada -- la tabla y la conclusión que separan *falló el término* de
         *le faltó coeficiente*, computadas y sin dibujar -- porque ningún paso
         lo nombraba y ninguna afirmación miraba el disco. Las dos mitades se
@@ -212,6 +216,99 @@ class PasosDeclaradosTests(unittest.TestCase):
     def test_un_cuaderno_ausente_se_rechaza_en_vez_de_correr(self):
         with self.assertRaises(FileNotFoundError):
             steps._ejecutar("no_existe.ipynb")
+
+
+#: Los `.ipynb` que este repositorio nombra a propósito sin que existan, cada
+#: uno con su razón al lado --- la misma forma que `CUADERNOS_SIN_PASO`, y por
+#: la misma razón: un nombre pelado en una exención y un olvido se leen igual.
+CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
+    "no_existe.ipynb": ("el cuaderno que `_ejecutar` tiene que rechazar; "
+                        "que exista sería la falla que ese test mide"),
+}
+
+
+class ReferenciasACuadernosTests(unittest.TestCase):
+    """Todo `.ipynb` que este repositorio se nombra a sí mismo está en el árbol.
+
+    La afirmación no es «el cuaderno del paso existe» --- eso lo dice ya
+    `test_todo_cuaderno_del_arbol_lo_corre_un_paso_o_dice_por_que_no`, y sigue
+    verde mientras cualquier OTRO archivo siga nombrando el nombre viejo. Lo
+    que se afirma acá es que ningún lugar del repositorio quedó nombrando un
+    cuaderno que ya no está: el paso, la declaración, un test, la prosa de
+    `AGREED.md` o el texto de otro cuaderno.
+
+    Es la mitad que un renombre rompe y nada más mira. `Benchmark_Search_v1`
+    pasó a llamarse `Benchmark_Search_Report_v1` y su ruta aparecía además
+    como testigo en `AGREED.md`, donde ningún test la habría leído.
+    """
+
+    #: Dónde puede vivir un cuaderno de este repositorio. Dos, porque `CREDA/`
+    #: es trabajo previo que este proyecto no edita y sus cuadernos igual se
+    #: nombran desde `src/CREDA/schedules.py`.
+    DIRECTORIOS = ("MIL-CREDA/Notebooks", "CREDA/Notebooks")
+    #: Lo que no se lee: producto, entornos y cachés. `Results/` y `Models/`
+    #: quedan afuera porque son salida y no texto de este repositorio.
+    SALTEADOS = {".git", ".venv", "__pycache__", ".pytest_cache", ".scratch",
+                 ".ipynb_checkpoints", ".benchmark-data", ".implementation",
+                 "Results", "Models", ".domain-adaptation-cache", ".atl"}
+    LEIDOS = {".py", ".md", ".txt", ".cfg", ".toml", ".ipynb"}
+
+    def _texto_del_repositorio(self):
+        """`[(ruta relativa, texto)]` de todo lo que puede nombrar un cuaderno.
+
+        Un `.ipynb` se abre como JSON y se devuelve sólo el `source` de sus
+        celdas: leer su archivo crudo mezclaría el código con las salidas
+        guardadas, y una salida vieja nombrando un cuaderno viejo no es una
+        referencia que nadie siga.
+        """
+        import json
+
+        raiz = _RAIZ
+        for ruta in sorted(raiz.rglob("*")):
+            if not ruta.is_file() or ruta.suffix not in self.LEIDOS:
+                continue
+            if self.SALTEADOS & set(ruta.relative_to(raiz).parts):
+                continue
+            if ruta.suffix == ".ipynb":
+                documento = json.loads(ruta.read_text(encoding="utf-8"))
+                texto = "\n".join("".join(c.get("source", []))
+                                  for c in documento["cells"])
+            else:
+                texto = ruta.read_text(encoding="utf-8")
+            yield ruta.relative_to(raiz).as_posix(), texto
+
+    def test_ninguna_referencia_a_un_cuaderno_quedo_apuntando_a_la_nada(self):
+        """Rojo alcanzable: renombrar un cuaderno y arreglar sólo `steps.py`,
+        dejando la declaración, un test o el testigo de `AGREED.md` nombrando
+        el nombre viejo.
+        """
+        import re
+
+        en_disco = {ruta.name for directorio in self.DIRECTORIOS
+                    for ruta in (_RAIZ / directorio).glob("*.ipynb")}
+        self.assertTrue(en_disco, "no se encontró ningún cuaderno en el árbol")
+
+        colgadas = []
+        for archivo, texto in self._texto_del_repositorio():
+            for nombre in re.findall(r"[A-Za-z0-9_.-]+\.ipynb", texto):
+                if nombre in en_disco or nombre in CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO:
+                    continue
+                colgadas.append(f"{archivo} nombra {nombre}")
+        self.assertEqual(colgadas, [],
+                         "estas referencias apuntan a un cuaderno que no está")
+
+    def test_toda_exencion_sigue_nombrando_algo_que_de_verdad_no_existe(self):
+        """Exentar cuesta escribir por qué, y la exención no le sobrevive al
+        hecho: el día que uno de estos nombres exista, la exención lo estaría
+        tapando en vez de declararlo.
+
+        Rojo alcanzable: crear `no_existe.ipynb`, o exentar un nombre sin razón.
+        """
+        for nombre, razon in CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO.items():
+            self.assertTrue(razon.strip(), f"{nombre} exento sin decir por qué")
+            for directorio in self.DIRECTORIOS:
+                self.assertFalse((_RAIZ / directorio / nombre).exists(),
+                                 f"{nombre} existe: la exención lo tapa")
 
 
 class RaicesDeclaradasTests(unittest.TestCase):

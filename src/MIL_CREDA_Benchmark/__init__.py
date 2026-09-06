@@ -553,7 +553,7 @@ __steps__: dict = {
     "search-report": {"module": "MIL_CREDA_Benchmark.steps",
                       "function": "informe_de_busqueda",
                      "advances": 3,
-                     "produces": ["Notebooks/Benchmark_Search_v1.ipynb"]},
+                     "produces": ["Notebooks/Benchmark_Search_Report_v1.ipynb"]},
     # Dibuja sobre la corrida vigente (`contamination.in_force(0.0,
     # "campaign")["root"]`), que es la completa si existe y el ensayo si no:
     # por eso las dos escalas. Escribe `curves/*.pdf`, `report.txt` y
@@ -624,7 +624,7 @@ __steps__: dict = {
                                   "Results/Noise/degradation.json",
                                   "Results/Pilot/Noise/degradation.pdf",
                                   "Results/Pilot/Noise/degradation.json",
-                                  "Notebooks/Benchmark_Noise_v1.ipynb"]},
+                                  "Notebooks/Benchmark_Noise_Report_v1.ipynb"]},
     # Un solo archivo, y es todo lo que escribe: la re-búsqueda que paga NO
     # gobierna ningún registro (`governs_the_ceilings_record` es falso bajo
     # contaminación y sobre una transferencia sola) y el motor `optuna` no deja
@@ -639,5 +639,5 @@ __steps__: dict = {
     "noise-diagnostic-report": {"module": "MIL_CREDA_Benchmark.steps",
                                 "function": "informe_del_diagnostico",
                                 "produces": [
-                                    "Notebooks/Benchmark_Noise_Diagnostic_v1.ipynb"]},
+                                    "Notebooks/Benchmark_Noise_Diagnostic_Report_v1.ipynb"]},
 }

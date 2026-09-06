@@ -349,7 +349,7 @@ class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
 def test_la_forma_del_repliegue_es_una_sola_en_todo_el_repositorio():
     """Dos ortografías de una regla es el defecto, no la regla.
 
-    `Benchmark_Search_v1` escribía el repliegue a mano ---`search_record() or
+    `Benchmark_Search_Report_v1` escribía el repliegue a mano ---`search_record() or
     search_record(pilot=True)`--- y por eso era el único cuaderno que mostraba
     sus tablas; el informe no lo tenía y no mostraba ninguna. El repliegue vive
     ahora en la firma, una vez, y escribirlo a mano otra vez cae acá.
