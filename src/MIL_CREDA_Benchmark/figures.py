@@ -27,6 +27,11 @@ import matplotlib.pyplot as plt
 from MIL_CREDA_Benchmark import config
 from MIL_CREDA_Benchmark import pooling
 
+#: Separación entre las franjas del pie de figura, en fracción de figura. Se aplica
+#: dos veces: entre la leyenda y la etiqueta del eje, y entre la etiqueta y los
+#: paneles. Es lo único fijo de ese pie --- dónde empieza cada franja se mide.
+_BAND_GAP = 0.02
+
 
 def emit(figure: plt.Figure, path: Path) -> plt.Figure:
     """Escribe la figura y la devuelve, para que la celda la muestre además de guardarla.
@@ -250,11 +255,27 @@ def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
     # La leyenda abajo del todo y la etiqueta del eje encima de ella, cada una en
     # su franja. Por omisión las dos se colocan abajo al centro y se superponen:
     # los nombres de los métodos quedaban escritos encima de «optimizer step».
-    figure.legend(loc="lower center", ncol=6, fontsize=8, frameon=False,
-                  bbox_to_anchor=(0.5, 0.0))
+    #
+    # Dónde empieza esa segunda franja se MIDE, no se elige. La leyenda cambia de
+    # alto con cuántas entradas lleva --- y cuántas lleva depende de los brazos que
+    # recibe cada figura, que no son los mismos --- así que un desplazamiento fijo
+    # acierta para una y se mete adentro de la leyenda para las demás. Con `y=0.055`
+    # las tres se superponían: la leyenda llegaba a 0.0816 y la etiqueta arrancaba
+    # en 0.0550. Es la misma regla que la de arriba sobre `shared_x`: la geometría
+    # es una afirmación sobre lo dibujado, y se comprueba en vez de suponerse.
+    legend = figure.legend(loc="lower center", ncol=6, fontsize=8, frameon=False,
+                           bbox_to_anchor=(0.5, 0.0))
+    bottom = 0.06
     if shared_x:
-        figure.supxlabel("optimizer step", fontsize=9, y=0.055)
-    figure.tight_layout(rect=(0, 0.11 if shared_x else 0.06, 1, 1))
+        figure.canvas.draw()
+        renderer = figure._get_renderer()
+        as_fraction = figure.transFigure.inverted()
+        legend_top = legend.get_window_extent(renderer).transformed(as_fraction).y1
+        label = figure.supxlabel("optimizer step", fontsize=9,
+                                 y=legend_top + _BAND_GAP)
+        label_top = label.get_window_extent(renderer).transformed(as_fraction).y1
+        bottom = label_top + _BAND_GAP
+    figure.tight_layout(rect=(0, bottom, 1, 1))
     return emit(figure, path)
 
 
