@@ -786,9 +786,44 @@ def ceilings_record_in_force() -> tuple["Path | None", str]:
     return None, "none"
 
 
-def ceilings_provenance() -> dict:
-    """De donde salieron los techos vigentes, para estampar en la reduccion."""
-    record, kind = ceilings_record_in_force()
+def ceilings_record_at(pilot: "bool | None" = None) -> tuple["Path | None", str]:
+    """El registro del que lee ESTA corrida, y a que titulo.
+
+    La misma pareja que devuelve `ceilings_record_in_force`, con la coordenada
+    de escala adelante. Un solo lugar donde `pilot` se vuelve un registro para
+    todo lo que LEE, igual que `ceilings_record_for` lo es para todo lo que
+    escribe, y por el mismo motivo: la preferencia --- el completo le gana al
+    ensayo siempre que exista --- vive una sola vez, en
+    `ceilings_record_in_force`, y esto la consulta en vez de volver a
+    escribirla.
+
+    `pilot=None` es *el que rige* y es la omision: la pregunta de un resolutor,
+    "cual manda", que es lo correcto para lo que se muestra sin pertenecer a
+    ninguna corrida. Cualquier otro valor es la corrida que pregunta por SU
+    registro y por ninguno de los dos: a escala de ensayo el del ensayo, a
+    escala completa el completo, y la ausencia del propio se contesta con
+    `"none"` en vez de repartir el del vecino. Esa es toda la diferencia entre
+    un resolutor y una corrida, y es la que faltaba: `ceilings_on_record` no
+    tenia como recibirla, asi que una campana de ensayo pedia sus techos y se
+    llevaba los de la corrida completa sin una palabra.
+    """
+    if pilot is None:
+        return ceilings_record_in_force()
+    record = ceilings_record_for(pilot)
+    if not record.exists():
+        return None, "none"
+    return record, "pilot" if pilot else "full"
+
+
+def ceilings_provenance(pilot: "bool | None" = None) -> dict:
+    """De donde salieron los techos de esta corrida, para estampar en la reduccion.
+
+    `pilot=None` describe el registro vigente; con la coordenada describe el de
+    esa escala. Un aviso que dijera "busqueda completa" sobre una corrida de
+    ensayo seria peor que no avisar: es exactamente el sello que
+    `search_source_note` existe para poner.
+    """
+    record, kind = ceilings_record_at(pilot)
     out = {"source": kind, "record": str(record) if record else None,
            "epochs": None, "seeds": None}
     if record is None:
@@ -807,7 +842,7 @@ def ceilings_provenance() -> dict:
     return out
 
 
-def ceilings_on_record() -> dict[str, float]:
+def ceilings_on_record(pilot: "bool | None" = None) -> dict[str, float]:
     """The searched ceilings, read from the record the search wrote.
 
     Read and not remembered, like everything else here. A constant typed in by
@@ -818,8 +853,16 @@ def ceilings_on_record() -> dict[str, float]:
     import. A caller that runs the search in the same process — a notebook, which
     is the only place that ever does — would otherwise hold the empty mapping this
     module was imported with and hand it to a campaign that refuses it.
+
+    `pilot` es la coordenada que faltaba, y la omision sigue siendo el registro
+    VIGENTE porque esa es la pregunta de un resolutor: `CEILINGS`, mas abajo, se
+    llena al importar y no pertenece a ninguna corrida todavia. Una corrida si
+    pertenece a una escala, y la dice: sin poder decirla, una campana de ensayo
+    corria bajo los techos de la busqueda COMPLETA --- medidos en otro
+    experimento, a veinte epocas --- y su propio registro de ensayo quedaba en
+    disco sin que nada lo leyera.
     """
-    record, _ = ceilings_record_in_force()
+    record, _ = ceilings_record_at(pilot)
     if record is None:
         return {}
     import json as _json
@@ -827,15 +870,25 @@ def ceilings_on_record() -> dict[str, float]:
     return {family: entry["ceiling"] for family, entry in found.items()}
 
 
-def ceilings_by_transfer_on_record() -> dict[str, dict[str, float]]:
+def ceilings_by_transfer_on_record(
+        pilot: "bool | None" = None) -> dict[str, dict[str, float]]:
     """The per-transfer picks, read from the same record.
 
     A record written before this key existed simply has none, and that is not an
     error: an absent mapping makes every transfer fall back to the pooled winner,
     which is exactly what such a record meant when it was written. Read on every
     call, for the same reason `ceilings_on_record` is.
+
+    **La misma coordenada que `ceilings_on_record`, y por una razon propia.** Las
+    dos mitades de un mismo techo --- el agrupado y el pick por transferencia ---
+    se leen en dos llamadas separadas, y una reduccion que tomara cada mitad de
+    un registro distinto llevaria adentro dos experimentos mezclados en el valor
+    mas sensible del calculo. Que hoy coincidan no es una propiedad de las dos
+    funciones: es una propiedad de que las dos preguntaban lo mismo. Con la
+    coordenada las dos preguntan lo mismo *que la corrida*, que es lo que hay que
+    sostener.
     """
-    record, _ = ceilings_record_in_force()
+    record, _ = ceilings_record_at(pilot)
     if record is None:
         return {}
     import json as _json
@@ -947,6 +1000,51 @@ LECTURAS_SIN_COORDENADA: dict[str, str] = {
         "lugares--- pasan siempre el parcial ya resuelto por `shard_paths` con "
         "las tres coordenadas de la reducción. Darle escala acá sería una "
         "segunda fuente para un archivo que ya viene decidido"),
+}
+
+
+#: ------------------------- las lecturas que TIENEN una escala y no la reenvían
+#:
+#: La otra mitad de la regla de arriba, y la que faltaba. `LECTURAS_SIN_COORDENADA`
+#: mira las puertas cuya omisión significa «la corrida completa»; una puerta cuya
+#: omisión significa «el que rige» acepta la llamada pelada, y ahí es donde se
+#: escondía el segundo defecto: `config.ceilings_on_record()` no tenía coordenada
+#: ninguna, así que una campaña de ENSAYO ---que sabe perfectamente a qué escala
+#: corre--- pedía sus techos y se llevaba los de la búsqueda COMPLETA, medida a
+#: veinte épocas en otro experimento, mientras su propio `ceilings.pilot.json`
+#: quedaba en disco sin que nada lo leyera. Ni un error: los dos números existen
+#: y los dos son plausibles.
+#:
+#: La regla, derivada del árbol y no de una lista: **si el ámbito que rodea a la
+#: llamada YA tiene una escala, la llamada tiene que decirla.** Un ámbito tiene
+#: escala cuando es una función con parámetro `pilot`, cuando su cuerpo nombra
+#: `reduction.pilot`, o cuando es una celda de cuaderno que declara `ES_ENSAYO`.
+#: Lo que queda es un resolutor: nadie alrededor sabe de qué corrida se habla, y
+#: «cuál rige» es la pregunta correcta.
+#:
+#: La clave es el archivo y la expresión tal como la escribe `ast.unparse`, igual
+#: que en las otras dos reglas y por el mismo motivo.
+LECTURAS_QUE_NO_REENVIAN: dict[str, str] = {
+    "Benchmark_Ceiling_Search_v1.ipynb: config.ceilings_provenance()": (
+        "no habla de la corrida que ese cuaderno está por lanzar sino del "
+        "registro que rige AHORA, y lo imprime con esa etiqueta --- «registro "
+        "en vigor ahora mismo» --- al lado del destino que sí lleva la escala. "
+        "Son dos hechos distintos y el cuaderno los muestra juntos a propósito: "
+        "uno dice adónde va a escribir esta corrida, el otro dice qué archivo "
+        "gobierna las campañas mientras tanto. Reenviarle la escala haría que "
+        "los dos dijeran lo mismo y el segundo dejaría de informar nada"),
+    "Benchmark_Noise_Report_v1.ipynb: contamination.load(t)": (
+        "es la lectura de la que SALE `ES_ENSAYO` en esa misma celda --- "
+        "`any(contamination.load(t)['pilot'] for t in corridos)` ---, así que "
+        "reenviarle la escala sería pedirle la respuesta que todavía no existe. "
+        "El informe del ruido dibuja el barrido que esté en disco y averigua de "
+        "cuál se trata leyéndolo: acá «cuál rige» es literalmente la pregunta"),
+    "Benchmark_Noise_Report_v1.ipynb: contamination.load(tasa)": (
+        "relee los MISMOS niveles que la línea de arriba acaba de resolver, "
+        "para contrastar la tasa que cada campaña selló contra el directorio "
+        "que la contiene. Un resolutor consultado dos veces en una celda "
+        "contesta lo mismo; darle la escala derivada de su propia respuesta "
+        "sería cerrar el círculo y no agregaría una sola garantía"),
 }
 
 

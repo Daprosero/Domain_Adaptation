@@ -840,22 +840,23 @@ def search_record(pilot: bool | None = None) -> dict | None:
     `pilot=True` es el ensayo y nada más. La omisión es para lo que se muestra,
     nunca para lo que decide.
 
-    No se le pasa la escala de la CAMPAÑA: son dos registros con escalas
-    propias. `config.ceilings_record_in_force` ya declara que el completo gana
-    siempre que exista «para que un piloto local pueda correr sin haber gastado
-    Kaggle», y `steps.campana` construye su reducción de ensayo con
-    `config.ceilings_on_record()`, que lee justamente el vigente. Reenviarle el
-    `ES_ENSAYO` del cuaderno haría que un informe de ensayo dijera «no hay
-    búsqueda» mientras su propia reducción cita techos completos: los números
-    mostrados contradirían a la corrida que los produjo.
+    **Se le pasa la escala de la corrida, y antes no.** El argumento escrito acá
+    era que son dos registros con escalas propias y que reenviarle el `ES_ENSAYO`
+    del cuaderno haría que «un informe de ensayo dijera "no hay búsqueda"
+    mientras su propia reducción cita techos completos». La conclusión era
+    correcta y su premisa se movió: esa reducción citaba techos completos porque
+    `config.ceilings_on_record()` no tenía cómo recibir una escala, así que una
+    campaña de ensayo consumía la búsqueda COMPLETA. Ahora la recibe, la campaña
+    de ensayo corre bajo `ceilings.pilot.json` y el informe que la dibuja
+    pregunta por el mismo archivo: las dos mitades dicen lo mismo porque leen lo
+    mismo, que es lo que aquel párrafo quería y no podía tener.
+
+    La resolución vive en `config.ceilings_record_at`, una sola vez: la
+    preferencia entre los dos archivos estaba escrita acá y allá, y dos
+    ortografías de una regla es el defecto, no la regla.
     """
-    if pilot is None:
-        record, _ = config.ceilings_record_in_force()
-        if record is None:
-            return None
-    else:
-        record = config.ceilings_record_for(pilot)
-    if not record.exists():
+    record, _ = config.ceilings_record_at(pilot)
+    if record is None:
         return None
     return json.loads(record.read_text(encoding="utf-8"))
 
@@ -873,11 +874,19 @@ def search_source_note(pilot: bool | None = None) -> str:
 
     Los hechos salen de `config.ceilings_provenance()`, que ya los computaba
     para estampar la reducción; acá sólo se redactan.
+
+    **Y se le pasa la escala pedida.** El rechazo de arriba ya preguntaba por
+    ella y la redacción de abajo leía la vigente, así que un aviso pedido para
+    el ENSAYO ---con los dos registros en disco--- pasaba el rechazo y después
+    decía «búsqueda completa, 20 épocas» encima de una rejilla de tres. Las dos
+    mitades de una misma respuesta contra dos archivos distintos: el aviso que
+    existe para que un ensayo no se lea como una corrida completa era el que lo
+    hacía.
     """
     if pilot is not None and search_record(pilot=pilot) is None:
         return ("**Sin registro de techos** para la escala pedida: no hay nada "
                 "que mostrar, que no es lo mismo que una rejilla vacía.")
-    procedencia = config.ceilings_provenance()
+    procedencia = config.ceilings_provenance(pilot=pilot)
     if procedencia["source"] == "none":
         return ("**Sin búsqueda de techos.** Ni corrida completa ni ensayo: no "
                 "hay nada que mostrar, que no es lo mismo que una rejilla "
@@ -909,13 +918,22 @@ def ceilings_in_force(reduction: Reduction, device: torch.device,
     caller wanted a different one is exactly the silent refunding the campaign's
     refusal exists to prevent. Under-scale is not fixed here either: `campaign`
     reads `atRequiredScale` itself and says which record to delete.
+
+    **Devuelve el registro de ESTA escala y no el vigente.** `pilot` decidía a
+    qué archivo buscar y escribir, y después la lectura salía por
+    `config.ceilings_on_record()` sin coordenada: con los dos registros en
+    disco, una corrida de ensayo buscaba en `ceilings.pilot.json`, lo escribía,
+    y se llevaba los techos de `ceilings.json` --- otro experimento, a veinte
+    épocas --- mientras su propio registro quedaba ahí sin que nada lo leyera.
+    Las dos mitades de esta función contra dos archivos distintos, y la que
+    manda era la que no llevaba la coordenada.
     """
     reduction = replace(reduction, pilot=pilot)
     if search_record(pilot=pilot) is None:
         progress("no ceiling record: searching, once, before anything is compared")
         search_ceilings(reduction, device, progress=progress, shard=shard,
                         pilot=pilot)
-    return config.ceilings_on_record()
+    return config.ceilings_on_record(pilot=pilot)
 
 
 def with_ceilings_in_force(reduction: Reduction, device: torch.device,
@@ -937,10 +955,19 @@ def with_ceilings_in_force(reduction: Reduction, device: torch.device,
     # que la campaña real consume. Hoy los tres sitios que llaman construyen
     # `Reduction()` sin `pilot`, así que esto no mueve ninguna corrida; lo que
     # cierra es que la próxima que sí lo lleve no se le dé vuelta en silencio.
+    #
+    # Y la MISMA escala en las dos mitades. El agrupado salía de
+    # `ceilings_in_force(pilot=reduction.pilot)` y el pick por transferencia de
+    # una llamada pelada: dos resoluciones independientes del registro para las
+    # dos mitades de un mismo techo. Hoy las dos nombran `reduction.pilot`, así
+    # que la reducción no puede llevar adentro un agrupado de un experimento y
+    # un pick de otro --- que en el valor más sensible del cálculo no se ve
+    # nunca, porque los dos números existen y son plausibles.
     pooled = ceilings_in_force(reduction, device, progress=progress, shard=shard,
                                pilot=reduction.pilot)
     return replace(reduction, ceilings=pooled,
-                   ceilingsByTransfer=config.ceilings_by_transfer_on_record())
+                   ceilingsByTransfer=config.ceilings_by_transfer_on_record(
+                       pilot=reduction.pilot))
 
 
 def governs_the_ceilings_record(noise: float = 0.0,
@@ -1438,7 +1465,14 @@ def campaign(reduction: Reduction, device: torch.device,
     # `ceilings`. Running anyway would apply the pooled winner to the two
     # transfers the search measured — the old rule, arriving with no sign that
     # anything was skipped. Refuse by name instead.
-    on_record = config.ceilings_by_transfer_on_record()
+    # `pilot=reduction.pilot`, o sea el registro del que esta reducción sacó sus
+    # techos, y no el vigente. Sin la coordenada este chequeo leía un archivo y
+    # la reducción venía del otro: una campaña de ensayo bajo un registro
+    # completo con picks se negaba nombrando picks que su propio registro no
+    # tiene, y una campaña completa sin `ceilings.json` era medida contra los
+    # picks del ENSAYO. No es la guarda de escala --- ésa sigue dos bloques más
+    # abajo, pidiendo `pilot=False` por su nombre, y no se mueve.
+    on_record = config.ceilings_by_transfer_on_record(pilot=reduction.pilot)
     missing = sorted(family for family, picks in on_record.items()
                      if picks and not reduction.ceilingsByTransfer.get(family))
     if missing:
@@ -1465,7 +1499,18 @@ def campaign(reduction: Reduction, device: torch.device,
     # hand. The winner alone cannot say whether the grid leaned or the tie-break
     # chose, and a field a caller has to remember to fill is one that gets filled
     # on the run somebody was paying attention and left empty on the next.
-    reduction = replace(reduction, ceilingSearch=searched)
+    #
+    # El registro de ESTA corrida, y no `searched`. Las dos lecturas compartían
+    # una variable y son dos preguntas distintas: `searched` es la que GOBIERNA
+    # ---abajo se le exige `atRequiredScale` y por eso nombra `pilot=False`---
+    # y esto es la EVIDENCIA de la que salió el escalar con el que se corrió,
+    # que `tables.conclusion_ceilings` imprime al pie de las tablas. Compartida,
+    # una campaña de ensayo se sellaba con la rejilla de la búsqueda completa
+    # ---o con `{}` cuando esa búsqueda no existía--- mientras corría bajo los
+    # techos del ensayo: el informe describía cómo se eligió un número que esa
+    # corrida no usó, y las dos cosas son igual de plausibles en la página.
+    reduction = replace(reduction,
+                        ceilingSearch=search_record(pilot=reduction.pilot) or {})
     under = [family for family, entry in searched.items()
              if not entry.get("atRequiredScale", False)]
     if under:

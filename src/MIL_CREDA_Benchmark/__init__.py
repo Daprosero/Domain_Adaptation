@@ -472,8 +472,11 @@ __records__: dict = {
 # escala. Los cuatro pasos de ensayo (`search-pilot`, `campaign-local`,
 # `noise-sweep`, `noise-diagnostic`) declaran la raíz de ENSAYO y ninguna otra
 # --- el día que uno escriba a escala completa eso es `foreign`, que es
-# exactamente lo que hay que ver, y los tres que derivan su escala de
-# `config.is_pilot_scale()` se niegan antes de llegar ahí ---
+# exactamente lo que hay que ver, y los CUATRO derivan su escala de
+# `config.is_pilot_scale()` y se niegan antes de llegar ahí. Eran tres: la
+# búsqueda fijaba `pilot=True` adentro de su cuaderno, así que no tenía de qué
+# negarse --- y tampoco había forma de correr la búsqueda completa desde un
+# cuaderno ---
 # y los cuadernos, que dibujan sobre la corrida que esté vigente y por lo
 # tanto pueden caer de cualquiera de los dos lados, declaran las dos, una por
 # escala.
@@ -492,13 +495,20 @@ __steps__: dict = {
                      "advances": 1,
                      "produces": ["Results/local_distance_bound.pdf",
                                   "Notebooks/verification.ipynb"]},
-    # Corre `Benchmark_Search_Pilot_v1.ipynb`, que es el cuaderno del ENSAYO de la
+    # Corre `Benchmark_Ceiling_Search_v1.ipynb`, que es el cuaderno que CORRE la
     # búsqueda, y no computa en su lugar. Su celda de la corrida llama a
-    # `harness.run_search(pilot=ES_ENSAYO)` con `ES_ENSAYO` fijo en `True` --- no
-    # derivado de `config.is_pilot_scale()` como en la campaña, porque esa lectura
-    # habla del tamaño de la CAMPAÑA y la búsqueda tiene su propia escala
-    # declarada aparte; derivarla haría que este cuaderno lance la corrida larga
-    # cuando la campaña esté configurada en grande.
+    # `harness.run_search(pilot=ES_ENSAYO)` con `ES_ENSAYO` derivado de
+    # `config.is_pilot_scale()`, igual que los otros tres, y el paso se niega si
+    # esa escala no es la del ensayo --- así estas raíces son las de ensayo y no
+    # pueden ser otras.
+    #
+    # El cuaderno se llamaba `Benchmark_Search_Pilot_v1.ipynb` y fijaba `True`
+    # adentro. Ese nombre afirmaba una escala que no le toca elegir y, mientras
+    # la afirmaba, ningún cuaderno podía correr la búsqueda completa: a escala
+    # completa los techos venían de la biblioteca y todo lo demás del recorrido
+    # de un cuaderno. `Benchmark_Search_v1` --- el nombre que el informe dejó
+    # libre --- no se recicla: una referencia vieja seguiría resolviendo contra
+    # otro artefacto.
     #
     # `run_search` -> `ceilings_in_force` -> el motor `optuna`, que escribe un solo
     # archivo: `config.ceilings_record_for(True)`, o sea `CEILINGS_PILOT_RECORD`.
@@ -514,7 +524,7 @@ __steps__: dict = {
                      "function": "ensayo_de_busqueda",
                      "advances": 2,
                      "produces": ["Results/Benchmark/ceilings.pilot.json",
-                                  "Notebooks/Benchmark_Search_Pilot_v1.ipynb"]},
+                                  "Notebooks/Benchmark_Ceiling_Search_v1.ipynb"]},
     # Corre `Benchmark_Campaign_v1.ipynb`, que es el cuaderno que se envía, y no
     # computa en su lugar. Su celda 7 llama a `harness.campaign()` con
     # `kind="campaign"` y con el `pilot` que la celda 2 deriva de
