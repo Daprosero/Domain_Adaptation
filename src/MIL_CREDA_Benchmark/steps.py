@@ -556,6 +556,97 @@ def honra_la_escala_de_entrada(paso: str) -> bool:
                for celda in documento["cells"] if celda["cell_type"] == "code")
 
 
+def notas_de_fuente() -> tuple[str, ...]:
+    """Los nombres con los que un cuaderno declara DE QUÉ ÁRBOL leyó.
+
+    Se derivan del paquete y no se escriben acá: cualquier `def` cuyo nombre
+    termine en `source_note` entra sola. Agregar una nota nueva la habilita sin
+    que nadie tenga que acordarse de anotarla en un segundo lugar, y borrar la
+    última deja el control en ROJO en vez de en verde por una lista que quedó
+    vieja --- que es la única forma en que una lista escrita a mano falla.
+    """
+    import ast
+
+    nombres = set()
+    for archivo in sorted((Path(__file__).parent).glob("*.py")):
+        arbol = ast.parse(archivo.read_text(encoding="utf-8"))
+        nombres.update(
+            nodo.name for nodo in ast.walk(arbol)
+            if isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and nodo.name.endswith("source_note"))
+    return tuple(sorted(nombres))
+
+
+def declara_su_fuente(paso: str) -> bool:
+    """Si el cuaderno de este paso dice de cuál de los dos árboles salieron sus números.
+
+    La otra mitad de `honra_la_escala_de_entrada`, y la que hacía falta.
+
+    Un cuaderno que compone sus lecturas con `config.upstream_pilot_scale()` lee
+    un árbol EXACTO: el de la escala del recorrido, sin caídas, y no hay nada que
+    declarar porque no eligió nada. Los que no la nombran son los que resuelven su
+    propia fuente ---`contamination.in_force`, `harness.search_record`,
+    `tables._diagnostic_record`: los tres prefieren la corrida completa y caen al
+    ensayo cuando no hay--- y ésos SÍ eligieron, en silencio y hacia abajo.
+
+    Una caída silenciosa es peor que no tener caída. La figura sale con la forma
+    correcta y los números del ensayo, y nada arriba de ella lo dice: ya pasó al
+    revés en este repositorio, con «Piloto de 1 repetición» impreso encima de
+    tablas de 3 semillas. Por eso la caída se permite ---es lo que hace que estos
+    cinco cuadernos sirvan para mirar mientras la corrida completa todavía no
+    volvió--- y el estampado no.
+
+    Se lee del cuaderno, igual que su hermana, así que convertir uno lo habilita
+    solo y este control lo sigue sin una segunda lista de pasos.
+    """
+    import ast
+
+    nombre = cuaderno_de(paso)
+    if nombre is None:
+        return False
+    documento = json.loads((CUADERNOS / nombre).read_text(encoding="utf-8"))
+    notas = set(notas_de_fuente())
+    mostradores = {"show", "display", "print"}
+
+    # Nombrarla no alcanza: la nota tiene que LLEGAR a quien mira. Una nota
+    # calculada y nunca mostrada deja este control en verde sobre un cuaderno
+    # que no dice nada --- que es la misma falla, con un paso más.
+    llamadas, asignadas, mostrado = set(), {}, set()
+    for celda in documento["cells"]:
+        if celda["cell_type"] != "code":
+            continue
+        try:
+            arbol = ast.parse("".join(celda["source"]))
+        except SyntaxError:
+            continue  # una celda con magias no parsea; ninguna nota vive ahí
+        for nodo in ast.walk(arbol):
+            if isinstance(nodo, ast.Call):
+                if isinstance(nodo.func, ast.Attribute) and nodo.func.attr in notas:
+                    llamadas.add(nodo.func.attr)
+                if isinstance(nodo.func, ast.Name) and nodo.func.id in notas:
+                    llamadas.add(nodo.func.id)
+                nombre_llamado = (nodo.func.id if isinstance(nodo.func, ast.Name)
+                                  else getattr(nodo.func, "attr", ""))
+                if nombre_llamado in mostradores:
+                    mostrado.update(
+                        hijo.id for hijo in ast.walk(nodo)
+                        if isinstance(hijo, ast.Name))
+                    mostrado.update(
+                        getattr(hijo.func, "attr", "")
+                        for hijo in ast.walk(nodo) if isinstance(hijo, ast.Call))
+            if isinstance(nodo, ast.Assign):
+                dentro = {getattr(h.func, "attr", "") or getattr(h.func, "id", "")
+                          for h in ast.walk(nodo.value) if isinstance(h, ast.Call)}
+                if dentro & notas:
+                    for destino in nodo.targets:
+                        if isinstance(destino, ast.Name):
+                            asignadas[destino.id] = True
+
+    if not llamadas:
+        return False
+    return bool(llamadas & mostrado) or bool(set(asignadas) & mostrado)
+
+
 def ensayo_remoto(paso: str) -> dict:
     """El ensayo de UN paso, corriendo en el worker antes de gastar la cuota.
 

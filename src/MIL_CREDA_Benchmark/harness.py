@@ -1920,15 +1920,3 @@ def header(reduction: Reduction) -> str:
     return "\n".join(lines)
 
 
-def render_transfer(summary: dict, transfer: str) -> str:
-    """One transfer's ladder, in the same table shape the sweep uses."""
-    rows = [row for row in summary["perTransfer"][transfer]
-            if row["metric"] in ("targetAccuracy", "sourceAccuracy")]
-    return f"[{transfer}]\n" + render(rows, {
-        "setting": summary["reduction"]["setting"],
-        "backbone": summary["reduction"]["backbone"],
-        "dataset": transfer,
-        "seeds": len(summary["reduction"]["seeds"]),
-        "revision": summary["reduction"]["revision"],
-    })
-
