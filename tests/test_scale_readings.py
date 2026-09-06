@@ -396,3 +396,46 @@ def test_el_gemelo_de_la_campana_sigue_teniendo_la_misma_forma():
             is None)
     assert (inspect.signature(harness.search_record).parameters["pilot"].default
             is None)
+
+
+def test_la_escala_configurada_se_lee_de_las_dos_constantes_que_la_declaran(
+        monkeypatch):
+    """`is_pilot_scale()` contra las dos constantes, medido y no leído.
+
+    El encabezado de `config` dice que dos constantes separan al ensayo de la
+    corrida completa, `EPOCHS` y `SEEDS`, y ninguna otra. Esta es la única
+    lectura de esa regla, y las dos mitades se comprueban por separado porque
+    cada una puede romperse sola: un predicado que mirara sólo las épocas diría
+    «completa» sobre veinte épocas con una semilla, que es un ensayo.
+
+    Y la lectura es «por debajo de», no «distinto de»: por encima de la escala
+    declarada no hay ensayo que valga --- una corrida más larga que la completa
+    no es una rehearsal --- y `<` lo dice mientras `!=` diría lo contrario.
+
+    Rojo alcanzable: mirar una sola de las dos constantes, comparar por
+    igualdad, o dar vuelta el sentido.
+    """
+    monkeypatch.setattr(config, "EPOCHS", config.FULL_EPOCHS)
+    monkeypatch.setattr(config, "SEEDS", list(config.FULL_SEEDS))
+    assert config.is_pilot_scale() is False, "la escala completa se leyó como ensayo"
+
+    monkeypatch.setattr(config, "EPOCHS", config.FULL_EPOCHS - 1)
+    assert config.is_pilot_scale() is True, "pocas épocas no se leyeron como ensayo"
+
+    monkeypatch.setattr(config, "EPOCHS", config.FULL_EPOCHS)
+    monkeypatch.setattr(config, "SEEDS", list(config.FULL_SEEDS)[:-1])
+    assert config.is_pilot_scale() is True, "pocas semillas no se leyeron como ensayo"
+
+    # Por ENCIMA de la escala declarada tampoco hay ensayo, y es la única mitad
+    # que separa `<` de `!=`: sin este caso las dos ortografías dan lo mismo en
+    # todo lo de arriba y la afirmación sobre el sentido no estaría medida.
+    monkeypatch.setattr(config, "EPOCHS", config.FULL_EPOCHS + 1)
+    monkeypatch.setattr(config, "SEEDS", list(config.FULL_SEEDS) + [99])
+    assert config.is_pilot_scale() is False, (
+        "una corrida más larga que la completa se leyó como ensayo")
+
+    # y lo que el repositorio declara hoy: las dos por debajo, o sea un ensayo
+    monkeypatch.undo()
+    assert config.EPOCHS < config.FULL_EPOCHS
+    assert len(config.SEEDS) < len(config.FULL_SEEDS)
+    assert config.is_pilot_scale() is True

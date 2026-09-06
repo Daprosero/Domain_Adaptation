@@ -33,26 +33,144 @@ class PasosDeclaradosTests(unittest.TestCase):
                 firma = inspect.signature(getattr(steps, entrada["function"]))
                 self.assertEqual(list(firma.parameters), [])
 
-    def test_los_cuadernos_que_los_pasos_nombran_existen(self):
-        for nombre in ("verification.ipynb", "Benchmark_Search_v1.ipynb",
-                       "Benchmark_Report_v1.ipynb", "Benchmark_Latent_v1.ipynb"):
-            with self.subTest(cuaderno=nombre):
-                self.assertTrue((steps.CUADERNOS / nombre).is_file(),
-                                f"{steps.CUADERNOS / nombre} no existe")
+    def test_la_campana_corre_su_cuaderno_en_vez_de_computar_en_su_lugar(self):
+        """El defecto que el ensayo existe para no tener.
 
-    def test_la_campana_no_se_ofrece_como_paso_local(self):
-        """La ausencia es la decisión, no un olvido.
+        `campana` llamaba a `harness.campaign()` directamente, así que el
+        cuaderno que se envía --- el único de este árbol que se envía --- era el
+        único que el ensayo nunca ejercitaba: `Benchmark_Campaign_v1.ipynb`
+        llegó a tener cero celdas ejecutadas mientras el paso reportaba
+        `returned`. Un ensayo que computa por su cuenta prueba la biblioteca y
+        deja sin probar el artefacto.
 
-        `Benchmark_Campaign_v1.ipynb` lanza al servicio remoto. Un paso local
-        que lo corriera saltearía la aprobación humana por envío, que es la
-        única precondición que un llamador no puede satisfacer por su cuenta.
-        Sin esta afirmacion la omisión se lee como un descuido y alguien la
-        "completa".
+        Las dos mitades se afirman por separado porque cada una puede volver
+        sola: que corra el cuaderno, y que no vuelva a computar al lado de él.
+        Ninguna de las dos se lee de la otra --- un paso que hiciera las dos
+        cosas correría la campaña dos veces y reportaría `returned`.
+
+        La biblioteca no se toca y este test no la vigila: la celda 7 del
+        cuaderno llama a `harness.campaign()`, así que borrarla rompería lo que
+        se quiere correr.
+
+        Rojo alcanzable: devolver `harness.campaign(...)` al cuerpo del paso,
+        apuntarlo a otro cuaderno, o sacarle el `_ejecutar`.
         """
-        self.assertTrue((steps.CUADERNOS / "Benchmark_Campaign_v1.ipynb").is_file(),
-                        "el cuaderno de campaña no está: esta prueba no probaría nada")
-        self.assertNotIn("Benchmark_Campaign_v1.ipynb",
-                         _cuadernos_nombrados_por_los_pasos())
+        import ast
+
+        entrada = paquete.__steps__["campaign-local"]
+        self.assertEqual(entrada["function"], "campana")
+        self.assertEqual(
+            _cuadernos_nombrados_por_los_pasos().get("Benchmark_Campaign_v1.ipynb"),
+            "campana", "la campaña no corre su propio cuaderno")
+
+        fuente = Path(steps.__file__).read_text(encoding="utf-8")
+        (definicion,) = [nodo for nodo in ast.parse(fuente).body
+                         if isinstance(nodo, ast.FunctionDef)
+                         and nodo.name == "campana"]
+        computa = [nodo for nodo in ast.walk(definicion)
+                   if isinstance(nodo, ast.Call)
+                   and isinstance(nodo.func, ast.Attribute)
+                   and nodo.func.attr in ("campaign", "run_search",
+                                          "search_ceilings", "run_one")]
+        self.assertEqual(computa, [],
+                         "la campaña computa al lado del cuaderno que corre")
+
+    def test_la_busqueda_de_ensayo_no_tiene_cuaderno_y_su_informe_tiene_un_solo_dueno(
+            self):
+        """Por qué `ensayo_de_busqueda` se queda en biblioteca, medido.
+
+        Es el único paso que computa sin correr un cuaderno, y la razón no es
+        que falte uno: `Benchmark_Search_v1.ipynb` es el INFORME de la búsqueda
+        y ya lo corre `informe_de_busqueda`. Apuntar los dos pasos al mismo
+        cuaderno le daría dos dueños a una raíz declarada, que es exactamente lo
+        que `test_ninguna_raiz_es_de_dos_pasos` prohíbe --- y descomentar la
+        llamada de su celda 7 es la misma cosa por dentro, con el agregado de
+        que abrir el informe costaría lo que cuesta correrlo.
+
+        Las tres mitades: la llamada vive en el paso, el cuaderno de la búsqueda
+        tiene un dueño y es el informe, y la celda que corre la búsqueda adentro
+        del informe sigue comentada.
+
+        Rojo alcanzable: descomentar `harness.run_search(pilot=True)` en la
+        celda 7 del informe, o apuntar `ensayo_de_busqueda` a ese cuaderno.
+        """
+        import ast
+
+        fuente = Path(steps.__file__).read_text(encoding="utf-8")
+        (definicion,) = [nodo for nodo in ast.parse(fuente).body
+                         if isinstance(nodo, ast.FunctionDef)
+                         and nodo.name == "ensayo_de_busqueda"]
+        llamadas = {nodo.func.attr for nodo in ast.walk(definicion)
+                    if isinstance(nodo, ast.Call)
+                    and isinstance(nodo.func, ast.Attribute)}
+        self.assertIn("run_search", llamadas,
+                      "el ensayo de la búsqueda dejó de correr la búsqueda")
+
+        corridos = _cuadernos_nombrados_por_los_pasos()
+        self.assertEqual(corridos.get("Benchmark_Search_v1.ipynb"),
+                         "informe_de_busqueda",
+                         "el cuaderno de la búsqueda es su informe y de nadie más")
+
+        celdas = _celdas_de_codigo("Benchmark_Search_v1.ipynb")
+        (celda,) = [c for c in celdas if "run_search" in c]
+        for linea in celda.splitlines():
+            if "run_search" in linea:
+                self.assertTrue(linea.lstrip().startswith("#"),
+                                "el informe de la búsqueda corre la búsqueda: "
+                                "abrirlo cuesta lo que cuesta correrla")
+
+    def test_el_cuaderno_de_campana_deriva_su_escala_en_vez_de_escribir_en_la_completa(
+            self):
+        """Dónde escribe el cuaderno lo decide la escala, y una sola expresión.
+
+        `Reduction.pilot` decide el árbol y `EPOCHS`/`SEEDS` deciden la escala,
+        y hasta acá nada unía las dos: el cuaderno construía su reducción sin
+        `pilot`, o sea `False`, así que una corrida de tres épocas y una semilla
+        escribía en `Results/Benchmark/` --- el árbol de la corrida completa ---
+        y sus números quedaban ahí para que alguien los citara. Es la falla que
+        la docstring del propio campo nombra.
+
+        Las dos mitades: el cuaderno pasa `pilot=` derivado de
+        `config.is_pilot_scale()`, y el paso se niega cuando esa lectura dice
+        que la escala es la completa, porque sus `produces` nombran el árbol de
+        ensayo y ninguno más.
+
+        Rojo alcanzable: sacarle el `pilot=` a la `Reduction` del cuaderno,
+        escribir la regla a mano en vez de leerla, o sacarle la guarda al paso.
+        """
+        import ast
+
+        celdas = "\n".join(_celdas_de_codigo("Benchmark_Campaign_v1.ipynb"))
+        arbol = ast.parse(celdas)
+        reducciones = [nodo for nodo in ast.walk(arbol)
+                       if isinstance(nodo, ast.Call)
+                       and isinstance(nodo.func, ast.Attribute)
+                       and nodo.func.attr == "Reduction"]
+        self.assertTrue(reducciones, "el cuaderno de campaña no arma reducción")
+        for llamada in reducciones:
+            with self.subTest(linea=llamada.lineno):
+                nombres = {k.arg for k in llamada.keywords}
+                self.assertIn("pilot", nombres,
+                              "la reducción no dice a qué escala escribe")
+
+        # y el nombre que pasa sale de la única lectura de la regla
+        asignado = [nodo for nodo in ast.walk(arbol)
+                    if isinstance(nodo, ast.Assign)
+                    and any(isinstance(t, ast.Name) and t.id == "ES_ENSAYO"
+                            for t in nodo.targets)]
+        self.assertTrue(asignado, "el cuaderno no deriva su escala")
+        for nodo in asignado:
+            with self.subTest(linea=nodo.lineno):
+                self.assertIn("is_pilot_scale", ast.dump(nodo.value),
+                              "la escala se escribió a mano en vez de leerse")
+
+        # la guarda del paso, sobre la misma lectura
+        fuente = Path(steps.__file__).read_text(encoding="utf-8")
+        (definicion,) = [nodo for nodo in ast.parse(fuente).body
+                         if isinstance(nodo, ast.FunctionDef)
+                         and nodo.name == "campana"]
+        self.assertIn("is_pilot_scale", ast.dump(definicion),
+                      "el paso no se niega a escala completa")
 
     def test_todo_cuaderno_del_arbol_lo_corre_un_paso_o_dice_por_que_no(self):
         """El defecto no es un cuaderno sin paso: es que nada lo note.
@@ -211,11 +329,18 @@ class RaicesDeclaradasTests(unittest.TestCase):
         --- que es la única forma de que un literal en `__init__.py` siga
         siendo verdad.
 
-        La escala es específica a propósito: los cuatro pasos que computan
-        fijan `pilot=True` en su código y declaran sólo el árbol de ensayo,
-        mientras que los cuadernos, que dibujan sobre la corrida vigente,
-        declaran las dos escalas. No hay una raíz que cubra las dos sin cubrir
-        también el árbol de todos los demás pasos.
+        La escala es específica a propósito: los cuatro pasos que corren a
+        escala de ensayo declaran sólo ese árbol, mientras que los cuadernos del
+        veredicto, que dibujan sobre la corrida vigente, declaran las dos
+        escalas. No hay una raíz que cubra las dos sin cubrir también el árbol
+        de todos los demás pasos.
+
+        `campaign-local` lleva además su cuaderno, porque lo corre `--inplace`.
+        No está escrito acá tampoco: sale del árbol de `steps.py`, igual que
+        todo el resto. Lo que se afirma es la POSICIÓN y que no sobre ninguna
+        otra raíz --- que el cuaderno esté declarado ya lo dice
+        `test_el_cuaderno_que_corre_cada_paso_esta_entre_sus_raices`, y las dos
+        cosas se rompen por separado.
 
         Rojo alcanzable: declarar la raíz completa donde el paso escribe la de
         ensayo, o al revés.
@@ -224,6 +349,11 @@ class RaicesDeclaradasTests(unittest.TestCase):
 
         def relativa(ruta) -> str:
             return ruta.relative_to(config.PRODUCT).as_posix()
+
+        def cuaderno_de(funcion: str) -> str:
+            (nombre,) = [c for c, f in _cuadernos_nombrados_por_los_pasos().items()
+                         if f == funcion]
+            return f"Notebooks/{nombre}"
 
         rho = config.NOISE_REPORTED
         ensayo = config.results_for(0.0, "campaign", True)
@@ -235,7 +365,8 @@ class RaicesDeclaradasTests(unittest.TestCase):
                                f"{relativa(ensayo)}/summary.json",
                                f"{relativa(ensayo)}/shard.json",
                                f"{relativa(ensayo.parent)}/Probe_results.json",
-                               relativa(config.models_for(0.0, "campaign", True))],
+                               relativa(config.models_for(0.0, "campaign", True)),
+                               cuaderno_de("campana")],
             "noise-sweep": [relativa(curva),
                             relativa(config.models_for(0.0, "curve", True).parent)],
             "noise-diagnostic": [
@@ -287,6 +418,22 @@ def _contiene(raiz: str, otra: str) -> bool:
     """
     partes, otras = Path(raiz).parts, Path(otra).parts
     return otras[:len(partes)] == partes
+
+
+def _celdas_de_codigo(cuaderno: str) -> list[str]:
+    """Las celdas de código de un cuaderno, como texto.
+
+    Un cuaderno es JSON, así que leer su archivo con `rg` o buscarle una
+    subcadena al texto crudo mezcla el código con las salidas guardadas y con el
+    escape de cada línea. Acá se abre como lo que es y se devuelve sólo lo que
+    se ejecuta.
+    """
+    import json
+
+    documento = json.loads(
+        (steps.CUADERNOS / cuaderno).read_text(encoding="utf-8"))
+    return ["".join(celda["source"]) for celda in documento["cells"]
+            if celda["cell_type"] == "code"]
 
 
 def _cuadernos_nombrados_por_los_pasos() -> dict[str, str]:

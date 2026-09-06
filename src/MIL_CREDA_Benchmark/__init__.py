@@ -445,10 +445,6 @@ __records__: dict = {
 # `__levels__`: declararlos no vuelve "declarado" un repositorio que todavía no
 # lo está.
 #
-# `Benchmark_Campaign_v1.ipynb` NO está acá, y la ausencia es la decisión: ese
-# cuaderno lanza al servicio remoto, y un lanzamiento remoto no se ejecuta sin
-# una aprobación humana por envío. Un paso local que lo corriera sería
-# exactamente la vuelta que esa aprobación existe para impedir.
 # `produces`: las raíces que cada paso escribe, relativas a la carpeta de
 # producto. La forja fotografía el producto antes de lanzar el paso y después
 # de que reporta, y contrasta lo que cambió contra estas raíces. Sin ellas las
@@ -507,7 +503,11 @@ __steps__: dict = {
                      "function": "ensayo_de_busqueda",
                      "advances": 2,
                      "produces": ["Results/Benchmark/ceilings.pilot.json"]},
-    # `harness.campaign()` con `pilot=True` y `kind="campaign"`:
+    # Corre `Benchmark_Campaign_v1.ipynb`, que es el cuaderno que se envía, y no
+    # computa en su lugar. Su celda 7 llama a `harness.campaign()` con
+    # `kind="campaign"` y con el `pilot` que la celda 2 deriva de
+    # `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
+    # ensayo, así que estas raíces son las de ensayo y no pueden ser otras.
     # `shard_paths(None, pilot=True)` da `runs.jsonl` y `shard.json` bajo
     # `results_for(0.0, "campaign", True)`, al lado va `summary.json`, y
     # `Probe_results.json` sale un directorio más arriba
@@ -517,6 +517,7 @@ __steps__: dict = {
     # campaña --- que no lo escribe --- se leyera como suyo.
     # Los pesos sí son un directorio: `keep_median` los nombra por brazo,
     # transferencia y semilla, y `keeps_checkpoints(0.0)` es verdadero.
+    # Y el cuaderno mismo, que se ejecuta `--inplace`.
     "campaign-local": {"module": "MIL_CREDA_Benchmark.steps",
                        "function": "campana",
                      "advances": 4,
@@ -524,7 +525,8 @@ __steps__: dict = {
                                   "Results/Pilot/Benchmark/summary.json",
                                   "Results/Pilot/Benchmark/shard.json",
                                   "Results/Pilot/Probe_results.json",
-                                  "Models/Pilot/Benchmark"]},
+                                  "Models/Pilot/Benchmark",
+                                  "Notebooks/Benchmark_Campaign_v1.ipynb"]},
     # Sólo lee y presenta --- la llamada que corre la búsqueda está comentada
     # adentro del cuaderno --- y aun así escribe: se ejecuta `--inplace`, así
     # que su propio cuaderno es su raíz y la única.
@@ -573,12 +575,13 @@ __steps__: dict = {
     # diferencia de la campaña contaminada, que es un envío y necesita su propia
     # autorización por lanzamiento.
     #
-    # Ninguna de las cuatro lleva `advances`, y la ausencia es la misma decisión
-    # en las cuatro: el eje del ruido no es un peldaño de la secuencia del
-    # ensayo sino un ejercicio al costado, y numerarlo lo metería en un orden que
-    # el veredicto no recorre. `noise-diagnostic-report` hereda esa decisión de
-    # su eje, no de su forma: `report` y `latent` también sólo dibujan y sí
-    # avanzan, porque los suyos son los cuadernos del veredicto.
+    # Ninguna de las cuatro lleva `advances`. La razón que estaba escrita acá
+    # --- que el eje del ruido es «un ejercicio al costado» y no un peldaño del
+    # ensayo --- la inventó quien escribió el comentario, y no es la del dueño
+    # del repositorio, que sitúa al eje en el medio del recorrido. Queda el
+    # hecho, sin una segunda conjetura encima: hoy estos cuatro pasos no están
+    # numerados, y qué lugar les toca en la secuencia es una decisión que no se
+    # tomó todavía.
     # Una campaña por nivel, todas con `kind="curve"` y `pilot=True`: el
     # directorio `curve/` de `results_for` cubre los cinco `rho*` y el
     # `Probe_results.json` que `campaign()` deja en su padre. Los pesos también
