@@ -1081,10 +1081,15 @@ def test_the_scratch_file_is_not_the_finished_record(tmp_path, monkeypatch) -> N
     from MIL_CREDA_Benchmark import harness
 
     monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    # El de ensayo también, y no por prolijidad: sin esto el `search_record`
+    # de abajo caía sobre el registro de ensayo REAL del disco de quien corre
+    # la suite, así que el verde dependía de qué hubiera corrido esa persona.
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD",
+                        tmp_path / "ceilings.pilot.json")
     harness._write_partial("creda", "D", {(0, "M->U"): {1e-4: 0.5}}, 1.0,
                            lambda *a: None)
     assert not config.CEILINGS_RECORD.exists()
-    assert harness.search_record() is None
+    assert harness.search_record(pilot=False) is None
 
 
 def test_a_resumed_ceiling_the_grid_no_longer_has_refuses_by_name(

@@ -886,6 +886,50 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
 }
 
 
+#: --------------------------------------------- las lecturas que llevan escala
+#:
+#: Un DESTINO es donde una corrida escribe; una LECTURA es de qué corrida se
+#: leen los números que después alguien mira. Son la misma coordenada y dos
+#: defectos distintos, y este repositorio ya tenía cerrado el primero mientras
+#: el segundo seguía abierto: el informe del ensayo llamaba a
+#: `harness.search_record()` sin coordenada, leía el registro de la corrida
+#: COMPLETA ---que no existía, porque lo que corrió fue un ensayo--- y 23
+#: renglones de «no hay búsqueda» salían sobre una búsqueda que sí había
+#: corrido. El cuaderno latente hacía lo mismo con los pesos y dibujaba la
+#: grilla entera apagada.
+#:
+#: La regla es UNA y se deriva de la firma, no de una lista:
+#:
+#:   * si la omisión de `pilot` ya significa **el que rige** ---la corrida
+#:     completa si existe, el ensayo si no, que es `pilot: bool | None = None`---
+#:     entonces una llamada pelada es correcta y es la forma que se prefiere
+#:     para todo lo que se muestra. `contamination.level_dir` y
+#:     `harness.search_record` la tienen.
+#:   * si la omisión significa **la corrida completa** ---`pilot: bool = False`,
+#:     que es lo correcto para lo que GOBIERNA--- entonces cada llamada tiene
+#:     que decir la escala. `campaign` pide `pilot=False` por su nombre porque
+#:     exige `atRequiredScale` sobre ese archivo, y aceptar ahí el del ensayo
+#:     dejaría que los techos de un ensayo gobernaran una campaña real: mucho
+#:     peor que el defecto que esta regla arregla.
+#:
+#: `tests/test_scale_readings.py` recorre el paquete, `tools/` y las celdas de
+#: los cuadernos, resuelve cada llamada contra la firma viva, y lo que quede
+#: suelto tiene que ser exactamente lo de abajo.
+#:
+#: La clave es el archivo y la expresión tal como la escribe `ast.unparse`,
+#: igual que en `DESTINOS_SIN_COORDENADA` y por el mismo motivo: un nombre
+#: pelado en una lista y un olvido se leen igual.
+LECTURAS_SIN_COORDENADA: dict[str, str] = {
+    "harness.py: _partial_path()": (
+        "es el valor por omisión de un ayudante privado que nadie llama así: "
+        "`_read_partial` y `_write_partial` lo escriben como `path or "
+        "_partial_path()` y sus dos únicos llamadores ---la búsqueda, en dos "
+        "lugares--- pasan siempre el parcial ya resuelto por `shard_paths` con "
+        "las tres coordenadas de la reducción. Darle escala acá sería una "
+        "segunda fuente para un archivo que ya viene decidido"),
+}
+
+
 CEILINGS.update(ceilings_on_record())
 CEILINGS_BY_TRANSFER.update(ceilings_by_transfer_on_record())
 

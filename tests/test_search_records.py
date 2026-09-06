@@ -94,12 +94,35 @@ def test_el_parcial_del_ensayo_es_su_propio_archivo(registros):
 
 
 def test_search_record_lee_el_registro_que_se_le_pide(registros):
+    """Cada escala pedida por su nombre lee su propio archivo y ningún otro.
+
+    `pilot=False` es la lectura que gobierna y tiene que seguir siendo ciega al
+    ensayo: es lo que hace admisible que la omisión se repliegue.
+    """
     lleno, ensayo = registros
     _escribir(ensayo, config.PILOT_SEARCH_EPOCHS, 1)
     assert harness.search_record(pilot=True) is not None
-    assert harness.search_record() is None
+    assert harness.search_record(pilot=False) is None
     _escribir(lleno, config.SEARCH_EPOCHS, 3)
-    assert harness.search_record() is not None
+    assert harness.search_record(pilot=False) is not None
+
+
+def test_search_record_sin_coordenada_lee_el_vigente(registros):
+    """La omisión significa «el que rige»: completo si existe, ensayo si no.
+
+    El polo que importa es el primero. Con la omisión leyendo sólo el árbol
+    completo, un informe de ensayo recibía `None` con el registro del ensayo en
+    disco, y 23 renglones de «no hay búsqueda» salían sobre una búsqueda que sí
+    había corrido. El segundo polo es igual de necesario: si el repliegue
+    ganara siempre, un ensayo desplazaría a una medición.
+    """
+    lleno, ensayo = registros
+    assert harness.search_record() is None
+    _escribir(ensayo, config.PILOT_SEARCH_EPOCHS, 1)
+    assert harness.search_record() == harness.search_record(pilot=True)
+    _escribir(lleno, config.SEARCH_EPOCHS, 3)
+    assert harness.search_record() == harness.search_record(pilot=False)
+    assert harness.search_record() != harness.search_record(pilot=True)
 
 
 def test_el_destino_sale_de_un_solo_lugar_y_lo_usan_los_tres(registros):
