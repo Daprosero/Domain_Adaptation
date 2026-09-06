@@ -295,6 +295,110 @@ CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
 }
 
 
+class OrdinalesDelRecorridoTests(unittest.TestCase):
+    """El orden del recorrido, declarado en `advances`, y lo que tiene que cumplir.
+
+    Un paso sin ordinal corre sin puerta y la forja lo dice así: queda AFUERA
+    del recorrido ordenado. Cuatro de los diez estaban afuera --- todo el eje del
+    ruido --- y el lugar que les toca no era una decisión libre: el barrido y su
+    informe van entre la búsqueda y la campaña, y el diagnóstico y el suyo al
+    final.
+
+    Las dos afirmaciones de abajo son distintas y ninguna se lee de la otra. Que
+    los diez tengan ordinal no dice nada sobre el orden, y un orden que respete
+    la cadena puede tener un hueco o un empate.
+    """
+
+    #: El ordinal de cada paso, leído de la declaración y nunca escrito acá: una
+    #: copia y el original se pueden desalinear, y entonces este test afirmaría
+    #: que dos listas de este archivo coinciden entre sí.
+    def _ordinales(self) -> dict[str, int]:
+        return {nombre: entrada.get("advances")
+                for nombre, entrada in paquete.__steps__.items()}
+
+    def test_los_diez_pasos_llevan_ordinal_y_son_uno_a_diez_sin_repetir(self):
+        """Diez pasos, diez cuadernos, diez ordinales.
+
+        Rojo alcanzable: sacarle el `advances` a cualquiera de los cuatro del
+        eje del ruido, o darle a dos pasos el mismo número.
+        """
+        ordinales = self._ordinales()
+        sin_ordinal = sorted(n for n, o in ordinales.items()
+                             if not isinstance(o, int) or isinstance(o, bool))
+        self.assertEqual(sin_ordinal, [],
+                         "un paso sin ordinal queda fuera del recorrido ordenado")
+        self.assertEqual(sorted(ordinales.values()),
+                         list(range(1, len(paquete.__steps__) + 1)),
+                         "los ordinales no son 1..N sin repetir")
+
+    def test_ningun_ordinal_pone_a_un_paso_delante_de_lo_que_lee(self):
+        """El orden se contrasta contra la cadena DERIVADA y no contra una lista.
+
+        `steps.predecesores` sale de `reads` y `produces`; nadie nombra a nadie.
+        Un ordinal que dejara a un paso corriendo antes de lo que lee es peor
+        que no tener ordinal: sin ordinal el paso corre sin puerta y se ve; con
+        el ordinal equivocado la puerta lo deja pasar y afirma que estaba en su
+        lugar.
+
+        Rojo alcanzable: intercambiar los ordinales de `noise-sweep` y
+        `noise-report`, o bajar `report` por debajo de `campaign-local`.
+        """
+        ordinales = self._ordinales()
+        for nombre in paquete.__steps__:
+            for predecesor in steps.predecesores(nombre):
+                with self.subTest(paso=nombre, predecesor=predecesor):
+                    self.assertLess(
+                        ordinales[predecesor], ordinales[nombre],
+                        f"{nombre} corre en el puesto {ordinales[nombre]} y lee "
+                        f"lo que produce {predecesor}, que corre en el "
+                        f"{ordinales[predecesor]}")
+
+    def test_cada_ordinal_cae_en_el_item_que_atestigua_el_cuaderno_de_ese_paso(self):
+        """Las dos mitades del recorrido dicen lo mismo.
+
+        `advances` no es un número suelto: nombra el ítem de la secuencia de
+        posición para el que ese paso produce evidencia, y la forja hace ese
+        join (`_pilot_notebooks`). Declarar el ordinal de un lado y no moverlo
+        del otro deja a un paso produciendo evidencia para el ítem de otro, sin
+        que nada se ponga rojo.
+
+        Sólo los ítems que atestiguan un CUADERNO entran: el del registro de
+        techos y el del shard atestiguan otra cosa, y exigirles un cuaderno
+        sería pedirle a este join algo que no afirma.
+
+        Rojo alcanzable: renumerar `advances` sin volver a correr `position`, o
+        insertar un ítem en la secuencia sin renumerar `advances`.
+        """
+        secuencia = _secuencia_de_posicion()
+        self.assertEqual(len(secuencia), len(paquete.__steps__),
+                         "la secuencia y los pasos declarados ya no son tantos")
+        for nombre, entrada in paquete.__steps__.items():
+            testigo = secuencia[entrada["advances"]]
+            if not testigo.endswith(".ipynb"):
+                continue
+            with self.subTest(paso=nombre):
+                self.assertEqual(Path(testigo).name, steps.cuaderno_de(nombre))
+
+
+def _secuencia_de_posicion() -> dict[int, str]:
+    """`{ordinal: operando del testigo}`, leído del bloque que `position` escribe.
+
+    Del archivo y no de una copia: `AGREED.md` es lo que un humano lee y lo que
+    la forja mide, así que es la mitad que tiene que coincidir con `advances`.
+    """
+    import re
+
+    texto = (_RAIZ / "MIL-CREDA" / "AGREED.md").read_text(encoding="utf-8")
+    bloque = texto.split("<!-- position ")[1].split("<!-- /position -->")[0]
+    encontrados = {}
+    for linea in bloque.splitlines():
+        hallazgo = re.match(r"^- \[.\] (\d+)\. .* `@\w+(?::level)? (.+)`$", linea)
+        if hallazgo:
+            encontrados[int(hallazgo.group(1))] = hallazgo.group(2)
+    assert encontrados, "no se leyó ningún ítem del bloque de posición"
+    return encontrados
+
+
 class ReferenciasACuadernosTests(unittest.TestCase):
     """Todo `.ipynb` que este repositorio se nombra a sí mismo está en el árbol.
 
