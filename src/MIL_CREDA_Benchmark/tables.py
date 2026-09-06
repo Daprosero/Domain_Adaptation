@@ -264,6 +264,11 @@ def objective(key: str, markdown: bool = True) -> str:
             "**Buscamos que los dos dominios se mezclen dentro de cada clase y que "
             "las clases sigan separadas entre sí.** Mezclar todo también junta los "
             "dominios, y eso no es alinear sino colapsar.",
+        "grid.contaminated":
+            "**Buscamos que sobreviva la misma estructura que en la mitad limpia**: "
+            "los dominios mezclados dentro de cada clase y las clases separadas "
+            "entre sí. Lo que se lee es cuánto se degrada, y si se degrada menos "
+            "donde el término local está declarado.",
         "gains":
             f"**Buscamos que la fuente no caiga y que el destino suba**, las dos "
             f"contra el propio piso del método —el mismo brazo con la adaptación "
