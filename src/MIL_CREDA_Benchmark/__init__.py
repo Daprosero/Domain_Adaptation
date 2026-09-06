@@ -560,12 +560,12 @@ __steps__: dict = {
                      "produces": ["Results/Benchmark/ceilings.pilot.json",
                                   "Notebooks/Benchmark_Ceiling_Search_v1.ipynb"]},
     # Corre `Benchmark_Campaign_v1.ipynb`, que es el cuaderno que se envía, y no
-    # computa en su lugar. Su celda 7 llama a `harness.campaign()` con
-    # `kind="campaign"` y con el `pilot` que la celda 2 deriva de
+    # computa en su lugar. Su celda 8 llama a `harness.campaign()` con
+    # `kind="campaign"` y con el `pilot` que la celda 3 deriva de
     # `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
     # ensayo, así que estas raíces son las de ensayo y no pueden ser otras.
     #
-    # **Dos pasadas y por eso dos árboles.** La celda 7 recorre `NIVELES`, que es
+    # **Dos pasadas y por eso dos árboles.** La celda 8 recorre `NIVELES`, que es
     # `(config.NOISE, config.NOISE_REPORTED)`: la campaña es cada transferencia a
     # UNA tasa, así que el nivel contaminado es una segunda pasada de la misma
     # forma y no un paso nuevo. La limpia cae en `results_for(0.0, "campaign",

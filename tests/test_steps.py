@@ -52,7 +52,7 @@ class PasosDeclaradosTests(unittest.TestCase):
         Ninguna de las dos se lee de la otra --- un paso que hiciera las dos
         cosas correría la campaña dos veces y reportaría `returned`.
 
-        La biblioteca no se toca y este test no la vigila: la celda 7 del
+        La biblioteca no se toca y este test no la vigila: la celda 8 del
         cuaderno llama a `harness.campaign()`, así que borrarla rompería lo que
         se quiere correr.
 
@@ -613,20 +613,36 @@ def _celdas_de_codigo(cuaderno: str) -> list[str]:
             if celda["cell_type"] == "code"]
 
 
-def _correr_las_celdas(cuaderno: str, ambito: dict | None = None) -> dict:
-    """Ejecuta las celdas de código de un cuaderno menos la de arranque.
+#: Lo que marca a las celdas de arranque, que son DOS: la que la forja es dueña
+#: ---resuelve la raíz contra `Path.cwd()`, que adentro de la suite es la raíz
+#: del repositorio y no la carpeta del cuaderno--- y la que le sigue, que
+#: manosea `sys.path`. Adentro de la suite el paquete ya está importado, así que
+#: ninguna de las dos hace falta y las dos hacen daño.
+_ARRANQUE = ("resolve_repository_root", "sys.path.insert")
 
-    Ésa busca el repositorio en el disco y manosea `sys.path`, y adentro de la
-    suite el paquete ya está importado. Cuál es se deriva de su contenido y no
-    de un índice --- una celda que se agregue arriba correría el índice y
-    dejaría este helper saltándose otra cosa.
+
+def _correr_las_celdas(cuaderno: str, ambito: dict | None = None) -> dict:
+    """Ejecuta las celdas de código de un cuaderno menos las de arranque.
+
+    Cuáles son se deriva de su contenido y no de un índice --- una celda que se
+    agregue arriba correría el índice y dejaría este helper saltándose otra
+    cosa --- y se EXIGE que cada marca aparezca: una marca que ya no está en
+    ningún cuaderno filtra cero celdas y se lee exactamente igual que un filtro
+    que anda.
 
     Las celdas se compilan juntas y no de a una: un cuaderno es un solo
     programa, y ejecutar la tercera sin la segunda probaría algo que nadie va a
     correr nunca.
     """
     ambito = {} if ambito is None else ambito
-    celdas = [c for c in _celdas_de_codigo(cuaderno) if "find_repository" not in c]
+    fuentes = _celdas_de_codigo(cuaderno)
+    celdas = [c for c in fuentes if not any(m in c for m in _ARRANQUE)]
+    faltan = [m for m in _ARRANQUE if not any(m in c for c in fuentes)]
+    assert not faltan, (
+        f"{cuaderno} ya no tiene ninguna celda con {faltan}, así que este filtro "
+        "dejó de sacar la de arranque y la corre igual. Pasó: la marca era "
+        "`find_repository`, los cuadernos adoptaron la celda de la forja, "
+        "ninguna la definía más, el filtro no sacó nada y la suite siguió verde")
     exec(compile("\n".join(celdas), f"<{cuaderno}>", "exec"), ambito)
     return ambito
 
@@ -1277,7 +1293,7 @@ def test_el_ensayo_remoto_de_la_campana_corre_bajo_los_techos_de_la_busqueda_com
     La ESCRITURA no se mueve: el ensayo remoto corre a escala reducida y archiva
     donde archiva un ensayo, que es lo que lo hace un ensayo y no una corrida.
 
-    Rojo alcanzable: leer los techos con `reduction.pilot` en la celda 5, o hacer
+    Rojo alcanzable: leer los techos con `reduction.pilot` en la celda 6, o hacer
     que `upstream_pilot_scale()` conteste lo mismo en los dos modos.
     """
     from MIL_CREDA_Benchmark import config
@@ -1319,7 +1335,7 @@ def test_el_ensayo_remoto_del_barrido_corre_bajo_los_techos_de_la_busqueda_compl
     que después corre bajo un registro que no le pidieron.
 
     Rojo alcanzable: dejar `pilot=ES_ENSAYO` en cualquiera de las tres lecturas
-    de la celda 3, o desacoplar la guarda de la lectura.
+    de la celda 4, o desacoplar la guarda de la lectura.
     """
     from MIL_CREDA_Benchmark import config
 
@@ -1357,7 +1373,7 @@ def test_el_ensayo_remoto_del_diagnostico_lee_la_linea_limpia_del_barrido_comple
     `cleanCeilingRun` no es nulo la pasa un diagnóstico que se llevó la línea del
     barrido de ensayo.
 
-    Rojo alcanzable: volver a `pilot=reduccion.pilot` en la celda 7.
+    Rojo alcanzable: volver a `pilot=reduccion.pilot` en la celda 8.
     """
     from MIL_CREDA_Benchmark import config, contamination, harness
 
@@ -1657,7 +1673,7 @@ def _correr_las_celdas_de_la_campana(monkeypatch, tmp_path) -> dict:
     from MIL_CREDA_Benchmark import bags, config, harness
 
     _sin_maquina(monkeypatch, tmp_path)
-    # `_sin_maquina` deja un ambiente de una sola clave y la celda 2 lo imprime
+    # `_sin_maquina` deja un ambiente de una sola clave y la celda 3 lo imprime
     # por campo, así que acá lleva los tres campos que esa celda nombra.
     monkeypatch.setattr(harness, "environment", lambda: {
         "platform": "stub", "torch": "stub", "selfHosted": False})
@@ -1761,7 +1777,7 @@ def test_la_campana_corre_las_dos_pasadas_y_la_segunda_es_la_contaminada(
     último tramo la campaña podría escribir donde nadie la vigila y la forja lo
     leería como `foreign`.
 
-    Rojo alcanzable: sacarle el bucle a la celda 7, poner `(config.NOISE,
+    Rojo alcanzable: sacarle el bucle a la celda 8, poner `(config.NOISE,
     config.NOISE)` en `NIVELES`, componer la raíz desde la constante en vez de
     desde la reducción de la pasada, o sacarle las raíces contaminadas a
     `produces`.
