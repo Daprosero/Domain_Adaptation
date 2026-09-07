@@ -1,6 +1,6 @@
 {
   "shard": null,
-  "env": "7c284fdfafc7",
+  "env": "4bef9265ee57",
   "environment": {
     "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
     "python": "3.12.13",
@@ -8,7 +8,7 @@
     "torch": "2.13.0",
     "selfHosted": true,
     "power": {
-      "source": "mains",
+      "source": "battery",
       "charge": 100
     },
     "device": {
@@ -47,9 +47,9 @@
     }
   },
   "evidence": {
-    "codeDigest": "9b86a90c580a1686ae3f030217dd2215eade4841abb8a790430f003920384e8d",
+    "codeDigest": "7b4ca5351789345e87a0e1c3e42b96a44eff9dbda150c94c211bc852fa7544d5",
     "importsFrom": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark",
-    "commit": "c6c97433b1d4851bc7fc2e4dfbe111161815d438",
+    "commit": "9ba89334b5487d55a9837053987dc05285a0d1df",
     "outputs": [
       "runs.jsonl",
       "shard.json",
