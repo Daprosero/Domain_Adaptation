@@ -606,6 +606,44 @@ def test_the_contaminated_correspondence_is_its_own_rendering() -> None:
             == tables.render_correspondence(scored, markdown=True))
 
 
+def test_the_ceiling_record_says_which_machine_measured_it() -> None:
+    """The ceiling record was the only record here without an environment stamp.
+
+    Every shard.json carries interpreter, platform, torch version and device.
+    The ceilings carried none of the four, and the ceiling is the scalar that
+    governs the whole campaign -- so with the full search running on a worker,
+    a later reader could not tell a record searched here from one searched
+    there, which is exactly the distinction the stamp preserves everywhere
+    else.
+
+    Per family and not once at the top, because the record is a flat
+    family -> entry map that every consumer iterates: a sibling key would be
+    read as a third family and printed as a row. It is also the right
+    granularity, since the two families' searches can be split across workers.
+    """
+    from MIL_CREDA_Benchmark import harness, tables
+
+    reduction = harness.Reduction(environment={
+        "interpreter": "/somewhere/.venv", "python": "3.12.13",
+        "platform": "linux-x86_64", "torch": "2.13.0", "selfHosted": False,
+        "power": {"source": "ac"}, "device": {"name": "T4", "kind": "cuda"}})
+    found = {"creda": {"ceiling": 1e-4}, "milcreda": {"ceiling": 1.0}}
+
+    stamped = harness.sellar_techos(found, reduction)
+
+    for family, entry in stamped.items():
+        assert entry["environment"] == reduction.environment, family
+        # The short handle too, so a reader can compare and group without
+        # carrying the whole stamp -- the same pair a run carries.
+        assert entry["env"] == harness.environment_key(reduction.environment)
+
+    # And the readers still see exactly two families: the stamp went inside the
+    # entries, so nothing new appears as a row.
+    rendered = tables.render_ceilings_by_transfer(stamped, ["M->U"], markdown=True)
+    assert rendered.count("`creda`") == 1 and rendered.count("`milcreda`") == 1
+    assert "environment" not in rendered
+
+
 # --------------------------------------------------------- run_smoke checkpoints
 
 def _fake_run_one(fake_state):
