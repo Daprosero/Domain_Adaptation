@@ -375,6 +375,23 @@ def _grid_per_run(runs: list[dict], dimensions: list[str]) -> dict:
     return dict(built)
 
 
+def per_run_grid(runs: list[dict], dimensions: list[str]) -> dict:
+    """The `gridPerRun` shape, for a caller that is not merging shards.
+
+    `merge` is not the only writer of a summary. A campaign that runs on one
+    machine assembles its own, and it needs this same shape or every `perRun`
+    section of the report has nothing to read --- which is what happened: the
+    runs were in `runs.jsonl` the whole time and the summary beside them
+    carried no `gridPerRun`, so the report's first section rendered a sentence
+    where its table belongs and nothing said so.
+
+    Public so that caller does not reach into a private name, and one function
+    rather than two, because two implementations of one shape are two that can
+    drift apart.
+    """
+    return _grid_per_run(runs, dimensions)
+
+
 def merge(shards: list[dict], expected: int | None = None,
           dimensions: dict | None = None, dist: dict | None = None) -> dict:
     """Three shapes, the shards that arrived, and a refusal when they disagree.

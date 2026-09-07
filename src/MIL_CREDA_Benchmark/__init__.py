@@ -79,6 +79,7 @@ __benchmark__ = {
             "tables.render_rungs",
             "tables.render_readings",
             "tables.render_correspondence",
+            "tables.render_correspondence_contaminated",
             # The ceiling search's whole grid, not only its winner. The scalar that
             # governs every table below is chosen here, so the report has to show
             # what it was chosen over: a ceiling that wins among four identical
