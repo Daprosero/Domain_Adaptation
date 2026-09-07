@@ -336,8 +336,8 @@
       "torch": "2.13.0",
       "selfHosted": true,
       "power": {
-        "source": "battery",
-        "charge": 97
+        "source": "mains",
+        "charge": 44
       },
       "device": {
         "name": "mps",
