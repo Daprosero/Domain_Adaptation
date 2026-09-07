@@ -996,6 +996,40 @@ def governs_the_ceilings_record(noise: float = 0.0,
     return chosen == [transfer_label(t) for t in config.SEARCH_TRANSFERS]
 
 
+def sellar_techos(found: dict, reduction: Reduction) -> dict:
+    """Dónde se midió el techo de cada familia, escrito adentro de su entrada.
+
+    El registro de techos era el único de este repositorio sin sello de entorno.
+    Cada `shard.json` lleva intérprete, plataforma, versión de torch y
+    dispositivo; los techos no llevaban ninguno de los cuatro, y con la búsqueda
+    completa corriendo en un worker eso significa que el escalar que gobierna
+    toda la campaña no diría en ningún lado en qué máquina se eligió. Un lector
+    posterior no podría distinguir un registro buscado acá de uno buscado allá,
+    que es exactamente la distinción que el sello existe para conservar en todos
+    los demás registros.
+
+    **Por familia y no una vez arriba**, por dos razones. El registro es un mapa
+    plano `familia -> entrada` y todo consumidor lo recorre así --- `for familia,
+    entrada in sorted(record.items())` en `tables` ---, de modo que una clave
+    hermana se leería como una tercera familia y saldría impresa como una fila.
+    Y además es la granularidad correcta: las búsquedas de las dos familias
+    pueden repartirse entre workers distintos, y entonces cada entrada dice dónde
+    se midió la suya en vez de heredar la de la otra.
+
+    Lleva el mango corto y el sello completo, igual que las corridas: el mango
+    para comparar y agrupar sin cargar el sello entero, el sello para que el
+    registro viaje solo. Una corrida puede permitirse referenciar un
+    `shard.json` de al lado porque viaja con él; este archivo vuelve del worker
+    por su cuenta.
+    """
+    stamp = reduction.environment or environment()
+    handle = environment_key(stamp)
+    for entry in found.values():
+        entry["env"] = handle
+        entry["environment"] = stamp
+    return found
+
+
 def search_ceilings_trials(reduction: Reduction, device: torch.device,
                            progress=print, shard: str | None = None,
                            pilot: bool = False, noise: float = 0.0,
@@ -1164,7 +1198,8 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
     if governs_the_ceilings_record(noise, transfers):
         record = config.ceilings_record_for(pilot)
         record.parent.mkdir(parents=True, exist_ok=True)
-        record.write_text(json.dumps(found, indent=2), encoding="utf-8")
+        record.write_text(json.dumps(sellar_techos(found, reduction), indent=2),
+                          encoding="utf-8")
     return found
 
 
@@ -1406,7 +1441,8 @@ def search_ceilings(reduction: Reduction, device: torch.device,
     if governs_the_ceilings_record(noise, transfers):
         record = config.ceilings_record_for(pilot)
         record.parent.mkdir(parents=True, exist_ok=True)
-        record.write_text(json.dumps(found, indent=2), encoding="utf-8")
+        record.write_text(json.dumps(sellar_techos(found, reduction), indent=2),
+                          encoding="utf-8")
     # The scratch file goes only once the answer exists. Leaving it would let a
     # later relaunch resume from cells that already produced a finished record.
     partial.unlink(missing_ok=True)
