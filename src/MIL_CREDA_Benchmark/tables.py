@@ -611,14 +611,29 @@ def conclusion_ceilings_by_transfer(record: dict | None,
             continue
         aparte = sorted(l for l, v in medidos.items() if v != entrada["ceiling"])
         heredan = len([l for l in transfers if l not in medidos])
+        # Las etiquetas nombran QUIÉN se aparta; el factor dice CUÁNTO, y es lo
+        # único de los dos que la tabla no muestra. Listar el techo de cada
+        # transferencia que se aparta sería la tabla otra vez en prosa: el
+        # lector ya la tiene arriba, y una conclusión que la repite dejó de
+        # concluir.
+        fuera = ""
+        if heredan:
+            cuantas = ("La restante corre" if heredan == 1
+                       else f"Las {heredan} restantes corren")
+            fuera = (f" {cuantas} al ganador agrupado, "
+                     f"{entrada['ceiling']:g}, fuera de muestra.")
         if aparte:
-            detalle = ", ".join(f"`{l}` a {medidos[l]:g}" for l in aparte)
+            etiquetas = ", ".join(f"`{l}`" for l in aparte)
+            valores = list(medidos.values())
+            factor = max(valores) / min(valores) if min(valores) > 0 else None
+            reparto = (f"Entre el techo más alto y el más bajo de la fila hay un "
+                       f"factor {factor:.1f}. " if factor else "")
             partes.append(
-                f"**{familia}**: {len(medidos)} medida(s), {heredan} heredada(s) a "
-                f"{entrada['ceiling']:g}, y {len(aparte)} de las medidas elige otro "
-                f"techo — {detalle}. Ahí la familia deja de correr a un coeficiente "
-                f"único, así que su promedio entre transferencias mezcla dos "
-                f"escalares; dentro de cada transferencia todos los brazos siguen "
+                f"**{familia}**: {len(medidos)} medida(s), {heredan} heredada(s), y "
+                f"{len(aparte)} de las medidas elige otro techo — {etiquetas}."
+                f"{fuera} {reparto}Ahí la familia deja de correr a un coeficiente "
+                f"único, así que su promedio entre transferencias mezcla escalares "
+                f"distintos; dentro de cada transferencia todos los brazos siguen "
                 f"compartiendo el techo, que es lo que mantiene atribuible cada "
                 f"peldaño.")
         else:
@@ -909,7 +924,9 @@ def render_per_run(grid_per_run: dict, metric: str, markdown: bool = False) -> s
                     "value": _scaled(reading["value"], metric),
                 })
     if not rows:
-        return "(sin corridas medidas)"
+        return ("Sin corridas por máquina para esta dimensión: el registro no "
+                "trae `gridPerRun`, que sólo lo escribe una campaña repartida "
+                "entre varias máquinas. No está vacía: no existe.")
 
     note = _notes_block([_PER_RUN_NOTE], markdown)
     columns = ["Método", "Transferencia", "Entorno", "Semilla", f"{title} ({unit})" if unit else title]
@@ -976,7 +993,9 @@ def render_per_run_summary(grid_per_run: dict, metric: str,
                     (config.NAME_OF.get(arm, arm), transfer, reading["env"]),
                     []).append(_scaled(reading["value"], metric))
     if not grouped:
-        return "(sin corridas medidas)"
+        return ("Sin corridas por máquina para esta dimensión: el registro no "
+                "trae `gridPerRun`, que sólo lo escribe una campaña repartida "
+                "entre varias máquinas. No está vacía: no existe.")
 
     rows = []
     for (arm, transfer, env), values in grouped.items():

@@ -1608,7 +1608,7 @@ def test_the_per_transfer_conclusion_can_come_out_different() -> None:
     And the two texts are not interchangeable prose: they are the two readings
     the family's average across transfers can be. Once a measured transfer picks
     a ceiling of its own the family stops running at one coefficient, so the row
-    averaged over transfers mixes two scalars -- and the report has to say that
+    averaged over transfers mixes scalars that differ -- and the report has to say that
     is what it is giving, rather than leaving the reader to assume the single
     coefficient that no longer exists. When none of them departs, separating the
     two readings changed no number at all, and saying so is more honest than a
@@ -1630,8 +1630,8 @@ def test_the_per_transfer_conclusion_can_come_out_different() -> None:
     assert "S->M" in said_differs and "S->M" not in said_agrees
 
     # which of the two readings the row is, named in the text and not inferred
-    assert "mezcla dos escalares" in said_differs
-    assert "mezcla dos escalares" not in said_agrees
+    assert "mezcla escalares distintos" in said_differs
+    assert "mezcla escalares distintos" not in said_agrees
     assert "no cambió ningún techo" in said_agrees
     assert "no cambió ningún techo" not in said_differs
 

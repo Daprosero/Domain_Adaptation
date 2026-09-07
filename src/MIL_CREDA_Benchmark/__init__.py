@@ -219,6 +219,21 @@ __benchmark__ = {
                             "en cinco puntos y el argmax entre cinco celdas lo "
                             "decide el ruido. Tres es el piso para que la "
                             "elección signifique algo",
+            "CEILING_RANGE": "los extremos de CEILING_GRID, que son los dos "
+                             "valores por defecto ya declarados: el "
+                             "`creda_lambda_special` publicado de CREDA abajo y "
+                             "el neutro de la Ec. (39) normalizada arriba. Lo "
+                             "que cambia al pasar de rejilla a rango es que "
+                             "adentro hay un continuo en vez de cinco puntos; "
+                             "los bordes no los eligió ninguna medición",
+            "CHECKPOINT_LEVELS": "los niveles cuyos pesos se conservan, y son "
+                                 "exactamente los que el cuaderno latente "
+                                 "dibuja: 0.0 y NOISE_REPORTED, que es el punto "
+                                 "medio del rango. La lista se deriva de lo que "
+                                 "el informe ya declara, no de qué nivel salió "
+                                 "mejor. Los demás niveles corren y registran "
+                                 "sus corridas — la curva de degradación las "
+                                 "necesita — pero no escriben checkpoints",
             "SEARCH_TRANSFERS": "una transferencia fácil y una difícil, elegidas "
                                 "por dificultad y no por resultado, para que el "
                                 "techo no quede ajustado a una sola. El veredicto "
@@ -248,6 +263,14 @@ __benchmark__ = {
             "Results/Noise",
             "Results/Noise/degradation.json",
             "Results/Noise/diagnostic.json",
+            # El piloto escribe un árbol paralelo: las mismas rutas de arriba,
+            # colgadas de `Pilot/`. Se declara el directorio una sola vez y no
+            # archivo por archivo, porque no es un segundo experimento sino la
+            # misma corrida a escala reducida, y la escala ya se lee del propio
+            # registro. Sin esta línea las cuarenta salidas del piloto se
+            # reportan como material que nadie declaró, que es justo lo que
+            # `undeclaredRecords` existe para forzar a escribir.
+            "Results/Pilot",
         ],
         # The terms Eq. (39) combines, and the dimension carrying their share.
         #
