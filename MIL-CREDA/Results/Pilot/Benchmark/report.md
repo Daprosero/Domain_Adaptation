@@ -41,7 +41,70 @@ En las transferencias que la búsqueda midió rige el ganador de esa transferenc
 
 ## 1 · Tiempo de entrenamiento (más bajo es mejor)
 
-Sin corridas por máquina para esta dimensión: el registro no trae `gridPerRun`, que sólo lo escribe una campaña repartida entre varias máquinas. No está vacía: no existe.
+> cada fila es una corrida en su propia máquina, nunca promediada con otra: no hay una columna de método que hable por todas.  
+
+| Método | Transferencia | Entorno | Semilla | tiempo de entrenamiento (s) |
+|---|---|---|---|---|
+| `Baseline` | M->U | `4bef9265ee57` | 0 | 4.54 |
+| `CREDA*` | M->U | `4bef9265ee57` | 0 | 10.49 |
+| `CREDA` | M->U | `4bef9265ee57` | 0 | 8.21 |
+| `MIL-Baseline` | M->U | `4bef9265ee57` | 0 | 4.55 |
+| `MIL-CREDA**` | M->U | `4bef9265ee57` | 0 | 11.09 |
+| `MIL-CREDA*` | M->U | `4bef9265ee57` | 0 | 11.22 |
+| `MIL-CREDA` | M->U | `4bef9265ee57` | 0 | 11.76 |
+| `MIL-CREDA-U` | M->U | `4bef9265ee57` | 0 | 11.54 |
+| `MIL-CREDA-A` | M->U | `4bef9265ee57` | 0 | 12.88 |
+| `MIL-CREDA-K` | M->U | `4bef9265ee57` | 0 | 11.54 |
+| `Baseline` | U->M | `4bef9265ee57` | 0 | 4.29 |
+| `CREDA*` | U->M | `4bef9265ee57` | 0 | 8.30 |
+| `CREDA` | U->M | `4bef9265ee57` | 0 | 7.40 |
+| `MIL-Baseline` | U->M | `4bef9265ee57` | 0 | 4.24 |
+| `MIL-CREDA**` | U->M | `4bef9265ee57` | 0 | 10.44 |
+| `MIL-CREDA*` | U->M | `4bef9265ee57` | 0 | 10.57 |
+| `MIL-CREDA` | U->M | `4bef9265ee57` | 0 | 11.54 |
+| `MIL-CREDA-U` | U->M | `4bef9265ee57` | 0 | 11.81 |
+| `MIL-CREDA-A` | U->M | `4bef9265ee57` | 0 | 11.41 |
+| `MIL-CREDA-K` | U->M | `4bef9265ee57` | 0 | 11.42 |
+| `Baseline` | M->S | `4bef9265ee57` | 0 | 4.23 |
+| `CREDA*` | M->S | `4bef9265ee57` | 0 | 7.98 |
+| `CREDA` | M->S | `4bef9265ee57` | 0 | 7.65 |
+| `MIL-Baseline` | M->S | `4bef9265ee57` | 0 | 4.33 |
+| `MIL-CREDA**` | M->S | `4bef9265ee57` | 0 | 10.68 |
+| `MIL-CREDA*` | M->S | `4bef9265ee57` | 0 | 11.79 |
+| `MIL-CREDA` | M->S | `4bef9265ee57` | 0 | 11.49 |
+| `MIL-CREDA-U` | M->S | `4bef9265ee57` | 0 | 11.36 |
+| `MIL-CREDA-A` | M->S | `4bef9265ee57` | 0 | 11.04 |
+| `MIL-CREDA-K` | M->S | `4bef9265ee57` | 0 | 11.68 |
+| `Baseline` | S->M | `4bef9265ee57` | 0 | 4.25 |
+| `CREDA*` | S->M | `4bef9265ee57` | 0 | 8.63 |
+| `CREDA` | S->M | `4bef9265ee57` | 0 | 7.46 |
+| `MIL-Baseline` | S->M | `4bef9265ee57` | 0 | 4.29 |
+| `MIL-CREDA**` | S->M | `4bef9265ee57` | 0 | 10.57 |
+| `MIL-CREDA*` | S->M | `4bef9265ee57` | 0 | 10.73 |
+| `MIL-CREDA` | S->M | `4bef9265ee57` | 0 | 12.18 |
+| `MIL-CREDA-U` | S->M | `4bef9265ee57` | 0 | 11.27 |
+| `MIL-CREDA-A` | S->M | `4bef9265ee57` | 0 | 12.53 |
+| `MIL-CREDA-K` | S->M | `4bef9265ee57` | 0 | 11.34 |
+| `Baseline` | U->S | `4bef9265ee57` | 0 | 4.28 |
+| `CREDA*` | U->S | `4bef9265ee57` | 0 | 8.49 |
+| `CREDA` | U->S | `4bef9265ee57` | 0 | 7.61 |
+| `MIL-Baseline` | U->S | `4bef9265ee57` | 0 | 4.44 |
+| `MIL-CREDA**` | U->S | `4bef9265ee57` | 0 | 11.14 |
+| `MIL-CREDA*` | U->S | `4bef9265ee57` | 0 | 11.85 |
+| `MIL-CREDA` | U->S | `4bef9265ee57` | 0 | 11.41 |
+| `MIL-CREDA-U` | U->S | `4bef9265ee57` | 0 | 11.02 |
+| `MIL-CREDA-A` | U->S | `4bef9265ee57` | 0 | 11.53 |
+| `MIL-CREDA-K` | U->S | `4bef9265ee57` | 0 | 11.29 |
+| `Baseline` | S->U | `4bef9265ee57` | 0 | 4.19 |
+| `CREDA*` | S->U | `4bef9265ee57` | 0 | 8.73 |
+| `CREDA` | S->U | `4bef9265ee57` | 0 | 7.52 |
+| `MIL-Baseline` | S->U | `4bef9265ee57` | 0 | 4.28 |
+| `MIL-CREDA**` | S->U | `4bef9265ee57` | 0 | 10.58 |
+| `MIL-CREDA*` | S->U | `4bef9265ee57` | 0 | 11.72 |
+| `MIL-CREDA` | S->U | `4bef9265ee57` | 0 | 11.47 |
+| `MIL-CREDA-U` | S->U | `4bef9265ee57` | 0 | 11.19 |
+| `MIL-CREDA-A` | S->U | `4bef9265ee57` | 0 | 11.25 |
+| `MIL-CREDA-K` | S->U | `4bef9265ee57` | 0 | 11.06 |
 
 Sin conclusión: tiempo de entrenamiento no se promedia entre máquinas — cada corrida es la lectura de su propio entorno, no una propiedad del método ni de la máquina que la corrió. Ver la tabla de arriba, corrida por corrida.
 
