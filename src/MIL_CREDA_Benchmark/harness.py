@@ -1592,11 +1592,29 @@ def campaign(reduction: Reduction, device: torch.device,
                 cell_runs, arm_id, label, manifests, reduction)
 
     per_transfer = {label: judge(ladder_rows(cell, label)) for label, cell in grid.items()}
+
+    # Una dimensión `perRun` no tiene media que este módulo esté dispuesto a
+    # entregar, así que el informe la lee corrida por corrida --- y esa forma la
+    # armaba únicamente `shards.merge`. Una campaña en una sola máquina escribía
+    # entonces un resumen sin ella, y la sección de tiempo del informe salía
+    # vacía con las corridas en `runs.jsonl` todo el tiempo. Una máquina es un
+    # entorno: la mediana entre semillas dentro de él, con su rango, es
+    # exactamente lo que esa sección dice que muestra.
+    #
+    # Import local porque `shards` importa este módulo. Se reusa su función en
+    # vez de repetirla acá: dos implementaciones de una misma forma son dos que
+    # pueden separarse, y el informe no podría decir cuál de las dos leyó.
+    from MIL_CREDA_Benchmark import shards as _shards
+    _, _, per_run = _shards.partition(config.DIMENSIONS, _shards.declaration())
+    grid_per_run = _shards.per_run_grid(
+        [run for cell_runs in cells.values() for run in cell_runs], per_run)
+
     summary = {
         "kind": "bounded",
         "reduction": asdict(reduction),
         "verdictsMeaningful": reduction.verdicts_meaningful,
         "grid": grid,
+        "gridPerRun": grid_per_run,
         "perTransfer": per_transfer,
         "panorama": paired_across_transfers(grid),
         "checkpoints": checkpoints,

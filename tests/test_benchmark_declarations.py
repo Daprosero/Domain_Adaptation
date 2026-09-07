@@ -520,6 +520,92 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
     assert "creda" in str(raised.value)
 
 
+def test_a_single_machine_campaign_records_its_per_run_readings(
+        tmp_path, monkeypatch) -> None:
+    """A `perRun` dimension has no mean anybody here is willing to hand a
+    reader, so the report reads it run by run out of `gridPerRun` -- and that
+    shape was assembled by `shards.merge` alone. A campaign on one machine
+    wrote a summary without it, so the report's whole first section rendered a
+    sentence where its table belongs while every reading sat in `runs.jsonl`.
+    One machine is one environment, and the median across seeds inside it is
+    exactly what that section says it shows.
+
+    Asserted over the real `campaign()` writer with only `run_one` and
+    `bags.build` faked, because a bespoke summary built in the test would prove
+    nothing about the path that actually writes the file."""
+    import json as _json
+    from MIL_CREDA_Benchmark import harness, shards
+
+    record = tmp_path / "ceilings.json"
+    record.write_text(_json.dumps({
+        "creda": {"ceiling": 1e-4, "atRequiredScale": True},
+        "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    # Two roots and not one, for the reason the refusal test beside this states:
+    # `MODELS` is `RESULTS`' sibling and redirecting one leaves the other
+    # pointing at the owner's real run.
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
+    # `keep_median` writes a manifest whose paths are relative to the
+    # repository root, so the root moves with the other two or the write
+    # raises on a path outside it.
+    monkeypatch.setattr(config, "REPOSITORY", tmp_path)
+    monkeypatch.setattr(harness, "run_one",
+                        _fake_run_one({"weight": torch.zeros(1)}))
+    # Its own and not `_fake_build()`: the campaign passes the contamination
+    # rate as a fourth argument and `run_smoke` does not, so the shared fake
+    # cannot be widened without changing what its own tests exercise.
+    from types import SimpleNamespace
+    monkeypatch.setattr(
+        harness.bags, "build",
+        lambda code, cache, seed, noise=0.0: SimpleNamespace(
+            manifest={"code": code, "seed": seed, "labelNoise": noise}))
+
+    reduction = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0},
+                                  seeds=[0, 1])
+    harness.campaign(reduction, torch.device("cpu"), arms=["A"],
+                     progress=lambda *a: None)
+
+    written = next(tmp_path.rglob("summary.json"))
+    summary = _json.loads(written.read_text(encoding="utf-8"))
+    assert "gridPerRun" in summary, "a one-machine summary carries it too"
+
+    _, _, per_run = shards.partition(config.DIMENSIONS, shards.declaration())
+    assert per_run, "the declaration has to name at least one for this to mean anything"
+    transfer = f"{config.VERDICT_TRANSFERS[0][0]}->{config.VERDICT_TRANSFERS[0][1]}"
+    readings = summary["gridPerRun"][transfer]["A"][per_run[0]]
+    # One reading per seed, each keeping its own environment and seed rather
+    # than an average across them -- which is the whole reason the dimension is
+    # `perRun` and the reason `render_per_run_summary` can group by machine.
+    assert sorted(r["seed"] for r in readings) == [0, 1]
+    assert all(r["env"] for r in readings)
+
+
+def test_the_contaminated_correspondence_is_its_own_rendering() -> None:
+    """Two halves calling one renderer with no dimension named read as one
+    measurement rendered twice, and the contaminated correspondence was exactly
+    that. It gets its own name for the reason `render_readings_contaminated`
+    already carries: they are two different numbers, and saying so is not
+    dodging the duplication check -- it leaves it intact for the case it exists
+    to catch.
+
+    And the empty case states the rate rather than a bare parenthesis, so a
+    reader meets which campaign has not left checkpoints yet."""
+    from MIL_CREDA_Benchmark import tables
+
+    declared = MIL_CREDA_Benchmark.__benchmark__["report"]["renderers"]
+    assert "tables.render_correspondence_contaminated" in declared
+
+    empty = tables.render_correspondence_contaminated([], 0.2)
+    assert "0.2" in empty and "no existe" in empty
+
+    scored = [{"arm": arm, "transfer": "M->U", "hits": 2, "classes": 3,
+               "mass": 0.5} for arm in config.BAG_PANELS]
+    assert (tables.render_correspondence_contaminated(scored, 0.2, markdown=True)
+            == tables.render_correspondence(scored, markdown=True))
+
+
 # --------------------------------------------------------- run_smoke checkpoints
 
 def _fake_run_one(fake_state):

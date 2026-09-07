@@ -2242,6 +2242,30 @@ def render_readings_contaminated(readings: Iterable[dict], path: str, title: str
     return render_readings(readings, path, title, markdown=markdown)
 
 
+def render_correspondence_contaminated(scored: Iterable[dict], rate: float,
+                                       markdown: bool = False) -> str:
+    """Los mismos aciertos y la misma masa, sobre la campaña contaminada.
+
+    Declarado aparte de `render_correspondence` por la razón que
+    `render_readings_contaminated` ya escribió para su propio par: el chequeo de
+    duplicación mira la llamada, y acá las dos mitades llamaban a la misma
+    función sin nombrar ninguna dimensión, de modo que la contaminada se leía
+    como una segunda renderización de la tabla limpia. No lo es: una mide sobre
+    material limpio y la otra a ρ, y son dos números distintos. Nombrarlo aparte
+    no esquiva el chequeo, dice lo que efectivamente hay, y lo deja intacto para
+    el caso que sí tiene que atrapar.
+
+    La tabla es idéntica porque tiene que serlo: dos formas distintas para la
+    misma cantidad obligarían al lector a traducir entre ellas para comparar,
+    que es justamente lo que estas dos tablas existen para no pedir.
+    """
+    scored = list(scored)
+    if not scored:
+        return (f"La campaña a ρ={rate:g} todavía no dejó checkpoints, así que no "
+                f"hay segunda tabla. No está vacía: no existe.")
+    return render_correspondence(scored, markdown=markdown)
+
+
 #: El peldaño del peso por confianza, familia por familia: el brazo sin pesar
 #: contra el que pesa. Declarado acá y no adivinado de `ARMS`, porque «cuál es el
 #: par que difiere sólo en el peso» es una lectura de la formulación y no una
