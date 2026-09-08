@@ -595,7 +595,8 @@ __steps__: dict = {
                      "advances": 1,
                      "reads": [],
                      "produces": ["Results/local_distance_bound.pdf",
-                                  "Notebooks/verification.ipynb"]},
+                                  "Notebooks/verification.ipynb"],
+                     "placement": "local"},
     # Corre `Benchmark_Ceiling_Search_v1.ipynb`, que es el cuaderno que CORRE la
     # búsqueda, y no computa en su lugar. Su celda de la corrida llama a
     # `harness.run_search(pilot=ES_ENSAYO)` con `ES_ENSAYO` derivado de
@@ -626,7 +627,10 @@ __steps__: dict = {
                      "advances": 2,
                      "reads": [],
                      "produces": ["Results/Benchmark/ceilings.pilot.json",
-                                  "Notebooks/Benchmark_Ceiling_Search_v1.ipynb"]},
+                                  "Notebooks/Benchmark_Ceiling_Search_v1.ipynb"],
+                     "placement": "remote",
+                     "job": "ceiling-search",
+                     "service": "kaggle"},
     # Corre `Benchmark_Campaign_v1.ipynb`, que es el cuaderno que se envía, y no
     # computa en su lugar. Su celda 8 llama a `harness.campaign()` con
     # `kind="campaign"` y con el `pilot` que la celda 3 deriva de
@@ -671,7 +675,10 @@ __steps__: dict = {
                                   "Results/Pilot/Probe_results.json",
                                   "Models/Pilot/Benchmark",
                                   "Models/Pilot/Noise/rho0p2",
-                                  "Notebooks/Benchmark_Campaign_v1.ipynb"]},
+                                  "Notebooks/Benchmark_Campaign_v1.ipynb"],
+                     "placement": "remote",
+                     "job": "campaign",
+                     "service": "kaggle"},
     # Sólo lee y presenta --- la llamada que corre la búsqueda está comentada
     # adentro del cuaderno --- y aun así escribe: se ejecuta `--inplace`, así
     # que su propio cuaderno es su raíz y la única.
@@ -679,7 +686,8 @@ __steps__: dict = {
                       "function": "informe_de_busqueda",
                      "advances": 3,
                      "reads": ["Results/Benchmark/ceilings.json"],
-                     "produces": ["Notebooks/Benchmark_Search_Report_v1.ipynb"]},
+                     "produces": ["Notebooks/Benchmark_Search_Report_v1.ipynb"],
+                     "placement": "local"},
     # Dibuja sobre la corrida vigente (`contamination.in_force(0.0,
     # "campaign")["root"]`), que es la completa si existe y el ensayo si no:
     # por eso las dos escalas. Escribe `curves/*.pdf`, `report.txt` y
@@ -699,7 +707,8 @@ __steps__: dict = {
                                   "Results/Pilot/Benchmark/report.md",
                                   "Results/Noise/rho0p2/curves",
                                   "Results/Pilot/Noise/rho0p2/curves",
-                                  "Notebooks/Benchmark_Report_v1.ipynb"]},
+                                  "Notebooks/Benchmark_Report_v1.ipynb"],
+                     "placement": "local"},
     # Las dos mitades van por escala. La limpia --- `latent/grid.pdf`,
     # `latent/correspondence.pdf`, `latent.json`, `latent.md` --- sale de
     # `results_for(0.0, "campaign", ES_ENSAYO)`, y hasta hace poco salía de
@@ -722,7 +731,8 @@ __steps__: dict = {
                                   "Results/Pilot/Benchmark/latent.md",
                                   "Results/Noise/rho0p2/latent",
                                   "Results/Pilot/Noise/rho0p2/latent",
-                                  "Notebooks/Benchmark_Latent_v1.ipynb"]},
+                                  "Notebooks/Benchmark_Latent_v1.ipynb"],
+                     "placement": "local"},
     # El eje de ruido. `noise-report` y `noise-diagnostic-report` sólo leen y
     # dibujan; `noise-diagnostic` sí corre -- una búsqueda sobre una
     # transferencia y dos brazos -- y está acá porque es local y barato, a
@@ -760,7 +770,10 @@ __steps__: dict = {
                     "reads": ["Results/Benchmark/ceilings.json"],
                     "produces": ["Results/Pilot/Noise/curve",
                                  "Models/Pilot/Noise/curve",
-                                 "Notebooks/Benchmark_Noise_Sweep_v1.ipynb"]},
+                                 "Notebooks/Benchmark_Noise_Sweep_v1.ipynb"],
+                     "placement": "remote",
+                     "job": "noise-sweep",
+                     "service": "kaggle"},
     # Sólo lee y dibuja, y aun así deja tres cosas: su cuaderno ejecutado y las
     # dos que escriben sus celdas, `degradation.pdf` (por `figures.noise_curves`
     # sobre `config.noise_axis_for(ES_ENSAYO) / "degradation"`, con el `.pdf` de
@@ -775,7 +788,8 @@ __steps__: dict = {
                                   "Results/Noise/degradation.json",
                                   "Results/Pilot/Noise/degradation.pdf",
                                   "Results/Pilot/Noise/degradation.json",
-                                  "Notebooks/Benchmark_Noise_Report_v1.ipynb"]},
+                                  "Notebooks/Benchmark_Noise_Report_v1.ipynb"],
+                     "placement": "local"},
     # Corre `Benchmark_Noise_Diagnostic_Search_v1.ipynb` y no computa en su lugar.
     # Un solo archivo de datos, y es todo lo que escribe además de su cuaderno: la
     # re-búsqueda que paga NO gobierna ningún registro
@@ -792,7 +806,10 @@ __steps__: dict = {
                          "reads": ["Results/Noise/curve"],
                          "produces": [
                              "Results/Pilot/Noise/diagnostic.json",
-                             "Notebooks/Benchmark_Noise_Diagnostic_Search_v1.ipynb"]},
+                             "Notebooks/Benchmark_Noise_Diagnostic_Search_v1.ipynb"],
+                     "placement": "remote",
+                     "job": "noise-diagnostic",
+                     "service": "kaggle"},
     # Presenta el `diagnostic.json` que ya existe y no computa nada, así que su
     # cuaderno ejecutado es su única raíz.
     "noise-diagnostic-report": {"module": "MIL_CREDA_Benchmark.steps",
@@ -800,5 +817,6 @@ __steps__: dict = {
                                 "advances": 10,
                                 "reads": ["Results/Noise/diagnostic.json"],
                                 "produces": [
-                                    "Notebooks/Benchmark_Noise_Diagnostic_Report_v1.ipynb"]},
+                                    "Notebooks/Benchmark_Noise_Diagnostic_Report_v1.ipynb"],
+                     "placement": "local"},
 }
