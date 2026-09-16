@@ -76,6 +76,71 @@ def test_no_checkpoints_at_all_refuses():
         latent.bound([], _summary(range(30)))
 
 
+def _environment(**overrides):
+    base = {"interpreter": "/repo/.venv", "python": "3.12.13",
+            "platform": "macos-arm64", "torch": "2.13.0", "selfHosted": True,
+            "power": {"source": "mains", "charge": 44},
+            "device": {"name": "mps", "kind": "mps"}}
+    base.update(overrides)
+    return base
+
+
+def test_the_charger_moving_mid_run_is_not_a_different_run():
+    """A campaign takes minutes and the laptop gets plugged in halfway through.
+
+    The run's own later checkpoints then carry `battery/70` where its record
+    carries `mains/44`, and the two describe the same machine running the same
+    campaign. Refusing there is a refusal about the wall socket.
+    """
+    plugged = _checkpoint(3, environment=_environment())
+    on_battery = _checkpoint(17, environment=_environment(
+        power={"source": "battery", "charge": 70}))
+    summary = _summary(range(30), environment=_environment())
+
+    assert latent.disagreements([plugged, on_battery], summary) == []
+    assert latent.bound([plugged, on_battery], summary) == [plugged, on_battery]
+
+
+def test_the_rest_of_the_environment_is_still_identity():
+    """The exclusion is one sub-key wide, not `environment` wide.
+
+    Each of these on its own is a checkpoint produced somewhere else, and each
+    still has to be refused — otherwise the previous test bought agreement by
+    hollowing the guard out.
+    """
+    summary = _summary(range(30), environment=_environment())
+    for field, value in [("python", "3.11.9"), ("torch", "2.4.0"),
+                         ("device", {"name": "T4", "kind": "cuda"}),
+                         ("interpreter", "/elsewhere/.venv")]:
+        elsewhere = _checkpoint(3, environment=_environment(**{field: value}))
+        with pytest.raises(latent.CheckpointsDisagree) as raised:
+            latent.bound([elsewhere], summary)
+        assert "environment" in str(raised.value), field
+
+
+def test_the_environment_finding_quotes_what_was_actually_compared():
+    """A message carrying `power` would send the reader to the field that was
+    excluded from the decision it is explaining."""
+    elsewhere = _checkpoint(3, environment=_environment(python="3.11.9"))
+    clashes = latent.disagreements([elsewhere],
+                                   _summary(range(30), environment=_environment()))
+
+    assert len(clashes) == 1
+    assert clashes[0]["field"] == "environment"
+    assert "power" not in clashes[0]["checkpoint_says"]
+    assert "power" not in clashes[0]["record_says"]
+    assert clashes[0]["checkpoint_says"]["python"] == "3.11.9"
+    assert clashes[0]["record_says"]["python"] == "3.12.13"
+
+
+def test_an_environment_that_is_not_a_mapping_is_still_compared():
+    """Excusing a shape this does not recognise would be an exclusion nobody
+    wrote: the field is still identity, whatever form it was recorded in."""
+    older = _checkpoint(3, environment="macos-arm64/py3.11")
+    with pytest.raises(latent.CheckpointsDisagree):
+        latent.bound([older], _summary(range(30), environment="macos-arm64/py3.12"))
+
+
 def test_the_disagreement_names_the_checkpoint_the_field_and_both_values():
     """A refusal that says only "they disagree" sends the reader to find out."""
     clashes = latent.disagreements([_checkpoint(0, epochs=3)], _summary(range(30)))

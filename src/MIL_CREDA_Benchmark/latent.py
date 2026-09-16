@@ -120,6 +120,36 @@ class CheckpointsDisagree(RuntimeError):
 PER_SHARD = "seeds"
 
 
+#: The field of a `reduction` that carries the machine the run happened on, and
+#: the sub-keys of it that move *while that run is running*.
+#:
+#: `power` is the charger and the battery level. A campaign takes minutes; plug
+#: the laptop in halfway through and the same run's later checkpoints stop
+#: matching the record that describes them, which is a refusal about the wall
+#: socket and not about the run. So it cannot be part of the identity.
+#:
+#: It is still written into every manifest exactly as before — it describes the
+#: run, and a reader comparing two machines wants it — it is simply not compared.
+#: The exclusion is scoped to these sub-keys and to this field: the interpreter,
+#: the Python and torch versions and the device stay identity, and a checkpoint
+#: produced somewhere else is still refused on them.
+ENVIRONMENT = "environment"
+VOLATILE_ENVIRONMENT = ("power",)
+
+
+def _stable_environment(value):
+    """An `environment` without the sub-keys that move while the run runs.
+
+    Anything that is not a mapping comes back untouched: an older manifest that
+    recorded the environment some other way must still be compared, not silently
+    excused.
+    """
+    if not isinstance(value, dict):
+        return value
+    return {key: entry for key, entry in value.items()
+            if key not in VOLATILE_ENVIRONMENT}
+
+
 def disagreements(found: list[dict], summary: dict) -> list[dict]:
     """Where the checkpoints and the record they are read beside disagree.
 
@@ -128,6 +158,10 @@ def disagreements(found: list[dict], summary: dict) -> list[dict]:
     record holds only what merging actually proved. Comparing the union would
     refuse on fields the record never claimed; comparing nothing at all is what
     let a three-epoch pilot be measured under a twenty-epoch stamp.
+
+    `environment` is compared without its volatile sub-keys, and the finding
+    reports the values as they were compared: a message quoting a `power` that
+    did not take part in the decision would send the reader to the wrong field.
 
     Returns the findings rather than raising, so the refusal can be tested apart
     from the message that carries it — `bound()` is what refuses.
@@ -139,10 +173,14 @@ def disagreements(found: list[dict], summary: dict) -> list[dict]:
         mine = entry.get("reduction") or {}
         name = Path(entry["manifest"]).name if entry.get("manifest") else "?"
         for field in sorted((set(mine) & set(record)) - {PER_SHARD}):
-            if mine[field] != record[field]:
+            says, record_says = mine[field], record[field]
+            if field == ENVIRONMENT:
+                says = _stable_environment(says)
+                record_says = _stable_environment(record_says)
+            if says != record_says:
                 found_out.append({"checkpoint": name, "field": field,
-                                  "checkpoint_says": mine[field],
-                                  "record_says": record[field]})
+                                  "checkpoint_says": says,
+                                  "record_says": record_says})
         if ran and entry.get("seed") not in ran:
             found_out.append({"checkpoint": name, "field": "seed",
                               "checkpoint_says": entry.get("seed"),

@@ -105,7 +105,11 @@ __benchmark__ = {
             "tables.render_per_run_summary_at",
             "tables.render_noise",
             "tables.render_diagnostic",
-            "tables.render_readings_contaminated",
+            # `render_readings_contaminated` ya no está. Era la gemela de
+            # `render_readings` para la campaña a ρ, y las dos tablas que
+            # producían son ahora una sola con la tasa como segunda columna: el
+            # lector compara dos filas contiguas en vez de dos tablas separadas
+            # por un párrafo. Una cantidad, una llamada, una renderización.
             "tables.render_gains_at",
             "tables.render_rungs_at",
         ],

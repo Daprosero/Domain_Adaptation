@@ -587,10 +587,13 @@ def test_a_single_machine_campaign_records_its_per_run_readings(
 def test_the_contaminated_correspondence_is_its_own_rendering() -> None:
     """Two halves calling one renderer with no dimension named read as one
     measurement rendered twice, and the contaminated correspondence was exactly
-    that. It gets its own name for the reason `render_readings_contaminated`
-    already carries: they are two different numbers, and saying so is not
-    dodging the duplication check -- it leaves it intact for the case it exists
-    to catch.
+    that. It gets its own name because they are two different numbers, and
+    saying so is not dodging the duplication check -- it leaves it intact for
+    the case it exists to catch.
+
+    The phase-two readings took the other exit: `render_readings` grew a rate
+    column and its contaminated twin is gone, so one call renders both numbers.
+    This one did not, and the pair of names survives here and only here.
 
     And the empty case states the rate rather than a bare parenthesis, so a
     reader meets which campaign has not left checkpoints yet."""
