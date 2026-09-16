@@ -337,7 +337,7 @@
       "selfHosted": true,
       "power": {
         "source": "battery",
-        "charge": 47
+        "charge": 76
       },
       "device": {
         "name": "mps",
@@ -382,66 +382,6 @@
   },
   "verdictsMeaningful": false,
   "comparison": [
-    {
-      "rung": "A->B",
-      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.5555555555555556,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "A->B",
-      "reading": "qu\u00e9 compra la representaci\u00f3n por bolsas, con la adaptaci\u00f3n apagada",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.19444444444444442,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "A->C",
-      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.0,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "A->C",
-      "reading": "qu\u00e9 compra la alineaci\u00f3n de CREDA, sin ponderar",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.02777777777777779,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "C->D",
-      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.0,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "C->D",
-      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en CREDA",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.0,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
     {
       "rung": "B->E",
       "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
@@ -501,66 +441,6 @@
       "transfers": 1,
       "favouringRight": 1,
       "favouringLeft": 0
-    },
-    {
-      "rung": "C->E",
-      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.5277777777777777,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "C->E",
-      "reading": "el mismo pelda\u00f1o, construido de dos maneras: sin ponderar",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.16666666666666663,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "D->F",
-      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.5277777777777777,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "D->F",
-      "reading": "el mismo pelda\u00f1o, construido de dos maneras: ponderado",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.16666666666666663,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "D->G",
-      "reading": "mano a mano, cada m\u00e9todo completo",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.5833333333333333,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
-    },
-    {
-      "rung": "D->G",
-      "reading": "mano a mano, cada m\u00e9todo completo",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.13888888888888884,
-      "stdev": 0.0,
-      "transfers": 1,
-      "favouringRight": 0,
-      "favouringLeft": 1
     },
     {
       "rung": "SU->SK",
