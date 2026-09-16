@@ -1058,6 +1058,22 @@ def floors_agree(transfers: list[str], seed: int, device: torch.device,
     dos espacios idénticos. Lo que se compara es la razón entre distancias y la
     separabilidad de dominio, que son las cantidades que la figura muestra.
     """
+    # Un piso que el banco ya no declara no es un piso ausente: es una pregunta
+    # que dejó de existir. La distinción cuesta esta guarda y sin ella las dos
+    # respuestas son la misma. Por un lado `checkpoint_for` encuentra los pesos
+    # igual --- un directorio sobrevive a la declaración que lo llenó --- así que
+    # `load` llega a `wiring.build` y aborta el cuaderno entero con un rechazo por
+    # nombre, que es la respuesta menos informativa posible a «¿son redundantes
+    # los dos pisos?». Por el otro, si los pesos tampoco estuvieran, la respuesta
+    # sería «sin checkpoints de los dos pisos», que se lee como un archivo que
+    # falta y significa otra cosa: que ya no hay dos pisos que comparar.
+    ausentes = [arm for arm in (left, right) if arm not in config.ARMS_BY_ID]
+    if ausentes:
+        return {"agree": None,
+                "detail": (f"el banco declara un solo piso: "
+                           f"{', '.join(ausentes)} ya no está declarado, así que "
+                           f"no hay dos representaciones que comparar.")}
+
     readings = []
     for transfer in transfers:
         pair = {}
