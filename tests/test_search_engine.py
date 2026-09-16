@@ -68,7 +68,7 @@ def test_solo_busca_sobre_los_metodos_completos(motor):
     """Un techo por brazo haría indistinguible el término del coeficiente."""
     vistos = motor
     _correr()
-    assert {v["arm"] for v in vistos} == set(config.SEARCH_ARMS.values()) == {"D", "G"}
+    assert {v["arm"] for v in vistos} == set(config.SEARCH_ARMS.values()) == {"G"}
 
 
 def test_una_sola_semilla_declarada_en_todos_los_trials(motor):
@@ -100,7 +100,7 @@ def test_los_trials_de_una_transferencia_visitan_techos_distintos(motor):
     vistos = motor
     _correr()
     de_una = [v["ceiling"] for v in vistos
-              if v["arm"] == "D" and v["transfer"] == config.SEARCH_TRANSFERS[0]]
+              if v["arm"] == "G" and v["transfer"] == config.SEARCH_TRANSFERS[0]]
     assert len(set(de_una)) == len(de_una) > 1
 
 
@@ -139,11 +139,11 @@ def test_el_techo_agrupado_sale_de_la_misma_regla_y_no_de_la_nada(motor):
 
 
 def test_cada_estudio_explora_puntos_propios_y_no_los_del_vecino(motor):
-    """Doce búsquedas independientes que arrancan del mismo lugar no lo son.
+    """Seis búsquedas independientes que arrancan del mismo lugar no lo son.
 
     Con una semilla compartida las propuestas de arranque son idénticas y los
-    doce estudios recorren los mismos techos — medido en el ensayo local, las
-    seis transferencias de `creda` visitaron los mismos cuatro. Cuando la meseta
+    seis estudios recorren los mismos techos — medido en el ensayo local, las
+    seis transferencias de una familia visitaron los mismos cuatro. Cuando la meseta
     es ancha el ganador es el más chico *visitado*, así que el registro muestra
     un acuerdo entre transferencias que es artefacto de la semilla y se lee como
     hallazgo.
@@ -154,7 +154,7 @@ def test_cada_estudio_explora_puntos_propios_y_no_los_del_vecino(motor):
     for v in vistos:
         por_estudio.setdefault((v["arm"], v["transfer"]), []).append(v["ceiling"])
     conjuntos = [tuple(sorted(c)) for c in por_estudio.values()]
-    assert len(por_estudio) == 12
+    assert len(por_estudio) == 6
     assert len(set(conjuntos)) == len(conjuntos), (
         "dos estudios visitaron exactamente los mismos techos")
 
@@ -163,15 +163,15 @@ def test_la_semilla_de_cada_estudio_es_reproducible(motor):
     """Independientes, no aleatorias: dos corridas del mismo ensayo coinciden."""
     primera = _correr()
     segunda = _correr()
-    assert (primera["creda"]["byTransfer"] == segunda["creda"]["byTransfer"])
+    assert (primera["milcreda"]["byTransfer"] == segunda["milcreda"]["byTransfer"])
 
 
-#: Lo que cada brazo tarda en el motor cronometrado, en segundos por trial. Son
-#: distintos a propósito: un registro que escribiera una constante — cero, el
-#: reloj mal leído, un campo copiado — pasaría cualquier test que solo pidiera
-#: «que haya un número». Con dos costos separados, el registro tiene que
-#: distinguirlos para pasar.
-COSTO_POR_TRIAL = {"D": 0.001, "G": 0.011}
+#: Lo que cada brazo tarda en el motor cronometrado, en segundos por trial. El
+#: costo lo pone el doble y no el modelo, de modo que el número del registro
+#: queda atado a lo que efectivamente durmió: un registro que escribiera una
+#: constante — cero, el reloj mal leído, un campo copiado — no alcanza el piso
+#: que ese costo impone.
+COSTO_POR_TRIAL = {"G": 0.011}
 
 #: Lo que cuesta dibujar el material, por dominio. Vive afuera de los trials y es
 #: lo que separa «cronometré la búsqueda» de «sumé los `minutes` que ya estaban».
@@ -212,10 +212,9 @@ def test_el_registro_se_lleva_cuanto_costo_la_busqueda_que_lo_escribio(
     misma nombra. Sin el tiempo, un ensayo de minutos y una búsqueda de horas se
     escriben idénticos y el número solo se recupera volviendo a correrla entera.
 
-    Tres cosas se verifican, y ninguna la pasa un cero ni una constante: que cada
-    familia supere el piso que su propio costo impone, que la familia cara quede
-    separada de la barata por la diferencia que se le puso, y que el total sea
-    mayor que la suma de los `minutes` por transferencia — porque el sorteo del
+    Dos cosas se verifican, y ninguna la pasa un cero ni una constante: que cada
+    familia supere el piso que su propio costo impone, y que el total sea mayor
+    que la suma de los `minutes` por transferencia — porque el sorteo del
     material corre afuera de esos relojes y adentro de este.
     """
     _correr()
@@ -237,14 +236,6 @@ def test_el_registro_se_lleva_cuanto_costo_la_busqueda_que_lo_escribio(
             f"{family}: {entrada['seconds']:.3f}s no cubre el sorteo por encima "
             f"de los {suma:.3f}s de sus transferencias")
 
-    # Y distingue una familia de la otra: una constante las escribiría iguales.
-    diferencia = found["milcreda"]["seconds"] - found["creda"]["seconds"]
-    esperada = (config.PILOT_SEARCH_TRIALS * transferencias
-                * (COSTO_POR_TRIAL["G"] - COSTO_POR_TRIAL["D"]))
-    assert diferencia >= esperada / 2, (
-        f"las dos familias costaron {diferencia:.3f}s de diferencia sobre "
-        f"{esperada:.3f}s dormidos: el registro no las está distinguiendo")
-
 
 def test_el_tiempo_es_aditivo_y_ningun_lector_del_registro_se_entera(motor):
     """Una clave nueva al lado de las viejas, y no una forma nueva.
@@ -256,8 +247,8 @@ def test_el_tiempo_es_aditivo_y_ningun_lector_del_registro_se_entera(motor):
     """
     found = _correr()
     assert all("seconds" in e for e in found.values())
-    assert cr.kind_of(found["creda"]) == cr.KIND_OPTUNA
-    assert cr.scale_of(found["creda"]) == {
+    assert cr.kind_of(found["milcreda"]) == cr.KIND_OPTUNA
+    assert cr.scale_of(found["milcreda"]) == {
         "epochs": config.PILOT_SEARCH_EPOCHS,
         "trials": config.PILOT_SEARCH_TRIALS}
     assert set(config.ceilings_on_record()) == set(config.SEARCH_ARMS)

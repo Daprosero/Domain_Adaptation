@@ -247,17 +247,17 @@ def test_promotion_never_touches_the_record_the_report_reads(tmp_path, monkeypat
 # independently and never produces that pairing; these hold the extension that
 # does, and hold that it only ever adds.
 
-FLOORS = {"C": "A", "D": "A", "G": "B"}
+FLOORS = {"G": "B"}
 
-#: Seven seeds, and two orderings whose medians are **disjoint**: C's are
-#: {2, 3, 4} and A's are {0, 1, 5}. Chosen that way deliberately. An earlier
+#: Seven seeds, and two orderings whose medians are **disjoint**: G's are
+#: {2, 3, 4} and B's are {0, 1, 5}. Chosen that way deliberately. An earlier
 #: version of these tests used five seeds whose two orderings both landed on
 #: {2, 3, 4}, so the floor already carried what its dependant needed and the
 #: pairing was never exercised — removing the pairing entirely left every test
 #: green. That accidental overlap is precisely the bug under test, so a fixture
 #: that reproduces it cannot detect it.
-_C = {5: 0.1, 6: 0.2, 2: 0.3, 3: 0.4, 4: 0.5, 0: 0.6, 1: 0.7}
-_A = {2: 0.1, 3: 0.2, 0: 0.3, 1: 0.4, 5: 0.5, 4: 0.6, 6: 0.7}
+_G = {5: 0.1, 6: 0.2, 2: 0.3, 3: 0.4, 4: 0.5, 0: 0.6, 1: 0.7}
+_B = {2: 0.1, 3: 0.2, 0: 0.3, 1: 0.4, 5: 0.5, 4: 0.6, 6: 0.7}
 
 
 def _every_seed(root, arm, transfer, accuracies, monkeypatch):
@@ -273,11 +273,11 @@ def _every_seed(root, arm, transfer, accuracies, monkeypatch):
 
 
 def _disjoint(root, monkeypatch, with_floor=True):
-    _every_seed(root, "C", "M->U", _C, monkeypatch)
-    runs = [_run("C", "M->U", s, a) for s, a in _C.items()]
+    _every_seed(root, "G", "M->U", _G, monkeypatch)
+    runs = [_run("G", "M->U", s, a) for s, a in _G.items()]
     if with_floor:
-        _every_seed(root, "A", "M->U", _A, monkeypatch)
-        runs += [_run("A", "M->U", s, a) for s, a in _A.items()]
+        _every_seed(root, "B", "M->U", _B, monkeypatch)
+        runs += [_run("B", "M->U", s, a) for s, a in _B.items()]
     return runs
 
 
@@ -297,8 +297,8 @@ def test_the_fixture_medians_really_are_disjoint(tmp_path, monkeypatch):
     root = tmp_path / "returned"
     runs = _disjoint(root, monkeypatch)
     picked = _selection(runs, root)
-    assert picked["C|M->U"]["chosen"] == [2, 3, 4]
-    assert picked["A|M->U"]["chosen"] == [0, 1, 5]
+    assert picked["G|M->U"]["chosen"] == [2, 3, 4]
+    assert picked["B|M->U"]["chosen"] == [0, 1, 5]
 
 
 def test_every_promoted_arm_has_its_floor_at_the_same_seed(tmp_path, monkeypatch):
@@ -315,9 +315,9 @@ def test_every_promoted_arm_has_its_floor_at_the_same_seed(tmp_path, monkeypatch
                              superseded=tmp_path / "aside", floor_of=FLOORS)
 
     landed = {p.name for p in into.glob("*.pt")}
-    for seed in report["chosen"]["C|M->U"]["chosen"]:
-        assert f"A_M-U_seed{seed}.pt" in landed, (
-            f"C promoted seed {seed} and its floor A did not")
+    for seed in report["chosen"]["G|M->U"]["chosen"]:
+        assert f"B_M-U_seed{seed}.pt" in landed, (
+            f"G promoted seed {seed} and its floor B did not")
 
 
 def test_an_arms_own_median_is_never_moved_to_match_its_floor(tmp_path, monkeypatch):
@@ -329,8 +329,8 @@ def test_an_arms_own_median_is_never_moved_to_match_its_floor(tmp_path, monkeypa
     report = promote.promote(runs=runs, root=root, destination=tmp_path / "into",
                              superseded=tmp_path / "aside", floor_of=FLOORS)
 
-    assert report["chosen"]["C|M->U"]["chosen"] == unpaired["C|M->U"]["chosen"] == [2, 3, 4]
-    assert report["chosen"]["A|M->U"]["chosen"] == unpaired["A|M->U"]["chosen"] == [0, 1, 5]
+    assert report["chosen"]["G|M->U"]["chosen"] == unpaired["G|M->U"]["chosen"] == [2, 3, 4]
+    assert report["chosen"]["B|M->U"]["chosen"] == unpaired["B|M->U"]["chosen"] == [0, 1, 5]
 
 
 def test_the_extras_a_floor_carries_are_kept_apart_from_its_median(tmp_path, monkeypatch):
@@ -345,11 +345,11 @@ def test_the_extras_a_floor_carries_are_kept_apart_from_its_median(tmp_path, mon
     report = promote.promote(runs=runs, root=root, destination=tmp_path / "into",
                              superseded=tmp_path / "aside", floor_of=FLOORS)
 
-    floor = report["chosen"]["A|M->U"]
+    floor = report["chosen"]["B|M->U"]
     assert floor["chosen"] == [0, 1, 5]
     assert floor["paired"] == [2, 3, 4]
     assert not set(floor["paired"]) & set(floor["chosen"])
-    assert report["chosen"]["C|M->U"]["paired"] == [], "an arm with a floor carries none"
+    assert report["chosen"]["G|M->U"]["paired"] == [], "an arm with a floor carries none"
 
 
 def test_a_floor_that_never_arrived_is_named_not_dropped(tmp_path, monkeypatch):
@@ -361,7 +361,7 @@ def test_a_floor_that_never_arrived_is_named_not_dropped(tmp_path, monkeypatch):
                              superseded=tmp_path / "aside", floor_of=FLOORS)
 
     assert len(report["unpairable"]) == 3
-    assert all("its floor A never arrived" in u for u in report["unpairable"])
+    assert all("its floor B never arrived" in u for u in report["unpairable"])
 
 
 # --- the display seed: the one every comparative panel is drawn from ---------
@@ -390,28 +390,28 @@ def test_the_display_seed_lands_in_every_cell(tmp_path, monkeypatch):
 
 def test_the_display_extra_is_kept_apart_from_median_and_pairing():
     """Three reasons to promote, three fields: only the first is the median."""
-    chosen = {"C|M->U": {"chosen": [2, 3, 4], "paired": []},
-              "A|M->U": {"chosen": [0, 1, 5], "paired": [2, 3, 4]}}
-    found = {("C", "M->U", 6): 1, ("A", "M->U", 6): 1}
+    chosen = {"G|M->U": {"chosen": [2, 3, 4], "paired": []},
+              "B|M->U": {"chosen": [0, 1, 5], "paired": [2, 3, 4]}}
+    found = {("G", "M->U", 6): 1, ("B", "M->U", 6): 1}
 
     out = promote.displayed(chosen, found, runs=[], seed=6)
 
     assert out["displaySeed"] == 6
-    assert out["chosen"]["C|M->U"]["display"] == [6]
-    assert out["chosen"]["C|M->U"]["chosen"] == [2, 3, 4]
-    assert out["chosen"]["A|M->U"]["paired"] == [2, 3, 4]
+    assert out["chosen"]["G|M->U"]["display"] == [6]
+    assert out["chosen"]["G|M->U"]["chosen"] == [2, 3, 4]
+    assert out["chosen"]["B|M->U"]["paired"] == [2, 3, 4]
 
 
 def test_a_cell_that_already_has_the_display_seed_gains_nothing():
     """Promoting it twice would copy one file over itself and inflate the record."""
-    chosen = {"C|M->U": {"chosen": [2, 3, 6], "paired": []}}
-    out = promote.displayed(chosen, {("C", "M->U", 6): 1}, runs=[], seed=6)
-    assert out["chosen"]["C|M->U"]["display"] == []
+    chosen = {"G|M->U": {"chosen": [2, 3, 6], "paired": []}}
+    out = promote.displayed(chosen, {("G", "M->U", 6): 1}, runs=[], seed=6)
+    assert out["chosen"]["G|M->U"]["display"] == []
 
 
 def test_a_cell_with_no_checkpoint_at_the_display_seed_is_named():
     """Its panel will be blank; that is worth saying before the figure is read."""
-    chosen = {"C|M->U": {"chosen": [2, 3, 4], "paired": []}}
+    chosen = {"G|M->U": {"chosen": [2, 3, 4], "paired": []}}
     out = promote.displayed(chosen, {}, runs=[], seed=6)
-    assert out["undisplayable"] == ["C|M->U seed 6"]
-    assert out["chosen"]["C|M->U"]["display"] == []
+    assert out["undisplayable"] == ["G|M->U seed 6"]
+    assert out["chosen"]["G|M->U"]["display"] == []

@@ -70,17 +70,17 @@ def test_the_degradation_figure_draws_the_share_against_rho_and_not_only_accurac
     share series comes out as the accuracy one.
     """
     _levels(tmp_path, monkeypatch, {
-        0.0: {"A": {"targetAccuracy": 0.80, "adaptationShare": 0.0},
+        0.0: {"B": {"targetAccuracy": 0.80, "adaptationShare": 0.0},
               "G": {"targetAccuracy": 0.82, "adaptationShare": 0.10}},
-        0.2: {"A": {"targetAccuracy": 0.60, "adaptationShare": 0.0},
+        0.2: {"B": {"targetAccuracy": 0.60, "adaptationShare": 0.0},
               "G": {"targetAccuracy": 0.75, "adaptationShare": 0.30}},
-        0.4: {"A": {"targetAccuracy": 0.40, "adaptationShare": 0.0},
+        0.4: {"B": {"targetAccuracy": 0.40, "adaptationShare": 0.0},
               "G": {"targetAccuracy": 0.70, "adaptationShare": 0.55}},
     })
 
     accuracy = _drawn(figures.noise_curves("targetAccuracy"))
     assert accuracy[config.NAME_OF["G"]] == ([0.0, 0.2, 0.4], [0.82, 0.75, 0.70])
-    assert accuracy[config.NAME_OF["A"]] == ([0.0, 0.2, 0.4], [0.80, 0.60, 0.40])
+    assert accuracy[config.NAME_OF["B"]] == ([0.0, 0.2, 0.4], [0.80, 0.60, 0.40])
 
     share = _drawn(figures.noise_curves("adaptationShare"))
     assert share[config.NAME_OF["G"]] == ([0.0, 0.2, 0.4], [0.10, 0.30, 0.55])
@@ -127,7 +127,7 @@ def test_the_contribution_panel_reports_the_realized_share_arm_by_arm(
     """
     runs = tmp_path / "runs.jsonl"
     steps = 4
-    shares = {"C": 0.03, "D": 0.20, "G": 0.99}
+    shares = {"E": 0.03, "F": 0.20, "G": 0.99}
     with runs.open("w", encoding="utf-8") as handle:
         for arm, share in shares.items():
             for seed in range(3):
@@ -169,11 +169,11 @@ def test_the_display_seed_is_the_median_of_the_across_arm_mean() -> None:
     headline arm's own accuracy.
     """
     runs = [
-        {"seed": 0, "arm": "A", "targetAccuracy": 0.10},
+        {"seed": 0, "arm": "B", "targetAccuracy": 0.10},
         {"seed": 0, "arm": "G", "targetAccuracy": 0.20},   # mean 0.15  (lowest)
-        {"seed": 1, "arm": "A", "targetAccuracy": 0.55},
+        {"seed": 1, "arm": "B", "targetAccuracy": 0.55},
         {"seed": 1, "arm": "G", "targetAccuracy": 0.65},   # mean 0.60  (median)
-        {"seed": 2, "arm": "A", "targetAccuracy": 0.95},
+        {"seed": 2, "arm": "B", "targetAccuracy": 0.95},
         {"seed": 2, "arm": "G", "targetAccuracy": 0.55},   # mean 0.75  (highest)
     ]
     assert latent.display_seed(runs) == 1
@@ -301,16 +301,19 @@ def test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_me
     assert [axes[row * columns].get_ylabel() for row in range(len(TRANSFERS))] == TRANSFERS
 
 
-def test_the_latent_grid_keeps_both_floors_as_its_first_trained_columns(
+def test_the_latent_grid_keeps_every_declared_floor_as_a_trained_column(
         stubbed, tmp_path) -> None:
-    """Whether the two floors are redundant is a measurement `latent.floors_agree`
-    makes, and only it may retire one of these columns."""
+    """A floor is what makes an aligned column readable, so every declared one is
+    drawn. Only a measurement -- `latent.floors_agree` -- may ever retire one, and
+    with a single unit declared there is a single floor for it to keep."""
     figure = latent.latent_grid(tmp_path / "grid.pdf", config.LATENT_PANELS,
                                 TRANSFERS[:1], seed=3, device=torch.device("cpu"))
     titles = [axis.get_title() for axis in figure.axes]
-    floors = [config.NAME_OF[arm["id"]] for arm in config.ARMS
-              if arm["adaptation"] is None and arm["id"] in config.LATENT_PANELS]
-    assert len(floors) == 2
+    declared = [arm["id"] for arm in config.ARMS if arm["adaptation"] is None]
+    floors = [config.NAME_OF[arm] for arm in declared
+              if arm in config.LATENT_PANELS]
+    assert floors and len(floors) == len(declared), \
+        "a declared floor is missing from the grid"
     for name in floors:
         assert name in titles
 
@@ -937,7 +940,7 @@ def test_only_the_arm_that_asserts_numbers_the_two_ends_of_its_line(
                       if t.get_text().isdigit()) == esperados
 
 
-def _curves_over(path, transfers, arms=("C", "D", "G"), steps=4):
+def _curves_over(path, transfers, arms=("E", "F", "G"), steps=4):
     """Un archivo de curvas con tantas transferencias como se le pidan."""
     import json
 
@@ -978,7 +981,7 @@ def test_no_figure_draws_more_transfers_than_the_count_fixes(tmp_path) -> None:
     for nombre in ("adaptation_curves", "supervised_curves", "contribution_curves"):
         with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
             getattr(figures, nombre)(tmp_path / f"{nombre}.pdf",
-                                     arms=("C", "D", "G"), runs=runs)
+                                     arms=("E", "F", "G"), runs=runs)
 
 
 def test_the_count_is_the_declared_one_and_not_a_number_written_twice(tmp_path) -> None:
@@ -989,7 +992,7 @@ def test_the_count_is_the_declared_one_and_not_a_number_written_twice(tmp_path) 
     """
     justas = TODAS[:config.FIGURE_TRANSFER_COUNT]
     runs = _curves_over(tmp_path / "justas.jsonl", justas)
-    figura = figures.contribution_curves(tmp_path / "ok.pdf", arms=("C", "D", "G"),
+    figura = figures.contribution_curves(tmp_path / "ok.pdf", arms=("E", "F", "G"),
                                          runs=runs)
     dibujados = [axis for axis in figura.axes if axis.has_data()]
     assert len(dibujados) == config.FIGURE_TRANSFER_COUNT
@@ -997,7 +1000,7 @@ def test_the_count_is_the_declared_one_and_not_a_number_written_twice(tmp_path) 
     una_mas = _curves_over(tmp_path / "una_mas.jsonl",
                            TODAS[:config.FIGURE_TRANSFER_COUNT + 1])
     with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
-        figures.contribution_curves(tmp_path / "no.pdf", arms=("C", "D", "G"),
+        figures.contribution_curves(tmp_path / "no.pdf", arms=("E", "F", "G"),
                                     runs=una_mas)
 
 
@@ -1013,7 +1016,7 @@ def test_the_caller_chooses_which_three_and_the_figure_only_bounds_how_many(
     elegidas = [TODAS[4], TODAS[0], TODAS[2]]
 
     figura = figures.contribution_curves(tmp_path / "elegidas.pdf",
-                                         arms=("C", "D", "G"), runs=runs,
+                                         arms=("E", "F", "G"), runs=runs,
                                          transfers=elegidas)
     titulos = [axis.get_title() for axis in figura.axes if axis.has_data()]
     assert titulos == elegidas
@@ -1030,7 +1033,7 @@ def test_a_requested_transfer_the_record_never_ran_refuses(tmp_path) -> None:
     """
     runs = _curves_over(tmp_path / "runs.jsonl", TODAS[:2])
     with pytest.raises(ValueError, match="no dejó curvas"):
-        figures.contribution_curves(tmp_path / "falta.pdf", arms=("C", "D", "G"),
+        figures.contribution_curves(tmp_path / "falta.pdf", arms=("E", "F", "G"),
                                     runs=runs, transfers=[TODAS[0], TODAS[5]])
 
 

@@ -72,8 +72,8 @@ def test_the_plus_minus_of_a_printed_cell_is_the_dispersion_across_seeds() -> No
     `±` off the record's own `batchStdev`, and the printed cell moves.
     """
     seeds = [0.50, 0.60, 0.70]
-    runs = _runs({("A", LABELS[0]): seeds,
-                  ("A", LABELS[1]): [0.10, 0.60, 1.00]})
+    runs = _runs({("B", LABELS[0]): seeds,
+                  ("B", LABELS[1]): [0.10, 0.60, 1.00]})
     printed = tables.render(runs, "targetAccuracy", _reduction())
 
     across_seeds = statistics.stdev(seeds)
@@ -91,7 +91,7 @@ def test_a_cell_of_one_repetition_prints_a_zero_dispersion_it_did_not_measure() 
     Held here because it is the state a pilot is read in, and a `±` that came out
     of nowhere would be indistinguishable from agreement.
     """
-    printed = tables.render(_runs({("A", LABELS[0]): [0.42]}),
+    printed = tables.render(_runs({("B", LABELS[0]): [0.42]}),
                             "targetAccuracy", _reduction(seeds=1))
     assert "42.0 ± 0.0" in printed
 
@@ -108,15 +108,15 @@ def test_the_table_is_arms_by_display_name_over_the_six_transfers_and_an_average
     transfer from the header.
     """
     runs = _runs({(arm, label): [0.5, 0.6]
-                  for arm in ("A", "B", "G") for label in LABELS})
+                  for arm in ("B", "E", "G") for label in LABELS})
     printed = tables.render(runs, "targetAccuracy", _reduction(seeds=2),
                             markdown=True)
     header = [cell.strip() for cell in printed.splitlines()[0].strip("|").split("|")]
 
     assert header == ["Método", *LABELS, "Prom."]
     names = [line.split("|")[1].strip().strip("`") for line in printed.splitlines()[2:]]
-    assert names == [config.NAME_OF[a] for a in ("A", "B", "G")]
-    for identifier in ("A", "B", "G"):
+    assert names == [config.NAME_OF[a] for a in ("B", "E", "G")]
+    for identifier in ("B", "E", "G"):
         assert f"`{identifier}`" not in printed, "the table names an arm by its id"
 
 
@@ -126,8 +126,8 @@ def test_the_average_column_averages_the_transfers_and_not_the_repetitions() -> 
     Reachable red: average the runs instead of the per-transfer means and the
     transfer with more seeds starts weighing more than the others.
     """
-    runs = _runs({("A", LABELS[0]): [0.20, 0.20, 0.20, 0.20],
-                  ("A", LABELS[1]): [1.00]})
+    runs = _runs({("B", LABELS[0]): [0.20, 0.20, 0.20, 0.20],
+                  ("B", LABELS[1]): [1.00]})
     row = tables.table(runs, "targetAccuracy")[0]
     assert row["avg"] == pytest.approx(0.6)
 
@@ -144,13 +144,13 @@ def test_below_the_repetition_floor_the_reason_is_stamped_and_the_table_still_pr
     Reachable red: return `[]` from `_stamp` below the floor, or suppress the
     table when the stamp is not empty.
     """
-    runs = _runs({(arm, LABELS[0]): [0.5] for arm in ("A", "G")})
+    runs = _runs({(arm, LABELS[0]): [0.5] for arm in ("B", "G")})
     stamped = tables.stamp(_reduction(seeds=1))
     printed = tables.render(runs, "targetAccuracy", _reduction(seeds=1))
 
     assert "1 repetición(es)" in stamped
     assert "piloto" in stamped and str(len(config.FULL_SEEDS)) in stamped
-    assert config.NAME_OF["G"] in printed and config.NAME_OF["A"] in printed
+    assert config.NAME_OF["G"] in printed and config.NAME_OF["B"] in printed
     assert printed.count("\n") >= 2, "the table was suppressed instead of stamped"
 
 
@@ -163,12 +163,12 @@ def test_at_the_declared_scale_nothing_is_stamped() -> None:
 # ------------------------------------------------------------------- the rungs
 
 def test_a_rung_is_named_by_display_names_and_never_by_identifiers() -> None:
-    """`Baseline → MIL-Baseline`, not `A->B`.
+    """`MIL-Baseline → MIL-CREDA**`, not `B->E`.
 
     Reachable red: return `f"{left}->{right}"` and both halves of this fail --
     the name and the arrow that separates a reading from an expression.
     """
-    assert tables.rung_name("A", "B") == "Baseline → MIL-Baseline"
+    assert tables.rung_name("B", "E") == "MIL-Baseline → MIL-CREDA**"
     for left, right, _ in config.LADDER:
         named = tables.rung_name(left, right)
         assert named == f"{config.NAME_OF[left]} → {config.NAME_OF[right]}"
@@ -217,7 +217,7 @@ def test_the_headings_are_spanish_and_the_keys_of_the_record_are_english() -> No
     """
     from MIL_CREDA_Benchmark import __benchmark__
 
-    printed = tables.render(_runs({("A", LABELS[0]): [0.5]}), "targetAccuracy",
+    printed = tables.render(_runs({("B", LABELS[0]): [0.5]}), "targetAccuracy",
                             _reduction(seeds=1), markdown=True)
     assert "Método" in printed and "Prom." in printed
     assert "Method" not in printed
@@ -649,7 +649,7 @@ def test_render_refuses_a_dimension_the_declaration_calls_per_run() -> None:
 def _pooling_calls(metric: str):
     """One callable per aggregating entry point, ready to invoke with `metric`."""
     runs = _runs({(arm, label): [10.0 + index, 30.0 + index]
-                  for index, arm in enumerate(("A", "B", "D", "G"))
+                  for index, arm in enumerate(("B", "E", "F", "G"))
                   for label in LABELS[:2]}, metric=metric)
     cell = {arm: {metric: {"mean": 0.5 + index / 10, "stdev": 0.01, "n": 2}}
             for index, arm in enumerate(config.ARMS_BY_ID)}

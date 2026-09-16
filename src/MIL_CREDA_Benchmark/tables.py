@@ -293,8 +293,8 @@ def objective(key: str, markdown: bool = True) -> str:
             f"escala fija, así que ninguno de los dos números significa nada por "
             f"su valor absoluto ni se compara entre métodos. Las tablas de abajo "
             f"están en esas unidades sin escala y se leen **contra el piso del "
-            f"propio método, transferencia por transferencia**: `CREDA` y `CREDA*` "
-            f"contra `Baseline`, toda la familia `MIL-` contra `MIL-Baseline`. La "
+            f"propio método, transferencia por transferencia**: toda la familia "
+            f"`MIL-` contra `MIL-Baseline`. La "
             f"conclusión reporta esos dos cambios en porcentaje respecto de ese "
             f"piso, y llama alineación a que el de la misma clase entre dominios "
             f"quede **más de {SCALE_TOLERANCE:g} punto porcentual por debajo** del "
@@ -788,7 +788,7 @@ def conclusion(runs: Iterable[dict], metric: str, reduction: dict) -> str:
 
     # Cada método completo contra su propio piso, que es la única lectura que
     # separa lo que aporta la adaptación de lo que aporta la representación.
-    for arm, floor in (("D", "A"), ("G", "B")):
+    for arm, floor in (("G", "B"),):
         pair = (config.NAME_OF[arm], config.NAME_OF[floor])
         if pair[0] in by_name and pair[1] in by_name:
             delta = by_name[pair[0]]["avg"] - by_name[pair[1]]["avg"]
@@ -2266,11 +2266,11 @@ def render_correspondence_contaminated(scored: Iterable[dict], rate: float,
     return render_correspondence(scored, markdown=markdown)
 
 
-#: El peldaño del peso por confianza, familia por familia: el brazo sin pesar
-#: contra el que pesa. Declarado acá y no adivinado de `ARMS`, porque «cuál es el
-#: par que difiere sólo en el peso» es una lectura de la formulación y no una
-#: propiedad que se pueda derivar de un diccionario.
-WEIGHTING_RUNGS = [("C", "D"), ("E", "F"), ("E", "G")]
+#: El peldaño del peso por confianza: el brazo sin pesar contra el que pesa.
+#: Declarado acá y no adivinado de `ARMS`, porque «cuál es el par que difiere
+#: sólo en el peso» es una lectura de la formulación y no una propiedad que se
+#: pueda derivar de un diccionario.
+WEIGHTING_RUNGS = [("E", "F"), ("E", "G")]
 
 
 def conclusion_weighting_under_noise(metric: str = "targetAccuracy") -> str:
@@ -2280,7 +2280,7 @@ def conclusion_weighting_under_noise(metric: str = "targetAccuracy") -> str:
     etiquetas** --- `pseudolabel` (Ec. 22) y `confidences` (Ec. 24) ---, así que
     contaminar sus bolsas no es ruido de etiqueta: corrompe la condicional a la
     que el término de adaptación se alinea y envenena los pseudo-rótulos de los
-    que sale la confianza. `D` contra `C`, y `F` y `G` contra `E`, difieren
+    que sale la confianza. `F` y `G` contra `E` difieren
     exactamente en ese peso, y con material limpio ese peldaño casi no tiene
     nada que separarlo: es bajo ruido donde el peso tiene algo que hacer.
 

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-import MIL_CREDA_Benchmark as package
+import MIL_CREDA as package
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 NOTEBOOKS = REPOSITORY / "MIL-CREDA" / "Notebooks"

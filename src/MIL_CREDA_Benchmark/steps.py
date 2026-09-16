@@ -438,7 +438,7 @@ def productores() -> dict[str, str]:
     ganaría, así que se prefiere el primero y la ambigüedad no se inventa un
     dueño nuevo.
     """
-    import MIL_CREDA_Benchmark as paquete
+    import MIL_CREDA as paquete
 
     mapa: dict[str, str] = {}
     for nombre, entrada in paquete.__steps__.items():
@@ -467,7 +467,7 @@ def predecesores(paso: str) -> tuple[str, ...]:
     es el que devuelve la tupla vacía, y eso sale de que su `reads` esté vacío,
     no de una lista de excepciones que alguien tenga que mantener.
     """
-    import MIL_CREDA_Benchmark as paquete
+    import MIL_CREDA as paquete
 
     if paso not in paquete.__steps__:
         raise SystemExit(
@@ -491,7 +491,7 @@ def entradas_faltantes(paso: str) -> list[dict]:
     la regla dice que el ensayo puede consumir SOLO lo completo, no que todo
     tenga que existir ya.
     """
-    import MIL_CREDA_Benchmark as paquete
+    import MIL_CREDA as paquete
 
     duenios = productores()
     faltan = []
@@ -525,7 +525,7 @@ def cuaderno_de(paso: str) -> str | None:
     no hace falta una segunda lista ni leer el árbol de sintaxis de este módulo
     para saber cuál es.
     """
-    import MIL_CREDA_Benchmark as paquete
+    import MIL_CREDA as paquete
 
     nombres = [Path(raiz).name
                for raiz in paquete.__steps__[paso].get("produces", [])
@@ -682,7 +682,7 @@ def ensayo_remoto(paso: str) -> dict:
     allí adentro. Se restaura lo que hubiera antes en vez de borrarse, así que
     dos llamadas anidadas no se pisan.
     """
-    import MIL_CREDA_Benchmark as paquete
+    import MIL_CREDA as paquete
     from MIL_CREDA_Benchmark import config, harness
 
     previos = predecesores(paso)
