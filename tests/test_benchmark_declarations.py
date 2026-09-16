@@ -13,6 +13,7 @@ Nothing here trains: what is not config-level drives the harness with a fake
 
 from __future__ import annotations
 
+import MIL_CREDA
 import MIL_CREDA_Benchmark
 import json
 
@@ -32,7 +33,7 @@ def test_every_arm_declares_which_sections_it_exercises() -> None:
 
 
 def test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration() -> None:
-    assert MIL_CREDA_Benchmark.__benchmark__["revision"] == config.REVISION
+    assert MIL_CREDA.__implementation__["revision"] == config.REVISION
 
 
 # --------------------------------------------------------- distribution -------
@@ -128,8 +129,9 @@ def test_the_declared_dimensions_now_cover_every_dimension_the_harness_measures(
 
 def test_the_benchmark_declares_what_its_protocol_assumes() -> None:
     """A change of reach leaves every arm intact and every dimension meaningless,
-    so the premises sit beside the arms rather than in somebody's memory."""
-    premises = MIL_CREDA_Benchmark.__benchmark__["premises"]
+    so the premises sit beside the method's own declaration rather than in
+    somebody's memory."""
+    premises = MIL_CREDA.__implementation__["premises"]
     for key in ("prediction", "unit", "metric", "direction"):
         assert premises.get(key), f"the protocol does not declare its {key}"
 
@@ -165,7 +167,7 @@ def test_the_figures_pick_transfers_the_campaign_actually_ran() -> None:
     from MIL_CREDA_Benchmark import tables
 
     ran = [f"{s}->{t}" for s, t in config.TRANSFERS]
-    runs = [{"arm": "A", "transfer": label, "targetAccuracy": index / 10,
+    runs = [{"arm": "B", "transfer": label, "targetAccuracy": index / 10,
              "contribution": 0.0} for index, label in enumerate(ran)]
     chosen = tables.best_transfers(runs)
     assert len(chosen) == config.FIGURE_TRANSFER_COUNT
@@ -179,7 +181,7 @@ def test_the_figure_transfer_rule_ranks_by_the_outcome_it_declares() -> None:
     from MIL_CREDA_Benchmark import tables
 
     ran = [f"{s}->{t}" for s, t in config.TRANSFERS]
-    ascending = [{"arm": "A", "transfer": label, "targetAccuracy": index / 10,
+    ascending = [{"arm": "B", "transfer": label, "targetAccuracy": index / 10,
                   "contribution": 0.0} for index, label in enumerate(ran)]
     assert tables.best_transfers(ascending, count=2) == [ran[-1], ran[-2]]
     assert config.FIGURE_TRANSFER_RULE.strip(), "the rule is not declared anywhere"
@@ -514,7 +516,7 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
 
     reduction = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0})
     with pytest.raises(SystemExit) as raised:
-        harness.campaign(reduction, torch.device("cpu"), arms=["A"],
+        harness.campaign(reduction, torch.device("cpu"), arms=["B"],
                          progress=lambda *a: None)
     assert "below scale" in str(raised.value)
     assert "creda" in str(raised.value)
@@ -564,7 +566,7 @@ def test_a_single_machine_campaign_records_its_per_run_readings(
 
     reduction = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0},
                                   seeds=[0, 1])
-    harness.campaign(reduction, torch.device("cpu"), arms=["A"],
+    harness.campaign(reduction, torch.device("cpu"), arms=["B"],
                      progress=lambda *a: None)
 
     written = next(tmp_path.rglob("summary.json"))
@@ -574,7 +576,7 @@ def test_a_single_machine_campaign_records_its_per_run_readings(
     _, _, per_run = shards.partition(config.DIMENSIONS, shards.declaration())
     assert per_run, "the declaration has to name at least one for this to mean anything"
     transfer = f"{config.VERDICT_TRANSFERS[0][0]}->{config.VERDICT_TRANSFERS[0][1]}"
-    readings = summary["gridPerRun"][transfer]["A"][per_run[0]]
+    readings = summary["gridPerRun"][transfer]["B"][per_run[0]]
     # One reading per seed, each keeping its own environment and seed rather
     # than an average across them -- which is the whole reason the dimension is
     # `perRun` and the reason `render_per_run_summary` can group by machine.

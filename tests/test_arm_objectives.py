@@ -108,76 +108,12 @@ def test_the_three_attention_rungs_are_the_ones_the_ladder_declares() -> None:
         {("SK", "G")}
 
 
-# ------------------------------------------------------------ prior work as it is
-
-def test_creda_keeps_its_per_instance_cross_entropy(encoder) -> None:
-    """An instance-unit arm's supervised term is CREDA's own cross-entropy over
-    instances, never Eq. (18) normalized by `B_src`.
-
-    The two are not interchangeable: `source_loss` divides by its own supremum so
-    the three terms of Eq. (39) can be read on one scale, and applying it here
-    would edit prior work to make the comparison look tidy. The asymmetry is the
-    formulation's and is reported rather than removed.
-
-    Reachable red: call `source_loss` in the instance branch, or drop the
-    `repeat_interleave` so the bag's label stops reaching its instances.
-    """
-    from MIL_CREDA.objective import source_loss
-
-    arm = _arm("D")
-    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
-    y = arm.source.labels[:config.BAGS_PER_STEP]
-    step = arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
-
-    embeddings = arm.instance_embeddings(x)
-    logits = arm.head(embeddings)
-    per_instance = F.cross_entropy(logits.reshape(-1, CLASSES),
-                                   y.repeat_interleave(x.shape[1]))
-    assert step["supervised"] == pytest.approx(float(per_instance.detach()), abs=1e-6)
-
-    bag_scores = F.softmax(arm.head(arm.bag_representations(embeddings)[0]), dim=1)
-    normalized = source_loss(bag_scores, F.one_hot(y, CLASSES).to(bag_scores.dtype),
-                             config.EPSILON)
-    assert step["supervised"] != pytest.approx(float(normalized.detach()), abs=1e-6)
-
-
-def test_creda_carries_one_term_and_computes_it_with_its_own_loss(encoder) -> None:
-    """Its own single-term objective: `L_creda` as `CREDALoss` computes it, with
-    the coefficient applied once from the shared schedule.
-
-    `lambda_creda` stays at one inside the module because the ramp already
-    carries the ceiling; leaving prior work's own coefficient there as well would
-    apply it twice and the arm would be running at a scalar nobody declared.
-
-    Reachable red: give `CREDALoss` back its coefficient, or compute the term over
-    bag representations instead of over instances.
-    """
-    arm = _arm("D")
-    assert arm.creda.lambda_creda == 1.0
-
-    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
-    y = arm.source.labels[:config.BAGS_PER_STEP]
-    generator = torch.Generator().manual_seed(3)
-    step = arm.training_step(x, y, 0.5, generator)
-
-    # the same term, recomputed from prior work's own module over instances
-    embeddings = arm.instance_embeddings(x)
-    target = arm.target.take(arm._draw_target(torch.Generator().manual_seed(3)))
-    H_t = arm.instance_embeddings(target).reshape(-1, arm.encoder.output_dim)
-    own = arm.creda(embeddings.reshape(-1, arm.encoder.output_dim), H_t,
-                    y.repeat_interleave(x.shape[1]),
-                    F.softmax(arm.head(H_t), dim=1))
-    assert step["adaptation"] == pytest.approx(float(own.detach()), abs=1e-6)
-
-    # one term and one coefficient: the objective is the sum of exactly those two
-    assert float(step["loss"].detach()) == pytest.approx(
-        step["supervised"] + step["contribution"], abs=1e-6)
-    assert step["contribution"] == pytest.approx(0.5 * step["adaptation"], abs=1e-6)
-
+# ------------------------------------------------- the supervised term of a bag
 
 def test_a_bag_unit_arm_uses_the_normalized_supervised_term_instead(encoder) -> None:
-    """The other half of the same claim: the two units do not share a term, and
-    which one an arm gets is read from what it declares."""
+    """Which supervised term an arm gets is read from the unit it declares, and a
+    bag-unit arm gets Eq. (18) normalized by `B_src` rather than a cross-entropy
+    over instances."""
     from MIL_CREDA.objective import source_loss
 
     arm = _arm("B")
@@ -238,7 +174,7 @@ def _run_campaign(seeds: list[int], noise: float = 0.0) -> dict:
         torch.device("cpu"), progress=lambda *a: None)
 
 
-def test_one_draw_of_the_material_is_shared_by_all_ten_arms(campana) -> None:
+def test_one_draw_of_the_material_is_shared_by_every_arm(campana) -> None:
     """Arms that saw differently corrupted material differ in the draw as well as
     in what they compute, and no rung between them is attributable.
 
@@ -247,8 +183,8 @@ def test_one_draw_of_the_material_is_shared_by_all_ten_arms(campana) -> None:
     same object. The count is what says so -- three domains for one seed, however
     many arms ran -- and the identity is what makes the count mean it.
 
-    Reachable red: move `bags.build` inside the arm loop, and the ten arms of a
-    cell get ten draws that agree in distribution and in nothing else.
+    Reachable red: move `bags.build` inside the arm loop, and the seven arms of
+    a cell get seven draws that agree in distribution and in nothing else.
     """
     harness_result = _run_campaign([7], noise=config.NOISE_LEVELS[2])
     built = campana["built"]
@@ -260,7 +196,7 @@ def test_one_draw_of_the_material_is_shared_by_all_ten_arms(campana) -> None:
 
     runs = campana["runs"]
     arms = {run["arm"] for run in runs}
-    assert len(arms) == len(config.ARMS) == 10
+    assert len(arms) == len(config.ARMS) == 7
     for transfer in {run["transfer"] for run in runs}:
         of_cell = [run for run in runs if run["transfer"] == transfer]
         assert len({run["source"] for run in of_cell}) == 1, \
@@ -523,25 +459,26 @@ class _SpyF:
         return F.cross_entropy(scores, target, *args, **kwargs)
 
 
-def test_the_bag_label_reaches_thirty_instances_in_one_unit_and_one_bag_in_the_other(
-        encoder, monkeypatch) -> None:
-    """One contamination, two perturbations -- asserted as the mechanism and not
-    as its consequence.
+def test_the_bag_label_never_leaves_its_bag(encoder, monkeypatch) -> None:
+    """A contaminated instance arrives as a witness inside its bag and never as a
+    wrong label -- asserted as the mechanism and not as its consequence.
 
-    `wiring` broadcasts the bag's label to all thirty of its instances for an
-    instance-unit arm, so a contaminated instance there carries a genuinely wrong
-    label. A bag-unit arm never expands it: the label stays at the bag and the
-    contaminants arrive as witnesses inside it. That is one perturbation entering
-    two objectives differently, and it is why a robustness table cannot read the
-    two families as the same experiment.
+    A bag-unit arm never expands the bag's label to its instances: the label stays
+    at the subject, so a contaminant is one of thirty witnesses the confidence can
+    downweight rather than a supervised target that is simply wrong.
 
-    What is asserted is the broadcast itself -- how many supervised targets one
-    bag's label becomes. Whether a wrong label and a downweightable witness
-    differ in kind is the reading the report makes of this, and it stays an
-    argument rather than becoming an assertion.
+    What is asserted is the absence of the broadcast itself -- how many supervised
+    targets one bag's label becomes. Whether a wrong label and a downweightable
+    witness differ in kind is the reading the report makes of this, and it stays
+    an argument rather than becoming an assertion.
 
-    Reachable red: drop the `repeat_interleave`, or expand the label in the bag
-    branch as well.
+    The other half of this claim -- the instance unit broadcasting the label to
+    all thirty -- no longer has a declared arm to run on. `wiring` still carries
+    that branch, and `test_the_bag_unit_arms_assemble_the_objective_and_never_write
+    _a_term_inline` still reads it out of the source tree; what is gone is the
+    executed comparison between the two units.
+
+    Reachable red: expand the label in the bag branch as well.
     """
     per_instance, per_bag = [], []
     monkeypatch.setattr(wiring, "F", _SpyF(per_instance))
@@ -557,19 +494,6 @@ def test_the_bag_label_reaches_thirty_instances_in_one_unit_and_one_bag_in_the_o
     B = config.BAGS_PER_STEP
     m = config.INSTANCES_PER_BAG
 
-    instance_arm = _arm("D")
-    assert config.ARMS_BY_ID["D"]["unit"] == "instance"
-    x = instance_arm.source.take(torch.arange(B))
-    y = instance_arm.source.labels[:B]
-    instance_arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
-
-    assert per_instance, "the instance unit computed no supervised term"
-    # one target per instance: the bag's single label, thirty times over
-    assert per_instance[0].shape == (B * m,)
-    assert torch.equal(per_instance[0], y.repeat_interleave(m))
-    assert per_bag == [], "the instance unit reached Eq. (18)"
-
-    per_instance.clear()
     bag_arm = _arm("G")
     assert config.ARMS_BY_ID["G"]["unit"] == "bag"
     x = bag_arm.source.take(torch.arange(B))
@@ -582,8 +506,8 @@ def test_the_bag_label_reaches_thirty_instances_in_one_unit_and_one_bag_in_the_o
     assert torch.equal(per_bag[0].argmax(dim=1), y)
     assert per_instance == [], "the bag unit broadcast the label anyway"
 
-    # thirty supervised targets against one is what "two perturbations" names,
-    # and the factor between them is the bag's own cardinality
+    # one supervised target against the thirty witnesses inside it, and the
+    # factor between them is the bag's own cardinality
     assert m == config.INSTANCES_PER_BAG > 1
 
 

@@ -241,22 +241,21 @@ NOISE_TRANSFER = ("M", "U")
 #: The diagnostic that separates *the term failed* from *the coefficient was too
 #: small*, once the campaign's ceilings are known to have been searched clean.
 #:
-#: `D` and `G` are the two complete methods, one per family, and the only two
-#: carrying the coefficient at all: `A` and `B` have no adaptation term to
-#: re-search a ceiling for, and `C`, `E` and `F` are ablations that would
-#: multiply the search without adding diagnosis.
+#: `G` is the complete method and the only arm carrying the coefficient at all:
+#: `B` has no adaptation term to re-search a ceiling for, and `E` and `F` are
+#: ablations that would multiply the search without adding diagnosis.
 #:
 #: `NOISE_DIAGNOSTIC_LEVEL` is the cap of the range, fixed here rather than after
 #: the curve exists. At the extreme the coefficient is under the most pressure, so
 #: a re-searched ceiling that recovers nothing there recovers nothing anywhere and
 #: the reading does not depend on where anyone chose to look.
 #:
-#: It needs three points and pays for one: the two arms at this level under the
-#: campaign's clean ceiling come out of the campaign, and what is run is the
-#: ceiling searched at this level plus the two arms under it. Its numbers are
+#: It needs three points and pays for one: the arm at this level under the
+#: campaign's clean ceiling comes out of the campaign, and what is run is the
+#: ceiling searched at this level plus the arm under it. Its numbers are
 #: diagnostic and never enter the verdict tables; what it decides is whether
 #: per-level ceilings are worth restructuring for.
-NOISE_DIAGNOSTIC_ARMS = ["D", "G"]
+NOISE_DIAGNOSTIC_ARMS = ["G"]
 NOISE_DIAGNOSTIC_LEVEL = NOISE_LEVELS[-1]
 
 # -------------------------------------------------------------------- network
@@ -341,7 +340,7 @@ RAMP_CEILING = 1.0
 CEILING_GRID = [1e-4, 1e-3, 1e-2, 1e-1, 1.0]
 
 #: Which arm each family searches with: the complete method, not an ablation.
-SEARCH_ARMS = {"creda": "D", "milcreda": "G"}
+SEARCH_ARMS = {"milcreda": "G"}
 
 #: The search runs once, at the scale the campaign runs at, and never at pilot
 #: scale. Its epoch count is `FULL_EPOCHS` and not `EPOCHS`, deliberately: the
@@ -484,15 +483,6 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 #: the local term, and an unmarked name is the complete method.
 
 ARMS = [
-    {"id": "A", "name": "Baseline", "label": "source-only (instances)",
-     "unit": "instance", "adaptation": None, "weighting": False, "local": False,
-     "attention": None, "selection": None},
-    {"id": "C", "name": "CREDA*", "label": "CREDA, unweighted",
-     "unit": "instance", "adaptation": "creda", "weighting": False, "local": False,
-     "attention": None, "selection": None},
-    {"id": "D", "name": "CREDA", "label": "CREDA, weighted (full)",
-     "unit": "instance", "adaptation": "creda", "weighting": True, "local": False,
-     "attention": None, "selection": None},
     {"id": "B", "name": "MIL-Baseline", "label": "source-only (bags)",
      "unit": "bag", "adaptation": None, "weighting": False, "local": False,
      "attention": "learned", "selection": None},
@@ -538,15 +528,9 @@ SELECTION_SEED = 20250812
 #: two arms differ in one thing, so the pairs are written out rather than left to
 #: whoever reads the table.
 LADDER = [
-    ("A", "B", "qué compra la representación por bolsas, con la adaptación apagada"),
-    ("A", "C", "qué compra la alineación de CREDA, sin ponderar"),
-    ("C", "D", "qué compra la ponderación por confianza en CREDA"),
     ("B", "E", "qué compra el término global, sin ponderar"),
     ("E", "F", "qué compra la ponderación por confianza en MIL-CREDA"),
     ("F", "G", "qué compra la correspondencia local"),
-    ("C", "E", "el mismo peldaño, construido de dos maneras: sin ponderar"),
-    ("D", "F", "el mismo peldaño, construido de dos maneras: ponderado"),
-    ("D", "G", "mano a mano, cada método completo"),
     # The three below hold the instance budget at SELECT_K and differ only in the
     # rule that spends it, except the last, which is the budget itself.
     ("SU", "SK", "qué compra la selección por atención frente a una regular"),
@@ -591,8 +575,7 @@ CHECKPOINTS = {arm["id"]: 3 for arm in ARMS}
 
 #: Which floor each adapted arm is read against: same unit, same everything, with
 #: the adaptation term switched off.
-FLOOR_OF = {"D": "A", "G": "B", "F": "B", "E": "B", "SU": "B", "SA": "B", "SK": "B",
-            "C": "A"}
+FLOOR_OF = {"G": "B", "F": "B", "E": "B", "SU": "B", "SA": "B", "SK": "B"}
 
 # ------------------------------------------------------------------- figures
 
@@ -616,21 +599,21 @@ FIGURE_TRANSFER_COUNT = 3
 #: outcome is how a figure stops being able to come out wrong.
 FIGURE_TRANSFER_RULE = "mayor exactitud media en destino sobre todos los métodos"
 
-#: The columns of the latent grid after the shared original space: both floors,
-#: both CREDA, all three MIL-CREDA. The floors are what make the rest readable —
-#: "aligned" cannot be seen without a "not aligned" beside it.
+#: The columns of the latent grid after the shared original space: the floor and
+#: all three MIL-CREDA. The floor is what makes the rest readable — "aligned"
+#: cannot be seen without a "not aligned" beside it.
 #:
-#: Both floors and not one, because whether they are redundant is a measurement
-#: and the measurement says they are not: drawn at the instance level on the pilot,
-#: their distance ratios differ by up to 0.38 and their domain separabilities by
-#: 0.07. They train the same encoder through different objectives — cross-entropy
-#: per instance against cross-entropy per bag through the attention pooling — so
-#: their instance embeddings had no reason to agree. `latent.floors_agree` runs
-#: that check on every campaign rather than leaving it as a belief.
+#: One floor and not two, because there is one unit left: with the instance-unit
+#: arms undeclared, `MIL-Baseline` is the only source-only column the grid has to
+#: draw. `latent.floors_agree` — which measured whether the two floors were
+#: redundant, and found they were not: drawn at the instance level on the pilot,
+#: their distance ratios differed by up to 0.38 and their domain separabilities by
+#: 0.07 — has no second floor left to read against, and is kept for the day one is
+#: declared again rather than removed as though the question had been answered.
 #:
 #: The selecting arms are left out because they differ from `G` in their instance
 #: budget rather than in what they align: a phase-one question, not a picture.
-LATENT_PANELS = ["A", "B", "C", "D", "E", "F", "G"]
+LATENT_PANELS = ["B", "E", "F", "G"]
 
 #: Whether `MIL-Baseline` is redundant with `Baseline` once both are drawn at the
 #: instance level is a measurement, not an assumption: the two train the same

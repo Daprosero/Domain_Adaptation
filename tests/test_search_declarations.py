@@ -284,7 +284,7 @@ def test_la_campana_se_niega_sin_techos(tmp_path, monkeypatch) -> None:
 
     with pytest.raises(SystemExit) as levantado:
         harness.campaign(harness.Reduction(ceilings={}), torch.device("cpu"),
-                         arms=["A"], progress=lambda *a: None)
+                         arms=["B"], progress=lambda *a: None)
     dicho = str(levantado.value)
     assert "refusing to run without the searched ceilings" in dicho
     assert str(config.SEARCH_EPOCHS) in dicho, "el rechazo no dice a qué escala se busca"

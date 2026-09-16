@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-import MIL_CREDA_Benchmark as paquete
+import MIL_CREDA as paquete
 from MIL_CREDA_Benchmark import steps
 
 #: La raíz del repositorio, derivada del módulo que ya la conoce
@@ -904,10 +904,10 @@ def test_el_diagnostico_corre_en_el_tope_del_rango_y_paga_una_sola_medicion(
     assert config.NOISE_TRANSFER == ("M", "U")
     assert registro["transfer"] == "M->U"
 
-    # los dos completos, uno por familia
-    assert list(registro["arms"]) == list(config.NOISE_DIAGNOSTIC_ARMS) == ["D", "G"]
+    # el completo de la familia declarada
+    assert list(registro["arms"]) == list(config.NOISE_DIAGNOSTIC_ARMS) == ["G"]
     familias = {config.ARMS_BY_ID[a]["adaptation"] for a in registro["arms"]}
-    assert familias == {"creda", "milcreda"}
+    assert familias == {"milcreda"}
     for arm in registro["arms"]:
         spec = config.ARMS_BY_ID[arm]
         assert spec["adaptation"] is not None, "un brazo sin techo que re-buscar"
@@ -1786,7 +1786,7 @@ def test_el_ensayo_remoto_no_ablanda_la_guarda_que_gobierna_la_campana(
     reduccion = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0},
                                   pilot=True)
     with pytest.raises(SystemExit) as caido:
-        harness.campaign(reduccion, torch.device("cpu"), arms=["A"],
+        harness.campaign(reduccion, torch.device("cpu"), arms=["B"],
                          progress=lambda *a: None)
     assert "below scale" in str(caido.value)
     assert "creda" in str(caido.value)

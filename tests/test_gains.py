@@ -36,8 +36,8 @@ def test_the_difference_is_paired_within_a_transfer():
     en las dos. Sin aparear, la media de los valores crudos mezcla la dificultad;
     apareado tiene que dar 5.00 puntos limpios en ambas.
     """
-    runs = (_pair("D", "A", LABELS[0], [0.05] * 4, base=0.20)
-            + _pair("D", "A", LABELS[1], [0.05] * 4, base=0.80))
+    runs = (_pair("G", "B", LABELS[0], [0.05] * 4, base=0.20)
+            + _pair("G", "B", LABELS[1], [0.05] * 4, base=0.80))
     row = tables.paired_gains(runs, "targetAccuracy")[0]
     assert row["cells"][LABELS[0]]["mean"] == pytest.approx(5.0)
     assert row["cells"][LABELS[1]]["mean"] == pytest.approx(5.0)
@@ -51,8 +51,8 @@ def test_the_error_is_between_transfers_not_over_the_pooled_pairs():
     declararía significativo un promedio que no resuelve nada. Entre
     transferencias el error es la mitad de la distancia que las separa.
     """
-    runs = (_pair("D", "A", LABELS[0], [0.15] * 5)
-            + _pair("D", "A", LABELS[1], [-0.05] * 5))
+    runs = (_pair("G", "B", LABELS[0], [0.15] * 5)
+            + _pair("G", "B", LABELS[1], [-0.05] * 5))
     row = tables.paired_gains(runs, "targetAccuracy")[0]
     assert row["mean"] == pytest.approx(5.0)
     assert row["error"] == pytest.approx(10.0)
@@ -66,8 +66,8 @@ def test_the_two_averages_can_disagree_in_sign():
     porcentajes `-6.87`. Los dos son correctos y contestan preguntas distintas,
     que es exactamente por qué se reportan los dos.
     """
-    runs = (_pair("D", "A", LABELS[0], [-0.04] * 4, base=0.20)
-            + _pair("D", "A", LABELS[1], [0.05] * 4, base=0.80))
+    runs = (_pair("G", "B", LABELS[0], [-0.04] * 4, base=0.20)
+            + _pair("G", "B", LABELS[1], [0.05] * 4, base=0.80))
     row = tables.paired_gains(runs, "targetAccuracy")[0]
     assert row["mean"] > 0
     assert row["pct"] < 0
@@ -76,25 +76,25 @@ def test_the_two_averages_can_disagree_in_sign():
 
 
 def test_the_agreement_counts_each_transfer_beyond_its_own_noise():
-    runs = (_pair("D", "A", LABELS[0], [0.15] * 5)
-            + _pair("D", "A", LABELS[1], [-0.05] * 5)
-            + _pair("D", "A", LABELS[2], [0.0] * 5))
+    runs = (_pair("G", "B", LABELS[0], [0.15] * 5)
+            + _pair("G", "B", LABELS[1], [-0.05] * 5)
+            + _pair("G", "B", LABELS[2], [0.0] * 5))
     row = tables.paired_gains(runs, "targetAccuracy")[0]
     assert row["agreement"] == {"gana": 1, "pierde": 1, "empata": 1}
 
 
 def test_the_span_reports_the_two_extremes():
     """Lo que frena a un lector que solo mira el promedio."""
-    runs = (_pair("D", "A", LABELS[0], [0.15] * 5)
-            + _pair("D", "A", LABELS[1], [-0.05] * 5))
+    runs = (_pair("G", "B", LABELS[0], [0.15] * 5)
+            + _pair("G", "B", LABELS[1], [-0.05] * 5))
     row = tables.paired_gains(runs, "targetAccuracy")[0]
     assert row["span"] == pytest.approx((15.0, -5.0))
 
 
 def test_the_rendered_row_carries_all_four_summaries():
     """Ninguno de los cuatro puede faltar: cada uno tapa una lectura falsa."""
-    runs = (_pair("D", "A", LABELS[0], [0.15] * 5)
-            + _pair("D", "A", LABELS[1], [-0.05] * 5))
+    runs = (_pair("G", "B", LABELS[0], [0.15] * 5)
+            + _pair("G", "B", LABELS[1], [-0.05] * 5))
     text = tables.render_gains(runs, "targetAccuracy", "prueba", markdown=True)
     assert "Media (pts)" in text and "% medio" in text
     assert "Rango" in text and "de +15.0 a -5.0" in text
@@ -102,19 +102,19 @@ def test_the_rendered_row_carries_all_four_summaries():
 
 
 def test_a_floorless_arm_has_no_row():
-    """`Baseline` y `MIL-Baseline` no son la ganancia de nadie."""
-    runs = _pair("D", "A", LABELS[0], [0.05] * 4)
+    """`MIL-Baseline` no es la ganancia de nadie."""
+    runs = _pair("G", "B", LABELS[0], [0.05] * 4)
     arms = {r["arm"] for r in tables.paired_gains(runs, "targetAccuracy")}
-    assert "A" not in arms and "B" not in arms
+    assert "B" not in arms
 
 
 def test_it_reads_the_dimension_it_is_given():
     """Source y target son la misma tabla con otro instrumento."""
     runs = []
     for seed in range(4):
-        runs.append({"arm": "A", "transfer": LABELS[0], "seed": seed,
+        runs.append({"arm": "B", "transfer": LABELS[0], "seed": seed,
                      "targetAccuracy": 0.5, "sourceAccuracy": 0.9})
-        runs.append({"arm": "D", "transfer": LABELS[0], "seed": seed,
+        runs.append({"arm": "G", "transfer": LABELS[0], "seed": seed,
                      "targetAccuracy": 0.6, "sourceAccuracy": 0.8})
     tgt = tables.paired_gains(runs, "targetAccuracy")[0]
     src = tables.paired_gains(runs, "sourceAccuracy")[0]
@@ -129,14 +129,14 @@ def test_the_mean_is_bold_by_the_same_rule_the_legend_states():
     propia tabla: el lector la aplica y lee como significativo un promedio que
     está adentro del ruido.
     """
-    ruido = (_pair("D", "A", LABELS[0], [0.10] * 5)
-             + _pair("D", "A", LABELS[1], [-0.10] * 5))
+    ruido = (_pair("G", "B", LABELS[0], [0.10] * 5)
+             + _pair("G", "B", LABELS[1], [-0.10] * 5))
     texto = tables.render_gains(ruido, "targetAccuracy", "t", markdown=True)
     fila = [l for l in texto.splitlines() if "CREDA" in l][0]
     assert "**+0.00" not in fila and "**-0.00" not in fila
 
-    claro = (_pair("D", "A", LABELS[0], [0.10] * 5)
-             + _pair("D", "A", LABELS[1], [0.10] * 5))
+    claro = (_pair("G", "B", LABELS[0], [0.10] * 5)
+             + _pair("G", "B", LABELS[1], [0.10] * 5))
     fila = [l for l in tables.render_gains(claro, "targetAccuracy", "t", markdown=True
                                            ).splitlines() if "CREDA" in l][0]
     assert "**+10.00 ± 0.00**" in fila

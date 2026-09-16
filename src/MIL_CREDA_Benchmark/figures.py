@@ -280,7 +280,7 @@ def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
 
 
 def adaptation_curves(path: Path,
-                      arms: tuple[str, ...] = ("C", "D", "E", "F", "G"),
+                      arms: tuple[str, ...] = ("E", "F", "G"),
                       runs: Path | None = None,
                       transfers: list[str] | None = None) -> plt.Figure:
     """Each adaptation term across training, one panel per transfer.
@@ -295,7 +295,7 @@ def adaptation_curves(path: Path,
 
 
 def supervised_curves(path: Path,
-                      arms: tuple[str, ...] = ("A", "D", "B", "G"),
+                      arms: tuple[str, ...] = ("B", "G"),
                       runs: Path | None = None,
                       transfers: list[str] | None = None) -> plt.Figure:
     """The supervised term beside the adaptation one.
@@ -309,7 +309,7 @@ def supervised_curves(path: Path,
 
 
 def contribution_curves(path: Path,
-                        arms: tuple[str, ...] = ("C", "D", "E", "F", "G"),
+                        arms: tuple[str, ...] = ("E", "F", "G"),
                         runs: Path | None = None,
                       transfers: list[str] | None = None) -> plt.Figure:
     """What share of the objective each declared term actually commands.

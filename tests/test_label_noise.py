@@ -453,9 +453,9 @@ class TestTheAxisReadsWhatRan:
         from MIL_CREDA_Benchmark import tables
 
         self._tree(tmp_path, monkeypatch,
-                   {0.0: {"A": 0.80, "G": 0.80}, 0.4: {"A": 0.40, "G": 0.75}})
+                   {0.0: {"B": 0.80, "G": 0.80}, 0.4: {"B": 0.40, "G": 0.75}})
         said = tables.conclusion_noise(self.METRIC)
-        assert config.NAME_OF["G"] in said and config.NAME_OF["A"] in said
+        assert config.NAME_OF["G"] in said and config.NAME_OF["B"] in said
 
     def test_the_conclusion_is_not_tied_to_nothing(self, tmp_path, monkeypatch):
         """Permute the record and the sentence has to change. A conclusion that
@@ -464,10 +464,10 @@ class TestTheAxisReadsWhatRan:
         from MIL_CREDA_Benchmark import tables
 
         self._tree(tmp_path, monkeypatch,
-                   {0.0: {"A": 0.80, "G": 0.80}, 0.4: {"A": 0.40, "G": 0.75}})
+                   {0.0: {"B": 0.80, "G": 0.80}, 0.4: {"B": 0.40, "G": 0.75}})
         one = tables.conclusion_noise(self.METRIC)
         self._tree(tmp_path, monkeypatch,
-                   {0.0: {"A": 0.80, "G": 0.80}, 0.4: {"A": 0.75, "G": 0.40}})
+                   {0.0: {"B": 0.80, "G": 0.80}, 0.4: {"B": 0.75, "G": 0.40}})
         other = tables.conclusion_noise(self.METRIC)
         assert one != other
 
@@ -478,11 +478,11 @@ class TestTheAxisReadsWhatRan:
         from MIL_CREDA_Benchmark import tables
 
         self._tree(tmp_path, monkeypatch,
-                   {0.0: {"A": 0.80, "G": 0.80}, 0.2: {"A": 0.50, "G": 0.78}},
+                   {0.0: {"B": 0.80, "G": 0.80}, 0.2: {"B": 0.50, "G": 0.78}},
                    kind="campaign")
         said = tables.conclusion_versus_clean(self.METRIC, 0.2)
         assert "0.2" in said
-        assert config.NAME_OF["G"] in said and config.NAME_OF["A"] in said
+        assert config.NAME_OF["G"] in said and config.NAME_OF["B"] in said
 
     def test_every_new_section_states_what_it_aims_at(self):
         """`verify` reports a section that never states its objective as
@@ -994,7 +994,7 @@ class TestNoTwoFunctionsShareAName:
 
         runs = [{"arm": arm, "transfer": f"{source}->{target}", "seed": 0,
                  "targetAccuracy": value, "contribution": 0.1}
-                for arm, value in (("A", 0.60), ("G", 0.80))
+                for arm, value in (("B", 0.60), ("G", 0.80))
                 for source, target in config.VERDICT_TRANSFERS]
         texto = tables.conclusion(runs, "targetAccuracy", {"seeds": [0]})
         assert config.NAME_OF["G"] in texto
