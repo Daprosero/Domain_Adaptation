@@ -900,3 +900,83 @@ def test_the_written_record_still_carries_every_row():
 
     filas = [l for l in completo.splitlines() if l.startswith("| `")]
     assert len(filas) == 3, "el registro se queda con una fila por corrida"
+
+
+# ---------------------------------- the phase-two readings, both rates at once
+
+def _lectura(arm: str, transfer: str, seed: int, ratio: float) -> dict:
+    """The one quantity these tests read, in the shape phase two writes."""
+    return {"arm": arm, "transfer": transfer, "seed": seed, "median": True,
+            "geometry": {"ratio": ratio}}
+
+
+def _las_dos_tasas() -> tuple[list[dict], list[dict]]:
+    limpias = [_lectura("B", LABELS[0], 0, 0.90), _lectura("B", LABELS[1], 0, 0.80),
+               _lectura("G", LABELS[0], 0, 0.50), _lectura("G", LABELS[1], 0, 0.40)]
+    sucias = [_lectura("B", LABELS[0], 0, 0.95), _lectura("B", LABELS[1], 0, 0.85),
+              _lectura("G", LABELS[0], 0, 0.55), _lectura("G", LABELS[1], 0, 0.45)]
+    return limpias, sucias
+
+
+def test_the_two_rates_of_one_arm_are_contiguous_rows():
+    """The whole reason the second table stopped existing.
+
+    Two tables separated by a paragraph asked the reader to hold one row in
+    their head while they went to find the other; grouping by arm puts the
+    subtraction between two lines that touch. Reachable red: order the rows by
+    rate first and `B` at ρ=0.2 stops following `B` at ρ=0.
+    """
+    limpias, sucias = _las_dos_tasas()
+    filas = [l for l in tables.render_readings(
+        limpias, "geometry.ratio", "t", contaminated=sucias, rate=0.2,
+        markdown=True).splitlines() if l.startswith("| `")]
+
+    assert len(filas) == 4, filas
+    assert [f.split("|")[1].strip() for f in filas] == [
+        f"`{config.NAME_OF['B']}`", f"`{config.NAME_OF['B']}`",
+        f"`{config.NAME_OF['G']}`", f"`{config.NAME_OF['G']}`"]
+    assert [f.split("|")[2].strip() for f in filas] == ["0", "0.2", "0", "0.2"]
+
+
+def test_the_rate_is_the_second_column_and_the_rest_of_the_table_did_not_move():
+    """One column was added. The six transfers and the average are where they
+    were, because a reader who learned this table under two renderings must not
+    have to learn it again."""
+    limpias, sucias = _las_dos_tasas()
+    encabezado = tables.render_readings(
+        limpias, "geometry.ratio", "t", contaminated=sucias, rate=0.2,
+        markdown=True).splitlines()[0]
+
+    assert ([c.strip() for c in encabezado.split("|")[1:-1]]
+            == ["Método", tables.RATE_COLUMN, *LABELS, "Prom."])
+
+
+def test_an_arm_without_a_reading_for_a_transfer_still_gets_an_empty_cell():
+    """Not a zero: a zero is a measurement and this arm has none."""
+    limpias, _ = _las_dos_tasas()
+    fila = [l for l in tables.render_readings(limpias, "geometry.ratio", "t",
+                                              markdown=True).splitlines()
+            if config.NAME_OF["B"] in l][0]
+
+    assert fila.split("|")[5].strip() == "—"
+
+
+def test_without_a_contaminated_campaign_the_clean_rows_print_alone():
+    """The notebook guards every call with `if readings_ruido else`, so this
+    state is reachable and refusing here would take the table away from the run
+    that has half the material rather than from the one that has none."""
+    limpias, _ = _las_dos_tasas()
+    filas = [l for l in tables.render_readings(limpias, "geometry.ratio", "t",
+                                               markdown=True).splitlines()
+             if l.startswith("| `")]
+
+    assert len(filas) == 2, filas
+    assert all(f.split("|")[2].strip() == "0" for f in filas), filas
+
+
+def test_contaminated_readings_with_no_rate_refuse_rather_than_printing_a_zero():
+    """A row whose ρ column said `0` for the contaminated campaign would be the
+    one failure this table exists to prevent, written by the table itself."""
+    limpias, sucias = _las_dos_tasas()
+    with pytest.raises(ValueError):
+        tables.render_readings(limpias, "geometry.ratio", "t", contaminated=sucias)

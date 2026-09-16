@@ -1114,9 +1114,30 @@ def _reach(record: dict, path: str):
     return float(value) if isinstance(value, (int, float)) else None
 
 
+#: Cómo se encabeza la columna de tasa de contaminación, y con qué valor entra la
+#: campaña limpia. Declarado una vez porque el encabezado y la celda tienen que
+#: decir la misma cosa: `ρ=0` no es «sin medir», es la tasa cero medida.
+RATE_COLUMN = "ρ"
+CLEAN_RATE = 0.0
+
+
 def render_readings(readings: Iterable[dict], path: str, title: str,
+                    contaminated: Iterable[dict] = (), rate: float | None = None,
                     markdown: bool = False) -> str:
-    """Una medición de fase dos en la misma forma que las tablas de fase uno.
+    """Una medición de fase dos, a las dos tasas de contaminación, en una tabla.
+
+    Antes eran dos: una por tasa, separadas por un párrafo y con la misma forma
+    justamente para que el lector no tuviera que traducir entre ellas. Eso seguía
+    pidiéndole que recordara una fila mientras bajaba a buscar la otra. Acá la
+    tasa es una **columna** —la segunda, pegada al nombre del método— y las filas
+    van **agrupadas por brazo**: `MIL-CREDA` a ρ=0 y `MIL-CREDA` a ρ de la
+    campaña contaminada quedan una encima de la otra, que es la comparación que
+    las dos tablas existían para permitir y no lograban.
+
+    Al haber una sola renderización por cantidad, el chequeo de duplicación deja
+    de tener dos llamadas que distinguir: hay una, y lleva adentro los dos
+    números. Lo que antes obligaba a nombrar la contaminada aparte desapareció
+    con la segunda tabla.
 
     El `±` de acá **no** es el de las tablas de fase uno: es la dispersión entre
     los checkpoints guardados de esa celda. La fase uno mide la variabilidad de la
@@ -1125,44 +1146,64 @@ def render_readings(readings: Iterable[dict], path: str, title: str,
 
     Un brazo sin lectura para esta cantidad — uno sin término local no tiene
     correspondencia — recibe una celda vacía, no un cero.
+
+    Sin lecturas contaminadas imprime las filas limpias solas y no se niega: la
+    campaña a ρ puede todavía no haber dejado checkpoints, y ese estado es
+    alcanzable —el cuaderno lo tiene guardado en cada llamada— así que una tabla
+    a una sola tasa es una respuesta y no una falla.
     """
-    readings = list(readings)
+    readings, sucias = list(readings), list(contaminated)
+    if sucias and rate is None:
+        raise ValueError(
+            "hay lecturas contaminadas y ninguna tasa que ponerles en la "
+            "columna: una fila sin su ρ no dice de qué campaña salió.")
     labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
-    gathered: dict[tuple[str, str], list[float]] = {}
-    for reading in _own_medians(readings):
-        value = _reach(reading, path)
-        if value is not None:
-            gathered.setdefault((reading["arm"], reading["transfer"]), []).append(value)
+
+    def reunir(source: list[dict]) -> dict[tuple[str, str], list[float]]:
+        gathered: dict[tuple[str, str], list[float]] = {}
+        for reading in _own_medians(source):
+            value = _reach(reading, path)
+            if value is not None:
+                gathered.setdefault((reading["arm"], reading["transfer"]), []).append(value)
+        return gathered
+
+    por_tasa = [(CLEAN_RATE, reunir(readings))]
+    if sucias:
+        por_tasa.append((float(rate), reunir(sucias)))
 
     rows = []
     for arm in config.ARM_ORDER:
-        by_label = {label: (spread(gathered[(arm, label)]) if (arm, label) in gathered
-                            else None) for label in labels}
-        present = [c for c in by_label.values() if c]
-        if not present:
-            continue
-        rows.append({"name": config.NAME_OF[arm], "cells": by_label,
-                     "avg": sum(c["mean"] for c in present) / len(present),
-                     "n": max(c["n"] for c in present)})
+        for tasa, gathered in por_tasa:
+            by_label = {label: (spread(gathered[(arm, label)]) if (arm, label) in gathered
+                                else None) for label in labels}
+            present = [c for c in by_label.values() if c]
+            if not present:
+                continue
+            rows.append({"name": config.NAME_OF[arm], "rate": f"{tasa:g}",
+                         "cells": by_label,
+                         "avg": sum(c["mean"] for c in present) / len(present),
+                         "n": max(c["n"] for c in present)})
 
     def cell(entry) -> str:
         return "—" if entry is None else f"{entry['mean']:.3f} ± {entry['stdev']:.3f}"
 
-    columns = ["Método"] + labels + ["Prom."]
+    columns = ["Método", RATE_COLUMN] + labels + ["Prom."]
     if markdown:
         lines = ["| " + " | ".join(columns) + " |",
                  "|" + "|".join(["---"] * len(columns)) + "|"]
         for row in rows:
             lines.append("| " + " | ".join(
-                [f"`{row['name']}`", *(cell(row["cells"][l]) for l in labels),
+                [f"`{row['name']}`", row["rate"],
+                 *(cell(row["cells"][l]) for l in labels),
                  f"**{row['avg']:.3f}**"]) + " |")
         return "\n".join(lines)
 
     width = max(14, max((len(r["name"]) for r in rows), default=14) + 2)
-    lines = [f"{'Método':<{width}}" + "".join(f"{l:>18}" for l in labels)
-             + f"{'Prom.':>10}"]
+    rate_width = max(len(RATE_COLUMN), max((len(r["rate"]) for r in rows), default=1)) + 2
+    lines = [f"{'Método':<{width}}" + f"{RATE_COLUMN:>{rate_width}}"
+             + "".join(f"{l:>18}" for l in labels) + f"{'Prom.':>10}"]
     for row in rows:
-        lines.append(f"{row['name']:<{width}}"
+        lines.append(f"{row['name']:<{width}}" + f"{row['rate']:>{rate_width}}"
                      + "".join(f"{cell(row['cells'][l]):>18}" for l in labels)
                      + f"{row['avg']:>10.3f}")
     return "\n".join(lines)
@@ -2184,11 +2225,18 @@ def conclusion_readings_versus_clean(limpias: Iterable[dict], sucias: Iterable[d
                                      path: str, rate: float) -> str:
     """Cuánto movió la contaminación una lectura de fase dos, brazo por brazo.
 
-    No repite la tabla que tiene arriba. Lo que agrega es la distancia entre las
-    dos tasas, que es exactamente lo que ninguna de las dos tablas contiene por
-    separado -- y en fase dos importa más que en fase uno, porque una geometría
-    que no se mueve bajo ruido y una exactitud que sí se mueve son dos hechos
-    distintos sobre el mismo modelo.
+    No repite la tabla que tiene arriba. Lo que agrega es la **resta**: la tabla
+    pone las dos tasas de cada brazo en filas contiguas, y eso es todo lo que
+    hace: quien quiera la distancia todavía tiene que restar dos números a ojo.
+    Acá está hecha, y con el brazo que más se movió y el que menos nombrados. En
+    fase dos importa más que en fase uno, porque una geometría que no se mueve
+    bajo ruido y una exactitud que sí se mueve son dos hechos distintos sobre el
+    mismo modelo.
+
+    (Antes esta frase decía «lo que ninguna de las dos tablas contiene por
+    separado». Las dos tablas son una sola desde que la tasa es una columna, así
+    que lo que quedó en pie no es que el número esté repartido entre dos
+    renderizaciones, sino que no está en ninguna: una tabla de lecturas no resta.)
 
     Sobre las medianas de cada celda y no sobre todo lo promovido: los extras
     fueron elegidos por el ordenamiento de los brazos dependientes, así que son
@@ -2215,45 +2263,26 @@ def conclusion_readings_versus_clean(limpias: Iterable[dict], sucias: Iterable[d
         f"Entre ρ=0 y ρ={rate:g}, `{config.NAME_OF.get(movido, movido)}` es el que "
         f"más se mueve ({movimientos[movido]:+.4g}) y "
         f"`{config.NAME_OF.get(quieto, quieto)}` el que menos "
-        f"({movimientos[quieto]:+.4g}). La distancia entre las dos tasas es lo "
-        f"único que ninguna de las dos tablas dice por su cuenta."
+        f"({movimientos[quieto]:+.4g}). La tabla de arriba pone las dos tasas "
+        f"una debajo de la otra; la resta entre ellas es lo único que no dice."
     )
-
-
-def render_readings_contaminated(readings: Iterable[dict], path: str, title: str,
-                                 rate: float, markdown: bool = False) -> str:
-    """La misma lectura de fase dos, sobre los checkpoints de la campaña contaminada.
-
-    Declarado aparte de `render_readings` y no por gusto. El chequeo de
-    duplicación mira la llamada -- `render_readings(geometry.ratio)` -- y no
-    puede ver que un lado recibe `readings` y el otro `readings_ruido`: leía dos
-    renderizaciones del mismo número donde hay dos números distintos. Nombrarlo
-    aparte no es esquivar el chequeo, es decir lo que efectivamente hay, y deja
-    el chequeo intacto para el caso que sí tiene que atrapar.
-
-    La tabla es idéntica porque tiene que serlo: dos formas distintas para la
-    misma cantidad obligarían al lector a traducir entre ellas para comparar,
-    que es justamente lo que estas dos tablas existen para no pedir.
-    """
-    readings = list(readings)
-    if not readings:
-        return (f"La campaña a ρ={rate:g} todavía no dejó checkpoints, así que no "
-                f"hay segunda tabla. No está vacía: no existe.")
-    return render_readings(readings, path, title, markdown=markdown)
 
 
 def render_correspondence_contaminated(scored: Iterable[dict], rate: float,
                                        markdown: bool = False) -> str:
     """Los mismos aciertos y la misma masa, sobre la campaña contaminada.
 
-    Declarado aparte de `render_correspondence` por la razón que
-    `render_readings_contaminated` ya escribió para su propio par: el chequeo de
-    duplicación mira la llamada, y acá las dos mitades llamaban a la misma
-    función sin nombrar ninguna dimensión, de modo que la contaminada se leía
-    como una segunda renderización de la tabla limpia. No lo es: una mide sobre
-    material limpio y la otra a ρ, y son dos números distintos. Nombrarlo aparte
-    no esquiva el chequeo, dice lo que efectivamente hay, y lo deja intacto para
-    el caso que sí tiene que atrapar.
+    Declarado aparte de `render_correspondence`: el chequeo de duplicación mira
+    la llamada, y acá las dos mitades llamaban a la misma función sin nombrar
+    ninguna dimensión, de modo que la contaminada se leía como una segunda
+    renderización de la tabla limpia. No lo es: una mide sobre material limpio y
+    la otra a ρ, y son dos números distintos. Nombrarlo aparte no esquiva el
+    chequeo, dice lo que efectivamente hay, y lo deja intacto para el caso que sí
+    tiene que atrapar.
+
+    Las lecturas de fase dos salieron de este arreglo: `render_readings` lleva
+    ahora una columna de tasa y una sola llamada por cantidad. Esta tabla no se
+    unificó, y por eso el par de nombres sigue existiendo acá y sólo acá.
 
     La tabla es idéntica porque tiene que serlo: dos formas distintas para la
     misma cantidad obligarían al lector a traducir entre ellas para comparar,
