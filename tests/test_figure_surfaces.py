@@ -804,8 +804,8 @@ def test_every_figure_carries_the_same_three_lines_a_table_does() -> None:
     sources = ["".join(cell["source"]) for cell in cells]
 
     # A figure is what reaches `figures.inline`. The notebook also calls
-    # `latent.floors_agree`, `latent.analyse` and `latent.bound`, which compute
-    # and never draw, so the display is what tells a figure from a helper.
+    # `latent.analyse` and `latent.bound`, which compute and never draw, so the
+    # display is what tells a figure from a helper.
     drawn = [index for index, cell in enumerate(cells)
              if cell["cell_type"] == "code" and "figures.inline(" in sources[index]]
     produced = {name for index in drawn

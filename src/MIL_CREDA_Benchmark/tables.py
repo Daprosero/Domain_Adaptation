@@ -2510,3 +2510,91 @@ def conclusion_rungs_versus_clean(metric: str, rate: float) -> str:
             f"({_scaled(movimientos[cae], metric):+.{decimals}f}). Un peldaño "
             f"que crece bajo ruido es el mecanismo haciendo algo que el material "
             f"limpio no le pedía.")
+
+
+# ------------------------------------------- una tabla, una conclusión
+#
+# Las tres funciones de abajo no calculan nada: **componen**. Cada una junta la
+# conclusión limpia --- quién está adelante y sobre qué evidencia --- con la
+# cruzada --- cuánto lo movió la contaminación --- en un solo texto, porque hay
+# una sola tabla.
+#
+# Eran dos conclusiones porque eran dos tablas. Desde que el ruido es una
+# columna y cada cantidad se renderiza una vez, con el bloque `sin` primero y el
+# `con` después, dos conclusiones bajo una tabla obligan a leer dos veces para
+# saber qué pasó con una sola cosa.
+#
+# Componen y no reescriben, y eso es deliberado: las frases que se emiten son
+# las que las funciones de abajo ya emitían, palabra por palabra. Una redacción
+# propia sería una segunda versión de la misma lectura, se desactualizaría en
+# silencio y se le creería igual --- que es exactamente lo que este archivo
+# entero existe para no hacer.
+
+
+def conclusion_with_noise(runs: Iterable[dict], metric: str, reduction: dict,
+                          rate: float) -> str:
+    """Dónde quedó cada método y cuánto lo movió la contaminación, junto.
+
+    La primera mitad es `conclusion`: los extremos de la tabla y cada método
+    contra su propio piso. La segunda es `conclusion_versus_clean`: la resta
+    entre el bloque `sin` y el `con`, que es lo único que la tabla no hace.
+    """
+    return (f"{conclusion(runs, metric, reduction)} "
+            f"{conclusion_versus_clean(metric, rate)}")
+
+
+def conclusion_rungs_with_noise(summary: dict, metric: str, rate: float) -> str:
+    """Qué peldaño separa más y cuánto lo movió la contaminación, junto.
+
+    `conclusion_rungs` primero --- qué componente puso a quién adelante y si el
+    peldaño se inclina igual en todas las transferencias --- y después
+    `conclusion_rungs_versus_clean`, que es cuál se agranda y cuál se achica
+    entre los dos bloques de la misma tabla.
+    """
+    return (f"{conclusion_rungs(summary, metric)} "
+            f"{conclusion_rungs_versus_clean(metric, rate)}")
+
+
+#: Qué conclusión limpia le corresponde a cada lectura de fase dos.
+#:
+#: Derivado de la lectura y no pasado a mano: la tabla ya se renderiza por su
+#: ruta --- `render_readings(readings, path, ...)` --- así que la celda del
+#: cuaderno nombra la ruta una sola vez y la conclusión sale de ahí. Pasar la
+#: función aparte dejaría que una celda mostrara la tabla de una lectura y
+#: concluyera sobre otra, y las dos saldrían bien formadas.
+#:
+#: `geometry.crossDomainSameClass` y `geometry.betweenClasses` no están, y su
+#: ausencia es la declaración: esas dos tablas se concluyen **juntas**, con
+#: `conclusion_distances`, porque una bajando sola no distingue alineación de
+#: colapso. Pedir acá una conclusión limpia para una de ellas es pedir la mitad
+#: de una lectura, y por eso se niega en vez de contestar.
+READING_CONCLUSIONS = {
+    "geometry.ratio": conclusion_geometry,
+    "domainSeparability": conclusion_separability,
+    "correspondence.massOnTrueClass": conclusion_mass,
+    "attentionSpread": conclusion_attention,
+}
+
+
+def conclusion_readings_with_noise(limpias: Iterable[dict],
+                                   sucias: Iterable[dict],
+                                   path: str, rate: float) -> str:
+    """Qué dice una lectura de fase dos y cuánto la movió la contaminación.
+
+    Se niega ante una ruta que no tiene conclusión limpia propia en vez de
+    devolver sólo la cruzada: una conclusión que aparece a veces entera y a
+    veces a medias se lee igual en los dos casos.
+    """
+    if path not in READING_CONCLUSIONS:
+        raise KeyError(
+            f"`{path}` no tiene conclusión limpia propia, así que no hay nada "
+            f"que componer. Las dos distancias se concluyen juntas con "
+            f"`conclusion_distances`; las rutas con conclusión propia son "
+            f"{', '.join(sorted(READING_CONCLUSIONS))}.")
+    limpias, sucias = list(limpias), list(sucias)
+    limpia = READING_CONCLUSIONS[path](limpias)
+    if not sucias:
+        return (f"{limpia} Sin la corrida contaminada no hay resta que hacer: "
+                f"la tabla de arriba lleva un solo bloque.")
+    return (f"{limpia} "
+            f"{conclusion_readings_versus_clean(limpias, sucias, path, rate)}")

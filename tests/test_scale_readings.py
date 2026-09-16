@@ -371,8 +371,17 @@ class TestUnEnsayoNoSePuedeLeerComoUnaCorridaCompleta:
 
 
 class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
-    """Las tres entradas que dibujan paneles llevan la escala, o el ensayo mira
-    un árbol vacío y dibuja una grilla apagada sin un solo error."""
+    """Las entradas que dibujan paneles llevan la escala, o el ensayo mira un
+    árbol vacío y dibuja una grilla apagada sin un solo error.
+
+    La firma se le exige a las TRES, y el cuaderno llama a DOS. `floors_agree`
+    medía si los dos pisos eran redundantes entre sí; con una sola unidad
+    declarada queda un solo piso y la sección que la llamaba ya no existe. La
+    función sigue en el paquete con su escala intacta, sin llamador, para el
+    día en que se declare un segundo piso: retirar la comparación fue una
+    decisión y volver a traerla tiene que ser otra. Aflojarle la firma mientras
+    tanto sería dejar que ese día la llame alguien sin escala.
+    """
 
     @pytest.mark.parametrize("entrada", ["latent_grid", "correspondence_grid",
                                          "floors_agree"])
@@ -382,7 +391,9 @@ class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
             f"`latent.{entrada}` dibuja paneles y no puede decir de qué corrida "
             f"salen los pesos -> {list(firma.parameters)}")
 
-    def test_el_cuaderno_le_pasa_su_propia_escala_a_las_tres(self):
+    def test_el_cuaderno_le_pasa_su_propia_escala_a_las_que_llama(self):
+        """Rojo alcanzable: sacarle `ES_ENSAYO` a cualquiera de las dos
+        llamadas que dibujan, o borrar una de las dos del cuaderno."""
         documento = json.loads((_REPOSITORIO / "MIL-CREDA" / "Notebooks"
                                 / "Benchmark_Latent_v1.ipynb")
                                .read_text(encoding="utf-8"))
@@ -401,8 +412,8 @@ class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
             texto = ast.unparse(nodo)
             assert "ES_ENSAYO" in texto or "pilot" in texto, (
                 f"esta llamada dibuja con los pesos de otra corrida -> {texto}")
-        assert vistas == {"latent_grid", "correspondence_grid", "floors_agree"}, (
-            f"el cuaderno ya no llama a las tres -> {sorted(vistas)}")
+        assert vistas == {"latent_grid", "correspondence_grid"}, (
+            f"el cuaderno ya no llama a las dos que dibujan -> {sorted(vistas)}")
 
 
 def test_la_forma_del_repliegue_es_una_sola_en_todo_el_repositorio():

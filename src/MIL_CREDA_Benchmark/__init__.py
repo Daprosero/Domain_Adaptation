@@ -131,6 +131,14 @@ __benchmark__ = {
             "tables.conclusion_readings_versus_clean",
             "tables.conclusion_weighting_under_noise",
             "tables.conclusion_rungs_versus_clean",
+            # Las tres composiciones: una tabla, una conclusión. No calculan
+            # nada propio --- juntan la conclusión limpia con la cruzada, con
+            # las frases que las dos ya emitían --- y están declaradas igual
+            # que las demás porque son las que el cuaderno llama, y lo que la
+            # verificación mira es el documento que alguien lee.
+            "tables.conclusion_with_noise",
+            "tables.conclusion_rungs_with_noise",
+            "tables.conclusion_readings_with_noise",
         ],
         # One call that takes a record and returns {label: text}. It exists so the
         # verification can run every conclusion over permuted numbers without
@@ -200,7 +208,9 @@ __benchmark__ = {
                                       "techo re-buscado que no recupera nada ahí "
                                       "no recupera nada en ningún lado",
             "LATENT_PANELS": "los métodos que alinean, elegidos por lo que computan "
-                             "y no por lo que puntúan; los pisos entran por medición",
+                             "y no por lo que puntúan, y el único piso que queda "
+                             "declarado, que es lo que los hace legibles: "
+                             "«alineado» no se ve sin un «no alineado» al lado",
             "BAG_PANELS": "el peldaño donde vive el término local: piso, sin el "
                           "término y con él, elegidos por el mecanismo",
             "SEARCH_SEEDS": "tres repeticiones, elegidas por cuenta y no por "
