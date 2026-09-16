@@ -33,73 +33,52 @@ En las transferencias que la búsqueda midió rige el ganador de esa transferenc
 cada fila es una corrida en su propia máquina, nunca promediada con otra: no hay una columna de método que hable por todas.
 
 Método        Transferencia   Entorno          Semillatiempo de entrenamiento (s)
-Baseline      M->U            7c284fdfafc7           0            4.98
-CREDA*        M->U            7c284fdfafc7           0           10.14
-CREDA         M->U            7c284fdfafc7           0            8.42
-MIL-Baseline  M->U            7c284fdfafc7           0            4.89
-MIL-CREDA**   M->U            7c284fdfafc7           0           12.56
-MIL-CREDA*    M->U            7c284fdfafc7           0           12.00
-MIL-CREDA     M->U            7c284fdfafc7           0           13.83
-MIL-CREDA-U   M->U            7c284fdfafc7           0           13.69
-MIL-CREDA-A   M->U            7c284fdfafc7           0           17.18
-MIL-CREDA-K   M->U            7c284fdfafc7           0           25.22
-Baseline      U->M            7c284fdfafc7           0            5.12
-CREDA*        U->M            7c284fdfafc7           0           10.74
-CREDA         U->M            7c284fdfafc7           0            8.42
-MIL-Baseline  U->M            7c284fdfafc7           0            4.84
-MIL-CREDA**   U->M            7c284fdfafc7           0           12.10
-MIL-CREDA*    U->M            7c284fdfafc7           0           11.87
-MIL-CREDA     U->M            7c284fdfafc7           0           12.95
-MIL-CREDA-U   U->M            7c284fdfafc7           0           15.69
-MIL-CREDA-A   U->M            7c284fdfafc7           0           24.63
-MIL-CREDA-K   U->M            7c284fdfafc7           0           13.17
-Baseline      M->S            7c284fdfafc7           0            5.09
-CREDA*        M->S            7c284fdfafc7           0           12.92
-CREDA         M->S            7c284fdfafc7           0           11.83
-MIL-Baseline  M->S            7c284fdfafc7           0            4.99
-MIL-CREDA**   M->S            7c284fdfafc7           0           11.78
-MIL-CREDA*    M->S            7c284fdfafc7           0           12.41
-MIL-CREDA     M->S            7c284fdfafc7           0           13.38
-MIL-CREDA-U   M->S            7c284fdfafc7           0           13.44
-MIL-CREDA-A   M->S            7c284fdfafc7           0           12.19
-MIL-CREDA-K   M->S            7c284fdfafc7           0           12.23
-Baseline      S->M            7c284fdfafc7           0            4.68
-CREDA*        S->M            7c284fdfafc7           0            9.19
-CREDA         S->M            7c284fdfafc7           0            8.08
-MIL-Baseline  S->M            7c284fdfafc7           0            4.68
-MIL-CREDA**   S->M            7c284fdfafc7           0           11.84
-MIL-CREDA*    S->M            7c284fdfafc7           0           11.70
-MIL-CREDA     S->M            7c284fdfafc7           0           13.05
-MIL-CREDA-U   S->M            7c284fdfafc7           0           12.33
-MIL-CREDA-A   S->M            7c284fdfafc7           0           13.58
-MIL-CREDA-K   S->M            7c284fdfafc7           0           20.03
-Baseline      U->S            7c284fdfafc7           0            5.20
-CREDA*        U->S            7c284fdfafc7           0           10.87
-CREDA         U->S            7c284fdfafc7           0            7.80
-MIL-Baseline  U->S            7c284fdfafc7           0            4.82
-MIL-CREDA**   U->S            7c284fdfafc7           0           11.11
-MIL-CREDA*    U->S            7c284fdfafc7           0           11.20
-MIL-CREDA     U->S            7c284fdfafc7           0           12.47
-MIL-CREDA-U   U->S            7c284fdfafc7           0           12.55
-MIL-CREDA-A   U->S            7c284fdfafc7           0           12.01
-MIL-CREDA-K   U->S            7c284fdfafc7           0           12.17
-Baseline      S->U            7c284fdfafc7           0            4.55
-CREDA*        S->U            7c284fdfafc7           0            9.67
-CREDA         S->U            7c284fdfafc7           0           11.70
-MIL-Baseline  S->U            7c284fdfafc7           0            5.31
-MIL-CREDA**   S->U            7c284fdfafc7           0           19.19
-MIL-CREDA*    S->U            7c284fdfafc7           0           12.56
-MIL-CREDA     S->U            7c284fdfafc7           0           12.45
-MIL-CREDA-U   S->U            7c284fdfafc7           0           12.32
-MIL-CREDA-A   S->U            7c284fdfafc7           0           12.23
-MIL-CREDA-K   S->U            7c284fdfafc7           0           12.32
+MIL-Baseline  M->U            4bef9265ee57           0            5.12
+MIL-CREDA**   M->U            4bef9265ee57           0           11.94
+MIL-CREDA*    M->U            4bef9265ee57           0           12.32
+MIL-CREDA     M->U            4bef9265ee57           0           13.11
+MIL-CREDA-U   M->U            4bef9265ee57           0           12.91
+MIL-CREDA-A   M->U            4bef9265ee57           0           13.88
+MIL-CREDA-K   M->U            4bef9265ee57           0           13.08
+MIL-Baseline  U->M            4bef9265ee57           0            4.89
+MIL-CREDA**   U->M            4bef9265ee57           0           12.20
+MIL-CREDA*    U->M            4bef9265ee57           0           12.07
+MIL-CREDA     U->M            4bef9265ee57           0           13.19
+MIL-CREDA-U   U->M            4bef9265ee57           0           12.97
+MIL-CREDA-A   U->M            4bef9265ee57           0           13.04
+MIL-CREDA-K   U->M            4bef9265ee57           0           13.01
+MIL-Baseline  M->S            4bef9265ee57           0            5.18
+MIL-CREDA**   M->S            4bef9265ee57           0           11.97
+MIL-CREDA*    M->S            4bef9265ee57           0           11.84
+MIL-CREDA     M->S            4bef9265ee57           0           13.39
+MIL-CREDA-U   M->S            4bef9265ee57           0           12.92
+MIL-CREDA-A   M->S            4bef9265ee57           0           12.81
+MIL-CREDA-K   M->S            4bef9265ee57           0           12.99
+MIL-Baseline  S->M            4bef9265ee57           0            4.94
+MIL-CREDA**   S->M            4bef9265ee57           0           11.93
+MIL-CREDA*    S->M            4bef9265ee57           0           12.15
+MIL-CREDA     S->M            4bef9265ee57           0           13.13
+MIL-CREDA-U   S->M            4bef9265ee57           0           12.86
+MIL-CREDA-A   S->M            4bef9265ee57           0           13.07
+MIL-CREDA-K   S->M            4bef9265ee57           0           13.13
+MIL-Baseline  U->S            4bef9265ee57           0            4.98
+MIL-CREDA**   U->S            4bef9265ee57           0           11.80
+MIL-CREDA*    U->S            4bef9265ee57           0           11.96
+MIL-CREDA     U->S            4bef9265ee57           0           13.01
+MIL-CREDA-U   U->S            4bef9265ee57           0           12.88
+MIL-CREDA-A   U->S            4bef9265ee57           0           12.93
+MIL-CREDA-K   U->S            4bef9265ee57           0           12.87
+MIL-Baseline  S->U            4bef9265ee57           0            4.94
+MIL-CREDA**   S->U            4bef9265ee57           0           12.05
+MIL-CREDA*    S->U            4bef9265ee57           0           11.95
+MIL-CREDA     S->U            4bef9265ee57           0           13.67
+MIL-CREDA-U   S->U            4bef9265ee57           0           12.79
+MIL-CREDA-A   S->U            4bef9265ee57           0           12.85
+MIL-CREDA-K   S->U            4bef9265ee57           0           13.14
 
 Sin conclusión: tiempo de entrenamiento no se promedia entre máquinas — cada corrida es la lectura de su propio entorno, no una propiedad del método ni de la máquina que la corrió. Ver la tabla de arriba, corrida por corrida.
 
 Método                    M->U            U->M            M->S            S->M            U->S            S->U     Prom.
-Baseline           100.0 ± 0.0     100.0 ± 0.0     100.0 ± 0.0      38.9 ± 0.0     100.0 ± 0.0      50.0 ± 0.0      81.5
-CREDA*             100.0 ± 0.0     100.0 ± 0.0     100.0 ± 0.0      38.9 ± 0.0     100.0 ± 0.0      50.0 ± 0.0      81.5
-CREDA              100.0 ± 0.0     100.0 ± 0.0     100.0 ± 0.0      38.9 ± 0.0     100.0 ± 0.0      50.0 ± 0.0      81.5
 MIL-Baseline       100.0 ± 0.0      97.2 ± 0.0     100.0 ± 0.0      22.2 ± 0.0      86.1 ± 0.0      30.6 ± 0.0      72.7
 MIL-CREDA**        100.0 ± 0.0      97.2 ± 0.0     100.0 ± 0.0      22.2 ± 0.0      86.1 ± 0.0      30.6 ± 0.0      72.7
 MIL-CREDA*         100.0 ± 0.0      97.2 ± 0.0     100.0 ± 0.0      22.2 ± 0.0      86.1 ± 0.0      30.6 ± 0.0      72.7
@@ -108,27 +87,15 @@ MIL-CREDA-U         88.9 ± 0.0      83.3 ± 0.0      88.9 ± 0.0      19.4 ± 0
 MIL-CREDA-A         80.6 ± 0.0      97.2 ± 0.0      88.9 ± 0.0      19.4 ± 0.0      83.3 ± 0.0      36.1 ± 0.0      67.6
 MIL-CREDA-K         94.4 ± 0.0      91.7 ± 0.0      94.4 ± 0.0      19.4 ± 0.0      97.2 ± 0.0      25.0 ± 0.0      70.4
 
-Mejor promedio: **Baseline**; peor: MIL-CREDA-U, a 15.3% de distancia. CREDA no se separa de su piso Baseline. MIL-CREDA queda 0.5% por encima de su piso MIL-Baseline. Con 1 repetición(es) esto es una estimación puntual y no un veredicto: la dispersión es cero por construcción, no por acuerdo. Más repeticiones lo refuerzan o lo cambian.
+Mejor promedio: **MIL-CREDA**; peor: MIL-CREDA-U, a 6.9% de distancia. MIL-CREDA queda 0.5% por encima de su piso MIL-Baseline. Con 1 repetición(es) esto es una estimación puntual y no un veredicto: la dispersión es cero por construcción, no por acuerdo. Más repeticiones lo refuerzan o lo cambian.
 
 Peldaño                           M->U      U->M      M->S      S->M      U->S      S->U     Prom.  gana izq.
-Baseline → MIL-Baseline           +0.0      +2.8      +0.0     +16.7     +13.9     +19.4      +8.84/6       
-                                qué compra la representación por bolsas, con la adaptación apagada
-Baseline → CREDA*                 +0.0      +0.0      +0.0      +0.0      +0.0      +0.0      +0.00/6       
-                                qué compra la alineación de CREDA, sin ponderar
-CREDA* → CREDA                    +0.0      +0.0      +0.0      +0.0      +0.0      +0.0      +0.00/6       
-                                qué compra la ponderación por confianza en CREDA
 MIL-Baseline → MIL-CREDA**        +0.0      +0.0      +0.0      +0.0      +0.0      +0.0      +0.00/6       
                                 qué compra el término global, sin ponderar
 MIL-CREDA** → MIL-CREDA*          +0.0      +0.0      +0.0      +0.0      +0.0      +0.0      +0.00/6       
                                 qué compra la ponderación por confianza en MIL-CREDA
 MIL-CREDA* → MIL-CREDA            +0.0      -2.8      +0.0      +0.0      +0.0      +0.0      -0.50/6       
                                 qué compra la correspondencia local
-CREDA* → MIL-CREDA**              +0.0      +2.8      +0.0     +16.7     +13.9     +19.4      +8.84/6       
-                                el mismo peldaño, construido de dos maneras: sin ponderar
-CREDA → MIL-CREDA*                +0.0      +2.8      +0.0     +16.7     +13.9     +19.4      +8.84/6       
-                                el mismo peldaño, construido de dos maneras: ponderado
-CREDA → MIL-CREDA                 +0.0      +0.0      +0.0     +16.7     +13.9     +19.4      +8.33/6       
-                                mano a mano, cada método completo
 MIL-CREDA-U → MIL-CREDA-K         -5.6      -8.3      -5.6      +0.0     -13.9      +8.3      -4.21/6       
                                 qué compra la selección por atención frente a una regular
 MIL-CREDA-A → MIL-CREDA-K        -13.9      +5.6      -5.6      +0.0     -13.9     +11.1      -2.82/6       
@@ -136,12 +103,9 @@ MIL-CREDA-A → MIL-CREDA-K        -13.9      +5.6      -5.6      +0.0     -13.9
 MIL-CREDA-K → MIL-CREDA           -5.6      -8.3      -5.6      -2.8     +11.1      -5.6      -2.81/6       
                                 qué cuesta quedarse solo con las mejores instancias frente a quedarse con todas
 
-El peldaño que más separa es **Baseline → MIL-Baseline**: **Baseline** queda 8.8 por encima de MIL-Baseline, y eso lee qué compra la representación por bolsas, con la adaptación apagada. Se inclinan igual en las 6 transferencias: Baseline → CREDA*, CREDA* → CREDA, MIL-Baseline → MIL-CREDA**, MIL-CREDA** → MIL-CREDA*, MIL-CREDA* → MIL-CREDA. Con esta cantidad de repeticiones lo que carga peso es la coincidencia entre transferencias, no la magnitud: seis acuerdos y tres contra tres promedian parecido y dicen cosas distintas.
+El peldaño que más separa es **MIL-CREDA-U → MIL-CREDA-K**: **MIL-CREDA-K** queda 4.2 por encima de MIL-CREDA-U, y eso lee qué compra la selección por atención frente a una regular. Se inclinan igual en las 6 transferencias: MIL-Baseline → MIL-CREDA**, MIL-CREDA** → MIL-CREDA*, MIL-CREDA* → MIL-CREDA. Con esta cantidad de repeticiones lo que carga peso es la coincidencia entre transferencias, no la magnitud: seis acuerdos y tres contra tres promedian parecido y dicen cosas distintas.
 
 Método                    M->U            U->M            M->S            S->M            U->S            S->U     Prom.
-Baseline            77.8 ± 0.0      94.4 ± 0.0       8.3 ± 0.0      69.4 ± 0.0      16.7 ± 0.0      47.2 ± 0.0      52.3
-CREDA*              77.8 ± 0.0      94.4 ± 0.0       8.3 ± 0.0      69.4 ± 0.0      16.7 ± 0.0      47.2 ± 0.0      52.3
-CREDA               77.8 ± 0.0      94.4 ± 0.0       8.3 ± 0.0      69.4 ± 0.0      16.7 ± 0.0      47.2 ± 0.0      52.3
 MIL-Baseline        61.1 ± 0.0      80.6 ± 0.0      16.7 ± 0.0      38.9 ± 0.0      19.4 ± 0.0      27.8 ± 0.0      40.7
 MIL-CREDA**         72.2 ± 0.0      80.6 ± 0.0      16.7 ± 0.0      38.9 ± 0.0      22.2 ± 0.0      27.8 ± 0.0      43.1
 MIL-CREDA*          63.9 ± 0.0      80.6 ± 0.0      16.7 ± 0.0      41.7 ± 0.0      19.4 ± 0.0      27.8 ± 0.0      41.7
@@ -150,27 +114,15 @@ MIL-CREDA-U         25.0 ± 0.0      77.8 ± 0.0      11.1 ± 0.0      30.6 ± 0
 MIL-CREDA-A         41.7 ± 0.0      75.0 ± 0.0      22.2 ± 0.0      27.8 ± 0.0      19.4 ± 0.0      25.0 ± 0.0      35.2
 MIL-CREDA-K         55.6 ± 0.0      66.7 ± 0.0      27.8 ± 0.0      41.7 ± 0.0      22.2 ± 0.0      44.4 ± 0.0      43.1
 
-Mejor promedio: **Baseline**; peor: MIL-CREDA-U, a 19.4% de distancia. CREDA no se separa de su piso Baseline. MIL-CREDA queda 1.4% por encima de su piso MIL-Baseline. Con 1 repetición(es) esto es una estimación puntual y no un veredicto: la dispersión es cero por construcción, no por acuerdo. Más repeticiones lo refuerzan o lo cambian.
+Mejor promedio: **MIL-CREDA****; peor: MIL-CREDA-U, a 10.2% de distancia. MIL-CREDA queda 1.4% por encima de su piso MIL-Baseline. Con 1 repetición(es) esto es una estimación puntual y no un veredicto: la dispersión es cero por construcción, no por acuerdo. Más repeticiones lo refuerzan o lo cambian.
 
 Peldaño                           M->U      U->M      M->S      S->M      U->S      S->U     Prom.  gana izq.
-Baseline → MIL-Baseline          +16.7     +13.9      -8.3     +30.6      -2.8     +19.4     +11.64/6       
-                                qué compra la representación por bolsas, con la adaptación apagada
-Baseline → CREDA*                 +0.0      +0.0      +0.0      +0.0      +0.0      +0.0      +0.00/6       
-                                qué compra la alineación de CREDA, sin ponderar
-CREDA* → CREDA                    +0.0      +0.0      +0.0      +0.0      +0.0      +0.0      +0.00/6       
-                                qué compra la ponderación por confianza en CREDA
 MIL-Baseline → MIL-CREDA**       -11.1      +0.0      +0.0      +0.0      -2.8      +0.0      -2.30/6       
                                 qué compra el término global, sin ponderar
 MIL-CREDA** → MIL-CREDA*          +8.3      +0.0      +0.0      -2.8      +2.8      +0.0      +1.42/6       
                                 qué compra la ponderación por confianza en MIL-CREDA
 MIL-CREDA* → MIL-CREDA            -2.8      +0.0      +0.0      +0.0      +0.0      +0.0      -0.50/6       
                                 qué compra la correspondencia local
-CREDA* → MIL-CREDA**              +5.6     +13.9      -8.3     +30.6      -5.6     +19.4      +9.34/6       
-                                el mismo peldaño, construido de dos maneras: sin ponderar
-CREDA → MIL-CREDA*               +13.9     +13.9      -8.3     +27.8      -2.8     +19.4     +10.64/6       
-                                el mismo peldaño, construido de dos maneras: ponderado
-CREDA → MIL-CREDA                +11.1     +13.9      -8.3     +27.8      -2.8     +19.4     +10.24/6       
-                                mano a mano, cada método completo
 MIL-CREDA-U → MIL-CREDA-K        -30.6     +11.1     -16.7     -11.1      -8.3      -5.6     -10.21/6       
                                 qué compra la selección por atención frente a una regular
 MIL-CREDA-A → MIL-CREDA-K        -13.9      +8.3      -5.6     -13.9      -2.8     -19.4      -7.91/6       
@@ -178,4 +130,4 @@ MIL-CREDA-A → MIL-CREDA-K        -13.9      +8.3      -5.6     -13.9      -2.8
 MIL-CREDA-K → MIL-CREDA          -11.1     -13.9     +11.1      +0.0      +2.8     +16.7      +0.93/6       
                                 qué cuesta quedarse solo con las mejores instancias frente a quedarse con todas
 
-El peldaño que más separa es **Baseline → MIL-Baseline**: **Baseline** queda 11.6 por encima de MIL-Baseline, y eso lee qué compra la representación por bolsas, con la adaptación apagada. Se inclinan igual en las 6 transferencias: Baseline → CREDA*, CREDA* → CREDA, MIL-Baseline → MIL-CREDA**, MIL-CREDA* → MIL-CREDA. Con esta cantidad de repeticiones lo que carga peso es la coincidencia entre transferencias, no la magnitud: seis acuerdos y tres contra tres promedian parecido y dicen cosas distintas.
+El peldaño que más separa es **MIL-CREDA-U → MIL-CREDA-K**: **MIL-CREDA-K** queda 10.2 por encima de MIL-CREDA-U, y eso lee qué compra la selección por atención frente a una regular. Se inclinan igual en las 6 transferencias: MIL-Baseline → MIL-CREDA**, MIL-CREDA* → MIL-CREDA. Con esta cantidad de repeticiones lo que carga peso es la coincidencia entre transferencias, no la magnitud: seis acuerdos y tres contra tres promedian parecido y dicen cosas distintas.
