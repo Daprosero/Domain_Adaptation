@@ -11,12 +11,6 @@
 
 | Familia | Brazo | Transferencia | Techo | Criterio | Meseta | Trials |
 |---|---|---|---|---|---|---|
-| `creda` | `D` | M->S | **0.00282167** | 10.0 | 4 | 4 |
-| `creda` | `D` | M->U | **0.000135666** | 80.0 | 4 | 4 |
-| `creda` | `D` | S->M | **0.000165025** | 75.0 | 3 | 4 |
-| `creda` | `D` | S->U | **0.00121795** | 50.0 | 4 | 4 |
-| `creda` | `D` | U->M | **0.000302765** | 100.0 | 4 | 4 |
-| `creda` | `D` | U->S | **0.000105352** | 20.0 | 4 | 4 |
 | `milcreda` | `G` | M->S | **0.000643961** | 20.0 | 4 | 4 |
 | `milcreda` | `G` | M->U | **0.00515442** | 80.0 | 2 | 4 |
 | `milcreda` | `G` | S->M | **0.000558888** | 35.0 | 4 | 4 |
@@ -26,7 +20,7 @@
 
 En negrita el techo que puso la regla de meseta y no el criterio. **Meseta** es cuántos techos el ruido estimado no distinguió del mejor: uno significa que el criterio decidió.
 
-**creda** se queda en 0.000302765, elegido por una diferencia en el criterio sobre el rol `valid` con 4 trial(s) de 3 épocas y la resolución del criterio es 0.05, **por debajo de la escala que su respuesta necesita**. **milcreda** se queda en 0.000582196, elegido por una diferencia en el criterio sobre el rol `valid` con 4 trial(s) de 3 épocas y la resolución del criterio es 0.05, **por debajo de la escala que su respuesta necesita**.
+**milcreda** se queda en 0.000582196, elegido por una diferencia en el criterio sobre el rol `valid` con 4 trial(s) de 3 épocas y la resolución del criterio es 0.05, **por debajo de la escala que su respuesta necesita**.
 
 ### 0b · Qué techo rige en cada transferencia
 
@@ -34,10 +28,9 @@ En negrita el techo que puso la regla de meseta y no el criterio. **Meseta** es 
 
 | Familia | M->U | U->M | M->S | S->M | U->S | S->U |
 |---|---|---|---|---|---|---|
-| `creda` | **0.000135666** | **0.000302765** | **0.00282167** | **0.000165025** | **0.000105352** | **0.00121795** |
 | `milcreda` | **0.00515442** | **0.000582196** | **0.000643961** | **0.000558888** | **0.0035048** | **0.000308476** |
 
-En las transferencias que la búsqueda midió rige el ganador de esa transferencia, por la misma lectura apareada y el mismo desempate. En las restantes rige el ganador de las medidas tomadas juntas: es una aplicación fuera de muestra y se declara como tal, porque ese escalar no se eligió mirándolas. **creda**: 6 medida(s), 0 heredada(s), y 5 de las medidas elige otro techo — `M->S`, `M->U`, `S->M`, `S->U`, `U->S`. Entre el techo más alto y el más bajo de la fila hay un factor 26.8. Ahí la familia deja de correr a un coeficiente único, así que su promedio entre transferencias mezcla escalares distintos; dentro de cada transferencia todos los brazos siguen compartiendo el techo, que es lo que mantiene atribuible cada peldaño. **milcreda**: 6 medida(s), 0 heredada(s), y 5 de las medidas elige otro techo — `M->S`, `M->U`, `S->M`, `S->U`, `U->S`. Entre el techo más alto y el más bajo de la fila hay un factor 16.7. Ahí la familia deja de correr a un coeficiente único, así que su promedio entre transferencias mezcla escalares distintos; dentro de cada transferencia todos los brazos siguen compartiendo el techo, que es lo que mantiene atribuible cada peldaño.
+En las transferencias que la búsqueda midió rige el ganador de esa transferencia, por la misma lectura apareada y el mismo desempate. En las restantes rige el ganador de las medidas tomadas juntas: es una aplicación fuera de muestra y se declara como tal, porque ese escalar no se eligió mirándolas. **milcreda**: 6 medida(s), 0 heredada(s), y 5 de las medidas elige otro techo — `M->S`, `M->U`, `S->M`, `S->U`, `U->S`. Entre el techo más alto y el más bajo de la fila hay un factor 16.7. Ahí la familia deja de correr a un coeficiente único, así que su promedio entre transferencias mezcla escalares distintos; dentro de cada transferencia todos los brazos siguen compartiendo el techo, que es lo que mantiene atribuible cada peldaño.
 
 ## 1 · Tiempo de entrenamiento (más bajo es mejor)
 
