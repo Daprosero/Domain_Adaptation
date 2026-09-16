@@ -146,3 +146,38 @@ def test_the_disagreement_names_the_checkpoint_the_field_and_both_values():
     clashes = latent.disagreements([_checkpoint(0, epochs=3)], _summary(range(30)))
     assert clashes == [{"checkpoint": "G_M-U_seed0.manifest.json", "field": "epochs",
                         "checkpoint_says": 3, "record_says": 20}]
+
+
+def _write_checkpoint(directory, arm, transfer="M-U", seed=0):
+    """One manifest plus the weights beside it, which is what `available` globs."""
+    import json
+    (directory / f"{arm}_{transfer}_seed{seed}.pt").write_bytes(b"")
+    (directory / f"{arm}_{transfer}_seed{seed}.manifest.json").write_text(
+        json.dumps({"arm": arm, "transfer": transfer, "seed": seed,
+                    "reduction": {"epochs": 20}}), encoding="utf-8")
+
+
+def test_a_checkpoint_of_an_undeclared_arm_is_tagged_and_never_dropped(tmp_path,
+                                                                      monkeypatch):
+    """A directory outlives the declaration that filled it.
+
+    Weights for an arm the bench has since undeclared stay on disk and glob
+    exactly like the current ones. Dropping them here would let a whole previous
+    campaign leave the tree with nothing saying so, which is the failure the
+    `median` tag already exists to avoid one question over. So both come back and
+    `declared` is what tells them apart.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    vigente = next(iter(config.ARMS_BY_ID))
+    ajeno = next(a for a in ("A", "C", "D", "ZZ") if a not in config.ARMS_BY_ID)
+    _write_checkpoint(tmp_path, vigente)
+    _write_checkpoint(tmp_path, ajeno)
+    monkeypatch.setattr(config, "models_for", lambda *a, **k: tmp_path)
+
+    found = latent.available(0.0, True)
+
+    assert len(found) == 2, "etiquetado, no filtrado: los dos tienen que volver"
+    por_brazo = {entry["arm"]: entry["declared"] for entry in found}
+    assert por_brazo[vigente] is True
+    assert por_brazo[ajeno] is False

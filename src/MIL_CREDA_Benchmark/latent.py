@@ -82,6 +82,15 @@ def available(rate: float = 0.0, pilot: bool = False) -> list[dict]:
     *dependant* arms' accuracy orderings, not by its own, so they are a biased
     sample of that floor's outcomes. Averaging a floor's row over them does not
     estimate that row better; it estimates something else.
+
+    `declared` carries the same shape for a second question: whether the arm this
+    checkpoint names is still one the bench declares. A directory outlives the
+    declaration that filled it, so weights for an arm that has since been
+    undeclared stay on disk and glob exactly like the current ones. Tagged rather
+    than dropped, for the reason above: a caller that measures them gets
+    `wiring.build`'s own refusal by name, and a caller that skips them can say
+    how many it skipped and which arms they were. Dropping them here would let a
+    whole previous campaign leave the tree without anything saying so.
     """
     medians = _median_seeds(rate, pilot)
     found = []
@@ -97,7 +106,8 @@ def available(rate: float = 0.0, pilot: bool = False) -> list[dict]:
             cell = f"{record['arm']}|{record['transfer']}"
             is_median = record["seed"] in medians.get(cell, set())
         found.append({**record, "weights": weights, "manifest": manifest_path,
-                      "median": is_median})
+                      "median": is_median,
+                      "declared": record["arm"] in config.ARMS_BY_ID})
     return found
 
 
