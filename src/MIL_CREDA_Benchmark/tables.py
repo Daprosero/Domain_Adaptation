@@ -1794,6 +1794,14 @@ def conclusion_separability(readings: Iterable[dict]) -> str:
     Lo que se lee no es la exactitud sino su distancia al azar, porque la
     dirección declarada es *hacia el azar* y no *hacia abajo*: un clasificador que
     quedara por debajo del azar estaría igual de lejos de ser invariante.
+
+    **Nombra el azar y no lo imprime.** El valor lo dicen ya el objetivo de la
+    sección y la línea de título de su tabla, las dos calculados de
+    `DOMAIN_CHANCE`; repetirlo acá era un tercer lugar para un mismo número y
+    uno de los que el chequeo de duplicación cuenta. Con la conclusión cruzada
+    compuesta en la misma frase —una tabla, una conclusión— ese tercer lugar
+    llevaba el texto por encima del límite: la lectura entera se caía por un
+    número que la tabla ya tenía arriba.
     """
     readings = list(readings)
     values = _by_arm(readings, "domainSeparability")
@@ -1810,7 +1818,7 @@ def conclusion_separability(readings: Iterable[dict]) -> str:
         if not differences:
             continue
         lines.append(f"{config.NAME_OF[arm]} contra {config.NAME_OF[floor]}, "
-                     f"distancia al azar ({DOMAIN_CHANCE:.3f}): "
+                     f"distancia al azar: "
                      f"{_agreement(differences, 0.01)}.")
     if not lines:
         return "Ningún método comparte transferencias con su piso: nada que aparear."
