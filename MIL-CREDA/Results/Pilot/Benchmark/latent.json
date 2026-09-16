@@ -19,10 +19,6 @@
     "F",
     "G"
   ],
-  "floorsAgree": {
-    "agree": null,
-    "detail": "el banco declara un solo piso: A ya no est\u00e1 declarado, as\u00ed que no hay dos representaciones que comparar."
-  },
   "readings": [
     {
       "arm": "B",
