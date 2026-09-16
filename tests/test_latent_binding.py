@@ -181,3 +181,24 @@ def test_a_checkpoint_of_an_undeclared_arm_is_tagged_and_never_dropped(tmp_path,
     por_brazo = {entry["arm"]: entry["declared"] for entry in found}
     assert por_brazo[vigente] is True
     assert por_brazo[ajeno] is False
+
+
+def test_a_floor_the_bench_no_longer_declares_is_an_undefined_question():
+    """Not "the checkpoints are missing". The two read the same and mean opposite
+    things: one is a file to go and produce, the other is a comparison that has
+    stopped existing. Without this guard the weights are still on disk, `load`
+    reaches `wiring.build` and the whole notebook dies on an unknown arm — which
+    is the least informative possible answer to "are the two floors redundant?".
+    """
+    import torch
+    from MIL_CREDA_Benchmark import config, latent
+
+    ajeno = next(a for a in ("A", "C", "D", "ZZ") if a not in config.ARMS_BY_ID)
+    vigente = next(iter(config.ARMS_BY_ID))
+
+    answer = latent.floors_agree(["M-U"], 0, torch.device("cpu"),
+                                 left=ajeno, right=vigente)
+
+    assert answer["agree"] is None
+    assert ajeno in answer["detail"]
+    assert "declara un solo piso" in answer["detail"]
