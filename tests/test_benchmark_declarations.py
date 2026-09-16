@@ -591,9 +591,12 @@ def test_the_contaminated_correspondence_is_its_own_rendering() -> None:
     saying so is not dodging the duplication check -- it leaves it intact for
     the case it exists to catch.
 
-    The phase-two readings took the other exit: `render_readings` grew a rate
-    column and its contaminated twin is gone, so one call renders both numbers.
-    This one did not, and the pair of names survives here and only here.
+    The other five took the other exit: `render_readings`, `render`,
+    `render_rungs`, `render_gains` and `render_per_run_summary` grew a `Ruido`
+    column with a block per material, and their contaminated twins are gone, so
+    one call renders both numbers. This one did not --- its rows are subjects and
+    not arms, so a `con` block would have no `sin` row to pair with --- and the
+    pair of names survives here and only here.
 
     And the empty case states the rate rather than a bare parenthesis, so a
     reader meets which campaign has not left checkpoints yet."""

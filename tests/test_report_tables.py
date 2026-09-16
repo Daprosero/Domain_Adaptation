@@ -51,6 +51,17 @@ def _runs(values: dict[tuple[str, str], list[float]],
     return runs
 
 
+def _filas(rendered: str) -> list[str]:
+    """Las filas de datos de una tabla de dos bloques.
+
+    Se reconocen por la primera columna, que es `Ruido` en las cinco tablas
+    unificadas, y no por un backtick: el nombre del método dejó de ser lo
+    primero de la fila el día que el material pasó a serlo.
+    """
+    marcas = (f"| {tables.NOISE_CLEAN} |", f"| {tables.NOISE_DIRTY} |")
+    return [l for l in rendered.splitlines() if l.startswith(marcas)]
+
+
 def _reduction(seeds: int = 3) -> dict:
     return {"seeds": list(range(seeds)), "epochs": config.EPOCHS,
             "backbone": config.BACKBONE, "revision": config.REVISION}
@@ -99,13 +110,16 @@ def test_a_cell_of_one_repetition_prints_a_zero_dispersion_it_did_not_measure() 
 # ------------------------------------------------------- rows, columns, average
 
 def test_the_table_is_arms_by_display_name_over_the_six_transfers_and_an_average() -> None:
-    """Rows are arms by display name, columns the six transfers plus `Prom.`.
+    """Rows are arms by display name, columns `Ruido`, the six transfers, `Prom.`.
 
     An identifier is not a name: a reader of the report has no table mapping `G`
     to `MIL-CREDA`, and the row that says `G` says nothing to them.
 
-    Reachable red: print `row['arm']`, drop the average column, or lose a
-    transfer from the header.
+    `Ruido` leads and says `sin` on every row here, because no contaminated
+    campaign was asked for: one shape, whether the section has one block or two.
+
+    Reachable red: print `row['arm']`, drop the average column, lose a
+    transfer from the header, or put the noise column anywhere but first.
     """
     runs = _runs({(arm, label): [0.5, 0.6]
                   for arm in ("B", "E", "G") for label in LABELS})
@@ -113,8 +127,10 @@ def test_the_table_is_arms_by_display_name_over_the_six_transfers_and_an_average
                             markdown=True)
     header = [cell.strip() for cell in printed.splitlines()[0].strip("|").split("|")]
 
-    assert header == ["Método", *LABELS, "Prom."]
-    names = [line.split("|")[1].strip().strip("`") for line in printed.splitlines()[2:]]
+    assert header == [tables.NOISE_COLUMN, "Método", *LABELS, "Prom."]
+    rows = printed.splitlines()[2:]
+    assert [line.split("|")[1].strip() for line in rows] == [tables.NOISE_CLEAN] * 3
+    names = [line.split("|")[2].strip().strip("`") for line in rows]
     assert names == [config.NAME_OF[a] for a in ("B", "E", "G")]
     for identifier in ("B", "E", "G"):
         assert f"`{identifier}`" not in printed, "the table names an arm by its id"
@@ -860,7 +876,7 @@ def test_the_inline_seconds_table_never_puts_two_environments_in_one_row():
     ])
     rendered = tables.render_per_run_summary(grid, "seconds", markdown=True)
 
-    filas = [l for l in rendered.splitlines() if l.startswith("| `")]
+    filas = _filas(rendered)
     assert len(filas) == 2, filas
     assert any("T4" in f and "12.00" in f for f in filas), filas
     assert any("P100" in f and "42.00" in f for f in filas), filas
@@ -883,7 +899,7 @@ def test_the_inline_seconds_table_collapses_one_axis_and_not_two():
     ])
     rendered = tables.render_per_run_summary(grid, "seconds", markdown=True)
 
-    filas = [l for l in rendered.splitlines() if l.startswith("| `")]
+    filas = _filas(rendered)
     assert len(filas) == 2, filas
     assert any("M->U" in f and "10.00" in f for f in filas), filas
     assert any("U->M" in f and "90.00" in f for f in filas), filas
@@ -918,37 +934,67 @@ def _las_dos_tasas() -> tuple[list[dict], list[dict]]:
     return limpias, sucias
 
 
-def test_the_two_rates_of_one_arm_are_contiguous_rows():
-    """The whole reason the second table stopped existing.
+def test_the_clean_rows_come_first_as_a_block_and_the_contaminated_ones_after():
+    """Two blocks, not one interleaved list.
 
-    Two tables separated by a paragraph asked the reader to hold one row in
-    their head while they went to find the other; grouping by arm puts the
-    subtraction between two lines that touch. Reachable red: order the rows by
-    rate first and `B` at ρ=0.2 stops following `B` at ρ=0.
+    Every `sin` row, in arm order, and only then every `con` row in the same arm
+    order. A reader comparing one arm across materials counts down a fixed number
+    of rows and lands on the same method; a reader comparing two arms under the
+    same material never has the other material's row between them.
+
+    Reachable red: group by arm instead --- `sin`/`con` of `B` and then
+    `sin`/`con` of `G` --- and the first column stops being two blocks.
     """
     limpias, sucias = _las_dos_tasas()
-    filas = [l for l in tables.render_readings(
+    filas = _filas(tables.render_readings(
         limpias, "geometry.ratio", "t", contaminated=sucias, rate=0.2,
-        markdown=True).splitlines() if l.startswith("| `")]
+        markdown=True))
 
     assert len(filas) == 4, filas
     assert [f.split("|")[1].strip() for f in filas] == [
-        f"`{config.NAME_OF['B']}`", f"`{config.NAME_OF['B']}`",
-        f"`{config.NAME_OF['G']}`", f"`{config.NAME_OF['G']}`"]
-    assert [f.split("|")[2].strip() for f in filas] == ["0", "0.2", "0", "0.2"]
+        tables.NOISE_CLEAN, tables.NOISE_CLEAN,
+        tables.NOISE_DIRTY, tables.NOISE_DIRTY]
+    assert [f.split("|")[2].strip() for f in filas] == [
+        f"`{config.NAME_OF['B']}`", f"`{config.NAME_OF['G']}`",
+        f"`{config.NAME_OF['B']}`", f"`{config.NAME_OF['G']}`"]
 
 
-def test_the_rate_is_the_second_column_and_the_rest_of_the_table_did_not_move():
-    """One column was added. The six transfers and the average are where they
-    were, because a reader who learned this table under two renderings must not
-    have to learn it again."""
+def test_the_noise_is_the_first_column_and_the_rest_of_the_table_did_not_move():
+    """One column was added, at the front. The six transfers and the average are
+    where they were, because a reader who learned this table under two
+    renderings must not have to learn it again."""
     limpias, sucias = _las_dos_tasas()
     encabezado = tables.render_readings(
         limpias, "geometry.ratio", "t", contaminated=sucias, rate=0.2,
-        markdown=True).splitlines()[0]
+        markdown=True).splitlines()[2]
 
     assert ([c.strip() for c in encabezado.split("|")[1:-1]]
-            == ["Método", tables.RATE_COLUMN, *LABELS, "Prom."])
+            == [tables.NOISE_COLUMN, "Método", *LABELS, "Prom."])
+
+
+def test_the_rate_is_stated_once_in_the_title_and_in_no_row():
+    """`con` and `0.2` in the same row are one fact written twice.
+
+    The rate is fixed for the whole campaign, so a column carrying it would
+    repeat it once per row and the report's own contract counts a measurement
+    rendered twice as a defect. It is stated in the table's title line ---
+    computed from the `rate` the readings were loaded with, never typed --- and
+    nowhere else.
+
+    Reachable red: put the rate back in a column, or hard-code `0.2` into the
+    title, and pass a different rate here.
+    """
+    limpias, sucias = _las_dos_tasas()
+    rendered = tables.render_readings(
+        limpias, "geometry.ratio", "t", contaminated=sucias, rate=0.35,
+        markdown=True)
+
+    assert rendered.count("0.35") == 1, rendered
+    assert "0.35" in rendered.splitlines()[0], "the rate is not in the title line"
+    assert all("0.35" not in f for f in _filas(rendered)), _filas(rendered)
+    # And nothing says it when there is nothing contaminated to say it about.
+    assert "ρ=" not in tables.render_readings(limpias, "geometry.ratio", "t",
+                                              markdown=True)
 
 
 def test_an_arm_without_a_reading_for_a_transfer_still_gets_an_empty_cell():
@@ -966,17 +1012,202 @@ def test_without_a_contaminated_campaign_the_clean_rows_print_alone():
     state is reachable and refusing here would take the table away from the run
     that has half the material rather than from the one that has none."""
     limpias, _ = _las_dos_tasas()
-    filas = [l for l in tables.render_readings(limpias, "geometry.ratio", "t",
-                                               markdown=True).splitlines()
-             if l.startswith("| `")]
+    filas = _filas(tables.render_readings(limpias, "geometry.ratio", "t",
+                                          markdown=True))
 
     assert len(filas) == 2, filas
-    assert all(f.split("|")[2].strip() == "0" for f in filas), filas
+    assert all(f.split("|")[1].strip() == tables.NOISE_CLEAN for f in filas), filas
 
 
 def test_contaminated_readings_with_no_rate_refuse_rather_than_printing_a_zero():
-    """A row whose ρ column said `0` for the contaminated campaign would be the
-    one failure this table exists to prevent, written by the table itself."""
+    """A `con` block whose title could not say which campaign it came from is
+    the one failure this table exists to prevent, written by the table itself."""
     limpias, sucias = _las_dos_tasas()
     with pytest.raises(ValueError):
         tables.render_readings(limpias, "geometry.ratio", "t", contaminated=sucias)
+
+
+# ------------------------------- the five tables that now carry both materials
+
+def _campana_contaminada(tmp_path, monkeypatch, rate: float, *, runs=None,
+                         grid=None, grid_per_run=None, stated=None) -> None:
+    """Un árbol de resultados a `rate`, escrito como lo escribe una campaña.
+
+    Hace falta de verdad y no se puede pasar en memoria: las cinco tablas piden
+    el material contaminado **por su tasa**, que es como está guardado, y esa
+    puerta ---`_level_or_note`--- es la que lleva la guarda que compara el
+    `labelNoise` declarado contra el directorio donde apareció. Un fixture que
+    entregara las corridas directamente saltearía justo lo que se quiere probar.
+    """
+    monkeypatch.setattr(config, "PRODUCT", tmp_path)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    root = config.results_for(rate, "campaign")
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "runs.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in (runs or [])), encoding="utf-8")
+    summary = {"reduction": {"labelNoise": rate if stated is None else stated},
+               "grid": grid or {}}
+    if grid_per_run is not None:
+        summary["gridPerRun"] = grid_per_run
+    (root / "summary.json").write_text(json.dumps(summary), encoding="utf-8")
+
+
+def _celda_de_grilla(values: dict[str, float], metric: str) -> dict:
+    return {arm: {metric: {"mean": value}} for arm, value in values.items()}
+
+
+def test_every_unified_table_prints_the_clean_block_and_then_the_contaminated(
+        tmp_path, monkeypatch) -> None:
+    """The four `_at` twins are gone and the four clean renderers took the data.
+
+    Each twin loaded the contaminated record and called its clean sibling again.
+    It was declared apart for one reason only --- the duplication check looks at
+    the call, and two calls to one renderer with two different records read as
+    one measurement rendered twice --- so the resolution is the one
+    `render_readings` already took: one call, no twin, nothing to misread.
+
+    Asserted over all four at once because the claim is about the class and not
+    about any one of them: the shape they share is `Ruido` first, every `sin`
+    row, then every `con` row.
+
+    Reachable red: append the contaminated rows to the clean ones without the
+    label, or interleave the two blocks by arm.
+    """
+    metric = "targetAccuracy"
+    # Todos los brazos declarados: los peldaños se leen de `config.LADDER` y una
+    # grilla con dos brazos no tiene ningún par que restar, así que la tabla de
+    # peldaños saldría vacía y la prueba pasaría sin haber dibujado nada.
+    niveles = {arm: 0.50 + 0.05 * i for i, arm in enumerate(config.ARM_ORDER)}
+    limpias = [{"arm": arm, "transfer": label, "seed": 0, metric: value,
+                "contribution": 0.25}
+               for arm, value in niveles.items() for label in LABELS]
+    sucias = [dict(run, **{metric: run[metric] - 0.20}) for run in limpias]
+    grid = {label: _celda_de_grilla(niveles, metric) for label in LABELS}
+    grid_sucia = {label: _celda_de_grilla(
+        {arm: value - 0.20 for arm, value in niveles.items()}, metric)
+        for label in LABELS}
+    per_run = _grid_per_run([("M->U", "G", "T4", s, 10.0 + s) for s in (0, 1, 2)])
+    per_run_sucia = _grid_per_run(
+        [("M->U", "G", "T4", s, 90.0 + s) for s in (0, 1, 2)])
+    _campana_contaminada(tmp_path, monkeypatch, 0.2, runs=sucias, grid=grid_sucia,
+                         grid_per_run=per_run_sucia)
+
+    dibujadas = {
+        "render": tables.render(limpias, metric, _reduction(seeds=1),
+                                rate=0.2, markdown=True),
+        "render_rungs": tables.render_rungs({"grid": grid}, metric, rate=0.2,
+                                            markdown=True),
+        "render_gains": tables.render_gains(limpias, metric, "t", rate=0.2,
+                                            markdown=True),
+        "render_per_run_summary": tables.render_per_run_summary(
+            per_run, "seconds", rate=0.2, markdown=True),
+    }
+    for name, rendered in dibujadas.items():
+        etiquetas = [f.split("|")[1].strip() for f in _filas(rendered)]
+        assert tables.NOISE_CLEAN in etiquetas and tables.NOISE_DIRTY in etiquetas, \
+            f"{name} drew one block where the record has two"
+        assert etiquetas == sorted(
+            etiquetas, key=[tables.NOISE_CLEAN, tables.NOISE_DIRTY].index), \
+            f"{name} interleaves the two materials instead of blocking them"
+        assert [c.strip() for c in rendered.splitlines()
+                if c.startswith("| ")][0].split("|")[1].strip() \
+            == tables.NOISE_COLUMN, f"{name} does not lead with the noise column"
+
+    # Y los números son los del registro contaminado, no una segunda copia de
+    # los limpios: sin esto un `con` que volviera a dibujar el bloque `sin`
+    # pasaría todo lo de arriba.
+    primero = config.NAME_OF[config.ARM_ORDER[0]]
+    filas_de_ese_brazo = [f for f in _filas(dibujadas["render"])
+                          if f"`{primero}`" in f]
+    assert len(filas_de_ese_brazo) == 2, filas_de_ese_brazo
+    limpio, sucio = (float(f.split("|")[-2].strip().strip("*"))
+                     for f in filas_de_ese_brazo)
+    assert sucio == pytest.approx(limpio - 20.0), (limpio, sucio)
+    assert "91.00" in dibujadas["render_per_run_summary"], \
+        "the contaminated block redrew the clean readings"
+
+
+def test_a_rate_that_never_ran_keeps_the_clean_block_and_says_why(
+        tmp_path, monkeypatch) -> None:
+    """Half the material is still material.
+
+    The twins returned the note *instead of* a table, which was right when the
+    note stood where a second table would have been. It is not right now: the
+    `sin` rows belong to the run that has them, so the note goes under the table
+    and not in place of it.
+
+    Reachable red: return the note alone and the clean campaign loses its own
+    numbers because the contaminated one has not run.
+    """
+    metric = "targetAccuracy"
+    limpias = [{"arm": arm, "transfer": label, "seed": 0, metric: value,
+                "contribution": 0.25}
+               for arm, value in (("B", 0.80), ("G", 0.90)) for label in LABELS]
+    monkeypatch.setattr(config, "PRODUCT", tmp_path)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+
+    rendered = tables.render(limpias, metric, _reduction(seeds=1), rate=0.2,
+                             markdown=True)
+
+    etiquetas = [f.split("|")[1].strip() for f in _filas(rendered)]
+    assert etiquetas == [tables.NOISE_CLEAN, tables.NOISE_CLEAN], etiquetas
+    assert "0.2" in rendered and "no existe" in rendered
+
+
+def test_a_record_that_contradicts_its_own_directory_draws_no_contaminated_block(
+        tmp_path, monkeypatch) -> None:
+    """One guard, one place, five tables.
+
+    Each twin carried its own copy of this refusal. Five copies are five texts
+    that can drift, and a section drawing a block the one beside it refused
+    would be the drift nobody could see.
+    """
+    metric = "targetAccuracy"
+    limpias = [{"arm": "B", "transfer": LABELS[0], "seed": 0, metric: 0.8,
+                "contribution": 0.25}]
+    sucias = [{"arm": "B", "transfer": LABELS[0], "seed": 0, metric: 0.6,
+               "contribution": 0.25}]
+    _campana_contaminada(tmp_path, monkeypatch, 0.2, runs=sucias, stated=0.4)
+
+    rendered = tables.render(limpias, metric, _reduction(seeds=1), rate=0.2,
+                             markdown=True)
+
+    assert not [f for f in _filas(rendered)
+                if f.split("|")[1].strip() == tables.NOISE_DIRTY]
+    assert "labelNoise=0.4" in rendered
+
+
+def test_the_report_declares_no_renderer_that_no_longer_exists() -> None:
+    """`verify` reads this declaration, and a name it cannot resolve is a
+    contract that describes a document nobody can produce.
+
+    Reachable red: delete a renderer and leave its name in `__benchmark__`, which
+    is exactly what removing the four `_at` twins would have done.
+    """
+    declared = MIL_CREDA_Benchmark.__benchmark__["report"]
+    for name in declared["renderers"] + declared["conclusions"]:
+        module, attribute = name.split(".")
+        assert module == "tables", name
+        assert hasattr(tables, attribute), f"{name} is declared and does not exist"
+    assert not [n for n in declared["renderers"] if n.endswith("_at")], \
+        "a twin that loaded the contaminated record by rate is declared again"
+
+
+def test_no_section_of_the_report_draws_one_quantity_twice() -> None:
+    """The document half of the same claim.
+
+    Each of the seven clean/contaminated sections used to spend a second framing
+    cell and a second table cell on the same quantity. One table now carries both
+    materials, so no renderer is called twice with the same reading in the
+    notebook's shown cells.
+
+    Reachable red: put `render(runs, "targetAccuracy", ...)` back into a second
+    cell for the contaminated campaign.
+    """
+    shown = [(name, _metric_of(args)) for name, args in _shown(REPORT)
+             if name.startswith("render")]
+    repetidas = [pair for pair in set(shown)
+                 if pair[1] is not None and shown.count(pair) > 1]
+    assert not repetidas, f"one quantity is rendered twice: {repetidas}"
+    assert not [name for name, _ in shown if name.endswith("_at")], \
+        "the notebook still asks for a contaminated twin"

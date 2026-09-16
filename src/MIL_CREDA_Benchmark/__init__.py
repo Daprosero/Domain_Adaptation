@@ -81,37 +81,28 @@ __benchmark__ = {
             # not the same evidence.
             "tables.render_ceilings",
             "tables.render_ceilings_by_transfer",
-            # El eje de ruido. `render_at` es el MISMO `render` sobre el
-            # registro de una tasa contaminada y no un renderer paralelo: dos
-            # funciones que dibujan la misma tabla son dos cosas que se pueden
-            # desalinear, y el lector no tendría cómo saber cuál se movió.
             # La sección de tiempo, sus dos formas. Ninguna de las dos estaba
             # declarada, así que la mitad del informe que MEJOR se porta --- la
             # que se niega a promediar `seconds` y saca fila por corrida --- era
-            # justo la que ningún control miraba. Declarar sólo la contaminada
-            # la dejaba sin conclusión a los ojos del contrato, que es como
-            # apareció.
+            # justo la que ningún control miraba.
             "tables.render_per_run",
             # Y su forma inline: mediana con rango min-max, colapsando el eje de
             # semillas dentro de un entorno. Dos renderers y no un parámetro
             # porque son dos afirmaciones distintas, y el contrato nombra cuál
             # se usó.
             "tables.render_per_run_summary",
-            "tables.render_at",
-            # Y su gemela por corrida, que NO es la misma tabla: `render_at`
-            # promedia y `cells` se niega ante una dimensión `perRun`, así que
-            # la sección contaminada de `seconds` no tenía tabla que imprimir
-            # mientras su conclusión sí promediaba.
-            "tables.render_per_run_summary_at",
             "tables.render_noise",
             "tables.render_diagnostic",
-            # `render_readings_contaminated` ya no está. Era la gemela de
-            # `render_readings` para la campaña a ρ, y las dos tablas que
-            # producían son ahora una sola con la tasa como segunda columna: el
-            # lector compara dos filas contiguas en vez de dos tablas separadas
-            # por un párrafo. Una cantidad, una llamada, una renderización.
-            "tables.render_gains_at",
-            "tables.render_rungs_at",
+            # El eje de ruido ya no agrega renderers. Las cinco gemelas que
+            # tenía --- `render_readings_contaminated` primero, y después
+            # `render_at`, `render_per_run_summary_at`, `render_gains_at` y
+            # `render_rungs_at` --- dibujaban la misma tabla sobre el registro
+            # de la campaña contaminada, y estaban declaradas aparte sólo para
+            # que el chequeo de duplicación no leyera dos renderizaciones del
+            # mismo número donde hay dos números distintos. Cada par es ahora
+            # una tabla con la columna `Ruido` adelante y dos bloques, `sin` y
+            # después `con`: una cantidad, una llamada, una renderización, y
+            # nada que el chequeo pueda confundir.
         ],
         "conclusions": [
             "tables.conclusion",
@@ -124,10 +115,11 @@ __benchmark__ = {
             "tables.conclusion_correspondence",
             "tables.conclusion_ceilings",
             "tables.conclusion_ceilings_by_transfer",
-            # `conclusion_versus_clean` informa la diferencia entre las dos
-            # tasas, que es lo único que ninguna de las dos tablas contiene por
-            # separado. Nunca enumera la tabla que tiene al lado: una conclusión
-            # que repite su propia tabla dejó de concluir.
+            # `conclusion_versus_clean` informa la diferencia entre los dos
+            # bloques, que es lo único que la tabla no contiene: pone el
+            # material limpio y el contaminado uno sobre otro y no los resta.
+            # Nunca enumera la tabla que tiene al lado: una conclusión que
+            # repite su propia tabla dejó de concluir.
             "tables.conclusion_noise",
             # No computa nada y esa es su afirmación: `render_per_run` ya se
             # negó a promediar, y una conclusión que después imprimiera
