@@ -92,54 +92,54 @@ Sin conclusión: tiempo de entrenamiento no se promedia entre máquinas — cada
 
 ## 2 · Exactitud en fuente (más alto es mejor)
 
-| Método | M->U | U->M | M->S | S->M | U->S | S->U | Prom. |
-|---|---|---|---|---|---|---|---|
-| `MIL-Baseline` | 100.0 ± 0.0 | 97.2 ± 0.0 | 100.0 ± 0.0 | 22.2 ± 0.0 | 86.1 ± 0.0 | 30.6 ± 0.0 | **72.7** |
-| `MIL-CREDA**` | 100.0 ± 0.0 | 97.2 ± 0.0 | 100.0 ± 0.0 | 22.2 ± 0.0 | 86.1 ± 0.0 | 30.6 ± 0.0 | **72.7** |
-| `MIL-CREDA*` | 100.0 ± 0.0 | 97.2 ± 0.0 | 100.0 ± 0.0 | 22.2 ± 0.0 | 86.1 ± 0.0 | 30.6 ± 0.0 | **72.7** |
-| `MIL-CREDA` | 100.0 ± 0.0 | 100.0 ± 0.0 | 100.0 ± 0.0 | 22.2 ± 0.0 | 86.1 ± 0.0 | 30.6 ± 0.0 | **73.1** |
-| `MIL-CREDA-U` | 88.9 ± 0.0 | 83.3 ± 0.0 | 88.9 ± 0.0 | 19.4 ± 0.0 | 83.3 ± 0.0 | 33.3 ± 0.0 | **66.2** |
-| `MIL-CREDA-A` | 80.6 ± 0.0 | 97.2 ± 0.0 | 88.9 ± 0.0 | 19.4 ± 0.0 | 83.3 ± 0.0 | 36.1 ± 0.0 | **67.6** |
-| `MIL-CREDA-K` | 94.4 ± 0.0 | 91.7 ± 0.0 | 94.4 ± 0.0 | 19.4 ± 0.0 | 97.2 ± 0.0 | 25.0 ± 0.0 | **70.4** |
+| Ruido | Método | M->U | U->M | M->S | S->M | U->S | S->U | Prom. |
+|---|---|---|---|---|---|---|---|---|
+| sin | `MIL-Baseline` | 100.0 ± 0.0 | 97.2 ± 0.0 | 100.0 ± 0.0 | 22.2 ± 0.0 | 86.1 ± 0.0 | 30.6 ± 0.0 | **72.7** |
+| sin | `MIL-CREDA**` | 100.0 ± 0.0 | 97.2 ± 0.0 | 100.0 ± 0.0 | 22.2 ± 0.0 | 86.1 ± 0.0 | 30.6 ± 0.0 | **72.7** |
+| sin | `MIL-CREDA*` | 100.0 ± 0.0 | 97.2 ± 0.0 | 100.0 ± 0.0 | 22.2 ± 0.0 | 86.1 ± 0.0 | 30.6 ± 0.0 | **72.7** |
+| sin | `MIL-CREDA` | 100.0 ± 0.0 | 100.0 ± 0.0 | 100.0 ± 0.0 | 22.2 ± 0.0 | 86.1 ± 0.0 | 30.6 ± 0.0 | **73.1** |
+| sin | `MIL-CREDA-U` | 88.9 ± 0.0 | 83.3 ± 0.0 | 88.9 ± 0.0 | 19.4 ± 0.0 | 83.3 ± 0.0 | 33.3 ± 0.0 | **66.2** |
+| sin | `MIL-CREDA-A` | 80.6 ± 0.0 | 97.2 ± 0.0 | 88.9 ± 0.0 | 19.4 ± 0.0 | 83.3 ± 0.0 | 36.1 ± 0.0 | **67.6** |
+| sin | `MIL-CREDA-K` | 94.4 ± 0.0 | 91.7 ± 0.0 | 94.4 ± 0.0 | 19.4 ± 0.0 | 97.2 ± 0.0 | 25.0 ± 0.0 | **70.4** |
 
 Mejor promedio: **MIL-CREDA**; peor: MIL-CREDA-U, a 6.9% de distancia. MIL-CREDA queda 0.5% por encima de su piso MIL-Baseline. Con 1 repetición(es) esto es una estimación puntual y no un veredicto: la dispersión es cero por construcción, no por acuerdo. Más repeticiones lo refuerzan o lo cambian.
 
 ### 2b · Peldaños en fuente
 
-| Peldaño | M->U | U->M | M->S | S->M | U->S | S->U | Prom. | gana izq. |
-|---|---|---|---|---|---|---|---|---|
-| MIL-Baseline → MIL-CREDA** | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | **+0.0** | 0/6 |
-| MIL-CREDA** → MIL-CREDA* | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | **+0.0** | 0/6 |
-| MIL-CREDA* → MIL-CREDA | +0.0 | -2.8 | +0.0 | +0.0 | +0.0 | +0.0 | **-0.5** | 0/6 |
-| MIL-CREDA-U → MIL-CREDA-K | -5.6 | -8.3 | -5.6 | +0.0 | -13.9 | +8.3 | **-4.2** | 1/6 |
-| MIL-CREDA-A → MIL-CREDA-K | -13.9 | +5.6 | -5.6 | +0.0 | -13.9 | +11.1 | **-2.8** | 2/6 |
-| MIL-CREDA-K → MIL-CREDA | -5.6 | -8.3 | -5.6 | -2.8 | +11.1 | -5.6 | **-2.8** | 1/6 |
+| Ruido | Peldaño | M->U | U->M | M->S | S->M | U->S | S->U | Prom. | gana izq. |
+|---|---|---|---|---|---|---|---|---|---|
+| sin | MIL-Baseline → MIL-CREDA** | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | **+0.0** | 0/6 |
+| sin | MIL-CREDA** → MIL-CREDA* | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | **+0.0** | 0/6 |
+| sin | MIL-CREDA* → MIL-CREDA | +0.0 | -2.8 | +0.0 | +0.0 | +0.0 | +0.0 | **-0.5** | 0/6 |
+| sin | MIL-CREDA-U → MIL-CREDA-K | -5.6 | -8.3 | -5.6 | +0.0 | -13.9 | +8.3 | **-4.2** | 1/6 |
+| sin | MIL-CREDA-A → MIL-CREDA-K | -13.9 | +5.6 | -5.6 | +0.0 | -13.9 | +11.1 | **-2.8** | 2/6 |
+| sin | MIL-CREDA-K → MIL-CREDA | -5.6 | -8.3 | -5.6 | -2.8 | +11.1 | -5.6 | **-2.8** | 1/6 |
 
 El peldaño que más separa es **MIL-CREDA-U → MIL-CREDA-K**: **MIL-CREDA-K** queda 4.2 por encima de MIL-CREDA-U, y eso lee qué compra la selección por atención frente a una regular. Se inclinan igual en las 6 transferencias: MIL-Baseline → MIL-CREDA**, MIL-CREDA** → MIL-CREDA*, MIL-CREDA* → MIL-CREDA. Con esta cantidad de repeticiones lo que carga peso es la coincidencia entre transferencias, no la magnitud: seis acuerdos y tres contra tres promedian parecido y dicen cosas distintas.
 
 ## 3 · Exactitud en destino (más alto es mejor)
 
-| Método | M->U | U->M | M->S | S->M | U->S | S->U | Prom. |
-|---|---|---|---|---|---|---|---|
-| `MIL-Baseline` | 61.1 ± 0.0 | 80.6 ± 0.0 | 16.7 ± 0.0 | 38.9 ± 0.0 | 19.4 ± 0.0 | 27.8 ± 0.0 | **40.7** |
-| `MIL-CREDA**` | 72.2 ± 0.0 | 80.6 ± 0.0 | 16.7 ± 0.0 | 38.9 ± 0.0 | 22.2 ± 0.0 | 27.8 ± 0.0 | **43.1** |
-| `MIL-CREDA*` | 63.9 ± 0.0 | 80.6 ± 0.0 | 16.7 ± 0.0 | 41.7 ± 0.0 | 19.4 ± 0.0 | 27.8 ± 0.0 | **41.7** |
-| `MIL-CREDA` | 66.7 ± 0.0 | 80.6 ± 0.0 | 16.7 ± 0.0 | 41.7 ± 0.0 | 19.4 ± 0.0 | 27.8 ± 0.0 | **42.1** |
-| `MIL-CREDA-U` | 25.0 ± 0.0 | 77.8 ± 0.0 | 11.1 ± 0.0 | 30.6 ± 0.0 | 13.9 ± 0.0 | 38.9 ± 0.0 | **32.9** |
-| `MIL-CREDA-A` | 41.7 ± 0.0 | 75.0 ± 0.0 | 22.2 ± 0.0 | 27.8 ± 0.0 | 19.4 ± 0.0 | 25.0 ± 0.0 | **35.2** |
-| `MIL-CREDA-K` | 55.6 ± 0.0 | 66.7 ± 0.0 | 27.8 ± 0.0 | 41.7 ± 0.0 | 22.2 ± 0.0 | 44.4 ± 0.0 | **43.1** |
+| Ruido | Método | M->U | U->M | M->S | S->M | U->S | S->U | Prom. |
+|---|---|---|---|---|---|---|---|---|
+| sin | `MIL-Baseline` | 61.1 ± 0.0 | 80.6 ± 0.0 | 16.7 ± 0.0 | 38.9 ± 0.0 | 19.4 ± 0.0 | 27.8 ± 0.0 | **40.7** |
+| sin | `MIL-CREDA**` | 72.2 ± 0.0 | 80.6 ± 0.0 | 16.7 ± 0.0 | 38.9 ± 0.0 | 22.2 ± 0.0 | 27.8 ± 0.0 | **43.1** |
+| sin | `MIL-CREDA*` | 63.9 ± 0.0 | 80.6 ± 0.0 | 16.7 ± 0.0 | 41.7 ± 0.0 | 19.4 ± 0.0 | 27.8 ± 0.0 | **41.7** |
+| sin | `MIL-CREDA` | 66.7 ± 0.0 | 80.6 ± 0.0 | 16.7 ± 0.0 | 41.7 ± 0.0 | 19.4 ± 0.0 | 27.8 ± 0.0 | **42.1** |
+| sin | `MIL-CREDA-U` | 25.0 ± 0.0 | 77.8 ± 0.0 | 11.1 ± 0.0 | 30.6 ± 0.0 | 13.9 ± 0.0 | 38.9 ± 0.0 | **32.9** |
+| sin | `MIL-CREDA-A` | 41.7 ± 0.0 | 75.0 ± 0.0 | 22.2 ± 0.0 | 27.8 ± 0.0 | 19.4 ± 0.0 | 25.0 ± 0.0 | **35.2** |
+| sin | `MIL-CREDA-K` | 55.6 ± 0.0 | 66.7 ± 0.0 | 27.8 ± 0.0 | 41.7 ± 0.0 | 22.2 ± 0.0 | 44.4 ± 0.0 | **43.1** |
 
 Mejor promedio: **MIL-CREDA****; peor: MIL-CREDA-U, a 10.2% de distancia. MIL-CREDA queda 1.4% por encima de su piso MIL-Baseline. Con 1 repetición(es) esto es una estimación puntual y no un veredicto: la dispersión es cero por construcción, no por acuerdo. Más repeticiones lo refuerzan o lo cambian.
 
 ### 3b · Peldaños en destino
 
-| Peldaño | M->U | U->M | M->S | S->M | U->S | S->U | Prom. | gana izq. |
-|---|---|---|---|---|---|---|---|---|
-| MIL-Baseline → MIL-CREDA** | -11.1 | +0.0 | +0.0 | +0.0 | -2.8 | +0.0 | **-2.3** | 0/6 |
-| MIL-CREDA** → MIL-CREDA* | +8.3 | +0.0 | +0.0 | -2.8 | +2.8 | +0.0 | **+1.4** | 2/6 |
-| MIL-CREDA* → MIL-CREDA | -2.8 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | **-0.5** | 0/6 |
-| MIL-CREDA-U → MIL-CREDA-K | -30.6 | +11.1 | -16.7 | -11.1 | -8.3 | -5.6 | **-10.2** | 1/6 |
-| MIL-CREDA-A → MIL-CREDA-K | -13.9 | +8.3 | -5.6 | -13.9 | -2.8 | -19.4 | **-7.9** | 1/6 |
-| MIL-CREDA-K → MIL-CREDA | -11.1 | -13.9 | +11.1 | +0.0 | +2.8 | +16.7 | **+0.9** | 3/6 |
+| Ruido | Peldaño | M->U | U->M | M->S | S->M | U->S | S->U | Prom. | gana izq. |
+|---|---|---|---|---|---|---|---|---|---|
+| sin | MIL-Baseline → MIL-CREDA** | -11.1 | +0.0 | +0.0 | +0.0 | -2.8 | +0.0 | **-2.3** | 0/6 |
+| sin | MIL-CREDA** → MIL-CREDA* | +8.3 | +0.0 | +0.0 | -2.8 | +2.8 | +0.0 | **+1.4** | 2/6 |
+| sin | MIL-CREDA* → MIL-CREDA | -2.8 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | **-0.5** | 0/6 |
+| sin | MIL-CREDA-U → MIL-CREDA-K | -30.6 | +11.1 | -16.7 | -11.1 | -8.3 | -5.6 | **-10.2** | 1/6 |
+| sin | MIL-CREDA-A → MIL-CREDA-K | -13.9 | +8.3 | -5.6 | -13.9 | -2.8 | -19.4 | **-7.9** | 1/6 |
+| sin | MIL-CREDA-K → MIL-CREDA | -11.1 | -13.9 | +11.1 | +0.0 | +2.8 | +16.7 | **+0.9** | 3/6 |
 
 El peldaño que más separa es **MIL-CREDA-U → MIL-CREDA-K**: **MIL-CREDA-K** queda 10.2 por encima de MIL-CREDA-U, y eso lee qué compra la selección por atención frente a una regular. Se inclinan igual en las 6 transferencias: MIL-Baseline → MIL-CREDA**, MIL-CREDA* → MIL-CREDA. Con esta cantidad de repeticiones lo que carga peso es la coincidencia entre transferencias, no la magnitud: seis acuerdos y tres contra tres promedian parecido y dicen cosas distintas.
