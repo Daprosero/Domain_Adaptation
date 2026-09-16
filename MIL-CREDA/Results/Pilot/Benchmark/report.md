@@ -5,7 +5,7 @@
 > !! 1 repetición(es): el ± de abajo es cero por construcción, no por acuerdo. Son estimaciones puntuales, no resultados.  
 > !! piloto: el protocolo declara 30 repeticiones y 20 épocas. Nada de esto es un resultado.  
 
-## 0 · El techo de cada familia
+## 0 · El techo del término de adaptación
 
 **Estos techos son de un ENSAYO** (3 épocas), porque no hay búsqueda completa. El protocolo pide 20 épocas: no se citan como resultados, ni en el informe, ni en el resumen, ni en conversación.
 
