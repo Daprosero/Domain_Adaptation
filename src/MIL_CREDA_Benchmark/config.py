@@ -4,8 +4,13 @@ Two constants separate the pilot from the full configuration — `EPOCHS` and
 `SEEDS` — and nothing else. That is deliberate: the pilot has to exercise the
 same path the full run will, or it proves nothing about it.
 
-    pilot:  EPOCHS = 3,  SEEDS = [0]           60 runs
-    full:   EPOCHS = 20, SEEDS = range(30)   1800 runs
+    pilot:  EPOCHS = 3,  SEEDS = [0]
+    full:   EPOCHS = 20, SEEDS = range(30)
+
+The run count at either scale is `len(ARMS) * len(TRANSFERS) * len(SEEDS)` --
+computed by `sizing()` below rather than typed here, because a number typed
+beside this docstring would drift the day an arm is added or removed and
+nothing would notice.
 
 Read the header of any summary before reading its numbers. A table produced with
 one seed carries a threshold of zero, so every row declares a winner from a bare
@@ -296,7 +301,9 @@ TAU_LOCAL = 1.0
 #: says the attention consensus reuses that same kernel and its bandwidth
 #: rather than a second one of its own -- so one constant serves the
 #: consensus term inside the attention logit (Eq. 15), the top-k selection
-#: ranking, every bag kernel block Eq. (17)-(18) builds (K_ss, K_st, K_tt),
+#: ranking, every bag kernel block Eq. (23) builds (K_ss, K_st, K_tt) -- the
+#: three blocks of a class's mixed matrix are defined there, not at Eqs.
+#: (17)-(18), which define the bag kernel and its representation in general --
 #: and the local correspondence's own kernel evaluations (Eq. 28, 31). Every
 #: caller passes this explicitly, with no default anywhere in the call
 #: chain -- a constant carries no gradient, so there is no question of it
