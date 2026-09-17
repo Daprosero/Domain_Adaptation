@@ -282,9 +282,19 @@ def test_every_sigma_consumer_receives_the_one_declared_constant(
     stale per-batch median, a scaled bandwidth, anything but the one
     constant -- is caught by name rather than by a single aggregate check.
 
+    Also drives `arm(x)` -- `Arm.forward`, the call `harness.accuracy` makes
+    on every evaluation batch -- so the evaluation path's own sigma
+    consumer (`forward` -> `bag_representations` -> `bags_of` ->
+    `weights_for` -> `relevance_logits`) is checked too, not only the
+    training path. Training and evaluation call the same method with the
+    same declared constant, but nothing before this bound them together:
+    `forward` could drift to a different value and every training-time spy
+    above would stay green.
+
     Reachable red: pass a different value to any one consumer -- e.g. change
     `bag_kernel_matrix(bags_s, bags_s, sigma)`'s `sigma` to `sigma * 2` in
-    `_milcreda_term`.
+    `_milcreda_term`, or `config.KERNEL_SIGMA` to `config.KERNEL_SIGMA * 3`
+    in `Arm.forward`.
     """
     import MIL_CREDA.attention as attention_module
     import MIL_CREDA.bag_kernel as bag_kernel_module
@@ -320,6 +330,10 @@ def test_every_sigma_consumer_receives_the_one_declared_constant(
         x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
         y = arm.source.labels[:config.BAGS_PER_STEP]
         arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+        # The evaluation path: `harness.accuracy` calls `model(x)` on every
+        # batch, never `training_step` -- it has to be driven separately or
+        # a drift confined to `forward` would never reach any spy above.
+        arm(x)
 
     assert seen, "no sigma consumer was ever called"
     consumers = {name for name, _ in seen}
@@ -436,6 +450,51 @@ def test_an_adapted_arms_target_forward_updates_running_statistics(
 
     assert not torch.equal(bn.running_mean, before_mean)
     assert not torch.equal(bn.running_var, before_var)
+
+
+@pytest.mark.parametrize("arm_id", ["E", "F", "G", "SU", "SA", "SK"])
+def test_every_adapted_arms_full_training_step_updates_running_statistics_a_source_only_twin_does_not(
+        bn_encoder, arm_id) -> None:
+    """The guard above covers `G` alone, and only at `_target_embeddings`
+    directly. This drives every adapted arm through a full `training_step`
+    and compares its encoder's running statistics against a `B` twin built
+    from identical initial weights (`_arm` resets the seed before building
+    each one, over the same deterministic pools) and fed the identical
+    batch and generator. `B` never lets a target image reach the encoder
+    (Decision 2), so its running statistics move only from the source
+    forward; if the adapted arm's landed in the same place, its own target
+    forward would have to have been skipped or frozen somewhere between
+    `training_step` and `_target_embeddings`.
+
+    Reachable red, two ways: freeze the target forward for `arm_id` (wrap it
+    in `eval()`) anywhere from `training_step` down to `_target_embeddings`
+    for every arm but `G`, or freeze it specifically inside
+    `_milcreda_term` around the `_target_embeddings` call it makes.
+    """
+    floor = _arm("B")
+    adapted = _arm(arm_id)
+
+    floor.encoder.train()
+    adapted.encoder.train()
+    assert torch.equal(floor.encoder.bn.running_mean, adapted.encoder.bn.running_mean), (
+        "the twins did not start with identical running statistics"
+    )
+
+    x = floor.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = floor.source.labels[:config.BAGS_PER_STEP]
+    gen_floor = torch.Generator().manual_seed(41)
+    gen_adapted = torch.Generator().manual_seed(41)
+
+    floor.training_step(x, y, 0.5, gen_floor)
+    adapted.training_step(x, y, 0.5, gen_adapted)
+
+    assert not torch.equal(floor.encoder.bn.running_mean,
+                           adapted.encoder.bn.running_mean), (
+        f"{arm_id}'s running statistics matched its source-only twin's "
+        "after a full training_step: its target forward never touched them"
+    )
+    assert not torch.equal(floor.encoder.bn.running_var,
+                           adapted.encoder.bn.running_var)
 
 
 # ------------------------------------------------- the supervised term of a bag
