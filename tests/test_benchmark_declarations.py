@@ -47,6 +47,29 @@ def test_every_arm_declares_which_sections_it_exercises() -> None:
         f"sections declared for arms that no longer exist: {sorted(declared - configured)}")
 
 
+def test_the_declared_arms_and_rungs_are_exactly_the_operators_seven_and_six() -> None:
+    """Defect (11): arm `GN` was retired (commit `af796f8`, "normalization is
+    part of the architecture, not a per-arm switch") and every guard that
+    caught its re-addition before this test did so only by counting --
+    `len(config.ARMS) == 7` -- which a re-added `GN` paired with a dropped
+    arm elsewhere would satisfy while still being wrong. This asserts the
+    actual identities: the seven arms are exactly `B, E, F, G, SU, SA, SK`
+    and the ladder's six rungs are exactly the operator's six.
+
+    Reachable red: re-add `GN` (with or without also dropping a real arm), or
+    add, drop or repoint any rung of `config.LADDER`.
+    """
+    assert {arm["id"] for arm in config.ARMS} == {"B", "E", "F", "G", "SU", "SA", "SK"}
+    assert set(config.ARM_ORDER) == {"B", "E", "F", "G", "SU", "SA", "SK"}
+    assert "GN" not in config.ARMS_BY_ID
+
+    rungs = {(left, right) for left, right, _ in config.LADDER}
+    assert rungs == {
+        ("B", "E"), ("E", "F"), ("F", "G"),
+        ("SU", "SK"), ("SA", "SK"), ("SK", "G"),
+    }
+
+
 def test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration() -> None:
     assert MIL_CREDA.__implementation__["revision"] == config.REVISION
 
