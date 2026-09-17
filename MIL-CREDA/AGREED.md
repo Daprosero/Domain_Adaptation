@@ -215,6 +215,7 @@ already existed: they are two halves of one contract and they live in one. -->
 
 ## The full run
 
+- [ ] Nothing runs (pilot, shard, notebook or search) until the record-provenance guard is closed for every record the decided experiments keep: stale ceilings reaching a run through import-time defaults, Reduction.from_record ignoring the revision, and the noise diagnostic re-stamping an unchecked sweep.
 - [ ] The full grid — 30 seeds, 20 epochs — is not launched without an explicit authorization. Neither a clean verification nor a green pilot is permission.
 - [ ] While the run stands at pilot scale, its numbers are not quoted as results: not in the report, not in the summary, not in conversation.
 
