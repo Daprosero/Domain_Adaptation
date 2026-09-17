@@ -1,4 +1,5 @@
-"""The ten arms: what each one computes, and nothing about how it is trained.
+"""The arms declared in `config.ARMS`: what each one computes, and nothing
+about how it is trained.
 
 Every arm shares the same encoder, the same linear head, the same data, the same
 schedules and the same optimizer. What separates them is written in `config.ARMS`
@@ -31,7 +32,6 @@ bookkeeping, and not one formula.
 
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass
 
 import torch
@@ -66,48 +66,6 @@ class Pool:
     def take(self, positions: torch.Tensor) -> torch.Tensor:
         """The instances of the chosen bags, as (B, 30, 3, 32, 32)."""
         return self.images[self.members[positions]]
-
-
-def _running_stats_modules(module: nn.Module) -> list[nn.Module]:
-    """Every submodule of `module` that carries running statistics.
-
-    Found by the attribute the base classes actually declare
-    (`track_running_stats`), not by an explicit class list: `BatchNorm1d`,
-    `BatchNorm2d`, `BatchNorm3d` and any `InstanceNorm*` built with
-    `track_running_stats=True` all expose it, and this catches every one of
-    them -- including a class this repository does not know about by name --
-    rather than a hand-picked subset that a backbone change could silently
-    stop covering.
-    """
-    return [sub for sub in module.modules()
-            if getattr(sub, "track_running_stats", False)]
-
-
-@contextlib.contextmanager
-def _frozen_running_stats(module: nn.Module):
-    """Decision 3: the target forward normalizes with the CURRENT running
-    statistics and leaves them unchanged, for the duration of this block.
-
-    `eval()` on exactly the running-stats submodules found above, never on
-    `module` as a whole: that is the narrowest switch that stops a running
-    mean/var from being updated while leaving every other module -- and the
-    surrounding source forward, which stays in training mode -- untouched.
-    `eval()` mode is also what makes BatchNorm normalize with the stored
-    running statistics instead of the batch's own, which is the other half
-    of the same requirement: a target forward computed this way is centred
-    and scaled by what the source has produced so far, not by itself.
-    Restored to `train()` on exit unconditionally, since every caller here
-    only ever opens this block from inside `training_step`, where the
-    encoder is already in training mode throughout.
-    """
-    stats_modules = _running_stats_modules(module)
-    for sub in stats_modules:
-        sub.eval()
-    try:
-        yield
-    finally:
-        for sub in stats_modules:
-            sub.train()
 
 
 class Arm(nn.Module):
@@ -261,20 +219,16 @@ class Arm(nn.Module):
         return order[: config.BAGS_PER_STEP].to(self.target.members.device)
 
     def _target_embeddings(self, target_bags: torch.Tensor) -> torch.Tensor:
-        """Encode a target batch during training, honouring `targetNormalization`
-        (Decision 3 / Decision 4).
+        """Encode a target batch during training.
 
-        `"frozen"` -- every existing adapted arm, per Decision 3: every
-        running-stats layer of the encoder normalizes this forward with its
-        CURRENT running statistics, built from the source alone since this is
-        the only place a target image reaches the encoder during training,
-        and leaves those statistics unchanged. `"live"` -- `GN` only, per
-        Decision 4: today's pre-existing behaviour, where the target forward
-        updates them too.
+        Every adapted arm passes the target batch through the encoder exactly
+        as it passes the source batch: normalization layers stay in training
+        mode and learn from this forward like the rest of the model does.
+        There is no separate treatment to honour here -- normalization is
+        part of the architecture, not a per-arm switch -- and this method
+        exists only so `_milcreda_term`/`_creda_term` have one name for
+        "encode the target batch" beside `instance_embeddings`.
         """
-        if self.spec["targetNormalization"] == "frozen":
-            with _frozen_running_stats(self.encoder):
-                return self.instance_embeddings(target_bags)
         return self.instance_embeddings(target_bags)
 
     def _milcreda_term(self, H_s, source_labels, target_bags):
@@ -395,11 +349,13 @@ class Arm(nn.Module):
         # Decision 2: a floor never lets a target image reach the encoder,
         # ever, in training -- one earlier design measured the normalization
         # rather than the loss this way (M->U, coefficient forced to zero:
-        # the arm still scored 0.778 against the floor's 0.722), and Decision
-        # 3 closes that gap for every adapted arm instead, by freezing the
-        # running statistics a target forward normalizes with rather than by
-        # handing a floor a target batch it has no use for. `_draw_target` is
-        # still called for every arm, floor included, so the generator is
+        # the arm still scored 0.778 against the floor's 0.722). Every
+        # adapted arm's target forward, by contrast, runs through the
+        # encoder exactly like its source forward -- normalization layers in
+        # training mode included, learning from both domains as part of the
+        # architecture, not as a separate effect to isolate or a confound to
+        # control for. `_draw_target` is still called for every arm, floor
+        # included, so the generator is
         # consumed identically across arms (SKILL.md: arms must not differ in
         # how much of the generator they consume) -- what a floor never does
         # with the indices it draws is `take` or encode the images they name.

@@ -4,7 +4,7 @@ Three claims live here that the declaration tests could only look at from the
 outside. That the selecting arms spend a budget of ten is a fact about `select`,
 not about the constant it reads. That prior work is used as it was written is a
 fact about the objective `training_step` assembles for an instance-unit arm. And
-that all ten arms see one contamination draw is a fact about the loop in
+that every declared arm sees one contamination draw is a fact about the loop in
 `campaign`, where the material is built.
 
 The encoder is stubbed -- it is a pretrained resnet18 and no claim here is about
@@ -47,9 +47,10 @@ class _BNEncoder(nn.Module):
     """Like `_Encoder`, but with a running-stats layer of its own.
 
     `_Encoder` carries no `BatchNorm`, deliberately: most claims here have
-    nothing to do with it. Decision 3/4's claims are entirely ABOUT it, so
-    they need a stub that actually has running statistics to observe move or
-    not move.
+    nothing to do with it. The claim that an adapted arm's target forward
+    updates the encoder's running statistics -- normalization is part of the
+    architecture, not a separate mechanism -- is entirely ABOUT it, so it
+    needs a stub that actually has running statistics to observe move.
     """
 
     def __init__(self, backbone=None, pretrained=False):
@@ -183,10 +184,13 @@ def test_weights_for_and_select_read_the_declared_gamma_and_temperature(
     `relevance_logits`/`bag_weights`, rather than a value a hardcoded 0.0/1.0
     could silently stand in for at today's neutral hyperparameters.
 
-    Patched to NON-neutral values on purpose: at the declared neutral
-    (gamma=0, tau_att=1) a mutant that hardcoded those exact numbers would
-    read identically to the real thing. Only a patched, non-neutral config
-    can tell them apart.
+    Each parameter is patched ALONE, with the other pinned at its neutral --
+    not both at once. Moving both together would let a mutant that hardcoded
+    only ONE of the two (say, `bag_weights` always dividing by 1.0 while
+    correctly reading `config.ATTENTION_GAMMA`) pass unnoticed: the output
+    would still differ from neutral because the OTHER parameter genuinely
+    moved, and the hardcoded one would never be exercised on its own. Only a
+    single-parameter patch can catch a single-parameter mutant.
     """
     arm = _arm("G")
     torch.manual_seed(7)
@@ -196,27 +200,41 @@ def test_weights_for_and_select_read_the_declared_gamma_and_temperature(
     monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
     neutral_weights = arm.weights_for(H, config.KERNEL_SIGMA)
 
+    # gamma alone, temperature pinned at its neutral
     monkeypatch.setattr(config, "ATTENTION_GAMMA", 2.4)
-    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 0.2)
-    patched_weights = arm.weights_for(H, config.KERNEL_SIGMA)
-
-    assert not torch.allclose(neutral_weights, patched_weights), (
-        "weights_for produced the same weights under a patched gamma/tau_att "
-        "as under the neutral ones -- it is not reading config"
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
+    gamma_only_weights = arm.weights_for(H, config.KERNEL_SIGMA)
+    assert not torch.allclose(neutral_weights, gamma_only_weights), (
+        "weights_for produced the same weights under a patched gamma alone "
+        "as under the neutral ones -- it is not reading "
+        "config.ATTENTION_GAMMA"
     )
 
+    # temperature alone, gamma pinned at its neutral
+    monkeypatch.setattr(config, "ATTENTION_GAMMA", 0.0)
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 0.2)
+    temperature_only_weights = arm.weights_for(H, config.KERNEL_SIGMA)
+    assert not torch.allclose(neutral_weights, temperature_only_weights), (
+        "weights_for produced the same weights under a patched temperature "
+        "alone as under the neutral ones -- it is not reading "
+        "config.ATTENTION_TEMPERATURE"
+    )
+
+    # `select`'s topk ranking depends on the raw logit (gamma), never on the
+    # softmax temperature -- so only gamma is exercised here, alone.
     sk = _arm("SK")
     monkeypatch.setattr(config, "ATTENTION_GAMMA", 0.0)
     monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
     neutral_kept = sk.select(H, config.KERNEL_SIGMA)
 
     monkeypatch.setattr(config, "ATTENTION_GAMMA", 2.4)
-    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 0.2)
-    patched_kept = sk.select(H, config.KERNEL_SIGMA)
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
+    gamma_only_kept = sk.select(H, config.KERNEL_SIGMA)
 
-    assert not torch.equal(neutral_kept, patched_kept), (
+    assert not torch.equal(neutral_kept, gamma_only_kept), (
         "select's topk ranking chose the same instances under a patched "
-        "gamma as under the neutral one -- it is not reading config"
+        "gamma alone as under the neutral one -- it is not reading "
+        "config.ATTENTION_GAMMA"
     )
 
 
@@ -319,31 +337,39 @@ def test_a_floor_never_encodes_a_target_image_during_training(encoder, monkeypat
     """Decision 2: a floor's training step never lets a target image reach
     the encoder, ever.
 
-    Instrumented rather than inferred: `instance_embeddings` is spied on the
-    live arm instance, and every call it receives during the floor's
-    `training_step` is checked against the identity of the SOURCE batch
-    handed to that step. A target-derived tensor reaching the encoder at all
-    -- for BatchNorm parity or anything else -- is what this refuses.
+    Hooked at `encoder.forward` itself, not at `instance_embeddings`.
+    `instance_embeddings` is only the path the CURRENT code happens to
+    reach the encoder through, so a spy placed there is blind to a mutation
+    that called `self.encoder(target_bags...)` directly and bypassed it --
+    a real risk for exactly the floor branch this test guards, where "call
+    the encoder some other way" is the shape any reintroduced target
+    exposure would take. Hooking the encoder's own `forward` catches every
+    path, whatever `wiring.py` grows to call it through.
 
     Reachable red: restore the old unconditional
-    `self.instance_embeddings(target_bags)` call in the floor branch.
+    `self.instance_embeddings(target_bags)` call in the floor branch, or add
+    a direct `self.encoder(...)` call on a target-derived tensor anywhere in
+    the floor's step.
     """
     arm = _arm("B")
     x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
     y = arm.source.labels[:config.BAGS_PER_STEP]
 
     seen_ids = []
-    real_instance_embeddings = arm.instance_embeddings
+    real_forward = arm.encoder.forward
 
     def spy(bags):
         seen_ids.append(bags.data_ptr())
-        return real_instance_embeddings(bags)
+        return real_forward(bags)
 
-    monkeypatch.setattr(arm, "instance_embeddings", spy)
+    monkeypatch.setattr(arm.encoder, "forward", spy)
     arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
 
+    # `x` is already contiguous (built by `Pool.take`'s own fancy indexing),
+    # so the flattened view `instance_embeddings` reshapes it into before
+    # handing it to the encoder shares `x`'s own storage and data_ptr.
     assert seen_ids == [x.data_ptr()], (
-        f"the floor's training step called instance_embeddings "
+        f"the floor's training step called encoder.forward "
         f"{len(seen_ids)} time(s); only its own source batch may reach it"
     )
 
@@ -379,65 +405,30 @@ def test_a_floor_consumes_the_generator_identically_to_an_adapted_arm(encoder) -
     )
 
 
-# --------------------------------------- Decision 3/4: whose stats the target sees
+# ------------------------------- normalization is part of the model, not a switch
 
-def test_target_embeddings_leaves_running_stats_unchanged_for_a_frozen_arm(
+def test_an_adapted_arms_target_forward_updates_running_statistics(
         bn_encoder) -> None:
-    """Decision 3: E, F, G, SU, SA, SK ('targetNormalization': 'frozen')
-    normalize the target forward with the CURRENT running statistics and
-    leave them unchanged -- checked directly against a stub encoder that
-    actually carries a `BatchNorm1d`, at the exact method
-    (`Arm._target_embeddings`) that does the freezing, rather than through a
-    full training step where the source forward's own (legitimate) update
-    would confound the reading.
+    """Normalization is part of the architecture: an adapted arm's target
+    forward runs through the encoder exactly like its source forward, so it
+    updates the encoder's running statistics too -- checked directly against
+    a stub encoder that actually carries a `BatchNorm1d`, at the exact
+    method (`Arm._target_embeddings`) a future freeze would have to touch to
+    reintroduce the mechanism this repository decided against.
 
-    Reachable red: call `self.instance_embeddings(target_bags)` directly in
-    `_target_embeddings` instead of opening `_frozen_running_stats`.
+    This is the guard against reintroducing a freeze silently: if
+    `_target_embeddings` ever again special-cased the target forward (e.g.
+    switching a running-stats layer to `eval()` for it), this would go red.
+
+    Reachable red: wrap the call in `_target_embeddings` with anything that
+    puts `self.encoder`, or one of its running-stats submodules, into
+    `eval()` mode for the duration of the target forward.
     """
     arm = _arm("G")
-    assert config.ARMS_BY_ID["G"]["targetNormalization"] == "frozen"
-    bn = arm.encoder.bn
-
-    # Seed the running stats away from their fresh init/unit-variance state,
-    # via one source-shaped forward in training mode -- what a real step's
-    # source half already does -- so "unchanged" is a real claim.
-    arm.encoder.train()
-    arm.encoder(torch.randn(20, 3, 8, 8))
-    before_mean, before_var = bn.running_mean.clone(), bn.running_var.clone()
-
-    target_bags = arm.target.take(torch.arange(config.BAGS_PER_STEP))
-    embeddings = arm._target_embeddings(target_bags)
-
-    assert torch.equal(bn.running_mean, before_mean)
-    assert torch.equal(bn.running_var, before_var)
-
-    # And the forward really used those frozen stats to normalize, rather
-    # than the target batch's own -- confirmed against the encoder's own
-    # eval()-mode output, which is defined to use the stored running stats.
-    arm.encoder.eval()
-    with torch.no_grad():
-        B, m = target_bags.shape[0], target_bags.shape[1]
-        expected = arm.encoder(
-            target_bags.reshape(B * m, *target_bags.shape[2:])
-        ).reshape(B, m, -1)
-    arm.encoder.train()
-    assert torch.allclose(embeddings, expected, atol=1e-6)
-
-
-def test_target_embeddings_updates_running_stats_for_gn(bn_encoder) -> None:
-    """Decision 4: `GN` is identical to `G` except its running-stats layers
-    DO update from the target forward -- checked at the same method as the
-    test above, on the one arm whose `targetNormalization` is `'live'`.
-
-    Reachable red: give `GN` the same `'frozen'` value `G` has, or make
-    `_target_embeddings` ignore `targetNormalization` altogether.
-    """
-    arm = _arm("GN")
-    assert config.ARMS_BY_ID["GN"]["targetNormalization"] == "live"
     bn = arm.encoder.bn
 
     arm.encoder.train()
-    arm.encoder(torch.randn(20, 3, 8, 8))
+    arm.encoder(torch.randn(20, 3, 8, 8))  # give the stats something of their own
     before_mean, before_var = bn.running_mean.clone(), bn.running_var.clone()
 
     target_bags = arm.target.take(torch.arange(config.BAGS_PER_STEP))
@@ -445,40 +436,6 @@ def test_target_embeddings_updates_running_stats_for_gn(bn_encoder) -> None:
 
     assert not torch.equal(bn.running_mean, before_mean)
     assert not torch.equal(bn.running_var, before_var)
-
-
-def test_running_stats_after_a_step_match_a_source_only_forward(bn_encoder) -> None:
-    """Decision 3, the literal comparison: running statistics after a frozen
-    arm's full training step equal those a source-only forward alone would
-    have produced -- proving the target forward, which DOES happen (the
-    adaptation terms need it), contributes nothing to them.
-
-    Two arms in identical state (`copy.deepcopy`, so every parameter and
-    every running-stats buffer starts bit-identical): one takes a real
-    training step, the other only ever sees the same source batch, forwarded
-    exactly as `instance_embeddings` would.
-    """
-    import copy
-
-    arm = _arm("G")
-    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
-    y = arm.source.labels[:config.BAGS_PER_STEP]
-
-    arm.encoder.train()
-    arm.encoder(torch.randn(20, 3, 8, 8))  # give the stats something of their own
-
-    twin = copy.deepcopy(arm)
-
-    arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
-
-    twin.encoder.train()
-    B, m = x.shape[0], x.shape[1]
-    twin.encoder(x.reshape(B * m, *x.shape[2:]))
-
-    assert torch.allclose(arm.encoder.bn.running_mean, twin.encoder.bn.running_mean,
-                          atol=1e-6)
-    assert torch.allclose(arm.encoder.bn.running_var, twin.encoder.bn.running_var,
-                          atol=1e-6)
 
 
 # ------------------------------------------------- the supervised term of a bag
@@ -556,8 +513,9 @@ def test_one_draw_of_the_material_is_shared_by_every_arm(campana) -> None:
     same object. The count is what says so -- three domains for one seed, however
     many arms ran -- and the identity is what makes the count mean it.
 
-    Reachable red: move `bags.build` inside the arm loop, and the eight arms of
-    a cell get eight draws that agree in distribution and in nothing else.
+    Reachable red: move `bags.build` inside the arm loop, and the declared
+    arms of a cell get one draw each that agree in distribution and in
+    nothing else.
     """
     harness_result = _run_campaign([7], noise=config.NOISE_LEVELS[2])
     built = campana["built"]
@@ -569,7 +527,7 @@ def test_one_draw_of_the_material_is_shared_by_every_arm(campana) -> None:
 
     runs = campana["runs"]
     arms = {run["arm"] for run in runs}
-    assert len(arms) == len(config.ARMS) == 8
+    assert len(arms) == len(config.ARMS) == 7
     for transfer in {run["transfer"] for run in runs}:
         of_cell = [run for run in runs if run["transfer"] == transfer]
         assert len({run["source"] for run in of_cell}) == 1, \
