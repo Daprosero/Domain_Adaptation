@@ -234,6 +234,174 @@ def test_load_refuses_a_checkpoint_stamped_under_an_earlier_revision():
     assert config.REVISION in str(raised.value)
 
 
+def test_a_checkpoint_with_no_revision_at_all_is_tagged_and_load_refuses_it_too():
+    """Defect (g): a manifest carrying NO `revision` field at all -- an even
+    older manifest, from before this field was recorded -- used to read
+    inconsistently between the two tools: `available()` already tagged it
+    `currentRevision: False` (`None != config.REVISION`), but `load()`'s own
+    guard only fired when `revision is not None`, so it loaded the very
+    checkpoint `available()` had just flagged as not current. Both now agree:
+    tagged, and refused.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    vigente = next(iter(config.ARMS_BY_ID))
+    revisionless = {"arm": vigente, "transfer": "M-U", "seed": 0,
+                    "reduction": {"epochs": 20}, "source": {}, "target": {}}
+
+    assert revisionless["reduction"].get("revision") is None
+
+    with pytest.raises(latent.StaleCheckpointRevision):
+        latent.load(revisionless, device=None)
+
+
+def test_available_tags_a_checkpoint_with_no_revision_field_not_current(
+        tmp_path, monkeypatch):
+    """The `available()` half of the same consistency: a manifest missing
+    `revision` entirely comes back tagged `currentRevision: False`, exactly
+    like one naming an explicitly earlier revision -- never treated as
+    current because nothing contradicts it.
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import config
+
+    vigente = next(iter(config.ARMS_BY_ID))
+    (tmp_path / f"{vigente}_M-U_seed0.pt").write_bytes(b"")
+    (tmp_path / f"{vigente}_M-U_seed0.manifest.json").write_text(
+        json.dumps({"arm": vigente, "transfer": "M-U", "seed": 0,
+                    "reduction": {"epochs": 20}}),
+        encoding="utf-8")
+    monkeypatch.setattr(config, "models_for", lambda *a, **k: tmp_path)
+
+    found = latent.available(0.0, True)
+    assert len(found) == 1
+    assert found[0]["currentRevision"] is False
+
+
+def _checkpoint_with_reduction(vigente: str, **reduction):
+    base = {"epochs": 20}
+    base.update(reduction)
+    return {"arm": vigente, "transfer": "M-U", "seed": 0, "reduction": base}
+
+
+def test_available_tags_a_checkpoint_whose_bandwidth_or_attention_hyperparameters_drifted(
+        tmp_path, monkeypatch):
+    """Defect (i): `KERNEL_SIGMA`, `ATTENTION_GAMMA` and `ATTENTION_TEMPERATURE`
+    are stamped in every `Reduction`, and a checkpoint whose manifest recorded
+    a different one is tagged `currentHyperparameters: False` -- the same
+    `tag, do not drop` choice `currentRevision` already makes, applied to
+    Decision 1's bandwidth and Eq. (16)'s two hyperparameters rather than to
+    the managed revision.
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import config
+
+    vigente = next(iter(config.ARMS_BY_ID))
+    current = _checkpoint_with_reduction(
+        vigente, revision=config.REVISION, kernelSigma=config.KERNEL_SIGMA,
+        attentionGamma=config.ATTENTION_GAMMA,
+        attentionTemperature=config.ATTENTION_TEMPERATURE)
+    drifted = _checkpoint_with_reduction(
+        vigente, revision=config.REVISION,
+        kernelSigma=config.KERNEL_SIGMA * 3,
+        attentionGamma=config.ATTENTION_GAMMA,
+        attentionTemperature=config.ATTENTION_TEMPERATURE)
+
+    (tmp_path / f"{vigente}_M-U_seed0.pt").write_bytes(b"")
+    (tmp_path / f"{vigente}_M-U_seed0.manifest.json").write_text(
+        json.dumps(current), encoding="utf-8")
+    (tmp_path / f"{vigente}_M-S_seed0.pt").write_bytes(b"")
+    (tmp_path / f"{vigente}_M-S_seed0.manifest.json").write_text(
+        json.dumps({**drifted, "transfer": "M-S"}), encoding="utf-8")
+    monkeypatch.setattr(config, "models_for", lambda *a, **k: tmp_path)
+
+    found = latent.available(0.0, True)
+    assert len(found) == 2
+    by_transfer = {entry["transfer"]: entry["currentHyperparameters"] for entry in found}
+    assert by_transfer["M-U"] is True
+    assert by_transfer["M-S"] is False
+
+
+def test_an_older_manifest_missing_the_three_hyperparameter_fields_is_not_drift(
+        tmp_path, monkeypatch):
+    """A manifest stamped before these three fields existed carries none of
+    them -- nothing to compare, so it is not drift, and it stays tagged
+    current on this axis. It may still be caught by `currentRevision` if it
+    is genuinely from an earlier revision; this test only isolates the
+    hyperparameter axis.
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import config
+
+    vigente = next(iter(config.ARMS_BY_ID))
+    (tmp_path / f"{vigente}_M-U_seed0.pt").write_bytes(b"")
+    (tmp_path / f"{vigente}_M-U_seed0.manifest.json").write_text(
+        json.dumps(_checkpoint_with_reduction(vigente, revision=config.REVISION)),
+        encoding="utf-8")
+    monkeypatch.setattr(config, "models_for", lambda *a, **k: tmp_path)
+
+    found = latent.available(0.0, True)
+    assert found[0]["currentHyperparameters"] is True
+
+
+def test_load_refuses_a_checkpoint_stamped_under_a_different_kernel_sigma():
+    """`load()`'s own refusal, beside the tag `available()` adds -- the same
+    shape as `StaleCheckpointRevision`'s refusal, for `kernelSigma` alone.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    drifted = {"reduction": {"revision": config.REVISION,
+                             "kernelSigma": config.KERNEL_SIGMA * 3},
+               "source": {}, "target": {}}
+    with pytest.raises(latent.StaleCheckpointHyperparameters) as raised:
+        latent.load(drifted, device=None)
+    assert "kernelSigma" in str(raised.value)
+
+
+def test_load_refuses_a_checkpoint_stamped_under_a_different_gamma_or_temperature():
+    from MIL_CREDA_Benchmark import config
+
+    drifted_gamma = {"reduction": {"revision": config.REVISION,
+                                   "attentionGamma": config.ATTENTION_GAMMA + 1.0},
+                     "source": {}, "target": {}}
+    with pytest.raises(latent.StaleCheckpointHyperparameters) as raised:
+        latent.load(drifted_gamma, device=None)
+    assert "attentionGamma" in str(raised.value)
+
+    drifted_tau = {"reduction": {"revision": config.REVISION,
+                                 "attentionTemperature":
+                                     config.ATTENTION_TEMPERATURE + 1.0},
+                   "source": {}, "target": {}}
+    with pytest.raises(latent.StaleCheckpointHyperparameters) as raised:
+        latent.load(drifted_tau, device=None)
+    assert "attentionTemperature" in str(raised.value)
+
+
+def test_load_never_confuses_hyperparameter_drift_with_revision_drift():
+    """The two refusals are distinct exceptions: a checkpoint under the
+    current revision but a moved bandwidth raises
+    `StaleCheckpointHyperparameters`, never `StaleCheckpointRevision` -- a
+    caller that only caught the revision exception would otherwise let this
+    one through silently.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    drifted = {"reduction": {"revision": config.REVISION,
+                             "kernelSigma": config.KERNEL_SIGMA * 3},
+               "source": {}, "target": {}}
+    with pytest.raises(latent.StaleCheckpointHyperparameters):
+        latent.load(drifted, device=None)
+    try:
+        latent.load(drifted, device=None)
+    except latent.StaleCheckpointRevision:
+        pytest.fail("hyperparameter drift raised as a revision refusal")
+    except latent.StaleCheckpointHyperparameters:
+        pass
+
+
 def test_a_floor_the_bench_no_longer_declares_is_an_undefined_question():
     """Not "the checkpoints are missing". The two read the same and mean opposite
     things: one is a file to go and produce, the other is a comparison that has
