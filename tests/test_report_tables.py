@@ -1449,3 +1449,72 @@ def test_attention_spread_text_prints_the_per_arm_floor_not_only_the_global_one(
     assert f"piso {full_bag_floor:.3f}" in said_full_bag
     assert f"sobre {config.INSTANCES_PER_BAG} instancias" in said_full_bag
     assert f"piso {selecting_floor:.3f}" not in said_full_bag
+
+
+@pytest.mark.parametrize("arm", ["B", "E", "F", "G", "SU", "SA", "SK"])
+def test_conclusion_attention_prints_this_exact_arms_own_floor(arm: str) -> None:
+    """The test above isolates SK against G; a mutation that special-cased
+    only `SA` to read the global floor (`MIN_ATTENTION_SPREAD_BY_ARM.get(arm,
+    MIN_ATTENTION_SPREAD)` rewritten as, say, `... if arm != "SA" else
+    MIN_ATTENTION_SPREAD`) would pass every test above -- none of them ever
+    build a row for `SA`, or for `SU`, `B`, `E` or `F`. Driven over all seven
+    declared arms, one row at a time, so a mutation confined to any single
+    arm's own lookup is caught by that arm's own row.
+
+    Reachable red: any one arm's floor lookup replaced by the global
+    `MIN_ATTENTION_SPREAD` while every other arm's stays correct.
+    """
+    floor = tables.MIN_ATTENTION_SPREAD_BY_ARM[arm]
+    said = tables.conclusion_attention([
+        {"arm": arm, "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
+    ])
+    assert f"piso {floor:.3f}" in said, (
+        f"arm {arm}: expected its own floor {floor:.3f} in {said!r}"
+    )
+
+
+# --------------------------------------------------- defect (4): the diagnostic axis
+
+def test_diagnostic_record_refuses_a_stamp_mismatch(tmp_path, monkeypatch) -> None:
+    """Defect (4): `Benchmark_Noise_Diagnostic_Search_v1.ipynb` now stamps
+    `diagnostic.json` (`harness.ceiling_record.stamp(registro)`), and
+    `tables._diagnostic_record` -- the single read every one of
+    `diagnostic_source_note`/`render_diagnostic`/`conclusion_diagnostic`
+    goes through -- refuses rather than reporting a stale measurement as
+    current: this file holds exactly one measurement, not a table of several
+    where some rows might still be valid, so there is nothing here that can
+    be shown partially.
+    """
+    import json as _json
+
+    from MIL_CREDA_Benchmark import ceiling_record
+
+    stale = ceiling_record.stamp({"level": 0.4, "transfer": "M->U"})
+    stale["kernelSigma"] = config.KERNEL_SIGMA * 3
+    (tmp_path / "diagnostic.json").write_text(_json.dumps(stale), encoding="utf-8")
+    monkeypatch.setattr(config, "noise_axis_for", lambda pilot: tmp_path)
+
+    with pytest.raises(SystemExit):
+        tables._diagnostic_record()
+    with pytest.raises(SystemExit):
+        tables.render_diagnostic()
+    with pytest.raises(SystemExit):
+        tables.diagnostic_source_note()
+    with pytest.raises(SystemExit):
+        tables.conclusion_diagnostic()
+
+
+def test_diagnostic_record_accepts_a_correctly_stamped_measurement(
+        tmp_path, monkeypatch) -> None:
+    import json as _json
+
+    from MIL_CREDA_Benchmark import ceiling_record
+
+    fresh = ceiling_record.stamp({"level": 0.4, "transfer": "M->U",
+                                  "searchedUnderNoise": {}, "diagnosticOnly": "x"})
+    (tmp_path / "diagnostic.json").write_text(_json.dumps(fresh), encoding="utf-8")
+    monkeypatch.setattr(config, "noise_axis_for", lambda pilot: tmp_path)
+
+    record, pilot = tables._diagnostic_record()
+    assert record is not None
+    assert pilot is False

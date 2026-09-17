@@ -47,6 +47,39 @@ def test_stamp_drift_no_vacio_cuando_un_campo_difiere():
                                      "current": config.KERNEL_SIGMA}
 
 
+@pytest.mark.parametrize("campo,otro", [
+    ("revision", "research-concept-r99.md"),
+    ("kernelSigma", None),
+    ("attentionGamma", None),
+    ("attentionTemperature", None),
+])
+def test_stamp_drift_detecta_un_desacuerdo_en_cada_campo_por_separado(campo, otro):
+    """El test de arriba sólo mueve `kernelSigma`; un `stamp_drift` que
+    comparara `revision`/`attentionGamma`/`attentionTemperature` a medias
+    --- o no los comparara --- pasaría igual. Cada campo se mueve solo, con
+    los otros tres intactos, para que un desacuerdo ignorado en cualquiera
+    de los cuatro se note por su propio nombre.
+
+    Rojo alcanzable: `stamp_drift` ignorando un desacuerdo en `revision`,
+    `attentionGamma` o `attentionTemperature` (cada uno por separado).
+    """
+    entrada = cr.stamp({"ceiling": 0.01})
+    if otro is not None:
+        valor_movido = otro
+    else:
+        # `* 3` no mueve un cero (ATTENTION_GAMMA es 0 por declaración: "nunca
+        # se barre el techo de la rampa; 1 es el neutro de la Ec. (39)" no
+        # aplica acá, pero gamma sí puede valer 0 como neutro propio), así que
+        # el desplazamiento es aditivo y nunca depende de que el valor de hoy
+        # sea distinto de cero.
+        valor_movido = entrada[campo] + 1.0
+    entrada[campo] = valor_movido
+    drift = cr.stamp_drift(entrada)
+    assert set(drift) == {campo}, f"esperaba sólo {campo!r}, salió {sorted(drift)}"
+    assert drift[campo] == {"record": valor_movido,
+                            "current": getattr(config, cr.STAMP_FIELDS[campo])}
+
+
 def test_stamp_drift_una_entrada_sin_ninguno_de_los_cuatro_campos_es_drift_completo():
     """Un registro de antes de que `stamp` existiera no tiene nada que
     comparar, y esa ausencia ES la deriva -- la misma regla que

@@ -330,6 +330,25 @@ TAU_LOCAL = 1.0
 #: below follows from it. This is a placeholder to be tuned with Optuna
 #: alongside the ceiling search -- not added to that search by this stretch
 #: of work, which was not asked to make that change.
+#:
+#: `tools/measure_kernel_sigma.py` is this procedure, committed, not only
+#: described: seed the global generator with `SEEDS[0]`, build the clean
+#: material for domain M, build any arm (the encoder is constructed first,
+#: before any arm-specific parameter, so which arm is irrelevant), leave the
+#: model in training mode, walk the 64 training bags through
+#: `instance_embeddings` in `BAGS_PER_STEP`-bag chunks in `train_idx`'s own
+#: order under `torch.no_grad()`, concatenate the 1920 embeddings, and take
+#: `sqrt(median(off-diagonal squared distance) + 1e-6)` directly over that set
+#: -- every tensor left in the float32 dtype `bags.build` and an ordinary
+#: campaign both already use, never upcast to this package's own
+#: `MIL_CREDA_Benchmark.DTYPE`, which governs a different module's internal
+#: tensors and not what a campaign trains with. Run today it measures
+#: 36.135013580322266, 7.245e-07 away from the value below; stable across
+#: repeated runs on this machine, so the gap is not run-to-run noise here, but
+#: a gap this small is exactly what unordered floating-point summation inside
+#: a multi-threaded BLAS matrix multiply can produce between environments
+#: without the procedure itself differing. The script prints both numbers
+#: rather than asserting they must agree.
 KERNEL_SIGMA = 36.135014304860874
 
 #: The stabilizer inside a logarithm, shared by two call sites rather than
@@ -964,6 +983,73 @@ def ceilings_provenance(pilot: "bool | None" = None) -> dict:
     return out
 
 
+#: The same mapping `ceiling_record.STAMP_FIELDS` declares, duplicated here
+#: rather than imported. `ceiling_record` imports THIS module at its own top
+#: level, and `ceilings_on_record()` below is called from `CEILINGS.update(...)`
+#: at this module's own top level (a few hundred lines down) -- so an import of
+#: `ceiling_record` reached from inside `_refuse_on_stamp_drift`, even a local
+#: one, is reached while `config` is still mid-import whenever `ceiling_record`
+#: is the caller's first import of the two, and `ceiling_record` itself is then
+#: only half-defined. Two constants that have to agree is the cost of not
+#: creating that cycle; `tests/test_ceiling_record.py` and this module's own
+#: tests hold the two mappings equal so a field added to one and not the other
+#: is caught rather than silently checked on one side and not the other.
+_STAMP_FIELDS: dict[str, str] = {
+    "revision": "REVISION",
+    "kernelSigma": "KERNEL_SIGMA",
+    "attentionGamma": "ATTENTION_GAMMA",
+    "attentionTemperature": "ATTENTION_TEMPERATURE",
+}
+
+
+def _refuse_on_stamp_drift(found: dict, record: "Path") -> None:
+    """Refuse when any family in `found` disagrees with the CURRENT config's
+    stamp, or was written before a stamp existed at all.
+
+    The check `harness.ceiling_for` and `harness.ceilings_in_force` already
+    make (via `ceiling_record.stamp_drift`, the same rule, see `_STAMP_FIELDS`
+    above for why this cannot call that function directly), moved to where
+    these two functions actually read the file -- both were reachable straight
+    from a notebook (`Benchmark_Campaign_v1.ipynb`'s `ES_ENSAYO` branch,
+    `Benchmark_Noise_Sweep_v1.ipynb`) building `ceilings=`/`ceilingsByTransfer=`
+    from these two calls directly, never through `harness.with_ceilings_in_force`,
+    so neither of those refusals ever ran: a campaign built that way trained
+    every arm under a ceiling searched under a `KERNEL_SIGMA`/`ATTENTION_GAMMA`/
+    `ATTENTION_TEMPERATURE`/`REVISION` the current config no longer carries, and
+    nothing said so.
+
+    **Called only when the caller named a scale.** Both callers below take this
+    only when `pilot is not None` -- an explicit `True`/`False`, the shape every
+    caller feeding a `Reduction` actually passes (`ceilings_in_force`'s own
+    `pilot` parameter defaults to `False`, never `None`, and so do both
+    notebook call sites this closes). `pilot=None` is the *vigente* resolver
+    reading (`ceilings_record_at`'s own docstring), used for reporting what
+    governs right now rather than for anything about to run under it --
+    `CEILINGS` below is the one caller that matters: it fills at IMPORT, before
+    any `Reduction` exists to run, and refusing there would make importing this
+    module itself depend on a ceiling record's freshness. `campaign()`'s own
+    up-front stamp check (`harness.py`) is what actually stands between a stale
+    `CEILINGS` default and a run: nothing reaches `run_one` without passing it.
+    """
+    def has_drift(entry: dict) -> bool:
+        for field, source in _STAMP_FIELDS.items():
+            current = globals()[source]
+            if field not in entry or entry[field] != current:
+                return True
+        return False
+
+    drifted = sorted(family for family, entry in found.items()
+                     if isinstance(entry, dict) and has_drift(entry))
+    if drifted:
+        raise SystemExit(
+            f"refusing to read ceilings from {record}: stamped under a "
+            f"revision or hyperparameters the current config no longer "
+            f"carries: {', '.join(drifted)}.\n"
+            "  Re-run `harness.search_ceilings(...)` under today's config, or "
+            "delete the stale record to search again."
+        )
+
+
 def ceilings_on_record(pilot: "bool | None" = None) -> dict[str, float]:
     """The searched ceilings, read from the record the search wrote.
 
@@ -989,6 +1075,8 @@ def ceilings_on_record(pilot: "bool | None" = None) -> dict[str, float]:
         return {}
     import json as _json
     found = _json.loads(record.read_text(encoding="utf-8"))
+    if pilot is not None:
+        _refuse_on_stamp_drift(found, record)
     return {family: entry["ceiling"] for family, entry in found.items()}
 
 
@@ -1015,6 +1103,8 @@ def ceilings_by_transfer_on_record(
         return {}
     import json as _json
     found = _json.loads(record.read_text(encoding="utf-8"))
+    if pilot is not None:
+        _refuse_on_stamp_drift(found, record)
     return {family: dict(entry.get("byTransfer") or {})
             for family, entry in found.items()}
 

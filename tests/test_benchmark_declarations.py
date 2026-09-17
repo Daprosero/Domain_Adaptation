@@ -540,8 +540,8 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
 
     record = tmp_path / "ceilings.json"
     record.write_text(_json.dumps({
-        "creda": {"ceiling": 1e-4, "atRequiredScale": False},
-        "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
+        "creda": _stamped({"ceiling": 1e-4, "atRequiredScale": False}),
+        "milcreda": _stamped({"ceiling": 1.0, "atRequiredScale": True}),
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
     # `campaign()` hace `results_for(...).mkdir()` y `models_for(...).mkdir()`
@@ -578,8 +578,8 @@ def test_a_single_machine_campaign_records_its_per_run_readings(
 
     record = tmp_path / "ceilings.json"
     record.write_text(_json.dumps({
-        "creda": {"ceiling": 1e-4, "atRequiredScale": True},
-        "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
+        "creda": _stamped({"ceiling": 1e-4, "atRequiredScale": True}),
+        "milcreda": _stamped({"ceiling": 1.0, "atRequiredScale": True}),
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
     # Two roots and not one, for the reason the refusal test beside this states:
@@ -1337,6 +1337,57 @@ def test_the_stale_resume_refuses_before_it_measures_anything(
                                 progress=lambda *a: None)
 
 
+def test_write_partial_stamps_every_write(tmp_path, monkeypatch) -> None:
+    """Defect (4): a partial is a ceiling record mid-measurement, and gets the
+    same stamp `harness.sellar_techos` writes on a finished entry -- otherwise
+    a partial predating this change (or written under a moved `KERNEL_SIGMA`)
+    can be resumed and its cells silently spliced with ones measured under
+    today's objective.
+    """
+    from MIL_CREDA_Benchmark import ceiling_record, harness
+
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    harness._write_partial("milcreda", "G", {(0, "M->U"): {1e-4: 0.5}}, 1.0,
+                           lambda *a: None)
+    stored = json.loads(harness._partial_path().read_text(encoding="utf-8"))
+    assert ceiling_record.stamp_drift(stored) == {}
+
+
+def test_search_ceilings_refuses_to_resume_a_stamp_drifted_partial(
+        tmp_path, monkeypatch) -> None:
+    """Defect (4): the grid engine's own resume path, checked before it reads
+    a single cell out of the partial -- eagerness is the point, the same as
+    the stale-grid-key refusal beside this test.
+
+    Reachable red: `search_ceilings` calling `_read_partial` and resuming
+    without checking `_partial_stamp_drift` first.
+    """
+    monkeypatch.setattr(config, "SEARCH_ENGINE", "grid")
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+
+    def _unreached(*args, **kwargs):
+        pytest.fail("measured before refusing on stamp drift")
+
+    monkeypatch.setattr(harness, "run_one", _unreached)
+    monkeypatch.setattr(harness.bags, "build", _unreached)
+
+    # Write a partial the ordinary way, then move it out from under today's
+    # config, the same shape a repository-committed leftover partial is in.
+    harness._write_partial("creda", "D", {(0, "M->U"): {0.05: 0.51}}, 1.0,
+                           lambda *a: None)
+    path = harness._partial_path()
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    stored["kernelSigma"] = config.KERNEL_SIGMA * 3
+    path.write_text(json.dumps(stored), encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        harness.search_ceilings(harness.Reduction(), torch.device("cpu"),
+                                progress=lambda *a: None)
+    assert str(path) in str(raised.value)
+
+
 def test_the_power_state_is_stamped_and_never_fatal() -> None:
     """`seconds` and `peakMiB` are dimensions of the verdict, and a measurement
     describes whichever environment produced it. A throttled run must be labelled
@@ -1679,6 +1730,29 @@ def test_ceiling_for_refuses_when_the_attached_record_carries_stale_stamp() -> N
         harness.ceiling_for(reduction, "milcreda", ("S", "M"))
 
 
+def test_ceiling_for_refuses_on_an_entry_complete_except_a_kernel_sigma_mismatch() -> None:
+    """The test above builds an entry missing `revision`/`attentionGamma`/
+    `attentionTemperature` entirely, so `ceiling_for` ignoring `kernelSigma`
+    specifically and refusing only on the OTHER three missing fields would
+    still pass it. Isolated here: every other stamp field present and
+    agreeing with the current config, only `kernelSigma` moved.
+
+    Reachable red: `ceiling_for` (via `ceiling_record.stamp_drift`) ignoring
+    a `kernelSigma` mismatch while still checking the other three fields.
+    """
+    from MIL_CREDA_Benchmark import ceiling_record, harness
+
+    entry = ceiling_record.stamp({"ceiling": 1e-2})
+    entry["kernelSigma"] = config.KERNEL_SIGMA * 3
+    reduction = harness.Reduction(
+        ceilings={"milcreda": 1e-2},
+        ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
+        ceilingSearch={"milcreda": entry},
+    )
+    with pytest.raises(SystemExit):
+        harness.ceiling_for(reduction, "milcreda", ("S", "M"))
+
+
 def test_ceiling_for_accepts_a_correctly_stamped_attached_record() -> None:
     """The positive path beside the refusal above: a `ceilingSearch` entry
     stamped under the current config never refuses."""
@@ -1690,6 +1764,76 @@ def test_ceiling_for_accepts_a_correctly_stamped_attached_record() -> None:
         ceilingSearch={"milcreda": ceiling_record.stamp({"ceiling": 1e-2})},
     )
     assert harness.ceiling_for(reduction, "milcreda", ("S", "M")) == 1e-4
+
+
+def test_config_ceilings_on_record_refuses_a_stamp_mismatch_at_an_explicit_scale(
+        tmp_path, monkeypatch) -> None:
+    """The bypass a notebook actually reached: `Benchmark_Campaign_v1.ipynb`'s
+    `ES_ENSAYO` branch and `Benchmark_Noise_Sweep_v1.ipynb` both build
+    `ceilings=`/`ceilingsByTransfer=` from `config.ceilings_on_record(pilot=...)`
+    directly, never through `harness.with_ceilings_in_force` -- so
+    `ceilings_in_force`'s own refusal never ran. The stamp check has to live
+    where these two functions actually read the file.
+    """
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "milcreda": {"ceiling": 1e-2, "kernelSigma": config.KERNEL_SIGMA * 3,
+                     "revision": config.REVISION,
+                     "attentionGamma": config.ATTENTION_GAMMA,
+                     "attentionTemperature": config.ATTENTION_TEMPERATURE},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    with pytest.raises(SystemExit):
+        config.ceilings_on_record(pilot=False)
+
+
+def test_config_ceilings_by_transfer_on_record_refuses_a_stamp_mismatch(
+        tmp_path, monkeypatch) -> None:
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "milcreda": {"ceiling": 1e-2, "byTransfer": {"S->M": 1e-4},
+                     "kernelSigma": config.KERNEL_SIGMA * 3,
+                     "revision": config.REVISION,
+                     "attentionGamma": config.ATTENTION_GAMMA,
+                     "attentionTemperature": config.ATTENTION_TEMPERATURE},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    with pytest.raises(SystemExit):
+        config.ceilings_by_transfer_on_record(pilot=False)
+
+
+def test_config_ceilings_on_record_accepts_a_correctly_stamped_entry(
+        tmp_path, monkeypatch) -> None:
+    """The positive path: a record stamped under the CURRENT config is read
+    normally, at an explicit scale, and returns the plain `family -> ceiling`
+    mapping this function has always returned."""
+    from MIL_CREDA_Benchmark import ceiling_record
+
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "milcreda": ceiling_record.stamp({"ceiling": 1e-2}),
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    assert config.ceilings_on_record(pilot=False) == {"milcreda": 1e-2}
+
+
+def test_config_ceilings_on_record_does_not_refuse_at_the_default_pilot_none(
+        tmp_path, monkeypatch) -> None:
+    """`pilot=None` -- the *vigente* resolver reading `CEILINGS.update(...)`
+    uses at import time -- never refuses on a stale stamp: refusing there
+    would make importing `config` itself depend on a ceiling record's
+    freshness, which is a decision no repository should be able to make for
+    every one of its readers by leaving a stale file on disk.
+    `campaign()`'s own up-front check is what actually stands between a
+    stale default and a run.
+    """
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "milcreda": {"ceiling": 1e-2},  # no stamp at all
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "nope.json")
+    assert config.ceilings_on_record() == {"milcreda": 1e-2}
 
 
 def _synthetic_bagset(domain: str) -> object:
@@ -1757,6 +1901,58 @@ def test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given(monkeypatch) 
                             role="valid")
         assert seen == [expected], (transfer, seen)
 
+
+def test_the_campaign_refuses_up_front_on_a_stale_ceiling_record_before_writing_anything(
+        tmp_path, monkeypatch) -> None:
+    """Defect (3): `campaign()` used to truncate `runs.jsonl` (opened `"w"`)
+    and train arm B before `run_one(E)` reached `ceiling_for`'s own stamp
+    check -- a stamp mismatch was discovered only after real work and a real
+    write already happened. The check now runs before any mkdir, open,
+    truncation or training.
+
+    Proven by planting `runs.jsonl` with sentinel bytes from an unrelated
+    earlier run and a `run_one` that fails the test if it is ever called:
+    if the refusal fired late, the sentinel bytes would already be gone
+    (`open("w")` truncates on open, before a single line is written) and
+    `run_one` would have been called on arm B, the first declared arm.
+    """
+    from MIL_CREDA_Benchmark import ceiling_record, harness
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        # No stamp at all: predates `ceiling_record.stamp`, the exact shape
+        # this repository's own `ceilings.pilot.json` is in today.
+        "milcreda": {"ceiling": 1e-2, "byTransfer": {"S->M": 1e-4}},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "no-pilot-record.json")
+
+    runs_path = config.results_for(0.0, "campaign", False) / "runs.jsonl"
+    runs_path.parent.mkdir(parents=True, exist_ok=True)
+    sentinel = b'{"arm": "sentinel-from-an-earlier-run"}\n'
+    runs_path.write_bytes(sentinel)
+
+    def run_one_must_not_be_called(*args, **kwargs):
+        pytest.fail("run_one was called: the up-front stamp check did not "
+                    "stop the campaign before training started")
+
+    monkeypatch.setattr(harness, "run_one", run_one_must_not_be_called)
+
+    reduction = harness.Reduction(ceilings={"milcreda": 1e-2},
+                                  ceilingsByTransfer={"milcreda": {"S->M": 1e-4}})
+    with pytest.raises(SystemExit):
+        harness.campaign(reduction, torch.device("cpu"), progress=lambda *a: None)
+
+    assert runs_path.read_bytes() == sentinel, (
+        "runs.jsonl was truncated or written to before the stamp check refused"
+    )
+    assert not (tmp_path / "Models" / "Benchmark").exists(), (
+        "models directory was created before the stamp check refused"
+    )
+
+
 def test_the_campaign_refuses_when_the_record_has_picks_and_the_run_does_not(
         tmp_path, monkeypatch) -> None:
     """The stale-field case, refused by name instead of running the old rule.
@@ -1770,7 +1966,7 @@ def test_the_campaign_refuses_when_the_record_has_picks_and_the_run_does_not(
 
     record = tmp_path / "ceilings.json"
     record.write_text(json.dumps({
-        "milcreda": {"ceiling": 1e-2, "byTransfer": {"S->M": 1e-4}},
+        "milcreda": _stamped({"ceiling": 1e-2, "byTransfer": {"S->M": 1e-4}}),
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
     # `campaign()` hace `results_for(...).mkdir()` y `models_for(...).mkdir()`

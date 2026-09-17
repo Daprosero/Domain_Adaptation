@@ -27,7 +27,7 @@ import sys
 import time
 import zlib
 import tracemalloc
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
 import torch
@@ -309,6 +309,48 @@ class Reduction:
     def verdicts_meaningful(self) -> bool:
         return len(self.seeds) >= 3
 
+    @staticmethod
+    def from_record(d: dict) -> "Reduction":
+        """A `Reduction`, rebuilt from a record's own `"reduction"` field.
+
+        `Reduction(**d)` crashes on this input: `kernelSigma`, `attentionGamma`
+        and `attentionTemperature` are `init=False`, and `dataclasses` refuses
+        any keyword naming a non-init field. That crash is what
+        `Benchmark_Report_v1.ipynb` hit rebuilding a `Reduction` from
+        `summary["reduction"]` -- `campaign()` writes `asdict(reduction)`, which
+        carries all three, straight back at `Reduction(**summary["reduction"])`.
+
+        Dropping them silently would be worse than the crash: a rebuilt
+        `Reduction` would report the CURRENT config's stamp regardless of what
+        the record actually carries, exactly the confusion `latent.load()` and
+        `ceiling_record.stamp_drift` both refuse elsewhere -- a report drawn
+        under today's `KERNEL_SIGMA` while describing a run made under a
+        different one, with nothing in the object itself to tell the two apart.
+
+        So this refuses on the same disagreement `latent.hyperparameter_drift`
+        already checks a checkpoint's manifest against, applied here to a
+        record's own `"reduction"` field: a field missing entirely, or present
+        and different from what `config` currently carries, is drift, and drift
+        refuses. Only once the drift check passes are the three dropped, along
+        with any other non-init field a future `Reduction` might add, and the
+        remaining keys become the constructor call.
+        """
+        from MIL_CREDA_Benchmark import latent as _latent
+
+        drift = _latent.hyperparameter_drift({"reduction": d})
+        if drift:
+            raise SystemExit(
+                "refusing to rebuild a Reduction from a record stamped under "
+                f"hyperparameters the current config no longer carries: {drift}.\n"
+                "  This record was produced under a different `KERNEL_SIGMA`, "
+                "`ATTENTION_GAMMA` or `ATTENTION_TEMPERATURE` than the one "
+                "`config` declares now -- rebuilding a `Reduction` from it would "
+                "silently stamp today's values over a record that measured "
+                "something else."
+            )
+        init_names = {f.name for f in fields(Reduction) if f.init}
+        return Reduction(**{k: v for k, v in d.items() if k in init_names})
+
 
 # --------------------------------------------------------------------- one run
 
@@ -362,14 +404,24 @@ def ceiling_for(reduction: Reduction, family: str | None,
     coefficient it multiplies is not in its objective at all.
 
     **Refuses when `reduction.ceilingSearch` names this family under a stamp
-    the CURRENT config disagrees with.** `campaign()` always attaches the
-    whole record there before any run starts, so this is the same check
-    `ceilings_in_force()` makes, reached a second way — a backstop for a
-    `Reduction` built with `ceilings=`/`ceilingsByTransfer=` set by hand
-    rather than through `with_ceilings_in_force()`. A bare `Reduction()`
-    carries `ceilingSearch == {}` and is unaffected: nothing to check against
-    means nothing refuses, the same as `run_smoke()`'s declared neutral,
-    which was never searched at all.
+    the CURRENT config disagrees with.** `campaign()` attaches
+    `search_record(pilot=reduction.pilot)` there before any run starts — that
+    record, and not necessarily the one `reduction.ceilings`/
+    `reduction.ceilingsByTransfer` actually came from. The two agree whenever a
+    caller built the `Reduction` through `with_ceilings_in_force()`, which reads
+    both halves from that same record. They do not have to agree in general: a
+    `Reduction` assembled by hand from `config.ceilings_on_record(pilot=...)` at
+    one `pilot` value, then run under a different `reduction.pilot` — the
+    remote-rehearsal shape, a pilot reduction whose numbers came from the full
+    record — carries ceilings this check never looks at, because it only ever
+    consults the file matching `reduction.pilot`. This is a backstop for that
+    narrower case, not the same check `ceilings_in_force()`/
+    `config.ceilings_on_record()` make reached a second way: those refuse on
+    the record they actually read from, at the `pilot` they were actually asked
+    for; this refuses on the record `campaign()` happened to attach, which is
+    not always that one. A bare `Reduction()` carries `ceilingSearch == {}` and
+    is unaffected: nothing to check against means nothing refuses, the same as
+    `run_smoke()`'s declared neutral, which was never searched at all.
     """
     if family is None:
         return config.RAMP_CEILING
@@ -838,6 +890,22 @@ def _read_partial(path: Path | None = None) -> dict:
     }
 
 
+def _partial_stamp_drift(path: Path | None = None) -> dict:
+    """`ceiling_record.stamp_drift`, applied to a grid-search partial's own
+    top-level stamp rather than to a ceiling record entry.
+
+    Empty when the partial does not exist -- nothing to resume, nothing to
+    refuse. `stamp_drift` already treats an absent field as drift, so a
+    partial written before `_write_partial` stamped every write (below) comes
+    back as drift on all four fields, the same as an old ceiling record does.
+    """
+    path = path or _partial_path()
+    if not path.exists():
+        return {}
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    return ceiling_record.stamp_drift(stored)
+
+
 def _write_partial(family: str, arm_id: str, cells: dict, minutes: float,
                    progress, path: Path | None = None) -> None:
     """Persist what is measured so far, after every cell."""
@@ -850,6 +918,13 @@ def _write_partial(family: str, arm_id: str, cells: dict, minutes: float,
     stored["minutesPerCell"].setdefault(family, []).append(round(minutes, 2))
     stored["arms"] = {**stored.get("arms", {}), family: arm_id}
     stored["environment"] = environment()
+    # Stamped every write, like every other record this repository's search
+    # produces: a partial is a ceiling record mid-measurement, bound to the
+    # same revision and the same three hyperparameters as the entry it will
+    # eventually become, and a relaunch that resumed it under a moved
+    # `KERNEL_SIGMA` would silently splice cells measured under two objectives
+    # into one entry.
+    ceiling_record.stamp(stored)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
 
@@ -1345,6 +1420,19 @@ def search_ceilings(reduction: Reduction, device: torch.device,
     # búsqueda limpia: el mismo archivo, dos experimentos.
     partial = shard_paths(shard, noise=reduction.labelNoise,
                           kind=reduction.kind, pilot=reduction.pilot)['partial']
+    # Refused before reading a single cell out of the partial, let alone
+    # measuring another one: a partial stamped under a moved `KERNEL_SIGMA` (or
+    # written before this stamp existed at all) was measured under a different
+    # objective than today's, and resuming it would splice cells from two
+    # objectives into one entry with nothing in the record to tell them apart.
+    _partial_drift = _partial_stamp_drift(partial)
+    if _partial_drift:
+        raise SystemExit(
+            f"refusing to resume {partial}: stamped under a revision or "
+            f"hyperparameters the current config no longer carries: "
+            f"{_partial_drift}.\n"
+            f"  Delete {partial} to search again under today's config."
+        )
     measured = _read_partial(partial)
     if measured:
         done = sum(len(cells) for cells in measured.values())
@@ -1553,6 +1641,34 @@ def campaign(reduction: Reduction, device: torch.device,
     back into the number it was chosen to improve.
     """
     arm_ids = arms or [arm["id"] for arm in config.ARMS]
+
+    # Refused HERE, before any mkdir, `runs.jsonl` truncation or training
+    # below -- a stamp mismatch discovered later, inside `run_one`'s first
+    # call to `ceiling_for`, still cost a truncated `runs.jsonl` (opened `"w"`
+    # a few lines down) and a fully trained arm B beforehand. Both records
+    # `search_record` this campaign can end up reading are checked: the one at
+    # `reduction.pilot` -- what `reduction.ceilingSearch` is attached from,
+    # below -- and, when `reduction.pilot` is true, the full one too, because
+    # `governs_the_ceilings_record`'s scale guard a few lines down also reads
+    # it and a caller may have reached this function without ever calling
+    # `with_ceilings_in_force`/`config.ceilings_on_record` (both refuse this
+    # same drift on read, but a `Reduction` built from a hand-assembled record
+    # dict skips both).
+    for _pilot in ({reduction.pilot, False} if reduction.pilot else {False}):
+        _record = search_record(pilot=_pilot) or {}
+        _drifted = sorted(family for family, entry in _record.items()
+                          if isinstance(entry, dict)
+                          and not entry.get("currentStamp", False))
+        if _drifted:
+            raise SystemExit(
+                "refusing to run: ceilings stamped under a different revision "
+                f"or hyperparameters ({'pilot' if _pilot else 'full'} record "
+                f"at {config.ceilings_record_for(_pilot)}): "
+                f"{', '.join(_drifted)}.\n"
+                "  Re-run `harness.search_ceilings(...)` under today's config, "
+                "or delete the stale record to search again."
+            )
+
     # El árbol de ESTA corrida. Era `config.RESULTS` a secas, que es el de la
     # corrida completa y limpia: un ensayo, o un nivel del barrido, creaba el
     # directorio de la campaña completa antes de escribir una sola línea en el

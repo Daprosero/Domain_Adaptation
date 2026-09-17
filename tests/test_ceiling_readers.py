@@ -94,6 +94,32 @@ def test_la_tabla_de_rejilla_conserva_sus_columnas_de_techos():
     assert "Meseta" not in texto
 
 
+def test_un_registro_con_sello_vencido_lleva_un_aviso_visible():
+    """Defecto (4): `render_ceilings`/`conclusion_ceilings` ignoraban
+    `currentStamp` y renderiaban una busqueda vieja como si gobernara hoy.
+    Un aviso, no un rechazo -- consistente con `latent.available()`, que
+    ETIQUETA un checkpoint con hiperparametros vencidos en vez de negarse,
+    porque esto es un INFORME de varias familias y no una carga para
+    calcular con ella (esa es `latent.load()`, que sí se niega)."""
+    from MIL_CREDA_Benchmark import config
+
+    vencida = {"milcreda": {**TRIALS["milcreda"],
+                            "revision": config.REVISION,
+                            "kernelSigma": config.KERNEL_SIGMA * 3,
+                            "attentionGamma": config.ATTENTION_GAMMA,
+                            "attentionTemperature": config.ATTENTION_TEMPERATURE}}
+    assert "Sello vencido" in tables.render_ceilings(vencida)
+    assert "Sello vencido" in tables.conclusion_ceilings(vencida)
+
+    vigente = {"milcreda": {**TRIALS["milcreda"],
+                            "revision": config.REVISION,
+                            "kernelSigma": config.KERNEL_SIGMA,
+                            "attentionGamma": config.ATTENTION_GAMMA,
+                            "attentionTemperature": config.ATTENTION_TEMPERATURE}}
+    assert "Sello vencido" not in tables.render_ceilings(vigente)
+    assert "Sello vencido" not in tables.conclusion_ceilings(vigente)
+
+
 def test_el_accesor_no_normaliza_los_dos_ejes_a_un_nombre_comun():
     """Tres repeticiones y treinta evaluaciones de puntos distintos no son la
     misma cantidad de evidencia, y llamarlas igual invita a compararlas."""
