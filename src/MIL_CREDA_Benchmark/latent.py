@@ -107,8 +107,30 @@ def available(rate: float = 0.0, pilot: bool = False) -> list[dict]:
             is_median = record["seed"] in medians.get(cell, set())
         found.append({**record, "weights": weights, "manifest": manifest_path,
                       "median": is_median,
-                      "declared": record["arm"] in config.ARMS_BY_ID})
+                      "declared": record["arm"] in config.ARMS_BY_ID,
+                      "currentRevision": (record.get("reduction") or {}).get("revision")
+                      == config.REVISION})
     return found
+
+
+def stale_revisions(found: list[dict]) -> dict:
+    """Every checkpoint `available()` tagged `currentRevision: False`, counted
+    by the revision its own manifest carries.
+
+    `available()` tags rather than drops -- the same choice it already makes
+    for `declared` -- so a checkpoint stamped under an earlier managed
+    revision (r17 pilot checkpoints measured on disk, against the r21 this
+    target now declares) still comes back and still gets analysed if a
+    caller asks for it specifically. This is the "count and revision" a
+    notebook prints before it does: named here, once, rather than composed
+    by hand at every call site that wants to say it out loud.
+    """
+    stale = [entry for entry in found if not entry.get("currentRevision", True)]
+    counts: dict[str, int] = {}
+    for entry in stale:
+        revision = (entry.get("reduction") or {}).get("revision") or "unknown"
+        counts[revision] = counts.get(revision, 0) + 1
+    return {"count": len(stale), "byRevision": counts}
 
 
 class CheckpointsDisagree(RuntimeError):
@@ -235,8 +257,33 @@ def bound(found: list[dict], summary: dict) -> list[dict]:
     return found
 
 
+class StaleCheckpointRevision(RuntimeError):
+    """A checkpoint's manifest was stamped under a revision this target no
+    longer declares as current.
+
+    Distinct from `CheckpointsDisagree`, which is about a checkpoint that
+    disagrees with the RUN it is read beside: this one is about a checkpoint
+    whose own manifest carries an earlier managed revision (measured on
+    disk: r17 pilot checkpoints under `MIL-CREDA/Models/Pilot/Benchmark/`,
+    against the r21 `config.REVISION` now declares). `available()` tags such
+    an entry `currentRevision: False` rather than dropping it -- a caller can
+    still count and report them with `stale_revisions()` -- but `load()`
+    itself refuses to actually measure one: rendering it under today's stamp
+    is exactly the silent analysis this exists to stop.
+    """
+
+
 def load(record: dict, device: torch.device):
     """One trained arm and the exact material it was trained on."""
+    revision = (record.get("reduction") or {}).get("revision")
+    if revision is not None and revision != config.REVISION:
+        raise StaleCheckpointRevision(
+            f"refusing to load a checkpoint stamped {revision!r}; the "
+            f"current managed revision is {config.REVISION!r}. `available()` "
+            f"already tagged this entry `currentRevision: False` -- "
+            f"analysing it under today's stamp would be exactly the silent "
+            f"drift this refusal exists to prevent."
+        )
     source = bags.rebuild(record["source"], config.DATA_CACHE)
     target = bags.rebuild(record["target"], config.DATA_CACHE)
     model = wiring.build(
@@ -275,7 +322,7 @@ def represent(model, bagset: bags.BagSet, positions: torch.Tensor,
         embeddings = model.instance_embeddings(instances)
         classes = bagset.labels[chunk].to(device)
         if (unit or model.spec["unit"]) == "bag":
-            Z, _ = model.bag_representations(embeddings)
+            Z, _ = model.bag_representations(embeddings, config.KERNEL_SIGMA)
             rows.append(Z)
             labels.append(classes)
         else:
@@ -329,9 +376,9 @@ def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
     actually aligns in.
 
     Se leía con `torch.norm` entre centroides, que es la distancia euclidiana
-    sobre el embedding z de la Ec. (16). El método no alinea ahí: alinea en el
-    RKHS que induce el kernel de la Ec. (19), donde una clase se representa por
-    la Ec. (20) y dos representaciones se comparan por la Ec. (21). Las dos
+    sobre el embedding z de la Ec. (19). El método no alinea ahí: alinea en el
+    RKHS que induce el kernel de la Ec. (14), donde una clase se representa por
+    la Ec. (17) y dos representaciones se comparan por la Ec. (18). Las dos
     lecturas se imprimen igual ---un número por celda, más bajo mejor--- y
     responden preguntas distintas, y la euclidiana responde una que el método
     nunca hizo.
@@ -343,16 +390,16 @@ def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
     prueba, que es donde una cota se comprueba y no se cita.
 
     Nada de esto se reimplementa acá. El kernel de bolsa es
-    `MIL_CREDA.bag_kernel`, que declara su provenance sobre las Ecs. (20) y
-    (21); una clase entra como una bolsa a pesos uniformes, que es lo que hace
-    de la Ec. (20) una media de clase. Uniformes **entre instancias**, no
+    `MIL_CREDA.bag_kernel`, que declara su provenance sobre las Ecs. (17) y
+    (18); una clase entra como una bolsa a pesos uniformes, que es lo que hace
+    de la Ec. (17) una media de clase. Uniformes **entre instancias**, no
     «que sumen uno»: la normalización cancela cualquier factor común, así que
     `1/n` y `1` dan idénticamente el mismo número. El `1/n` queda porque es la
-    media que la Ec. (20) nombra; quien lo vea como redundante y lo saque no
+    media que la Ec. (17) nombra; quien lo vea como redundante y lo saque no
     rompe nada, y quien crea que la normalización es la que acota el intervalo
-    se equivoca --- eso lo hace Cauchy-Schwarz. El ancho de banda sale de la misma regla
-    que ya usan los dos kernels de este módulo, sobre las filas de los dos
-    dominios juntas.
+    se equivoca --- eso lo hace Cauchy-Schwarz. El ancho de banda es
+    `config.KERNEL_SIGMA`, la misma constante que gobierna todo lo demás
+    (Decision 1), no una regla recalculada sobre las filas de este módulo.
 
     Las distancias crudas quedan bajo `euclidean`: siguen en el registro, y no
     se dibujan porque la declaración no las nombra como dimensión. Sacarlas
@@ -363,10 +410,10 @@ def geometry(source_rows, source_labels, target_rows, target_labels) -> dict:
     source_classes = _class_rows(source_rows, source_labels)
     target_classes = _class_rows(target_rows, target_labels)
     shared = sorted(set(source_classes) & set(target_classes))
-    sigma = wiring._median_sigma(torch.cat([source_rows, target_rows]))
+    sigma = config.KERNEL_SIGMA
 
     def in_rkhs(A, B) -> float:
-        """Ec. (20) a pesos uniformes; Ec. (21) como su producto interno."""
+        """Ec. (17) a pesos uniformes; Ec. (18) como su producto interno."""
         weights_a = torch.full((len(A),), 1.0 / len(A), dtype=A.dtype, device=A.device)
         weights_b = torch.full((len(B),), 1.0 / len(B), dtype=B.dtype, device=B.device)
         k_ab = float(bag_kernel(A, weights_a, B, weights_b, sigma))
@@ -420,10 +467,9 @@ def correspondence(model, source: bags.BagSet, target: bags.BagSet,
     # Through the arm's own selection, so a selecting arm is scored on the
     # instances it actually looks at. Reading the full bags here would measure a
     # correspondence the trained model never computed.
-    bags_s = model.bags_of(H_s)
-    bags_t = model.bags_of(H_t)
-    sigma = wiring._median_sigma(torch.cat([torch.cat([H for H, _ in bags_s]),
-                                            torch.cat([H for H, _ in bags_t])]))
+    sigma = config.KERNEL_SIGMA
+    bags_s = model.bags_of(H_s, sigma)
+    bags_t = model.bags_of(H_t, sigma)
     K_st = bag_kernel_matrix(bags_s, bags_t, sigma)
 
     from MIL_CREDA.attention import bag_embedding
@@ -458,7 +504,7 @@ def attention_spread(model, bagset: bags.BagSet, positions: torch.Tensor,
     for start in range(0, len(positions), config.BAGS_PER_STEP):
         chunk = positions[start:start + config.BAGS_PER_STEP]
         instances = bagset.images[bagset.members[chunk]].to(device)
-        for _, beta in model.bags_of(model.instance_embeddings(instances)):
+        for _, beta in model.bags_of(model.instance_embeddings(instances), config.KERNEL_SIGMA):
             entropy = -(beta * torch.log(beta + config.EPSILON)).sum()
             entropies.append(float(entropy / torch.log(torch.tensor(float(len(beta))))))
     return sum(entropies) / len(entropies)
@@ -778,9 +824,8 @@ def bag_pairs(model, source: bags.BagSet, target: bags.BagSet, device: torch.dev
     s_pos, t_pos = source.train_idx, target.eval_idx
     H_s = model.instance_embeddings(source.images[source.members[s_pos]].to(device))
     H_t = model.instance_embeddings(target.images[target.members[t_pos]].to(device))
-    pairs_s, pairs_t = model.bags_of(H_s), model.bags_of(H_t)
-    sigma = wiring._median_sigma(torch.cat([torch.cat([H for H, _ in pairs_s]),
-                                            torch.cat([H for H, _ in pairs_t])]))
+    sigma = config.KERNEL_SIGMA
+    pairs_s, pairs_t = model.bags_of(H_s, sigma), model.bags_of(H_t, sigma)
     K_st = bag_kernel_matrix(pairs_s, pairs_t, sigma)
 
     Z_s = torch.stack([bag_embedding(H, w) for H, w in pairs_s])

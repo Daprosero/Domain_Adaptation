@@ -2,16 +2,16 @@
 
 El acuerdo lo dice y el código no lo hacía: `latent.geometry` restaba centroides
 con `torch.norm`, que es la distancia euclidiana sobre el embedding de la
-Ec. (16). El método no alinea ahí. Alinea en el RKHS que induce el kernel de la
-Ec. (19), donde una clase se representa por la Ec. (20) y dos representaciones
-se comparan por la Ec. (21).
+Ec. (19). El método no alinea ahí. Alinea en el RKHS que induce el kernel de la
+Ec. (14), donde una clase se representa por la Ec. (17) y dos representaciones
+se comparan por la Ec. (18).
 
 Las dos lecturas se ven iguales impresas ---un número por celda, más chico es
 mejor--- y responden preguntas distintas: una mide qué tan cerca quedaron dos
 nubes en un espacio que el método nunca usó.
 
 Nada acá recompone la matemática: el valor esperado sale de llamar a
-`MIL_CREDA.bag_kernel.bag_kernel`, que es el módulo que implementa la Ec. (21) y
+`MIL_CREDA.bag_kernel.bag_kernel`, que es el módulo que implementa la Ec. (18) y
 declara su provenance. Una prueba que escribiera la doble suma por su cuenta
 compararía dos implementaciones mías y no diría nada sobre la del método.
 """
@@ -24,7 +24,7 @@ import pytest
 import torch
 
 from MIL_CREDA.bag_kernel import bag_kernel
-from MIL_CREDA_Benchmark import latent, wiring
+from MIL_CREDA_Benchmark import config, latent
 
 
 def _dominios(desplazamiento: float = 0.3, clases: int = 3, por_clase: int = 8):
@@ -48,7 +48,7 @@ def _distancia_rkhs(A: torch.Tensor, B: torch.Tensor, sigma) -> float:
 
 
 def _esperado(filas_f, etiquetas_f, filas_d, etiquetas_d):
-    sigma = wiring._median_sigma(torch.cat([filas_f, filas_d]))
+    sigma = config.KERNEL_SIGMA
     por_clase_f = {int(c): filas_f[etiquetas_f == c] for c in etiquetas_f.unique()}
     por_clase_d = {int(c): filas_d[etiquetas_d == c] for c in etiquetas_d.unique()}
     compartidas = sorted(set(por_clase_f) & set(por_clase_d))
@@ -66,7 +66,7 @@ def _esperado(filas_f, etiquetas_f, filas_d, etiquetas_d):
 
 
 def test_the_reading_is_the_kernel_distance_the_method_aligns_in() -> None:
-    """El polo exacto: los tres números salen de la Ec. (21), no de `torch.norm`.
+    """El polo exacto: los tres números salen de la Ec. (18), no de `torch.norm`.
 
     Rojo alcanzable: volver a restar centroides. Los dos valores existen y
     difieren, así que la prueba no puede pasar por coincidencia --- lo afirma la
@@ -108,7 +108,7 @@ def test_the_kernel_reading_is_bounded_to_the_unit_interval() -> None:
     `K_AB` por ella y `K_AA` por su cuadrado, así que el cociente ---y con él la
     distancia--- no se mueve. Medido, no razonado: con pesos `1/n` y con pesos
     `1` da el mismo número a dieciséis dígitos. Lo que sí carga el peso de la
-    Ec. (20) es que sean **uniformes entre instancias**; una masa concentrada en
+    Ec. (17) es que sean **uniformes entre instancias**; una masa concentrada en
     una sola instancia cambia la lectura y la prueba de arriba se pone roja.
     """
     for desplazamiento in (0.0, 0.3, 5.0):
