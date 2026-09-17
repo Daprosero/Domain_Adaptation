@@ -1730,20 +1730,22 @@ def test_ceiling_for_refuses_when_the_attached_record_carries_stale_stamp() -> N
         harness.ceiling_for(reduction, "milcreda", ("S", "M"))
 
 
-def test_ceiling_for_refuses_on_an_entry_complete_except_a_kernel_sigma_mismatch() -> None:
-    """The test above builds an entry missing `revision`/`attentionGamma`/
-    `attentionTemperature` entirely, so `ceiling_for` ignoring `kernelSigma`
-    specifically and refusing only on the OTHER three missing fields would
-    still pass it. Isolated here: every other stamp field present and
-    agreeing with the current config, only `kernelSigma` moved.
+def test_ceiling_for_refuses_on_an_entry_complete_except_a_revision_mismatch() -> None:
+    """`kernelSigma`/`attentionGamma`/`attentionTemperature` are no longer a
+    fixed backdrop the search runs under -- it explores all three itself
+    (alongside `rampDelta`/`tauLocal`), per transfer, so an entry's own value
+    is that search's winner and not a value `ceiling_for` compares against
+    `config`. Only `revision` is still a genuine backdrop
+    (`ceiling_record.STAMP_FIELDS`), so this is the one field left whose
+    mismatch this refusal can still be measured against.
 
     Reachable red: `ceiling_for` (via `ceiling_record.stamp_drift`) ignoring
-    a `kernelSigma` mismatch while still checking the other three fields.
+    a `revision` mismatch.
     """
     from MIL_CREDA_Benchmark import ceiling_record, harness
 
     entry = ceiling_record.stamp({"ceiling": 1e-2})
-    entry["kernelSigma"] = config.KERNEL_SIGMA * 3
+    entry["revision"] = "research-concept-r99.md"
     reduction = harness.Reduction(
         ceilings={"milcreda": 1e-2},
         ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
@@ -1775,12 +1777,13 @@ def test_config_ceilings_on_record_refuses_a_stamp_mismatch_at_an_explicit_scale
     `ceilings_in_force`'s own refusal never ran. The stamp check has to live
     where these two functions actually read the file.
     """
+    # `kernelSigma`/`attentionGamma`/`attentionTemperature` no longer drift:
+    # the search explores all three itself, so only `revision` -- the one
+    # remaining member of `ceiling_record.STAMP_FIELDS` -- can still trigger
+    # this refusal.
     record = tmp_path / "ceilings.json"
     record.write_text(json.dumps({
-        "milcreda": {"ceiling": 1e-2, "kernelSigma": config.KERNEL_SIGMA * 3,
-                     "revision": config.REVISION,
-                     "attentionGamma": config.ATTENTION_GAMMA,
-                     "attentionTemperature": config.ATTENTION_TEMPERATURE},
+        "milcreda": {"ceiling": 1e-2, "revision": "research-concept-r99.md"},
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
     with pytest.raises(SystemExit):
@@ -1792,10 +1795,7 @@ def test_config_ceilings_by_transfer_on_record_refuses_a_stamp_mismatch(
     record = tmp_path / "ceilings.json"
     record.write_text(json.dumps({
         "milcreda": {"ceiling": 1e-2, "byTransfer": {"S->M": 1e-4},
-                     "kernelSigma": config.KERNEL_SIGMA * 3,
-                     "revision": config.REVISION,
-                     "attentionGamma": config.ATTENTION_GAMMA,
-                     "attentionTemperature": config.ATTENTION_TEMPERATURE},
+                     "revision": "research-concept-r99.md"},
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
     with pytest.raises(SystemExit):
@@ -1879,7 +1879,7 @@ def test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given(monkeypatch) 
 
     seen: list[float] = []
 
-    def spy(epoch, epochs, family, ceiling):
+    def spy(epoch, epochs, family, ceiling, delta=None):
         seen.append(ceiling)
         raise _StopAtCeiling
 

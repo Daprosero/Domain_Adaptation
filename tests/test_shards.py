@@ -70,12 +70,24 @@ def test_each_environment_keeps_every_dimension():
     merged = shards.merge([_shard("a", "e1", [0, 1], seconds=10.0),
                            _shard("b", "e2", [2, 3], seconds=90.0)],
                           dimensions=config.DIMENSIONS, dist=DIST)
+    # Every dimension THIS fixture's own `DIST` declares -- `seconds`/
+    # `peakMiB` are this file's own illustrative environment-scoped
+    # dimensions and are no longer part of `config.DIMENSIONS`, which time
+    # and memory are removed from entirely.
+    declared = set(DIST["poolable"]) | set(DIST["perEnvironment"])
     for key, grid in merged["gridByEnvironment"].items():
-        assert set(grid["M->U"]["G"]) == set(config.DIMENSIONS)
+        assert set(grid["M->U"]["G"]) == declared
         harness.ladder_rows(grid["M->U"], "M->U")
 
+    # The pooled grid never carries `seconds`/`peakMiB` -- they are this
+    # fixture's own `perEnvironment`-only dimensions -- so asking
+    # `ladder_rows` for THIS fixture's fuller dimension set against it still
+    # raises. Against the bare `config.DIMENSIONS` default it would not:
+    # every dimension left there is poolable now that time and memory are
+    # removed entirely.
     with pytest.raises(KeyError):
-        harness.ladder_rows(merged["grid"]["M->U"], "M->U")
+        harness.ladder_rows(merged["grid"]["M->U"], "M->U",
+                            dimensions={d: None for d in declared})
 
 
 def test_two_machines_are_never_averaged_into_one_cost():
@@ -99,20 +111,24 @@ def test_shards_that_disagree_on_what_must_match_are_refused():
 
 def test_a_dimension_in_neither_half_is_refused_rather_than_dropped():
     """Silently dropping it would leave a column nobody notices is gone."""
+    poolable_without_parameters = [d for d in DIST["poolable"] if d != "parameters"]
     with pytest.raises(shards.ShardsDisagree) as raised:
         shards.merge([_shard("a", "e1", [0])], dimensions=config.DIMENSIONS,
-                     dist={**DIST, "perEnvironment": ["seconds"], "perRun": []})
-    assert "peakMiB" in str(raised.value)
+                     dist={**DIST, "poolable": poolable_without_parameters,
+                           "perEnvironment": [], "perRun": []})
+    assert "parameters" in str(raised.value)
 
 
 def test_a_dimension_named_in_none_of_the_three_groups_is_still_refused():
     """Adding `perRun` as a third home must not loosen the refusal: a
     dimension absent from all three groups is exactly as unclassified as one
     absent from two, and silence is still not a classification."""
+    poolable_without_parameters = [d for d in DIST["poolable"] if d != "parameters"]
     with pytest.raises(shards.ShardsDisagree) as raised:
         shards.merge([_shard("a", "e1", [0])], dimensions=config.DIMENSIONS,
-                     dist={**DIST, "perRun": ["seconds"], "perEnvironment": []})
-    assert "peakMiB" in str(raised.value)
+                     dist={**DIST, "poolable": poolable_without_parameters,
+                           "perRun": [], "perEnvironment": []})
+    assert "parameters" in str(raised.value)
 
 
 # ------------------------------------------------------------------- perRun

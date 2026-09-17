@@ -152,8 +152,10 @@ def _material(rate, seed=0, code="M"):
             else:
                 evaluation.append(position)
     before = list(flat)
-    record = bags._contaminate(flat, members, bag_labels, train, spare,
-                               rate, seed, code)
+    record = bags._contaminate(
+        flat, members, bag_labels,
+        {"train": train, "valid": valid, "eval": evaluation}, spare,
+        rate, seed, code)
     return {"before": before, "after": flat, "members": members,
             "labels": bag_labels, "train": train, "valid": valid,
             "eval": evaluation, "record": record}
@@ -197,23 +199,31 @@ class TestWhatItReplaces:
 
     RATE = 0.4
 
-    def test_every_training_bag_loses_exactly_the_declared_count(self):
+    def test_every_noised_role_bag_loses_exactly_the_declared_count(self):
+        """`train`, `valid` and `eval` are all noised roles now, with ONE
+        shared draw: the noisy condition contaminates every one of them, and
+        the same instances are replaced regardless of which arm the material
+        ends up training (the arm is not even in scope here -- one `BagSet`
+        is built per domain/seed and handed to every arm unchanged)."""
         drawn = _material(self.RATE)
         expected = config.noise_instances(self.RATE)
         assert expected > 0, "a rate that replaces nothing proves nothing below"
-        for position in drawn["train"]:
-            slots = drawn["members"][position]
-            moved = sum(1 for s in slots
-                        if drawn["after"][s] != drawn["before"][s])
-            assert moved == expected
-
-    def test_the_other_two_roles_are_untouched(self):
-        """`valid` reads the search's criterion and `eval` is the answer key."""
-        drawn = _material(self.RATE)
-        for role in ("valid", "eval"):
+        assert set(config.NOISE_ROLES) == {"train", "valid", "eval"}
+        for role in config.NOISE_ROLES:
             for position in drawn[role]:
-                for slot in drawn["members"][position]:
-                    assert drawn["after"][slot] == drawn["before"][slot]
+                slots = drawn["members"][position]
+                moved = sum(1 for s in slots
+                            if drawn["after"][s] != drawn["before"][s])
+                assert moved == expected, f"role {role!r}, bag {position}"
+
+    def test_every_bag_carries_its_own_role_in_the_record(self):
+        """The manifest names which role each contaminated bag belongs to --
+        needed now that all three are mixed into one combined draw."""
+        drawn = _material(self.RATE)
+        by_role = {"train": set(drawn["train"]), "valid": set(drawn["valid"]),
+                  "eval": set(drawn["eval"])}
+        for entry in drawn["record"]["bags"]:
+            assert entry["bag"] in by_role[entry["role"]]
 
     def test_a_replacement_never_comes_from_the_bags_own_class(self):
         """A contaminant of the bag's own class would corrupt nothing at all."""
@@ -427,13 +437,6 @@ class TestTheAxisReadsWhatRan:
         assert drawn["arms"] == ["B"]
         assert drawn["dropped"] == ["G"]
 
-    def test_the_table_says_which_levels_never_ran(self, tmp_path, monkeypatch):
-        from MIL_CREDA_Benchmark import tables
-
-        self._tree(tmp_path, monkeypatch, {0.0: {"B": 0.8}, 0.2: {"B": 0.6}})
-        rendered = tables.render_noise(self.METRIC, markdown=True)
-        assert "ρ=0.1" in rendered and "ρ=0.4" in rendered
-
     def test_a_directory_that_contradicts_its_own_record_is_visible(
             self, tmp_path, monkeypatch):
         """A directory name is not evidence. The rate that governs a table is the
@@ -448,49 +451,18 @@ class TestTheAxisReadsWhatRan:
             encoding="utf-8")
         assert axis.mismatched(axis.load(0.2)) is True
 
-    def test_the_conclusion_names_who_falls_least_and_who_falls_most(
-            self, tmp_path, monkeypatch):
-        from MIL_CREDA_Benchmark import tables
-
-        self._tree(tmp_path, monkeypatch,
-                   {0.0: {"B": 0.80, "G": 0.80}, 0.4: {"B": 0.40, "G": 0.75}})
-        said = tables.conclusion_noise(self.METRIC)
-        assert config.NAME_OF["G"] in said and config.NAME_OF["B"] in said
-
-    def test_the_conclusion_is_not_tied_to_nothing(self, tmp_path, monkeypatch):
-        """Permute the record and the sentence has to change. A conclusion that
-        comes out the same whatever the numbers say is measuring nothing, for the
-        same reason an assertion that cannot fail proves nothing."""
-        from MIL_CREDA_Benchmark import tables
-
-        self._tree(tmp_path, monkeypatch,
-                   {0.0: {"B": 0.80, "G": 0.80}, 0.4: {"B": 0.40, "G": 0.75}})
-        one = tables.conclusion_noise(self.METRIC)
-        self._tree(tmp_path, monkeypatch,
-                   {0.0: {"B": 0.80, "G": 0.80}, 0.4: {"B": 0.75, "G": 0.40}})
-        other = tables.conclusion_noise(self.METRIC)
-        assert one != other
-
-    def test_the_second_conclusion_says_what_the_first_cannot(
-            self, tmp_path, monkeypatch):
-        """It reports the difference between the two rates, which neither table
-        contains on its own -- rather than enumerating the table beside it."""
-        from MIL_CREDA_Benchmark import tables
-
-        self._tree(tmp_path, monkeypatch,
-                   {0.0: {"B": 0.80, "G": 0.80}, 0.2: {"B": 0.50, "G": 0.78}},
-                   kind="campaign")
-        said = tables.conclusion_versus_clean(self.METRIC, 0.2)
-        assert "0.2" in said
-        assert config.NAME_OF["G"] in said and config.NAME_OF["B"] in said
-
     def test_every_new_section_states_what_it_aims_at(self):
         """`verify` reports a section that never states its objective as
-        `unaimed`, and a direction is not a target."""
+        `unaimed`, and a direction is not a target.
+
+        Only `noise` remains declared: `noise.share` and `noise.diagnostic`
+        framed the retired adaptation-share sweep and the retired ceiling
+        diagnostic, neither of which the required report carries any more --
+        section 1 of `Results_v1.ipynb` is the floor-only accuracy curve, and
+        nothing else in the six required sections reads either objective."""
         from MIL_CREDA_Benchmark import tables
 
-        for key in ("noise", "noise.share", "noise.diagnostic"):
-            assert len(tables.objective(key)) > 80
+        assert len(tables.objective("noise")) > 80
 
 
 class TestTheSweepAndTheCampaignAreNotOneRun:
@@ -669,22 +641,25 @@ class TestTheContaminationReachesTheMaterializedBags:
             pytest.skip("MNIST no está en la caché local")
         return _torch
 
-    def test_a_clean_build_and_a_contaminated_one_differ_only_in_training_bags(
+    def test_a_clean_build_and_a_contaminated_one_differ_in_every_noised_role(
             self, torch):
+        """All three roles (`train`, `valid`, `eval`) are noised roles now:
+        the noisy condition contaminates every one of them, with the SAME
+        shared draw. There is no longer a role this build leaves untouched."""
         limpio = bags.build("M", config.DATA_CACHE, 0, noise=0.0)
         sucio = bags.build("M", config.DATA_CACHE, 0, noise=0.4)
 
-        movidas = 0
-        for position in limpio.train_idx.tolist():
-            a = limpio.images[limpio.members[position]]
-            b = sucio.images[sucio.members[position]]
-            movidas += int((~torch.isclose(a, b).flatten(1).all(dim=1)).sum())
-        assert movidas == config.noise_instances(0.4) * len(limpio.train_idx)
-
-        for role in ("valid_idx", "eval_idx"):
-            for position in getattr(limpio, role).tolist():
-                assert torch.equal(limpio.images[limpio.members[position]],
-                                   sucio.images[sucio.members[position]])
+        assert set(config.NOISE_ROLES) == {"train", "valid", "eval"}
+        for role in ("train_idx", "valid_idx", "eval_idx"):
+            movidas = 0
+            positions = getattr(limpio, role).tolist()
+            for position in positions:
+                a = limpio.images[limpio.members[position]]
+                b = sucio.images[sucio.members[position]]
+                movidas += int((~torch.isclose(a, b).flatten(1).all(dim=1)).sum())
+            assert movidas == config.noise_instances(0.4) * len(positions), (
+                f"role {role!r} did not lose exactly the declared count"
+            )
 
     def test_the_labels_never_move(self, torch):
         """Lo que se corrompe es la evidencia, no la respuesta."""
@@ -1031,21 +1006,19 @@ class TestTheNoiseAxisRefusesToPoolAPerRunDimension:
         las que reducen varias corridas a un número.
         """
         from MIL_CREDA_Benchmark import contamination as axis
-        from MIL_CREDA_Benchmark import figures, tables
+        from MIL_CREDA_Benchmark import figures
 
+        # `tables.render_noise`, `conclusion_noise`, `conclusion_versus_clean`,
+        # `conclusion_weighting_under_noise` and `conclusion_rungs_versus_clean`
+        # are retired: none of the six required sections of `Results_v1.ipynb`
+        # reads any of them (the noise-diagnostic renderers and the rungs/gains
+        # table are gone). `figures.noise_curves` stays, and stays general over
+        # `arms` -- section 1 calls it with the floor arm(s) only, derived from
+        # `config.FLOOR_OF` and never hardcoded here.
         return {
             "contamination.by_arm": lambda m: axis.by_arm([], m),
             "contamination.curve": lambda m: axis.curve(m),
             "contamination.degradation": lambda m: axis.degradation(m),
-            "tables.render_noise": lambda m: tables.render_noise(m),
-            "tables.conclusion_noise": lambda m: tables.conclusion_noise(m),
-            "tables.conclusion_versus_clean":
-                lambda m: tables.conclusion_versus_clean(m, config.NOISE_REPORTED),
-            "tables.conclusion_weighting_under_noise":
-                lambda m: tables.conclusion_weighting_under_noise(m),
-            "tables.conclusion_rungs_versus_clean":
-                lambda m: tables.conclusion_rungs_versus_clean(
-                    m, config.NOISE_REPORTED),
             "figures.noise_curves": lambda m: figures.noise_curves(m),
         }
 
@@ -1079,13 +1052,13 @@ class TestTheNoiseAxisRefusesToPoolAPerRunDimension:
     def test_a_poolable_dimension_still_goes_through(
             self, tmp_path, monkeypatch):
         """El polo contrario. Sin él, una guarda que se negara a todo pasaría
-        la prueba de arriba entera y nadie lo notaría hasta ver la tabla vacía."""
+        la prueba de arriba entera y nadie lo notaría hasta ver la figura vacía."""
         from MIL_CREDA_Benchmark import contamination as axis
-        from MIL_CREDA_Benchmark import tables
+        from MIL_CREDA_Benchmark import figures
 
         self._empty_tree(tmp_path, monkeypatch)
         assert axis.by_arm([], "targetAccuracy") == {}
-        assert isinstance(tables.render_noise("targetAccuracy"), str)
+        assert figures.noise_curves("targetAccuracy") is not None
 
 
 class TestTheTwoDestinationRootsAgree:

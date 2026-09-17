@@ -364,12 +364,19 @@ def _grid_per_run(runs: list[dict], dimensions: list[str]) -> dict:
     caller needs to tell "the method's own value" and "the machine's own
     value" apart from "one execution's own value" instead of losing that
     distinction to an average.
+
+    A `dimension` a run does not carry is skipped for that run rather than
+    raising `KeyError`. Time and memory (`seconds`/`peakMiB`) are removed from
+    `harness.run_one`'s own output entirely; a `distribution` declaration that
+    still names either under `perRun` is stale rather than wrong, and this
+    reports it as an empty series -- never a crash over a dimension nothing
+    produces any more.
     """
     built: dict[str, dict] = defaultdict(dict)
     for (transfer, arm), cell in _cells(runs).items():
         built[transfer][arm] = {
             d: [{"env": run.get("env", "unknown"), "seed": run["seed"],
-                 "value": float(run[d])} for run in cell]
+                 "value": float(run[d])} for run in cell if d in run]
             for d in dimensions
         }
     return dict(built)

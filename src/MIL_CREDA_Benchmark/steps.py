@@ -147,80 +147,26 @@ def ensayo_de_busqueda() -> str:
     return _ejecutar("Benchmark_Ceiling_Search_v1.ipynb")
 
 
-def campana() -> str:
-    """Corre la campaña ejecutando SU cuaderno, a la escala que declara `config`.
+def resultados() -> str:
+    """Las tablas, conclusiones y figuras finales, ejecutando SU cuaderno.
 
-    Dos pasadas y una sola ejecución. La campaña es cada transferencia a UNA
-    tasa, así que correr los dos niveles que el informe muestra --- `config.NOISE`
-    y `config.NOISE_REPORTED` --- son dos pasadas de esa misma forma y no un paso
-    nuevo: el bucle vive en la celda 8 del cuaderno, que es donde vive la campaña.
-    Ejecutar el cuaderno dos veces sería la otra forma de pedirlo y es peor:
-    `_ejecutar` corre `--inplace` y la salida ejecutada ES el informe, así que la
-    segunda ejecución borraría lo único que la primera deja. Además el cuaderno
-    resuelve sus techos y paga su pronóstico una vez por ejecución, y las dos
-    cosas se pagarían de nuevo.
+    El único paso de presentación: reemplaza lo que antes eran tres pasos
+    separados (`report`, `latent`, `noise-report`), cuyas tres notebooks
+    fueron borradas junto con esta reestructuración. `Results_v1.ipynb` sólo
+    lee y dibuja --- medido contra el archivo: ninguna celda llama a
+    `harness.campaign()` ni a `config.is_pilot_scale()`, sólo a
+    `cargar_corridas()`, que resuelve viendo cuál de los dos árboles tiene
+    `runs.jsonl`/`summary.json` --- así que no lleva guarda de escala ni de
+    techos, la misma forma que `informe_de_busqueda` tiene: sólo lee lo que
+    ya existe y sigue adelante, con una ausencia honesta, si no existe nada
+    todavía.
 
-    Este paso llamaba a `harness.campaign()` en lugar de correr
-    `Benchmark_Campaign_v1.ipynb`, y ese era el defecto: el cuaderno que se
-    envía era el único que el ensayo nunca ejercitaba. Su primera celda dice de
-    sí mismo que corre «el pronóstico de costo, la búsqueda del techo de cada
-    familia y la campaña completa», y tenía cero celdas ejecutadas. Un ensayo
-    que computa por su cuenta prueba la biblioteca y no prueba el artefacto.
-
-    La biblioteca no se toca: el cuaderno llama a `harness.campaign()` en su
-    celda 8, así que lo que cambió es el cuerpo de este paso y nada más.
-
-    Las dos guardas son precondiciones, no cómputo, y las dos existen para que
-    el cuaderno pueda correr sin escribir fuera de las raíces que este paso
-    declara:
-
-    * **La escala.** `produces` nombra los dos árboles de ENSAYO --- el limpio y
-      el contaminado ---, y el cuaderno elige su escala con
-      `config.is_pilot_scale()`. A escala completa escribiría en
-      `Results/Benchmark/` y `Results/Noise/rho0p2/`, que son de otro, así que
-      acá se niega en vez de mudarse en silencio.
-    * **El registro de techos.** Sin ninguno de los dos archivos, `campaign()`
-      se negaría adentro del cuaderno con un mensaje sobre techos vacíos;
-      negarse acá dice qué correr antes. Los techos se resuelven una vez, arriba
-      del bucle, y las dos pasadas corren bajo los mismos: los de la búsqueda EN
-      LIMPIO. La pasada contaminada no re-busca nada --- lo que la contaminación
-      le cuesta al techo lo mide `diagnostico_de_ruido`, que busca a su nivel y
-      no gobierna este registro. La escala preguntada es la de ENTRADA,
-      que es la misma que el cuaderno lee y no la de ESTE paso: preguntaba si
-      existía ALGUNO de los dos archivos mientras el cuaderno leía uno solo, así
-      que con sólo un `ceilings.json` en disco esta precondición decía
-      «adelante» y el cuaderno se negaba adentro por techos vacíos --- pagando
-      el arranque del intérprete para decir lo que acá se sabía. Decía `True`
-      fijo, y la razón escrita era que este paso «corre siempre en ensayo porque
-      la guarda de arriba lo obliga». Sigue corriendo siempre en ensayo y eso ya
-      no contesta la pregunta: en el ENSAYO REMOTO el paso corre en ensayo y el
-      cuaderno lee el registro COMPLETO a propósito, así que una guarda que
-      preguntara por el del ensayo negaría cada ensayo remoto por la ausencia de
-      un archivo que ese ensayo no va a abrir.
-
-    Esto NO envía nada al servicio remoto, y el cuaderno tampoco: no importa
-    `remote_cli`, no submite, y lo único que lo menciona es su bootstrap, que
-    resuelve el repositorio bajo `/kaggle/working` para poder correr ALLÁ si
-    alguien lo manda. La exclusión anterior decía que «lanza al servicio
-    remoto», y eso era falso contra el archivo.
+    Dónde corre la campaña que este cuaderno lee es una pregunta que este
+    paso no contesta: no hay, en este árbol, un paso que invoque
+    `harness.campaign()`/`run_campaign_shard()` hoy -- ver el informe de este
+    stretch.
     """
-    from MIL_CREDA_Benchmark import config, harness
-
-    if not config.is_pilot_scale():
-        raise SystemExit(
-            f"la escala configurada es la completa ({config.EPOCHS} épocas, "
-            f"{len(config.SEEDS)} semillas). Este paso declara el árbol de "
-            "ensayo y el cuaderno escribiría en el de la corrida completa: "
-            "una campaña a escala completa se lanza con su propia "
-            "autorización, no por acá.")
-    if harness.search_record(pilot=config.upstream_pilot_scale()) is None:
-        raise SystemExit(
-            "no hay registro de techos a la escala que el cuaderno lee. Corré "
-            "primero la búsqueda (`search-pilot`): una campaña sin techos mide "
-            "el método y la falta de coeficiente a la vez, y una campaña de "
-            "ensayo bajo los techos de la búsqueda completa mide un coeficiente "
-            "que no midió acá.")
-    return _ejecutar("Benchmark_Campaign_v1.ipynb")
+    return _ejecutar("Results_v1.ipynb")
 
 
 def informe_de_busqueda() -> str:
@@ -246,100 +192,46 @@ def informe_de_busqueda() -> str:
     return _ejecutar("Benchmark_Search_Report_v1.ipynb")
 
 
-def informe() -> str:
-    """Las tablas y conclusiones sobre el registro fusionado."""
-    return _ejecutar("Benchmark_Report_v1.ipynb")
-
-
-def latente() -> str:
-    """El análisis latente sobre los checkpoints promovidos."""
-    return _ejecutar("Benchmark_Latent_v1.ipynb")
-
-
-def diagnostico_de_ruido() -> str:
-    """Corre el diagnóstico ejecutando SU cuaderno, a la escala que declara `config`.
-
-    El experimento que separa *falló el término* de *le faltó coeficiente*, y que
-    existe porque los techos de la campaña se buscaron en limpio y se mantienen
-    fijos en los cinco niveles. Esa decisión hace que una caída no se pueda
-    atribuir, y este paso es lo barato que la atribuye.
-
-    Necesita tres puntos y paga uno solo: la búsqueda del techo al nivel de
-    diagnóstico, sobre material contaminado. Los otros dos ya salen del barrido.
-    Si el techo re-buscado recupera lo perdido, fue el coeficiente; si no lo
-    recupera, fue el término.
-
-    Este paso computaba en lugar de correr un cuaderno, y el eje quedaba con dos
-    mitades desparejas: `informe_del_diagnostico` dibujaba un `diagnostic.json`
-    que ningún cuaderno había escrito. La biblioteca no se toca --- la celda que
-    mide llama a `harness.search_ceilings()` con las mismas tres restricciones
-    que estaban acá ---, así que lo que cambió es el cuerpo de este paso.
-
-    La guarda es una precondición, no cómputo, y existe para que el cuaderno pueda
-    correr sin escribir fuera de las raíces que este paso declara: `produces`
-    nombra el árbol de ENSAYO, y el cuaderno elige su escala con
-    `config.is_pilot_scale()`. A escala completa escribiría en `Results/Noise/`,
-    que es de otro, así que acá se niega en vez de mudarse en silencio --- la
-    misma forma que `campana`. Antes el cuaderno no existía y la escala estaba
-    fijada en `True` adentro de esta función, así que a escala completa un
-    diagnóstico de veinte épocas se archivaba bajo `Pilot/`: una medición
-    completa etiquetada como ensayo, que es la falla inversa y del mismo tamaño.
-    """
-    from MIL_CREDA_Benchmark import config
-
-    if not config.is_pilot_scale():
-        raise SystemExit(
-            f"la escala configurada es la completa ({config.EPOCHS} épocas, "
-            f"{len(config.SEEDS)} semillas). Este paso declara el árbol de "
-            "ensayo y el cuaderno escribiría en el de la corrida completa: "
-            "un diagnóstico a escala completa se lanza con su propia "
-            "autorización, no por acá.")
-    return _ejecutar("Benchmark_Noise_Diagnostic_Search_v1.ipynb")
-
-
 def barrido_de_ruido() -> str:
     """Corre el barrido ejecutando SU cuaderno, a la escala que declara `config`.
 
     Este es el ejercicio del ruido, y es una forma distinta de una campaña, no una
-    campaña más chica: una transferencia recorriendo los cinco niveles contra seis
-    transferencias en un nivel. Por eso el cuaderno escribe bajo `kind="curve"` ---
-    las dos pueden pararse en la misma tasa, y `runs.jsonl` se abre en `"w"`.
+    campaña más chica: UNA transferencia (`config.NOISE_TRANSFER`) recorriendo
+    los cinco niveles, con el brazo PISO (`B`) solo. Por eso el cuaderno escribe
+    bajo `kind="curve"` --- puede pararse en la misma tasa que una campaña, y
+    `runs.jsonl` se abre en `"w"`.
 
-    Los techos salen de la búsqueda en limpio y se mantienen fijos en los cinco
-    niveles: la curva es el coeficiente elegido sin contaminación aplicado con
-    ella. Lo que eso cuesta lo separa después `diagnostico_de_ruido`.
+    Un solo brazo y no seis: la curva de degradación es sobre el material ---
+    cómo cae la exactitud cuando se contaminan `train`/`valid`/`eval` a la vez,
+    con un único brazo de referencia --- y no una repetición de la comparación
+    entera por nivel. El diagnóstico que antes re-buscaba el techo bajo
+    contaminación (`diagnostico_de_ruido`, `Benchmark_Noise_Diagnostic_*`) fue
+    retirado: re-buscaba el techo de la adaptación bajo material contaminado, lo
+    que contradice la decisión de que la búsqueda del techo corre siempre sobre
+    material limpio.
 
     Guarda pesos en dos de los cinco niveles y en ninguno de los otros tres, y no
-    lo decide este paso: `campaign()` pregunta por `keeps_checkpoints`, que es
-    verdadero exactamente en los niveles que el cuaderno latente dibuja --- 0.0 y
-    `NOISE_REPORTED`. Los otros tres corren y escriben sus `runs.jsonl`, que es de
-    donde sale la curva, y ni un peso: 8 GB por nivel que nadie abre dejarían un
-    directorio que parece evidencia.
+    lo decide este paso: `campaign()` pregunta por `keeps_checkpoints`. Los otros
+    tres corren y escriben sus `runs.jsonl`, que es de donde sale la curva, y ni
+    un peso.
 
-    Este paso computaba en lugar de correr un cuaderno, y el eje quedaba con la
-    mitad que dibuja y sin la que corre. La biblioteca no se toca: el bucle de la
-    celda de la corrida llama a `harness.campaign()` nivel por nivel, igual que la
-    campaña llama al suyo, con los mismos techos leídos UNA vez arriba del bucle.
+    La biblioteca no se toca: la celda de la corrida llama a
+    `harness.campaign(reduction, device, arms=["B"],
+    transfers=[config.NOISE_TRANSFER], kind="curve", ...)` nivel por nivel, con
+    los mismos techos leídos UNA vez arriba del bucle.
 
     Las dos guardas son precondiciones, no cómputo:
 
     * **La escala.** `produces` nombra el árbol de ENSAYO, y el cuaderno elige su
       escala con `config.is_pilot_scale()`. A escala completa escribiría en
       `Results/Noise/curve/`, que es de otro, así que acá se niega en vez de
-      mudarse en silencio --- la misma forma que `campana`. Antes la escala estaba
-      fijada en `True` adentro de esta función, así que a escala completa un
-      barrido de veinte épocas y treinta semillas se archivaba bajo `Pilot/`: una
-      medición completa etiquetada como ensayo.
+      mudarse en silencio --- la misma forma que `ensayo_de_busqueda` tenía.
     * **El registro de techos.** Sin el archivo de esta escala el cuaderno se
       negaría adentro; negarse acá dice qué correr antes, sin pagar el arranque
       del intérprete del cuaderno. La escala preguntada es la de ENTRADA, la
       misma que el cuaderno lee: una precondición que preguntara por ALGUNO de
       los dos archivos dejaría pasar un barrido que después corre bajo un
-      registro que no es el que se le pidió. Decía `True` fijo, con la razón de
-      que este paso «corre siempre en ensayo porque la guarda de arriba lo
-      obliga»; sigue siendo cierto y ya no contesta la pregunta, porque en el
-      ENSAYO REMOTO el paso corre en ensayo y el cuaderno lee el registro
-      COMPLETO a propósito.
+      registro que no es el que se le pidió.
 
     Lo que el cuaderno NO hace, y es la razón por la que su celda de techos los
     lee en vez de resolverlos: llamar a `with_ceilings_in_force` era el reflejo
@@ -364,11 +256,6 @@ def barrido_de_ruido() -> str:
             "dos cosas a la vez, y uno de ensayo bajo los techos de la búsqueda "
             "completa mide un coeficiente que no midió acá.")
     return _ejecutar("Benchmark_Noise_Sweep_v1.ipynb")
-
-
-def informe_de_ruido() -> str:
-    """La curva de degradación sobre los niveles que dejaron registro."""
-    return _ejecutar("Benchmark_Noise_Report_v1.ipynb")
 
 
 # --------------------------------------------------------------- el ensayo remoto
@@ -727,16 +614,4 @@ def ensayo_remoto(paso: str) -> dict:
     return {"step": paso, "shape": "notebook",
             "consumed": list(entrada.get("reads", [])),
             "predecessors": list(previos), "result": salida}
-
-
-def informe_del_diagnostico() -> str:
-    """La tabla y la conclusión que separan el término del coeficiente.
-
-    Sólo lee: `diagnostico_de_ruido` ya escribió `diagnostic.json` y este
-    cuaderno lo presenta. No estaba, y la ausencia no era una decisión sino un
-    hueco: el eje era el único con un paso que computa y ninguno que dibuje, y
-    lo que decide si vale reestructurar para techos por nivel quedaba computado
-    y sin que nadie pudiera leerlo.
-    """
-    return _ejecutar("Benchmark_Noise_Diagnostic_Report_v1.ipynb")
 

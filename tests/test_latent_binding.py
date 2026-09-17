@@ -530,20 +530,24 @@ def test_reduction_stamps_kernel_sigma_from_config_at_construction_time(
 
 def test_ceiling_record_stamp_reads_config_at_call_time(monkeypatch):
     """`ceiling_record.stamp`'s own version of the test above: a hardcoded
-    `entry["kernelSigma"] = 36.135014304860874` would pass a test that never
-    moves `config.KERNEL_SIGMA` away from that exact value, silently."""
+    `entry["revision"] = "research-concept-r21.md"` would pass a test that
+    never moves `config.REVISION` away from that exact value, silently.
+
+    `kernelSigma`/`attentionGamma`/`attentionTemperature` are no longer
+    stamped here at all: the ceiling search now explores all three itself
+    (alongside `rampDelta`/`tauLocal`), so an entry's own value is that
+    search's winner, never a background `config` snapshot to reproduce --
+    see `ceiling_record.STAMP_FIELDS`.
+    """
     from MIL_CREDA_Benchmark import ceiling_record, config
 
-    monkeypatch.setattr(config, "KERNEL_SIGMA", 4.5)
-    monkeypatch.setattr(config, "ATTENTION_GAMMA", 6.5)
-    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 8.5)
     monkeypatch.setattr(config, "REVISION", "research-concept-r99.md")
 
     entry = ceiling_record.stamp({"ceiling": 0.5})
-    assert entry["kernelSigma"] == 4.5
-    assert entry["attentionGamma"] == 6.5
-    assert entry["attentionTemperature"] == 8.5
     assert entry["revision"] == "research-concept-r99.md"
+    assert set(ceiling_record.STAMP_FIELDS) == {"revision"}
+    for campo in ("kernelSigma", "attentionGamma", "attentionTemperature"):
+        assert campo not in entry
 
 
 @pytest.mark.parametrize("missing_field", [

@@ -205,13 +205,12 @@ def test_a_dimension_the_given_distribution_leaves_out_still_refuses() -> None:
     found = [_shard("a", 0, 0.5, 0.8)]
     incomplete = {"axis": "seed", "poolable": ["targetAccuracy"],
                   "perEnvironment": ["sourceAccuracy"],
-                  "perRun": ["seconds", "contribution", "supervised",
-                            "adaptationShare", "parameters"],
-                  # peakMiB named nowhere.
+                  "perRun": ["contribution", "supervised", "adaptationShare"],
+                  # parameters named nowhere.
                   "identicalAcrossShards": ["epochs"]}
     with pytest.raises(shards.ShardsDisagree) as raised:
         bridge.build_summary(found, dist=incomplete)
-    assert "peakMiB" in str(raised.value)
+    assert "parameters" in str(raised.value)
 
 
 def test_ladder_rows_default_dimensions_unchanged() -> None:
@@ -233,7 +232,7 @@ def test_ladder_rows_default_dimensions_unchanged() -> None:
     assert {row["metric"] for row in rows} == set(bridge.config.DIMENSIONS)
 
     redacted_cell = dict(full_cell)
-    redacted_cell.pop("seconds", None)
+    redacted_cell.pop("parameters", None)
     with pytest.raises(KeyError):
         bridge.harness.ladder_rows({"F": redacted_cell, "G": redacted_cell}, "M->U")
 

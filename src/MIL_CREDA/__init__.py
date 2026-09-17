@@ -173,17 +173,14 @@ __environment__: dict = {
 # `Results/`, que además contiene el árbol de todos los demás pasos:
 # declararlo volvería `own` a cualquier escritura en cualquier lado y apagaría
 # el guarda sin decir que lo apagó. Entonces la declaración es específica de
-# escala. Los cuatro pasos de ensayo (`search-pilot`, `campaign-local`,
-# `noise-sweep`, `noise-diagnostic`) declaran la raíz de ENSAYO y ninguna otra
-# --- el día que uno escriba a escala completa eso es `foreign`, que es
-# exactamente lo que hay que ver, y los CUATRO derivan su escala de
-# `config.is_pilot_scale()` y se niegan antes de llegar ahí. Eran tres: la
-# búsqueda fijaba `pilot=True` adentro de su cuaderno, así que no tenía de qué
-# negarse --- y tampoco había forma de correr la búsqueda completa desde un
-# cuaderno ---
-# y los cuadernos, que dibujan sobre la corrida que esté vigente y por lo
-# tanto pueden caer de cualquiera de los dos lados, declaran las dos, una por
-# escala.
+# escala. Los dos pasos de ensayo remoto (`search-pilot`, `noise-sweep`)
+# declaran la raíz de ENSAYO y ninguna otra --- el día que uno escriba a
+# escala completa eso es `foreign`, que es exactamente lo que hay que ver, y
+# los DOS derivan su escala de `config.is_pilot_scale()` y se niegan antes de
+# llegar ahí. `results` es local y sólo lee lo que cualquiera de las dos
+# escalas ya dejó, así que sus `produces` no llevan segmento de escala en
+# absoluto -- la misma forma que `report`/`latent` tenían antes de este
+# stretch.
 #
 # Las raíces son literales porque la forja lee este archivo con `ast` y sin
 # importarlo. Las que llevan un `rho` adentro salen de `config.NOISE_REPORTED`
@@ -216,12 +213,12 @@ __environment__: dict = {
 # `verification` lee cero: corre la suite sobre `src/MIL_CREDA` y nada más.
 #
 # Lo que un cuaderno lee bajo un `if ... .exists()` SÍ va acá, y no es un
-# descuido. `report` dibuja su mitad contaminada sólo si hay corridas y sigue
+# descuido. `results` dibuja su mitad contaminada sólo si hay corridas y sigue
 # adelante si no; el ensayo, en cambio, existe para ejercitar el paso contra sus
 # entradas reales, y uno que corra con la mitad contaminada ausente prueba la
 # mitad del cuaderno y reporta lo mismo que uno completo. No cuesta un rechazo
 # de más: las dos pasadas de la campaña viven adentro de UNA ejecución, así que
-# si `campaign-local` corrió completo están las dos o no está ninguna.
+# si `results` corrió completo están las dos o no está ninguna.
 __steps__: dict = {
     # Corre la suite adentro del cuaderno y dibuja la cota local. Dos clases de
     # raíz: el dato que produce y el cuaderno que ejecuta en el lugar.
@@ -267,54 +264,6 @@ __steps__: dict = {
                      "placement": "remote",
                      "job": "ceiling-search",
                      "service": "kaggle"},
-    # Corre `Benchmark_Campaign_v1.ipynb`, que es el cuaderno que se envía, y no
-    # computa en su lugar. Su celda 8 llama a `harness.campaign()` con
-    # `kind="campaign"` y con el `pilot` que la celda 3 deriva de
-    # `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
-    # ensayo, así que estas raíces son las de ensayo y no pueden ser otras.
-    #
-    # **Dos pasadas y por eso dos árboles.** La celda 8 recorre `NIVELES`, que es
-    # `(config.NOISE, config.NOISE_REPORTED)`: la campaña es cada transferencia a
-    # UNA tasa, así que el nivel contaminado es una segunda pasada de la misma
-    # forma y no un paso nuevo. La limpia cae en `results_for(0.0, "campaign",
-    # True)` y la contaminada en `results_for(NOISE_REPORTED, "campaign", True)`,
-    # que es exactamente la raíz que el informe y el latente leen y que hasta acá
-    # no escribía nadie --- por eso sus celdas contaminadas decían «no hay
-    # corridas». El `rho0p2` de estas rutas sale de `NOISE_REPORTED` y del
-    # formato de `results_for`, y `tests/test_steps.py` lo vuelve a componer.
-    #
-    # `shard_paths(None, pilot=True)` da `runs.jsonl` y `shard.json` bajo la raíz
-    # de cada pasada, al lado va `summary.json`, y `Probe_results.json` sale un
-    # directorio más arriba de la raíz LIMPIA --- `campaign()` lo ancla en
-    # `results_for(0.0, ...)` para las dos, así que es un solo archivo y lo
-    # escribe la última pasada, igual que el barrido con sus cinco niveles. Los
-    # archivos y no el directorio: el informe escribe sus figuras y su
-    # `report.md` adentro de estas mismas raíces, y declarar el directorio entero
-    # haría que un `report.md` escrito por la campaña --- que no lo escribe ---
-    # se leyera como suyo.
-    # Los pesos sí son un directorio, uno por pasada: `keep_median` los nombra
-    # por brazo, transferencia y semilla, y `keeps_checkpoints` es verdadero en
-    # las dos tasas --- son justamente las dos que el latente dibuja.
-    # Y el cuaderno mismo, que se ejecuta `--inplace` una sola vez: las dos
-    # pasadas viven adentro de una ejecución, así que la salida ejecutada muestra
-    # las dos. Correrlo dos veces le pisaría a la primera lo único que deja.
-    "campaign-local": {"module": "MIL_CREDA_Benchmark.steps",
-                       "function": "campana",
-                     "advances": 6,
-                     "reads": ["Results/Benchmark/ceilings.json"],
-                     "produces": ["Results/Pilot/Benchmark/runs.jsonl",
-                                  "Results/Pilot/Benchmark/summary.json",
-                                  "Results/Pilot/Benchmark/shard.json",
-                                  "Results/Pilot/Noise/rho0p2/runs.jsonl",
-                                  "Results/Pilot/Noise/rho0p2/summary.json",
-                                  "Results/Pilot/Noise/rho0p2/shard.json",
-                                  "Results/Pilot/Probe_results.json",
-                                  "Models/Pilot/Benchmark",
-                                  "Models/Pilot/Noise/rho0p2",
-                                  "Notebooks/Benchmark_Campaign_v1.ipynb"],
-                     "placement": "remote",
-                     "job": "campaign",
-                     "service": "kaggle"},
     # Sólo lee y presenta --- la llamada que corre la búsqueda está comentada
     # adentro del cuaderno --- y aun así escribe: se ejecuta `--inplace`, así
     # que su propio cuaderno es su raíz y la única.
@@ -324,82 +273,34 @@ __steps__: dict = {
                      "reads": ["Results/Benchmark/ceilings.json"],
                      "produces": ["Notebooks/Benchmark_Search_Report_v1.ipynb"],
                      "placement": "local"},
-    # Dibuja sobre la corrida vigente (`contamination.in_force(0.0,
-    # "campaign")["root"]`), que es la completa si existe y el ensayo si no:
-    # por eso las dos escalas. Escribe `curves/*.pdf`, `report.txt` y
-    # `report.md` en esa raíz, y una segunda tanda de curvas bajo
-    # `results_for(RHO, "campaign", ES_ENSAYO)` con `RHO = NOISE_REPORTED`.
-    "report": {"module": "MIL_CREDA_Benchmark.steps", "function": "informe",
-                     "advances": 7,
-                     "reads": ["Results/Benchmark/runs.jsonl",
-                               "Results/Benchmark/summary.json",
-                               "Results/Noise/rho0p2/runs.jsonl",
-                               "Results/Benchmark/ceilings.json"],
-                     "produces": ["Results/Benchmark/curves",
-                                  "Results/Benchmark/report.txt",
-                                  "Results/Benchmark/report.md",
-                                  "Results/Pilot/Benchmark/curves",
-                                  "Results/Pilot/Benchmark/report.txt",
-                                  "Results/Pilot/Benchmark/report.md",
-                                  "Results/Noise/rho0p2/curves",
-                                  "Results/Pilot/Noise/rho0p2/curves",
-                                  "Notebooks/Benchmark_Report_v1.ipynb"],
-                     "placement": "local"},
-    # Las dos mitades van por escala. La limpia --- `latent/grid.pdf`,
-    # `latent/correspondence.pdf`, `latent.json`, `latent.md` --- sale de
-    # `results_for(0.0, "campaign", ES_ENSAYO)`, y hasta hace poco salía de
-    # `config.RESULTS` a secas: el cuaderno LEÍA los pesos por escala y ESCRIBÍA
-    # siempre en el árbol completo, así que un análisis de ensayo se dibujaba
-    # encima del de la corrida completa. Por eso están las dos escalas acá.
-    # La mitad contaminada ya era por escala: `results_for(RHO, "campaign",
-    # ES_ENSAYO) / "latent"`, con `RHO = NOISE_REPORTED`.
-    "latent": {"module": "MIL_CREDA_Benchmark.steps", "function": "latente",
-                     "advances": 8,
-                     "reads": ["Results/Benchmark/runs.jsonl",
-                               "Results/Benchmark/summary.json",
-                               "Models/Benchmark",
-                               "Models/Noise/rho0p2"],
-                     "produces": ["Results/Benchmark/latent",
-                                  "Results/Benchmark/latent.json",
-                                  "Results/Benchmark/latent.md",
-                                  "Results/Pilot/Benchmark/latent",
-                                  "Results/Pilot/Benchmark/latent.json",
-                                  "Results/Pilot/Benchmark/latent.md",
-                                  "Results/Noise/rho0p2/latent",
-                                  "Results/Pilot/Noise/rho0p2/latent",
-                                  "Notebooks/Benchmark_Latent_v1.ipynb"],
-                     "placement": "local"},
-    # El eje de ruido. `noise-report` y `noise-diagnostic-report` sólo leen y
-    # dibujan; `noise-diagnostic` sí corre -- una búsqueda sobre una
-    # transferencia y dos brazos -- y está acá porque es local y barato, a
-    # diferencia de la campaña contaminada, que es un envío y necesita su propia
-    # autorización por lanzamiento.
+    # El eje de ruido, reducido a un solo paso que lo genera y lo corre. La
+    # separación previa entre el barrido y su informe, más el diagnóstico y el
+    # suyo, era el eje del noise-diagnostic que este stretch retira (ver el
+    # comentario grande sobre `noise-diagnostic` en la revisión anterior de
+    # este archivo, y `config.py`'s own retirement note: la re-búsqueda del
+    # diagnóstico re-buscaba el techo bajo contaminación, lo que contradice la
+    # decisión de que la búsqueda corre siempre sobre material limpio).
     #
-    # Las cuatro llevan `advances`, y el lugar es el que el dueño del
-    # repositorio le da al eje: EN EL MEDIO del recorrido y no al costado. El
-    # barrido y su informe van entre la búsqueda y la campaña ---4 y 5---, y el
-    # diagnóstico y el suyo cierran ---9 y 10---, después del latente. Acá
-    # estuvo escrito lo contrario ---que el eje era «un ejercicio al costado»---
-    # y esa razón no era de nadie: la inventó quien escribió el comentario.
-    #
-    # Los diez ordinales se comprobaron contra la cadena que `steps.predecesores`
-    # DERIVA de `reads` y `produces`, y ninguno deja a un paso adelante de algo
-    # que lee. `tests/test_steps.py` rehace esa cuenta y se pone en rojo si una
-    # de las dos cosas se mueve sin la otra: un ordinal que adelantara a su
-    # predecesor es peor que ningún ordinal, porque el gate lo dejaría correr.
-    # Corre `Benchmark_Noise_Sweep_v1.ipynb` y no computa en su lugar. Una campaña
-    # por nivel, todas con `kind="curve"` y con el `pilot` que el cuaderno deriva
-    # de `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
+    # Corre `Benchmark_Noise_Sweep_v1.ipynb` y no computa en su lugar. Ya no
+    # una campaña por nivel sobre cada arm/transferencia: la celda de la
+    # corrida llama a `harness.campaign(reduction, device, arms=["B"],
+    # transfers=[config.NOISE_TRANSFER], ...)` por nivel, con
+    # `kind="curve"` y el `pilot` que la celda deriva de
+    # `config.is_pilot_scale()` -- el paso se niega si esa escala no es la del
     # ensayo, así que estas raíces son las de ensayo y no pueden ser otras.
+    # Sólo el brazo piso (`B`, `FLOOR_OF`'s own floor) y una sola
+    # transferencia (`config.NOISE_TRANSFER`): la curva de degradación es
+    # sobre el material, no sobre el método, así que no necesita repetir cada
+    # brazo.
     #
-    # El directorio `curve/` de `results_for` cubre los cinco `rho*` y el
-    # `Probe_results.json` que `campaign()` deja en su padre. Los pesos también
-    # son un directorio y no un vacío: `keeps_checkpoints` es verdadero en 0.0 y
-    # en 0.2, así que dos de los cinco niveles sí escriben checkpoints.
+    # El directorio `curve/` de `results_for` cubre los cinco `rho*`, y el
+    # `Probe_results.json` que `campaign()` deja en su padre. Los pesos
+    # también son un directorio, aunque con un solo brazo su volumen es una
+    # fracción de lo que costaba antes.
     #
-    # Y el cuaderno mismo, ejecutado `--inplace` una sola vez: los cinco niveles
-    # viven adentro de una ejecución, así que la salida ejecutada los muestra a
-    # los cinco.
+    # Y el cuaderno mismo, ejecutado `--inplace` una sola vez: los cinco
+    # niveles viven adentro de una ejecución, así que la salida ejecutada los
+    # muestra a los cinco.
     "noise-sweep": {"module": "MIL_CREDA_Benchmark.steps",
                     "function": "barrido_de_ruido",
                     "advances": 4,
@@ -410,49 +311,38 @@ __steps__: dict = {
                      "placement": "remote",
                      "job": "noise-sweep",
                      "service": "kaggle"},
-    # Sólo lee y dibuja, y aun así deja tres cosas: su cuaderno ejecutado y las
-    # dos que escriben sus celdas, `degradation.pdf` (por `figures.noise_curves`
-    # sobre `config.noise_axis_for(ES_ENSAYO) / "degradation"`, con el `.pdf` de
-    # `emit`) y `degradation.json`. Las dos siguen al barrido que resumen, y por
-    # eso están las dos escalas: el cuaderno componía esa ruta a mano desde
-    # `PRODUCT` y el resumen de un barrido de ensayo caía en el árbol completo.
-    "noise-report": {"module": "MIL_CREDA_Benchmark.steps",
-                     "function": "informe_de_ruido",
+    # El único paso que PRESENTA: reemplaza lo que `report`, `latent` y
+    # `noise-report` dibujaban por separado -- las tres notebooks de esos
+    # pasos fueron borradas junto con la reestructuración de este stretch.
+    # `Results_v1.ipynb` sólo lee y dibuja -- medido contra el archivo: no
+    # llama a `harness.campaign()` ni a `config.is_pilot_scale()` en ninguna
+    # celda, sólo a `cargar_corridas()`, que resuelve viendo cuál de los dos
+    # árboles (completo o ensayo) tiene `runs.jsonl` y `summary.json` --
+    # así que es LOCAL, como `report`/`latent` lo eran, y no lleva `job`/
+    # `service`: no envía nada.
+    #
+    # **Dónde corre la campaña que este paso lee queda fuera de este
+    # stretch.** `campaign-local`, el paso que antes ejercitaba
+    # `harness.campaign()` corriendo `Benchmark_Campaign_v1.ipynb`, fue
+    # retirado junto con esa notebook y no tiene sucesor declarado acá: nada
+    # en `__steps__` invoca `harness.campaign()`/`run_campaign_shard` hoy.
+    # Ver el informe de este stretch para el detalle.
+    #
+    # `FIGURES = config.PRODUCT / "Results" / "figures"`, un solo árbol sin
+    # segmento de escala ni de tasa -- medido en la notebook, no supuesto --
+    # así que la raíz es la que el archivo compone de verdad y no la que
+    # `results_for` habría dado. `config.DESTINOS_SIN_COORDENADA` ya declara
+    # por qué esa raíz no lleva coordenada.
+    "results": {"module": "MIL_CREDA_Benchmark.steps", "function": "resultados",
                      "advances": 5,
-                     "reads": ["Results/Noise/curve"],
-                     "produces": ["Results/Noise/degradation.pdf",
-                                  "Results/Noise/degradation.json",
-                                  "Results/Pilot/Noise/degradation.pdf",
-                                  "Results/Pilot/Noise/degradation.json",
-                                  "Notebooks/Benchmark_Noise_Report_v1.ipynb"],
-                     "placement": "local"},
-    # Corre `Benchmark_Noise_Diagnostic_Search_v1.ipynb` y no computa en su lugar.
-    # Un solo archivo de datos, y es todo lo que escribe además de su cuaderno: la
-    # re-búsqueda que paga NO gobierna ningún registro
-    # (`governs_the_ceilings_record` es falso bajo contaminación y sobre una
-    # transferencia sola) y el motor `optuna` no deja parcial. El destino es
-    # `config.noise_axis_for(ES_ENSAYO)`, con el `pilot` que el cuaderno deriva de
-    # `config.is_pilot_scale()`; el paso se niega si esa escala no es la del
-    # ensayo, así que la raíz es la de ENSAYO y no puede ser otra --- escrito bajo
-    # `Results/Noise/` a secas pisaría el diagnóstico de la corrida completa con
-    # números de ensayo.
-    "noise-diagnostic": {"module": "MIL_CREDA_Benchmark.steps",
-                         "function": "diagnostico_de_ruido",
-                         "advances": 9,
-                         "reads": ["Results/Noise/curve"],
-                         "produces": [
-                             "Results/Pilot/Noise/diagnostic.json",
-                             "Notebooks/Benchmark_Noise_Diagnostic_Search_v1.ipynb"],
-                     "placement": "remote",
-                     "job": "noise-diagnostic",
-                     "service": "kaggle"},
-    # Presenta el `diagnostic.json` que ya existe y no computa nada, así que su
-    # cuaderno ejecutado es su única raíz.
-    "noise-diagnostic-report": {"module": "MIL_CREDA_Benchmark.steps",
-                                "function": "informe_del_diagnostico",
-                                "advances": 10,
-                                "reads": ["Results/Noise/diagnostic.json"],
-                                "produces": [
-                                    "Notebooks/Benchmark_Noise_Diagnostic_Report_v1.ipynb"],
+                     "reads": ["Results/Benchmark/runs.jsonl",
+                               "Results/Benchmark/summary.json",
+                               "Results/Benchmark/ceilings.json",
+                               "Results/Benchmark/attention_mechanisms.json",
+                               "Results/Noise/curve",
+                               "Models/Benchmark",
+                               "Models/Noise/rho0p2"],
+                     "produces": ["Results/figures",
+                                  "Notebooks/Results_v1.ipynb"],
                      "placement": "local"},
 }
