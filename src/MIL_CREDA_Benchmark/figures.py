@@ -308,29 +308,23 @@ def supervised_curves(path: Path,
                      transfers=transfers)
 
 
-def contribution_curves(path: Path,
-                        arms: tuple[str, ...] = ("E", "F", "G"),
-                        runs: Path | None = None,
-                      transfers: list[str] | None = None) -> plt.Figure:
-    """What share of the objective each declared term actually commands.
-
-    Without this panel, "the term had no effect" and "the term had no weight" are
-    the same picture. The coefficient is fixed at `RAMP_CEILING` for every arm, and
-    fixing the coefficient does not fix the share: a term whose magnitude differs
-    by an order of magnitude between arms is a difference nobody declared, and a
-    rung that ignores it credits the mechanism with what the scale did.
-    """
-    return _panelled(path, arms, "contribution", "lambda x adaptation",
-                     runs=runs, transfers=transfers)
-
-
-def noise_curves(metric: str = "targetAccuracy", path: Path | None = None):
+def noise_curves(metric: str = "targetAccuracy", path: Path | None = None,
+                 arms: tuple[str, ...] | None = None):
     """Cada método contra la tasa de contaminación, en un solo panel.
 
     Un panel y no una rejilla: el eje es la tasa, y separar por transferencia
     pondría dos ejes en una figura que afirma ser función de uno. Las
     transferencias ya están colapsadas dentro de cada punto, y `contamination.by_arm`
     nombra ese colapso donde ocurre.
+
+    `arms=None` dibuja todos los que el registro trae -- el comportamiento de
+    siempre. Con una tupla, sólo esos: `contamination.curve` no filtra por
+    brazo, así que el recorte se hace acá, sobre lo que ya devolvió, y nunca
+    escribiendo un id de brazo en este módulo. Section 1 del informe la llama
+    con el o los pisos (`config.FLOOR_OF.values()`, nunca un nombre fijo)
+    porque ahí la pregunta es si el ruido perjudica incluso al método que no
+    adapta -- mezclar los brazos adaptados en el mismo panel diluiría esa
+    lectura con lo que la adaptación ya hace por su cuenta.
 
     El azar se dibuja porque es el piso real de la lectura: un método que llega
     ahí dejó de decidir, y sin la línea eso se lee como una caída más entre
@@ -342,7 +336,8 @@ def noise_curves(metric: str = "targetAccuracy", path: Path | None = None):
 
     drawn = noise_axis.curve(metric)
     figure, axis = plt.subplots(figsize=(6.4, 4.2))
-    if not drawn["rates"]:
+    wanted = [a for a in drawn["arms"] if arms is None or a in arms]
+    if not drawn["rates"] or not wanted:
         # Decirlo dentro de la figura y no dibujar ejes vacíos: una figura en
         # blanco se lee como un resultado plano.
         axis.text(0.5, 0.5, "ningún nivel declarado dejó registro todavía",
@@ -350,7 +345,7 @@ def noise_curves(metric: str = "targetAccuracy", path: Path | None = None):
         axis.set_axis_off()
         return emit(figure, path) if path else figure
 
-    for arm in drawn["arms"]:
+    for arm in wanted:
         axis.plot(drawn["rates"], drawn["series"][arm], marker="o",
                   label=config.NAME_OF.get(arm, arm))
     axis.axhline(1.0 / config.CLASSES, linestyle=":", linewidth=1, color="0.5")

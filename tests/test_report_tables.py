@@ -27,7 +27,7 @@ import MIL_CREDA_Benchmark
 from MIL_CREDA_Benchmark import config, harness, tables
 
 NOTEBOOKS = config.REPOSITORY / "MIL-CREDA" / "Notebooks"
-REPORT = NOTEBOOKS / "Benchmark_Report_v1.ipynb"
+REPORT = NOTEBOOKS / "Results_v1.ipynb"
 
 LABELS = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
 
@@ -128,7 +128,7 @@ def test_the_table_is_arms_by_display_name_over_the_six_transfers_and_an_average
                             markdown=True)
     header = [cell.strip() for cell in printed.splitlines()[0].strip("|").split("|")]
 
-    assert header == [tables.NOISE_COLUMN, "Método", *LABELS, "Prom."]
+    assert header == [tables.NOISE_COLUMN, "Método", *LABELS, "Prom.", "Puesto"]
     rows = printed.splitlines()[2:]
     assert [line.split("|")[1].strip() for line in rows] == [tables.NOISE_CLEAN] * 3
     names = [line.split("|")[2].strip().strip("`") for line in rows]
@@ -177,28 +177,15 @@ def test_at_the_declared_scale_nothing_is_stamped() -> None:
     assert "piloto" not in tables.stamp({"seeds": list(config.FULL_SEEDS)})
 
 
-# ------------------------------------------------------------------- the rungs
-
-def test_a_rung_is_named_by_display_names_and_never_by_identifiers() -> None:
-    """`MIL-Baseline → MIL-CREDA**`, not `B->E`.
-
-    Reachable red: return `f"{left}->{right}"` and both halves of this fail --
-    the name and the arrow that separates a reading from an expression.
-    """
-    assert tables.rung_name("B", "E") == "MIL-Baseline → MIL-CREDA**"
-    for left, right, _ in config.LADDER:
-        named = tables.rung_name(left, right)
-        assert named == f"{config.NAME_OF[left]} → {config.NAME_OF[right]}"
-        assert "->" not in named
-
-
-def test_the_rung_table_labels_its_rows_with_the_name_and_not_the_pair() -> None:
-    """The renderer has to use it, or the rule lives in a function nobody calls."""
-    cell = {arm: {"targetAccuracy": {"mean": 0.5 + index / 10, "stdev": 0.0, "n": 2}}
-            for index, arm in enumerate(config.ARMS_BY_ID)}
-    printed = tables.render_rungs({"grid": {LABELS[0]: cell}}, "targetAccuracy")
-    assert tables.rung_name(*config.LADDER[0][:2]) in printed
-    assert f"{config.LADDER[0][0]}->{config.LADDER[0][1]}" not in printed
+# `test_a_rung_is_named_by_display_names_and_never_by_identifiers` and
+# `test_the_rung_table_labels_its_rows_with_the_name_and_not_the_pair` removed:
+# `tables.rung_name` and `tables.render_rungs` are retired along with the
+# rungs (gains) table and its conclusion -- none of the six required sections
+# of `Results_v1.ipynb` shows a ladder of adjacent-arm differences any more.
+# Section 2/3's own attribution reading (each arm against its own floor) is
+# `tables.conclusion`, already covered by
+# `test_every_conclusion_the_report_produces_is_read_off_its_own_numbers` and
+# by `test_the_table_is_arms_by_display_name_over_the_six_transfers_and_an_average`.
 
 
 # --------------------------------------------------- Spanish prose, English keys
@@ -272,23 +259,19 @@ def _shown(notebook) -> list[tuple[str, str]]:
 
 
 def _metric_of(arguments: str) -> str | None:
-    for metric in ("seconds", "sourceAccuracy", "targetAccuracy"):
+    for metric in ("sourceAccuracy", "targetAccuracy"):
         if f'"{metric}"' in arguments:
             return metric
     return None
 
 
-#: Which renderer draws each metric's level table. Not a preference: `seconds` is
-#: `perRun` in the benchmark's own declaration, so `tables.render` refuses it and
-#: only the per-run forms are left. Inline it is `render_per_run_summary` --- the
-#: median with its min-max range, collapsing the seed axis within one environment
-#: and never across two; the written record keeps `render_per_run`, one row per
-#: run. The other two pool and are printed by `render`. The claims below -- the
-#: reading order, and that every level table is followed by its own conclusion --
-#: are about the section, not about which function drew it, so they read the
+#: Which renderer draws each metric's level table. `seconds`/`peakMiB` are gone
+#: from the declaration along with every reader of them, so both remaining
+#: metrics pool and are printed by `render`. The claims below -- the reading
+#: order, and that every level table is followed by its own conclusion -- are
+#: about the section, not about which function drew it, so they read the
 #: renderer from here instead of assuming one.
-LEVEL_RENDERER = {"seconds": "render_per_run_summary",
-                  "sourceAccuracy": "render",
+LEVEL_RENDERER = {"sourceAccuracy": "render",
                   "targetAccuracy": "render"}
 
 
@@ -309,6 +292,11 @@ def test_the_report_shows_the_target_table_and_its_source_complement() -> None:
     one table cannot tell it from a success. Target is the headline and source
     the complement, so source is read first and target last.
 
+    No `seconds` table precedes them any more: `seconds`/`peakMiB` were
+    retired from the declaration and from this report along with every reader
+    of them, so the reading order this section owes is only source-before-
+    target.
+
     Reachable red: delete either `render(runs, "…Accuracy", …)` call from the
     notebook, or show target before source.
     """
@@ -316,33 +304,15 @@ def test_the_report_shows_the_target_table_and_its_source_complement() -> None:
 
     assert levels.count("sourceAccuracy") == 1, "the source complement is not shown once"
     assert levels.count("targetAccuracy") == 1, "the headline is not shown once"
-    assert levels.index("seconds") < levels.index("sourceAccuracy") < \
-        levels.index("targetAccuracy"), "the declared reading order is not the one printed"
+    assert levels.index("sourceAccuracy") < levels.index("targetAccuracy"), \
+        "the declared reading order is not the one printed"
 
 
-def test_each_level_table_is_followed_by_the_ladder_of_that_same_metric() -> None:
-    """Levels say who is ahead; only the rungs say which piece did the work, so
-    the two are read together and in that order.
-
-    What is asserted is what the notebook still holds: the rung table of a metric
-    comes after that metric's level table and before the next metric's. It is NOT
-    the literal `directly below` of the agreement -- the gains table sits between
-    them -- and writing the stronger assertion would have made a test that fails
-    for being right.
-
-    Reachable red: move `render_rungs(summary, "sourceAccuracy")` after the
-    target level table, or drop it.
-    """
-    shown = [(name, _metric_of(args)) for name, args in _shown(REPORT)]
-    for metric in ("sourceAccuracy", "targetAccuracy"):
-        level = shown.index(("render", metric))
-        rungs = shown.index(("render_rungs", metric))
-        assert level < rungs, f"the ladder of {metric} is printed before its levels"
-        later = [index for index, entry in enumerate(shown)
-                 if entry[0] == "render" and entry[1] and entry[1] != metric
-                 and index > level]
-        assert all(index > rungs for index in later), \
-            f"another metric's table is printed between {metric} and its ladder"
+# `test_each_level_table_is_followed_by_the_ladder_of_that_same_metric` removed:
+# `render_rungs` is retired along with the rungs (gains) table, so there is no
+# ladder for a level table to be followed by any more. What replaces it is the
+# rank column inside the level table itself, already covered by
+# `test_the_table_is_arms_by_display_name_over_the_six_transfers_and_an_average`.
 
 
 def test_every_table_the_report_shows_declares_what_it_is_looking_for() -> None:
@@ -398,7 +368,7 @@ def test_each_level_table_is_followed_by_its_own_computed_conclusion() -> None:
     describing the section above.
     """
     shown = [(name, _metric_of(args)) for name, args in _shown(REPORT)]
-    for metric in ("seconds", "sourceAccuracy", "targetAccuracy"):
+    for metric in ("sourceAccuracy", "targetAccuracy"):
         level = shown.index((LEVEL_RENDERER[metric], metric))
         concluded = next(((name, seen) for name, seen in shown[level + 1:]
                           if name.startswith("conclusion")), None)
@@ -662,18 +632,17 @@ def test_render_refuses_a_dimension_the_declaration_calls_per_run() -> None:
 #: `render` alone while seven siblings went on pooling the same numbers, and a
 #: test that named one function per case would have been written the same way.
 #:
-#: `render_per_run` and `conclusion_per_run` are deliberately absent -- they are
-#: the forms the declaration permits, and a guard on them would leave `seconds`
-#: with no way to be printed at all.
+#: `render_per_run` and `conclusion_per_run` are gone along with `seconds`/
+#: `peakMiB` themselves -- there is no `perRun` dimension left that a form the
+#: declaration permits would need to print. `render_rungs`/`conclusion_rungs`
+#: (the rungs table) and `paired_gains`/`render_gains` (the gains table) are
+#: gone for the same reason every reader of them is: neither has a place in
+#: the six required sections of `Results_v1.ipynb`.
 def _pooling_calls(metric: str):
     """One callable per aggregating entry point, ready to invoke with `metric`."""
     runs = _runs({(arm, label): [10.0 + index, 30.0 + index]
                   for index, arm in enumerate(("B", "E", "F", "G"))
                   for label in LABELS[:2]}, metric=metric)
-    cell = {arm: {metric: {"mean": 0.5 + index / 10, "stdev": 0.01, "n": 2}}
-            for index, arm in enumerate(config.ARMS_BY_ID)}
-    summary = {"grid": {label: cell for label in LABELS[:2]},
-               "reduction": _reduction(seeds=2)}
     return {
         "cells": lambda: tables.cells(runs, metric),
         "table": lambda: tables.table(runs, metric),
@@ -681,10 +650,6 @@ def _pooling_calls(metric: str):
         "conclusion": lambda: tables.conclusion(runs, metric, _reduction(seeds=2)),
         "ranking": lambda: tables.ranking(runs, metric),
         "best_transfers": lambda: tables.best_transfers(runs, metric=metric),
-        "render_rungs": lambda: tables.render_rungs(summary, metric),
-        "conclusion_rungs": lambda: tables.conclusion_rungs(summary, metric),
-        "paired_gains": lambda: tables.paired_gains(runs, metric),
-        "render_gains": lambda: tables.render_gains(runs, metric, "t"),
     }
 
 
@@ -702,8 +667,8 @@ def test_no_function_that_pools_a_dimension_accepts_one_the_declaration_forbids(
     that has to grow when a new aggregator is written.
 
     Reachable red: delete `_refuse_pooling`'s call from any one of `cells`,
-    `render`, `render_rungs`, `conclusion_rungs` or `paired_gains`, and the
-    entry points that reach the number through it stop refusing.
+    `render`, `conclusion`, `ranking` or `best_transfers`, and the entry
+    points that reach the number through it stop refusing.
     """
     declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["perRun"]
     assert declared, "the declaration names no per-run dimension to refuse"
@@ -821,104 +786,16 @@ def test_the_report_asks_for_no_pooled_table_of_a_per_run_dimension() -> None:
             f"calls it perRun and `render` refuses it"
 
 
-def _grid_per_run(readings):
-    """`{transfer: {arm: {metric: [{env, seed, value}, ...]}}}`, la forma que
-    `shards.merge` deja bajo `gridPerRun`."""
-    grid = {}
-    for transfer, arm, env, seed, value in readings:
-        (grid.setdefault(transfer, {}).setdefault(arm, {})
-             .setdefault("seconds", []).append(
-                 {"env": env, "seed": seed, "value": value}))
-    return grid
-
-
-def test_the_inline_seconds_table_collapses_the_seed_axis_and_names_it():
-    """Inline es la mediana con su rango min-max; el registro escrito se queda
-    con todas las filas.
-
-    Volcar corrida por corrida adentro del cuaderno son treinta filas por celda
-    que nadie lee, y el lector termina construyendo la mediana de cabeza --- que
-    es exactamente el resumen que `render_per_run` le pide que construya «a la
-    vista de cuántas máquinas». A la vista sigue estando: el entorno es una
-    columna y el rango es el min-max de verdad, no un `±` que insinúa una
-    estabilidad que nadie midió.
-
-    Rojo alcanzable: imprimir una media, o un `±`, o esconder el rango.
-    """
-    # 10/20/60: mediana 20, media 30. Con 10/20/30 las dos dan 20 y una media
-    # impresa en lugar de la mediana pasaría la prueba --- el fixture sería igual
-    # al mutante, que es una prueba que no puede salir mal.
-    grid = _grid_per_run([
-        ("M->U", "G", "T4", 0, 10.0), ("M->U", "G", "T4", 1, 60.0),
-        ("M->U", "G", "T4", 2, 20.0),
-    ])
-    rendered = tables.render_per_run_summary(grid, "seconds", markdown=True)
-
-    assert "20.00" in rendered, "la mediana de 10/20/60"
-    assert "30.00" not in rendered, "eso sería la media, no la mediana"
-    assert "10.00" in rendered and "60.00" in rendered, "el rango completo"
-    assert "±" not in rendered, "un ± afirma una dispersión que no se midió así"
-    assert "semilla" in rendered.lower(), "el eje colapsado se nombra"
-
-
-def test_the_inline_seconds_table_never_puts_two_environments_in_one_row():
-    """La máquina no se colapsa: es la mitad de por qué la dimensión es `perRun`.
-
-    Es lo único que hace defendible resumir acá. Una fila por método y entorno
-    colapsa las semillas dentro de una máquina; una fila por método a secas
-    promediaría entre máquinas, que es justo lo que `_refuse_pooling` impide en
-    el resto del informe.
-    """
-    # Tres por entorno y asimétricas: con dos lecturas la mediana ES la media, y
-    # la prueba no distinguiría una de otra.
-    grid = _grid_per_run([
-        ("M->U", "G", "T4", 0, 10.0), ("M->U", "G", "T4", 1, 12.0),
-        ("M->U", "G", "T4", 2, 44.0),
-        ("M->U", "G", "P100", 0, 40.0), ("M->U", "G", "P100", 1, 42.0),
-        ("M->U", "G", "P100", 2, 104.0),
-    ])
-    rendered = tables.render_per_run_summary(grid, "seconds", markdown=True)
-
-    filas = _filas(rendered)
-    assert len(filas) == 2, filas
-    assert any("T4" in f and "12.00" in f for f in filas), filas
-    assert any("P100" in f and "42.00" in f for f in filas), filas
-    # y la mediana de las seis juntas, que es lo que saldría al colapsar el
-    # entorno, no aparece en ninguna fila
-    assert not any("26.00" in f for f in filas), filas
-
-
-def test_the_inline_seconds_table_collapses_one_axis_and_not_two():
-    """La transferencia sigue siendo una clave, no otro eje colapsado.
-
-    El acuerdo dice «colapsando el eje de semillas» en singular, y la regla que
-    lo gobierna pide que cada agregación nombre UN eje. Juntar además las
-    transferencias produciría algo con la misma forma y otro significado: seis
-    corridas de distinta dificultad leídas como una.
-    """
-    grid = _grid_per_run([
-        ("M->U", "G", "T4", 0, 10.0), ("M->U", "G", "T4", 1, 10.0),
-        ("U->M", "G", "T4", 0, 90.0), ("U->M", "G", "T4", 1, 90.0),
-    ])
-    rendered = tables.render_per_run_summary(grid, "seconds", markdown=True)
-
-    filas = _filas(rendered)
-    assert len(filas) == 2, filas
-    assert any("M->U" in f and "10.00" in f for f in filas), filas
-    assert any("U->M" in f and "90.00" in f for f in filas), filas
-
-
-def test_the_written_record_still_carries_every_row():
-    """El otro polo del acuerdo. Sin él, resumir inline pasaría la prueba de
-    arriba y el registro perdería las corridas, que es para lo que existe."""
-    grid = _grid_per_run([
-        ("M->U", "G", "T4", 0, 10.0), ("M->U", "G", "T4", 1, 60.0),
-        ("M->U", "G", "T4", 2, 20.0),
-    ])
-    completo = tables.render_per_run(grid, "seconds", markdown=True)
-
-    filas = [l for l in completo.splitlines() if l.startswith("| `")]
-    assert len(filas) == 3, "el registro se queda con una fila por corrida"
+# `_grid_per_run`, `test_the_inline_seconds_table_collapses_the_seed_axis_and_
+# names_it`, `test_the_inline_seconds_table_never_puts_two_environments_in_one
+# _row`, `test_the_inline_seconds_table_collapses_one_axis_and_not_two` and
+# `test_the_written_record_still_carries_every_row` removed: all five
+# exercised `tables.render_per_run`/`render_per_run_summary`, which read the
+# `seconds`/`peakMiB` `perRun` dimensions. Both dimensions are retired from
+# `config.DIMENSIONS` -- not renamed, removed -- and their two readers are
+# retired from `tables.py` along with them. Nothing declared any more is
+# `perRun`, so there is no inline-versus-written-record distinction left to
+# hold.
 
 
 # ---------------------------------- the phase-two readings, both rates at once
@@ -1061,7 +938,7 @@ def _celda_de_grilla(values: dict[str, float], metric: str) -> dict:
 
 def test_every_unified_table_prints_the_clean_block_and_then_the_contaminated(
         tmp_path, monkeypatch) -> None:
-    """The four `_at` twins are gone and the four clean renderers took the data.
+    """The four `_at` twins are gone and the clean renderers took the data.
 
     Each twin loaded the contaminated record and called its clean sibling again.
     It was declared apart for one reason only --- the duplication check looks at
@@ -1069,41 +946,38 @@ def test_every_unified_table_prints_the_clean_block_and_then_the_contaminated(
     one measurement rendered twice --- so the resolution is the one
     `render_readings` already took: one call, no twin, nothing to misread.
 
-    Asserted over all four at once because the claim is about the class and not
-    about any one of them: the shape they share is `Ruido` first, every `sin`
-    row, then every `con` row.
+    Asserted over both at once because the claim is about the class and not
+    about any one member of it: the shape they share is `Ruido` first, every
+    `sin` row, then every `con` row. `render` and `render_readings` are the two
+    survivors of the family -- `render_rungs`/`render_gains`/`render_per_run*`
+    are retired along with everything that read them.
 
     Reachable red: append the contaminated rows to the clean ones without the
     label, or interleave the two blocks by arm.
     """
     metric = "targetAccuracy"
-    # Todos los brazos declarados: los peldaños se leen de `config.LADDER` y una
-    # grilla con dos brazos no tiene ningún par que restar, así que la tabla de
-    # peldaños saldría vacía y la prueba pasaría sin haber dibujado nada.
     niveles = {arm: 0.50 + 0.05 * i for i, arm in enumerate(config.ARM_ORDER)}
     limpias = [{"arm": arm, "transfer": label, "seed": 0, metric: value,
                 "contribution": 0.25}
                for arm, value in niveles.items() for label in LABELS]
     sucias = [dict(run, **{metric: run[metric] - 0.20}) for run in limpias]
-    grid = {label: _celda_de_grilla(niveles, metric) for label in LABELS}
     grid_sucia = {label: _celda_de_grilla(
         {arm: value - 0.20 for arm, value in niveles.items()}, metric)
         for label in LABELS}
-    per_run = _grid_per_run([("M->U", "G", "T4", s, 10.0 + s) for s in (0, 1, 2)])
-    per_run_sucia = _grid_per_run(
-        [("M->U", "G", "T4", s, 90.0 + s) for s in (0, 1, 2)])
-    _campana_contaminada(tmp_path, monkeypatch, 0.2, runs=sucias, grid=grid_sucia,
-                         grid_per_run=per_run_sucia)
+    _campana_contaminada(tmp_path, monkeypatch, 0.2, runs=sucias, grid=grid_sucia)
+
+    limpias_geom = [{"arm": arm, "transfer": label, "seed": 0, "median": True,
+                     "geometry": {"ratio": value}}
+                    for arm, value in niveles.items() for label in LABELS]
+    sucias_geom = [dict(reading, geometry={"ratio": reading["geometry"]["ratio"] - 0.20})
+                   for reading in limpias_geom]
 
     dibujadas = {
         "render": tables.render(limpias, metric, _reduction(seeds=1),
                                 rate=0.2, markdown=True),
-        "render_rungs": tables.render_rungs({"grid": grid}, metric, rate=0.2,
-                                            markdown=True),
-        "render_gains": tables.render_gains(limpias, metric, "t", rate=0.2,
-                                            markdown=True),
-        "render_per_run_summary": tables.render_per_run_summary(
-            per_run, "seconds", rate=0.2, markdown=True),
+        "render_readings": tables.render_readings(
+            limpias_geom, "geometry.ratio", "t", contaminated=sucias_geom,
+            rate=0.2, markdown=True),
     }
     for name, rendered in dibujadas.items():
         etiquetas = [f.split("|")[1].strip() for f in _filas(rendered)]
@@ -1123,11 +997,17 @@ def test_every_unified_table_prints_the_clean_block_and_then_the_contaminated(
     filas_de_ese_brazo = [f for f in _filas(dibujadas["render"])
                           if f"`{primero}`" in f]
     assert len(filas_de_ese_brazo) == 2, filas_de_ese_brazo
-    limpio, sucio = (float(f.split("|")[-2].strip().strip("*"))
+    # `Prom.` es la anteúltima columna de datos: la última es `Puesto`.
+    limpio, sucio = (float(f.split("|")[-3].strip().strip("*"))
                      for f in filas_de_ese_brazo)
     assert sucio == pytest.approx(limpio - 20.0), (limpio, sucio)
-    assert "91.00" in dibujadas["render_per_run_summary"], \
-        "the contaminated block redrew the clean readings"
+
+    filas_geom = [f for f in _filas(dibujadas["render_readings"])
+                 if f"`{primero}`" in f]
+    assert len(filas_geom) == 2, filas_geom
+    limpio_g, sucio_g = (float(f.split("|")[-2].strip().strip("*"))
+                        for f in filas_geom)
+    assert sucio_g == pytest.approx(limpio_g - 0.20), (limpio_g, sucio_g)
 
 
 def test_a_rate_that_never_ran_keeps_the_clean_block_and_says_why(
@@ -1262,46 +1142,43 @@ def test_the_attention_spread_floor_is_computed_not_asserted_at_zero() -> None:
 
 
 def test_the_floor_is_computed_per_arm_never_one_number_for_all() -> None:
-    """A selecting arm (`SU`, `SA`, `SK`) reparte sobre `SELECT_K` instancias,
-    not over the full bag, so its floor is a DIFFERENT, smaller number --
-    never `MIN_ATTENTION_SPREAD`, which is the full-bag floor every other
-    attending arm shares.
+    """A selecting arm reparte over its own declared budget, not over the full
+    bag, so its floor would be a DIFFERENT, smaller number -- never
+    `MIN_ATTENTION_SPREAD`, which is the full-bag floor every other attending
+    arm shares.
 
-    Reachable red: key every arm to `MIN_ATTENTION_SPREAD` (today's
-    single-number defect), or compute a selecting arm's floor over
-    `INSTANCES_PER_BAG` instead of `SELECT_K`.
+    No arm id is written here: which arms select is read from
+    `config.ARMS`'s own `selection` field, never assumed to be `SU`/`SA`/`SK`
+    -- today's declaration selects none, which this test accepts as a valid,
+    measured state rather than skipping over it, and every attending arm's
+    floor is checked against the shared, full-bag one.
+
+    Reachable red: key a selecting arm to `MIN_ATTENTION_SPREAD` (today's
+    single-number defect) once the declaration adds one back, or compute a
+    selecting arm's floor over `INSTANCES_PER_BAG` instead of its own budget.
     """
     attending = {arm["id"] for arm in config.ARMS if arm["attention"] == "learned"}
     assert attending == set(tables.MIN_ATTENTION_SPREAD_BY_ARM)
 
-    selecting = {"SU", "SA", "SK"}
-    full_bag = {a for a in attending if a not in selecting}
+    selecting = {arm["id"] for arm in config.ARMS if arm.get("selection") is not None}
+    full_bag = attending - selecting
     assert full_bag, "no non-selecting attending arm to compare against"
 
     for arm in full_bag:
         assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] == pytest.approx(
             tables.MIN_ATTENTION_SPREAD, abs=1e-12)
 
-    expected_selecting = _independent_min_normalized_entropy(
-        config.SELECT_K, 2.0 + config.ATTENTION_GAMMA)
     for arm in selecting:
-        assert arm in tables.MIN_ATTENTION_SPREAD_BY_ARM
+        budget = config.ARMS_BY_ID[arm].get("budget")
+        assert budget, f"{arm} selects and declares no budget to select over"
+        expected = _independent_min_normalized_entropy(
+            int(budget), 2.0 + config.ATTENTION_GAMMA)
         assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] == pytest.approx(
-            expected_selecting, abs=1e-9)
-        # A selecting arm's floor is strictly LOWER than the full-bag floor
-        # (0.794 for m=SELECT_K=10 against 0.861 for m=INSTANCES_PER_BAG=30,
-        # under today's neutral hyperparameters): a smaller bag reaches a
-        # narrower minimum entropy MORE easily, not less. What is checked is
-        # the direction, not merely that the two floors differ.
+            expected, abs=1e-9)
+        # A selecting arm's floor is strictly LOWER than the full-bag floor: a
+        # smaller bag reaches a narrower minimum entropy MORE easily, not
+        # less. What is checked is the direction, not merely that they differ.
         assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] < tables.MIN_ATTENTION_SPREAD - 1e-6
-
-    # The number the operator measured for m=SELECT_K=10 under today's
-    # neutral hyperparameters, quoted as a fact this suite reproduces rather
-    # than trusts.
-    if config.SELECT_K == 10 and config.ATTENTION_GAMMA == 0.0 \
-            and config.ATTENTION_TEMPERATURE == 1.0:
-        assert tables.MIN_ATTENTION_SPREAD_BY_ARM["SK"] == pytest.approx(
-            0.7939896773181211, abs=1e-9)
 
 
 def _optimized_min_normalized_entropy(m: int, gamma: float, tau_att: float,
@@ -1362,7 +1239,8 @@ def test_no_configuration_of_the_sweep_reaches_below_the_computed_floor() -> Non
     search that actually MINIMIZES catches that.
     """
     sizes = {tables._bag_size_for(arm) for arm in tables.MIN_ATTENTION_SPREAD_BY_ARM}
-    assert sizes == {config.INSTANCES_PER_BAG, config.SELECT_K}
+    assert sizes, "no attending arm declared, nothing to check the floor of"
+    assert config.INSTANCES_PER_BAG in sizes
 
     for m in sizes:
         claimed = tables._min_reachable_attention_entropy(
@@ -1414,16 +1292,29 @@ def test_attention_spread_text_names_the_computed_floor_and_the_r21_reading() ->
 
 def test_attention_spread_text_prints_the_per_arm_floor_not_only_the_global_one() -> None:
     """Defect (7): `objective` and `conclusion_attention` print the PER-ARM
-    floor for a selecting arm -- `SK`'s own, over `SELECT_K=10` instances --
-    beside the m=`INSTANCES_PER_BAG`=30 floor a full-bag arm reads, never
-    the global floor stamped onto a selecting arm's own row.
+    floor for a selecting arm -- its own, over its declared budget of
+    instances -- beside the m=`INSTANCES_PER_BAG` floor a full-bag arm reads,
+    never the global floor stamped onto a selecting arm's own row.
 
-    Reachable red: read `MIN_ATTENTION_SPREAD` (the m=30 floor) for `SK`'s
-    row instead of `MIN_ATTENTION_SPREAD_BY_ARM['SK']` -- in either
-    function.
+    No arm id is written here: the selecting arm, if any, is read from
+    `config.ARMS`. Today's declaration selects none, so this reachable-red
+    coverage is skipped rather than faked against an arm that does not exist
+    -- a skip says plainly that the state is unmeasured, where silently
+    reusing a full-bag arm would print a green result for a claim nothing here
+    checked.
+
+    Reachable red: read `MIN_ATTENTION_SPREAD` (the full-bag floor) for a
+    selecting arm's row instead of its own `MIN_ATTENTION_SPREAD_BY_ARM`
+    entry -- in either function.
     """
-    selecting_floor = tables.MIN_ATTENTION_SPREAD_BY_ARM["SK"]
+    selecting = [arm["id"] for arm in config.ARMS if arm.get("selection") is not None]
+    if not selecting:
+        pytest.skip("no selecting arm is declared: nothing to isolate a "
+                    "per-arm floor against")
+    arm_id = selecting[0]
+    selecting_floor = tables.MIN_ATTENTION_SPREAD_BY_ARM[arm_id]
     full_bag_floor = tables.MIN_ATTENTION_SPREAD
+    budget = config.ARMS_BY_ID[arm_id]["budget"]
     assert selecting_floor != pytest.approx(full_bag_floor, abs=1e-6), (
         "fixture assumption broken: the two floors coincide under this config"
     )
@@ -1431,35 +1322,38 @@ def test_attention_spread_text_prints_the_per_arm_floor_not_only_the_global_one(
     objective_text = tables.objective("attentionSpread")
     assert f"{selecting_floor:.3f}" in objective_text
     assert f"{full_bag_floor:.3f}" in objective_text
-    assert str(config.SELECT_K) in objective_text
+    assert str(budget) in objective_text
     assert str(config.INSTANCES_PER_BAG) in objective_text
 
-    # A selecting arm's own row names its own (bag size 10) floor.
+    # A selecting arm's own row names its own budget-sized floor.
     said_selecting = tables.conclusion_attention([
-        {"arm": "SK", "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
+        {"arm": arm_id, "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
     ])
     assert f"piso {selecting_floor:.3f}" in said_selecting
-    assert f"sobre {config.SELECT_K} instancias" in said_selecting
+    assert f"sobre {budget} instancias" in said_selecting
     assert f"piso {full_bag_floor:.3f}" not in said_selecting
 
-    # A full-bag arm's own row names the m=30 floor instead.
+    # A full-bag arm's own row names the full-bag floor instead.
+    full_bag_arm = next(arm["id"] for arm in config.ARMS
+                        if arm["attention"] == "learned" and arm["id"] != arm_id)
     said_full_bag = tables.conclusion_attention([
-        {"arm": "G", "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
+        {"arm": full_bag_arm, "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
     ])
     assert f"piso {full_bag_floor:.3f}" in said_full_bag
     assert f"sobre {config.INSTANCES_PER_BAG} instancias" in said_full_bag
     assert f"piso {selecting_floor:.3f}" not in said_full_bag
 
 
-@pytest.mark.parametrize("arm", ["B", "E", "F", "G", "SU", "SA", "SK"])
+@pytest.mark.parametrize(
+    "arm", [arm["id"] for arm in config.ARMS if arm["attention"] == "learned"])
 def test_conclusion_attention_prints_this_exact_arms_own_floor(arm: str) -> None:
-    """The test above isolates SK against G; a mutation that special-cased
-    only `SA` to read the global floor (`MIN_ATTENTION_SPREAD_BY_ARM.get(arm,
-    MIN_ATTENTION_SPREAD)` rewritten as, say, `... if arm != "SA" else
-    MIN_ATTENTION_SPREAD`) would pass every test above -- none of them ever
-    build a row for `SA`, or for `SU`, `B`, `E` or `F`. Driven over all seven
-    declared arms, one row at a time, so a mutation confined to any single
-    arm's own lookup is caught by that arm's own row.
+    """A mutation that special-cased one arm to read the global floor
+    (`MIN_ATTENTION_SPREAD_BY_ARM.get(arm, MIN_ATTENTION_SPREAD)` rewritten
+    as, say, `... if arm != "F" else MIN_ATTENTION_SPREAD`) would pass a
+    test that only ever built a row for one or two arms. Driven over every
+    attending arm, one row at a time -- read from `config.ARMS` and never
+    written here -- so a mutation confined to any single arm's own lookup is
+    caught by that arm's own row.
 
     Reachable red: any one arm's floor lookup replaced by the global
     `MIN_ATTENTION_SPREAD` while every other arm's stays correct.
@@ -1473,48 +1367,9 @@ def test_conclusion_attention_prints_this_exact_arms_own_floor(arm: str) -> None
     )
 
 
-# --------------------------------------------------- defect (4): the diagnostic axis
-
-def test_diagnostic_record_refuses_a_stamp_mismatch(tmp_path, monkeypatch) -> None:
-    """Defect (4): `Benchmark_Noise_Diagnostic_Search_v1.ipynb` now stamps
-    `diagnostic.json` (`harness.ceiling_record.stamp(registro)`), and
-    `tables._diagnostic_record` -- the single read every one of
-    `diagnostic_source_note`/`render_diagnostic`/`conclusion_diagnostic`
-    goes through -- refuses rather than reporting a stale measurement as
-    current: this file holds exactly one measurement, not a table of several
-    where some rows might still be valid, so there is nothing here that can
-    be shown partially.
-    """
-    import json as _json
-
-    from MIL_CREDA_Benchmark import ceiling_record
-
-    stale = ceiling_record.stamp({"level": 0.4, "transfer": "M->U"})
-    stale["kernelSigma"] = config.KERNEL_SIGMA * 3
-    (tmp_path / "diagnostic.json").write_text(_json.dumps(stale), encoding="utf-8")
-    monkeypatch.setattr(config, "noise_axis_for", lambda pilot: tmp_path)
-
-    with pytest.raises(SystemExit):
-        tables._diagnostic_record()
-    with pytest.raises(SystemExit):
-        tables.render_diagnostic()
-    with pytest.raises(SystemExit):
-        tables.diagnostic_source_note()
-    with pytest.raises(SystemExit):
-        tables.conclusion_diagnostic()
-
-
-def test_diagnostic_record_accepts_a_correctly_stamped_measurement(
-        tmp_path, monkeypatch) -> None:
-    import json as _json
-
-    from MIL_CREDA_Benchmark import ceiling_record
-
-    fresh = ceiling_record.stamp({"level": 0.4, "transfer": "M->U",
-                                  "searchedUnderNoise": {}, "diagnosticOnly": "x"})
-    (tmp_path / "diagnostic.json").write_text(_json.dumps(fresh), encoding="utf-8")
-    monkeypatch.setattr(config, "noise_axis_for", lambda pilot: tmp_path)
-
-    record, pilot = tables._diagnostic_record()
-    assert record is not None
-    assert pilot is False
+# `test_diagnostic_record_refuses_a_stamp_mismatch` and
+# `test_diagnostic_record_accepts_a_correctly_stamped_measurement` removed:
+# `tables._diagnostic_record`, `render_diagnostic`, `diagnostic_source_note`
+# and `conclusion_diagnostic` are retired along with the noise-diagnostic
+# apparatus. None of the six required sections of `Results_v1.ipynb` reads a
+# re-searched-ceiling-under-noise diagnostic any more.

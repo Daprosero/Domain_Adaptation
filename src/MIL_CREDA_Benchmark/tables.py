@@ -92,24 +92,30 @@ def _min_reachable_attention_entropy(m: int, gamma: float, tau_att: float) -> fl
 def _bag_size_for(arm: str) -> int:
     """Cuántas instancias `weights_for` reparte para este brazo -- `len(beta)`
     en `latent.attention_spread` -- nunca una sola cuenta para todos. Un brazo
-    que selecciona reparte sobre `SELECT_K`, no sobre la bolsa entera: el piso
-    alcanzable de su entropía es OTRO número, más chico, porque hay menos
-    instancias entre las que repartir.
+    que selecciona reparte sobre su propio presupuesto (`spec["budget"]`, si la
+    declaración lo lleva), no sobre la bolsa entera: el piso alcanzable de su
+    entropía es OTRO número, más chico, porque hay menos instancias entre las
+    que repartir. Ningún nombre de brazo se supone acá: se lee de
+    `config.ARMS_BY_ID[arm]`, y si la declaración de hoy no lleva ningún brazo
+    que seleccione, esta rama nunca se toma.
     """
     spec = config.ARMS_BY_ID[arm]
-    if spec["selection"] is None:
+    budget = spec.get("selection") and spec.get("budget")
+    if not budget:
         return config.INSTANCES_PER_BAG
-    return min(config.SELECT_K, config.INSTANCES_PER_BAG)
+    return min(int(budget), config.INSTANCES_PER_BAG)
 
 
 #: El piso alcanzable de `attentionSpread` bajo los hiperparámetros neutros de
 #: hoy, por brazo -- computado de la cota que r21 declara para el logit, nunca
 #: supuesto en 0 y nunca un solo número para todos: un brazo que selecciona
-#: (`SU`, `SA`, `SK`) reparte sobre `SELECT_K` instancias y no sobre las
+#: reparte sobre su propio presupuesto de instancias y no sobre las
 #: `INSTANCES_PER_BAG` de la bolsa completa, así que su piso es otro. Con
 #: `ATTENTION_GAMMA = 0` y `ATTENTION_TEMPERATURE = 1` el rango alcanzable de
 #: cada uno es angosto y pegado a uno: "lejos del máximo" nunca significa
-#: "cerca de cero".
+#: "cerca de cero". Ningún id de brazo está escrito acá: la declaración de hoy
+#: (`config.ARMS`) puede no llevar ningún brazo que seleccione, y entonces este
+#: diccionario coincide con `MIN_ATTENTION_SPREAD` para todos.
 MIN_ATTENTION_SPREAD_BY_ARM = {
     arm["id"]: _min_reachable_attention_entropy(
         _bag_size_for(arm["id"]), config.ATTENTION_GAMMA, config.ATTENTION_TEMPERATURE)
@@ -132,6 +138,27 @@ MIN_ATTENTION_SPREAD = _min_reachable_attention_entropy(
 #: de la propia bolsa, no con la masa de correspondencia. Esa autosimilitud
 #: es una lectura distinta, y este informe no la calcula ni la imprime.
 UNIFORM_ATTENTION = 0.99
+
+
+def _selecting_arms_floor_clause() -> str:
+    """La cláusula que nombra el piso de un brazo que selecciona, o nada.
+
+    Ningún id de brazo se escribe acá: se recorre `config.ARMS` y se nombra
+    cualquiera cuyo `spec["selection"]` no sea `None`, cualquiera que sea su
+    id o cuántos sean. La declaración de hoy no lleva ninguno, así que esto
+    devuelve la cadena vacía y la frase de `objective("attentionSpread")` sale
+    sin esa cláusula -- en vez de nombrar un brazo retirado o morir buscando
+    una constante que la declaración ya no lleva.
+    """
+    selecting = [arm for arm in config.ARMS if arm.get("selection") is not None]
+    if not selecting:
+        return ""
+    names = ", ".join(sorted(arm["id"] for arm in selecting))
+    floors = {MIN_ATTENTION_SPREAD_BY_ARM.get(arm["id"], MIN_ATTENTION_SPREAD)
+              for arm in selecting}
+    piso = f"{min(floors):.3f}" if len(floors) == 1 else (
+        f"entre {min(floors):.3f} y {max(floors):.3f}")
+    return f", {piso} sobre la bolsa reducida que seleccionan {names}"
 
 #: Cuántos puntos porcentuales tienen que separar los dos cambios relativos para
 #: leerlos como distintos. Por debajo de esto las dos distancias se movieron
@@ -168,6 +195,21 @@ def cells(runs: Iterable[dict], metric: str) -> dict:
     return {key: spread(values) for key, values in gathered.items()}
 
 
+def _mean_se(values: list[float]) -> tuple[float, float]:
+    """Media y su error estándar, sobre las repeticiones de un mismo brazo.
+
+    Con menos de dos valores el error es cero: es un hecho sobre la muestra
+    -- una sola lectura no tiene con qué estimar su propia dispersión -- y no
+    un veredicto de precisión perfecta.
+    """
+    n = len(values)
+    mean = sum(values) / n
+    if n < 2:
+        return mean, 0.0
+    var = sum((v - mean) ** 2 for v in values) / (n - 1)
+    return mean, math.sqrt(var) / math.sqrt(n)
+
+
 def table(runs: Iterable[dict], metric: str) -> list[dict]:
     """Una fila por método: cada transferencia, el promedio y el pico.
 
@@ -176,6 +218,11 @@ def table(runs: Iterable[dict], metric: str) -> list[dict]:
     transferencia — el método en su semilla más afortunada de cada una — y existe
     para que el pico quede documentado como número acá, en lugar de colarse en
     una figura eligiendo el mejor modelo.
+
+    `se` es el error estándar de la media del brazo, sobre TODAS sus corridas
+    crudas (cada transferencia, cada semilla, agrupadas en una sola muestra) --
+    la cantidad que `rank_groups` necesita para decidir si dos brazos se
+    distinguen, y que ni `cells` ni el resto de esta fila calculan.
     """
     runs = list(runs)
     grid = cells(runs, metric)
@@ -187,17 +234,52 @@ def table(runs: Iterable[dict], metric: str) -> list[dict]:
         present = [grid[(arm, label)] for label in labels if (arm, label) in grid]
         if not present:
             continue
+        raw = [float(run[metric]) for run in runs if run["arm"] == arm]
+        _, se = _mean_se(raw)
         rows.append({
             "arm": arm,
             "name": config.NAME_OF[arm],
             "byTransfer": {label: grid.get((arm, label)) for label in labels},
             "avg": sum(c["mean"] for c in present) / len(present),
             "max": sum(c["max"] for c in present) / len(present),
+            "se": se,
+            "n": len(raw),
             "share": (sum(shares[(arm, label)]["mean"] for label in labels
                           if (arm, label) in shares)
                       / max(1, sum(1 for label in labels if (arm, label) in shares))),
         })
     return rows
+
+
+def rank_groups(rows: list[dict], better: str | None = config.HIGHER) -> dict[str, int]:
+    """{brazo: puesto}, compartiendo puesto cuando dos brazos no se distinguen.
+
+    Ordena por `avg` y camina la lista: un brazo se une al puesto del anterior
+    cuando la brecha entre los dos no supera su error estándar COMBINADO --
+    `sqrt(se_a^2 + se_b^2)`, el error estándar de la diferencia de dos medias
+    independientes -- y abre un puesto nuevo cuando sí la supera. Compartir es
+    por lo tanto una propiedad de **vecinos**: una cadena de tres brazos cada
+    uno indistinguible del siguiente comparte un solo puesto aunque los dos
+    extremos sí se distingan entre sí, porque nada en los datos separa a
+    ningún par adyacente de esa cadena.
+
+    Con `se=0` en todas las filas -- un piloto de una repetición -- el error
+    combinado es siempre cero y cada brazo abre su propio puesto: sin
+    dispersión medida no hay empate que conceder, y el sello de piloto ya
+    dice que estas cifras no son un veredicto.
+    """
+    reverse = better != config.LOWER
+    ordered = sorted(rows, key=lambda r: r["avg"], reverse=reverse)
+    places: dict[str, int] = {}
+    place = 1
+    for index, row in enumerate(ordered):
+        if index > 0:
+            previous = ordered[index - 1]
+            combined_se = math.sqrt(row.get("se", 0.0) ** 2 + previous.get("se", 0.0) ** 2)
+            if abs(row["avg"] - previous["avg"]) > combined_se:
+                place += 1
+        places[row["arm"]] = place
+    return places
 
 
 def _scaled(value: float, metric: str) -> float:
@@ -308,27 +390,52 @@ def objective(key: str, markdown: bool = True) -> str:
             f"escala.",
         "noise":
             f"**Buscamos que la caída sea chica y que el orden entre métodos no se "
-            f"invierta.** El objetivo no es que nadie caiga —contaminado el "
-            f"material de entrenamiento, todos caen— sino que la formulación de "
-            f"bolsa caiga menos que la de instancia, que es lo que afirma "
-            f"mitigar. El piso sigue siendo el azar de {clase:.3f}: un método que "
-            f"llega ahí dejó de decidir. Las filas `{NOISE_DIRTY}` de las tablas "
-            f"de esta sección salieron de la campaña con las etiquetas de "
-            f"entrenamiento contaminadas a ρ={config.NOISE_REPORTED:g}; las "
-            f"`{NOISE_CLEAN}`, del material limpio. La tasa va acá y no en la "
-            f"tabla: es una sola para toda la sección, y escrita por fila sería "
-            f"el mismo hecho tantas veces como filas haya.",
-        "noise.share":
-            "**Buscamos que la participación del término de adaptación suba con el "
-            "ruido**, y que suba en los brazos que lo llevan y en ninguno más. Si "
-            "no se mueve, el término está pesado para material limpio y la caída "
-            "no dice si falló el término o si le faltó coeficiente.",
-        "noise.diagnostic":
-            f"**Buscamos saber cuál de las dos cosas fue.** Con el techo buscado en "
-            f"limpio y aplicado en sucio, una caída puede ser el término o puede "
-            f"ser el coeficiente. Si el techo re-buscado en {config.NOISE_DIAGNOSTIC_LEVEL:g} "
-            f"recupera lo perdido, fue el coeficiente; si no lo recupera, fue el "
-            f"término. Ningún número de acá entra en las tablas del veredicto.",
+            f"invierta.** Contaminado el material de entrenamiento, todos caen; lo "
+            f"que separa a un método es cuánto. El piso sigue siendo el azar de "
+            f"{clase:.3f}: un método que llega ahí dejó de decidir. Las filas "
+            f"`{NOISE_DIRTY}` de las tablas de esta sección salieron de la campaña "
+            f"con las etiquetas de entrenamiento contaminadas a "
+            f"ρ={config.NOISE_REPORTED:g}; las `{NOISE_CLEAN}`, del material "
+            f"limpio. La tasa va acá y no en la tabla: es una sola para toda la "
+            f"sección, y escrita por fila sería el mismo hecho tantas veces como "
+            f"filas haya.",
+        "noise.floor.source":
+            f"**Buscamos ver si el ruido perjudica incluso al método que no "
+            f"adapta, en fuente.** El piso entrena sólo con etiquetas de fuente, "
+            f"así que una caída acá no puede venir de ningún término de "
+            f"adaptación -- mide cuánto empeora la propia representación cuando "
+            f"el material de entrenamiento está contaminado. El piso de la "
+            f"lectura sigue siendo el azar de {clase:.3f}, y lo esperable es que "
+            f"esta curva caiga menos que la de destino: la fuente nunca se "
+            f"contaminó a sí misma, sólo el rótulo que la acompaña.",
+        "noise.floor.target":
+            f"**Buscamos ver si el ruido perjudica incluso al método que no "
+            f"adapta, en destino.** La misma pregunta que la curva de fuente, "
+            f"sobre el dominio que el piso nunca ve durante el entrenamiento: "
+            f"si ni siquiera el destino de un método que no adapta se mueve con "
+            f"el ruido, la contaminación no está llegando a la representación "
+            f"en absoluto. El piso de la lectura sigue siendo el azar de "
+            f"{clase:.3f}.",
+        "latent.grid.clean":
+            "**Buscamos ver si las clases se mezclan entre dominios y siguen "
+            "separadas entre sí, sobre material limpio.** Un panel por método, "
+            "el espacio original primero: «alineado» no se ve sin un «no "
+            "alineado» al lado, que es lo que el primer panel de la fila da.",
+        "latent.grid.noisy":
+            "**Buscamos cuánta de la mezcla entre clases que se veía en limpio "
+            "sobrevive cuando el entrenamiento se ensucia.** La misma rejilla, "
+            "sobre el material contaminado: lo que importa acá no es el panel "
+            "por sí solo sino la comparación con la rejilla limpia de arriba.",
+        "correspondence.grid.clean":
+            "**Buscamos que el triángulo destacado caiga entre círculos de su "
+            "mismo color, en material limpio**, y que eso pase más en la "
+            "columna con término local que en la de al lado -- esa comparación "
+            "es la razón de que el piso, la versión sin término local y la "
+            "completa compartan la misma fila.",
+        "correspondence.grid.noisy":
+            "**Buscamos si la correspondencia local sobrevive al ruido mejor "
+            "que la global.** La misma figura, sobre el material contaminado, "
+            "leída junto a la limpia y nunca por separado.",
         "floors":
             "**Buscamos que la diferencia entre los dos pisos sea menor que la que "
             "los separa de cualquier método con adaptación.** Si lo es, la segunda "
@@ -398,9 +505,8 @@ def objective(key: str, markdown: bool = True) -> str:
             f"tau_att={config.ATTENTION_TEMPERATURE:g}) el piso que Eq. (16) puede "
             f"alcanzar depende de cuántas instancias el brazo reparte entre sí: "
             f"{MIN_ATTENTION_SPREAD:.3f} sobre una bolsa completa de "
-            f"{config.INSTANCES_PER_BAG} instancias, "
-            f"{MIN_ATTENTION_SPREAD_BY_ARM.get('SK', MIN_ATTENTION_SPREAD):.3f} sobre "
-            f"las {config.SELECT_K} que seleccionan SU/SA/SK -- nunca 0.000, en "
+            f"{config.INSTANCES_PER_BAG} instancias"
+            f"{_selecting_arms_floor_clause()} -- nunca 0.000, en "
             f"ningún caso: r21 acota el logit en 2 + gamma en el párrafo que sigue "
             f"a la Ec. (16), así que el rango alcanzable es angosto y pegado a uno. "
             f"r21 l.501 dice además que un peso casi uniforme es lo esperado en una "
@@ -896,21 +1002,31 @@ def render(runs: Iterable[dict], metric: str, reduction: dict,
     mismo hecho repetido; el número lo dice el encuadre de la sección —
     `objective("noise")`, calculado de la declaración — una sola vez.
 
-    Y se niega de plano ante una dimensión declarada `perRun`. `render_per_run`
-    explica por qué ninguna media de `seconds`/`peakMiB` es defendible; sin esa
-    guarda el argumento vivía en un docstring que la función de al lado no lee,
-    y agrupar quedaba a un `else` de distancia. Un promedio que la declaración
-    prohíbe se imprime igual de convincente que uno que permite.
+    Y se niega de plano ante una dimensión declarada `perRun`. `seconds` y
+    `peakMiB` -- las dos que fueron `perRun` -- ya no están en la declaración
+    ni en el objetivo de este informe; la guarda queda igual, general, para
+    cualquier dimensión que una declaración futura marque `perRun`. Un
+    promedio que la declaración prohíbe se imprime igual de convincente que
+    uno que permite.
 
     La negativa ya no está escrita acá sino en `cells`, por donde esta función
     pasa antes de imprimir nada. Repetida en las dos era una guarda que no se
     podía probar: quitarla de acá dejaba la suite entera en verde, porque la de
     abajo la tapaba — un candado idéntico a uno vivo y que no cierra nada.
+
+    **Lleva un puesto por bloque, calculado con `rank_groups` y nunca a mano.**
+    Cada bloque -- `sin` y, si lo hay, `con` -- se ordena y se reparte puestos
+    por su cuenta: el material limpio y el contaminado no comparten error
+    estándar, así que compartir puesto en uno no dice nada sobre el otro. Dos
+    brazos comparten puesto cuando la brecha entre sus promedios no supera su
+    error estándar combinado, y ahí lo dice el propio número: dos filas con el
+    mismo puesto son, con la evidencia de esta corrida, indistinguibles.
     """
     labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
     title, unit = SPANISH.get(metric, (metric, ""))
     seeds = reduction.get("seeds", config.SEEDS)
     n_seeds = len(seeds) if isinstance(seeds, (list, tuple)) else int(seeds or 0)
+    better = config.DIMENSIONS.get(metric, config.HIGHER)
 
     # Sin encabezado propio: qué mide esta tabla lo dice el párrafo de arriba, y
     # bajo qué límites corrió lo dice el sello, una vez, antes de todo.
@@ -922,7 +1038,25 @@ def render(runs: Iterable[dict], metric: str, reduction: dict,
         if nivel is not None:
             bloques.append((NOISE_DIRTY, table(nivel["runs"], metric)))
 
-    rows = [dict(row, noise=ruido) for ruido, filas in bloques for row in filas]
+    return _render_ranked_blocks(bloques, metric, labels, better, markdown, note=nota)
+
+
+def _render_ranked_blocks(bloques: list[tuple[str, list[dict]]], metric: str,
+                          labels: list[str], better: str | None,
+                          markdown: bool = False, note: str | None = None,
+                          row_header: str = "Método") -> str:
+    """El cuerpo compartido de toda tabla de dos bloques con puesto por bloque.
+
+    Extraído de `render` para que `render` (por brazo declarado) y una
+    comparación por mecanismo de atención (sección 4, por nombre de mecanismo
+    y no por brazo) impriman exactamente la misma forma sin duplicar el
+    formato: una cantidad, una manera de mostrarla.
+    """
+    rows = []
+    for ruido, filas in bloques:
+        puestos = rank_groups(filas, better) if better in (config.HIGHER, config.LOWER) else {}
+        for row in filas:
+            rows.append(dict(row, noise=ruido, place=puestos.get(row["arm"])))
 
     decimals = 1 if metric in PERCENT else 2
 
@@ -932,7 +1066,10 @@ def render(runs: Iterable[dict], metric: str, reduction: dict,
         return (f"{_scaled(entry['mean'], metric):.{decimals}f} ± "
                 f"{_scaled(entry['stdev'], metric):.{decimals}f}")
 
-    columns = [NOISE_COLUMN, "Método"] + labels + ["Prom."]
+    def place_cell(row) -> str:
+        return "—" if row["place"] is None else str(row["place"])
+
+    columns = [NOISE_COLUMN, row_header] + labels + ["Prom.", "Puesto"]
     if markdown:
         lines = ["| " + " | ".join(columns) + " |",
                  "|" + "|".join(["---"] * len(columns)) + "|"]
@@ -940,17 +1077,20 @@ def render(runs: Iterable[dict], metric: str, reduction: dict,
             values = [cell(row["byTransfer"][label]) for label in labels]
             lines.append("| " + " | ".join(
                 [row["noise"], f"`{row['name']}`", *values,
-                 f"**{_scaled(row['avg'], metric):.{decimals}f}**"]) + " |")
-        return _with_note(lines, nota)
+                 f"**{_scaled(row['avg'], metric):.{decimals}f}**",
+                 place_cell(row)]) + " |")
+        return _with_note(lines, note)
 
     width = max(14, max((len(r["name"]) for r in rows), default=14) + 2)
-    lines = [f"{NOISE_COLUMN:<{_NOISE_WIDTH}}{'Método':<{width}}"
-             + "".join(f"{label:>16}" for label in labels) + f"{'Prom.':>10}"]
+    lines = [f"{NOISE_COLUMN:<{_NOISE_WIDTH}}{row_header:<{width}}"
+             + "".join(f"{label:>16}" for label in labels)
+             + f"{'Prom.':>10}{'Puesto':>8}"]
     for row in rows:
         values = "".join(f"{cell(row['byTransfer'][label]):>16}" for label in labels)
         lines.append(f"{row['noise']:<{_NOISE_WIDTH}}{row['name']:<{width}}{values}"
-                     + f"{_scaled(row['avg'], metric):>10.{decimals}f}")
-    return _with_note(lines, nota)
+                     + f"{_scaled(row['avg'], metric):>10.{decimals}f}"
+                     + f"{place_cell(row):>8}")
+    return _with_note(lines, note)
 
 
 def conclusion(runs: Iterable[dict], metric: str, reduction: dict) -> str:
@@ -1002,9 +1142,13 @@ def conclusion(runs: Iterable[dict], metric: str, reduction: dict) -> str:
              + ("sin distancia apreciable entre ellos." if vanishes(spread)
                 else f"a {show(spread)} de distancia.")]
 
-    # Cada método completo contra su propio piso, que es la única lectura que
+    # Cada brazo adaptado contra su propio piso, que es la única lectura que
     # separa lo que aporta la adaptación de lo que aporta la representación.
-    for arm, floor in (("G", "B"),):
+    # `config.FLOOR_OF` entero y no un par escrito a mano: qué brazo es "el
+    # completo" es una lectura de la declaración de hoy, y una declaración que
+    # cambie de arms no debe obligar a tocar esta función para seguir siendo
+    # correcta.
+    for arm, floor in sorted(config.FLOOR_OF.items()):
         pair = (config.NAME_OF[arm], config.NAME_OF[floor])
         if pair[0] in by_name and pair[1] in by_name:
             delta = by_name[pair[0]]["avg"] - by_name[pair[1]]["avg"]
@@ -1023,348 +1167,120 @@ def conclusion(runs: Iterable[dict], metric: str, reduction: dict) -> str:
     return " ".join(lines)
 
 
-# ----------------------------------------------------------------- los peldaños
+# ------------------------------------------------- mecanismos de atención
 
-def rung_name(left: str, right: str) -> str:
-    """`Baseline → MIL-Baseline`, no `A->B`. Un identificador no es un nombre."""
-    return f"{config.NAME_OF.get(left, left)} → {config.NAME_OF.get(right, right)}"
+#: La ruta donde vive el barrido de mecanismos, declarada acá porque `render_
+#: mechanisms` y la celda del cuaderno tienen que nombrar el mismo archivo. No
+#: hay productor todavía -- ningún módulo de `wiring`/`harness` corre el
+#: método completo bajo un mecanismo de atención distinto del propio -- así
+#: que esta ruta puede no existir nunca, y eso se reporta y no se disimula.
+MECHANISM_RECORD = "Results/Benchmark/attention_mechanisms.json"
 
 
-def render_rungs(summary: dict, metric: str, rate: float | None = None,
-                 markdown: bool = False) -> str:
-    """Un peldaño por fila, una transferencia por columna: la diferencia medida.
+def mechanism_table(runs: Iterable[dict], metric: str, mechanisms: list[str]) -> list[dict]:
+    """Como `table`, pero la fila es un mecanismo de atención y no un brazo declarado.
 
-    Es la misma forma que la tabla de niveles, con el mismo orden de lectura. La
-    diferencia se resta en el orden en que el peldaño se lee — izquierda menos
-    derecha — así que un valor **negativo** significa que el de la derecha quedó
-    por encima. El nombre del peldaño dice `izquierda → derecha`, y restar al revés
-    obligaba a invertir mentalmente cada celda contra el título de su propia fila.
-
-    **Con `rate` lleva los dos materiales**: el bloque `sin` primero, el `con`
-    después, con la columna `Ruido` adelante. Es la tabla donde más se nota, y
-    por eso la gemela `render_rungs_at` era la más difícil de defender: cada
-    peldaño resta dos brazos que difieren en una sola cosa, y leer si el
-    mecanismo aguanta la contaminación era ir y volver entre dos tablas
-    separadas por un párrafo. Ahora es bajar un bloque en la misma columna.
-
-    No pasa por `cells`: lee la grilla ya reducida, así que la negativa a agrupar
-    una dimensión `perRun` tiene que decirse acá. Y hace falta de verdad — en una
-    corrida de una sola máquina `harness.summarize` promedia **todas** las
-    dimensiones declaradas, `seconds` incluida, así que sin esto la resta de dos
-    medias prohibidas salía impresa sin que nada fallara. Se dice una vez y
-    antes de cargar nada: el bloque contaminado entra por la misma puerta.
+    La sección 4 compara MECANISMOS dentro del único brazo completo -- nunca
+    un id de `config.ARMS` -- así que lee `run["mechanism"]` en vez de
+    `run["arm"]`, y el orden de las filas es el que `mechanisms` declare: el
+    nombre de cada mecanismo lo trae el propio registro, nunca esta función.
     """
-    _refuse_pooling(metric)
-    title, unit = SPANISH.get(metric, (metric, ""))
-
-    nota = None
-    resumenes = [(NOISE_CLEAN, summary)]
-    if rate is not None:
-        nivel, nota = _level_or_note(rate)
-        if nivel is not None:
-            resumenes.append((NOISE_DIRTY, nivel["summary"]))
-
-    labels, rows = [], []
-    for ruido, resumen in resumenes:
-        grid = resumen["grid"]
-        suyas = [t for t in [f"{s}->{d}" for s, d in config.VERDICT_TRANSFERS]
-                 if t in grid]
-        labels += [l for l in suyas if l not in labels]
-        for left, right, reading in config.LADDER:
-            values = {}
-            for label in suyas:
-                cell = grid[label]
-                if left in cell and right in cell:
-                    values[label] = (cell[left][metric]["mean"]
-                                     - cell[right][metric]["mean"])
-            if not values:
-                continue
-            rows.append({"noise": ruido, "name": rung_name(left, right),
-                         "reading": reading, "values": values,
-                         "avg": sum(values.values()) / len(values),
-                         # Las veces que ganó la izquierda, que es el lado positivo
-                         # de la misma resta que imprime la fila. Contar el otro lado
-                         # obligaría a invertir el signo contra el título de la columna.
-                         "leans": sum(1 for v in values.values() if v > 0)})
-    if not rows:
-        return _with_note(["(sin peldaños medibles)"], nota)
-
-    def show(value) -> str:
-        return "—" if value is None else f"{_scaled(value, metric):+.1f}"
-
-    # `a favor` se queda y no es un extra: cuenta en cuántas transferencias se
-    # inclinó para el mismo lado, y con este piso de repeticiones es lo único que
-    # carga peso. Seis acuerdos y tres contra tres promedian parecido y dicen
-    # cosas opuestas; sin esta columna el promedio no se puede leer.
-    columns = [NOISE_COLUMN, "Peldaño"] + labels + ["Prom.", "gana izq."]
-    if markdown:
-        lines = ["| " + " | ".join(columns) + " |",
-                 "|" + "|".join(["---"] * len(columns)) + "|"]
-        for row in rows:
-            lines.append("| " + " | ".join(
-                [row["noise"], row["name"],
-                 *(show(row["values"].get(l)) for l in labels),
-                 f"**{show(row['avg'])}**",
-                 f"{row['leans']}/{len(row['values'])}"]) + " |")
-        return _with_note(lines, nota)
-
-    width = max(len(r["name"]) for r in rows) + 2
-    lines = [f"{NOISE_COLUMN:<{_NOISE_WIDTH}}{'Peldaño':<{width}}"
-             + "".join(f"{l:>10}" for l in labels)
-             + f"{'Prom.':>10}{'gana izq.':>11}"]
-    for row in rows:
-        lines.append(f"{row['noise']:<{_NOISE_WIDTH}}{row['name']:<{width}}"
-                     + "".join(f"{show(row['values'].get(l)):>10}" for l in labels)
-                     + f"{show(row['avg']):>10}"
-                     + f"{row['leans']}/{len(row['values']):<8}")
-        lines.append(f"{'':<{_NOISE_WIDTH + width}}    {row['reading']}")
-    return _with_note(lines, nota)
-
-
-#: Prepended to every `render_per_run` table, in both formats — the one place a
-#: reader who skips straight to the numbers still meets the reason there is no
-#: `±` column here, before they can mistake a per-machine row for a pooled one.
-_PER_RUN_NOTE = ("cada fila es una corrida en su propia máquina, nunca "
-                  "promediada con otra: no hay una columna de método que hable "
-                  "por todas.")
-
-
-def render_per_run(grid_per_run: dict, metric: str, markdown: bool = False) -> str:
-    """Every `perRun` reading, one row per run, tagged with its own environment.
-
-    A `perRun` dimension has no mean this report is willing to print: the
-    replication that created the category (see `shards.merge`) found no value
-    of `seconds`/`peakMiB` stable enough to stand for the method, or even for
-    one fixed machine across two of its own runs. Pooling `n` readings into a
-    single `mean ± stdev`, the way `render` does for a `poolable` dimension,
-    would print a number that describes none of the runs behind it and reads
-    exactly as rigorous as one that does — the dispersion column makes it look
-    more trustworthy, not less misleading.
-
-    So every row here names the run that produced it instead: its own
-    environment and seed. There is no aggregate row and no `±` anywhere in the
-    output — a reader who wants a summary has to build one themselves, in full
-    view of how many machines and readings it would be standing in for.
-    """
-    title, unit = SPANISH.get(metric, (metric, ""))
-    decimals = 1 if metric in PERCENT else 2
-    rows = []
-    for transfer, cell in grid_per_run.items():
-        for arm in config.ARM_ORDER:
-            readings = cell.get(arm, {}).get(metric)
-            if not readings:
-                continue
-            for reading in sorted(readings, key=lambda r: (r["env"], r["seed"])):
-                rows.append({
-                    "arm": config.NAME_OF.get(arm, arm),
-                    "transfer": transfer,
-                    "env": reading["env"],
-                    "seed": reading["seed"],
-                    "value": _scaled(reading["value"], metric),
-                })
-    if not rows:
-        return ("Sin corridas por máquina para esta dimensión: el registro no "
-                "trae `gridPerRun`, que sólo lo escribe una campaña repartida "
-                "entre varias máquinas. No está vacía: no existe.")
-
-    note = _notes_block([_PER_RUN_NOTE], markdown)
-    columns = ["Método", "Transferencia", "Entorno", "Semilla", f"{title} ({unit})" if unit else title]
-    if markdown:
-        lines = [note, "",
-                 "| " + " | ".join(columns) + " |",
-                 "|" + "|".join(["---"] * len(columns)) + "|"]
-        for row in rows:
-            lines.append("| " + " | ".join([
-                f"`{row['arm']}`", row["transfer"], f"`{row['env']}`",
-                str(row["seed"]), f"{row['value']:.{decimals}f}"]) + " |")
-        return "\n".join(lines)
-
-    width = max(14, max(len(r["arm"]) for r in rows) + 2)
-    lines = [note, "",
-             f"{'Método':<{width}}{'Transferencia':<16}{'Entorno':<16}"
-             f"{'Semilla':>8}{columns[-1]:>16}"]
-    for row in rows:
-        lines.append(f"{row['arm']:<{width}}{row['transfer']:<16}{row['env']:<16}"
-                     f"{row['seed']:>8}{row['value']:>16.{decimals}f}")
-    return "\n".join(lines)
-
-
-_PER_RUN_SUMMARY_NOTE = (
-    "la mediana entre semillas DENTRO de un entorno, con su rango min-max; "
-    "el eje colapsado es la semilla y nada más --- método, transferencia y "
-    "entorno siguen siendo claves. Todas las corridas están en el registro")
-
-
-def render_per_run_summary(grid_per_run: dict, metric: str,
-                           rate: float | None = None,
-                           markdown: bool = False) -> str:
-    """La forma inline de una dimensión `perRun`: mediana y rango, no cada corrida.
-
-    `render_per_run` deja una fila por corrida y esa es la forma correcta para el
-    REGISTRO, que existe para tenerlas todas. Adentro del cuaderno son treinta
-    filas por celda que nadie lee, y el lector termina calculando la mediana de
-    cabeza --- que es exactamente el resumen que el docstring de al lado le pide
-    construir «a la vista de cuántas máquinas». Acá se lo construye, y la vista
-    se conserva.
-
-    **No llama a `refuse`, y es la única función de este módulo que agrupa sin
-    hacerlo.** Escrito fuerte porque una función que se saltea la guarda es
-    justamente lo que esta guarda existe para impedir. Lo que la hace defendible
-    son dos cosas medidas, no argumentadas: el entorno es una CLAVE y no se
-    colapsa nunca ---la mitad de por qué la dimensión es `perRun` es que la
-    máquina decide el número--- y lo que se imprime es la mediana con su min-max
-    de verdad, no un `mean ± stdev` que insinúa una estabilidad entre corridas
-    que nadie midió. Las dos tienen su prueba.
-
-    Y colapsa UN eje. El acuerdo dice «colapsando el eje de semillas», en
-    singular, y juntar además las transferencias daría una tabla con la misma
-    forma y otro significado: seis corridas de distinta dificultad leídas como
-    una. Por eso la transferencia sigue siendo una clave aunque el acuerdo hable
-    de «método y entorno» --- es lo que hace verdadera su propia cláusula.
-
-    **Con `rate` suma el bloque `con`**, que es el otro material y no otro eje
-    colapsado: el ruido es una columna más, adelante, exactamente como el entorno
-    es una columna. La gemela `render_per_run_summary_at` cargaba el registro
-    contaminado y volvía a llamar acá; existía porque `render_at` --- que sí
-    promedia --- no podía imprimir esta dimensión, y el chequeo de duplicación
-    no tenía cómo ver que los datos eran otros. Con una sola llamada no hay dos
-    renderizaciones que confundir.
-
-    `gridPerRun` sólo existe en el resumen de una campaña distribuida. Una
-    corrida de una sola máquina no tiene grilla por corrida, y lo honesto ahí es
-    ninguna fila y no una media que la declaración prohíbe.
-    """
-    title, unit = SPANISH.get(metric, (metric, ""))
-    decimals = 1 if metric in PERCENT else 2
-
-    nota = None
-    bloques = [(NOISE_CLEAN, grid_per_run)]
-    if rate is not None:
-        nivel, nota = _level_or_note(rate)
-        if nivel is not None:
-            bloques.append((NOISE_DIRTY, nivel["summary"].get("gridPerRun") or {}))
+    runs = list(runs)
+    grid: dict[tuple[str, str], list[float]] = {}
+    for run in runs:
+        grid.setdefault((run["mechanism"], run["transfer"]), []).append(float(run[metric]))
+    labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
 
     rows = []
-    for ruido, grilla in bloques:
-        grouped: dict[tuple, list[float]] = {}
-        for transfer, cell in (grilla or {}).items():
-            for arm in config.ARM_ORDER:
-                for reading in cell.get(arm, {}).get(metric) or []:
-                    grouped.setdefault(
-                        (config.NAME_OF.get(arm, arm), transfer, reading["env"]),
-                        []).append(_scaled(reading["value"], metric))
-        for (arm, transfer, env), values in grouped.items():
-            ordered = sorted(values)
-            middle = len(ordered) // 2
-            median = (ordered[middle] if len(ordered) % 2
-                      else (ordered[middle - 1] + ordered[middle]) / 2)
-            rows.append({"noise": ruido, "arm": arm, "transfer": transfer,
-                         "env": env, "n": len(ordered), "median": median,
-                         "min": ordered[0], "max": ordered[-1]})
+    for mechanism in mechanisms:
+        present = [spread(grid[(mechanism, label)]) for label in labels
+                   if (mechanism, label) in grid]
+        if not present:
+            continue
+        raw = [value for label in labels for value in grid.get((mechanism, label), [])]
+        _, se = _mean_se(raw)
+        rows.append({
+            "arm": mechanism,
+            "name": mechanism,
+            "byTransfer": {label: (spread(grid[(mechanism, label)])
+                                   if (mechanism, label) in grid else None)
+                          for label in labels},
+            "avg": sum(c["mean"] for c in present) / len(present),
+            "se": se,
+            "n": len(raw),
+        })
+    return rows
+
+
+def render_mechanisms(record: dict | None, metric: str, markdown: bool = False) -> str:
+    """Sección 4: un mecanismo de atención por fila, sobre el brazo completo.
+
+    `record` es `{"mechanisms": [...], "clean": [runs...], "noisy": [runs...]}`
+    -- cada `run` lleva `mechanism`, `transfer` y la métrica, exactamente como
+    un `run` de `runs.jsonl` lleva `arm` en su lugar. Sin registro, o sin la
+    clave `mechanisms`, se dice llanamente que el barrido no corrió: ningún
+    nombre de mecanismo (ABMIL publicado, ABMIL con compuerta, max, mean, o el
+    propio de este método) está escrito en este módulo, así que no hay nada
+    que esta función pueda inventar para llenar la tabla.
+    """
+    if not record or not record.get("mechanisms"):
+        return ("Sin barrido de mecanismos de atención: la comparación no "
+                "corrió todavía. No es una tabla vacía: es que la corrida no "
+                "existe.")
+    mechanisms = list(record["mechanisms"])
+    better = config.DIMENSIONS.get(metric, config.HIGHER)
+    labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
+    bloques = [(NOISE_CLEAN, mechanism_table(record.get("clean") or [], metric, mechanisms))]
+    if record.get("noisy"):
+        bloques.append((NOISE_DIRTY, mechanism_table(record["noisy"], metric, mechanisms)))
+    return _render_ranked_blocks(bloques, metric, labels, better, markdown,
+                                 row_header="Mecanismo")
+
+
+def conclusion_mechanisms(record: dict | None, metric: str) -> str:
+    """Cuál mecanismo queda adelante, calculado de `render_mechanisms` y no escrito a mano."""
+    if not record or not record.get("mechanisms"):
+        return ("Sin barrido: no hay mecanismo que comparar todavía.")
+    mechanisms = list(record["mechanisms"])
+    rows = mechanism_table(record.get("clean") or [], metric, mechanisms)
     if not rows:
-        return _with_note(
-            ["Sin corridas por máquina para esta dimensión: el registro no "
-             "trae `gridPerRun`, que sólo lo escribe una campaña repartida "
-             "entre varias máquinas. No está vacía: no existe."], nota)
-
-    note = _notes_block([_PER_RUN_SUMMARY_NOTE], markdown)
-    reading = f"{title} ({unit})" if unit else title
-    columns = [NOISE_COLUMN, "Método", "Transferencia", "Entorno", "Semillas",
-               f"{reading}: mediana", "min", "max"]
-    if markdown:
-        lines = [note, "",
-                 "| " + " | ".join(columns) + " |",
-                 "|" + "|".join(["---"] * len(columns)) + "|"]
-        for row in rows:
-            lines.append("| " + " | ".join([
-                row["noise"], f"`{row['arm']}`", row["transfer"], f"`{row['env']}`",
-                str(row["n"]), f"{row['median']:.{decimals}f}",
-                f"{row['min']:.{decimals}f}", f"{row['max']:.{decimals}f}"]) + " |")
-        return _with_note(lines, nota)
-
-    width = max(14, max(len(r["arm"]) for r in rows) + 2)
-    lines = [note, "",
-             f"{NOISE_COLUMN:<{_NOISE_WIDTH}}{'Método':<{width}}"
-             f"{'Transferencia':<16}{'Entorno':<16}"
-             f"{'Semillas':>9}{'mediana':>12}{'min':>12}{'max':>12}"]
-    for row in rows:
-        lines.append(f"{row['noise']:<{_NOISE_WIDTH}}{row['arm']:<{width}}"
-                     f"{row['transfer']:<16}{row['env']:<16}"
-                     f"{row['n']:>9}{row['median']:>12.{decimals}f}"
-                     f"{row['min']:>12.{decimals}f}{row['max']:>12.{decimals}f}")
-    return _with_note(lines, nota)
+        return "El registro no trae corridas limpias: no hay nada que concluir."
+    better = config.DIMENSIONS.get(metric, config.HIGHER)
+    reverse = better == config.HIGHER
+    ordered = sorted(rows, key=lambda r: r["avg"], reverse=reverse)
+    best, worst = ordered[0], ordered[-1]
+    decimals = 1 if metric in PERCENT else 2
+    spread_value = abs(best["avg"] - worst["avg"])
+    return (f"En material limpio, el mecanismo que queda adelante es "
+            f"**{best['name']}**; el que queda atrás, {worst['name']}, a "
+            f"{_scaled(spread_value, metric):.{decimals}f}{'%' if metric in PERCENT else ''} "
+            f"de distancia.")
 
 
-def conclusion_per_run(metric: str) -> str:
-    """Why this section prints no best/worst, unlike `conclusion`.
+def conclusion_normalization(runs: Iterable[dict], key: str) -> str:
+    """Si la curva de `key` se quedó dentro de [0, 1) en toda esta corrida.
 
-    `render_per_run` already refuses to average; a conclusion that then
-    printed 'best average / worst average' over the same readings would take
-    back with prose exactly what the table just refused to claim with
-    numbers. There is nothing this function computes — the readings above are
-    the entire finding.
+    La única lectura que la sección 6 pide -- no cuál método tiene la curva
+    más baja, sino si la normalización que la Ec. (39) promete se sostiene.
+    Barre cada punto de cada trayectoria de cada corrida, así que un solo
+    paso de un solo brazo que se saliera del intervalo alcanza para que esta
+    conclusión lo diga.
     """
-    title, unit = SPANISH.get(metric, (metric, ""))
-    return (f"Sin conclusión: {title} no se promedia entre máquinas — cada "
-            f"corrida es la lectura de su propio entorno, no una propiedad del "
-            f"método ni de la máquina que la corrió. Ver la tabla de arriba, "
-            f"corrida por corrida.")
+    valores = [float(punto[key]) for run in runs for punto in run.get("curve", [])
+              if key in punto]
+    if not valores:
+        return "Sin puntos de curva para esta cantidad: no hay nada que comprobar."
+    bajo, alto = min(valores), max(valores)
+    if 0.0 <= bajo and alto < 1.0:
+        return (f"La curva se queda dentro de [0, 1) en toda esta corrida: "
+                f"mínimo {bajo:.4f}, máximo {alto:.4f}. La normalización se "
+                f"sostiene.")
+    return (f"La curva SALE de [0, 1) en esta corrida: mínimo {bajo:.4f}, "
+            f"máximo {alto:.4f}. Eso es el hallazgo, no un detalle de "
+            f"implementación.")
 
 
-def conclusion_rungs(summary: dict, metric: str) -> str:
-    """Qué peldaño se movió más y cuál coincidió en todas las transferencias.
-
-    Misma negativa que su tabla, y por separado: cada una llega a la grilla por
-    su cuenta. Proteger la tabla y dejar la conclusión abierta imprime en prosa
-    exactamente el promedio que la tabla acaba de negarse a mostrar.
-    """
-    _refuse_pooling(metric)
-    grid = summary["grid"]
-    labels = [t for t in [f"{s}->{d}" for s, d in config.VERDICT_TRANSFERS] if t in grid]
-    readings = []
-    for left, right, reading in config.LADDER:
-        values = [grid[l][left][metric]["mean"] - grid[l][right][metric]["mean"]
-                  for l in labels if left in grid[l] and right in grid[l]]
-        if values:
-            readings.append({"name": rung_name(left, right), "reading": reading,
-                             "left": config.NAME_OF.get(left, left),
-                             "right": config.NAME_OF.get(right, right),
-                             "avg": sum(values) / len(values),
-                             # Idem: las veces que ganó la izquierda.
-                             "leans": sum(1 for v in values if v > 0), "n": len(values)})
-    if not readings:
-        return "Sin peldaños medibles."
-
-    strongest = max(readings, key=lambda r: abs(r["avg"]))
-    unanimous = [r for r in readings if r["leans"] in (0, r["n"])]
-    # Quién quedó adelante, no cuánto se movió la resta. Un peldaño que "se movió
-    # 3.4" no dice de qué lado, y el lector termina reconstruyendo el signo contra
-    # el nombre de la fila — que es exactamente el trabajo que la conclusión existe
-    # para ahorrarle.
-    ahead = strongest["right"] if strongest["avg"] < 0 else strongest["left"]
-    behind = strongest["left"] if strongest["avg"] < 0 else strongest["right"]
-    lines = [f"El peldaño que más separa es **{strongest['name']}**: "
-             f"**{ahead}** queda "
-             f"{abs(_scaled(strongest['avg'], metric)):.1f} por encima de {behind}, "
-             f"y eso lee {strongest['reading']}."]
-    if unanimous:
-        # Los nombres, no sus valores: la tabla de arriba ya los imprimió, y
-        # repetirlos acá los pone en dos lugares que pueden separarse.
-        lines.append("Se inclinan igual en las " + str(readings[0]["n"]) +
-                     " transferencias: " + ", ".join(r["name"] for r in unanimous) +
-                     ".")
-    else:
-        lines.append("Ningún peldaño se inclina igual en todas las transferencias, "
-                     "que es lo que haría falta para leer algo de un solo sentido.")
-    if _stamp(summary["reduction"]):
-        lines.append("Con esta cantidad de repeticiones lo que carga peso es la "
-                     "coincidencia entre transferencias, no la magnitud: seis "
-                     "acuerdos y tres contra tres promedian parecido y dicen cosas "
-                     "distintas.")
-    return " ".join(lines)
-
-
-# --------------------------------------------------------------- fase dos
+# ----------------------------------------------------------------- lecturas anidadas
 
 def _reach(record: dict, path: str):
     """`geometry.ratio` dentro de una lectura anidada, o nada si el brazo no la tiene."""
@@ -1537,189 +1453,6 @@ def _agreement(differences: list[tuple[str, float]], tolerance: float) -> str:
     return (f"las transferencias no coinciden — {len(up)} a favor, {len(down)} en "
             f"contra, {len(flat)} planas ({detail}). Un promedio acá diría 'no hace "
             f"nada' y estaría tapando que una transferencia sí se movió")
-
-
-def paired_gains(runs: Iterable[dict], dimension: str) -> list[dict]:
-    """Cada método contra su propio piso, apareado dentro de cada transferencia.
-
-    Apareado y no crudo: una transferencia donde todos sacan 0.23 y otra donde
-    todos sacan 0.81 no son comparables sumadas, y la diferencia dentro de cada
-    una cancela esa dificultad. Cada par comparte transferencia **y** semilla, o
-    sea el mismo sorteo y la misma partición.
-
-    Tres resúmenes, y ninguno alcanza solo:
-
-    * `mean` — puntos porcentuales, con su error **entre transferencias**. No es
-      el error de juntar los 180 pares: la transferencia es un escenario y no una
-      repetición, y agruparlos afirma una estabilidad entre escenarios que nadie
-      midió. Sobre esta campaña los dos difieren por un factor de tres.
-    * `pct` — la media de las ganancias relativas. Dice otra cosa y puede decirla
-      con el signo contrario: los pisos van de 23% a 81%, así que una pérdida de
-      cinco puntos sobre el piso más bajo pesa cuatro veces más como razón que
-      como diferencia. Sobre esta campaña la media de puntos da `+0.56` y la de
-      porcentajes `-3.61`. Se reportan las dos porque elegir una es elegir una
-      respuesta.
-    * `span` y el acuerdo — de cuánto a cuánto, y en cuántas transferencias gana,
-      pierde o empata. El rango es lo que frena a un lector que solo mira el
-      promedio: `de +15.1 a -5.5` se entiende en una lectura y ya avisa que la
-      media no es la historia.
-
-    Lee las corridas crudas sin pasar por `cells`, así que la negativa va acá
-    también. Apareado no es lo mismo que defendible: restar dos lecturas de
-    `seconds` dentro de una transferencia sigue promediando después entre las
-    seis, y `span` y `pct` son dos resúmenes más sobre lo mismo. Cubre a
-    `render_gains`, y con él a sus dos bloques: el contaminado entra por esta
-    misma puerta y no por una gemela con su propia guarda.
-    """
-    _refuse_pooling(dimension)
-    rows = runs if isinstance(runs, list) else list(runs)
-    idx = {(r["arm"], r["transfer"], r["seed"]): r for r in rows}
-    labels = [f"{a}->{b}" for a, b in config.VERDICT_TRANSFERS]
-
-    out = []
-    for arm, floor in config.FLOOR_OF.items():
-        per: dict[str, dict] = {}
-        for label in labels:
-            deltas, floors = [], []
-            for (a, t, seed), row in idx.items():
-                if a != arm or t != label:
-                    continue
-                base = idx.get((floor, t, seed))
-                if base is None or dimension not in row or dimension not in base:
-                    continue
-                deltas.append(100.0 * (float(row[dimension]) - float(base[dimension])))
-                floors.append(100.0 * float(base[dimension]))
-            if not deltas:
-                continue
-            mean, err = _spread_of(deltas)
-            base_mean = sum(floors) / len(floors)
-            per[label] = {"mean": mean, "error": err, "n": len(deltas),
-                          "pct": (100.0 * mean / base_mean) if base_mean else None,
-                          "verdict": ("gana" if mean > 2 * err else
-                                      "pierde" if mean < -2 * err else "empata")}
-        if not per:
-            continue
-        means = [c["mean"] for c in per.values()]
-        pcts = [c["pct"] for c in per.values() if c["pct"] is not None]
-        counted = collections.Counter(c["verdict"] for c in per.values())
-        out.append({
-            "arm": arm, "floor": floor, "cells": per,
-            "mean": sum(means) / len(means),
-            # Entre transferencias, nunca sobre los pares agrupados.
-            "error": _spread_of(means)[1],
-            "pct": (sum(pcts) / len(pcts)) if pcts else None,
-            "span": (max(means), min(means)),
-            "agreement": {k: counted.get(k, 0) for k in ("gana", "pierde", "empata")},
-            "transfers": len(per),
-        })
-    return out
-
-
-def _spread_of(values: list[float]) -> tuple[float, float]:
-    """Media y error estándar de la media. Con un solo valor el error es cero y
-    se devuelve como tal: es un hecho sobre la muestra, no un veredicto."""
-    n = len(values)
-    mean = sum(values) / n
-    if n < 2:
-        return mean, 0.0
-    var = sum((v - mean) ** 2 for v in values) / (n - 1)
-    return mean, math.sqrt(var) / math.sqrt(n)
-
-
-def render_gains(runs: Iterable[dict], dimension: str, title: str,
-                 rate: float | None = None, markdown: bool = False) -> str:
-    """La tabla de ganancias: cada método menos su propio piso.
-
-    Va después de la tabla de exactitud y no en lugar de ella. Aquella dice
-    dónde está cada método; esta dice qué agregó el término, que es la pregunta
-    que la primera no puede contestar porque los pisos de las dos familias están
-    separados por diecisiete puntos.
-
-    **Con `rate` lleva los dos materiales en una sola tabla**, el bloque `sin`
-    primero y el `con` después, con la columna `Ruido` adelante. La gemela
-    `render_gains_at` cargaba el registro contaminado y volvía a llamar acá;
-    existía sólo para que el chequeo de duplicación no leyera dos
-    renderizaciones del mismo número donde hay dos números distintos, y con una
-    sola llamada no queda nada que distinguir.
-
-    El título es uno solo, y el que corresponde: la sección ya no tiene dos
-    tablas a las que ponerles dos nombres. Cuánto ruido lo dice el encuadre de
-    la sección una vez, no una fila por vez.
-    """
-    nota = None
-    bloques = [(NOISE_CLEAN, paired_gains(runs, dimension))]
-    if rate is not None:
-        nivel, nota = _level_or_note(rate)
-        if nivel is not None:
-            bloques.append((NOISE_DIRTY, paired_gains(nivel["runs"], dimension)))
-
-    ordered = []
-    for ruido, filas in bloques:
-        for row in sorted(filas, key=lambda r: config.ARM_ORDER.index(r["arm"])):
-            ordered.append(dict(row, noise=ruido))
-    if not ordered:
-        return _with_note([f"(sin pares para {dimension})"], nota)
-    labels = [f"{a}->{b}" for a, b in config.VERDICT_TRANSFERS]
-
-    def cell(entry) -> str:
-        if entry is None:
-            return "—"
-        body = f"{entry['mean']:+.2f} ± {entry['error']:.2f}"
-        if entry["verdict"] != "empata":
-            body = f"**{body}**" if markdown else body
-        pct = "" if entry["pct"] is None else f"{entry['pct']:+.1f}%"
-        return f"{body}<br>{pct}" if markdown else f"{body}"
-
-    def summary(row) -> tuple[str, str, str]:
-        pct = "—" if row["pct"] is None else f"{row['pct']:+.2f}%"
-        hi, lo = row["span"]
-        # La misma regla que en las celdas. Poner la media siempre en negrita
-        # contradice la leyenda que las explica: el lector la aplica y lee como
-        # significativo un promedio que no lo es.
-        body = f"{row['mean']:+.2f} ± {row['error']:.2f}"
-        if markdown and abs(row["mean"]) > 2 * row["error"]:
-            body = f"**{body}**"
-        return (body, pct, f"de {hi:+.1f} a {lo:+.1f}")
-
-    def words(row) -> str:
-        ag, n = row["agreement"], row["transfers"]
-        return (f"gana en {ag['gana']} de {n}, pierde en {ag['pierde']}, "
-                f"empata en {ag['empata']}")
-
-    if markdown:
-        columns = [NOISE_COLUMN, "Método vs su piso"] + labels + [
-            "Media (pts)", "% medio", "Rango", "Acuerdo"]
-        lines = [f"**{title}**", "",
-                 "| " + " | ".join(columns) + " |",
-                 "|" + "|".join(["---"] * len(columns)) + "|"]
-        for row in ordered:
-            m, pct, span = summary(row)
-            lines.append("| " + " | ".join([
-                row["noise"],
-                f"`{config.NAME_OF[row['arm']]}` vs `{config.NAME_OF[row['floor']]}`",
-                *(cell(row["cells"].get(l)) for l in labels),
-                m, pct, span, words(row)]) + " |")
-        lines += ["", "En negrita lo que supera dos errores estándar. El error de "
-                      "la media es **entre transferencias**, no sobre los pares "
-                      "agrupados: la transferencia es un escenario y no una "
-                      "repetición. Los dos promedios pueden discrepar en el signo "
-                      "— el de puntos y el de porcentajes miden cosas distintas — "
-                      "y por eso van los dos."]
-        return _with_note(lines, nota)
-
-    width = max(len(f"{config.NAME_OF[r['arm']]} vs {config.NAME_OF[r['floor']]}")
-                for r in ordered) + 2
-    lines = [title, "",
-             f"{NOISE_COLUMN:<{_NOISE_WIDTH}}{'Método vs su piso':<{width}}"
-             + "".join(f"{l:>16}" for l in labels)
-             + f"{'Media':>16}{'% medio':>10}{'Rango':>20}  Acuerdo"]
-    for row in ordered:
-        m, pct, span = summary(row)
-        name = f"{config.NAME_OF[row['arm']]} vs {config.NAME_OF[row['floor']]}"
-        lines.append(f"{row['noise']:<{_NOISE_WIDTH}}{name:<{width}}"
-                     + "".join(f"{cell(row['cells'].get(l)):>16}" for l in labels)
-                     + f"{m:>16}{pct:>10}{span:>20}  {words(row)}")
-    return _with_note(lines, nota)
 
 
 def conclusion_geometry(readings: Iterable[dict]) -> str:
@@ -2151,6 +1884,104 @@ def conclusion_correspondence(scored: Iterable[dict],
     return " ".join(lines)
 
 
+def render_bag_neighbors(entries: Iterable[dict], markdown: bool = False) -> str:
+    """Por cada bolsa de destino (evaluación), sus 5 bolsas fuente más cercanas.
+
+    `entries` es lo que devuelve `latent.top_k_source_bags`: una lista de
+    `{"targetBag", "targetLabel", "neighbours": [{"sourceBag", "kernel",
+    "trueClass"}, ...]}`, ya en orden de cercanía. Cada vecino marca si es de
+    la clase verdadera, para leer de un vistazo si el top-5 de una bolsa es
+    mayormente de su propia clase o no.
+    """
+    entries = list(entries)
+    if not entries:
+        return ("Sin bolsas de evaluación medidas: no hay vecinos que mostrar. "
+                "No es una tabla vacía: es que esta lectura no corrió.")
+    columns = ["Bolsa destino", "Clase", "Vecinos fuente (kernel, clase)"]
+
+    def vecino(n) -> str:
+        marca = "✓" if n["trueClass"] else "✗"
+        return f"{n['sourceBag']} ({n['kernel']:.3f}, {marca})"
+
+    if markdown:
+        lines = ["| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for entry in entries:
+            vecinos = ", ".join(vecino(n) for n in entry["neighbours"])
+            lines.append(f"| {entry['targetBag']} | {entry['targetLabel']} | {vecinos} |")
+        lines += ["", "✓ marca un vecino de la misma clase que la bolsa de destino; "
+                      "✗ de otra. El número entre paréntesis es el kernel de bolsa "
+                      "de la Sección 3, no una distancia -- más alto es más cerca."]
+        return "\n".join(lines)
+
+    lines = [f"{'Bolsa destino':<15}{'Clase':<8}Vecinos fuente (kernel, clase)"]
+    for entry in entries:
+        vecinos = ", ".join(vecino(n) for n in entry["neighbours"])
+        lines.append(f"{entry['targetBag']:<15}{entry['targetLabel']:<8}{vecinos}")
+    return "\n".join(lines)
+
+
+def conclusion_bag_neighbors(entries: Iterable[dict]) -> str:
+    """Qué fracción del top-5 de cada bolsa de destino es de su propia clase."""
+    entries = list(entries)
+    if not entries:
+        return "Sin bolsas medidas: no hay nada que concluir."
+    total = sum(len(entry["neighbours"]) for entry in entries)
+    correct = sum(1 for entry in entries for n in entry["neighbours"] if n["trueClass"])
+    per_bag = [sum(1 for n in entry["neighbours"] if n["trueClass"]) / len(entry["neighbours"])
+              for entry in entries if entry["neighbours"]]
+    all_correct = sum(1 for share in per_bag if share == 1.0)
+    none_correct = sum(1 for share in per_bag if share == 0.0)
+    return (f"En {correct} de {total} vecinos (top-{len(entries[0]['neighbours'])}) el "
+            f"kernel eligió una bolsa fuente de la misma clase. "
+            f"{all_correct} de {len(per_bag)} bolsas de destino tienen el top-5 "
+            f"entero de su propia clase; {none_correct} no tienen ninguno.")
+
+
+def render_source_bag_usage(usage: dict, markdown: bool = False) -> str:
+    """Por cada bolsa fuente, cuántas bolsas de destino la usaron -- la tabla inversa.
+
+    `usage` es lo que devuelve `latent.source_bag_usage`: `{bolsa_fuente:
+    cuenta}`, con cuenta cero incluida. Ordenada de menor a mayor uso, porque
+    lo que esta tabla existe para exponer son las bolsas fuente que nadie usa,
+    y esas son las que hay que ver primero.
+    """
+    if not usage:
+        return ("Sin bolsas fuente medidas: no hay uso que mostrar. No es una "
+                "tabla vacía: es que esta lectura no corrió.")
+    ordered = sorted(usage.items(), key=lambda kv: (kv[1], kv[0]))
+    unused = sum(1 for _, count in ordered if count == 0)
+    columns = ["Bolsa fuente", "Bolsas destino que la usaron"]
+    if markdown:
+        lines = ["| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for bag, count in ordered:
+            lines.append(f"| {bag} | {count} |")
+        lines += ["", f"{unused} de {len(ordered)} bolsas fuente no aparecen en "
+                      f"el top-`k` de ninguna bolsa de destino."]
+        return "\n".join(lines)
+
+    lines = [f"{'Bolsa fuente':<14}Bolsas destino que la usaron"]
+    lines += [f"{bag:<14}{count}" for bag, count in ordered]
+    lines.append(f"\n{unused} de {len(ordered)} bolsas fuente no aparecen en el "
+                 f"top-`k` de ninguna bolsa de destino.")
+    return "\n".join(lines)
+
+
+def conclusion_source_bag_usage(usage: dict) -> str:
+    """Cuántas bolsas fuente quedan afuera de todo top-5, calculado y no leído a ojo."""
+    if not usage:
+        return "Sin bolsas fuente medidas: no hay nada que concluir."
+    ordered = sorted(usage.items(), key=lambda kv: kv[1])
+    unused = [bag for bag, count in ordered if count == 0]
+    most_used_bag, most_used_count = max(usage.items(), key=lambda kv: kv[1])
+    share = len(unused) / len(usage)
+    return (f"{len(unused)} de {len(usage)} bolsas fuente "
+            f"({share:.0%}) no aparecen en el top-`k` de ninguna bolsa de "
+            f"destino. La más usada es la bolsa {most_used_bag}, en el top-`k` "
+            f"de {most_used_count} bolsas de destino.")
+
+
 def conclusions(record: dict) -> dict:
     """Cada conclusión del informe, a partir de un registro y de nada más.
 
@@ -2169,13 +2000,11 @@ def conclusions(record: dict) -> dict:
     runs = record.get("runs")
     reduction = record.get("reduction") or {}
     if isinstance(runs, list) and runs:
-        # `seconds` estaba en esta lista y no volvió: la declaración lo llama
-        # `perRun` y `conclusion` ahora se niega, así que pedirlo acá no era una
-        # conclusión de más sino la única llamada del informe que todavía
-        # agrupaba lo prohibido — «mejor promedio / peor promedio» sobre unos
-        # segundos que no describen ni a una máquina consigo misma. Lo que el
-        # informe imprime en su lugar es `conclusion_per_run`, corrida por
-        # corrida. Los niveles que quedan son los que la declaración sí agrupa.
+        # `seconds` y `peakMiB` estaban en esta lista y no volvieron: eran las
+        # dos dimensiones `perRun` de la declaración, y `conclusion` se niega
+        # a agruparlas. La declaración de hoy ya no las lleva -- se retiraron
+        # del banco entero, no sólo de este informe --, así que lo que queda
+        # es lo que la declaración sí agrupa.
         for metric in ("sourceAccuracy", "targetAccuracy"):
             produced[f"niveles:{metric}"] = conclusion(runs, metric, reduction)
     # El panorama sigue en el registro y ya no se concluye. Promediar cada peldaño
@@ -2205,102 +2034,42 @@ def conclusions(record: dict) -> dict:
 
 # ------------------------------------------------------- el eje de contaminación
 
-def render_noise(metric: str, markdown: bool = False) -> str:
-    """Una fila por método, una columna por tasa de contaminación.
+def conclusion_noise_floor(metric: str, arms: list[str] | None = None) -> str:
+    """Cuánto cae la exactitud del piso entre el primer y el último nivel.
 
-    El eje que colapsa cada celda es transferencia y repetición a la vez, y se
-    dice acá porque la curva es función de la tasa y de nada más. Una tabla que
-    además variara qué transferencias promedia estaría leyendo dos ejes e
-    informando uno.
+    Abre el informe: mide si el ruido perjudica incluso al método que no
+    adapta. `arms=None` toma `sorted(set(config.FLOOR_OF.values()))` -- los
+    pisos declarados hoy, nunca un id escrito acá -- así que una declaración
+    con más de un piso concluye sobre todos, uno por frase.
     """
-    _refuse_pooling(metric)
     from MIL_CREDA_Benchmark import contamination as noise_axis
 
-    drawn = noise_axis.curve(metric)
-    if not drawn["rates"]:
-        return ("Ninguno de los niveles declarados dejó registro todavía, así que "
-                "no hay nada que tabular. No es una tabla vacía: es que la "
-                "campaña sobre este eje no corrió.")
-
-    decimals = 1 if metric in PERCENT else 2
-    columns = ["Método"] + [f"ρ={rate:g}" for rate in drawn["rates"]]
-    rows = [(config.NAME_OF.get(arm, arm),
-             [f"{_scaled(v, metric):.{decimals}f}" for v in drawn["series"][arm]])
-            for arm in drawn["arms"]]
-
-    if markdown:
-        lines = ["| " + " | ".join(columns) + " |",
-                 "|" + "|".join(["---"] * len(columns)) + "|"]
-        for name, values in rows:
-            lines.append("| " + " | ".join([f"`{name}`", *values]) + " |")
-        body = "\n".join(lines)
-    else:
-        width = max(14, max((len(n) for n, _ in rows), default=14) + 2)
-        lines = [f"{'Método':<{width}}" + "".join(f"{c:>12}" for c in columns[1:])]
-        for name, values in rows:
-            lines.append(f"{name:<{width}}" + "".join(f"{v:>12}" for v in values))
-        body = "\n".join(lines)
-
-    return body + _noise_gaps(drawn, markdown)
-
-
-def _noise_gaps(drawn: dict, markdown: bool) -> str:
-    """Lo que la tabla no pudo mostrar, dicho en vez de omitido.
-
-    Una tabla a la que le faltan niveles o brazos se ve completa. Un nivel que no
-    corrió y un brazo que corrió en unos niveles y no en otros son huecos de la
-    campaña, y callarlos deja una figura que parece cubrir el eje entero.
-    """
-    notes = []
-    if drawn["missing"]:
-        faltan = ", ".join(f"ρ={r:g}" for r in drawn["missing"])
-        notes.append(f"Niveles declarados que todavía no corrieron: {faltan}.")
-    if drawn["dropped"]:
-        brazos = ", ".join(config.NAME_OF.get(a, a) for a in drawn["dropped"])
-        notes.append(
-            f"Brazos ausentes de al menos un nivel y por eso fuera de la tabla: "
-            f"{brazos}. Una serie con un hueco al lado de una completa difiere en "
-            f"cuántos puntos lleva, y la vista lee densidad como cobertura.")
-    return _notes_block(notes, markdown) if notes else ""
-
-
-def conclusion_noise(metric: str) -> str:
-    """Quién aguanta y quién no, calculado sobre la caída y no sobre el nivel.
-
-    La lectura que importa no es quién puntúa más alto —eso ya lo dice la tabla
-    limpia— sino cuánto pierde cada uno al ensuciarse el material, y si el orden
-    entre métodos sobrevive. Un método que empieza arriba y cae hasta el azar no
-    mitiga nada; uno que empieza abajo y no se mueve tampoco, porque nunca estuvo
-    decidiendo.
-    """
     _refuse_pooling(metric)
-    from MIL_CREDA_Benchmark import contamination as noise_axis
-
-    rows = noise_axis.degradation(metric)
-    if not rows:
-        return ("Sin registro en el nivel limpio no hay caída que medir: la "
-                "referencia es la única tasa en la que nada se corrompió.")
-    if len(rows) < 2:
-        return ("Un solo brazo con registro en todos los niveles: una caída sin "
-                "otra contra la cual leerse no distingue el método del material.")
-
+    arms = sorted(set(config.FLOOR_OF.values())) if arms is None else list(arms)
+    if not arms:
+        return ("Ningún piso está declarado (`config.FLOOR_OF` está vacío): no "
+                "hay brazo sobre el que leer esta curva.")
+    rows = {row["arm"]: row for row in noise_axis.degradation(metric)}
+    present = [arm for arm in arms if arm in rows]
+    if not present:
+        return ("Sin registro en el eje de ruido para ningún piso declarado: la "
+                "curva no corrió todavía. No es una figura vacía: es que la "
+                "corrida no existe.")
     decimals = 1 if metric in PERCENT else 2
-    ordered = sorted(rows, key=lambda r: r["fall"])
-    firme, peor = ordered[0], ordered[-1]
-
-    limpio = sorted(rows, key=lambda r: r["clean"], reverse=True)
-    sucio = sorted(rows, key=lambda r: r["worst"], reverse=True)
-    cambio = ("el orden entre métodos se mantiene de punta a punta"
-              if [r["arm"] for r in limpio] == [r["arm"] for r in sucio]
-              else f"el orden cambia: en limpio encabeza `{limpio[0]['name']}` y "
-                   f"contaminado encabeza `{sucio[0]['name']}`")
-
-    rates = noise_axis.curve(metric)["rates"]
-    return (
-        f"Entre ρ={rates[0]:g} y ρ={rates[-1]:g}, `{firme['name']}` es el que menos "
-        f"pierde ({_scaled(firme['fall'], metric):.{decimals}f}) y `{peor['name']}` "
-        f"el que más ({_scaled(peor['fall'], metric):.{decimals}f}); {cambio}."
-    )
+    partes = []
+    for arm in present:
+        row = rows[arm]
+        partes.append(
+            f"**{row['name']}** cae de {_scaled(row['clean'], metric):.{decimals}f} "
+            f"a {_scaled(row['worst'], metric):.{decimals}f} "
+            f"({_scaled(row['fall'], metric):+.{decimals}f})")
+    faltan = [arm for arm in arms if arm not in rows]
+    cola = ""
+    if faltan:
+        nombres = ", ".join(config.NAME_OF.get(arm, arm) for arm in faltan)
+        cola = f" Sin registro para {nombres}."
+    return ("El ruido perjudica incluso al método que no adapta: "
+            + "; ".join(partes) + "." + cola)
 
 
 def conclusion_versus_clean(metric: str, rate: float) -> str:
@@ -2350,159 +2119,6 @@ def conclusion_versus_clean(metric: str, rate: float) -> str:
         f"pone los dos materiales en dos bloques; la resta entre ellos es lo "
         f"único que no dice."
     )
-
-
-def _diagnostic_record() -> "tuple[dict | None, bool | None]":
-    """El diagnóstico que rige: el de la corrida completa, y si no, el del ensayo.
-
-    Mismo respaldo que el resto del eje. Anclado a `Results/Noise` a secas leía
-    el árbol de la campaña completa mientras el ensayo escribía dos directorios
-    más allá, y la tabla salía vacía con el registro en disco.
-
-    **Se niega, y no avisa, sobre un sello vencido.** A diferencia de
-    `render_ceilings`/`conclusion_ceilings` --- que reportan una rejilla entera
-    de familias, algunas quizás vigentes --- este archivo es UNA medición sola
-    (`harness.search_ceilings(noise=...)`, corrida una vez) que compara un techo
-    re-buscado contra el de la campaña limpia. Un sello vencido acá no es una
-    familia entre varias que siguen siendo válidas: es la única medición que el
-    archivo contiene, así que no hay nada que este lector pueda mostrar de forma
-    parcialmente confiable. Toda función que lee este archivo pasa por acá, así
-    que las tres --- `diagnostic_source_note`, `render_diagnostic`,
-    `conclusion_diagnostic` --- se niegan igual: un aviso visible sobre un
-    número que de todos modos se imprime no sería mejor que negarse cuando el
-    número entero describe una medición que ya no corresponde a este `config`.
-    """
-    import json
-
-    for pilot in (False, True):
-        path = config.noise_axis_for(pilot) / "diagnostic.json"
-        if path.exists():
-            record = json.loads(path.read_text(encoding="utf-8"))
-            drift = ceiling_record.stamp_drift(record)
-            if drift:
-                raise SystemExit(
-                    f"refusing to read {path}: stamped under a revision or "
-                    f"hyperparameters the current config no longer carries: "
-                    f"{sorted(drift)}.\n"
-                    "  Re-run `step --step noise-diagnostic` under today's "
-                    "config, or delete the stale record to measure again."
-                )
-            return record, pilot
-    return None, None
-
-
-def diagnostic_source_note() -> str:
-    """De cuál de los dos árboles salió el diagnóstico, en una línea.
-
-    Se escribe siempre y no sólo cuando es un ensayo, por la misma razón que
-    `contamination.source_note`: un aviso que aparece únicamente en el caso malo
-    no le enseña a nadie qué es lo que vigila, y la primera vez que falta se lee
-    como que no había nada que avisar.
-
-    Lee por `_diagnostic_record` y nunca vuelve a recorrer los dos árboles: una
-    segunda ortografía de esa preferencia es exactamente lo que queda viejo
-    cuando una de las dos cambia, y las dos mitades ---la tabla y su
-    procedencia--- dirían cosas distintas sobre el mismo archivo.
-    """
-    record, pilot = _diagnostic_record()
-    if record is None:
-        return ("**Sin diagnóstico.** Ni corrida completa ni ensayo: no hay de "
-                "qué declarar procedencia.")
-    if pilot:
-        return ("**Este diagnóstico es de un ENSAYO**, porque no hay corrida "
-                "completa que lo haya escrito. No se cita como resultado.")
-    return "Diagnóstico de la corrida completa."
-
-
-def render_diagnostic(markdown: bool = False) -> str:
-    """El techo que la campaña usó contra el techo re-buscado bajo contaminación.
-
-    Dos columnas y no una: el punto de la campaña es gratis —ya se midió— y el
-    re-buscado es lo único que este experimento paga. Una tabla con solo el
-    segundo no diría nada, porque la pregunta es la distancia entre los dos.
-    """
-    record, _ = _diagnostic_record()
-    if record is None:
-        return ("El diagnóstico todavía no corrió. No es una tabla vacía: es que "
-                "`step --step noise-diagnostic` no se ejecutó, y sin el techo "
-                "re-buscado no hay segundo punto contra el cual leer el primero.")
-
-    transfer = record.get("transfer", "")
-    buscado = record.get("searchedUnderNoise") or {}
-    limpio = ((record.get("cleanCeilingRun") or {}).get("reduction") or {})
-    por_familia_limpio = limpio.get("ceilingsByTransfer") or {}
-
-    filas = []
-    for familia, hallado in buscado.items():
-        bajo_ruido = (hallado.get("byTransfer") or {}).get(transfer)
-        de_campana = (por_familia_limpio.get(familia) or {}).get(transfer)
-        filas.append((familia,
-                      "—" if de_campana is None else f"{de_campana:.4g}",
-                      "—" if bajo_ruido is None else f"{bajo_ruido:.4g}"))
-    if not filas:
-        return ("El registro existe y no nombra ninguna familia: no hay techo "
-                "que comparar.")
-
-    columns = ["Familia", "techo de la campaña (limpio)",
-               f"techo re-buscado (ρ={record.get('level')})"]
-    if markdown:
-        lines = ["| " + " | ".join(columns) + " |",
-                 "|" + "|".join(["---"] * len(columns)) + "|"]
-        for familia, uno, otro in filas:
-            lines.append(f"| `{familia}` | {uno} | {otro} |")
-        return "\n".join(lines)
-    return "\n".join(f"{f:<12}{a:>28}{b:>28}" for f, a, b in
-                     [tuple(columns)] + filas)
-
-
-def conclusion_diagnostic() -> str:
-    """Si el coeficiente explica la caída, o si no la explica.
-
-    Lo que decide es una sola cosa: si el techo re-buscado bajo contaminación se
-    parece al de la campaña, entonces el coeficiente no era el problema y la
-    caída es del término. Si se mueve, el coeficiente estaba corto y la campaña
-    está subestimando al método -- que es el caso en el que vale reestructurar
-    para buscar techos por nivel.
-    """
-    record, _ = _diagnostic_record()
-    if record is None:
-        return ("Sin diagnóstico corrido no hay nada que concluir, y en "
-                "particular no se puede decir si una caída fue del término o "
-                "del coeficiente: bajo un techo fijo las dos se ven igual.")
-
-    transfer = record.get("transfer", "")
-    buscado = record.get("searchedUnderNoise") or {}
-    limpio = ((record.get("cleanCeilingRun") or {}).get("reduction") or {})
-    por_familia = limpio.get("ceilingsByTransfer") or {}
-
-    movidos, quietos, sin_par = [], [], []
-    for familia, hallado in buscado.items():
-        bajo_ruido = (hallado.get("byTransfer") or {}).get(transfer)
-        de_campana = (por_familia.get(familia) or {}).get(transfer)
-        if bajo_ruido is None or de_campana is None:
-            sin_par.append(familia)
-        elif de_campana and abs(bajo_ruido - de_campana) / de_campana > 0.5:
-            movidos.append(familia)
-        else:
-            quietos.append(familia)
-
-    partes = []
-    if movidos:
-        partes.append(
-            f"En {', '.join(f'`{f}`' for f in movidos)} el techo se mueve al "
-            f"buscarlo sobre material contaminado: el coeficiente elegido en "
-            f"limpio estaba corto ahí, así que la campaña subestima al método y "
-            f"techos por nivel valdrían lo que cuestan.")
-    if quietos:
-        partes.append(
-            f"En {', '.join(f'`{f}`' for f in quietos)} el techo se queda donde "
-            f"estaba: el coeficiente no explica la caída, y lo que cae es el "
-            f"término. Re-buscar por nivel no recuperaría nada.")
-    if sin_par:
-        partes.append(
-            f"Sin par comparable en {', '.join(f'`{f}`' for f in sin_par)}: "
-            f"falta uno de los dos extremos y una punta sola no mide distancia.")
-    return " ".join(partes)
 
 
 def conclusion_readings_versus_clean(limpias: Iterable[dict], sucias: Iterable[dict],
@@ -2586,118 +2202,6 @@ def render_correspondence_contaminated(scored: Iterable[dict], rate: float,
 #: Declarado acá y no adivinado de `ARMS`, porque «cuál es el par que difiere
 #: sólo en el peso» es una lectura de la formulación y no una propiedad que se
 #: pueda derivar de un diccionario.
-WEIGHTING_RUNGS = [("E", "F"), ("E", "G")]
-
-
-def conclusion_weighting_under_noise(metric: str = "targetAccuracy") -> str:
-    """Qué le hace la contaminación al peldaño del peso por confianza.
-
-    Es la mitad que la tabla de arriba no aísla. El destino entrena **sin
-    etiquetas** --- `pseudolabel` (Ec. 22) y `confidences` (Ec. 24) ---, así que
-    contaminar sus bolsas no es ruido de etiqueta: corrompe la condicional a la
-    que el término de adaptación se alinea y envenena los pseudo-rótulos de los
-    que sale la confianza. `F` y `G` contra `E` difieren
-    exactamente en ese peso, y con material limpio ese peldaño casi no tiene
-    nada que separarlo: es bajo ruido donde el peso tiene algo que hacer.
-
-    Se lee sobre el barrido y no sobre una campaña: la pregunta es cómo se mueve
-    el peldaño *con la tasa*, y una sola tasa no tiene pendiente.
-    """
-    _refuse_pooling(metric)
-    from MIL_CREDA_Benchmark import contamination as noise_axis
-
-    drawn = noise_axis.curve(metric)
-    if len(drawn["rates"]) < 2:
-        return ("Con menos de dos niveles el peldaño no tiene pendiente: hace "
-                "falta al menos una tasa limpia y una contaminada para saber si "
-                "el peso por confianza hace algo que el material limpio no pedía.")
-
-    decimals = 1 if metric in PERCENT else 2
-    partes, ausentes = [], []
-    for sin_peso, con_peso in WEIGHTING_RUNGS:
-        if sin_peso not in drawn["series"] or con_peso not in drawn["series"]:
-            ausentes.append(f"{sin_peso}->{con_peso}")
-            continue
-        primero = drawn["series"][con_peso][0] - drawn["series"][sin_peso][0]
-        ultimo = drawn["series"][con_peso][-1] - drawn["series"][sin_peso][-1]
-        partes.append(
-            f"`{config.NAME_OF.get(con_peso, con_peso)}` sobre "
-            f"`{config.NAME_OF.get(sin_peso, sin_peso)}` pasa de "
-            f"{_scaled(primero, metric):+.{decimals}f} en ρ={drawn['rates'][0]:g} a "
-            f"{_scaled(ultimo, metric):+.{decimals}f} en ρ={drawn['rates'][-1]:g}")
-    if not partes:
-        return ("Ninguno de los pares que difieren sólo en el peso por confianza "
-                "corrió en todos los niveles, así que el peldaño no se puede leer.")
-
-    cola = ""
-    if ausentes:
-        cola = (f" Sin lectura para {', '.join(ausentes)}: falta alguno de los "
-                f"dos brazos en al menos un nivel.")
-    return ("El peldaño del peso por confianza, que es donde el destino "
-            "contaminado tendría que notarse: " + "; ".join(partes) + "." + cola)
-
-
-def conclusion_rungs_versus_clean(metric: str, rate: float) -> str:
-    """Cuánto se movió cada peldaño entre las dos tasas.
-
-    No repite la tabla de arriba: informa la diferencia entre sus dos bloques,
-    que es lo único que la tabla no contiene. Un peldaño que se agranda bajo ruido es el
-    mecanismo haciendo algo que el material limpio no le pedía; uno que se
-    achica es lo contrario, y las dos lecturas son el resultado.
-    """
-    _refuse_pooling(metric)
-    from MIL_CREDA_Benchmark import contamination as axis
-
-    limpio = axis.load(0.0, "campaign")
-    sucio, nota = _level_or_note(rate)
-    if limpio is None or sucio is None:
-        return nota or "Falta el registro limpio, así que no hay comparación."
-
-    def peldanos(resumen):
-        salida = {}
-        for label, celda in (resumen.get("perTransfer") or {}).items():
-            for fila in celda if isinstance(celda, list) else []:
-                if fila.get("metric") == metric and fila.get("rung"):
-                    salida.setdefault(fila["rung"], []).append(fila.get("delta"))
-        return {k: sum(v) / len(v) for k, v in salida.items()
-                if v and all(x is not None for x in v)}
-
-    antes, despues = peldanos(limpio["summary"]), peldanos(sucio["summary"])
-    comunes = sorted(set(antes) & set(despues))
-    if not comunes:
-        return ("Los dos registros no comparten ningún peldaño con la misma "
-                "métrica, así que no hay par sobre el que restar.")
-    decimals = 1 if metric in PERCENT else 2
-    movimientos = {r: despues[r] - antes[r] for r in comunes}
-    crece = max(comunes, key=lambda r: movimientos[r])
-    cae = min(comunes, key=lambda r: movimientos[r])
-    return (f"Entre ρ=0 y ρ={rate:g}, el peldaño que más se agranda es "
-            f"`{crece}` ({_scaled(movimientos[crece], metric):+.{decimals}f}) y "
-            f"el que más se achica `{cae}` "
-            f"({_scaled(movimientos[cae], metric):+.{decimals}f}). Un peldaño "
-            f"que crece bajo ruido es el mecanismo haciendo algo que el material "
-            f"limpio no le pedía.")
-
-
-# ------------------------------------------- una tabla, una conclusión
-#
-# Las tres funciones de abajo no calculan nada: **componen**. Cada una junta la
-# conclusión limpia --- quién está adelante y sobre qué evidencia --- con la
-# cruzada --- cuánto lo movió la contaminación --- en un solo texto, porque hay
-# una sola tabla.
-#
-# Eran dos conclusiones porque eran dos tablas. Desde que el ruido es una
-# columna y cada cantidad se renderiza una vez, con el bloque `sin` primero y el
-# `con` después, dos conclusiones bajo una tabla obligan a leer dos veces para
-# saber qué pasó con una sola cosa.
-#
-# Componen y no reescriben, y eso es deliberado: las frases que se emiten son
-# las que las funciones de abajo ya emitían, palabra por palabra. Una redacción
-# propia sería una segunda versión de la misma lectura, se desactualizaría en
-# silencio y se le creería igual --- que es exactamente lo que este archivo
-# entero existe para no hacer.
-
-
 def conclusion_with_noise(runs: Iterable[dict], metric: str, reduction: dict,
                           rate: float) -> str:
     """Dónde quedó cada método y cuánto lo movió la contaminación, junto.
@@ -2710,31 +2214,6 @@ def conclusion_with_noise(runs: Iterable[dict], metric: str, reduction: dict,
             f"{conclusion_versus_clean(metric, rate)}")
 
 
-def conclusion_rungs_with_noise(summary: dict, metric: str, rate: float) -> str:
-    """Qué peldaño separa más y cuánto lo movió la contaminación, junto.
-
-    `conclusion_rungs` primero --- qué componente puso a quién adelante y si el
-    peldaño se inclina igual en todas las transferencias --- y después
-    `conclusion_rungs_versus_clean`, que es cuál se agranda y cuál se achica
-    entre los dos bloques de la misma tabla.
-    """
-    return (f"{conclusion_rungs(summary, metric)} "
-            f"{conclusion_rungs_versus_clean(metric, rate)}")
-
-
-#: Qué conclusión limpia le corresponde a cada lectura de fase dos.
-#:
-#: Derivado de la lectura y no pasado a mano: la tabla ya se renderiza por su
-#: ruta --- `render_readings(readings, path, ...)` --- así que la celda del
-#: cuaderno nombra la ruta una sola vez y la conclusión sale de ahí. Pasar la
-#: función aparte dejaría que una celda mostrara la tabla de una lectura y
-#: concluyera sobre otra, y las dos saldrían bien formadas.
-#:
-#: `geometry.crossDomainSameClass` y `geometry.betweenClasses` no están, y su
-#: ausencia es la declaración: esas dos tablas se concluyen **juntas**, con
-#: `conclusion_distances`, porque una bajando sola no distingue alineación de
-#: colapso. Pedir acá una conclusión limpia para una de ellas es pedir la mitad
-#: de una lectura, y por eso se niega en vez de contestar.
 READING_CONCLUSIONS = {
     "geometry.ratio": conclusion_geometry,
     "domainSeparability": conclusion_separability,

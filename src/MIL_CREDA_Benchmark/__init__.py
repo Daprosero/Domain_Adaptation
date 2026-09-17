@@ -70,7 +70,6 @@ __benchmark__ = {
     "report": {
         "renderers": [
             "tables.render",
-            "tables.render_rungs",
             "tables.render_readings",
             "tables.render_correspondence",
             "tables.render_correspondence_contaminated",
@@ -78,35 +77,41 @@ __benchmark__ = {
             # governs every table below is chosen here, so the report has to show
             # what it was chosen over: a ceiling that wins among four identical
             # scores and one that wins by a real difference are the same number and
-            # not the same evidence.
+            # not the same evidence. Shown by `Benchmark_Search_Report_v1.ipynb`,
+            # not by `Results_v1.ipynb` -- the ceiling search is its own
+            # experiment and reads as one, with its own report.
             "tables.render_ceilings",
             "tables.render_ceilings_by_transfer",
-            # La sección de tiempo, sus dos formas. Ninguna de las dos estaba
-            # declarada, así que la mitad del informe que MEJOR se porta --- la
-            # que se niega a promediar `seconds` y saca fila por corrida --- era
-            # justo la que ningún control miraba.
-            "tables.render_per_run",
-            # Y su forma inline: mediana con rango min-max, colapsando el eje de
-            # semillas dentro de un entorno. Dos renderers y no un parámetro
-            # porque son dos afirmaciones distintas, y el contrato nombra cuál
-            # se usó.
-            "tables.render_per_run_summary",
-            "tables.render_noise",
-            "tables.render_diagnostic",
-            # El eje de ruido ya no agrega renderers. Las cinco gemelas que
-            # tenía --- `render_readings_contaminated` primero, y después
-            # `render_at`, `render_per_run_summary_at`, `render_gains_at` y
-            # `render_rungs_at` --- dibujaban la misma tabla sobre el registro
-            # de la campaña contaminada, y estaban declaradas aparte sólo para
-            # que el chequeo de duplicación no leyera dos renderizaciones del
-            # mismo número donde hay dos números distintos. Cada par es ahora
-            # una tabla con la columna `Ruido` adelante y dos bloques, `sin` y
-            # después `con`: una cantidad, una llamada, una renderización, y
-            # nada que el chequeo pueda confundir.
+            # `render_rungs`, `render_per_run`, `render_per_run_summary`,
+            # `render_noise` and `render_diagnostic` are retired along with
+            # everything that made them necessary: the rungs (gains) table and
+            # its ladder, the `seconds`/`peakMiB` `perRun` dimensions, and the
+            # noise-diagnostic apparatus. None of the six required sections of
+            # `Results_v1.ipynb` reads any of them, and no other notebook did
+            # either.
+            #
+            # Section 1's floor-only degradation curve is a figure
+            # (`figures.noise_curves`, declared below), not a `tables` renderer;
+            # its conclusion is `conclusion_noise_floor`.
+            #
+            # Section 4 compares attention mechanisms on the one full-method
+            # arm -- ours as this repository implements it, ABMIL as published
+            # (unnormalized `v_R`), ABMIL gated, `max`, `mean` -- never a
+            # declared arm id, so it reads a dedicated record
+            # (`tables.MECHANISM_RECORD`) and not `runs.jsonl`.
+            "tables.render_mechanisms",
+            # Section 5's bag-kernel correspondence, both directions: per test
+            # target bag its ranked top-`k` source bags, and per source bag how
+            # many target bags took it into account. Neither is `render_
+            # correspondence`'s per-arm hit-rate summary, which stays declared
+            # because it is still shown (Section 5c, over the same figure the
+            # bag-highlight grid already draws) -- these two are additional,
+            # finer-grained readings the old report never had.
+            "tables.render_bag_neighbors",
+            "tables.render_source_bag_usage",
         ],
         "conclusions": [
             "tables.conclusion",
-            "tables.conclusion_rungs",
             "tables.conclusion_geometry",
             "tables.conclusion_distances",
             "tables.conclusion_separability",
@@ -115,30 +120,40 @@ __benchmark__ = {
             "tables.conclusion_correspondence",
             "tables.conclusion_ceilings",
             "tables.conclusion_ceilings_by_transfer",
-            # `conclusion_versus_clean` informa la diferencia entre los dos
-            # bloques, que es lo único que la tabla no contiene: pone el
-            # material limpio y el contaminado uno sobre otro y no los resta.
-            # Nunca enumera la tabla que tiene al lado: una conclusión que
-            # repite su propia tabla dejó de concluir.
-            "tables.conclusion_noise",
-            # No computa nada y esa es su afirmación: `render_per_run` ya se
-            # negó a promediar, y una conclusión que después imprimiera
-            # «mejor/peor» sobre las mismas lecturas devolvería en prosa lo que
-            # la tabla acaba de declinar en números.
-            "tables.conclusion_per_run",
+            # `conclusion_rungs`, `conclusion_per_run`, `conclusion_noise`,
+            # `conclusion_diagnostic`, `conclusion_weighting_under_noise`,
+            # `conclusion_rungs_versus_clean` and `conclusion_rungs_with_noise`
+            # are retired for the same reasons their renderers are, above.
+            #
+            # `conclusion_versus_clean` informs the difference between the two
+            # blocks, which is the one thing the table beside it does not
+            # contain: it puts the clean and the contaminated material one over
+            # the other and never subtracts them. Never enumerates the table
+            # beside it: a conclusion that repeats its own table stopped
+            # concluding.
             "tables.conclusion_versus_clean",
-            "tables.conclusion_diagnostic",
             "tables.conclusion_readings_versus_clean",
-            "tables.conclusion_weighting_under_noise",
-            "tables.conclusion_rungs_versus_clean",
-            # Las tres composiciones: una tabla, una conclusión. No calculan
-            # nada propio --- juntan la conclusión limpia con la cruzada, con
-            # las frases que las dos ya emitían --- y están declaradas igual
-            # que las demás porque son las que el cuaderno llama, y lo que la
-            # verificación mira es el documento que alguien lee.
+            # The composition: one table, one conclusion. Computes nothing of
+            # its own -- joins the clean conclusion with the crossed one, in
+            # the sentences each already emits -- and is declared the same as
+            # the rest because it is what Sections 2 and 3 call, and what the
+            # verification looks at is the document a reader sees.
             "tables.conclusion_with_noise",
-            "tables.conclusion_rungs_with_noise",
             "tables.conclusion_readings_with_noise",
+            # Section 1's floor-only degradation curve, section 4's attention-
+            # mechanism comparison, and section 5's bag-kernel correspondence
+            # in both directions -- see the matching renderers above for why
+            # each exists and what record each reads.
+            "tables.conclusion_noise_floor",
+            "tables.conclusion_mechanisms",
+            "tables.conclusion_bag_neighbors",
+            "tables.conclusion_source_bag_usage",
+            # Section 6's loss curves are shown "only to check the
+            # normalization" -- not to read a trajectory -- so their
+            # conclusion is not which arm's curve is lowest, it is whether
+            # every point of every curve stayed inside the interval Eq. (39)
+            # promises.
+            "tables.conclusion_normalization",
         ],
         # One call that takes a record and returns {label: text}. It exists so the
         # verification can run every conclusion over permuted numbers without
@@ -162,16 +177,21 @@ __benchmark__ = {
         # others are — a cell that archives a figure and never shows it has
         # reported a filename, and with `emit` named that comes out as a finding
         # instead of passing quietly.
+        # `figures.contribution_curves` is retired -- the contribution panel
+        # beside the loss curves is gone, and section 6 of `Results_v1.ipynb`
+        # shows `adaptation_curves`/`supervised_curves` only, "only to check
+        # the normalization". `latent.projection` is retired too: a
+        # single-panel UMAP helper with no caller anywhere, not even in
+        # `latent.py` itself -- `latent_grid`/`correspondence_grid` draw their
+        # own panels and never called it.
         "figures": [
             "figures.inline",
             "figures.emit",
             "figures.adaptation_curves",
             "figures.supervised_curves",
-            "figures.contribution_curves",
             "figures.noise_curves",
             "latent.latent_grid",
             "latent.correspondence_grid",
-            "latent.projection",
             "plt.show",
         ],
         # Constants that name a subset of another constant. Each one is a selection
@@ -197,16 +217,9 @@ __benchmark__ = {
                               "cerca de su piso en 0.0 no tiene de dónde caer — y "
                               "la brecha es propiedad del material, no de ninguna "
                               "medición",
-            "NOISE_DIAGNOSTIC_ARMS": "el método completo, y el único que lleva el "
-                                     "coeficiente: B no tiene término de "
-                                     "adaptación al que re-buscarle un techo, y E "
-                                     "y F son ablaciones que multiplicarían la "
-                                     "búsqueda sin agregar diagnóstico",
-            "NOISE_DIAGNOSTIC_LEVEL": "el tope del rango, fijado antes de que la "
-                                      "curva exista. En el extremo el coeficiente "
-                                      "está bajo la máxima presión, así que un "
-                                      "techo re-buscado que no recupera nada ahí "
-                                      "no recupera nada en ningún lado",
+            # `NOISE_DIAGNOSTIC_ARMS`/`NOISE_DIAGNOSTIC_LEVEL` retired along with
+            # the noise-diagnostic apparatus they selected for: `config` no
+            # longer declares either constant.
             "LATENT_PANELS": "los métodos que alinean, elegidos por lo que computan "
                              "y no por lo que puntúan, y el único piso que queda "
                              "declarado, que es lo que los hace legibles: "
@@ -256,6 +269,11 @@ __benchmark__ = {
             "Results/Benchmark",
             "Results/Benchmark/ceilings.json",
             "Results/local_distance_bound.pdf",
+            # Where `Results_v1.ipynb` archives every figure it draws --
+            # `figures.emit`'s vector copy, one directory and not one line per
+            # file, because a report figure is the same kind of output as the
+            # rest of what a run leaves.
+            "Results/figures",
             # The noise axis leaves its own artefacts, and naming them here is
             # what stops `undeclaredRecords` from reporting them as a second
             # experiment nobody accounted for -- which, until they are named, is
@@ -289,14 +307,14 @@ __benchmark__ = {
             "terms": ["supervised", "contribution"],
             "share": "adaptationShare",
         },
+        # `seconds`/`peakMiB` are gone -- not renamed, removed -- along with
+        # every reader of them. Nothing here still measures them.
         "dimensions": {
             "targetAccuracy": "higher",
             "sourceAccuracy": "higher",
-            "seconds": "lower",
             "contribution": "descriptive",
             "supervised": "descriptive",
             "adaptationShare": "descriptive",
-            "peakMiB": "descriptive",
             "parameters": "descriptive",
             "geometry.ratio": "lower",
             "geometry.crossDomainSameClass": "descriptive",
