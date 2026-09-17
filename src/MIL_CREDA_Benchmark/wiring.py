@@ -109,8 +109,11 @@ class Arm(nn.Module):
         if spec["adaptation"] == "creda":
             # lambda_creda is one because the coefficient is applied outside, from
             # the shared schedule; leaving it here as well would apply it twice.
-            # No declared arm (B, E, F, G, SU, SA, SK) carries "creda" here --
-            # this branch is unreached today, kept as-is (prior work, unchanged).
+            # No declared arm (B, E, F, G, SU, SA, SK) carries "creda" here as
+            # `spec["adaptation"]` -- this is this benchmark's own harness code,
+            # not `src/CREDA/`'s prior work, and no declared arm reaches this
+            # branch today. It is kept rather than deleted because a future arm
+            # could still declare `"adaptation": "creda"` and land here.
             self.creda = CREDALoss(sigma="auto", lambda_creda=1.0,
                                    use_entropy_weighting=spec["weighting"])
 
