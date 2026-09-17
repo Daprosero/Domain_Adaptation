@@ -115,7 +115,7 @@ def upstream_pilot_scale() -> bool:
 
 # ------------------------------------------------------------------- material
 
-REVISION = "research-concept-r17.md"
+REVISION = "research-concept-r21.md"
 
 #: Every domain supplies its own bags; a transfer names which is source and which
 #: is target. All three hold far more than the 3600 images a domain contributes.
@@ -264,15 +264,30 @@ BACKBONE = "resnet18"
 PRETRAINED = True          # ImageNet weights, identical on both sides
 FEATURE_DIM = 512          # resnet18's pooled width, the head's input
 
-#: Hidden width of the relevance selector of Eq. (14). It has no counterpart on
-#: the other side, so it is declared and never tuned.
+#: Hidden width of the relevance selector's R_phi of Eq. (15). It has no
+#: counterpart on the other side, so it is declared and never tuned.
 ATTENTION_WIDTH = 128
+
+#: gamma of Eq. (15): the weight of the within-bag consensus term against the
+#: learned relevance R_phi. The proposal fixes it as a hyperparameter during
+#: training but gives it no value. Zero sits at the neutral where Eq. (15)
+#: reduces exactly to the r17 attention (no consensus term at all), which is
+#: where this comparison starts; it stays tunable and is not asserted as the
+#: last word on it.
+ATTENTION_GAMMA = 0.0
+
+#: tau_att of Eq. (16): the attention temperature. The proposal fixes it as a
+#: hyperparameter during training but gives it no value. One sits at the
+#: neutral where Eq. (16) reduces exactly to the r17 softmax (no temperature
+#: scaling at all); it stays tunable and is not asserted as the last word on
+#: it.
+ATTENTION_TEMPERATURE = 1.0
 
 #: The local temperature of Eq. (28). Also without a counterpart in CREDA, so it
 #: is fixed at one and reported as fixed rather than chosen.
 TAU_LOCAL = 1.0
 
-#: The stabilizer inside a logarithm. Eq. (18) normalizes its own; this one only
+#: The stabilizer inside a logarithm. Eq. (21) normalizes its own; this one only
 #: keeps the averaged instance distribution off zero before it is logged.
 EPSILON = 1e-8
 
@@ -285,12 +300,12 @@ EPSILON = 1e-8
 #:
 #: Nothing multiplies the schedule afterwards. Three factors, two of them pinned
 #: at one and therefore invisible, is how a scale error hides: the supervised
-#: term of Eq. (18) spent a revision at 18.42 times its stated weight because the
+#: term of Eq. (21) spent a revision at 18.42 times its stated weight because the
 #: coefficient was spread across places nobody read together.
 
 #: How far. One is the neutral of Eq. (39), and from r17 that is a statement about
 #: the objective rather than about this setting. Eq. (36) normalizes the global
-#: score by the conservative bounds, Eq. (38) bounds the local term, and Eq. (18)
+#: score by the conservative bounds, Eq. (38) bounds the local term, and Eq. (21)
 #: is divided by its own supremum B_src — so all three terms live in [0, 1) and a
 #: coefficient of one weighs them equally, which is what the normalization is for.
 #:
@@ -302,7 +317,7 @@ EPSILON = 1e-8
 #: CREDA's own published ceiling for these domains is `creda_lambda_special`
 #: = 1e-4, and running it there was measured to be inert: at 1e-4, 1e-2 and 1e-1
 #: every adapted arm scored exactly what its own floor scored. That measurement
-#: was taken against the UN-NORMALIZED objective — before Eq. (18) was divided
+#: was taken against the UN-NORMALIZED objective — before Eq. (21) was divided
 #: by its own supremum B_src and the three terms of Eq. (39) were brought onto a
 #: common scale — so it is historical record and not a reading of the objective
 #: this comment describes above. What it established still stands: a comparison

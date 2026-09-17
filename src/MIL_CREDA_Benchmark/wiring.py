@@ -81,6 +81,36 @@ def _median_sigma(H: torch.Tensor) -> torch.Tensor:
     return torch.sqrt(torch.median(off_diagonal) + 1e-6)
 
 
+def _bag_sigma(H: torch.Tensor) -> torch.Tensor:
+    """The bandwidth Eq. (15)'s consensus term reads its instance kernel at.
+
+    The revision reuses one instance kernel and one bandwidth throughout
+    (Eq. 14), but the attention weights of a single bag are needed standalone
+    -- at plain inference (`forward` on one domain's bags), with no paired
+    domain to draw the two-domain median CREDA's rule computes for the later
+    adaptation terms in `_milcreda_term`. Wiring the exact same batch-wide
+    sigma into the attention weights would mean threading it through
+    `instance_embeddings`/`bag_representations`/`select` for every arm, on
+    every call, including calls that never build an adaptation term at all --
+    a restructuring this stretch was not asked to make. This applies the
+    identical median rule to the bag's own instances instead, which is a
+    wiring decision, not a mathematical one: at `ATTENTION_GAMMA = 0.0`
+    (today's declared neutral) the consensus term is multiplied by zero and
+    this bandwidth never reaches a single number the run reports. Once gamma
+    is tuned away from zero, whether attention should share the training
+    step's own batch-wide sigma rather than a per-bag one becomes a live
+    question of its own.
+
+    A bag of one instance has no off-diagonal pair to take a median over, and
+    does not need one: its consensus is exactly 1 regardless of sigma
+    (Eq. 14's self-kernel is 1), so the placeholder returned here is never
+    read through anything but that multiplication.
+    """
+    if H.shape[0] < 2:
+        return torch.ones((), dtype=H.dtype, device=H.device)
+    return _median_sigma(H)
+
+
 class Arm(nn.Module):
     """One row of the ladder, trainable end to end."""
 
@@ -96,8 +126,10 @@ class Arm(nn.Module):
 
         width = self.encoder.output_dim
         if spec["attention"] == "learned":
-            # The parameters of Eq. (14). The equation itself is applied by
-            # `MIL_CREDA.attention`; only its weights live here.
+            # The parameters of Eq. (15)'s R_phi. The equation itself, and its
+            # ell_1-ball reparametrization of v_R, is applied by
+            # `MIL_CREDA.attention`; only its raw, unconstrained weights live
+            # here.
             self.V_R = nn.Parameter(torch.empty(config.ATTENTION_WIDTH, width))
             self.b_R = nn.Parameter(torch.zeros(config.ATTENTION_WIDTH))
             self.v_R = nn.Parameter(torch.empty(config.ATTENTION_WIDTH))
@@ -136,10 +168,14 @@ class Arm(nn.Module):
         return flat.reshape(B, m, -1)
 
     def weights_for(self, H: torch.Tensor) -> torch.Tensor:
-        """The in-bag weights beta of Eq. (15), over whatever instances survive."""
+        """The in-bag weights beta of Eq. (16), over whatever instances survive."""
         if self.spec["attention"] == "learned":
-            return bag_weights(relevance_logits(H, self.V_R, self.b_R, self.v_R))
-        # uniform: Eq. (16) with beta = 1/m
+            logits = relevance_logits(
+                H, self.V_R, self.b_R, self.v_R,
+                config.ATTENTION_GAMMA, _bag_sigma(H),
+            )
+            return bag_weights(logits, config.ATTENTION_TEMPERATURE)
+        # uniform: Eq. (19) with beta = 1/m
         return torch.full((H.shape[0],), 1.0 / H.shape[0],
                           dtype=H.dtype, device=H.device)
 
@@ -155,13 +191,22 @@ class Arm(nn.Module):
         the bag representation and the decision at evaluation all see the same
         instances. An arm that trained on ten and decided on thirty would be two
         arms wearing one name.
+
+        The ranking for `topk` is the full Eq. (15) logit — relevance plus the
+        gamma-weighted consensus, not the learned relevance alone. At today's
+        neutral (`ATTENTION_GAMMA = 0.0`) the two rank identically; which of
+        the two a nonzero gamma should rank by is an experiments decision, not
+        settled here.
         """
         rule = self.spec["selection"]
         if rule is None:
             return H
         k = min(config.SELECT_K, H.shape[0])
         if rule == "topk":
-            scores = relevance_logits(H, self.V_R, self.b_R, self.v_R).reshape(-1)
+            scores = relevance_logits(
+                H, self.V_R, self.b_R, self.v_R,
+                config.ATTENTION_GAMMA, _bag_sigma(H),
+            ).reshape(-1)
             keep = torch.topk(scores, k=k).indices.sort().values
             return H[keep]
         return H[self.positions[:k].to(H.device)]
@@ -172,7 +217,7 @@ class Arm(nn.Module):
         return [(H, self.weights_for(H)) for H in kept]
 
     def bag_representations(self, embeddings: torch.Tensor):
-        """Eq. (16) for every bag, plus the weights that produced it."""
+        """Eq. (19) for every bag, plus the weights that produced it."""
         pairs = self.bags_of(embeddings)
         Z = torch.stack([bag_embedding(H, w) for H, w in pairs])
         return Z, [w for _, w in pairs]
@@ -204,7 +249,8 @@ class Arm(nn.Module):
         return order[: config.BAGS_PER_STEP].to(self.target.members.device)
 
     def _milcreda_term(self, H_s, source_labels, target_bags):
-        """Eqs. (19)-(38): the global score, and the local correspondence if on.
+        """Eqs. (14), (16)-(20), (22)-(38): the global score, and the local
+        correspondence if on.
 
         The source side is the step's own supervised batch, already encoded —
         which is what `train_creda` does with `feats_src`, so both families draw
@@ -230,7 +276,7 @@ class Arm(nn.Module):
         K_tt = bag_kernel_matrix(bags_t, bags_t, sigma)
 
         Z_t = torch.stack([bag_embedding(H, w) for H, w in bags_t])
-        G_t = F.softmax(self.head(Z_t), dim=1)                    # Eq. (17)
+        G_t = F.softmax(self.head(Z_t), dim=1)                    # Eq. (20)
         w_t = confidences(G_t)                                    # Eq. (24)
         pseudo = torch.tensor([pseudolabel(g) for g in G_t],      # Eq. (22)
                               device=K_ss.device)
@@ -285,7 +331,7 @@ class Arm(nn.Module):
         """The arm's own objective, and nothing the arm does not have.
 
         The supervised term is the arm's. A bag-unit arm calls `source_loss`,
-        which is Eq. (18) as the revision states it, normalized by its own
+        which is Eq. (21) as the revision states it, normalized by its own
         supremum B_src; an instance-unit arm keeps CREDA's per-instance
         cross-entropy, because prior work is used exactly as it was written. The
         adaptation term is added with the shared coefficient — the same ramp and
@@ -302,7 +348,7 @@ class Arm(nn.Module):
         if self.spec["unit"] == "bag":
             Z, _ = self.bag_representations(embeddings)
             logits = self.head(Z)
-            supervised = source_loss(                                 # Eq. (18)
+            supervised = source_loss(                                 # Eq. (21)
                 F.softmax(logits, dim=1),
                 F.one_hot(labels, self.classes).to(logits.dtype),
                 config.EPSILON,
