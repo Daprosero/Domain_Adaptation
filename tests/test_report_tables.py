@@ -1261,29 +1261,123 @@ def test_the_attention_spread_floor_is_computed_not_asserted_at_zero() -> None:
     assert (1.0 - tables.UNIFORM_ATTENTION) < tables.MIN_ATTENTION_SPREAD
 
 
-def test_no_configuration_of_the_sweep_reaches_below_the_computed_floor() -> None:
-    """A random search over bounded logits never beats the claimed minimum.
+def test_the_floor_is_computed_per_arm_never_one_number_for_all() -> None:
+    """A selecting arm (`SU`, `SA`, `SK`) reparte sobre `SELECT_K` instancias,
+    not over the full bag, so its floor is a DIFFERENT, smaller number --
+    never `MIN_ATTENTION_SPREAD`, which is the full-bag floor every other
+    attending arm shares.
 
-    This does not recompute the same closed form a second time; it samples
-    logit vectors respecting r21's own stated bound and checks the floor
-    holds for each -- the kind of check a wrong-but-plausible constant would
-    fail on the first few draws.
+    Reachable red: key every arm to `MIN_ATTENTION_SPREAD` (today's
+    single-number defect), or compute a selecting arm's floor over
+    `INSTANCES_PER_BAG` instead of `SELECT_K`.
     """
-    import random
+    attending = {arm["id"] for arm in config.ARMS if arm["attention"] == "learned"}
+    assert attending == set(tables.MIN_ATTENTION_SPREAD_BY_ARM)
 
-    rng = random.Random(20260916)
-    m = config.INSTANCES_PER_BAG
-    half_spread = (2.0 + config.ATTENTION_GAMMA) / 2.0
-    for _ in range(200):
-        logits = [rng.uniform(-half_spread, half_spread) for _ in range(m)]
-        exps = [math.exp(x) for x in logits]
-        total = sum(exps)
-        weights = [e / total for e in exps]
-        entropy = -sum(w * math.log(w) for w in weights)
-        normalized = entropy / math.log(m)
-        assert normalized >= tables.MIN_ATTENTION_SPREAD - 1e-9, (
-            f"a random configuration reached {normalized}, below the "
-            f"claimed floor {tables.MIN_ATTENTION_SPREAD}")
+    selecting = {"SU", "SA", "SK"}
+    full_bag = {a for a in attending if a not in selecting}
+    assert full_bag, "no non-selecting attending arm to compare against"
+
+    for arm in full_bag:
+        assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] == pytest.approx(
+            tables.MIN_ATTENTION_SPREAD, abs=1e-12)
+
+    expected_selecting = _independent_min_normalized_entropy(
+        config.SELECT_K, 2.0 + config.ATTENTION_GAMMA)
+    for arm in selecting:
+        assert arm in tables.MIN_ATTENTION_SPREAD_BY_ARM
+        assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] == pytest.approx(
+            expected_selecting, abs=1e-9)
+        # A selecting arm's floor is strictly higher (a smaller bag reaches a
+        # narrower minimum entropy less easily is wrong intuition -- what is
+        # true and checked is simply that the two floors differ).
+        assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] != pytest.approx(
+            tables.MIN_ATTENTION_SPREAD, abs=1e-6)
+
+    # The number the operator measured for m=SELECT_K=10 under today's
+    # neutral hyperparameters, quoted as a fact this suite reproduces rather
+    # than trusts.
+    if config.SELECT_K == 10 and config.ATTENTION_GAMMA == 0.0 \
+            and config.ATTENTION_TEMPERATURE == 1.0:
+        assert tables.MIN_ATTENTION_SPREAD_BY_ARM["SK"] == pytest.approx(
+            0.7939896773181211, abs=1e-9)
+
+
+def _optimized_min_normalized_entropy(m: int, gamma: float, tau_att: float,
+                                       seed: int) -> float:
+    """The claimed floor, reached with a different algorithm than `tables.py`'s
+    own closed-form vertex sweep: projected gradient descent that MINIMIZES
+    the normalized entropy of a softmax over `m` logits, each clamped
+    (projected) to r21's own stated bound `[-half_spread, half_spread]` after
+    every step, from several random restarts.
+
+    Never the same vertex algorithm `_min_reachable_attention_entropy` uses --
+    a shared mistake in that closed form would pass both if they were the
+    same computation wearing two names. And unlike a purely random sample of
+    logit vectors, an optimizer that actually searches converges close to the
+    true minimum, so it can tell a correct floor from one mutated too low:
+    a floor set below the true minimum would read as `too far above the
+    optimizer's own best`, which the second assertion below checks for.
+    """
+    import torch
+
+    half_spread = (2.0 + gamma) / 2.0
+    generator = torch.Generator().manual_seed(seed)
+    best = 1.0
+    # The landscape is not convex -- it has one local basin per possible split
+    # `k` of instances between the logit's two bounds, and a handful of
+    # restarts settles into whichever basin the random init happened to be
+    # closest to rather than the global one. Enough restarts is what finds
+    # the true minimum: measured, 40 restarts land within 1e-6 of the closed
+    # form's answer for both bag sizes this suite checks; 6 restarts landed
+    # a full 0.007 short of it.
+    for _ in range(40):
+        logits = (torch.rand(m, generator=generator) * 2 - 1) * half_spread
+        logits.requires_grad_(True)
+        optimizer = torch.optim.Adam([logits], lr=0.2)
+        for _ in range(300):
+            optimizer.zero_grad()
+            weights = torch.softmax(logits / tau_att, dim=0)
+            entropy = -(weights * torch.log(weights + 1e-12)).sum()
+            entropy.backward()
+            optimizer.step()
+            with torch.no_grad():
+                logits.clamp_(-half_spread, half_spread)
+        with torch.no_grad():
+            weights = torch.softmax(logits / tau_att, dim=0)
+            entropy = -(weights * torch.log(weights + 1e-12)).sum()
+            best = min(best, float(entropy) / math.log(m))
+    return best
+
+
+def test_no_configuration_of_the_sweep_reaches_below_the_computed_floor() -> None:
+    """An independent optimizer never beats the claimed minimum, for every
+    bag size a declared arm actually attends over -- and it gets close
+    enough to it that a floor mutated too low would be caught here: a purely
+    random sample of logits, which the previous version of this test drew,
+    can only ever prove the ">=" direction and passes just as well when the
+    claimed floor is wrongly low, because "the sample never went below an
+    artificially low floor" is true of every floor at least that low. Only a
+    search that actually MINIMIZES catches that.
+    """
+    sizes = {tables._bag_size_for(arm) for arm in tables.MIN_ATTENTION_SPREAD_BY_ARM}
+    assert sizes == {config.INSTANCES_PER_BAG, config.SELECT_K}
+
+    for m in sizes:
+        claimed = tables._min_reachable_attention_entropy(
+            m, config.ATTENTION_GAMMA, config.ATTENTION_TEMPERATURE)
+        found = _optimized_min_normalized_entropy(
+            m, config.ATTENTION_GAMMA, config.ATTENTION_TEMPERATURE, seed=20260916)
+        assert found >= claimed - 1e-6, (
+            f"m={m}: the optimizer reached {found}, below the claimed floor "
+            f"{claimed}")
+        # The sweep is not vacuous: an optimizer that actually minimizes
+        # lands close to the claimed floor. A floor set too low (e.g.
+        # hardcoded at 0.0, or computed at the wrong m) would fail here even
+        # though it trivially satisfies the ">=" check above.
+        assert found <= claimed + 5e-3, (
+            f"m={m}: the claimed floor {claimed} is far from the true "
+            f"minimum {found} the optimizer actually found")
 
 
 def test_attention_spread_text_names_the_computed_floor_and_the_r21_reading() -> None:
@@ -1301,6 +1395,13 @@ def test_attention_spread_text_names_the_computed_floor_and_the_r21_reading() ->
     assert "dejó de elegir" not in objective_text
     assert "no es, por sí solo, un fallo" in objective_text
     assert "l.501" in objective_text
+    # The r21 l.501 pairing is with the bag's own self-similarity, never with
+    # the correspondence mass -- that was the defect: r21 pairs a near-uniform
+    # weight with a LOW self-similarity (a diverse bag with no dominant
+    # group), which has nothing to do with how much local-correspondence mass
+    # landed on the true class.
+    assert "autosimilitud" in objective_text
+    assert "masa de correspondencia" not in objective_text
 
     said = tables.conclusion_attention([
         {"arm": "G", "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
