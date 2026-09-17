@@ -25,8 +25,6 @@ import torch.nn as nn
 
 from MIL_CREDA_Benchmark import bags, config, figures, latent, tables, wiring
 
-REPORT = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / "Benchmark_Report_v1.ipynb"
-
 TRANSFERS = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS[:3]]
 
 
@@ -111,45 +109,13 @@ def test_the_figure_is_written_where_it_is_asked_for_and_only_as_a_pdf(
     assert written == ["ruido.pdf"]
 
 
-def test_the_contribution_panel_reports_the_realized_share_arm_by_arm(
-        tmp_path) -> None:
-    """The coefficient is fixed at the neutral for every arm, and fixing the
-    coefficient does not fix the share: what each term actually commands of its
-    own objective has to be reported per arm, or a term scaled to irrelevance is
-    inferred rather than seen.
-
-    The curve is the median across seeds with an interquartile band -- never one
-    seed's trajectory, which cannot say whether the shape is the method's or the
-    draw's.
-
-    Reachable red: drop an arm from the panel, or draw `supervised` where the
-    realized contribution belongs.
-    """
-    runs = tmp_path / "runs.jsonl"
-    steps = 4
-    shares = {"E": 0.03, "F": 0.20, "G": 0.99}
-    with runs.open("w", encoding="utf-8") as handle:
-        for arm, share in shares.items():
-            for seed in range(3):
-                curve = [{"contribution": share + seed / 100,
-                          "supervised": 1.0 - share,
-                          "adaptation": share} for _ in range(steps)]
-                handle.write(json.dumps(
-                    {"transfer": "M->U", "arm": arm, "seed": seed,
-                     "curve": curve}) + "\n")
-
-    figure = figures.contribution_curves(tmp_path / "contribution.pdf",
-                                         arms=tuple(shares), runs=runs)
-    drawn = {line.get_label(): list(line.get_ydata())
-             for line in figure.axes[0].lines if not line.get_label().startswith("_")}
-
-    assert set(drawn) == {config.NAME_OF[a] for a in shares}
-    for arm, share in shares.items():
-        # the median of the three seeds, and the whole trajectory rather than a
-        # single number
-        assert drawn[config.NAME_OF[arm]] == [pytest.approx(share + 0.01)] * steps
-    # a term at 0.03 beside one at 0.99 is the reading the panel exists for
-    assert min(min(v) for v in drawn.values()) < 0.1 < max(max(v) for v in drawn.values())
+# `test_the_contribution_panel_reports_the_realized_share_arm_by_arm` removed:
+# `figures.contribution_curves` is retired. Section 6 of `Results_v1.ipynb` is
+# loss curves "only to check the normalization" (Eq. 39's terms on the common
+# [0, 1) scale) -- `adaptation_curves` and `supervised_curves` -- and the task
+# that built this notebook explicitly removes "the contribution panel beside
+# the loss curves". Nothing in the required report reads a realized-share
+# curve any more.
 
 
 # ------------------------------------------------------------- the display seed
@@ -419,38 +385,12 @@ def test_a_repetition_that_stopped_early_truncates_the_band_and_never_extends_it
     assert (low, mid, high) == ([2.0], [3.0], [4.0])
 
 
-def test_the_contribution_panel_is_shown_beside_the_other_two_curve_figures() -> None:
-    """The third panel is not optional and it is not somewhere else.
-
-    Without it, "the term had no effect" and "the term had no weight" are the
-    same picture: the supervised and adaptation curves show the trajectories and
-    neither says what share of the objective the term actually commanded. The
-    panel is beside them -- the same notebook, after both -- because it is read
-    against them and not on its own.
-
-    Read from the notebook itself, which is the only place that decides which
-    figures the report shows and in what order.
-
-    Reachable red: drop the contribution cell, or move it above the two curves
-    it is meant to be read beside.
-    """
-    cells = json.loads(REPORT.read_text(encoding="utf-8"))["cells"]
-    shown = []
-    for cell in cells:
-        if cell["cell_type"] != "code":
-            continue
-        source = "".join(cell["source"])
-        for name in ("supervised_curves", "adaptation_curves", "contribution_curves"):
-            if f"figures.{name}(" in source:
-                shown.append(name)
-
-    assert "contribution_curves" in shown, "the report shows no contribution panel"
-    assert {"supervised_curves", "adaptation_curves"} <= set(shown)
-    # beside them and after them: the share is read against the trajectories
-    assert shown.index("contribution_curves") > shown.index("supervised_curves")
-    assert shown.index("contribution_curves") > shown.index("adaptation_curves")
-    # and it is a real panel of the module, not a name the notebook alone knows
-    assert callable(figures.contribution_curves)
+# `test_the_contribution_panel_is_shown_beside_the_other_two_curve_figures`
+# removed: it read `Benchmark_Report_v1.ipynb`, which no longer exists, to
+# assert a contribution-panel cell that no longer exists either. Section 6 of
+# `Results_v1.ipynb` -- the notebook's replacement -- shows `supervised_curves`
+# and `adaptation_curves` only, "only to check the normalization", and the
+# task that built it explicitly retires the contribution panel.
 
 
 # ------------------------------------------------------- what one cell draws with
@@ -768,7 +708,7 @@ def test_the_bag_figure_keeps_the_projection_and_never_becomes_a_bipartite_diagr
 
 # ------------------------------------- the three lines a figure carries above it
 
-LATENT = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / "Benchmark_Latent_v1.ipynb"
+LATENT = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / "Results_v1.ipynb"
 
 
 def test_every_figure_carries_the_same_three_lines_a_table_does() -> None:
@@ -977,7 +917,7 @@ def test_no_figure_draws_more_transfers_than_the_count_fixes(tmp_path) -> None:
     assert len(TODAS) > config.FIGURE_TRANSFER_COUNT, \
         "con seis o menos transferencias esta prueba no probaría nada"
 
-    for nombre in ("adaptation_curves", "supervised_curves", "contribution_curves"):
+    for nombre in ("adaptation_curves", "supervised_curves"):
         with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
             getattr(figures, nombre)(tmp_path / f"{nombre}.pdf",
                                      arms=("E", "F", "G"), runs=runs)
@@ -991,16 +931,16 @@ def test_the_count_is_the_declared_one_and_not_a_number_written_twice(tmp_path) 
     """
     justas = TODAS[:config.FIGURE_TRANSFER_COUNT]
     runs = _curves_over(tmp_path / "justas.jsonl", justas)
-    figura = figures.contribution_curves(tmp_path / "ok.pdf", arms=("E", "F", "G"),
-                                         runs=runs)
+    figura = figures.adaptation_curves(tmp_path / "ok.pdf", arms=("E", "F", "G"),
+                                       runs=runs)
     dibujados = [axis for axis in figura.axes if axis.has_data()]
     assert len(dibujados) == config.FIGURE_TRANSFER_COUNT
 
     una_mas = _curves_over(tmp_path / "una_mas.jsonl",
                            TODAS[:config.FIGURE_TRANSFER_COUNT + 1])
     with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
-        figures.contribution_curves(tmp_path / "no.pdf", arms=("E", "F", "G"),
-                                    runs=una_mas)
+        figures.adaptation_curves(tmp_path / "no.pdf", arms=("E", "F", "G"),
+                                  runs=una_mas)
 
 
 def test_the_caller_chooses_which_three_and_the_figure_only_bounds_how_many(
@@ -1014,9 +954,9 @@ def test_the_caller_chooses_which_three_and_the_figure_only_bounds_how_many(
     runs = _curves_over(tmp_path / "runs.jsonl", TODAS)
     elegidas = [TODAS[4], TODAS[0], TODAS[2]]
 
-    figura = figures.contribution_curves(tmp_path / "elegidas.pdf",
-                                         arms=("E", "F", "G"), runs=runs,
-                                         transfers=elegidas)
+    figura = figures.adaptation_curves(tmp_path / "elegidas.pdf",
+                                       arms=("E", "F", "G"), runs=runs,
+                                       transfers=elegidas)
     titulos = [axis.get_title() for axis in figura.axes if axis.has_data()]
     assert titulos == elegidas
 
@@ -1032,8 +972,8 @@ def test_a_requested_transfer_the_record_never_ran_refuses(tmp_path) -> None:
     """
     runs = _curves_over(tmp_path / "runs.jsonl", TODAS[:2])
     with pytest.raises(ValueError, match="no dejó curvas"):
-        figures.contribution_curves(tmp_path / "falta.pdf", arms=("E", "F", "G"),
-                                    runs=runs, transfers=[TODAS[0], TODAS[5]])
+        figures.adaptation_curves(tmp_path / "falta.pdf", arms=("E", "F", "G"),
+                                  runs=runs, transfers=[TODAS[0], TODAS[5]])
 
 
 def test_the_latent_grids_are_bounded_by_the_same_count(tmp_path) -> None:

@@ -72,11 +72,12 @@ def available(rate: float = 0.0, pilot: bool = False) -> list[dict]:
     the same seed.
 
     **Tagged and not filtered**, deliberately. Dropping the extras here would
-    make every caller see only medians, including `against_floor()`, whose whole
-    purpose is the paired difference those extras exist for — and it would lose
-    them silently, which is the one failure mode nothing downstream could detect.
-    Each consumer decides instead: a marginal average over a cell reads only the
-    medians, a paired difference reads everything.
+    make every caller see only medians, including a paired difference against a
+    floor -- see `tables.conclusion_distances`/`conclusion_separability`, whose
+    whole purpose is the paired difference those extras exist for -- and it
+    would lose them silently, which is the one failure mode nothing downstream
+    could detect. Each consumer decides instead: a marginal average over a cell
+    reads only the medians, a paired difference reads everything.
 
     The distinction is not tidiness. A floor's extras were selected by the
     *dependant* arms' accuracy orderings, not by its own, so they are a biased
@@ -603,71 +604,6 @@ def analyse(record: dict, device: torch.device) -> dict:
     return reading
 
 
-def against_floor(readings: list[dict]) -> list[dict]:
-    """Each adapted arm beside the floor it should have improved on."""
-    indexed = {(r["arm"], r["transfer"], r["seed"]): r for r in readings}
-    compared = []
-    for (arm, transfer, seed), reading in indexed.items():
-        floor_id = config.FLOOR_OF.get(arm)
-        floor = indexed.get((floor_id, transfer, seed)) if floor_id else None
-        if floor is None:
-            continue
-        compared.append({
-            "arm": arm, "floor": floor_id, "transfer": transfer, "seed": seed,
-            "ratio": reading["geometry"]["ratio"],
-            "floorRatio": floor["geometry"]["ratio"],
-            "ratioChange": reading["geometry"]["ratio"] - floor["geometry"]["ratio"],
-            "separability": reading["domainSeparability"],
-            "floorSeparability": floor["domainSeparability"],
-            "separabilityChange": reading["domainSeparability"] - floor["domainSeparability"],
-        })
-    return compared
-
-
-def projection(rows, labels, domains, path: Path, title: str, seed: int,
-               caption: str = "") -> "figures.plt.Figure":
-    """A picture beside the numbers, never instead of them.
-
-    UMAP and not t-SNE, and the reason is the claim being shown rather than taste.
-    t-SNE optimizes local neighbourhoods and does not preserve the distance between
-    clusters — the standard caveat is that inter-cluster distance in a t-SNE plot
-    means nothing. What the geometry measurements assert is exactly an inter-cluster
-    distance: how far the same class sits across domains against how far different
-    classes sit from each other. Drawing that on a projection that scrambles it would
-    show the reader something the numbers do not say.
-
-    The caption carries the run's bounds, because a figure read without them gets
-    misquoted the same way a number does.
-    """
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    import umap
-
-    reducer = umap.UMAP(n_components=2, random_state=seed,
-                        n_neighbors=min(15, max(2, len(rows) // 4)), min_dist=0.1)
-    embedded = reducer.fit_transform(rows.numpy())
-    figure, axis = plt.subplots(figsize=(6, 5.4))
-    for domain, marker in ((0, "o"), (1, "^")):
-        mask = domains == domain
-        axis.scatter(embedded[mask, 0], embedded[mask, 1], c=labels[mask],
-                     cmap="tab10", marker=marker, s=14, alpha=0.75,
-                     label="source" if domain == 0 else "target")
-    axis.set_title(title)
-    axis.legend(loc="best", fontsize=8)
-    axis.set_xticks([])
-    axis.set_yticks([])
-    if caption:
-        # Wrapped rather than shrunk: a caption that runs off the edge loses exactly
-        # the bounds it was added to carry, and silently.
-        import textwrap
-        wrapped = "\n".join(textwrap.wrap(caption, width=72))
-        figure.text(0.5, 0.012, wrapped, ha="center", va="bottom",
-                    fontsize=7, color="0.35", linespacing=1.5)
-    figure.tight_layout(rect=(0, 0.10, 1, 1) if caption else None)
-    return figures.emit(figure, path)
-
-
 # ------------------------------------------------------------- the comparative grid
 
 def display_seed(runs: list[dict]) -> int:
@@ -917,7 +853,66 @@ def bag_pairs(model, source: bags.BagSet, target: bags.BagSet, device: torch.dev
         "targetLabels": t_labels.cpu(),
         "nearest": K_st.argmax(dim=0).cpu(),
         "mass": torch.tensor(mass),
+        # El kernel completo, fuente por destino -- lo que `top_k_source_bags`
+        # y `source_bag_usage` necesitan y `nearest` (que ya sólo guarda el
+        # argmax) no puede darles: el máximo pierde el orden por debajo del
+        # primero, y esa lista es justamente la pregunta de la sección 5.
+        "kernel": K_st.float().cpu(),
     }
+
+
+def top_k_source_bags(reference: dict, k: int = 5) -> list[dict]:
+    """Por cada bolsa de destino (evaluación), sus `k` bolsas fuente más cercanas.
+
+    Rankeadas por el kernel de bolsa de la Sección 3 sobre TODAS las bolsas
+    fuente de entrenamiento -- nunca un subconjunto, y nunca en la proyección
+    de dos dimensiones, que ilustraría UMAP y no la correspondencia. Cada
+    vecino lleva si su clase coincide con la clase verdadera de la bolsa de
+    destino, para que una fila se lea de un vistazo sin tener que cruzar dos
+    columnas.
+    """
+    kernel = reference["kernel"]
+    n_source = kernel.shape[0]
+    k = min(k, n_source)
+    if k <= 0 or kernel.shape[1] == 0:
+        return []
+    values, indices = kernel.topk(k, dim=0)
+    source_labels, target_labels = reference["sourceLabels"], reference["targetLabels"]
+    out = []
+    for column in range(kernel.shape[1]):
+        neighbours = []
+        for rank in range(k):
+            source_index = int(indices[rank, column])
+            neighbours.append({
+                "sourceBag": source_index,
+                "kernel": float(values[rank, column]),
+                "trueClass": bool(source_labels[source_index] == target_labels[column]),
+            })
+        out.append({"targetBag": int(column), "targetLabel": int(target_labels[column]),
+                    "neighbours": neighbours})
+    return out
+
+
+def source_bag_usage(reference: dict, k: int = 5) -> dict[int, int]:
+    """Por cada bolsa fuente, cuántas bolsas de destino la tuvieron en su top-`k`.
+
+    La contracara de `top_k_source_bags`: expone las bolsas fuente que el top-
+    `k` de nadie nombra, algo que la tabla de destino-a-fuente no puede
+    mostrar porque está indexada al revés. Toda bolsa fuente aparece, incluso
+    con cuenta cero -- una bolsa ausente de este diccionario en vez de en cero
+    sería una bolsa que nadie puede distinguir de una que sí se usó una vez.
+    """
+    kernel = reference["kernel"]
+    n_source = kernel.shape[0]
+    k = min(k, n_source)
+    usage: dict[int, int] = {index: 0 for index in range(n_source)}
+    if k <= 0 or kernel.shape[1] == 0:
+        return usage
+    _, indices = kernel.topk(k, dim=0)
+    for column in range(kernel.shape[1]):
+        for rank in range(k):
+            usage[int(indices[rank, column])] += 1
+    return usage
 
 
 def median_bag_per_class(reference: dict) -> dict:
