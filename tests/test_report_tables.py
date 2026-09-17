@@ -1288,11 +1288,12 @@ def test_the_floor_is_computed_per_arm_never_one_number_for_all() -> None:
         assert arm in tables.MIN_ATTENTION_SPREAD_BY_ARM
         assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] == pytest.approx(
             expected_selecting, abs=1e-9)
-        # A selecting arm's floor is strictly higher (a smaller bag reaches a
-        # narrower minimum entropy less easily is wrong intuition -- what is
-        # true and checked is simply that the two floors differ).
-        assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] != pytest.approx(
-            tables.MIN_ATTENTION_SPREAD, abs=1e-6)
+        # A selecting arm's floor is strictly LOWER than the full-bag floor
+        # (0.794 for m=SELECT_K=10 against 0.861 for m=INSTANCES_PER_BAG=30,
+        # under today's neutral hyperparameters): a smaller bag reaches a
+        # narrower minimum entropy MORE easily, not less. What is checked is
+        # the direction, not merely that the two floors differ.
+        assert tables.MIN_ATTENTION_SPREAD_BY_ARM[arm] < tables.MIN_ATTENTION_SPREAD - 1e-6
 
     # The number the operator measured for m=SELECT_K=10 under today's
     # neutral hyperparameters, quoted as a fact this suite reproduces rather
@@ -1409,3 +1410,42 @@ def test_attention_spread_text_names_the_computed_floor_and_the_r21_reading() ->
     assert floor_str in said
     assert "l.501" in said
     assert "que venía a mejorar" not in said
+
+
+def test_attention_spread_text_prints_the_per_arm_floor_not_only_the_global_one() -> None:
+    """Defect (7): `objective` and `conclusion_attention` print the PER-ARM
+    floor for a selecting arm -- `SK`'s own, over `SELECT_K=10` instances --
+    beside the m=`INSTANCES_PER_BAG`=30 floor a full-bag arm reads, never
+    the global floor stamped onto a selecting arm's own row.
+
+    Reachable red: read `MIN_ATTENTION_SPREAD` (the m=30 floor) for `SK`'s
+    row instead of `MIN_ATTENTION_SPREAD_BY_ARM['SK']` -- in either
+    function.
+    """
+    selecting_floor = tables.MIN_ATTENTION_SPREAD_BY_ARM["SK"]
+    full_bag_floor = tables.MIN_ATTENTION_SPREAD
+    assert selecting_floor != pytest.approx(full_bag_floor, abs=1e-6), (
+        "fixture assumption broken: the two floors coincide under this config"
+    )
+
+    objective_text = tables.objective("attentionSpread")
+    assert f"{selecting_floor:.3f}" in objective_text
+    assert f"{full_bag_floor:.3f}" in objective_text
+    assert str(config.SELECT_K) in objective_text
+    assert str(config.INSTANCES_PER_BAG) in objective_text
+
+    # A selecting arm's own row names its own (bag size 10) floor.
+    said_selecting = tables.conclusion_attention([
+        {"arm": "SK", "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
+    ])
+    assert f"piso {selecting_floor:.3f}" in said_selecting
+    assert f"sobre {config.SELECT_K} instancias" in said_selecting
+    assert f"piso {full_bag_floor:.3f}" not in said_selecting
+
+    # A full-bag arm's own row names the m=30 floor instead.
+    said_full_bag = tables.conclusion_attention([
+        {"arm": "G", "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
+    ])
+    assert f"piso {full_bag_floor:.3f}" in said_full_bag
+    assert f"sobre {config.INSTANCES_PER_BAG} instancias" in said_full_bag
+    assert f"piso {selecting_floor:.3f}" not in said_full_bag

@@ -129,8 +129,8 @@ MIN_ATTENTION_SPREAD = _min_reachable_attention_entropy(
 #: (`MIN_ATTENTION_SPREAD` a 1.000): r21 l.501 dice que un valor así es lo
 #: esperado en una bolsa dispersa sin grupo dominante, y no es, por sí solo,
 #: un fallo de la atención -- ahí r21 lo empareja con una autosimilitud BAJA
-#: de la propia bolsa, no con la masa de correspondencia (una lectura
-#: distinta, que este informe también imprime pero no calcula del mismo par).
+#: de la propia bolsa, no con la masa de correspondencia. Esa autosimilitud
+#: es una lectura distinta, y este informe no la calcula ni la imprime.
 UNIFORM_ATTENTION = 0.99
 
 #: Cuántos puntos porcentuales tienen que separar los dos cambios relativos para
