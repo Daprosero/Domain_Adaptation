@@ -41,7 +41,7 @@ __provenance__ = {
         "consensus_component_bandwidth_limits",
         "relevance_logit_reduces_to_relevance_at_gamma_zero",
         "attention_logit_ratio_bounded_by_temperature",
-        "relevance_logits_match_r17_at_neutral_hyperparameters",
+        "relevance_logit_reduces_to_l1_normalized_relevance_at_neutral_hyperparameters",
         "effective_bag_size_in_range",
         "uniform_self_similarity_in_range",
         "separation_condition_implies_majority_consensus",

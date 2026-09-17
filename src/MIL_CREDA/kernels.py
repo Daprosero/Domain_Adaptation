@@ -16,8 +16,12 @@ from MIL_CREDA import as_matrix
 __provenance__ = {
     "revision": "research-concept-r21.md",
     "sections": ["1", "3"],
-    "equations": ["2", "14"],
-    "invariants": ["kernel_unit_diagonal_and_bounded", "kernel_psd"],
+    "equations": ["2", "6", "14"],
+    "invariants": [
+        "kernel_unit_diagonal_and_bounded",
+        "kernel_psd",
+        "gaussian_convolution_identity_eq6",
+    ],
 }
 
 
