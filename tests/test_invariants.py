@@ -398,30 +398,44 @@ def test_consensus_component_reads_the_declared_bandwidth_not_a_scaled_one(
         rng: Sampler) -> None:
     """Defect (b), stated as a direct mutation check rather than left to a
     manual audit pass: `consensus_component` at the bandwidth `sigma` this
-    test independently computes must disagree with the SAME independent
-    computation at `3*sigma` and at `sqrt(2)*sigma` -- the two scaled
-    bandwidths a mutation of the shared kernel helper could silently
-    introduce.
+    test independently computes must equal the SAME independent computation
+    at that same `sigma` -- `assert allclose(produced, at_sigma, atol=1e-9)`,
+    the one comparison in this loop that actually establishes
+    `consensus_component` read the declared bandwidth and not a mutated one.
 
-    The direct comparison (`allclose(produced, at_sigma)`) is kept exactly as
-    it was: it is what actually establishes `consensus_component` computed
-    the declared bandwidth. What is dropped is the 90%-of-configurations rate
-    threshold the mutation check used to run under: that rate measured how
-    often `_independent_consensus` -- the REFERENCE helper -- gives a
-    numerically different answer at `sigma` than at a scaled bandwidth, which
-    is a fact about the reference implementation's own geometry (how much a
+    What is dropped is the 90%-of-configurations rate threshold the mutation
+    check used to run under: that rate measured how often
+    `_independent_consensus` -- the REFERENCE helper -- gives a numerically
+    different answer at `sigma` than at a scaled bandwidth, which is a fact
+    about the reference implementation's own geometry (how much a
     3x/sqrt(2)x rescaling moves ITS output) and proves nothing about the
-    module under test. In its place: a per-configuration mutation check,
-    restricted to draws where the reference bandwidths are themselves
-    numerically distinguishable (excluding only the real degeneracy where a
-    saturated kernel makes 3*sigma or sqrt(2)*sigma read identically to sigma
-    -- something no choice `consensus_component` could make would hide or
-    reveal). On every one of those, the module's own output must equal the
-    sigma reading and must NEVER equal either scaled one -- a hard
-    requirement, not a rate.
+    module under test.
+
+    `distinguishable_3sigma`/`distinguishable_sqrt2sigma` replace it with a
+    precondition rather than a second mutation check: they count how many
+    configurations the reference itself can tell `sigma` from `3*sigma` or
+    `sqrt(2)*sigma` on, and the two `assert ... > 0` below the loop refuse a
+    sweep that drew none. An inner `assert not allclose(produced, at_Xsigma)`
+    inside that same `if` used to sit beside the counter; it is gone because
+    it could never fire on its own -- once `produced == at_sigma` (atol=1e-9)
+    and the `if` has already established `at_sigma != at_Xsigma` (atol=1e-6),
+    `produced != at_Xsigma` follows for free and catches no mutation the
+    first assertion had not already caught.
     """
     import math
 
+    # The inner `assert not allclose(produced, at_Xsigma)` this loop used to
+    # carry, gated behind `if not allclose(at_sigma, at_Xsigma)`, could never
+    # fire on its own: the unconditional `assert allclose(produced, at_sigma,
+    # atol=1e-9)` two lines above already pins `produced` to `at_sigma` at a
+    # tolerance ten times tighter, so once the `if` establishes that
+    # `at_sigma` and `at_Xsigma` disagree at atol=1e-6, `produced` disagreeing
+    # with `at_Xsigma` follows from the first assertion and proves nothing new
+    # -- any mutation it could catch was already caught two lines above. What
+    # is kept is the independent comparison it was paired with: the
+    # `distinguishable_*` counters below prove the reference implementation
+    # itself can tell `sigma` from a scaled bandwidth on this sweep, which is
+    # the precondition the whole check needs to mean anything.
     distinguishable_3sigma = distinguishable_sqrt2sigma = 0
     for cfg in _attention_configurations():
         if cfg["m"] < 2:
@@ -435,16 +449,8 @@ def test_consensus_component_reads_the_declared_bandwidth_not_a_scaled_one(
 
         if not allclose(at_sigma, at_3sigma, atol=1e-6):
             distinguishable_3sigma += 1
-            assert not allclose(produced, at_3sigma, atol=1e-6), (
-                "consensus_component would have passed unnoticed at a "
-                "3*sigma bandwidth"
-            )
         if not allclose(at_sigma, at_sqrt2sigma, atol=1e-6):
             distinguishable_sqrt2sigma += 1
-            assert not allclose(produced, at_sqrt2sigma, atol=1e-6), (
-                "consensus_component would have passed unnoticed at a "
-                "sqrt(2)*sigma bandwidth"
-            )
 
     assert distinguishable_3sigma > 0, (
         "the sweep drew no configuration where a 3*sigma bandwidth is "
