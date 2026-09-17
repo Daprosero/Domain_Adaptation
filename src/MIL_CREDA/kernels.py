@@ -1,8 +1,10 @@
 """The Gaussian kernel, used both on raw inputs and on instance embeddings.
 
 Section 1 introduces it as the kernel of the RKHS the whole construction lives
-in; Eq. (19) reuses the same form on the embeddings produced by the encoder.
-Nothing else in MIL-CREDA introduces a second kernel or a second bandwidth.
+in; Eq. (14) reuses the same form on the embeddings produced by the encoder,
+as the instance kernel kappa^I that both the attention consensus term and the
+bag kernel build on. Nothing else in MIL-CREDA introduces a second kernel or a
+second bandwidth.
 """
 
 from __future__ import annotations
@@ -12,9 +14,9 @@ import torch
 from MIL_CREDA import as_matrix
 
 __provenance__ = {
-    "revision": "research-concept-r17.md",
+    "revision": "research-concept-r21.md",
     "sections": ["1", "3"],
-    "equations": ["2", "19"],
+    "equations": ["2", "14"],
     "invariants": ["kernel_unit_diagonal_and_bounded", "kernel_psd"],
 }
 
@@ -22,7 +24,7 @@ __provenance__ = {
 def gaussian_kernel(
     X: torch.Tensor, Y: torch.Tensor, sigma: float | torch.Tensor
 ) -> torch.Tensor:
-    """Implement Eq. (2)/(19): kappa_sigma(x, x') = exp(-||x - x'||^2 / (2 sigma^2)).
+    """Implement Eq. (2)/(14): kappa_sigma(x, x') = exp(-||x - x'||^2 / (2 sigma^2)).
 
     `X` is (n, d), `Y` is (m, d); the result is the (n, m) matrix of pairwise
     kernel values. The proposal requires sigma > 0. The bandwidth may itself be a

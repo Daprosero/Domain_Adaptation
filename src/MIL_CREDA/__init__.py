@@ -59,7 +59,7 @@ def as_index(value: object, *, device: torch.device | None = None) -> torch.Tens
     return index if device is None else index.to(device)
 
 __implementation__ = {
-    "revision": "research-concept-r17.md",
+    "revision": "research-concept-r21.md",
     "premises": {
         "prediction": "a single class per bag, chosen from CLASSES alternatives",
         "unit": "the bag, for every arm",

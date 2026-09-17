@@ -1,8 +1,8 @@
 """The relevance-weighted bag kernel: the single geometry of the whole method.
 
-Alignment is not measured on the Euclidean representation z of Eq. (16) but in
-the RKHS H_I induced by the instance kernel. Eq. (20) represents a bag as the
-relevance-weighted mean of its instances' images, and Eq. (21) evaluates the
+Alignment is not measured on the Euclidean representation z of Eq. (19) but in
+the RKHS H_I induced by the instance kernel. Eq. (17) represents a bag as the
+relevance-weighted mean of its instances' images, and Eq. (18) evaluates the
 inner product of two such representations as a double sum over instance pairs.
 
 The same kernel feeds the global term (Eq. 23) and the local correspondence
@@ -19,9 +19,9 @@ from MIL_CREDA import DTYPE, as_tensor
 from MIL_CREDA.kernels import gaussian_kernel
 
 __provenance__ = {
-    "revision": "research-concept-r17.md",
+    "revision": "research-concept-r21.md",
     "sections": ["3"],
-    "equations": ["20", "21"],
+    "equations": ["17", "18"],
     "invariants": [
         "bag_kernel_symmetric",
         "bag_kernel_psd",
@@ -40,10 +40,10 @@ def bag_kernel(
     weights_v: torch.Tensor,
     sigma: float | torch.Tensor,
 ) -> torch.Tensor:
-    """Implement Eq. (21): kappa^B(B_u, B_v) = sum_{a,b} beta_a beta_b kappa^I(h_a, h_b).
+    """Implement Eq. (18): kappa^B(B_u, B_v) = sum_{a,b} beta_a beta_b kappa^I(h_a, h_b).
 
     Equivalently the inner product in H_I of the two representations Psi of
-    Eq. (20), which is what makes it positive semidefinite. No explicit
+    Eq. (17), which is what makes it positive semidefinite. No explicit
     coordinates of Phi_sigma are ever needed.
     """
     K_instances = gaussian_kernel(H_u, H_v, sigma)

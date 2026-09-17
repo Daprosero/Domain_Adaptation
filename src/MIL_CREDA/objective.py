@@ -1,6 +1,6 @@
 """The supervised term and the complete MIL-CREDA objective.
 
-Supervision exists only at the source bag level (Eq. 18), normalized by its own
+Supervision exists only at the source bag level (Eq. 21), normalized by its own
 exact supremum B_src so that it lands in [0, 1) like the two adaptation terms.
 Eq. (39) combines the three: the supervised loss is fixed as the reference with
 coefficient one, because the global scale of the objective does not change its
@@ -18,9 +18,9 @@ import torch
 from MIL_CREDA import as_matrix, as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r17.md",
+    "revision": "research-concept-r21.md",
     "sections": ["3", "5"],
-    "equations": ["18", "39"],
+    "equations": ["21", "39"],
     "invariants": [
         "source_loss_matches_negative_log_likelihood_of_the_observed_class",
         "source_loss_non_negative",
@@ -32,7 +32,7 @@ __provenance__ = {
 
 
 def source_bound(epsilon: float = 1e-8) -> float:
-    """Implement B_src of Eq. (18): the exact supremum of a single bag's loss.
+    """Implement B_src of Eq. (21): the exact supremum of a single bag's loss.
 
     The per-bag quantity is monotone in the observed class's score, so its
     extremes sit at the extremes of g in [0, 1]. All the mass on the correct
@@ -52,7 +52,7 @@ def source_bound(epsilon: float = 1e-8) -> float:
 def source_loss(
     G_source: torch.Tensor, Y_source: torch.Tensor, epsilon: float = 1e-8
 ) -> torch.Tensor:
-    """Implement Eq. (18): the per-bag averaged negative log-likelihood over B_src.
+    """Implement Eq. (21): the per-bag averaged negative log-likelihood over B_src.
 
     `Y_source` holds one-hot bag labels, so the inner sum selects the observed
     class. The stabilizer is normalized by its own maximum, (g + eps)/(1 + eps),
