@@ -276,18 +276,22 @@ def hyperparameter_drift(record: dict) -> dict:
     """Every one of `HYPERPARAMETER_FIELDS` this checkpoint's own `reduction`
     disagrees with the CURRENT `config` on.
 
-    A field absent from an older manifest -- stamped before these three were
-    recorded at all -- is not drift: there is nothing to compare it against,
-    and a manifest that old is already caught by `currentRevision` if it
-    truly predates today's revision.
+    A field absent from the manifest IS drift under the current revision.
+    `harness.Reduction` stamps all three of `HYPERPARAMETER_FIELDS` on every
+    checkpoint it produces, so a manifest missing one was not produced by
+    today's stamping code -- exactly the same silent-drift shape
+    `currentRevision` catches for the managed revision, applied here to
+    Decision 1's bandwidth and Eq. (16)'s gamma/tau_att. Treating an absent
+    field as "nothing to compare" let such a checkpoint load and analyse
+    silently under today's config; it is refused instead.
     """
     reduction = record.get("reduction") or {}
     drift = {}
     for field, source in HYPERPARAMETER_FIELDS.items():
-        if field not in reduction:
-            continue
         current = getattr(config, source)
-        if reduction[field] != current:
+        if field not in reduction:
+            drift[field] = {"checkpoint": None, "current": current}
+        elif reduction[field] != current:
             drift[field] = {"checkpoint": reduction[field], "current": current}
     return drift
 
