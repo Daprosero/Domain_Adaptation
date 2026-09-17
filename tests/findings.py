@@ -31,15 +31,34 @@ sound is not the same as adopting it.
 
 ---
 
-No finding is open against research-concept-r17.md.
+No finding is open against research-concept-r21.md.
 
-Two were raised against r14, measured over 200 configurations, validated with
-both poles, and adopted by the deliberation:
+r21 rewrote Section 3's attention block (Eqs. 15-16, plus the un-numbered
+R_phi/v_R_tilde reparametrization and the m_eff/self-similarity diagnostic
+pair) and renumbered the equations around it (old 16/17/18/19/20/21 ->
+new 19/20/21/14/17/18; see `MIL_CREDA.attention.__provenance__` and
+`references/usage.md` for the full map). Every new claim it states was swept
+over 200 randomized configurations, varying bag size, embedding dimension,
+the instance-kernel bandwidth, gamma, tau_att, the raw relevance parameter's
+scale, and (for the separation condition) group size and compactness --
+`tests/test_invariants.py`'s attention section carries the sweep beside each
+claim's own invariant test, one `test_<id>` per id in
+`MIL_CREDA.attention.__provenance__["invariants"]`. None failed: every claim
+held over its full sweep, so none of them is a finding here. This includes
+the l1 mechanism itself (`_l1_ball_reparametrization`), the permutation
+equivariance and singleton-bag claims, the consensus term's range and its two
+bandwidth limits, the gamma=0 and neutral-hyperparameter reductions, the
+logit-spread/weight-ratio bound, the two diagnostics' ranges, and the
+separation condition's sufficient-condition implication.
+
+Two findings were raised against r14, measured over 200 configurations,
+validated with both poles, and adopted by the deliberation:
 
 - `local_normalizer_loose_by_two` (loose-constant, theorem, Eq. 38) -> published
   in r15, now held by `test_local_distance_bounded_by_two`.
-- `source_stabilizer_breaks_non_negativity` (ill-formed, tendency 1/200, Eq. 18)
-  -> published in r16, now held by `test_source_loss_non_negative`.
+- `source_stabilizer_breaks_non_negativity` (ill-formed, tendency 1/200, Eq. 18
+  under r14's numbering, now Eq. 21) -> published in r16, now held by
+  `test_source_loss_non_negative`.
 
 An adopted remedy is no longer a correction under consideration: it is what the
 proposal says. Its claim moved to the invariant suite, its remedy test retired,

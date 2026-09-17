@@ -13,7 +13,12 @@ The proposed replacements live here, never in src/.
 
 ---
 
-No remedy is open against research-concept-r17.md.
+No remedy is open against research-concept-r21.md. r21's rewrite of the
+attention block (Eqs. 15-16, plus the un-numbered l1 reparametrization and
+diagnostic pair) was swept over 200 configurations per claim in
+`tests/test_invariants.py`; none failed, so `admit --revision
+research-concept-r21.md` refuses `NO_FINDINGS` -- there is nothing here to
+rule on.
 
 Both findings the audit raised against r14 were validated here, adopted by the
 deliberation, and published: the local normalizer in Eq. (38) and the placement
