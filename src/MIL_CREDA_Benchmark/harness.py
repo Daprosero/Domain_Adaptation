@@ -441,7 +441,7 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     # The supervised magnitude has to leave this function or it is gone: the curve
     # is discarded at the end of the run and no checkpoint can recover it. Without
     # it `contribution` is a bare number, and "the term commanded nothing" and "the
-    # term was scaled to nothing" read identically. Eq. (18) is divided by B_src
+    # term was scaled to nothing" read identically. Eq. (21) is divided by B_src
     # precisely so the three terms of Eq. (39) can be read against each other, so
     # the ratio is the quantity that normalization exists to make meaningful.
     supervised = [abs(point["supervised"]) for point in curve]
