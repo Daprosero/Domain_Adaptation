@@ -271,6 +271,15 @@ class Reduction:
     kind: str = "campaign"
     #: The neutral each family's searched ceiling is read against.
     rampCeiling: float = config.RAMP_CEILING
+    #: Decision 1's one bandwidth, and Eq. (16)'s two hyperparameters,
+    #: stamped beside every other bound. A checkpoint whose manifest recorded
+    #: a different value for any of the three was trained under a different
+    #: objective, exactly as one trained under an earlier `revision` was --
+    #: `latent.load` refuses on a mismatch here the same way it refuses on a
+    #: mismatched `revision`.
+    kernelSigma: float = config.KERNEL_SIGMA
+    attentionGamma: float = config.ATTENTION_GAMMA
+    attentionTemperature: float = config.ATTENTION_TEMPERATURE
     #: What each family searched and kept for its derivations. Empty until the
     #: search has run, and then carried beside every number it produced — a
     #: coefficient chosen by measurement is part of the bounds, not a detail.

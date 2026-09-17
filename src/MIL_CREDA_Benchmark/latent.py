@@ -109,7 +109,8 @@ def available(rate: float = 0.0, pilot: bool = False) -> list[dict]:
                       "median": is_median,
                       "declared": record["arm"] in config.ARMS_BY_ID,
                       "currentRevision": (record.get("reduction") or {}).get("revision")
-                      == config.REVISION})
+                      == config.REVISION,
+                      "currentHyperparameters": not hyperparameter_drift(record)})
     return found
 
 
@@ -257,32 +258,98 @@ def bound(found: list[dict], summary: dict) -> list[dict]:
     return found
 
 
+#: The hyperparameter fields `harness.Reduction` stamps beside every other
+#: bound, keyed to the `config` constant each was copied from at stamp time.
+#: A checkpoint recorded under a different one was trained under a different
+#: objective, the same fact `currentRevision` already establishes for the
+#: managed revision -- these three are placeholders this comparison's own
+#: config declares tunable rather than part of that revision, so they need
+#: their own comparison rather than piggybacking on it.
+HYPERPARAMETER_FIELDS = {
+    "kernelSigma": "KERNEL_SIGMA",
+    "attentionGamma": "ATTENTION_GAMMA",
+    "attentionTemperature": "ATTENTION_TEMPERATURE",
+}
+
+
+def hyperparameter_drift(record: dict) -> dict:
+    """Every one of `HYPERPARAMETER_FIELDS` this checkpoint's own `reduction`
+    disagrees with the CURRENT `config` on.
+
+    A field absent from an older manifest -- stamped before these three were
+    recorded at all -- is not drift: there is nothing to compare it against,
+    and a manifest that old is already caught by `currentRevision` if it
+    truly predates today's revision.
+    """
+    reduction = record.get("reduction") or {}
+    drift = {}
+    for field, source in HYPERPARAMETER_FIELDS.items():
+        if field not in reduction:
+            continue
+        current = getattr(config, source)
+        if reduction[field] != current:
+            drift[field] = {"checkpoint": reduction[field], "current": current}
+    return drift
+
+
+class StaleCheckpointHyperparameters(RuntimeError):
+    """A checkpoint's manifest recorded Decision 1's bandwidth or Eq. (16)'s
+    gamma/tau_att at a value the CURRENT config no longer carries.
+
+    Distinct from `StaleCheckpointRevision`: the managed revision can be
+    current while one of these three placeholders moved underneath it, since
+    none of the three is part of the revision itself -- and a checkpoint
+    trained under a different bandwidth was trained under a different
+    objective just as surely as one trained under an earlier revision.
+    `available()` tags such an entry `currentHyperparameters: False` rather
+    than dropping it; `load()` refuses to actually measure one.
+    """
+
+
 class StaleCheckpointRevision(RuntimeError):
     """A checkpoint's manifest was stamped under a revision this target no
-    longer declares as current.
+    longer declares as current, or names none at all.
 
     Distinct from `CheckpointsDisagree`, which is about a checkpoint that
     disagrees with the RUN it is read beside: this one is about a checkpoint
     whose own manifest carries an earlier managed revision (measured on
     disk: r17 pilot checkpoints under `MIL-CREDA/Models/Pilot/Benchmark/`,
-    against the r21 `config.REVISION` now declares). `available()` tags such
-    an entry `currentRevision: False` rather than dropping it -- a caller can
-    still count and report them with `stale_revisions()` -- but `load()`
-    itself refuses to actually measure one: rendering it under today's stamp
-    is exactly the silent analysis this exists to stop.
+    against the r21 `config.REVISION` now declares) -- or carries none,
+    which is the same fact about an even older manifest, from before this
+    field was recorded at all. `available()` tags either one
+    `currentRevision: False` rather than dropping it -- a caller can still
+    count and report them with `stale_revisions()` -- and `load()` itself
+    refuses to actually measure either: rendering one under today's stamp is
+    exactly the silent analysis this exists to stop. The two tools used to
+    disagree here -- `available()` tagged a revision-less manifest not
+    current while `load()` loaded it anyway, because its refusal only fired
+    when `revision is not None` -- and that inconsistency is what this
+    refusal closes.
     """
 
 
 def load(record: dict, device: torch.device):
     """One trained arm and the exact material it was trained on."""
     revision = (record.get("reduction") or {}).get("revision")
-    if revision is not None and revision != config.REVISION:
+    if revision != config.REVISION:
         raise StaleCheckpointRevision(
             f"refusing to load a checkpoint stamped {revision!r}; the "
             f"current managed revision is {config.REVISION!r}. `available()` "
             f"already tagged this entry `currentRevision: False` -- "
             f"analysing it under today's stamp would be exactly the silent "
             f"drift this refusal exists to prevent."
+        )
+    drift = hyperparameter_drift(record)
+    if drift:
+        field, first = next(iter(drift.items()))
+        raise StaleCheckpointHyperparameters(
+            f"refusing to load a checkpoint stamped under different "
+            f"hyperparameters: {', '.join(sorted(drift))} disagree with the "
+            f"current config (e.g. {field} was {first['checkpoint']!r}, now "
+            f"{first['current']!r}). `available()` already tagged this "
+            f"entry `currentHyperparameters: False` -- analysing it under "
+            f"today's values would be exactly the silent drift this "
+            f"refusal exists to prevent."
         )
     source = bags.rebuild(record["source"], config.DATA_CACHE)
     target = bags.rebuild(record["target"], config.DATA_CACHE)
