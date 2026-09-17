@@ -66,11 +66,12 @@ def _min_reachable_attention_entropy(m: int, gamma: float, tau_att: float) -> fl
     bolsa de `m` instancias, bajo `gamma` y `tau_att` -- nunca cero, y computado
     acá en vez de escrito a mano.
 
-    r21, justo después de la Ec. (15): "dos logits de una misma bolsa difieren
-    a lo sumo en 2 + gamma". Minimizar la entropía de un softmax sujeto solo a
-    esa cota de rango se alcanza en un vértice de la caja que la cota define --
-    todas las instancias en uno de los dos extremos del logit -- y por simetría
-    el valor en un vértice depende solo de cuántas instancias caen en cada
+    r21, en el párrafo que sigue a la Ec. (16) (l.~499): "los logits de la
+    Ec. 15 están acotados: dos logits de una misma bolsa difieren a lo sumo
+    en 2 + gamma". Minimizar la entropía de un softmax sujeto solo a esa cota
+    de rango se alcanza en un vértice de la caja que la cota define -- todas
+    las instancias en uno de los dos extremos del logit -- y por simetría el
+    valor en un vértice depende solo de cuántas instancias caen en cada
     extremo, así que barrer ese conteo es barrer todos los vértices y no una
     esquina plausible de la caja.
     """
@@ -88,11 +89,38 @@ def _min_reachable_attention_entropy(m: int, gamma: float, tau_att: float) -> fl
     return best
 
 
+def _bag_size_for(arm: str) -> int:
+    """Cuántas instancias `weights_for` reparte para este brazo -- `len(beta)`
+    en `latent.attention_spread` -- nunca una sola cuenta para todos. Un brazo
+    que selecciona reparte sobre `SELECT_K`, no sobre la bolsa entera: el piso
+    alcanzable de su entropía es OTRO número, más chico, porque hay menos
+    instancias entre las que repartir.
+    """
+    spec = config.ARMS_BY_ID[arm]
+    if spec["selection"] is None:
+        return config.INSTANCES_PER_BAG
+    return min(config.SELECT_K, config.INSTANCES_PER_BAG)
+
+
 #: El piso alcanzable de `attentionSpread` bajo los hiperparámetros neutros de
-#: hoy, sobre una bolsa de `INSTANCES_PER_BAG` instancias -- computado de la
-#: cota que r21 declara para el logit, nunca supuesto en 0. Con
-#: `ATTENTION_GAMMA = 0` y `ATTENTION_TEMPERATURE = 1` el rango alcanzable es
-#: angosto y pegado a uno: "lejos del máximo" nunca significa "cerca de cero".
+#: hoy, por brazo -- computado de la cota que r21 declara para el logit, nunca
+#: supuesto en 0 y nunca un solo número para todos: un brazo que selecciona
+#: (`SU`, `SA`, `SK`) reparte sobre `SELECT_K` instancias y no sobre las
+#: `INSTANCES_PER_BAG` de la bolsa completa, así que su piso es otro. Con
+#: `ATTENTION_GAMMA = 0` y `ATTENTION_TEMPERATURE = 1` el rango alcanzable de
+#: cada uno es angosto y pegado a uno: "lejos del máximo" nunca significa
+#: "cerca de cero".
+MIN_ATTENTION_SPREAD_BY_ARM = {
+    arm["id"]: _min_reachable_attention_entropy(
+        _bag_size_for(arm["id"]), config.ATTENTION_GAMMA, config.ATTENTION_TEMPERATURE)
+    for arm in config.ARMS if arm["attention"] == "learned"
+}
+
+#: El piso sobre una bolsa completa (`INSTANCES_PER_BAG` instancias), sin
+#: seleccionar -- lo que todo brazo salvo `SU`/`SA`/`SK` reparte sobre, y el
+#: valor que `MIN_ATTENTION_SPREAD_BY_ARM` ya guarda para cada uno de ellos.
+#: Mantenido con este nombre porque es el que la prosa general (`objective`,
+#: el encabezado de `conclusion_attention`) cita como referencia.
 MIN_ATTENTION_SPREAD = _min_reachable_attention_entropy(
     config.INSTANCES_PER_BAG, config.ATTENTION_GAMMA, config.ATTENTION_TEMPERATURE)
 
@@ -100,8 +128,9 @@ MIN_ATTENTION_SPREAD = _min_reachable_attention_entropy(
 #: umbral de lectura, no una medición, y cae dentro del rango alcanzable
 #: (`MIN_ATTENTION_SPREAD` a 1.000): r21 l.501 dice que un valor así es lo
 #: esperado en una bolsa dispersa sin grupo dominante, y no es, por sí solo,
-#: un fallo de la atención -- se lee junto a la masa de correspondencia, nunca
-#: solo.
+#: un fallo de la atención -- ahí r21 lo empareja con una autosimilitud BAJA
+#: de la propia bolsa, no con la masa de correspondencia (una lectura
+#: distinta, que este informe también imprime pero no calcula del mismo par).
 UNIFORM_ATTENTION = 0.99
 
 #: Cuántos puntos porcentuales tienen que separar los dos cambios relativos para
@@ -367,15 +396,17 @@ def objective(key: str, markdown: bool = True) -> str:
             f"normalizada, así que 1.000 es la media uniforme, y bajo los "
             f"hiperparámetros neutros de hoy (gamma={config.ATTENTION_GAMMA:g}, "
             f"tau_att={config.ATTENTION_TEMPERATURE:g}) el piso que Eq. (16) puede "
-            f"alcanzar sobre una bolsa de {config.INSTANCES_PER_BAG} instancias es "
-            f"{MIN_ATTENTION_SPREAD:.3f}, nunca 0.000: r21 acota el logit en "
-            f"2 + gamma justo después de la Ec. (15), así que el rango alcanzable "
-            f"es angosto y pegado a uno. r21 l.501 dice además que un valor cercano "
-            f"a la media uniforme es lo esperado en una bolsa dispersa sin grupo "
-            f"dominante -- no es, por sí solo, un fallo de la atención. Se lee junto "
-            f"a la masa de arriba: si esa masa es alta con una dispersión también "
-            f"alta, la correspondencia se sostiene en una mayoría difusa y no en "
-            f"unas pocas instancias.",
+            f"alcanzar depende de cuántas instancias el brazo reparte entre sí: "
+            f"{MIN_ATTENTION_SPREAD:.3f} sobre una bolsa completa de "
+            f"{config.INSTANCES_PER_BAG} instancias, "
+            f"{MIN_ATTENTION_SPREAD_BY_ARM.get('SK', MIN_ATTENTION_SPREAD):.3f} sobre "
+            f"las {config.SELECT_K} que seleccionan SU/SA/SK -- nunca 0.000, en "
+            f"ningún caso: r21 acota el logit en 2 + gamma en el párrafo que sigue "
+            f"a la Ec. (16), así que el rango alcanzable es angosto y pegado a uno. "
+            f"r21 l.501 dice además que un peso casi uniforme es lo esperado en una "
+            f"bolsa dispersa sin grupo dominante -- ahí empareja ese peso con una "
+            f"autosimilitud BAJA de la propia bolsa, una lectura distinta de la "
+            f"de arriba -- y no es, por sí solo, un fallo de la atención.",
         "ceilings":
             f"**Buscamos que el criterio se incline**, no un número en particular. "
             f"El neutro es {config.RAMP_CEILING:g}: un techo que aterriza ahí "
@@ -1916,23 +1947,27 @@ def conclusion_attention(readings: Iterable[dict]) -> str:
     Descriptiva y no se disputa: no hay un lado que gane, y un valor pegado a
     la media uniforme no es, por sí solo, un fallo de la atención -- r21 l.501
     dice que es lo esperado en una bolsa dispersa sin grupo dominante. Bajo
-    los hiperparámetros neutros el piso alcanzable (`MIN_ATTENTION_SPREAD`)
-    está lejos de cero, así que "lejos de la media uniforme" nunca significa
-    "cerca de cero" tampoco.
+    los hiperparámetros neutros el piso alcanzable
+    (`MIN_ATTENTION_SPREAD_BY_ARM`) está lejos de cero para cada brazo, así
+    que "lejos de la media uniforme" nunca significa "cerca de cero" tampoco
+    -- y el piso NO es el mismo número para todos: un brazo que selecciona
+    reparte sobre menos instancias, así que el suyo es otro.
     """
     readings = list(readings)
     values = _by_arm(readings, "attentionSpread")
     if not values:
         return "Ningún brazo guardado usa atención: no hay dispersión que concluir."
 
-    span = 1.0 - MIN_ATTENTION_SPREAD
     lines = []
     for arm in config.ARM_ORDER:
         if arm not in values:
             continue
+        floor = MIN_ATTENTION_SPREAD_BY_ARM.get(arm, MIN_ATTENTION_SPREAD)
+        bag_size = _bag_size_for(arm)
+        span = 1.0 - floor
         by_transfer = values[arm]
         mean = sum(by_transfer.values()) / len(by_transfer)
-        position = (mean - MIN_ATTENTION_SPREAD) / span if span else 1.0
+        position = (mean - floor) / span if span else 1.0
         if mean >= UNIFORM_ATTENTION or position >= 2 / 3:
             reading = ("reparte casi por igual entre todas las instancias, cerca de "
                        "la media uniforme")
@@ -1941,14 +1976,14 @@ def conclusion_attention(readings: Iterable[dict]) -> str:
                        "hiperparámetros permiten alcanzar")
         else:
             reading = "reparte de forma desigual, a mitad de camino del rango alcanzable"
-        lines.append(f"{config.NAME_OF[arm]} {reading}")
+        lines.append(f"{config.NAME_OF[arm]} (sobre {bag_size} instancias, piso "
+                     f"{floor:.3f}) {reading}")
     lines.insert(0, f"Bajo gamma={config.ATTENTION_GAMMA:g} y "
-                    f"tau_att={config.ATTENTION_TEMPERATURE:g}, Eq. (16) alcanza entre "
-                    f"{MIN_ATTENTION_SPREAD:.3f} y 1.000 de entropía normalizada sobre "
-                    f"una bolsa de {config.INSTANCES_PER_BAG} instancias -- nunca menos, "
-                    f"y un valor cercano a uno es lo esperado en una bolsa dispersa "
-                    f"(r21 l.501), no un fallo por sí solo. Cómo quedó cada uno dentro "
-                    f"de ese rango:")
+                    f"tau_att={config.ATTENTION_TEMPERATURE:g}, el piso que Eq. (16) "
+                    f"alcanza depende de sobre cuántas instancias reparte cada brazo -- "
+                    f"nunca menos que ese piso, y un valor cercano a uno es lo esperado "
+                    f"en una bolsa dispersa (r21 l.501), no un fallo por sí solo. Cómo "
+                    f"quedó cada uno dentro de su propio rango alcanzable:")
     return " ".join(_pilot_note(lines, readings))
 
 
