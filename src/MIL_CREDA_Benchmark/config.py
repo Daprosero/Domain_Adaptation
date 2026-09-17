@@ -318,9 +318,11 @@ TAU_LOCAL = 1.0
 #: INSTANCES_PER_BAG = 1920 images that role draws -- in the regime training
 #: actually uses: the encoder in TRAINING mode (so BatchNorm normalizes with
 #: each chunk's own batch statistics rather than accumulated running ones),
-#: passed through in the same BAGS_PER_STEP = 10-bag / 300-image chunks
-#: `training_step` batches its own source forward in, before any optimizer
-#: step. An earlier measurement of this same constant ran the encoder in
+#: passed through in BAGS_PER_STEP = 10-bag / 300-image chunks, walked in
+#: `train_idx`'s own sequential order -- not the class-stratified shuffle
+#: `training_step` actually draws its batches in via `balanced_batches`, which
+#: this measurement did not reproduce. An earlier measurement of this same
+#: constant ran the encoder in
 #: eval mode instead -- accumulated running statistics rather than the batch
 #: statistics training actually normalizes with -- and got 8.709090275783575
 #: from a median squared distance of 75.848252431748; measured in the regime
