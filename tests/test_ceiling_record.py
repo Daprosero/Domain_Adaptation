@@ -11,10 +11,50 @@ from __future__ import annotations
 import pytest
 
 from MIL_CREDA_Benchmark import ceiling_record as cr
+from MIL_CREDA_Benchmark import config
 
 
 def _trials(*pares):
     return [{"ceiling": c, "value": v} for c, v in pares]
+
+
+def test_stamp_estampa_los_cuatro_campos_del_config_vigente():
+    """El mismo mecanismo que `latent.HYPERPARAMETER_FIELDS` usa para un
+    checkpoint, aplicado a una entrada por familia del registro de techos."""
+    entrada = {"ceiling": 0.01}
+    cr.stamp(entrada)
+    assert entrada["revision"] == config.REVISION
+    assert entrada["kernelSigma"] == config.KERNEL_SIGMA
+    assert entrada["attentionGamma"] == config.ATTENTION_GAMMA
+    assert entrada["attentionTemperature"] == config.ATTENTION_TEMPERATURE
+
+
+def test_stamp_muta_en_el_lugar_y_devuelve_la_misma_entrada():
+    entrada = {"ceiling": 0.01}
+    assert cr.stamp(entrada) is entrada
+
+
+def test_stamp_drift_vacio_cuando_la_entrada_estampada_coincide_con_config():
+    assert cr.stamp_drift(cr.stamp({"ceiling": 0.01})) == {}
+
+
+def test_stamp_drift_no_vacio_cuando_un_campo_difiere():
+    entrada = cr.stamp({"ceiling": 0.01})
+    entrada["kernelSigma"] = config.KERNEL_SIGMA * 3
+    drift = cr.stamp_drift(entrada)
+    assert set(drift) == {"kernelSigma"}
+    assert drift["kernelSigma"] == {"record": config.KERNEL_SIGMA * 3,
+                                     "current": config.KERNEL_SIGMA}
+
+
+def test_stamp_drift_una_entrada_sin_ninguno_de_los_cuatro_campos_es_drift_completo():
+    """Un registro de antes de que `stamp` existiera no tiene nada que
+    comparar, y esa ausencia ES la deriva -- la misma regla que
+    `latent.hyperparameter_drift` aplica a un manifiesto viejo."""
+    drift = cr.stamp_drift({"ceiling": 0.01})
+    assert set(drift) == set(cr.STAMP_FIELDS)
+    for campo in cr.STAMP_FIELDS:
+        assert drift[campo]["record"] is None
 
 
 def test_las_dos_formas_se_distinguen_por_lo_que_traen():

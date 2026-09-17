@@ -31,12 +31,18 @@ def registros(tmp_path, monkeypatch):
 
 
 def _escribir(path, epochs, seeds):
+    # Estampado con la procedencia CURRENT, la misma que `ceiling_record.stamp`
+    # escribe hoy en cada entrada: sin esto `ceilings_in_force` rechazaría el
+    # registro de este fixture por un motivo ajeno a lo que estos tests miden.
     path.write_text(json.dumps({"creda": {
         "ceiling": 0.01, "epochs": epochs, "seeds": list(range(seeds)),
         "atRequiredScale": epochs >= config.FULL_SEARCH_EPOCHS,
         "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
                           "seeds": config.FULL_SEARCH_SEEDS},
-        "byTransfer": {"M->U": 0.01}}}), encoding="utf-8")
+        "byTransfer": {"M->U": 0.01},
+        "revision": config.REVISION, "kernelSigma": config.KERNEL_SIGMA,
+        "attentionGamma": config.ATTENTION_GAMMA,
+        "attentionTemperature": config.ATTENTION_TEMPERATURE}}), encoding="utf-8")
 
 
 def test_sin_ningun_registro_no_rige_nada(registros):
@@ -173,6 +179,98 @@ def test_un_ensayo_nunca_escribe_en_el_registro_completo(registros, monkeypatch)
     assert visto["pilot"] is True
     assert ensayo.exists()
     assert not lleno.exists(), "el ensayo escribio donde va la respuesta completa"
+
+
+# --------------------------------------------------- la procedencia estampada
+
+def test_search_record_etiqueta_currentStamp_true_sobre_una_entrada_vigente(registros):
+    """`_escribir` ya estampa la procedencia CURRENT -- la misma que
+    `ceiling_record.stamp` escribe -- así que `search_record()` la etiqueta
+    `currentStamp: True`, el mismo patrón no-refusante que `latent.available()`
+    usa para `currentHyperparameters`."""
+    lleno, _ = registros
+    _escribir(lleno, config.SEARCH_EPOCHS, 3)
+    encontrado = harness.search_record(pilot=False)
+    assert encontrado["creda"]["currentStamp"] is True
+
+
+def test_search_record_etiqueta_currentStamp_false_sobre_un_registro_sin_estampar(
+        registros):
+    """Un registro escrito antes de que `ceiling_record.stamp` existiera --
+    exactamente la forma de `ceilings.pilot.json` en disco hoy -- se etiqueta
+    `currentStamp: False` en vez de leerse como vigente."""
+    lleno, _ = registros
+    lleno.write_text(json.dumps({"creda": {
+        "ceiling": 0.01, "epochs": config.SEARCH_EPOCHS, "seeds": [0, 1, 2],
+        "atRequiredScale": True,
+        "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
+                          "seeds": config.FULL_SEARCH_SEEDS},
+        "byTransfer": {"M->U": 0.01}}}), encoding="utf-8")
+    encontrado = harness.search_record(pilot=False)
+    assert encontrado["creda"]["currentStamp"] is False
+
+
+def test_sellar_techos_estampa_los_cuatro_campos_de_procedencia():
+    """`sellar_techos` es lo único que escribe el registro de verdad; esto
+    prueba el escritor directamente y no sólo la lectura de un fixture."""
+    entradas = {"creda": {"ceiling": 0.01}, "milcreda": {"ceiling": 1.0}}
+    sellado = harness.sellar_techos(entradas, harness.Reduction())
+    for familia in ("creda", "milcreda"):
+        assert sellado[familia]["revision"] == config.REVISION
+        assert sellado[familia]["kernelSigma"] == config.KERNEL_SIGMA
+        assert sellado[familia]["attentionGamma"] == config.ATTENTION_GAMMA
+        assert sellado[familia]["attentionTemperature"] == config.ATTENTION_TEMPERATURE
+
+
+def test_ceilings_in_force_rechaza_un_registro_sin_estampar(registros, monkeypatch):
+    """El mismo rechazo que `latent.load()` hace sobre un checkpoint viejo,
+    aplicado acá al registro de techos: `ceilings.pilot.json` en disco hoy
+    tiene exactamente esta forma y se rechaza por esta regla, no se reescribe.
+    """
+    lleno, _ = registros
+    lleno.write_text(json.dumps({"creda": {
+        "ceiling": 0.01, "epochs": config.SEARCH_EPOCHS, "seeds": [0, 1, 2],
+        "atRequiredScale": True,
+        "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
+                          "seeds": config.FULL_SEARCH_SEEDS},
+        "byTransfer": {"M->U": 0.01}}}), encoding="utf-8")
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
+        "no debía volver a buscar: el registro ya existe"))
+    with pytest.raises(SystemExit):
+        harness.ceilings_in_force(harness.Reduction(), "cpu",
+                                  progress=lambda *_: None, pilot=False)
+
+
+def test_ceilings_in_force_rechaza_un_registro_estampado_con_otro_kernelsigma(
+        registros, monkeypatch):
+    lleno, _ = registros
+    lleno.write_text(json.dumps({"creda": {
+        "ceiling": 0.01, "epochs": config.SEARCH_EPOCHS, "seeds": [0, 1, 2],
+        "atRequiredScale": True,
+        "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
+                          "seeds": config.FULL_SEARCH_SEEDS},
+        "byTransfer": {"M->U": 0.01},
+        "revision": config.REVISION, "kernelSigma": config.KERNEL_SIGMA * 3,
+        "attentionGamma": config.ATTENTION_GAMMA,
+        "attentionTemperature": config.ATTENTION_TEMPERATURE}}), encoding="utf-8")
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
+        "no debía volver a buscar: el registro ya existe"))
+    with pytest.raises(SystemExit):
+        harness.ceilings_in_force(harness.Reduction(), "cpu",
+                                  progress=lambda *_: None, pilot=False)
+
+
+def test_ceilings_in_force_acepta_un_registro_estampado_correctamente(
+        registros, monkeypatch):
+    """El camino positivo, al lado de los dos rechazos: un registro estampado
+    con la procedencia vigente no se rechaza y devuelve los techos."""
+    lleno, _ = registros
+    _escribir(lleno, config.SEARCH_EPOCHS, 3)
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
+        "no debía volver a buscar: el registro ya existe"))
+    encontrado = harness.ceilings_in_force(harness.Reduction(), "cpu",
+                                           progress=lambda *_: None, pilot=False)
+    assert encontrado == {"creda": 0.01}
 
 
 def test_la_busqueda_y_el_veredicto_se_separan_por_rol_no_por_transferencia():

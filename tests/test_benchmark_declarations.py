@@ -23,6 +23,21 @@ import torch
 from MIL_CREDA_Benchmark import config, harness
 
 
+def _stamped(entry: dict) -> dict:
+    """`entry`, with the CURRENT config's ceiling-record provenance stamped in.
+
+    The fixtures below hand-write ceiling records the way `harness.
+    sellar_techos` writes them once `ceiling_record.stamp` runs over each
+    entry -- these tests are about re-search, disk-vs-import and scale, not
+    about the stamp, so a fixture missing it would now refuse for an
+    unrelated reason inside `ceilings_in_force`.
+    """
+    return {**entry, "revision": config.REVISION,
+            "kernelSigma": config.KERNEL_SIGMA,
+            "attentionGamma": config.ATTENTION_GAMMA,
+            "attentionTemperature": config.ATTENTION_TEMPERATURE}
+
+
 def test_every_arm_declares_which_sections_it_exercises() -> None:
     declared = set(MIL_CREDA_Benchmark.__benchmark__["arms"])
     configured = {arm["id"] for arm in config.ARMS}
@@ -831,8 +846,8 @@ def test_run_campaign_shard_runs_at_full_scale_never_the_pilots(
 
     record = tmp_path / "ceilings.json"
     record.write_text(json.dumps({
-        "creda": {"ceiling": 1e-4, "atRequiredScale": True},
-        "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
+        "creda": _stamped({"ceiling": 1e-4, "atRequiredScale": True}),
+        "milcreda": _stamped({"ceiling": 1.0, "atRequiredScale": True}),
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
     monkeypatch.setattr(config, "CEILINGS", {})
@@ -1153,7 +1168,7 @@ def test_an_existing_ceiling_record_is_never_re_searched(tmp_path, monkeypatch) 
 
     record = tmp_path / "ceilings.json"
     record.write_text(json.dumps({
-        "creda": {"ceiling": 0.5, "atRequiredScale": True},
+        "creda": _stamped({"ceiling": 0.5, "atRequiredScale": True}),
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", record)
 
@@ -1182,7 +1197,7 @@ def test_the_ceilings_are_read_back_from_disk_and_not_from_the_import(
 
     def write_it(*args, **kwargs):
         record.write_text(json.dumps({
-            "milcreda": {"ceiling": 0.25, "atRequiredScale": True},
+            "milcreda": _stamped({"ceiling": 0.25, "atRequiredScale": True}),
         }), encoding="utf-8")
         return {}
 
@@ -1620,6 +1635,38 @@ def test_a_floor_gets_the_neutral_and_never_a_families_ceiling() -> None:
         ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
     )
     assert harness.ceiling_for(reduction, None, ("S", "M")) == config.RAMP_CEILING
+
+
+def test_ceiling_for_refuses_when_the_attached_record_carries_stale_stamp() -> None:
+    """`campaign()` always attaches the whole record as `ceilingSearch` before
+    any run starts; `ceiling_for` is the backstop that reads it directly.
+
+    Mutation this catches: `ceiling_for` accepting a stale-stamped ceiling
+    would run a real campaign silently under a different `KERNEL_SIGMA`.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    reduction = harness.Reduction(
+        ceilings={"milcreda": 1e-2},
+        ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
+        ceilingSearch={"milcreda": {"ceiling": 1e-2,
+                                    "kernelSigma": config.KERNEL_SIGMA * 3}},
+    )
+    with pytest.raises(SystemExit):
+        harness.ceiling_for(reduction, "milcreda", ("S", "M"))
+
+
+def test_ceiling_for_accepts_a_correctly_stamped_attached_record() -> None:
+    """The positive path beside the refusal above: a `ceilingSearch` entry
+    stamped under the current config never refuses."""
+    from MIL_CREDA_Benchmark import ceiling_record, harness
+
+    reduction = harness.Reduction(
+        ceilings={"milcreda": 1e-2},
+        ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
+        ceilingSearch={"milcreda": ceiling_record.stamp({"ceiling": 1e-2})},
+    )
+    assert harness.ceiling_for(reduction, "milcreda", ("S", "M")) == 1e-4
 
 
 def _synthetic_bagset(domain: str) -> object:

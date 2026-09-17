@@ -360,9 +360,28 @@ def ceiling_for(reduction: Reduction, family: str | None,
 
     A family with no adaptation term has no ceiling and gets the neutral; the
     coefficient it multiplies is not in its objective at all.
+
+    **Refuses when `reduction.ceilingSearch` names this family under a stamp
+    the CURRENT config disagrees with.** `campaign()` always attaches the
+    whole record there before any run starts, so this is the same check
+    `ceilings_in_force()` makes, reached a second way — a backstop for a
+    `Reduction` built with `ceilings=`/`ceilingsByTransfer=` set by hand
+    rather than through `with_ceilings_in_force()`. A bare `Reduction()`
+    carries `ceilingSearch == {}` and is unaffected: nothing to check against
+    means nothing refuses, the same as `run_smoke()`'s declared neutral,
+    which was never searched at all.
     """
     if family is None:
         return config.RAMP_CEILING
+    entry = reduction.ceilingSearch.get(family)
+    if entry is not None and ceiling_record.stamp_drift(entry):
+        raise SystemExit(
+            f"refusing to use {family}'s ceiling: the attached record stamped "
+            "it under a revision or hyperparameters the current config no "
+            "longer carries.\n"
+            "  Re-run `harness.search_ceilings(...)` under today's config, or "
+            "delete the stale record to search again."
+        )
     pooled = reduction.ceilings.get(family, config.RAMP_CEILING)
     return (reduction.ceilingsByTransfer.get(family, {})
             .get(transfer_label(transfer), pooled))
@@ -876,7 +895,19 @@ def search_record(pilot: bool | None = None) -> dict | None:
     record, _ = config.ceilings_record_at(pilot)
     if record is None:
         return None
-    return json.loads(record.read_text(encoding="utf-8"))
+    found = json.loads(record.read_text(encoding="utf-8"))
+    # Tagged and not filtered, the same choice `latent.available()` makes for
+    # `currentRevision`/`currentHyperparameters`: a record from before
+    # `ceiling_record.stamp` existed, or one stamped under a `KERNEL_SIGMA`
+    # or revision the current config no longer carries, still comes back --
+    # dropping it here would hide from every reader (including this
+    # function's own callers below) that it exists at all. `ceilings_in_force`
+    # and `ceiling_for` are what actually refuse on this tag; this function
+    # only reports it.
+    for entry in found.values():
+        if isinstance(entry, dict):
+            entry["currentStamp"] = not ceiling_record.stamp_drift(entry)
+    return found
 
 
 def search_source_note(pilot: bool | None = None) -> str:
@@ -945,12 +976,37 @@ def ceilings_in_force(reduction: Reduction, device: torch.device,
     épocas --- mientras su propio registro quedaba ahí sin que nada lo leyera.
     Las dos mitades de esta función contra dos archivos distintos, y la que
     manda era la que no llevaba la coordenada.
+
+    **Refuses on a record whose stamp does not match the CURRENT config.**
+    `search_record()` tags every family entry with `currentStamp`; a record
+    written before `ceiling_record.stamp` existed, or one searched under a
+    `KERNEL_SIGMA`/`ATTENTION_GAMMA`/`ATTENTION_TEMPERATURE`/`REVISION` the
+    config no longer carries, governs a different objective exactly as a
+    checkpoint stamped that way would -- and `latent.load()` refuses on that
+    same disagreement rather than analysing it silently. `ceilings.pilot.json`
+    on disk today predates this stamp entirely and refuses here by that same
+    rule: it is not deleted or rewritten by this change, it is refused, which
+    is correct.
     """
     reduction = replace(reduction, pilot=pilot)
     if search_record(pilot=pilot) is None:
         progress("no ceiling record: searching, once, before anything is compared")
         search_ceilings(reduction, device, progress=progress, shard=shard,
                         pilot=pilot)
+    record = search_record(pilot=pilot) or {}
+    drifted = sorted(family for family, entry in record.items()
+                     if isinstance(entry, dict) and not entry.get("currentStamp", False))
+    if drifted:
+        raise SystemExit(
+            "refusing to use ceilings stamped under a different revision or "
+            f"hyperparameters: {', '.join(drifted)}.\n"
+            "  The record on disk was searched under a `KERNEL_SIGMA`, "
+            "`ATTENTION_GAMMA`, `ATTENTION_TEMPERATURE` or `REVISION` the "
+            "current config no longer carries -- or predates this stamp "
+            "entirely.\n"
+            "  Re-run `harness.search_ceilings(...)` under today's config, or "
+            "delete the stale record to search again."
+        )
     return config.ceilings_on_record(pilot=pilot)
 
 
@@ -1039,12 +1095,23 @@ def sellar_techos(found: dict, reduction: Reduction) -> dict:
     registro viaje solo. Una corrida puede permitirse referenciar un
     `shard.json` de al lado porque viaja con él; este archivo vuelve del worker
     por su cuenta.
+
+    **Y la misma revisión, el mismo sigma y los mismos dos hiperparámetros de
+    Eq. (16) que `Reduction` ya estampa en cada checkpoint.** Un techo buscado
+    bajo un `KERNEL_SIGMA` distinto gobierna una campaña bajo un objetivo
+    distinto, exactamente como un checkpoint entrenado así -- y antes de esto
+    el registro de techos no llevaba ninguno de los cuatro, así que ninguna
+    campaña podía distinguir un techo medido bajo el sigma vigente de uno
+    medido antes de que se moviera. `ceiling_record.stamp` es el mismo
+    mecanismo que `latent.HYPERPARAMETER_FIELDS` usa para los checkpoints,
+    aplicado acá a la entrada por familia.
     """
     stamp = reduction.environment or environment()
     handle = environment_key(stamp)
     for entry in found.values():
         entry["env"] = handle
         entry["environment"] = stamp
+        ceiling_record.stamp(entry)
     return found
 
 
