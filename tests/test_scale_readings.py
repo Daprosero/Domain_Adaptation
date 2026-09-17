@@ -29,6 +29,21 @@ import pytest
 
 from MIL_CREDA_Benchmark import config, contamination, harness, latent
 
+
+def _stamped(entry: dict) -> dict:
+    """`entry`, con la procedencia que `ceiling_record.stamp` estampa hoy.
+
+    Estos fixtures escriben un registro de techos a mano, como lo hacía
+    `harness.sellar_techos` antes de estampar `revision`/`kernelSigma`/
+    `attentionGamma`/`attentionTemperature`; sin esto `ceilings_in_force`
+    los rechaza por un motivo ajeno a lo que esta clase mide.
+    """
+    return {**entry, "revision": config.REVISION,
+            "kernelSigma": config.KERNEL_SIGMA,
+            "attentionGamma": config.ATTENTION_GAMMA,
+            "attentionTemperature": config.ATTENTION_TEMPERATURE}
+
+
 #: El repositorio, desde este archivo. Igual que en `test_label_noise.py`: un
 #: cuaderno no se importa, y su `source` es el único lugar donde está su código.
 _REPOSITORIO = Path(__file__).resolve().parents[1]
@@ -746,15 +761,15 @@ class TestLasDosMitadesDelTechoSalenDelMismoRegistro:
         monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD",
                             tmp_path / "ceilings.pilot.json")
         config.CEILINGS_RECORD.write_text(json.dumps({
-            "milcreda": {"ceiling": 0.90, "epochs": 20, "seeds": [0, 1, 2],
-                         "atRequiredScale": True,
-                         "requiredScale": {"epochs": 20, "trials": 30},
-                         "byTransfer": {"M->U": 0.91}}}), encoding="utf-8")
+            "milcreda": _stamped({"ceiling": 0.90, "epochs": 20, "seeds": [0, 1, 2],
+                                  "atRequiredScale": True,
+                                  "requiredScale": {"epochs": 20, "trials": 30},
+                                  "byTransfer": {"M->U": 0.91}})}), encoding="utf-8")
         config.CEILINGS_PILOT_RECORD.write_text(json.dumps({
-            "milcreda": {"ceiling": 0.11, "epochs": 3, "seeds": [0],
-                         "atRequiredScale": False,
-                         "requiredScale": {"epochs": 20, "trials": 30},
-                         "byTransfer": {"M->U": 0.12}}}), encoding="utf-8")
+            "milcreda": _stamped({"ceiling": 0.11, "epochs": 3, "seeds": [0],
+                                  "atRequiredScale": False,
+                                  "requiredScale": {"epochs": 20, "trials": 30},
+                                  "byTransfer": {"M->U": 0.12}})}), encoding="utf-8")
         return {True: (0.11, 0.12), False: (0.90, 0.91)}
 
     @pytest.mark.parametrize("escala", [True, False])

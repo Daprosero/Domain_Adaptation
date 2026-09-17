@@ -24,6 +24,8 @@ que es aditivo: un lector viejo no lo mira y sigue funcionando.
 
 from __future__ import annotations
 
+from MIL_CREDA_Benchmark import config
+
 KIND_GRID = "grid"
 KIND_OPTUNA = "optuna"
 
@@ -41,6 +43,58 @@ FLAT_RULE = (
     "Tampoco es una igualdad exacta: sobre un rango continuo dos evaluaciones nunca "
     "empatan y una regla de empate exacto no se activaría jamás"
 )
+
+
+#: The revision and the three hyperparameter fields `harness.Reduction`
+#: stamps on every trained checkpoint (`latent.HYPERPARAMETER_FIELDS`),
+#: stamped here too. Before this the registry had no provenance at all --
+#: not even the environment, before `harness.sellar_techos` added that -- and
+#: a searched ceiling is exactly as bound to the objective it was searched
+#: under as a trained checkpoint is: `run_one` reads `KERNEL_SIGMA` and
+#: Eq. (16)'s gamma/tau_att inside every trial and every grid cell the search
+#: runs, the same as it does for a campaign, and the search is bound to a
+#: managed revision the same way every other record in this repository is.
+STAMP_FIELDS = {
+    "revision": "REVISION",
+    "kernelSigma": "KERNEL_SIGMA",
+    "attentionGamma": "ATTENTION_GAMMA",
+    "attentionTemperature": "ATTENTION_TEMPERATURE",
+}
+
+
+def stamp(entry: dict) -> dict:
+    """`entry`, with the CURRENT config's provenance stamped in, in place.
+
+    Called once per family, at search time, from `harness.sellar_techos` --
+    the single place `environment()` is already stamped, so a ceiling record
+    never carries only half of what produced it.
+    """
+    for field, source in STAMP_FIELDS.items():
+        entry[field] = getattr(config, source)
+    return entry
+
+
+def stamp_drift(entry: dict) -> dict:
+    """Every one of `STAMP_FIELDS` this entry disagrees with the CURRENT config on.
+
+    A field absent from the entry IS drift -- the same rule
+    `latent.hyperparameter_drift` applies to a checkpoint's manifest, for the
+    same reason: nothing stamps these fields except `stamp()`, called from
+    `harness.sellar_techos` at search time, so an entry missing one was
+    written before this provenance existed at all and was not produced by
+    today's search. `revision` on its own already caught an entry from an
+    earlier managed revision; this generalizes the same check to Decision 1's
+    bandwidth and Eq. (16)'s two hyperparameters, which can drift under an
+    unchanged revision exactly as a checkpoint's can.
+    """
+    drift = {}
+    for field, source in STAMP_FIELDS.items():
+        current = getattr(config, source)
+        if field not in entry:
+            drift[field] = {"record": None, "current": current}
+        elif entry[field] != current:
+            drift[field] = {"record": entry[field], "current": current}
+    return drift
 
 
 def kind_of(entry: dict) -> str:
