@@ -43,6 +43,30 @@ def encoder(monkeypatch):
     monkeypatch.setattr(wiring, "FeatureExtractor", _Encoder)
 
 
+class _BNEncoder(nn.Module):
+    """Like `_Encoder`, but with a running-stats layer of its own.
+
+    `_Encoder` carries no `BatchNorm`, deliberately: most claims here have
+    nothing to do with it. Decision 3/4's claims are entirely ABOUT it, so
+    they need a stub that actually has running statistics to observe move or
+    not move.
+    """
+
+    def __init__(self, backbone=None, pretrained=False):
+        super().__init__()
+        self.output_dim = 6
+        self.linear = nn.Linear(3 * 8 * 8, self.output_dim)
+        self.bn = nn.BatchNorm1d(self.output_dim)
+
+    def forward(self, x):
+        return self.bn(self.linear(x.reshape(x.shape[0], -1)))
+
+
+@pytest.fixture
+def bn_encoder(monkeypatch):
+    monkeypatch.setattr(wiring, "FeatureExtractor", _BNEncoder)
+
+
 def _pool(seed: int) -> wiring.Pool:
     generator = torch.Generator().manual_seed(seed)
     bags_count = config.BAGS_PER_STEP + 2
@@ -76,7 +100,7 @@ def test_the_three_selecting_arms_spend_a_budget_of_ten(encoder) -> None:
     kept = {}
     for arm_id in ("SU", "SA", "SK"):
         arm = _arm(arm_id)
-        rows = arm.select(H)
+        rows = arm.select(H, config.KERNEL_SIGMA)
         assert rows.shape[0] == config.SELECT_K == 10, f"{arm_id} spent another budget"
         kept[arm_id] = {tuple(row.tolist()) for row in rows}
 
@@ -84,7 +108,7 @@ def test_the_three_selecting_arms_spend_a_budget_of_ten(encoder) -> None:
     assert kept["SU"] != kept["SA"] or kept["SU"] != kept["SK"]
 
     # the complete method keeps all of them: that is the rung `SK -> G` reads
-    assert _arm("G").select(H).shape[0] == config.INSTANCES_PER_BAG
+    assert _arm("G").select(H, config.KERNEL_SIGMA).shape[0] == config.INSTANCES_PER_BAG
 
 
 def test_the_three_attention_rungs_are_the_ones_the_ladder_declares() -> None:
@@ -108,11 +132,360 @@ def test_the_three_attention_rungs_are_the_ones_the_ladder_declares() -> None:
         {("SK", "G")}
 
 
+# --------------------------------------------------- attention stays within its bag
+
+def test_a_bags_own_attention_weights_do_not_depend_on_another_bag_in_the_batch(
+        encoder) -> None:
+    """r21 Sec. 3: 'el logit es funcion de la instancia y de su bolsa, pero
+    nunca de otras bolsas' -- checked at `Arm.bags_of`, the level a batch of
+    several bags is actually built at, rather than at `relevance_logits` alone.
+
+    Defect (c): `relevance_logits` takes one bag's `H` as its only tensor
+    argument, so isolation there is a fact of the function's signature and
+    cannot fail whatever a caller does with sigma -- the previous version of
+    this claim tested exactly that and so could never turn red. The place
+    cross-bag leakage could actually enter is the bandwidth: a batch-wide
+    sigma (what `_milcreda_term` computed before Decision 1, from the whole
+    source-and-target batch together) would move every bag's consensus term,
+    and through it its attention weights, whenever any OTHER bag in the batch
+    changed.
+
+    Decision 1's constant `config.KERNEL_SIGMA` removes that path entirely;
+    this is what proves it, by perturbing one bag of a multi-bag batch and
+    checking every OTHER bag's weights are bit-identical.
+
+    Reachable red: make sigma batch-dependent again -- recompute a median
+    over the concatenated batch inside `bags_of` or a caller, instead of
+    threading the one constant through.
+    """
+    arm = _arm("G")
+    torch.manual_seed(5)
+    embeddings = torch.randn(4, config.INSTANCES_PER_BAG, 6)
+
+    baseline = arm.bags_of(embeddings, config.KERNEL_SIGMA)
+    baseline_weights = [w.clone() for _, w in baseline]
+
+    perturbed = embeddings.clone()
+    perturbed[1] = perturbed[1] + 50.0  # large and unmissable
+    after = arm.bags_of(perturbed, config.KERNEL_SIGMA)
+
+    for index in (0, 2, 3):
+        assert torch.equal(baseline_weights[index], after[index][1]), \
+            f"bag {index}'s attention weights moved when only bag 1 changed"
+    # and bag 1 itself did move, so the perturbation actually perturbed something
+    assert not torch.equal(baseline_weights[1], after[1][1])
+
+
+def test_weights_for_and_select_read_the_declared_gamma_and_temperature(
+        encoder, monkeypatch) -> None:
+    """Defect (h): `weights_for` and `select`'s `topk` ranking pass
+    `config.ATTENTION_GAMMA`/`config.ATTENTION_TEMPERATURE` through to
+    `relevance_logits`/`bag_weights`, rather than a value a hardcoded 0.0/1.0
+    could silently stand in for at today's neutral hyperparameters.
+
+    Patched to NON-neutral values on purpose: at the declared neutral
+    (gamma=0, tau_att=1) a mutant that hardcoded those exact numbers would
+    read identically to the real thing. Only a patched, non-neutral config
+    can tell them apart.
+    """
+    arm = _arm("G")
+    torch.manual_seed(7)
+    H = torch.randn(config.INSTANCES_PER_BAG, 6)
+
+    monkeypatch.setattr(config, "ATTENTION_GAMMA", 0.0)
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
+    neutral_weights = arm.weights_for(H, config.KERNEL_SIGMA)
+
+    monkeypatch.setattr(config, "ATTENTION_GAMMA", 2.4)
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 0.2)
+    patched_weights = arm.weights_for(H, config.KERNEL_SIGMA)
+
+    assert not torch.allclose(neutral_weights, patched_weights), (
+        "weights_for produced the same weights under a patched gamma/tau_att "
+        "as under the neutral ones -- it is not reading config"
+    )
+
+    sk = _arm("SK")
+    monkeypatch.setattr(config, "ATTENTION_GAMMA", 0.0)
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
+    neutral_kept = sk.select(H, config.KERNEL_SIGMA)
+
+    monkeypatch.setattr(config, "ATTENTION_GAMMA", 2.4)
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 0.2)
+    patched_kept = sk.select(H, config.KERNEL_SIGMA)
+
+    assert not torch.equal(neutral_kept, patched_kept), (
+        "select's topk ranking chose the same instances under a patched "
+        "gamma as under the neutral one -- it is not reading config"
+    )
+
+
+def test_local_loss_reads_the_declared_local_stabilizer(encoder, monkeypatch) -> None:
+    """Defect (h): `local_loss`'s epsilon (Eq. 38's stabilizer) is passed
+    explicitly from `config.EPSILON_LOCAL` in `_milcreda_term`, rather than
+    silently falling through to the method's own `epsilon=1e-8` default --
+    a value a caller could omit without anyone noticing which number
+    governed the run.
+
+    Patched to something far from the true default so a mutant that dropped
+    the explicit argument (falling back to the function's own default) would
+    read differently and this test would catch it.
+    """
+    arm = _arm("G")
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+    generator = torch.Generator().manual_seed(3)
+    embeddings = arm.instance_embeddings(x)
+    target = arm.target.take(arm._draw_target(generator))
+
+    monkeypatch.setattr(config, "EPSILON_LOCAL", 1e-8)
+    _, local_default = arm._milcreda_term(embeddings, y, target)
+
+    monkeypatch.setattr(config, "EPSILON_LOCAL", 0.5)
+    _, local_patched = arm._milcreda_term(embeddings, y, target)
+
+    assert local_default.detach().item() != pytest.approx(
+        local_patched.detach().item()), (
+        "the local term did not move when config.EPSILON_LOCAL changed -- "
+        "local_loss is not reading it"
+    )
+
+
+def test_every_sigma_consumer_receives_the_one_declared_constant(
+        encoder, monkeypatch) -> None:
+    """Decision 1: `config.KERNEL_SIGMA` reaches the attention consensus, the
+    top-k ranking, every kernel block `_milcreda_term` builds (K_ss, K_st,
+    K_tt) and the local correspondence's own self-similarity evaluation --
+    all as the SAME number, never a per-call recomputation.
+
+    Spies on every function along the real training-step call path that
+    takes a `sigma` argument and records what it was actually called with,
+    named by function, so a consumer silently reading something else -- a
+    stale per-batch median, a scaled bandwidth, anything but the one
+    constant -- is caught by name rather than by a single aggregate check.
+
+    Reachable red: pass a different value to any one consumer -- e.g. change
+    `bag_kernel_matrix(bags_s, bags_s, sigma)`'s `sigma` to `sigma * 2` in
+    `_milcreda_term`.
+    """
+    import MIL_CREDA.attention as attention_module
+    import MIL_CREDA.bag_kernel as bag_kernel_module
+
+    seen: list[tuple[str, object]] = []
+
+    real_relevance_logits = attention_module.relevance_logits
+
+    def spy_relevance_logits(H, V_R, b_R, v_R, gamma, sigma):
+        seen.append(("relevance_logits", sigma))
+        return real_relevance_logits(H, V_R, b_R, v_R, gamma, sigma)
+
+    real_bag_kernel_matrix = bag_kernel_module.bag_kernel_matrix
+
+    def spy_bag_kernel_matrix(rows, cols, sigma):
+        seen.append(("bag_kernel_matrix", sigma))
+        return real_bag_kernel_matrix(rows, cols, sigma)
+
+    real_bag_kernel = bag_kernel_module.bag_kernel
+
+    def spy_bag_kernel(H_u, w_u, H_v, w_v, sigma):
+        seen.append(("bag_kernel", sigma))
+        return real_bag_kernel(H_u, w_u, H_v, w_v, sigma)
+
+    monkeypatch.setattr(wiring, "relevance_logits", spy_relevance_logits)
+    monkeypatch.setattr(wiring, "bag_kernel_matrix", spy_bag_kernel_matrix)
+    monkeypatch.setattr(wiring, "bag_kernel", spy_bag_kernel)
+
+    # G exercises weights_for and every kernel block plus local_distance's
+    # self-similarity; SK additionally exercises select's topk ranking.
+    for arm_id in ("G", "SK"):
+        arm = _arm(arm_id)
+        x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+        y = arm.source.labels[:config.BAGS_PER_STEP]
+        arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+
+    assert seen, "no sigma consumer was ever called"
+    consumers = {name for name, _ in seen}
+    assert consumers >= {"relevance_logits", "bag_kernel_matrix", "bag_kernel"}
+    for name, sigma in seen:
+        assert sigma == config.KERNEL_SIGMA, (
+            f"{name} was called with sigma={sigma!r}, not the declared "
+            f"constant {config.KERNEL_SIGMA!r}"
+        )
+
+
+# --------------------------------------------------------------- Decision 2: the floor
+
+def test_a_floor_never_encodes_a_target_image_during_training(encoder, monkeypatch) -> None:
+    """Decision 2: a floor's training step never lets a target image reach
+    the encoder, ever.
+
+    Instrumented rather than inferred: `instance_embeddings` is spied on the
+    live arm instance, and every call it receives during the floor's
+    `training_step` is checked against the identity of the SOURCE batch
+    handed to that step. A target-derived tensor reaching the encoder at all
+    -- for BatchNorm parity or anything else -- is what this refuses.
+
+    Reachable red: restore the old unconditional
+    `self.instance_embeddings(target_bags)` call in the floor branch.
+    """
+    arm = _arm("B")
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+
+    seen_ids = []
+    real_instance_embeddings = arm.instance_embeddings
+
+    def spy(bags):
+        seen_ids.append(bags.data_ptr())
+        return real_instance_embeddings(bags)
+
+    monkeypatch.setattr(arm, "instance_embeddings", spy)
+    arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+
+    assert seen_ids == [x.data_ptr()], (
+        f"the floor's training step called instance_embeddings "
+        f"{len(seen_ids)} time(s); only its own source batch may reach it"
+    )
+
+
+def test_a_floor_consumes_the_generator_identically_to_an_adapted_arm(encoder) -> None:
+    """Decision 2: the floor still draws the target indices `_draw_target`
+    always draws -- SKILL.md: arms must not differ in how much of the
+    generator they consume -- so the training generator advances by the
+    same amount whichever arm is training. Only whether the images those
+    indices name are ever taken or encoded differs (the test above).
+
+    Reachable red: move the `_draw_target` call inside the
+    `if adaptation == "milcreda"` branch, so the floor skips it entirely.
+    """
+    floor = _arm("B")
+    adapted = _arm("G")
+    x = floor.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = floor.source.labels[:config.BAGS_PER_STEP]
+
+    gen_floor = torch.Generator().manual_seed(99)
+    gen_adapted = torch.Generator().manual_seed(99)
+
+    floor.training_step(x, y, 0.5, gen_floor)
+    adapted.training_step(x, y, 0.5, gen_adapted)
+
+    # Identical state after, from identical state before, is only possible if
+    # the two arms consumed exactly the same amount of the generator's stream.
+    draw_floor = torch.randn(4, generator=gen_floor)
+    draw_adapted = torch.randn(4, generator=gen_adapted)
+    assert torch.equal(draw_floor, draw_adapted), (
+        "the floor and the adapted arm left the shared-shape generator in "
+        "different states, so they consumed different amounts of it"
+    )
+
+
+# --------------------------------------- Decision 3/4: whose stats the target sees
+
+def test_target_embeddings_leaves_running_stats_unchanged_for_a_frozen_arm(
+        bn_encoder) -> None:
+    """Decision 3: E, F, G, SU, SA, SK ('targetNormalization': 'frozen')
+    normalize the target forward with the CURRENT running statistics and
+    leave them unchanged -- checked directly against a stub encoder that
+    actually carries a `BatchNorm1d`, at the exact method
+    (`Arm._target_embeddings`) that does the freezing, rather than through a
+    full training step where the source forward's own (legitimate) update
+    would confound the reading.
+
+    Reachable red: call `self.instance_embeddings(target_bags)` directly in
+    `_target_embeddings` instead of opening `_frozen_running_stats`.
+    """
+    arm = _arm("G")
+    assert config.ARMS_BY_ID["G"]["targetNormalization"] == "frozen"
+    bn = arm.encoder.bn
+
+    # Seed the running stats away from their fresh init/unit-variance state,
+    # via one source-shaped forward in training mode -- what a real step's
+    # source half already does -- so "unchanged" is a real claim.
+    arm.encoder.train()
+    arm.encoder(torch.randn(20, 3, 8, 8))
+    before_mean, before_var = bn.running_mean.clone(), bn.running_var.clone()
+
+    target_bags = arm.target.take(torch.arange(config.BAGS_PER_STEP))
+    embeddings = arm._target_embeddings(target_bags)
+
+    assert torch.equal(bn.running_mean, before_mean)
+    assert torch.equal(bn.running_var, before_var)
+
+    # And the forward really used those frozen stats to normalize, rather
+    # than the target batch's own -- confirmed against the encoder's own
+    # eval()-mode output, which is defined to use the stored running stats.
+    arm.encoder.eval()
+    with torch.no_grad():
+        B, m = target_bags.shape[0], target_bags.shape[1]
+        expected = arm.encoder(
+            target_bags.reshape(B * m, *target_bags.shape[2:])
+        ).reshape(B, m, -1)
+    arm.encoder.train()
+    assert torch.allclose(embeddings, expected, atol=1e-6)
+
+
+def test_target_embeddings_updates_running_stats_for_gn(bn_encoder) -> None:
+    """Decision 4: `GN` is identical to `G` except its running-stats layers
+    DO update from the target forward -- checked at the same method as the
+    test above, on the one arm whose `targetNormalization` is `'live'`.
+
+    Reachable red: give `GN` the same `'frozen'` value `G` has, or make
+    `_target_embeddings` ignore `targetNormalization` altogether.
+    """
+    arm = _arm("GN")
+    assert config.ARMS_BY_ID["GN"]["targetNormalization"] == "live"
+    bn = arm.encoder.bn
+
+    arm.encoder.train()
+    arm.encoder(torch.randn(20, 3, 8, 8))
+    before_mean, before_var = bn.running_mean.clone(), bn.running_var.clone()
+
+    target_bags = arm.target.take(torch.arange(config.BAGS_PER_STEP))
+    arm._target_embeddings(target_bags)
+
+    assert not torch.equal(bn.running_mean, before_mean)
+    assert not torch.equal(bn.running_var, before_var)
+
+
+def test_running_stats_after_a_step_match_a_source_only_forward(bn_encoder) -> None:
+    """Decision 3, the literal comparison: running statistics after a frozen
+    arm's full training step equal those a source-only forward alone would
+    have produced -- proving the target forward, which DOES happen (the
+    adaptation terms need it), contributes nothing to them.
+
+    Two arms in identical state (`copy.deepcopy`, so every parameter and
+    every running-stats buffer starts bit-identical): one takes a real
+    training step, the other only ever sees the same source batch, forwarded
+    exactly as `instance_embeddings` would.
+    """
+    import copy
+
+    arm = _arm("G")
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+
+    arm.encoder.train()
+    arm.encoder(torch.randn(20, 3, 8, 8))  # give the stats something of their own
+
+    twin = copy.deepcopy(arm)
+
+    arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+
+    twin.encoder.train()
+    B, m = x.shape[0], x.shape[1]
+    twin.encoder(x.reshape(B * m, *x.shape[2:]))
+
+    assert torch.allclose(arm.encoder.bn.running_mean, twin.encoder.bn.running_mean,
+                          atol=1e-6)
+    assert torch.allclose(arm.encoder.bn.running_var, twin.encoder.bn.running_var,
+                          atol=1e-6)
+
+
 # ------------------------------------------------- the supervised term of a bag
 
 def test_a_bag_unit_arm_uses_the_normalized_supervised_term_instead(encoder) -> None:
     """Which supervised term an arm gets is read from the unit it declares, and a
-    bag-unit arm gets Eq. (18) normalized by `B_src` rather than a cross-entropy
+    bag-unit arm gets Eq. (21) normalized by `B_src` rather than a cross-entropy
     over instances."""
     from MIL_CREDA.objective import source_loss
 
@@ -121,7 +494,7 @@ def test_a_bag_unit_arm_uses_the_normalized_supervised_term_instead(encoder) -> 
     y = arm.source.labels[:config.BAGS_PER_STEP]
     step = arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
 
-    Z, _ = arm.bag_representations(arm.instance_embeddings(x))
+    Z, _ = arm.bag_representations(arm.instance_embeddings(x), config.KERNEL_SIGMA)
     scores = F.softmax(arm.head(Z), dim=1)
     expected = source_loss(scores, F.one_hot(y, CLASSES).to(scores.dtype),
                            config.EPSILON)
@@ -183,8 +556,8 @@ def test_one_draw_of_the_material_is_shared_by_every_arm(campana) -> None:
     same object. The count is what says so -- three domains for one seed, however
     many arms ran -- and the identity is what makes the count mean it.
 
-    Reachable red: move `bags.build` inside the arm loop, and the seven arms of
-    a cell get seven draws that agree in distribution and in nothing else.
+    Reachable red: move `bags.build` inside the arm loop, and the eight arms of
+    a cell get eight draws that agree in distribution and in nothing else.
     """
     harness_result = _run_campaign([7], noise=config.NOISE_LEVELS[2])
     built = campana["built"]
@@ -196,7 +569,7 @@ def test_one_draw_of_the_material_is_shared_by_every_arm(campana) -> None:
 
     runs = campana["runs"]
     arms = {run["arm"] for run in runs}
-    assert len(arms) == len(config.ARMS) == 7
+    assert len(arms) == len(config.ARMS) == 8
     for transfer in {run["transfer"] for run in runs}:
         of_cell = [run for run in runs if run["transfer"] == transfer]
         assert len({run["source"] for run in of_cell}) == 1, \
@@ -382,7 +755,7 @@ def _unit_branch():
 
 def test_the_bag_unit_arms_assemble_the_objective_and_never_write_a_term_inline(
         encoder) -> None:
-    """Eq. (18) and Eq. (39) as the revision states them, called and not restated.
+    """Eq. (21) and Eq. (39) as the revision states them, called and not restated.
 
     A supervised term written inline in the benchmark is a second copy of an
     equation the proposal already owns: it stops moving when the proposal moves,
@@ -395,7 +768,7 @@ def test_the_bag_unit_arms_assemble_the_objective_and_never_write_a_term_inline(
     term written inline" is only meaningful beside the one place a term IS
     written inline on purpose.
 
-    Reachable red: write Eq. (18) or Eq. (39) out by hand in the bag branch, or
+    Reachable red: write Eq. (21) or Eq. (39) out by hand in the bag branch, or
     let the bag branch fall through to the instance one's cross-entropy.
     """
     from MIL_CREDA.objective import source_loss, total_objective
@@ -408,7 +781,7 @@ def test_the_bag_unit_arms_assemble_the_objective_and_never_write_a_term_inline(
     step = arm.training_step(x, y, ramp, torch.Generator().manual_seed(3))
 
     embeddings = arm.instance_embeddings(x)
-    Z, _ = arm.bag_representations(embeddings)
+    Z, _ = arm.bag_representations(embeddings, config.KERNEL_SIGMA)
     scores = F.softmax(arm.head(Z), dim=1)
     supervised = source_loss(scores, F.one_hot(y, CLASSES).to(scores.dtype),
                              config.EPSILON)
@@ -425,7 +798,7 @@ def test_the_bag_unit_arms_assemble_the_objective_and_never_write_a_term_inline(
     assert {"source_loss", "one_hot", "softmax"} <= bag
     assert "cross_entropy" not in bag, "a supervised term written inline"
     assert "cross_entropy" in instance, "prior work's own term left the branch"
-    assert "source_loss" not in instance, "Eq. (18) applied to prior work"
+    assert "source_loss" not in instance, "Eq. (21) applied to prior work"
     assert "total_objective" in _milcreda_calls()
 
 
