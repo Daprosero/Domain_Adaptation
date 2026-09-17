@@ -109,6 +109,8 @@ class Arm(nn.Module):
         if spec["adaptation"] == "creda":
             # lambda_creda is one because the coefficient is applied outside, from
             # the shared schedule; leaving it here as well would apply it twice.
+            # No declared arm (B, E, F, G, SU, SA, SK) carries "creda" here --
+            # this branch is unreached today, kept as-is (prior work, unchanged).
             self.creda = CREDALoss(sigma="auto", lambda_creda=1.0,
                                    use_entropy_weighting=spec["weighting"])
 
@@ -347,18 +349,11 @@ class Arm(nn.Module):
                                + config.EPSILON)
 
         # Decision 2: a floor never lets a target image reach the encoder,
-        # ever, in training -- one earlier design measured the normalization
-        # rather than the loss this way (M->U, coefficient forced to zero:
-        # the arm still scored 0.778 against the floor's 0.722). Every
-        # adapted arm's target forward, by contrast, runs through the
-        # encoder exactly like its source forward -- normalization layers in
-        # training mode included, learning from both domains as part of the
-        # architecture, not as a separate effect to isolate or a confound to
-        # control for. `_draw_target` is still called for every arm, floor
-        # included, so the generator is
-        # consumed identically across arms (SKILL.md: arms must not differ in
-        # how much of the generator they consume) -- what a floor never does
-        # with the indices it draws is `take` or encode the images they name.
+        # ever, in training. `_draw_target` is still called for every arm,
+        # floor included, so the generator is consumed identically across
+        # arms (SKILL.md: arms must not differ in how much of the generator
+        # they consume) -- what a floor never does with the indices it draws
+        # is `take` or encode the images they name.
         target_indices = self._draw_target(generator)
         coefficient = ramp
         adaptation = torch.zeros((), device=logits.device, dtype=logits.dtype)
