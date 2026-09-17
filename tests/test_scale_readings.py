@@ -874,14 +874,14 @@ def test_el_recorrido_entero_lee_el_registro_de_su_escala_en_los_dos_modos():
     import inspect
     import tempfile
 
-    completo = {"milcreda": {"ceiling": 0.93, "epochs": 21, "seeds": [0, 1, 2],
+    completo = {"milcreda": _stamped({"ceiling": 0.93, "epochs": 21, "seeds": [0, 1, 2],
                              "atRequiredScale": True,
                              "requiredScale": {"epochs": 21, "trials": 31},
-                             "byTransfer": {"M->U": 0.93}}}
-    ensayo = {"milcreda": {"ceiling": 0.11, "epochs": 3, "seeds": [7],
+                             "byTransfer": {"M->U": 0.93}})}
+    ensayo = {"milcreda": _stamped({"ceiling": 0.11, "epochs": 3, "seeds": [7],
                            "atRequiredScale": False,
                            "requiredScale": {"epochs": 21, "trials": 31},
-                           "byTransfer": {"M->U": 0.11}}}
+                           "byTransfer": {"M->U": 0.11}})}
 
     lectores = {}
     for modulo in (config, harness):

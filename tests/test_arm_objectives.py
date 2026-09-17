@@ -345,6 +345,63 @@ def test_every_sigma_consumer_receives_the_one_declared_constant(
         )
 
 
+class _FakeDataset:
+    """The shape `harness.accuracy` iterates: `dataset[i] -> (instances, label)`."""
+
+    def __init__(self, pool: wiring.Pool, n: int):
+        self.pool = pool
+        self.n = n
+
+    def __len__(self) -> int:
+        return self.n
+
+    def __getitem__(self, i: int):
+        instances = self.pool.take(torch.tensor([i]))[0]
+        return instances, int(self.pool.labels[i])
+
+
+def test_evaluation_sigma_matches_the_declared_constant_through_harness_accuracy(
+        encoder, monkeypatch) -> None:
+    """Decision 1, driven through the ACTUAL evaluation path and not a bare
+    `arm(x)` call: `harness.accuracy` is `@torch.no_grad()` and explicitly
+    calls `model.eval()` before scoring a batch and `model.train()` after,
+    which `arm(x)` alone never does. Every one of the seven declared arms is
+    driven, not only two, so a drift confined to one arm's own path is
+    caught by name -- `bag_representations` is shared code, but nothing
+    before this proved every `spec` reaches it with the same sigma in eval
+    mode specifically.
+
+    Reachable red: a sigma drift that only fires while `model.training` is
+    `False`, or one confined to arm `SA` alone.
+    """
+    import MIL_CREDA.attention as attention_module
+
+    real_relevance_logits = attention_module.relevance_logits
+    seen: list[tuple[str, object]] = []
+
+    def spy_relevance_logits(H, V_R, b_R, v_R, gamma, sigma):
+        seen.append(("relevance_logits", sigma))
+        return real_relevance_logits(H, V_R, b_R, v_R, gamma, sigma)
+
+    monkeypatch.setattr(wiring, "relevance_logits", spy_relevance_logits)
+
+    for arm_id in config.ARMS_BY_ID:
+        seen.clear()
+        arm = _arm(arm_id)
+        dataset = _FakeDataset(arm.source, config.BAGS_PER_STEP)
+        assert arm.training, f"arm {arm_id}: not in training mode before accuracy()"
+        harness.accuracy(arm, dataset, torch.device("cpu"))
+        assert arm.training, (
+            f"arm {arm_id}: harness.accuracy did not restore training mode"
+        )
+        assert seen, f"arm {arm_id}: no sigma consumer was called through accuracy()"
+        for name, sigma in seen:
+            assert sigma == config.KERNEL_SIGMA, (
+                f"arm {arm_id}: {name} was called in eval mode with "
+                f"sigma={sigma!r}, not the declared constant {config.KERNEL_SIGMA!r}"
+            )
+
+
 # --------------------------------------------------------------- Decision 2: the floor
 
 def test_a_floor_never_encodes_a_target_image_during_training(encoder, monkeypatch) -> None:
@@ -385,6 +442,88 @@ def test_a_floor_never_encodes_a_target_image_during_training(encoder, monkeypat
     assert seen_ids == [x.data_ptr()], (
         f"the floor's training step called encoder.forward "
         f"{len(seen_ids)} time(s); only its own source batch may reach it"
+    )
+
+
+def test_a_floor_never_calls_take_on_the_target_pool(encoder, monkeypatch) -> None:
+    """Decision 2's comment states it directly: "what a floor never does with
+    the indices it draws is `take` or encode the images they name." The test
+    above spies `encoder.forward` and proves no target image ever reaches
+    it -- a stronger claim in one sense, but blind to a floor that called
+    `self.target.take(target_indices)` and simply discarded the result
+    without ever encoding it. That call has its own cost (indexing a
+    potentially large `images` tensor) and its own meaning (Decision 2 is
+    about not TOUCHING target material during training, not only about not
+    encoding it), so it gets its own spy, directly on `Pool.take`.
+
+    Reachable red: a floor branch that calls
+    `self.target.take(target_indices)` and drops the result.
+    """
+    arm = _arm("B")
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+
+    real_take = wiring.Pool.take
+    calls = []
+
+    def spy_take(self, positions):
+        calls.append(self is arm.target)
+        return real_take(self, positions)
+
+    monkeypatch.setattr(wiring.Pool, "take", spy_take)
+    arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+
+    assert not any(calls), (
+        "the floor's training step called Pool.take on its target pool "
+        f"{sum(calls)} time(s); Decision 2 says it never touches it"
+    )
+
+
+@pytest.mark.parametrize("arm_id", ["E", "F", "G", "SU", "SA", "SK"])
+def test_an_adapted_arms_target_forward_carries_gradient_to_the_encoder(
+        encoder, arm_id) -> None:
+    """The adaptation term trains the shared encoder through the TARGET
+    forward pass, not only through the source one the supervised term
+    already drives -- Eq. (39)'s whole point is one encoder both domains'
+    inputs update. Isolated from the supervised term by capturing
+    `_milcreda_term`'s own tensors before `training_step` detaches them into
+    its report dict, and calling `.backward()` on their sum alone.
+
+    Reachable red: wrap the target forward inside `_milcreda_term` (or the
+    `target_bags = self.target.take(...)` -> `self.instance_embeddings` path
+    that feeds it) in `torch.no_grad()`, or `.detach()` the target
+    embeddings before they enter `_milcreda_term`.
+    """
+    arm = _arm(arm_id)
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+
+    captured: dict = {}
+    real_term = arm._milcreda_term
+
+    def spy(embeddings, labels, target_bags):
+        global_term, local_term = real_term(embeddings, labels, target_bags)
+        captured["global_term"] = global_term
+        captured["local_term"] = local_term
+        return global_term, local_term
+
+    arm._milcreda_term = spy
+    arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+
+    assert "global_term" in captured, "training_step never reached _milcreda_term"
+    for p in arm.encoder.parameters():
+        assert p.grad is None, "encoder already carried a gradient before backward"
+
+    adaptation = captured["global_term"] + captured["local_term"]
+    adaptation.backward()
+
+    grads = [p.grad for p in arm.encoder.parameters() if p.grad is not None]
+    assert grads, (
+        f"arm {arm_id}: the adaptation term alone produced no gradient at all "
+        "on the encoder"
+    )
+    assert any(torch.any(g != 0) for g in grads), (
+        f"arm {arm_id}: the adaptation term's gradient on the encoder is all zero"
     )
 
 

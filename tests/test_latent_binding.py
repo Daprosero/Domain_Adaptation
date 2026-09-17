@@ -445,6 +445,135 @@ def test_keep_median_stamps_the_three_hyperparameters_the_run_actually_used(
     assert entry["currentHyperparameters"] is True
 
 
+def test_reduction_from_record_round_trips_through_asdict():
+    """Defect (1): `Benchmark_Report_v1.ipynb` crashed doing
+    `harness.Reduction(**summary["reduction"])` -- `kernelSigma`,
+    `attentionGamma` and `attentionTemperature` are `init=False`, and
+    `dataclasses` refuses any keyword naming one. `asdict(reduction)` ->
+    `Reduction.from_record(...)` has to land back on an equal `Reduction`.
+    """
+    from dataclasses import asdict
+
+    from MIL_CREDA_Benchmark import harness
+
+    original = harness.Reduction(labelNoise=0.4, pilot=True, kind="curve")
+    rebuilt = harness.Reduction.from_record(asdict(original))
+    assert rebuilt == original
+
+
+def test_reduction_from_record_refuses_a_hyperparameter_mismatch():
+    """The crash `Reduction(**record)` raised was worse only in the sense of
+    being unhelpful; silently accepting the record and stamping today's
+    `config` over it would be worse still -- exactly the confusion
+    `latent.load()` and `ceiling_record.stamp_drift` both refuse elsewhere.
+    """
+    from dataclasses import asdict
+
+    from MIL_CREDA_Benchmark import harness
+
+    record = asdict(harness.Reduction())
+    record["kernelSigma"] = record["kernelSigma"] * 3
+    with pytest.raises(SystemExit):
+        harness.Reduction.from_record(record)
+
+
+def test_reduction_from_record_refuses_a_missing_hyperparameter_field():
+    from dataclasses import asdict
+
+    from MIL_CREDA_Benchmark import harness
+
+    record = asdict(harness.Reduction())
+    del record["attentionTemperature"]
+    with pytest.raises(SystemExit):
+        harness.Reduction.from_record(record)
+
+
+def test_reduction_refuses_kernel_sigma_as_a_constructor_keyword():
+    """`kernelSigma`, `attentionGamma` and `attentionTemperature` are
+    `init=False` on purpose (`harness.py`'s own comment beside the three
+    fields): a `Reduction` always stamps what the run actually trained
+    under, read off `config` at construction time, and a constructor
+    keyword would let a caller stamp a value the run never used -- a
+    manifest that lies about what trained the checkpoint beside it.
+    `dataclasses` itself is what refuses; this only asserts that the
+    refusal is still reachable.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    with pytest.raises(TypeError):
+        harness.Reduction(kernelSigma=1.0)
+
+
+def test_reduction_stamps_kernel_sigma_from_config_at_construction_time(
+        monkeypatch):
+    """The stamp is read from `config` when the `Reduction` is BUILT, not a
+    frozen literal -- `harness.py`'s own comment states every consumer reads
+    `config.KERNEL_SIGMA` directly and never `reduction.kernelSigma`, so the
+    field exists only to report what was true at that moment. Monkeypatched
+    to a value nowhere close to the placeholder before construction: a
+    hardcoded `kernelSigma: float = field(default_factory=lambda: 36.135...)`
+    would report the placeholder regardless and this would catch it, while a
+    test that only ever reads the CURRENT `config.KERNEL_SIGMA` value could
+    not tell the two apart.
+    """
+    from MIL_CREDA_Benchmark import config, harness
+
+    monkeypatch.setattr(config, "KERNEL_SIGMA", 999.5)
+    monkeypatch.setattr(config, "ATTENTION_GAMMA", 12.25)
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 7.75)
+
+    reduction = harness.Reduction()
+    assert reduction.kernelSigma == 999.5
+    assert reduction.attentionGamma == 12.25
+    assert reduction.attentionTemperature == 7.75
+
+
+def test_ceiling_record_stamp_reads_config_at_call_time(monkeypatch):
+    """`ceiling_record.stamp`'s own version of the test above: a hardcoded
+    `entry["kernelSigma"] = 36.135014304860874` would pass a test that never
+    moves `config.KERNEL_SIGMA` away from that exact value, silently."""
+    from MIL_CREDA_Benchmark import ceiling_record, config
+
+    monkeypatch.setattr(config, "KERNEL_SIGMA", 4.5)
+    monkeypatch.setattr(config, "ATTENTION_GAMMA", 6.5)
+    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 8.5)
+    monkeypatch.setattr(config, "REVISION", "research-concept-r99.md")
+
+    entry = ceiling_record.stamp({"ceiling": 0.5})
+    assert entry["kernelSigma"] == 4.5
+    assert entry["attentionGamma"] == 6.5
+    assert entry["attentionTemperature"] == 8.5
+    assert entry["revision"] == "research-concept-r99.md"
+
+
+@pytest.mark.parametrize("missing_field", [
+    "kernelSigma", "attentionGamma", "attentionTemperature",
+])
+def test_hyperparameter_drift_flags_exactly_the_one_field_missing(missing_field):
+    """`test_an_older_manifest_missing_the_three_hyperparameter_fields_is_drift`
+    (above) removes all three fields at once, which a `hyperparameter_drift`
+    that only checked, say, `attentionGamma`'s absence would still pass --
+    the other two missing fields would carry it. Isolated here: every OTHER
+    field present and agreeing, one field missing, and only that one field
+    reported as drift.
+
+    Reachable red: `hyperparameter_drift` ignoring the absence of any one
+    of the three fields while still checking the other two.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    reduction = {"kernelSigma": config.KERNEL_SIGMA,
+                "attentionGamma": config.ATTENTION_GAMMA,
+                "attentionTemperature": config.ATTENTION_TEMPERATURE}
+    del reduction[missing_field]
+
+    drift = latent.hyperparameter_drift({"reduction": reduction})
+    assert set(drift) == {missing_field}, (
+        f"expected only {missing_field!r} to drift, got {sorted(drift)}"
+    )
+    assert drift[missing_field]["checkpoint"] is None
+
+
 def test_load_succeeds_on_a_checkpoint_whose_stamp_matches_the_current_config(
         monkeypatch):
     """`load()`'s positive path, mirrored against the refusals above it.

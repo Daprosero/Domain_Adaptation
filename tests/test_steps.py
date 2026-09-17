@@ -1744,6 +1744,22 @@ def test_el_ensayo_remoto_marca_el_modo_para_el_kernel_y_deja_el_entorno_como_es
     assert config.is_rehearsal() is True
 
 
+def _stamped(entry: dict) -> dict:
+    """`entry`, con la procedencia que `ceiling_record.stamp` estampa hoy.
+
+    Este archivo escribe registros de techos a mano para el único test de acá
+    abajo que necesita uno; sin esto `config.ceilings_on_record`/
+    `harness.search_record` lo verían como escrito antes de que el sello
+    existiera y se negarían por eso, no por lo que el test quiere ejercitar.
+    """
+    from MIL_CREDA_Benchmark import config as _config
+
+    return {**entry, "revision": _config.REVISION,
+            "kernelSigma": _config.KERNEL_SIGMA,
+            "attentionGamma": _config.ATTENTION_GAMMA,
+            "attentionTemperature": _config.ATTENTION_TEMPERATURE}
+
+
 def test_el_ensayo_remoto_no_ablanda_la_guarda_que_gobierna_la_campana(
         tmp_path, monkeypatch) -> None:
     """Lo que este modo NO toca, afirmado y no supuesto.
@@ -1778,10 +1794,17 @@ def test_el_ensayo_remoto_no_ablanda_la_guarda_que_gobierna_la_campana(
     _sin_maquina(monkeypatch, tmp_path)
     registro = tmp_path / "ceilings.json"
     registro.write_text(_json.dumps({
-        "creda": {"ceiling": 1e-4, "atRequiredScale": False},
-        "milcreda": {"ceiling": 1.0, "atRequiredScale": True},
+        "creda": _stamped({"ceiling": 1e-4, "atRequiredScale": False}),
+        "milcreda": _stamped({"ceiling": 1.0, "atRequiredScale": True}),
     }), encoding="utf-8")
     monkeypatch.setattr(config, "CEILINGS_RECORD", registro)
+    # `reduccion.pilot=True` hace que el rechazo de sello a la entrada de
+    # `campaign()` mire también `search_record(pilot=True)` -- el registro de
+    # ENSAYO, que este test nunca redirige, así que sin esto leería el
+    # `ceilings.pilot.json` real de este repositorio, viejo y sin sello, y se
+    # negaría por esa razón antes de llegar a la guarda de escala que el test
+    # quiere ejercitar.
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "ceilings.pilot.json")
 
     reduccion = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0},
                                   pilot=True)

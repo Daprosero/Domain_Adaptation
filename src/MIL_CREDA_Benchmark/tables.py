@@ -436,6 +436,40 @@ def objective(key: str, markdown: bool = True) -> str:
     return f"> {texto}" if markdown else texto
 
 
+def _stale_families(record: dict | None) -> list[str]:
+    """Cada familia de `record` cuyo sello discrepa con el `config` VIGENTE.
+
+    `harness.search_record()` ya etiqueta cada entrada con `currentStamp` en
+    vez de negarse -- reporta y no decide, la misma forma que `latent.available()`
+    usa para una lista de checkpoints, y no la que `latent.load()` usa para uno
+    que se va a medir. Estas dos funciones renderizan un informe, no cargan un
+    registro para calcular con él, así que siguen esa misma forma: no se niegan,
+    imprimen un aviso tan visible como el que ya existe para un registro de
+    ensayo (`search_source_note`) -- un `verify` en frío no puede diferenciar
+    entre "nunca se buscó" y "se buscó y quedó viejo" si las dos se leen igual.
+    """
+    return sorted(family for family, entry in (record or {}).items()
+                  if isinstance(entry, dict) and ceiling_record.stamp_drift(entry))
+
+
+def _stale_notice(record: dict | None, markdown: bool = False) -> str:
+    """El aviso de sello vencido, sin separador propio, o cadena vacía.
+
+    Sin `\\n` al final a propósito: cada llamador junta este texto con lo
+    suyo de una forma distinta -- una tabla lo antepone con salto de línea,
+    una conclusión en prosa lo junta con espacio -- y un separador fijo acá
+    sería el correcto para uno solo de los dos.
+    """
+    stale = _stale_families(record)
+    if not stale:
+        return ""
+    nombres = ", ".join(f"`{f}`" if markdown else f for f in stale)
+    return (f"**Sello vencido** para {nombres}: buscado bajo una revisión o "
+            f"unos hiperparámetros que el `config` vigente ya no lleva. Los "
+            f"números de abajo describen esa búsqueda, no la que correría "
+            f"hoy.")
+
+
 def render_ceilings(record: dict | None, markdown: bool = False) -> str:
     """La rejilla de la búsqueda, una fila por familia y una columna por techo.
 
@@ -444,7 +478,13 @@ def render_ceilings(record: dict | None, markdown: bool = False) -> str:
     demás. Y recibirlo entero, no solo el ganador: un techo elegido entre cuatro
     puntajes idénticos y uno elegido por una diferencia real son el mismo número y
     no la misma evidencia, así que la fila muestra la rejilla y marca cuál ganó.
+
+    **Nunca la renderiza como vigente sin decirlo.** `_stale_notice` antepone un
+    aviso cuando alguna familia quedó con un sello que el `config` de hoy ya no
+    sostiene -- ver esa función para por qué es un aviso y no un rechazo.
     """
+    aviso = _stale_notice(record, markdown=markdown)
+    aviso = (aviso + ("\n\n" if markdown else "\n")) if aviso else ""
     # Dos formas, dos tablas. Una rejilla tiene columnas: los mismos techos en
     # todas las familias, así que la fila se lee de izquierda a derecha y la
     # inclinación se ve. Una búsqueda por trials no las tiene — cada familia y
@@ -452,7 +492,7 @@ def render_ceilings(record: dict | None, markdown: bool = False) -> str:
     # forzarla a columnas inventaría un eje compartido que nadie midió.
     if record and all(ceiling_record.kind_of(e) == ceiling_record.KIND_OPTUNA
                       for e in record.values()):
-        return _render_ceilings_trials(record, markdown=markdown)
+        return aviso + _render_ceilings_trials(record, markdown=markdown)
     if not record:
         return ("Sin búsqueda de techos: no hay rejilla que mostrar. La campaña se "
                 "niega a correr hasta que exista.")
@@ -481,7 +521,7 @@ def render_ceilings(record: dict | None, markdown: bool = False) -> str:
         for familia, entrada in sorted(record.items()):
             lines.append("| " + " | ".join(
                 [f"`{familia}`", f"`{entrada['arm']}`", *cells(entrada)]) + " |")
-        return "\n".join(lines)
+        return aviso + "\n".join(lines)
 
     width = max(14, max((len(f) for f in record), default=14) + 2)
     lines = [f"{'Familia':<{width}}{'Brazo':>8}"
@@ -489,7 +529,7 @@ def render_ceilings(record: dict | None, markdown: bool = False) -> str:
     for familia, entrada in sorted(record.items()):
         lines.append(f"{familia:<{width}}{entrada['arm']:>8}"
                      + "".join(cell.rjust(12) for cell in cells(entrada)))
-    return "\n".join(lines)
+    return aviso + "\n".join(lines)
 
 
 def _render_ceilings_trials(record: dict, markdown: bool = False) -> str:
@@ -571,7 +611,8 @@ def conclusion_ceilings(record: dict | None) -> str:
     """
     if not record:
         return "Sin búsqueda: ningún techo está elegido y nada de abajo puede correr."
-    partes, por_regla = [], []
+    aviso = _stale_notice(record)
+    partes, por_regla = [aviso] if aviso else [], []
     for familia, entrada in sorted(record.items()):
         elec = ceiling_record.choice_of(entrada)
         rejilla = elec["kind"] == ceiling_record.KIND_GRID
@@ -2317,13 +2358,36 @@ def _diagnostic_record() -> "tuple[dict | None, bool | None]":
     Mismo respaldo que el resto del eje. Anclado a `Results/Noise` a secas leía
     el árbol de la campaña completa mientras el ensayo escribía dos directorios
     más allá, y la tabla salía vacía con el registro en disco.
+
+    **Se niega, y no avisa, sobre un sello vencido.** A diferencia de
+    `render_ceilings`/`conclusion_ceilings` --- que reportan una rejilla entera
+    de familias, algunas quizás vigentes --- este archivo es UNA medición sola
+    (`harness.search_ceilings(noise=...)`, corrida una vez) que compara un techo
+    re-buscado contra el de la campaña limpia. Un sello vencido acá no es una
+    familia entre varias que siguen siendo válidas: es la única medición que el
+    archivo contiene, así que no hay nada que este lector pueda mostrar de forma
+    parcialmente confiable. Toda función que lee este archivo pasa por acá, así
+    que las tres --- `diagnostic_source_note`, `render_diagnostic`,
+    `conclusion_diagnostic` --- se niegan igual: un aviso visible sobre un
+    número que de todos modos se imprime no sería mejor que negarse cuando el
+    número entero describe una medición que ya no corresponde a este `config`.
     """
     import json
 
     for pilot in (False, True):
         path = config.noise_axis_for(pilot) / "diagnostic.json"
         if path.exists():
-            return json.loads(path.read_text(encoding="utf-8")), pilot
+            record = json.loads(path.read_text(encoding="utf-8"))
+            drift = ceiling_record.stamp_drift(record)
+            if drift:
+                raise SystemExit(
+                    f"refusing to read {path}: stamped under a revision or "
+                    f"hyperparameters the current config no longer carries: "
+                    f"{sorted(drift)}.\n"
+                    "  Re-run `step --step noise-diagnostic` under today's "
+                    "config, or delete the stale record to measure again."
+                )
+            return record, pilot
     return None, None
 
 
