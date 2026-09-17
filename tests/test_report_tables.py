@@ -16,6 +16,7 @@ about a module that cannot know them.
 from __future__ import annotations
 
 import json
+import math
 import re
 import statistics
 from pathlib import Path
@@ -520,6 +521,8 @@ def test_the_figure_conclusions_name_the_method_the_measurement_favours() -> Non
     said = tables.conclusion_attention(readings)
     assert "casi por igual" in said
     assert said.index(config.NAME_OF["B"]) < said.index("casi por igual")
+    assert "extremo más concentrado" in said
+    assert said.index(config.NAME_OF["G"]) < said.index("extremo más concentrado")
 
 
 # ---------------------------------------------------- what a decimal can mean
@@ -1211,3 +1214,97 @@ def test_no_section_of_the_report_draws_one_quantity_twice() -> None:
     assert not repetidas, f"one quantity is rendered twice: {repetidas}"
     assert not [name for name, _ in shown if name.endswith("_at")], \
         "the notebook still asks for a contaminated twin"
+
+
+# ------------------------------------------------------ defect (e): attentionSpread
+
+def _independent_min_normalized_entropy(m: int, spread: float) -> float:
+    """The same claim, computed a different way than `tables.py`'s own search.
+
+    `tables.py` sweeps a count `k` and builds the two-tier weights from
+    `hi`/`lo` ratios; this instead builds the actual logit vector for every
+    split, applies a plain `math.exp`/normalize softmax and Shannon entropy
+    from first principles, and never imports `tables`. A shared mistake in
+    the closed-form ratio algebra would pass both if they were the same
+    computation wearing two names; this is not.
+    """
+    best = 1.0
+    for k in range(1, m):
+        logits = [spread / 2.0] * k + [-spread / 2.0] * (m - k)
+        exps = [math.exp(x) for x in logits]
+        total = sum(exps)
+        weights = [e / total for e in exps]
+        entropy = -sum(w * math.log(w) for w in weights)
+        best = min(best, entropy / math.log(m))
+    return best
+
+
+def test_the_attention_spread_floor_is_computed_not_asserted_at_zero() -> None:
+    """Defect (e): the floor `attentionSpread` can reach under today's neutral
+    hyperparameters is far from zero, and the report text has to say so with a
+    number this suite actually computed -- never a hand-typed one.
+
+    Reachable red: hardcode `MIN_ATTENTION_SPREAD = 0.0`, or compute it with
+    the wrong logit spread (e.g. `1 + gamma` instead of `2 + gamma`).
+    """
+    expected = _independent_min_normalized_entropy(
+        config.INSTANCES_PER_BAG,
+        2.0 + config.ATTENTION_GAMMA)
+    assert tables.MIN_ATTENTION_SPREAD == pytest.approx(expected, abs=1e-9)
+    # Far from the unreachable floor a prior version of this text implied.
+    assert tables.MIN_ATTENTION_SPREAD > 0.5
+
+    # The defect this fixes, stated as a fact about the numbers rather than
+    # about the old prose: the previous "concentrated" branch fired at
+    # `mean <= 1.0 - UNIFORM_ATTENTION`, and that threshold sits BELOW the
+    # true floor -- no real measurement could ever have reached it.
+    assert (1.0 - tables.UNIFORM_ATTENTION) < tables.MIN_ATTENTION_SPREAD
+
+
+def test_no_configuration_of_the_sweep_reaches_below_the_computed_floor() -> None:
+    """A random search over bounded logits never beats the claimed minimum.
+
+    This does not recompute the same closed form a second time; it samples
+    logit vectors respecting r21's own stated bound and checks the floor
+    holds for each -- the kind of check a wrong-but-plausible constant would
+    fail on the first few draws.
+    """
+    import random
+
+    rng = random.Random(20260916)
+    m = config.INSTANCES_PER_BAG
+    half_spread = (2.0 + config.ATTENTION_GAMMA) / 2.0
+    for _ in range(200):
+        logits = [rng.uniform(-half_spread, half_spread) for _ in range(m)]
+        exps = [math.exp(x) for x in logits]
+        total = sum(exps)
+        weights = [e / total for e in exps]
+        entropy = -sum(w * math.log(w) for w in weights)
+        normalized = entropy / math.log(m)
+        assert normalized >= tables.MIN_ATTENTION_SPREAD - 1e-9, (
+            f"a random configuration reached {normalized}, below the "
+            f"claimed floor {tables.MIN_ATTENTION_SPREAD}")
+
+
+def test_attention_spread_text_names_the_computed_floor_and_the_r21_reading() -> None:
+    """The objective and the conclusion both name r21 l.501's reading rather
+    than calling a uniform weight a failure, and both quote the SAME computed
+    number -- never a second, independently hand-typed one.
+
+    Reachable red: revert either string to "buscamos un valor lejos de
+    1.000" / "que venía a mejorar", or quote a different decimal in one of
+    the two.
+    """
+    objective_text = tables.objective("attentionSpread")
+    floor_str = f"{tables.MIN_ATTENTION_SPREAD:.3f}"
+    assert floor_str in objective_text
+    assert "dejó de elegir" not in objective_text
+    assert "no es, por sí solo, un fallo" in objective_text
+    assert "l.501" in objective_text
+
+    said = tables.conclusion_attention([
+        {"arm": "G", "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
+    ])
+    assert floor_str in said
+    assert "l.501" in said
+    assert "que venía a mejorar" not in said
