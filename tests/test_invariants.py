@@ -20,8 +20,18 @@ import pytest
 import torch
 from conftest import Sampler, allclose, close, make_bag, make_bags, one_hot, simplex_rows
 
+from sweep import SWEEP_SIZE
+
 from MIL_CREDA import DTYPE
-from MIL_CREDA.attention import bag_embedding, bag_weights, relevance_logits
+from MIL_CREDA.attention import (
+    bag_embedding,
+    bag_weights,
+    consensus_component,
+    effective_bag_size,
+    relevance_component,
+    relevance_logits,
+    uniform_self_similarity,
+)
 from MIL_CREDA.bag_kernel import bag_gram, bag_kernel, bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix, weighted_blocks
 from MIL_CREDA.confidence import bag_confidence, confidences, pseudolabel
@@ -47,7 +57,7 @@ SIGMA = 1.3
 
 
 # --------------------------------------------------------------------------
-# kernels.py - Section 1, Eqs. (2), (19)
+# kernels.py - Section 1, Eqs. (2), (14)
 # --------------------------------------------------------------------------
 
 
@@ -114,30 +124,74 @@ def test_h2_bounded_by_log_n(rng: Sampler) -> None:
 
 
 # --------------------------------------------------------------------------
-# attention.py - Section 3, Eqs. (14)-(16)
+# attention.py - Section 3, Eqs. (15), (16), (19)
 # --------------------------------------------------------------------------
+
+#: `attention.py`'s own sweep base, disjoint from `sweep.SWEEP_BASE`: this
+#: file's claims are about the attention pipeline alone (m, d, sigma, gamma,
+#: tau_att, the scale of v_R), never about the cross-bag machinery `sweep.py`
+#: draws its own 200 configurations for.
+_ATTENTION_SWEEP_SEED = 20260916 * 10000
+
+
+def _attention_configurations(count: int = SWEEP_SIZE):
+    """`count` independent (H, V_R, b_R, v_R, gamma, sigma, tau_att) draws.
+
+    Sweeps every axis the r21 attention claims quantify over: bag size m in
+    [1, 12], embedding dimension d in [2, 8], the instance-kernel bandwidth
+    sigma in [0.1, 4], the consensus weight gamma in [0, 3], the temperature
+    tau_att in [0.05, 5], and the scale of the raw (unconstrained) relevance
+    parameter v_R from 1e-3 to 50, mixed sign -- so the l1 reparametrization
+    is exercised both inside and outside the unit ball.
+    """
+    for index in range(count):
+        s = Sampler(_ATTENTION_SWEEP_SEED + index)
+        m = int(s.integers(1, 13))
+        d = int(s.integers(2, 9))
+        hidden = int(s.integers(2, 7))
+        H = s.normal(size=(m, d))
+        V_R = s.normal(size=(hidden, d))
+        b_R = s.normal(size=hidden)
+        scale = float(s.uniform(1e-3, 50.0))
+        v_R = s.normal(size=hidden) * scale
+        gamma = float(s.uniform(0.0, 3.0))
+        sigma = float(s.uniform(0.1, 4.0))
+        tau_att = float(s.uniform(0.05, 5.0))
+        yield {
+            "H": H, "V_R": V_R, "b_R": b_R, "v_R": v_R,
+            "gamma": gamma, "sigma": sigma, "tau_att": tau_att, "m": m,
+        }
 
 
 def test_bag_weights_on_simplex(rng: Sampler) -> None:
-    """r16 Sec. 3, Eq. (15): beta > 0 and sum over the bag equals one.
+    """r21 Sec. 3, Eq. (16): beta > 0 and sum over the bag equals one.
 
     Normalization is strictly within one bag; the weights express relevance
-    among the instances of a single subject.
+    among the instances of a single subject. Confirmed over the sweep: holds
+    for every m, d, sigma, gamma, tau_att and v_R scale it draws.
     """
     dimension, hidden = 4, 6
     H = rng.normal(size=(5, dimension))
     logits = relevance_logits(
         H, rng.normal(size=(hidden, dimension)), rng.normal(size=hidden),
-        rng.normal(size=hidden),
+        rng.normal(size=hidden), 0.7, SIGMA,
     )
-    beta = bag_weights(logits)
+    beta = bag_weights(logits, 1.3)
     assert beta.shape == (5,)
     assert bool((beta > 0.0).all())
     assert close(beta.sum(), 1.0, atol=TOL)
 
+    for cfg in _attention_configurations():
+        logits = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        beta = bag_weights(logits, cfg["tau_att"])
+        assert bool((beta > 0.0).all())
+        assert close(beta.sum(), 1.0, atol=1e-8)
+
 
 def test_bag_embedding_permutation_invariant(rng: Sampler) -> None:
-    """r16 Sec. 3, Eq. (16): z is invariant under permutations of the bag.
+    """r21 Sec. 3, Eq. (19): z is invariant under permutations of the bag.
 
     Each weight is paired with its own embedding, so reordering the instances
     together with their weights cannot move the representation.
@@ -147,13 +201,312 @@ def test_bag_embedding_permutation_invariant(rng: Sampler) -> None:
     assert allclose(bag_embedding(H, beta), bag_embedding(H[order], beta[order]), atol=TOL)
 
 
+def test_relevance_logit_matches_eq15_definition(rng: Sampler) -> None:
+    """r21 Sec. 3, Eq. (15): nu_a = R_phi(h_a) + gamma * consensus_a, exactly --
+    the composition itself, not only its gamma = 0 special case. A mutant that
+    dropped the consensus term (returning R_phi alone for every gamma) would
+    pass every OTHER test in this section undetected; this is the one that
+    catches it, by recomputing both sides independently and comparing.
+    """
+    for cfg in _attention_configurations():
+        logits = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        expected = (
+            relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
+            + cfg["gamma"] * consensus_component(cfg["H"], cfg["sigma"])
+        )
+        assert allclose(logits, expected, atol=1e-12)
+        if cfg["gamma"] > 0.01:
+            component = relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
+            assert not allclose(logits, component, atol=1e-9), (
+                "the consensus term made no difference at gamma > 0"
+            )
+
+
+def test_relevance_component_bounded_by_l1_normalization(rng: Sampler) -> None:
+    """r21 Sec. 3 (definition preceding Eq. 15): |R_phi(h)| <= 1 for ANY v_R.
+
+    'El parametro que se aprende es v_R, sin restriccion alguna; el selector
+    emplea su version normalizada v_R_tilde, ... de modo que ||v_R_tilde||_1
+    <= 1 para cualquier valor de los parametros.' The bound has to hold for
+    the raw, unconstrained parameter at any scale -- huge, tiny, negative, or
+    drawn at random -- never only for values gradient descent happens to
+    visit; this is the mechanism (`_l1_ball_reparametrization`), tested
+    directly rather than trusted.
+    """
+    dimension, hidden = 5, 8
+    H = rng.normal(size=(9, dimension))
+    V_R = rng.normal(size=(hidden, dimension))
+    b_R = rng.normal(size=hidden)
+
+    for scale in (1e6, -1e6, 1e-9, -1e-9):
+        v_R = torch.full((hidden,), float(scale), dtype=DTYPE)
+        component = relevance_component(H, V_R, b_R, v_R)
+        assert bool((component.abs() <= 1.0 + TOL).all())
+
+    random_huge = rng.normal(size=hidden) * 1e5
+    component = relevance_component(H, V_R, b_R, random_huge)
+    assert bool((component.abs() <= 1.0 + TOL).all())
+
+    zero = torch.zeros(hidden, dtype=DTYPE)
+    assert allclose(relevance_component(H, V_R, b_R, zero),
+                     torch.zeros(9, dtype=DTYPE), atol=TOL)
+
+    for cfg in _attention_configurations():
+        component = relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
+        assert bool((component.abs() <= 1.0 + TOL).all())
+
+
+def test_bag_weights_permutation_equivariant(rng: Sampler) -> None:
+    """r21 Sec. 3: 'Los pesos son equivariantes frente a permutaciones de las
+    instancias' -- the learned component acts instance by instance and the
+    consensus average is symmetric, so permuting the instances permutes the
+    logits, and therefore the weights, the same way.
+    """
+    for cfg in _attention_configurations():
+        if cfg["m"] < 2:
+            continue
+        order = rng.permutation(cfg["m"])
+        logits = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        logits_perm = relevance_logits(
+            cfg["H"][order], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        assert allclose(logits_perm, logits[order], atol=1e-8)
+        beta = bag_weights(logits, cfg["tau_att"])
+        beta_perm = bag_weights(logits_perm, cfg["tau_att"])
+        assert allclose(beta_perm, beta[order], atol=1e-8)
+
+
+def test_bag_weights_singleton_is_one(rng: Sampler) -> None:
+    """r21 Sec. 3, Eq. (16): 'una bolsa con una sola instancia le asigna peso
+    uno.' m = 1: the only weight is the softmax of a single value, which is
+    exactly one for any logit and any temperature.
+    """
+    dimension, hidden = 3, 5
+    for _ in range(SWEEP_SIZE):
+        H = rng.normal(size=(1, dimension))
+        V_R = rng.normal(size=(hidden, dimension))
+        b_R = rng.normal(size=hidden)
+        v_R = rng.normal(size=hidden) * float(rng.uniform(1e-3, 20.0))
+        gamma = float(rng.uniform(0.0, 3.0))
+        sigma = float(rng.uniform(0.1, 4.0))
+        tau_att = float(rng.uniform(0.05, 5.0))
+        logits = relevance_logits(H, V_R, b_R, v_R, gamma, sigma)
+        beta = bag_weights(logits, tau_att)
+        assert close(beta[0], 1.0, atol=TOL)
+
+
+def test_attention_logits_depend_only_on_own_bag(rng: Sampler) -> None:
+    """r21 Sec. 3: 'el logit es funcion de la instancia y de su bolsa, pero
+    nunca de otras bolsas' -- the within-bag-only hypothesis. Every argument
+    here is the bag's own and nothing carries state between calls, so
+    computing an unrelated bag in between cannot move the result.
+    """
+    for cfg in _attention_configurations():
+        before = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        distractor = rng.normal(size=(int(rng.integers(1, 9)), cfg["H"].shape[1]))
+        relevance_logits(
+            distractor, cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        after = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        assert allclose(before, after, atol=TOL)
+
+
+def test_consensus_component_in_unit_interval(rng: Sampler) -> None:
+    """r21 Sec. 3 (consensus term preceding Eq. 15): consensus in (0, 1].
+
+    kappa^I is strictly positive and at most one everywhere (Eq. 14), and the
+    self-term kappa^I(h, h) = 1 keeps the within-bag average from reaching
+    zero.
+    """
+    for cfg in _attention_configurations():
+        consensus = consensus_component(cfg["H"], cfg["sigma"])
+        assert bool((consensus > 0.0).all())
+        assert bool((consensus <= 1.0 + TOL).all())
+
+
+def test_consensus_component_bandwidth_limits(rng: Sampler) -> None:
+    """r21 Sec. 3: 'si sigma -> 0, ... los consensos de la bolsa tienden a
+    1/m; si sigma -> infinito, ... los consensos tambien [tienden a uno].'
+
+    `1e-4`, not an even smaller bandwidth: `gaussian_kernel`'s own squared
+    distance is `sum(x^2) - 2 x.y + sum(y^2)`, exact in real arithmetic but a
+    hair off zero in float64 on the diagonal; dividing that hair by `2 *
+    sigma^2` is what the limit is about, and past `~1e-5` the division
+    amplifies the float64 cancellation error itself rather than measuring the
+    claim. `1e-4` is small enough to saturate the limit and large enough to
+    stay clear of that floor.
+    """
+    for _ in range(SWEEP_SIZE):
+        m = int(rng.integers(2, 10))
+        d = int(rng.integers(2, 6))
+        H = rng.normal(size=(m, d))
+        tiny = consensus_component(H, 1e-4)
+        assert allclose(tiny, torch.full((m,), 1.0 / m, dtype=DTYPE), atol=1e-6)
+        huge = consensus_component(H, 1e6)
+        assert allclose(huge, torch.ones(m, dtype=DTYPE), atol=1e-6)
+
+
+def test_relevance_logit_reduces_to_relevance_at_gamma_zero(rng: Sampler) -> None:
+    """r21 Sec. 3, Eq. (15): 'Con gamma = 0 el logit se reduce a la componente
+    aprendida' -- exactly, whatever sigma is, since the consensus term is
+    multiplied by gamma.
+    """
+    for cfg in _attention_configurations():
+        logits = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], 0.0, cfg["sigma"]
+        )
+        component = relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
+        assert allclose(logits, component, atol=1e-12)
+
+
+def test_attention_logit_ratio_bounded_by_temperature(rng: Sampler) -> None:
+    """r21 Sec. 3: 'dos logits de una misma bolsa difieren a lo sumo en
+    2 + gamma, de modo que la razon entre dos pesos de la bolsa es a lo sumo
+    exp((2 + gamma) / tau_att).'
+    """
+    for cfg in _attention_configurations():
+        if cfg["m"] < 2:
+            continue
+        logits = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        spread = float(logits.max() - logits.min())
+        assert spread <= 2.0 + cfg["gamma"] + 1e-8
+        beta = bag_weights(logits, cfg["tau_att"])
+        ratio = float(beta.max() / beta.min())
+        bound = math.exp((2.0 + cfg["gamma"]) / cfg["tau_att"])
+        assert ratio <= bound * (1.0 + 1e-6) + 1e-9
+
+
+def test_relevance_logits_match_r17_at_neutral_hyperparameters(rng: Sampler) -> None:
+    """At gamma = 0 and tau_att = 1 (`config.ATTENTION_GAMMA`,
+    `config.ATTENTION_TEMPERATURE`'s declared neutral) Eqs. (15)-(16)
+    reproduce the r17 attention exactly: nu = v_R^T tanh(V_R h + b_R) with
+    v_R used as-is, and beta a plain softmax with no temperature -- the
+    pipeline this revision replaces.
+
+    v_R is fixed with ||v_R||_1 well under one, so the l1 reparametrization
+    this revision adds is a no-op here and the comparison isolates gamma and
+    tau_att alone, exactly as the mechanism decision this test pins requires.
+    """
+    dimension, hidden = 4, 6
+    H = rng.normal(size=(7, dimension))
+    V_R = rng.normal(size=(hidden, dimension))
+    b_R = rng.normal(size=hidden)
+    raw = rng.normal(size=hidden)
+    v_R = raw / float(torch.linalg.vector_norm(raw, ord=1)) * 0.5  # ||v_R||_1 == 0.5
+
+    logits = relevance_logits(H, V_R, b_R, v_R, 0.0, SIGMA)
+    r17_logits = torch.tanh(H @ V_R.transpose(0, 1) + b_R) @ v_R
+    assert allclose(logits, r17_logits, atol=1e-12)
+
+    beta = bag_weights(logits, 1.0)
+    r17_beta = torch.softmax(r17_logits, dim=0)
+    assert allclose(beta, r17_beta, atol=1e-12)
+
+
+def test_effective_bag_size_in_range(rng: Sampler) -> None:
+    """r21 Sec. 3 (diagnostic pair preceding Eq. 17): m_eff = 1 / sum(beta^2)
+    in [1, m], equal to m only at uniform weights.
+    """
+    for cfg in _attention_configurations():
+        logits = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+        )
+        beta = bag_weights(logits, cfg["tau_att"])
+        m_eff = float(effective_bag_size(beta))
+        assert 1.0 - 1e-8 <= m_eff <= cfg["m"] + 1e-8
+
+    uniform = torch.full((6,), 1.0 / 6, dtype=DTYPE)
+    assert close(effective_bag_size(uniform), 6.0, atol=TOL)
+    concentrated = torch.zeros(6, dtype=DTYPE)
+    concentrated[0] = 1.0
+    assert close(effective_bag_size(concentrated), 1.0, atol=TOL)
+
+
+def test_uniform_self_similarity_in_range(rng: Sampler) -> None:
+    """r21 Sec. 3 (diagnostic pair preceding Eq. 17): the uniform self-
+    similarity ||Psi_bar(B)||^2 is in [1/m, 1], equal to 1 only when every
+    embedding of the bag coincides.
+    """
+    for cfg in _attention_configurations():
+        sim = float(uniform_self_similarity(cfg["H"], cfg["sigma"]))
+        assert 1.0 / cfg["m"] - 1e-8 <= sim <= 1.0 + 1e-8
+
+    identical = torch.ones((5, 3), dtype=DTYPE)
+    assert close(uniform_self_similarity(identical, SIGMA), 1.0, atol=TOL)
+
+
+def test_separation_condition_implies_majority_consensus() -> None:
+    """r21 Sec. 3: the sufficient condition for the majority group's
+    consensus to exceed the minority group's, over disjoint index sets
+    I1, I2 covering the bag:
+
+        |I1| k_1_lower + |I2| k_12_lower > |I2| k_2_upper + |I1| k_12_upper
+        =>  min consensus over I1  >  max consensus over I2
+
+    Constructed rather than merely sampled, so the premise is genuinely
+    exercised and not vacuous: two clusters at a controlled separation,
+    checked against the bag's OWN actual pairwise kernel values (the true
+    min/max over each block), never against assumed bounds.
+    """
+    dimension = 4
+    checked, held = 0, 0
+    for index in range(SWEEP_SIZE):
+        s = Sampler(_ATTENTION_SWEEP_SEED + 500_000 + index)
+        n1 = int(s.integers(1, 6))
+        n2 = int(s.integers(1, 6))
+        spread1 = float(s.uniform(0.02, 0.6))
+        spread2 = float(s.uniform(0.02, 0.6))
+        separation = float(s.uniform(0.0, 8.0))
+        center1 = s.normal(size=dimension)
+        direction = s.normal(size=dimension)
+        direction = direction / torch.linalg.vector_norm(direction)
+        center2 = center1 + separation * direction
+        H1 = center1 + s.normal(scale=spread1, size=(n1, dimension))
+        H2 = center2 + s.normal(scale=spread2, size=(n2, dimension))
+        H = torch.cat([H1, H2], dim=0)
+        sigma = float(s.uniform(0.3, 2.0))
+
+        K = gaussian_kernel(H, H, sigma)
+        m = n1 + n2
+        idx1, idx2 = torch.arange(n1), torch.arange(n1, m)
+        K11, K22, K12 = K[idx1][:, idx1], K[idx2][:, idx2], K[idx1][:, idx2]
+        k1_lower, k2_upper = float(K11.min()), float(K22.max())
+        k12_lower, k12_upper = float(K12.min()), float(K12.max())
+
+        premise = n1 * k1_lower + n2 * k12_lower > n2 * k2_upper + n1 * k12_upper
+        checked += 1
+        if not premise:
+            continue
+        held += 1
+        consensus = consensus_component(H, sigma)
+        min_group1 = float(consensus[idx1].min())
+        max_group2 = float(consensus[idx2].max())
+        assert min_group1 > max_group2, (
+            f"premise held but group1's minimum consensus {min_group1} did "
+            f"not exceed group2's maximum {max_group2}"
+        )
+
+    assert checked == SWEEP_SIZE
+    assert held >= 1, "the sweep never constructed a configuration meeting the premise"
+
+
 # --------------------------------------------------------------------------
-# bag_kernel.py - Section 3, Eqs. (20)-(21)
+# bag_kernel.py - Section 3, Eqs. (17)-(18)
 # --------------------------------------------------------------------------
 
 
 def test_bag_kernel_symmetric(rng: Sampler) -> None:
-    """r16 Sec. 3, Eq. (21): kappa^B is an inner product in H_I, hence symmetric."""
+    """r21 Sec. 3, Eq. (18): kappa^B is an inner product in H_I, hence symmetric."""
     (H_u, w_u), (H_v, w_v) = make_bags(rng, 2, 4)
     assert close(
         bag_kernel(H_u, w_u, H_v, w_v, SIGMA),
@@ -163,13 +516,13 @@ def test_bag_kernel_symmetric(rng: Sampler) -> None:
 
 
 def test_bag_kernel_psd(rng: Sampler) -> None:
-    """r16 Sec. 3, Eq. (21): the bag kernel is positive semidefinite."""
+    """r21 Sec. 3, Eq. (18): the bag kernel is positive semidefinite."""
     eigenvalues = torch.linalg.eigvalsh(bag_gram(make_bags(rng, 9, 4), SIGMA))
     assert float(eigenvalues.min()) >= -1e-8
 
 
 def test_bag_self_similarity_at_most_one(rng: Sampler) -> None:
-    """r16 Sec. 5: ||Psi(B)||_{H_I} <= 1, so kappa^B(B, B) <= 1.
+    """r21 Sec. 5: ||Psi(B)||_{H_I} <= 1, so kappa^B(B, B) <= 1.
 
     Psi is a convex combination of unit-norm images, so the triangle inequality
     caps its norm. This is the first half of the argument bounding d_j^2.
@@ -179,7 +532,7 @@ def test_bag_self_similarity_at_most_one(rng: Sampler) -> None:
 
 
 def test_bag_kernel_reduces_to_instance_kernel_on_singletons(rng: Sampler) -> None:
-    """r16 Sec. 3, Eq. (21): on one-instance bags the double sum is kappa^I itself.
+    """r21 Sec. 3, Eq. (18): on one-instance bags the double sum is kappa^I itself.
 
     With m = 1 the only weight is one, so the bag kernel must collapse onto the
     instance kernel it is built from.
@@ -455,14 +808,14 @@ def test_local_loss_in_unit_interval(rng: Sampler) -> None:
 
 
 # --------------------------------------------------------------------------
-# objective.py - Sections 3, 5, Eqs. (18), (39)
+# objective.py - Sections 3, 5, Eqs. (21), (39)
 # --------------------------------------------------------------------------
 
 
 def test_source_loss_matches_negative_log_likelihood_of_the_observed_class(
     rng: Sampler,
 ) -> None:
-    """r17 Sec. 3, Eq. (18): the observed class alone, averaged per bag, over B_src.
+    """r21 Sec. 3, Eq. (21): the observed class alone, averaged per bag, over B_src.
 
     Three things at once, because they are one claim. The one-hot label selects
     the observed class, so the loss must equal what the observed class scores on
@@ -491,7 +844,7 @@ def test_source_loss_matches_negative_log_likelihood_of_the_observed_class(
 
 
 def test_source_loss_non_negative(rng: Sampler) -> None:
-    """r17 Sec. 3, Eq. (18): L_src >= 0 always, and exactly 0 at a certain, correct bag.
+    """r21 Sec. 3, Eq. (21): L_src >= 0 always, and exactly 0 at a certain, correct bag.
 
     The stabilizer is normalized by its own maximum, so the argument of the
     logarithm never exceeds one. Adding it inside the logarithm alone would let
@@ -515,7 +868,7 @@ def test_source_loss_non_negative(rng: Sampler) -> None:
 
 
 def test_source_loss_in_unit_interval(rng: Sampler) -> None:
-    """r17 Sec. 3, Eq. (18): L_src in [0, 1), the upper end a supremum not attained.
+    """r21 Sec. 3, Eq. (21): L_src in [0, 1), the upper end a supremum not attained.
 
     B_src is the exact supremum of a single bag's loss, so dividing by it caps
     the term at one. Two poles, because the bound only means something if it is

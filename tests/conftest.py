@@ -58,7 +58,7 @@ def rng() -> Sampler:
 
 
 def one_hot(labels: torch.Tensor, n_classes: int) -> torch.Tensor:
-    """Bag labels as the one-hot rows Eq. (18) expects."""
+    """Bag labels as the one-hot rows Eq. (21) expects."""
     return torch.nn.functional.one_hot(labels.reshape(-1), n_classes).to(DTYPE)
 
 
@@ -79,13 +79,14 @@ def make_bag(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """One bag: instance embeddings and in-bag relevance weights on the simplex.
 
-    The weights come from Eq. (15) applied to arbitrary logits, so they are a
-    legitimate in-bag distribution rather than a uniform placeholder.
+    The weights come from Eq. (16) applied to arbitrary logits at the neutral
+    temperature (tau_att = 1), so they are a legitimate in-bag distribution
+    rather than a uniform placeholder.
     """
     from MIL_CREDA.attention import bag_weights
 
     H = rng.normal(loc=shift, scale=1.0, size=(n_instances, dimension))
-    return H, bag_weights(rng.normal(size=n_instances))
+    return H, bag_weights(rng.normal(size=n_instances), 1.0)
 
 
 def make_bags(

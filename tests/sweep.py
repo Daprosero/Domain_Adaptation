@@ -39,7 +39,11 @@ def _bags(rng: Sampler, count: int, dimension: int, shift: float, spread: float)
     for _ in range(count):
         m = rng.integers(1, 7)
         H = rng.normal(loc=shift, scale=spread, size=(m, dimension))
-        bags.append((H, bag_weights(rng.normal(size=m))))
+        # Neutral temperature (tau_att = 1): this sweep is not about the
+        # attention claims of Eqs. (15)-(16), which get their own dedicated
+        # sweep in test_invariants.py; it only needs a legitimate in-bag
+        # distribution to feed the kernel and local-term machinery below.
+        bags.append((H, bag_weights(rng.normal(size=m), 1.0)))
     return bags
 
 
