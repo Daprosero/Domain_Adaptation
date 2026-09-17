@@ -31,6 +31,7 @@ bookkeeping, and not one formula.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 
 import torch
@@ -67,48 +68,46 @@ class Pool:
         return self.images[self.members[positions]]
 
 
-def _median_sigma(H: torch.Tensor) -> torch.Tensor:
-    """The bandwidth rule CREDA already uses, applied where each kernel lives.
+def _running_stats_modules(module: nn.Module) -> list[nn.Module]:
+    """Every submodule of `module` that carries running statistics.
 
-    `CREDALoss._compute_sigma` takes the median of the pairwise squared distances
-    with the diagonal removed. The same rule serves MIL-CREDA, over the instance
-    embeddings its kernel operates on rather than over bag representations. Same
-    rule, different domain of application — which is not the same as the same
-    number, and saying so is the point.
+    Found by the attribute the base classes actually declare
+    (`track_running_stats`), not by an explicit class list: `BatchNorm1d`,
+    `BatchNorm2d`, `BatchNorm3d` and any `InstanceNorm*` built with
+    `track_running_stats=True` all expose it, and this catches every one of
+    them -- including a class this repository does not know about by name --
+    rather than a hand-picked subset that a backbone change could silently
+    stop covering.
     """
-    squared = torch.cdist(H, H) ** 2
-    off_diagonal = squared[~torch.eye(H.shape[0], dtype=torch.bool, device=H.device)]
-    return torch.sqrt(torch.median(off_diagonal) + 1e-6)
+    return [sub for sub in module.modules()
+            if getattr(sub, "track_running_stats", False)]
 
 
-def _bag_sigma(H: torch.Tensor) -> torch.Tensor:
-    """The bandwidth Eq. (15)'s consensus term reads its instance kernel at.
+@contextlib.contextmanager
+def _frozen_running_stats(module: nn.Module):
+    """Decision 3: the target forward normalizes with the CURRENT running
+    statistics and leaves them unchanged, for the duration of this block.
 
-    The revision reuses one instance kernel and one bandwidth throughout
-    (Eq. 14), but the attention weights of a single bag are needed standalone
-    -- at plain inference (`forward` on one domain's bags), with no paired
-    domain to draw the two-domain median CREDA's rule computes for the later
-    adaptation terms in `_milcreda_term`. Wiring the exact same batch-wide
-    sigma into the attention weights would mean threading it through
-    `instance_embeddings`/`bag_representations`/`select` for every arm, on
-    every call, including calls that never build an adaptation term at all --
-    a restructuring this stretch was not asked to make. This applies the
-    identical median rule to the bag's own instances instead, which is a
-    wiring decision, not a mathematical one: at `ATTENTION_GAMMA = 0.0`
-    (today's declared neutral) the consensus term is multiplied by zero and
-    this bandwidth never reaches a single number the run reports. Once gamma
-    is tuned away from zero, whether attention should share the training
-    step's own batch-wide sigma rather than a per-bag one becomes a live
-    question of its own.
-
-    A bag of one instance has no off-diagonal pair to take a median over, and
-    does not need one: its consensus is exactly 1 regardless of sigma
-    (Eq. 14's self-kernel is 1), so the placeholder returned here is never
-    read through anything but that multiplication.
+    `eval()` on exactly the running-stats submodules found above, never on
+    `module` as a whole: that is the narrowest switch that stops a running
+    mean/var from being updated while leaving every other module -- and the
+    surrounding source forward, which stays in training mode -- untouched.
+    `eval()` mode is also what makes BatchNorm normalize with the stored
+    running statistics instead of the batch's own, which is the other half
+    of the same requirement: a target forward computed this way is centred
+    and scaled by what the source has produced so far, not by itself.
+    Restored to `train()` on exit unconditionally, since every caller here
+    only ever opens this block from inside `training_step`, where the
+    encoder is already in training mode throughout.
     """
-    if H.shape[0] < 2:
-        return torch.ones((), dtype=H.dtype, device=H.device)
-    return _median_sigma(H)
+    stats_modules = _running_stats_modules(module)
+    for sub in stats_modules:
+        sub.eval()
+    try:
+        yield
+    finally:
+        for sub in stats_modules:
+            sub.train()
 
 
 class Arm(nn.Module):
@@ -167,19 +166,25 @@ class Arm(nn.Module):
         flat = self.encoder(bags.reshape(B * m, *bags.shape[2:]))
         return flat.reshape(B, m, -1)
 
-    def weights_for(self, H: torch.Tensor) -> torch.Tensor:
-        """The in-bag weights beta of Eq. (16), over whatever instances survive."""
+    def weights_for(self, H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
+        """The in-bag weights beta of Eq. (16), over whatever instances survive.
+
+        `sigma` is Decision 1's one constant bandwidth, `config.KERNEL_SIGMA`
+        at every call site -- passed explicitly and with no default, so a
+        caller supplying a different value is a visible, deliberate choice
+        rather than something this method could quietly default to.
+        """
         if self.spec["attention"] == "learned":
             logits = relevance_logits(
                 H, self.V_R, self.b_R, self.v_R,
-                config.ATTENTION_GAMMA, _bag_sigma(H),
+                config.ATTENTION_GAMMA, sigma,
             )
             return bag_weights(logits, config.ATTENTION_TEMPERATURE)
         # uniform: Eq. (19) with beta = 1/m
         return torch.full((H.shape[0],), 1.0 / H.shape[0],
                           dtype=H.dtype, device=H.device)
 
-    def select(self, H: torch.Tensor) -> torch.Tensor:
+    def select(self, H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
         """The instances of ONE bag this arm is allowed to look at: (m, d) -> (k, d).
 
         An arm with no rule keeps all of them. The three that do keep the same
@@ -196,7 +201,8 @@ class Arm(nn.Module):
         gamma-weighted consensus, not the learned relevance alone. At today's
         neutral (`ATTENTION_GAMMA = 0.0`) the two rank identically; which of
         the two a nonzero gamma should rank by is an experiments decision, not
-        settled here.
+        settled here. `sigma` is the same one constant `weights_for` receives —
+        see Decision 1.
         """
         rule = self.spec["selection"]
         if rule is None:
@@ -205,20 +211,26 @@ class Arm(nn.Module):
         if rule == "topk":
             scores = relevance_logits(
                 H, self.V_R, self.b_R, self.v_R,
-                config.ATTENTION_GAMMA, _bag_sigma(H),
+                config.ATTENTION_GAMMA, sigma,
             ).reshape(-1)
             keep = torch.topk(scores, k=k).indices.sort().values
             return H[keep]
         return H[self.positions[:k].to(H.device)]
 
-    def bags_of(self, embeddings: torch.Tensor) -> list[tuple]:
-        """Every bag as the (instances, weights) pair the rest of the file consumes."""
-        kept = [self.select(H) for H in embeddings]
-        return [(H, self.weights_for(H)) for H in kept]
+    def bags_of(self, embeddings: torch.Tensor, sigma: float | torch.Tensor) -> list[tuple]:
+        """Every bag as the (instances, weights) pair the rest of the file consumes.
 
-    def bag_representations(self, embeddings: torch.Tensor):
+        `sigma` is threaded through rather than read from `config` here, so
+        every caller of this method states which bandwidth it is using —
+        Decision 1's whole point, applied at the one place that fans it out
+        to both `select` and `weights_for`.
+        """
+        kept = [self.select(H, sigma) for H in embeddings]
+        return [(H, self.weights_for(H, sigma)) for H in kept]
+
+    def bag_representations(self, embeddings: torch.Tensor, sigma: float | torch.Tensor):
         """Eq. (19) for every bag, plus the weights that produced it."""
-        pairs = self.bags_of(embeddings)
+        pairs = self.bags_of(embeddings, sigma)
         Z = torch.stack([bag_embedding(H, w) for H, w in pairs])
         return Z, [w for _, w in pairs]
 
@@ -233,7 +245,7 @@ class Arm(nn.Module):
         """
         embeddings = self.instance_embeddings(bags)
         if self.spec["unit"] == "bag":
-            Z, _ = self.bag_representations(embeddings)
+            Z, _ = self.bag_representations(embeddings, config.KERNEL_SIGMA)
             return self.head(Z)
         probabilities = F.softmax(self.head(embeddings), dim=-1).mean(dim=1)
         return torch.log(probabilities + config.EPSILON)
@@ -248,6 +260,23 @@ class Arm(nn.Module):
         # device is; the indices move to wherever the bags actually live.
         return order[: config.BAGS_PER_STEP].to(self.target.members.device)
 
+    def _target_embeddings(self, target_bags: torch.Tensor) -> torch.Tensor:
+        """Encode a target batch during training, honouring `targetNormalization`
+        (Decision 3 / Decision 4).
+
+        `"frozen"` -- every existing adapted arm, per Decision 3: every
+        running-stats layer of the encoder normalizes this forward with its
+        CURRENT running statistics, built from the source alone since this is
+        the only place a target image reaches the encoder during training,
+        and leaves those statistics unchanged. `"live"` -- `GN` only, per
+        Decision 4: today's pre-existing behaviour, where the target forward
+        updates them too.
+        """
+        if self.spec["targetNormalization"] == "frozen":
+            with _frozen_running_stats(self.encoder):
+                return self.instance_embeddings(target_bags)
+        return self.instance_embeddings(target_bags)
+
     def _milcreda_term(self, H_s, source_labels, target_bags):
         """Eqs. (14), (16)-(20), (22)-(38): the global score, and the local
         correspondence if on.
@@ -261,15 +290,16 @@ class Arm(nn.Module):
         them. Summing here would fold both into one number and leave this file
         deciding a weight the formulation states.
         """
-        H_t = self.instance_embeddings(target_bags)
+        H_t = self._target_embeddings(target_bags)
 
-        # Selection first: the bandwidth is the median over the instances the
-        # kernels actually operate on, so an arm that keeps ten of thirty gets the
-        # rule applied to its own ten rather than to a set it never sees.
-        bags_s = self.bags_of(H_s)
-        bags_t = self.bags_of(H_t)
-        sigma = _median_sigma(torch.cat([torch.cat([H for H, _ in bags_s]),
-                                         torch.cat([H for H, _ in bags_t])]))
+        # Decision 1: one constant bandwidth for the whole method -- the
+        # consensus term, the top-k ranking, every kernel block below and
+        # `local_distance` all read `config.KERNEL_SIGMA` and nothing else.
+        # r21 l.715: "Un unico ancho de banda sigma gobierna los tres
+        # bloques, ya que los tres derivan del mismo kernel de instancia."
+        sigma = config.KERNEL_SIGMA
+        bags_s = self.bags_of(H_s, sigma)
+        bags_t = self.bags_of(H_t, sigma)
 
         K_ss = bag_kernel_matrix(bags_s, bags_s, sigma)
         K_st = bag_kernel_matrix(bags_s, bags_t, sigma)
@@ -312,14 +342,14 @@ class Arm(nn.Module):
                 distances.append(
                     local_distance(bag_kernel(H_j, w_j, H_j, w_j, sigma), cross, K_ss, pi)
                 )
-            local_term = local_loss(torch.stack(distances), w_t)
+            local_term = local_loss(torch.stack(distances), w_t, config.EPSILON_LOCAL)
 
         return global_term, local_term
 
     def _creda_term(self, H_s, source_labels, target_bags):
         """CREDA's own loss, over instances, exactly as it was written."""
         instances = H_s.reshape(-1, self.encoder.output_dim)
-        H_t = self.instance_embeddings(target_bags).reshape(-1, self.encoder.output_dim)
+        H_t = self._target_embeddings(target_bags).reshape(-1, self.encoder.output_dim)
         y_s = source_labels.repeat_interleave(H_s.shape[1])
         g_t = F.softmax(self.head(H_t), dim=1)
         return self.creda(instances, H_t, y_s, g_t)
@@ -346,7 +376,7 @@ class Arm(nn.Module):
         """
         embeddings = self.instance_embeddings(bags)
         if self.spec["unit"] == "bag":
-            Z, _ = self.bag_representations(embeddings)
+            Z, _ = self.bag_representations(embeddings, config.KERNEL_SIGMA)
             logits = self.head(Z)
             supervised = source_loss(                                 # Eq. (21)
                 F.softmax(logits, dim=1),
@@ -362,20 +392,22 @@ class Arm(nn.Module):
             logits = torch.log(F.softmax(instance_logits, dim=-1).mean(dim=1)
                                + config.EPSILON)
 
-        # Every arm encodes a target batch, including the floors that have no use
-        # for it. This is not waste: resnet18 carries forty running means and
-        # variances, and encoding target images in training mode updates all of
-        # them with target statistics. An arm that computes an adaptation term
-        # gets that for free, and a floor that never looks at the target does not
-        # — so a comparison between them would measure the normalization rather
-        # than the loss. Measured on M->U: with the coefficient forced to zero the
-        # arm still scored 0.778 against the floor's 0.722, which is the whole gap
-        # and none of it the loss. Encoding the same batch everywhere leaves the
-        # loss as the only difference, and makes the wall-time row comparable too.
-        target_bags = self.target.take(self._draw_target(generator))
+        # Decision 2: a floor never lets a target image reach the encoder,
+        # ever, in training -- one earlier design measured the normalization
+        # rather than the loss this way (M->U, coefficient forced to zero:
+        # the arm still scored 0.778 against the floor's 0.722), and Decision
+        # 3 closes that gap for every adapted arm instead, by freezing the
+        # running statistics a target forward normalizes with rather than by
+        # handing a floor a target batch it has no use for. `_draw_target` is
+        # still called for every arm, floor included, so the generator is
+        # consumed identically across arms (SKILL.md: arms must not differ in
+        # how much of the generator they consume) -- what a floor never does
+        # with the indices it draws is `take` or encode the images they name.
+        target_indices = self._draw_target(generator)
         coefficient = ramp
         adaptation = torch.zeros((), device=logits.device, dtype=logits.dtype)
         if self.spec["adaptation"] == "milcreda":
+            target_bags = self.target.take(target_indices)
             global_term, local_term = self._milcreda_term(
                 embeddings, labels, target_bags
             )
@@ -386,10 +418,13 @@ class Arm(nn.Module):
         elif self.spec["adaptation"] == "creda":
             # CREDA's objective, not Eq. (39): one term, one coefficient, as its
             # own code writes it.
+            target_bags = self.target.take(target_indices)
             adaptation = self._creda_term(embeddings, labels, target_bags)
             total = supervised + coefficient * adaptation
         else:
-            self.instance_embeddings(target_bags)
+            # The floor: no target image passes through the encoder, ever, in
+            # training (Decision 2). `target_indices` is drawn above and
+            # deliberately unused past this point.
             total = supervised
 
         return {
