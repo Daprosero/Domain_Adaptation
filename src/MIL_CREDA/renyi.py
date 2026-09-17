@@ -24,6 +24,9 @@ __provenance__ = {
         "trace_one_after_normalization",
         "h2_frobenius_matches_spectral",
         "h2_bounded_by_log_n",
+        "information_potential_matches_eqs_7_8_definition",
+        "joint_normalized_matches_eq11_definition",
+        "matrix_mutual_information_matches_eq12_definition",
     ],
 }
 

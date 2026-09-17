@@ -50,7 +50,14 @@ from MIL_CREDA.local_term import (
     total_correspondence,
 )
 from MIL_CREDA.objective import source_bound, source_loss, total_objective
-from MIL_CREDA.renyi import quadratic_entropy, renyi_entropy, trace_normalize
+from MIL_CREDA.renyi import (
+    information_potential,
+    joint_normalized,
+    matrix_mutual_information,
+    quadratic_entropy,
+    renyi_entropy,
+    trace_normalize,
+)
 
 TOL = 1e-10
 SIGMA = 1.3
@@ -80,6 +87,58 @@ def test_kernel_psd(rng: Sampler) -> None:
     X = rng.normal(size=(11, 3))
     eigenvalues = torch.linalg.eigvalsh(gram(X, SIGMA))
     assert float(eigenvalues.min()) >= -1e-8
+
+
+def _numerically_integrate(f, low: float, high: float, points: int) -> float:
+    """Trapezoidal quadrature of `f` over one axis, in plain torch.
+
+    Used only to check Eq. (6) against a route that never assumes the
+    closed-form Gaussian-convolution identity it exists to establish: a
+    numerical integral is blind to whether the integrand happens to be
+    Gaussian.
+    """
+    grid = torch.linspace(low, high, points, dtype=DTYPE)
+    values = torch.stack([f(x) for x in grid])
+    return float(torch.trapezoid(values, grid))
+
+
+def test_gaussian_convolution_identity_eq6(rng: Sampler) -> None:
+    """Sec. 2, Eq. (6): the un-numbered constant right before it,
+    Z_{d,sigma} = (pi sigma^2)^{d/2}, and
+
+        integral over R^d of kappa_sigma(x, x_i) kappa_sigma(x, x_j) dx
+        = Z_{d,sigma} kappa_{sqrt(2) sigma}(x_i, x_j).
+
+    Checked by NUMERICAL integration, in d=1 -- where the integral is a
+    single quadrature this suite can actually perform -- rather than by
+    trusting the closed form the identity itself asserts. `Eqs. (7)-(8)`
+    (`information_potential`) rely on this identity to replace an integral
+    with pairwise kernel evaluations; this is what establishes it rather
+    than assuming it.
+    """
+    sigma = float(rng.uniform(0.4, 1.5))
+    for _ in range(8):
+        x_i = float(rng.uniform(-2.0, 2.0))
+        x_j = float(rng.uniform(-2.0, 2.0))
+
+        def integrand(x: torch.Tensor, x_i=x_i, x_j=x_j) -> torch.Tensor:
+            k_i = torch.exp(-((x - x_i) ** 2) / (2.0 * sigma**2))
+            k_j = torch.exp(-((x - x_j) ** 2) / (2.0 * sigma**2))
+            return k_i * k_j
+
+        # +/- 10 sigma from either center is far enough past the tails
+        # (exp(-50) ~ 2e-22) that truncating the integral there is not what
+        # limits the agreement below.
+        low = min(x_i, x_j) - 10.0 * sigma
+        high = max(x_i, x_j) + 10.0 * sigma
+        numeric = _numerically_integrate(integrand, low, high, 20001)
+
+        Z = (math.pi * sigma**2) ** 0.5
+        closed_form = Z * float(gaussian_kernel(
+            torch.tensor([[x_i]], dtype=DTYPE), torch.tensor([[x_j]], dtype=DTYPE),
+            math.sqrt(2.0) * sigma,
+        )[0, 0])
+        assert numeric == pytest.approx(closed_form, rel=1e-4, abs=1e-6)
 
 
 # --------------------------------------------------------------------------
@@ -123,6 +182,87 @@ def test_h2_bounded_by_log_n(rng: Sampler) -> None:
     assert close(quadratic_entropy(uniform), math.log(6), atol=TOL)
 
 
+def test_information_potential_matches_eqs_7_8_definition(rng: Sampler) -> None:
+    """Sec. 2, Eqs. (7)-(8): V_2(X) = Z_{d,sigma}/N^2 * sum_i sum_j K_ij =
+    Z_{d,sigma}/N^2 * 1^T K 1, with K_ij = kappa_{sqrt(2) sigma}(x_i, x_j).
+
+    Recomputed independently with an explicit double loop over the sample
+    pairs and Python's own `math.exp`/`math.pi` -- never `torch.sum` or
+    `gaussian_kernel` -- so a wrong power of pi, a wrong denominator (N vs
+    N^2, or N(N-1) excluding self-pairs) or a dropped Z factor in
+    `information_potential` disagrees with this rather than sharing the bug.
+    """
+    for _ in range(SWEEP_SIZE):
+        n = int(rng.integers(2, 9))
+        d = int(rng.integers(1, 4))
+        sigma = float(rng.uniform(0.3, 2.0))
+        X = rng.normal(size=(n, d))
+        K = gaussian_kernel(X, X, math.sqrt(2.0) * sigma)
+
+        produced = float(information_potential(K, d, sigma))
+
+        Z = (math.pi * sigma**2) ** (d / 2.0)
+        total = 0.0
+        rows = X.tolist()
+        for xi in rows:
+            for xj in rows:
+                squared = sum((a - b) ** 2 for a, b in zip(xi, xj))
+                total += math.exp(-squared / (2.0 * (math.sqrt(2.0) * sigma) ** 2))
+        expected = Z * total / (n**2)
+        assert produced == pytest.approx(expected, rel=1e-9)
+
+
+def test_joint_normalized_matches_eq11_definition(rng: Sampler) -> None:
+    """Sec. 2, Eq. (11)'s joint matrix: K_{X,Y} = K_X . K_Y (Hadamard),
+    trace-normalized -- `joint_normalized` against an independent
+    element-by-element recomputation, never `torch.mul` or the module's own
+    `trace_normalize` called on anything but the final comparison target.
+    """
+    for _ in range(SWEEP_SIZE):
+        n = int(rng.integers(2, 8))
+        K_x = gram(rng.normal(size=(n, 3)), SIGMA)
+        K_y = gram(rng.normal(size=(n, 4)), SIGMA * 1.7)
+
+        produced = joint_normalized(K_x, K_y)
+
+        hadamard = torch.tensor(
+            [[float(K_x[i, j]) * float(K_y[i, j]) for j in range(n)]
+             for i in range(n)],
+            dtype=DTYPE,
+        )
+        trace = sum(float(hadamard[i, i]) for i in range(n))
+        expected = hadamard / trace
+        assert allclose(produced, expected, atol=1e-9)
+
+
+def test_matrix_mutual_information_matches_eq12_definition(rng: Sampler) -> None:
+    """Sec. 2, Eq. (12): I_alpha(K_X; K_Y) = H(K_X) + H(K_Y) - H(K_X, K_Y),
+    each term from its OWN trace-normalized matrix -- checked as the sum of
+    three independently-called entropy evaluations, so a wrong sign or a
+    term computed from the wrong matrix disagrees with `renyi_entropy`
+    called by hand at each of the three sites.
+
+    And symmetric in K_X/K_Y, since the Hadamard product Eq. (11) builds the
+    joint matrix from commutes -- a property of the definition, not assumed.
+    """
+    alpha = 2.0
+    for _ in range(SWEEP_SIZE):
+        n = int(rng.integers(2, 8))
+        K_x = gram(rng.normal(size=(n, 3)), SIGMA)
+        K_y = gram(rng.normal(size=(n, 4)), SIGMA * 0.6)
+
+        produced = matrix_mutual_information(K_x, K_y, alpha)
+        expected = (
+            renyi_entropy(trace_normalize(K_x), alpha)
+            + renyi_entropy(trace_normalize(K_y), alpha)
+            - renyi_entropy(joint_normalized(K_x, K_y), alpha)
+        )
+        assert close(produced, expected, atol=1e-9)
+
+        swapped = matrix_mutual_information(K_y, K_x, alpha)
+        assert close(produced, swapped, atol=1e-9)
+
+
 # --------------------------------------------------------------------------
 # attention.py - Section 3, Eqs. (15), (16), (19)
 # --------------------------------------------------------------------------
@@ -161,6 +301,28 @@ def _attention_configurations(count: int = SWEEP_SIZE):
             "H": H, "V_R": V_R, "b_R": b_R, "v_R": v_R,
             "gamma": gamma, "sigma": sigma, "tau_att": tau_att, "m": m,
         }
+
+
+def _independent_consensus(H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
+    """(1/m) sum_{a'} kappa_sigma^I(h_a, h_a'), Eq. (14)'s kernel evaluated
+    directly with `torch.cdist` and `torch.exp` -- never through
+    `MIL_CREDA.kernels.gaussian_kernel` or `attention.consensus_component` --
+    including the self term (a'=a, where kappa^I(h, h) = 1 exactly, since
+    r21's un-numbered consensus definition sums over ALL m instances of the
+    bag, itself included).
+
+    Defect (b): comparing the module's own output to a second call of the
+    module's own `consensus_component` is a self-comparison, and a mutant
+    that scaled sigma by a constant factor survives it, because both sides
+    of the "check" apply the identical wrong scale. This recomputes the
+    kernel from its definition instead, so a wrong bandwidth in the module
+    under test disagrees with an independent implementation of the same
+    equation.
+    """
+    H = torch.as_tensor(H, dtype=torch.float64)
+    squared = torch.cdist(H, H) ** 2
+    K = torch.exp(-squared / (2.0 * float(sigma) ** 2))
+    return K.sum(dim=1) / H.shape[0]
 
 
 def test_bag_weights_on_simplex(rng: Sampler) -> None:
@@ -207,6 +369,14 @@ def test_relevance_logit_matches_eq15_definition(rng: Sampler) -> None:
     dropped the consensus term (returning R_phi alone for every gamma) would
     pass every OTHER test in this section undetected; this is the one that
     catches it, by recomputing both sides independently and comparing.
+
+    Defect (b): the consensus half used to be recomputed by calling
+    `consensus_component` a second time -- the same function `relevance_logits`
+    calls internally -- so a mutation to THAT function's own bandwidth (3*sigma,
+    sqrt(2)*sigma, dropping the self term) was invisible here: both "sides" of
+    the comparison shared the identical bug. `_independent_consensus` recomputes
+    Eq. (14)'s kernel from `torch.cdist`/`torch.exp` directly and never calls
+    `consensus_component` or `MIL_CREDA.kernels.gaussian_kernel` at all.
     """
     for cfg in _attention_configurations():
         logits = relevance_logits(
@@ -214,14 +384,62 @@ def test_relevance_logit_matches_eq15_definition(rng: Sampler) -> None:
         )
         expected = (
             relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
-            + cfg["gamma"] * consensus_component(cfg["H"], cfg["sigma"])
+            + cfg["gamma"] * _independent_consensus(cfg["H"], cfg["sigma"])
         )
-        assert allclose(logits, expected, atol=1e-12)
+        assert allclose(logits, expected, atol=1e-9)
         if cfg["gamma"] > 0.01:
             component = relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
             assert not allclose(logits, component, atol=1e-9), (
                 "the consensus term made no difference at gamma > 0"
             )
+
+
+def test_consensus_component_reads_the_declared_bandwidth_not_a_scaled_one(
+        rng: Sampler) -> None:
+    """Defect (b), stated as a direct mutation check rather than left to a
+    manual audit pass: `consensus_component` at the bandwidth `sigma` this
+    test independently computes must disagree with the SAME independent
+    computation at `3*sigma` and at `sqrt(2)*sigma` -- the two scaled
+    bandwidths a mutation of the shared kernel helper could silently
+    introduce. If `consensus_component` actually used one of those scaled
+    values instead of `sigma`, this test would pass by accident; it is run
+    over the full sweep specifically so no single (m, sigma) pair could make
+    that accident likely.
+    """
+    import math
+
+    checked = disagreed_3sigma = disagreed_sqrt2sigma = 0
+    for cfg in _attention_configurations():
+        if cfg["m"] < 2:
+            continue  # a singleton bag's consensus is 1 regardless of sigma
+        checked += 1
+        produced = consensus_component(cfg["H"], cfg["sigma"])
+        at_sigma = _independent_consensus(cfg["H"], cfg["sigma"])
+        assert allclose(produced, at_sigma, atol=1e-9)
+
+        at_3sigma = _independent_consensus(cfg["H"], 3.0 * cfg["sigma"])
+        at_sqrt2sigma = _independent_consensus(cfg["H"], math.sqrt(2.0) * cfg["sigma"])
+        if not allclose(produced, at_3sigma, atol=1e-6):
+            disagreed_3sigma += 1
+        if not allclose(produced, at_sqrt2sigma, atol=1e-6):
+            disagreed_sqrt2sigma += 1
+
+    # Not every draw: at either bandwidth extreme (sigma tiny relative to the
+    # embeddings' spread, or sigma huge) the kernel saturates -- toward 1/m or
+    # toward 1 respectively -- and scaling an already-saturated bandwidth by 3
+    # or by sqrt(2) can leave the reading unchanged to this tolerance. That is
+    # a real, understood degeneracy of the sweep's random draws and not a
+    # weakness of this check, so the bound is a measured rate (tendency, not
+    # theorem) rather than every configuration.
+    assert checked > 0, "the sweep drew no bag with two or more instances"
+    assert disagreed_3sigma >= 0.9 * checked, (
+        f"a 3*sigma bandwidth would have gone undetected in "
+        f"{checked - disagreed_3sigma} of {checked} configurations"
+    )
+    assert disagreed_sqrt2sigma >= 0.9 * checked, (
+        f"a sqrt(2)*sigma bandwidth would have gone undetected in "
+        f"{checked - disagreed_sqrt2sigma} of {checked} configurations"
+    )
 
 
 def test_relevance_component_bounded_by_l1_normalization(rng: Sampler) -> None:
@@ -386,31 +604,50 @@ def test_attention_logit_ratio_bounded_by_temperature(rng: Sampler) -> None:
         assert ratio <= bound * (1.0 + 1e-6) + 1e-9
 
 
-def test_relevance_logits_match_r17_at_neutral_hyperparameters(rng: Sampler) -> None:
+def test_relevance_logit_reduces_to_l1_normalized_relevance_at_neutral_hyperparameters() -> None:
     """At gamma = 0 and tau_att = 1 (`config.ATTENTION_GAMMA`,
-    `config.ATTENTION_TEMPERATURE`'s declared neutral) Eqs. (15)-(16)
-    reproduce the r17 attention exactly: nu = v_R^T tanh(V_R h + b_R) with
-    v_R used as-is, and beta a plain softmax with no temperature -- the
-    pipeline this revision replaces.
+    `config.ATTENTION_TEMPERATURE`'s declared neutral) Eqs. (15)-(16) reduce
+    to R_phi with the l1-normalized v_R (r21 l.456): a plain softmax of the
+    learned relevance alone, WITH the l1-ball reparametrization Eq. (15)
+    always applies to v_R.
 
-    v_R is fixed with ||v_R||_1 well under one, so the l1 reparametrization
-    this revision adds is a no-op here and the comparison isolates gamma and
-    tau_att alone, exactly as the mechanism decision this test pins requires.
+    Deliberately not a comparison against a bare, unconstrained
+    v_R^T tanh(V_R h + b_R) computed with v_R as-is -- an earlier version of
+    this test claimed that reduction under the name "r17", and it is false:
+    r21 never mentions r17, and the l1-ball reparametrization is not gated by
+    gamma or tau_att at all, so it applies here exactly as it does at any
+    other hyperparameters. `v_R` is drawn at a scale where
+    ||v_R||_1 >> 1 -- the harness's own trained selector sits around 9-11
+    against `config.ATTENTION_WIDTH = 128` raw components -- so this cannot
+    pass by accident of a `v_R` small enough for the reparametrization to be
+    a no-op.
     """
-    dimension, hidden = 4, 6
-    H = rng.normal(size=(7, dimension))
-    V_R = rng.normal(size=(hidden, dimension))
-    b_R = rng.normal(size=hidden)
-    raw = rng.normal(size=hidden)
-    v_R = raw / float(torch.linalg.vector_norm(raw, ord=1)) * 0.5  # ||v_R||_1 == 0.5
+    for index in range(SWEEP_SIZE):
+        s = Sampler(_ATTENTION_SWEEP_SEED + 700_000 + index)
+        m = int(s.integers(1, 12))
+        dimension = int(s.integers(2, 9))
+        hidden = int(s.integers(2, 7))
+        H = s.normal(size=(m, dimension))
+        V_R = s.normal(size=(hidden, dimension))
+        b_R = s.normal(size=hidden)
+        # ||v_R||_1 far above the unit ball, so the reparametrization is never
+        # a no-op here and this cannot pass by accident of a small v_R.
+        v_R = s.normal(size=hidden) * float(s.uniform(20.0, 80.0))
 
-    logits = relevance_logits(H, V_R, b_R, v_R, 0.0, SIGMA)
-    r17_logits = torch.tanh(H @ V_R.transpose(0, 1) + b_R) @ v_R
-    assert allclose(logits, r17_logits, atol=1e-12)
+        logits = relevance_logits(H, V_R, b_R, v_R, 0.0, SIGMA)
+        component = relevance_component(H, V_R, b_R, v_R)  # already l1-normalized inside
+        assert allclose(logits, component, atol=1e-12)
 
-    beta = bag_weights(logits, 1.0)
-    r17_beta = torch.softmax(r17_logits, dim=0)
-    assert allclose(beta, r17_beta, atol=1e-12)
+        beta = bag_weights(logits, 1.0)
+        expected_beta = torch.softmax(component, dim=0)
+        assert allclose(beta, expected_beta, atol=1e-12)
+
+        # And the reparametrization really is doing work here: the old,
+        # unconstrained pipeline this used to be checked against gives a
+        # DIFFERENT number at this scale, so the false claim is refuted
+        # rather than merely unmade.
+        unconstrained_logits = torch.tanh(H @ V_R.transpose(0, 1) + b_R) @ v_R
+        assert not allclose(logits, unconstrained_logits, atol=1e-6)
 
 
 def test_effective_bag_size_in_range(rng: Sampler) -> None:
@@ -445,6 +682,27 @@ def test_uniform_self_similarity_in_range(rng: Sampler) -> None:
     assert close(uniform_self_similarity(identical, SIGMA), 1.0, atol=TOL)
 
 
+def _no_self_term_consensus(H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
+    """The same average, but over a' != a -- the sum r21's own definition does
+    NOT take.
+
+    r21 Sec. 3, right before Eq. (15): the consensus is "el promedio de sus
+    evaluaciones del kernel de instancia con TODAS las instancias de su misma
+    bolsa", and kappa^I(h, h) = 1 exactly, so the self term is included on
+    purpose. This drops it, dividing by (m - 1) rather than m, and exists only
+    so `test_separation_condition_implies_majority_consensus` can show it
+    predicts something different from the real consensus -- which is what
+    makes "forgot the self term" a mutation that sweep can actually catch,
+    rather than one that happens to agree by coincidence.
+    """
+    H = torch.as_tensor(H, dtype=torch.float64)
+    m = H.shape[0]
+    squared = torch.cdist(H, H) ** 2
+    K = torch.exp(-squared / (2.0 * float(sigma) ** 2))
+    K = K * (1.0 - torch.eye(m, dtype=K.dtype))
+    return K.sum(dim=1) / max(m - 1, 1)
+
+
 def test_separation_condition_implies_majority_consensus() -> None:
     """r21 Sec. 3: the sufficient condition for the majority group's
     consensus to exceed the minority group's, over disjoint index sets
@@ -457,9 +715,26 @@ def test_separation_condition_implies_majority_consensus() -> None:
     exercised and not vacuous: two clusters at a controlled separation,
     checked against the bag's OWN actual pairwise kernel values (the true
     min/max over each block), never against assumed bounds.
+
+    Defect (b)/(d): the consensus asserted against the premise is
+    `_independent_consensus` -- Eq. (14)'s kernel recomputed from
+    `torch.cdist`/`torch.exp` directly, never through
+    `MIL_CREDA.attention.consensus_component` -- so this claim is checked
+    against the mathematics rather than against whatever the module under
+    test happens to compute. A second, WRONG consensus that omits the self
+    term (`_no_self_term_consensus`) is computed for every premise-holding
+    configuration too, and `consensus_component`'s own real output is
+    checked against BOTH: it has to agree with the correct one and disagree
+    with the wrong one, so the module under test is what this exercises,
+    never only the two hand-built formulas comparing themselves. Measured
+    separately and reported rather than asserted: on every configuration
+    this sweep's seed holds the premise for, dropping the self term widens
+    the ordering's margin instead of narrowing it, so the theorem itself
+    happens not to be the property that would catch a dropped self term
+    here -- the value comparison below is.
     """
     dimension = 4
-    checked, held = 0, 0
+    checked = held = disagreed = 0
     for index in range(SWEEP_SIZE):
         s = Sampler(_ATTENTION_SWEEP_SEED + 500_000 + index)
         n1 = int(s.integers(1, 6))
@@ -488,7 +763,7 @@ def test_separation_condition_implies_majority_consensus() -> None:
         if not premise:
             continue
         held += 1
-        consensus = consensus_component(H, sigma)
+        consensus = _independent_consensus(H, sigma)
         min_group1 = float(consensus[idx1].min())
         max_group2 = float(consensus[idx2].max())
         assert min_group1 > max_group2, (
@@ -496,8 +771,23 @@ def test_separation_condition_implies_majority_consensus() -> None:
             f"not exceed group2's maximum {max_group2}"
         )
 
+        # The module under test agrees with the correct, independent
+        # computation and disagrees with the one that omits the self term --
+        # checked against `consensus_component` itself, not only against the
+        # two hand-built reference formulas.
+        produced = consensus_component(H, sigma)
+        wrong = _no_self_term_consensus(H, sigma)
+        assert allclose(produced, consensus, atol=1e-9)
+        if not allclose(produced, wrong, atol=1e-6):
+            disagreed += 1
+
     assert checked == SWEEP_SIZE
     assert held >= 1, "the sweep never constructed a configuration meeting the premise"
+    assert disagreed == held, (
+        f"the no-self-term consensus matched the module under test on "
+        f"{held - disagreed} of {held} premise-holding configurations: a "
+        f"dropped self term would go undetected there"
+    )
 
 
 # --------------------------------------------------------------------------
