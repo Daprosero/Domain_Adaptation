@@ -9,6 +9,7 @@ check green. That is what these tests refuse.
 from __future__ import annotations
 
 import pytest
+import torch
 
 from MIL_CREDA_Benchmark import latent
 
@@ -324,12 +325,14 @@ def test_available_tags_a_checkpoint_whose_bandwidth_or_attention_hyperparameter
     assert by_transfer["M-S"] is False
 
 
-def test_an_older_manifest_missing_the_three_hyperparameter_fields_is_not_drift(
+def test_an_older_manifest_missing_the_three_hyperparameter_fields_is_drift(
         tmp_path, monkeypatch):
-    """A manifest stamped before these three fields existed carries none of
-    them -- nothing to compare, so it is not drift, and it stays tagged
-    current on this axis. It may still be caught by `currentRevision` if it
-    is genuinely from an earlier revision; this test only isolates the
+    """A manifest missing one or more of `HYPERPARAMETER_FIELDS` was not
+    produced by today's `harness.Reduction`, which stamps all three on every
+    checkpoint. Under the current revision that absence IS drift -- treating
+    it as "nothing to compare" would load and analyse the checkpoint silently
+    under today's config. It may still also be caught by `currentRevision` if
+    it is genuinely from an earlier revision; this test only isolates the
     hyperparameter axis.
     """
     import json
@@ -344,7 +347,7 @@ def test_an_older_manifest_missing_the_three_hyperparameter_fields_is_not_drift(
     monkeypatch.setattr(config, "models_for", lambda *a, **k: tmp_path)
 
     found = latent.available(0.0, True)
-    assert found[0]["currentHyperparameters"] is True
+    assert found[0]["currentHyperparameters"] is False
 
 
 def test_load_refuses_a_checkpoint_stamped_under_a_different_kernel_sigma():
@@ -400,6 +403,93 @@ def test_load_never_confuses_hyperparameter_drift_with_revision_drift():
         pytest.fail("hyperparameter drift raised as a revision refusal")
     except latent.StaleCheckpointHyperparameters:
         pass
+
+
+def test_keep_median_stamps_the_three_hyperparameters_the_run_actually_used(
+        tmp_path, monkeypatch):
+    """Round-trip through the real manifest writer, not a hand-built fixture.
+
+    `harness.keep_median` is what actually stamps a checkpoint's manifest —
+    `asdict(reduction)` carries `kernelSigma`/`attentionGamma`/
+    `attentionTemperature` straight from the `Reduction` those fields are
+    `init=False` on, i.e. straight from `config` at the moment the checkpoint
+    was written. Reading that manifest back through `latent.available()` has
+    to see all three fields present and agreeing, or `Reduction` stamping a
+    value the run never used would pass unnoticed.
+    """
+    from MIL_CREDA_Benchmark import config, harness
+
+    arm = next(iter(config.ARMS_BY_ID))
+    transfer = "M->U"
+    root = tmp_path / "models"
+    root.mkdir()
+    monkeypatch.setattr(config, "MODELS", root)
+    monkeypatch.setattr(config, "REPOSITORY", tmp_path)
+    monkeypatch.setattr(config, "models_for", lambda *a, **k: root)
+
+    (root / f"{arm}_M-U_seed0.pt").write_bytes(b"w")
+    runs = [{"arm": arm, "transfer": transfer, "seed": 0, "env": "e1",
+             "targetAccuracy": 0.5, "sourceAccuracy": 1.0, "seconds": 1.0,
+             "contribution": 0.1, "supervised": 0.2, "adaptationShare": 0.3,
+             "peakMiB": 50.0, "parameters": 11247434}]
+    manifests = {(transfer, 0): {"source": "M", "target": "U"}}
+    harness.keep_median(runs, arm, transfer, manifests, harness.Reduction())
+
+    found = latent.available(0.0, True)
+    assert len(found) == 1
+    entry = found[0]
+    reduction = entry["reduction"]
+    assert reduction["kernelSigma"] == config.KERNEL_SIGMA
+    assert reduction["attentionGamma"] == config.ATTENTION_GAMMA
+    assert reduction["attentionTemperature"] == config.ATTENTION_TEMPERATURE
+    assert entry["currentHyperparameters"] is True
+
+
+def test_load_succeeds_on_a_checkpoint_whose_stamp_matches_the_current_config(
+        monkeypatch):
+    """`load()`'s positive path, mirrored against the refusals above it.
+
+    Every earlier test in this file drives `load()` into one of its two
+    refusals. None of them proves the refusal fires *only* when it should —
+    a `load()` that refused unconditionally would pass every one of them.
+    This is the case where the revision and all three hyperparameters agree
+    with `config`, and neither `StaleCheckpointRevision` nor
+    `StaleCheckpointHyperparameters` may fire.
+    """
+    from MIL_CREDA_Benchmark import bags, config, wiring
+
+    class _FakeBagSet:
+        def __init__(self):
+            self.images = torch.zeros(1)
+            self.members = torch.zeros(1)
+            self.labels = torch.zeros(1, dtype=torch.long)
+            self.train_idx = torch.tensor([0])
+
+    class _FakeModel:
+        def to(self, device):
+            return self
+
+        def load_state_dict(self, state):
+            pass
+
+        def eval(self):
+            pass
+
+    monkeypatch.setattr(bags, "rebuild", lambda manifest, root: _FakeBagSet())
+    monkeypatch.setattr(wiring, "build", lambda *a, **k: _FakeModel())
+    monkeypatch.setattr(latent.torch, "load", lambda *a, **k: {})
+
+    record = {
+        "reduction": {"revision": config.REVISION,
+                      "kernelSigma": config.KERNEL_SIGMA,
+                      "attentionGamma": config.ATTENTION_GAMMA,
+                      "attentionTemperature": config.ATTENTION_TEMPERATURE},
+        "arm": next(iter(config.ARMS_BY_ID)),
+        "source": {}, "target": {}, "weights": "irrelevant.pt",
+    }
+
+    model, source, target = latent.load(record, device=None)
+    assert isinstance(model, _FakeModel)
 
 
 def test_a_floor_the_bench_no_longer_declares_is_an_undefined_question():

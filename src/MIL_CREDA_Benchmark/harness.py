@@ -277,9 +277,18 @@ class Reduction:
     #: objective, exactly as one trained under an earlier `revision` was --
     #: `latent.load` refuses on a mismatch here the same way it refuses on a
     #: mismatched `revision`.
-    kernelSigma: float = config.KERNEL_SIGMA
-    attentionGamma: float = config.ATTENTION_GAMMA
-    attentionTemperature: float = config.ATTENTION_TEMPERATURE
+    #:
+    #: `init=False`: these three stamp the values the run actually used, and
+    #: the run always reads them off `config` (every consumer in `wiring`/
+    #: `harness` calls `config.KERNEL_SIGMA` etc. directly, never
+    #: `reduction.kernelSigma`). Leaving them as ordinary constructor
+    #: parameters would let `Reduction(kernelSigma=x)` stamp a value nothing
+    #: downstream ever read -- a manifest that lies about what trained the
+    #: checkpoint beside it.
+    kernelSigma: float = field(init=False, default_factory=lambda: config.KERNEL_SIGMA)
+    attentionGamma: float = field(init=False, default_factory=lambda: config.ATTENTION_GAMMA)
+    attentionTemperature: float = field(
+        init=False, default_factory=lambda: config.ATTENTION_TEMPERATURE)
     #: What each family searched and kept for its derivations. Empty until the
     #: search has run, and then carried beside every number it produced — a
     #: coefficient chosen by measurement is part of the bounds, not a detail.
