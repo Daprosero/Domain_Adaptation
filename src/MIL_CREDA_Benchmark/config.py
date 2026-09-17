@@ -315,13 +315,20 @@ TAU_LOCAL = 1.0
 #: + 1e-6) over the off-diagonal pairwise squared distances of embeddings
 #: h = F_theta(x), computed on the pilot configuration's source training
 #: material -- domain M (MNIST), seed SEEDS[0] = 0, the 64 TRAIN_BAGS x 30
-#: INSTANCES_PER_BAG = 1920 images that role draws, passed once through the
-#: ImageNet-pretrained resnet18 FeatureExtractor in eval mode, before any
-#: training step. Median squared distance measured: 75.848252431748. This is
-#: a placeholder to be tuned with Optuna alongside the ceiling search -- not
-#: added to that search by this stretch of work, which was not asked to make
-#: that change.
-KERNEL_SIGMA = 8.709090275783575
+#: INSTANCES_PER_BAG = 1920 images that role draws -- in the regime training
+#: actually uses: the encoder in TRAINING mode (so BatchNorm normalizes with
+#: each chunk's own batch statistics rather than accumulated running ones),
+#: passed through in the same BAGS_PER_STEP = 10-bag / 300-image chunks
+#: `training_step` batches its own source forward in, before any optimizer
+#: step. An earlier measurement of this same constant ran the encoder in
+#: eval mode instead -- accumulated running statistics rather than the batch
+#: statistics training actually normalizes with -- and got 8.709090275783575
+#: from a median squared distance of 75.848252431748; measured in the regime
+#: above, the median squared distance is 1305.7392578125 and the constant
+#: below follows from it. This is a placeholder to be tuned with Optuna
+#: alongside the ceiling search -- not added to that search by this stretch
+#: of work, which was not asked to make that change.
+KERNEL_SIGMA = 36.135014304860874
 
 #: The stabilizer inside a logarithm, shared by two call sites rather than
 #: private to either: `wiring.py` passes it as eps_src, `source_loss`'s (and
@@ -541,14 +548,14 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 # weighting   confidence weighting of the target blocks
 # local       the subject-to-subject correspondence, which CREDA has no analogue of
 # attention   how a bag becomes a representation, for bag-unit arms
-# targetNormalization  "frozen" (every running-stats layer of the encoder
-#             normalizes the target forward with the source's own running
-#             statistics and leaves them unchanged) or "live" (today's
-#             pre-existing behaviour: the target forward updates them too).
-#             Read by `wiring.Arm`; irrelevant to a floor, since a floor
-#             (Decision 2) never encodes a target image during training at
-#             all, but declared on every arm rather than left to a default
-#             so nothing here is implicit.
+#
+# Normalization is part of the architecture and not a per-arm choice: every
+# adapted arm's target forward runs through the encoder exactly as the source
+# forward does, normalization layers in training mode included, so it learns
+# from both domains like the rest of the model. There is no separate
+# "frozen"/"live" knob here -- the only normalization fact any arm declares is
+# the floor's own (Decision 2): it never encodes a target image during
+# training at all, so it never reaches a normalization layer with one either.
 
 #: selection   which instances of a bag the arm is allowed to look at: None for
 #:             all of them, or a rule that keeps `SELECT_K` of the `INSTANCES_PER_BAG`
@@ -561,28 +568,25 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 ARMS = [
     {"id": "B", "name": "MIL-Baseline", "label": "source-only (bags)",
      "unit": "bag", "adaptation": None, "weighting": False, "local": False,
-     "attention": "learned", "selection": None, "targetNormalization": "frozen"},
+     "attention": "learned", "selection": None},
     {"id": "E", "name": "MIL-CREDA**", "label": "MIL-CREDA global, unweighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": False, "local": False,
-     "attention": "learned", "selection": None, "targetNormalization": "frozen"},
+     "attention": "learned", "selection": None},
     {"id": "F", "name": "MIL-CREDA*", "label": "MIL-CREDA global, weighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": False,
-     "attention": "learned", "selection": None, "targetNormalization": "frozen"},
+     "attention": "learned", "selection": None},
     {"id": "G", "name": "MIL-CREDA", "label": "MIL-CREDA full (global + local)",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": None, "targetNormalization": "frozen"},
-    {"id": "GN", "name": "MIL-CREDA-BN", "label": "full, normalization on both domains",
-     "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": None, "targetNormalization": "live"},
+     "attention": "learned", "selection": None},
     {"id": "SU", "name": "MIL-CREDA-U", "label": "MIL-CREDA full, regular selection",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "regular", "targetNormalization": "frozen"},
+     "attention": "learned", "selection": "regular"},
     {"id": "SA", "name": "MIL-CREDA-A", "label": "MIL-CREDA full, arbitrary selection",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "arbitrary", "targetNormalization": "frozen"},
+     "attention": "learned", "selection": "arbitrary"},
     {"id": "SK", "name": "MIL-CREDA-K", "label": "MIL-CREDA full, top-K selection",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "topk", "targetNormalization": "frozen"},
+     "attention": "learned", "selection": "topk"},
 ]
 
 ARMS_BY_ID = {arm["id"]: arm for arm in ARMS}
@@ -610,7 +614,6 @@ LADDER = [
     ("B", "E", "qué compra el término global, sin ponderar"),
     ("E", "F", "qué compra la ponderación por confianza en MIL-CREDA"),
     ("F", "G", "qué compra la correspondencia local"),
-    ("G", "GN", "qué aporta que la normalización aprenda también del dominio objetivo"),
     # The three below hold the instance budget at SELECT_K and differ only in the
     # rule that spends it, except the last, which is the budget itself.
     ("SU", "SK", "qué compra la selección por atención frente a una regular"),
@@ -655,7 +658,7 @@ CHECKPOINTS = {arm["id"]: 3 for arm in ARMS}
 
 #: Which floor each adapted arm is read against: same unit, same everything, with
 #: the adaptation term switched off.
-FLOOR_OF = {"G": "B", "GN": "B", "F": "B", "E": "B", "SU": "B", "SA": "B", "SK": "B"}
+FLOOR_OF = {"G": "B", "F": "B", "E": "B", "SU": "B", "SA": "B", "SK": "B"}
 
 # ------------------------------------------------------------------- figures
 
