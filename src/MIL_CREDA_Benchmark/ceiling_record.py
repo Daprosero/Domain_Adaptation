@@ -45,20 +45,28 @@ FLAT_RULE = (
 )
 
 
-#: The revision and the three hyperparameter fields `harness.Reduction`
-#: stamps on every trained checkpoint (`latent.HYPERPARAMETER_FIELDS`),
+#: The revision `harness.Reduction` stamps on every trained checkpoint,
 #: stamped here too. Before this the registry had no provenance at all --
 #: not even the environment, before `harness.sellar_techos` added that -- and
-#: a searched ceiling is exactly as bound to the objective it was searched
-#: under as a trained checkpoint is: `run_one` reads `KERNEL_SIGMA` and
-#: Eq. (16)'s gamma/tau_att inside every trial and every grid cell the search
-#: runs, the same as it does for a campaign, and the search is bound to a
-#: managed revision the same way every other record in this repository is.
+#: a searched ceiling is bound to a managed revision the same way every other
+#: record in this repository is.
+#:
+#: `kernelSigma`, `attentionGamma` and `attentionTemperature` were here
+#: alongside `revision`, on the premise that the search ran UNDER a fixed
+#: backdrop of the three and a later change to that backdrop made an old
+#: search stale. That premise no longer holds: the ceiling search now
+#: explores `kernelSigma`/`attentionGamma`/`attentionTemperature` themselves
+#: (alongside `rampDelta`/`tauLocal`), per transfer -- see
+#: `harness.search_ceilings_trials` and `config.KERNEL_SIGMA_RANGE` /
+#: `ATTENTION_GAMMA_RANGE` / `ATTENTION_TEMPERATURE_RANGE` -- so an entry's
+#: own `kernelSigma` etc. is that trial's WINNING VALUE, not a fixed
+#: precondition the search ran under. Comparing a search output against
+#: `config.KERNEL_SIGMA`'s bare declared default would flag drift on every
+#: search that found anything other than the exact default, which is not
+#: what "drift" means here. Only `revision` is still a genuine backdrop the
+#: search runs under and can go stale against.
 STAMP_FIELDS = {
     "revision": "REVISION",
-    "kernelSigma": "KERNEL_SIGMA",
-    "attentionGamma": "ATTENTION_GAMMA",
-    "attentionTemperature": "ATTENTION_TEMPERATURE",
 }
 
 
@@ -143,14 +151,24 @@ def choose(trials: list[dict], noise: float) -> dict:
     sostiene el primero. Un techo elegido dentro de una meseta ancha sostiene
     mucho menos de lo que un número elegido aparenta, y ese fue exactamente el
     caso de `creda` con la rejilla.
+
+    Every OTHER key a trial dict carries beside `"ceiling"`/`"value"` rides
+    along on the winner, unread and unmodified: the six-dimensional search
+    (`harness.search_ceilings_trials`) hands each trial its own `rampDelta`,
+    `kernelSigma`, `attentionGamma`, `attentionTemperature` and `tauLocal`
+    alongside `ceiling`, and the tie rule stays about `ceiling` alone -- the
+    smallest ceiling within the plateau wins, and whichever combination of the
+    other five that particular trial happened to run under is what the record
+    keeps beside it. A caller that never passes those keys (a two-key
+    `{"ceiling", "value"}` trial, as before this passthrough existed) gets
+    back exactly the same five keys as before.
     """
     if not trials:
         raise ValueError("no hay trials: no hay techo que elegir")
     banda = plateau(trials, noise)
     ganador = min(banda, key=lambda t: t["ceiling"])
     return {
-        "ceiling": ganador["ceiling"],
-        "value": ganador["value"],
+        **ganador,
         "best": max(t["value"] for t in trials),
         "trials": len(trials),
         "noise": noise,

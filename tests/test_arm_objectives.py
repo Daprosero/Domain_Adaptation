@@ -83,54 +83,29 @@ def _arm(arm_id: str):
     return wiring.build(arm_id, CLASSES, _pool(1), _pool(2))
 
 
-# ------------------------------------------------------------- the ten instances
+# ------------------------------------------------------------- selection is gone
 
-def test_the_three_selecting_arms_spend_a_budget_of_ten(encoder) -> None:
-    """`SU`, `SA` and `SK` keep ten of the bag's thirty instances and differ only
-    in which ten, so the rung between any two of them is the rule and nothing
-    else. The budget is asserted as a number because the trio's whole point is
-    that they share it: two arms differing in the rule AND in how much they spend
-    have a rung nobody can attribute.
+def test_no_declared_arm_selects_a_subset_of_its_bag(encoder) -> None:
+    """The selection arms (`SU`, `SA`, `SK`) and their budget (`SELECT_K`,
+    `SELECTION_SEED`) are removed: every declared arm's `spec["selection"]`
+    is `None`, and `Arm.select` always returns every instance of a bag
+    unchanged, for every one of them.
 
-    Reachable red: move `SELECT_K`, or let one rule return a different count --
-    `topk` off by one, or the regular stride overrunning the bag.
+    Reachable red: a declared arm with a non-`None` `selection`, or `select`
+    dropping an instance for an arm whose `selection` is `None`.
     """
-    assert config.SELECT_K == 10
+    assert {arm["selection"] for arm in config.ARMS} == {None}
+    assert not hasattr(config, "SELECT_K")
+    assert not hasattr(config, "SELECTION_SEED")
 
     H = torch.randn(config.INSTANCES_PER_BAG, 6)
-    kept = {}
-    for arm_id in ("SU", "SA", "SK"):
+    for arm_id in config.ARMS_BY_ID:
         arm = _arm(arm_id)
-        rows = arm.select(H, config.KERNEL_SIGMA)
-        assert rows.shape[0] == config.SELECT_K == 10, f"{arm_id} spent another budget"
-        kept[arm_id] = {tuple(row.tolist()) for row in rows}
-
-    # and the same ten would make two of the three arms one arm
-    assert kept["SU"] != kept["SA"] or kept["SU"] != kept["SK"]
-
-    # the complete method keeps all of them: that is the rung `SK -> G` reads
-    assert _arm("G").select(H, config.KERNEL_SIGMA).shape[0] == config.INSTANCES_PER_BAG
-
-
-def test_the_three_attention_rungs_are_the_ones_the_ladder_declares() -> None:
-    """`SU->SK`, `SA->SK` and `SK->G`, and no other pairing of the selecting arms.
-
-    The first two hold the budget at ten and read what the rule bought; the third
-    is the separate question of what the budget itself costs. A fourth pairing --
-    `SU->SA`, say -- would compare two arbitrary rules against each other and
-    read as if it said something about attention.
-
-    Reachable red: add, drop or repoint any of the three.
-    """
-    selecting = {arm["id"] for arm in config.ARMS if arm["selection"] is not None}
-    assert selecting == {"SU", "SA", "SK"}
-
-    rungs = {(left, right) for left, right, _ in config.LADDER
-             if left in selecting or right in selecting}
-    assert rungs == {("SU", "SK"), ("SA", "SK"), ("SK", "G")}
-    # and the budget rung is the only one leaving the trio
-    assert {r for r in rungs if not (r[0] in selecting and r[1] in selecting)} == \
-        {("SK", "G")}
+        kept = arm.select(H, config.KERNEL_SIGMA)
+        assert kept.shape[0] == config.INSTANCES_PER_BAG, (
+            f"{arm_id}: select dropped an instance with no selection rule declared"
+        )
+        assert torch.equal(kept, H)
 
 
 # --------------------------------------------------- attention stays within its bag
@@ -177,64 +152,52 @@ def test_a_bags_own_attention_weights_do_not_depend_on_another_bag_in_the_batch(
     assert not torch.equal(baseline_weights[1], after[1][1])
 
 
-def test_weights_for_and_select_read_the_declared_gamma_and_temperature(
-        encoder, monkeypatch) -> None:
-    """Defect (h): `weights_for` and `select`'s `topk` ranking pass
-    `config.ATTENTION_GAMMA`/`config.ATTENTION_TEMPERATURE` through to
-    `relevance_logits`/`bag_weights`, rather than a value a hardcoded 0.0/1.0
-    could silently stand in for at today's neutral hyperparameters.
+def test_weights_for_reads_the_arms_own_gamma_and_temperature(encoder) -> None:
+    """Defect (h): `weights_for` passes its arm's own gamma/temperature
+    through to `relevance_logits`/`bag_weights`, rather than a value a
+    hardcoded 0.0/1.0 could silently stand in for at today's neutral
+    hyperparameters.
+
+    Built through `wiring.build(..., hyper=...)` rather than monkeypatching
+    `config.ATTENTION_GAMMA` after construction: `Arm.__init__` resolves
+    `self.attention_gamma`/`self.attention_temperature` ONCE, from `hyper` or
+    `config`, precisely so the ceiling search's per-trial override is a
+    property of the arm and not of whatever `config` happens to say at call
+    time -- so a caller wanting a different value has to build a different
+    arm, the same way the search itself does.
 
     Each parameter is patched ALONE, with the other pinned at its neutral --
     not both at once. Moving both together would let a mutant that hardcoded
     only ONE of the two (say, `bag_weights` always dividing by 1.0 while
-    correctly reading `config.ATTENTION_GAMMA`) pass unnoticed: the output
-    would still differ from neutral because the OTHER parameter genuinely
-    moved, and the hardcoded one would never be exercised on its own. Only a
+    correctly reading gamma) pass unnoticed: the output would still differ
+    from neutral because the OTHER parameter genuinely moved, and the
+    hardcoded one would never be exercised on its own. Only a
     single-parameter patch can catch a single-parameter mutant.
     """
-    arm = _arm("G")
+    def built(gamma, temperature):
+        torch.manual_seed(11)
+        return wiring.build("G", CLASSES, _pool(1), _pool(2),
+                            hyper={"attentionGamma": gamma,
+                                   "attentionTemperature": temperature})
+
     torch.manual_seed(7)
     H = torch.randn(config.INSTANCES_PER_BAG, 6)
 
-    monkeypatch.setattr(config, "ATTENTION_GAMMA", 0.0)
-    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
-    neutral_weights = arm.weights_for(H, config.KERNEL_SIGMA)
+    neutral_weights = built(0.0, 1.0).weights_for(H, config.KERNEL_SIGMA)
 
     # gamma alone, temperature pinned at its neutral
-    monkeypatch.setattr(config, "ATTENTION_GAMMA", 2.4)
-    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
-    gamma_only_weights = arm.weights_for(H, config.KERNEL_SIGMA)
+    gamma_only_weights = built(2.4, 1.0).weights_for(H, config.KERNEL_SIGMA)
     assert not torch.allclose(neutral_weights, gamma_only_weights), (
         "weights_for produced the same weights under a patched gamma alone "
-        "as under the neutral ones -- it is not reading "
-        "config.ATTENTION_GAMMA"
+        "as under the neutral ones -- it is not reading its own gamma"
     )
 
     # temperature alone, gamma pinned at its neutral
-    monkeypatch.setattr(config, "ATTENTION_GAMMA", 0.0)
-    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 0.2)
-    temperature_only_weights = arm.weights_for(H, config.KERNEL_SIGMA)
+    temperature_only_weights = built(0.0, 0.2).weights_for(H, config.KERNEL_SIGMA)
     assert not torch.allclose(neutral_weights, temperature_only_weights), (
         "weights_for produced the same weights under a patched temperature "
-        "alone as under the neutral ones -- it is not reading "
-        "config.ATTENTION_TEMPERATURE"
-    )
-
-    # `select`'s topk ranking depends on the raw logit (gamma), never on the
-    # softmax temperature -- so only gamma is exercised here, alone.
-    sk = _arm("SK")
-    monkeypatch.setattr(config, "ATTENTION_GAMMA", 0.0)
-    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
-    neutral_kept = sk.select(H, config.KERNEL_SIGMA)
-
-    monkeypatch.setattr(config, "ATTENTION_GAMMA", 2.4)
-    monkeypatch.setattr(config, "ATTENTION_TEMPERATURE", 1.0)
-    gamma_only_kept = sk.select(H, config.KERNEL_SIGMA)
-
-    assert not torch.equal(neutral_kept, gamma_only_kept), (
-        "select's topk ranking chose the same instances under a patched "
-        "gamma alone as under the neutral one -- it is not reading "
-        "config.ATTENTION_GAMMA"
+        "alone as under the neutral ones -- it is not reading its own "
+        "temperature"
     )
 
 
@@ -324,8 +287,9 @@ def test_every_sigma_consumer_receives_the_one_declared_constant(
     monkeypatch.setattr(wiring, "bag_kernel", spy_bag_kernel)
 
     # G exercises weights_for and every kernel block plus local_distance's
-    # self-similarity; SK additionally exercises select's topk ranking.
-    for arm_id in ("G", "SK"):
+    # self-similarity; GN exercises the same path with its own frozen-stats
+    # target forward.
+    for arm_id in ("G", "GN"):
         arm = _arm(arm_id)
         x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
         y = arm.source.labels[:config.BAGS_PER_STEP]
@@ -365,14 +329,13 @@ def test_evaluation_sigma_matches_the_declared_constant_through_harness_accuracy
     """Decision 1, driven through the ACTUAL evaluation path and not a bare
     `arm(x)` call: `harness.accuracy` is `@torch.no_grad()` and explicitly
     calls `model.eval()` before scoring a batch and `model.train()` after,
-    which `arm(x)` alone never does. Every one of the seven declared arms is
-    driven, not only two, so a drift confined to one arm's own path is
-    caught by name -- `bag_representations` is shared code, but nothing
-    before this proved every `spec` reaches it with the same sigma in eval
-    mode specifically.
+    which `arm(x)` alone never does. Every declared arm is driven, not only
+    two, so a drift confined to one arm's own path is caught by name --
+    `bag_representations` is shared code, but nothing before this proved
+    every `spec` reaches it with the same sigma in eval mode specifically.
 
     Reachable red: a sigma drift that only fires while `model.training` is
-    `False`, or one confined to arm `SA` alone.
+    `False`, or one confined to a single arm.
     """
     import MIL_CREDA.attention as attention_module
 
@@ -479,7 +442,7 @@ def test_a_floor_never_calls_take_on_the_target_pool(encoder, monkeypatch) -> No
     )
 
 
-@pytest.mark.parametrize("arm_id", ["E", "F", "G", "SU", "SA", "SK"])
+@pytest.mark.parametrize("arm_id", ["E", "F", "G", "GN"])
 def test_an_adapted_arms_target_forward_carries_gradient_to_the_encoder(
         encoder, arm_id) -> None:
     """The adaptation term trains the shared encoder through the TARGET
@@ -591,19 +554,24 @@ def test_an_adapted_arms_target_forward_updates_running_statistics(
     assert not torch.equal(bn.running_var, before_var)
 
 
-@pytest.mark.parametrize("arm_id", ["E", "F", "G", "SU", "SA", "SK"])
+@pytest.mark.parametrize("arm_id", ["E", "F", "G"])
 def test_every_adapted_arms_full_training_step_updates_running_statistics_a_source_only_twin_does_not(
         bn_encoder, arm_id) -> None:
     """The guard above covers `G` alone, and only at `_target_embeddings`
-    directly. This drives every adapted arm through a full `training_step`
-    and compares its encoder's running statistics against a `B` twin built
-    from identical initial weights (`_arm` resets the seed before building
-    each one, over the same deterministic pools) and fed the identical
-    batch and generator. `B` never lets a target image reach the encoder
-    (Decision 2), so its running statistics move only from the source
+    directly. This drives every adapted arm but `GN` through a full
+    `training_step` and compares its encoder's running statistics against a
+    `B` twin built from identical initial weights (`_arm` resets the seed
+    before building each one, over the same deterministic pools) and fed the
+    identical batch and generator. `B` never lets a target image reach the
+    encoder (Decision 2), so its running statistics move only from the source
     forward; if the adapted arm's landed in the same place, its own target
     forward would have to have been skipped or frozen somewhere between
     `training_step` and `_target_embeddings`.
+
+    `GN` is excluded here on purpose and covered by its own test below: it is
+    the one declared arm whose running statistics ARE expected to match its
+    source-only twin's, because its target forward never touches them at all
+    (`normalization: "sourceBatch"`).
 
     Reachable red, two ways: freeze the target forward for `arm_id` (wrap it
     in `eval()`) anywhere from `training_step` down to `_target_embeddings`
@@ -636,6 +604,74 @@ def test_every_adapted_arms_full_training_step_updates_running_statistics_a_sour
                            adapted.encoder.bn.running_var)
 
 
+def test_gns_full_training_step_matches_a_source_only_twins_running_statistics(
+        bn_encoder) -> None:
+    """`GN`'s own claim, the mirror of the test above: its running statistics
+    after a full `training_step` equal a source-only twin's exactly, because
+    its target forward is normalized with the CURRENT SOURCE BATCH statistics
+    of that same step and never updates `running_mean`/`running_var` at all
+    -- `wiring.Arm._encode_with_frozen_stats` restores whatever the source
+    forward already left there.
+
+    Reachable red: `_encode_with_frozen_stats` failing to restore the
+    original running statistics after the target forward (leaking the
+    temporarily-injected source-batch numbers into the buffer permanently),
+    or `_target_embeddings` routing `GN` through the ordinary
+    `instance_embeddings` path instead.
+    """
+    floor = _arm("B")
+    gn = _arm("GN")
+
+    floor.encoder.train()
+    gn.encoder.train()
+    assert torch.equal(floor.encoder.bn.running_mean, gn.encoder.bn.running_mean), (
+        "the twins did not start with identical running statistics"
+    )
+
+    x = floor.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = floor.source.labels[:config.BAGS_PER_STEP]
+    gen_floor = torch.Generator().manual_seed(41)
+    gen_gn = torch.Generator().manual_seed(41)
+
+    floor.training_step(x, y, 0.5, gen_floor)
+    gn.training_step(x, y, 0.5, gen_gn)
+
+    assert torch.equal(floor.encoder.bn.running_mean, gn.encoder.bn.running_mean), (
+        "GN's running statistics moved away from its source-only twin's: "
+        "its target forward touched them, which normalization: "
+        "\"sourceBatch\" says it must never do"
+    )
+    assert torch.equal(floor.encoder.bn.running_var, gn.encoder.bn.running_var)
+
+
+def test_gns_target_embeddings_scale_comparably_to_the_source(bn_encoder) -> None:
+    """The other half of `GN`'s claim: normalizing the target batch with the
+    SOURCE batch's own statistics still produces embeddings on a comparable
+    scale to the source's -- not a blow-up or a collapse -- asserted as a
+    stated factor rather than an exact match, since the two domains' raw
+    activations are not identical to begin with.
+    """
+    gn = _arm("GN")
+    gn.encoder.train()
+
+    source_bags = gn.source.take(torch.arange(config.BAGS_PER_STEP))
+    target_bags = gn.target.take(torch.arange(config.BAGS_PER_STEP))
+
+    source_embeddings = gn._source_embeddings(source_bags)
+    target_embeddings = gn._target_embeddings(target_bags)
+
+    source_scale = source_embeddings.detach().abs().mean().item()
+    target_scale = target_embeddings.detach().abs().mean().item()
+    assert source_scale > 0, "the source embeddings collapsed to zero"
+
+    factor = target_scale / source_scale
+    assert 0.1 <= factor <= 10.0, (
+        f"GN's target embeddings scale by a factor of {factor:.4g} against "
+        "the source's -- outside the [0.1, 10.0] band this test treats as "
+        "\"comparable\""
+    )
+
+
 # ------------------------------------------------- the supervised term of a bag
 
 def test_a_bag_unit_arm_uses_the_normalized_supervised_term_instead(encoder) -> None:
@@ -654,6 +690,26 @@ def test_a_bag_unit_arm_uses_the_normalized_supervised_term_instead(encoder) -> 
     expected = source_loss(scores, F.one_hot(y, CLASSES).to(scores.dtype),
                            config.EPSILON)
     assert step["supervised"] == pytest.approx(float(expected.detach()), abs=1e-6)
+
+
+# ------------------------------------------------------------ the learning rate
+
+def test_the_learning_rate_is_fixed_and_not_decayed() -> None:
+    """One fixed, declared rate for every arm, at every epoch: `config.LR`.
+
+    `LR_ALPHA`/`LR_BETA` and the decay of CREDA's own `get_eta` are removed --
+    the dynamic schedule is replaced by a single constant, not searched.
+
+    Reachable red: reintroducing `p = epoch / epochs; return config.LR * (1 +
+    LR_ALPHA * p) ** (-LR_BETA)` (or any other epoch-dependent formula) in
+    `harness.learning_rate`.
+    """
+    assert not hasattr(config, "LR_ALPHA")
+    assert not hasattr(config, "LR_BETA")
+    for epoch in range(5):
+        assert harness.learning_rate(epoch, 20) == config.LR, (
+            f"the rate moved at epoch {epoch}: it is supposed to be fixed"
+        )
 
 
 # ------------------------------------------------- what the campaign hands the arms
@@ -725,7 +781,7 @@ def test_one_draw_of_the_material_is_shared_by_every_arm(campana) -> None:
 
     runs = campana["runs"]
     arms = {run["arm"] for run in runs}
-    assert len(arms) == len(config.ARMS) == 7
+    assert len(arms) == len(config.ARMS) == 5
     for transfer in {run["transfer"] for run in runs}:
         of_cell = [run for run in runs if run["transfer"] == transfer]
         assert len({run["source"] for run in of_cell}) == 1, \
@@ -778,53 +834,40 @@ def test_three_checkpoints_are_kept_per_arm_per_cell_for_every_arm(campana) -> N
     assert one["reduction"]["seeds"] == [0, 1, 2, 3]
 
 
-def _run_one_with_clock(seconds_of):
-    """`run_one`'s shape, with the wall time of each run under the test's hand.
-
-    The shared `_fake_run_one` returns a constant `0.01` for every arm, which
-    is exactly the fixture that would let a "the slowest arm is named" claim
-    pass while naming nothing: with every reading identical, any arm is a
-    correct answer. Here the slowest is a different arm in every cell.
+def _run_one_no_timing(arm_id, transfer, seed, reduction, device, material, **kwargs):
+    """`run_one`'s shape, with none of the timing/memory fields `harness.run_one`
+    no longer returns -- time and memory (`seconds`/`peakMiB`) are removed from
+    this comparison entirely.
     """
-    def run_one(arm_id, transfer, seed, reduction, device, material, **kwargs):
-        label = harness.transfer_label(transfer)
-        return {
-            "arm": arm_id, "transfer": label, "seed": seed,
-            "env": "test-env", "targetAccuracy": 0.5 + seed / 100,
-            "sourceAccuracy": 0.5, "seconds": seconds_of(arm_id, seed),
-            "peakMiB": 1.0, "parameters": 4, "contribution": 0.1,
-            "supervised": 0.2, "adaptationShare": 0.3,
-            "curve": [], "epochs": [{"epoch": 0}], "state": None,
-        }
-    return run_one
+    label = harness.transfer_label(transfer)
+    return {
+        "arm": arm_id, "transfer": label, "seed": seed,
+        "env": "test-env", "targetAccuracy": 0.5 + seed / 100,
+        "sourceAccuracy": 0.5, "parameters": 4, "contribution": 0.1,
+        "supervised": 0.2, "adaptationShare": 0.3,
+        "curve": [], "epochs": [{"epoch": 0}], "state": None,
+    }
 
 
-def test_progress_prints_one_line_per_cell_and_names_that_cells_slowest_arm(
+def test_progress_prints_one_line_per_cell_and_names_no_timing(
         campana, monkeypatch) -> None:
-    """One line per (seed, transfer), not one per run, and it names the slowest.
+    """One line per (seed, transfer), not one per run, and it names no timing.
 
     Six transfers over thirty seeds is 180 lines; the same call inside the arm
     loop prints 1800, and 1800 lines of a run measured in hours is a report
     nobody reads rather than the sign of life it is kept for.
 
-    The slowest arm rides along because the cell granularity is what would
-    otherwise hide it. Printed per run, an arm taking ten times its neighbours
-    was visible while it was still the only thing that had happened; summarised
-    per cell it would surface only once the cell closed, unless the summary
-    says which arm spent the time.
+    It used to name that cell's slowest arm and how long the cell took;
+    both are gone along with `seconds`/`peakMiB` themselves, which
+    `harness.run_one` no longer returns at all.
 
-    Reachable red, both halves: move `progress` back inside the arm loop and the
-    count lands on arms x transfers x seeds; drop the `slowest` clause and the
-    arm this cell actually spent its time on is nowhere in the line.
+    Reachable red: move `progress` back inside the arm loop and the count
+    lands on arms x transfers x seeds, or reintroduce a reference to
+    `run["seconds"]` inside `campaign`'s progress line -- which would raise
+    `KeyError` against this fixture's own run dict, which carries no such key.
     """
     arm_ids = [arm["id"] for arm in config.ARMS]
-
-    def seconds_of(arm_id: str, seed: int) -> float:
-        # A rotation, so no cell shares a slowest arm with the next and a line
-        # that named a fixed arm would be wrong five times out of six.
-        return 1.0 + (arm_ids.index(arm_id) + seed) % len(arm_ids)
-
-    monkeypatch.setattr(harness, "run_one", _run_one_with_clock(seconds_of))
+    monkeypatch.setattr(harness, "run_one", _run_one_no_timing)
     lines: list[str] = []
     seeds = [0, 1, 2]
     harness.campaign(
@@ -839,18 +882,10 @@ def test_progress_prints_one_line_per_cell_and_names_that_cells_slowest_arm(
         f"{len(cells)} progress lines for {len(seeds) * len(labels)} cells of "
         f"{len(arm_ids)} arms -- one per run would be "
         f"{len(seeds) * len(labels) * len(arm_ids)}")
-
-    for seed in seeds:
-        slowest = arm_ids[(len(arm_ids) - 1 - seed) % len(arm_ids)]
-        spent = seconds_of(slowest, seed)
-        for label in labels:
-            of_cell = [line for line in cells
-                       if f"{label} seed {seed}:" in line]
-            assert len(of_cell) == 1, \
-                f"{len(of_cell)} lines for the cell {label} seed {seed}"
-            assert f"slowest {slowest:>2} {spent:.1f}s" in of_cell[0], \
-                (f"the line for {label} seed {seed} does not name {slowest}, "
-                 f"which spent {spent:.1f}s of it: {of_cell[0]!r}")
+    for line in cells:
+        assert "slowest" not in line and "cell " not in line, (
+            f"a progress line still names timing: {line!r}"
+        )
 
 
 # ------------------------------------------------------- what funds the third role
@@ -1040,46 +1075,8 @@ def test_the_bag_label_never_leaves_its_bag(encoder, monkeypatch) -> None:
     assert m == config.INSTANCES_PER_BAG > 1
 
 
-def test_the_arbitrary_selection_draws_from_a_generator_of_its_own(encoder) -> None:
-    """`SA`'s ten positions are drawn, and the draw costs the run nothing.
-
-    Consuming the training generator would shift every later draw of the run --
-    the target batches, the shuffling, everything downstream -- and the rung
-    `SA->SK` would then be crediting the selection rule with what the offset did.
-    A rung that cannot be attributed is not a rung.
-
-    Two things have to hold at once and each passes while the other is broken:
-    the positions come out of `SELECTION_SEED` and nothing else, and building the
-    arm leaves the surrounding generator exactly where it found it. The second is
-    asserted against `SU`, whose positions are computed rather than drawn, so the
-    two builds are identical in everything except this draw.
-
-    Reachable red: drop the dedicated generator and let `randperm` fall through
-    to the global one.
-    """
-    def positions_of(arm_id: str, seed: int) -> torch.Tensor:
-        torch.manual_seed(seed)
-        return wiring.build(arm_id, CLASSES, _pool(1), _pool(2)).positions.clone()
-
-    def after_building(arm_id: str, seed: int) -> torch.Tensor:
-        torch.manual_seed(seed)
-        wiring.build(arm_id, CLASSES, _pool(1), _pool(2))
-        return torch.randn(4)
-
-    # the draw is reproducible off the declared seed and off nothing else: two
-    # different surrounding seeds give the same ten positions
-    assert torch.equal(positions_of("SA", 11), positions_of("SA", 4242))
-
-    expected = torch.randperm(
-        config.INSTANCES_PER_BAG,
-        generator=torch.Generator().manual_seed(config.SELECTION_SEED)
-    )[:config.SELECT_K].sort().values
-    assert torch.equal(positions_of("SA", 11), expected)
-
-    # and it takes nothing from the generator around it: after building `SA` the
-    # next draw is the same one that follows building `SU`, which draws nothing
-    assert torch.equal(after_building("SA", 11), after_building("SU", 11))
-
-    # the rule really is a draw and not the even stride `SU` walks
-    assert not torch.equal(positions_of("SA", 11), positions_of("SU", 11))
-    assert len(positions_of("SA", 11)) == config.SELECT_K
+# `test_the_arbitrary_selection_draws_from_a_generator_of_its_own` (SA's own
+# positions, once) is removed along with the selection arms: no declared arm
+# has a `positions` buffer at all any more, since `spec["selection"]` is
+# `None` everywhere and `Arm.__init__` only builds that buffer for
+# `"regular"`/`"arbitrary"` selection.

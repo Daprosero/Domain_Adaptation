@@ -340,49 +340,21 @@ class TestUnEnsayoNoSePuedeLeerComoUnaCorridaCompleta:
                             tmp_path / "ceilings.pilot.json")
         assert "Sin búsqueda de techos" in harness.search_source_note()
 
-    def test_el_informe_muestra_el_aviso_antes_de_cada_tabla_de_techos(self):
-        """Derivado del cuaderno y no de la memoria de quien lo escribió: cada
-        celda que renderiza el registro de la búsqueda tiene que mostrar la
-        procedencia también.
-
-        Rojo alcanzable: borrar un `show(PROCEDENCIA_TECHOS)` de cualquiera de
-        las dos celdas, o renderizar una tercera tabla de techos sin él.
-        """
-        documento = json.loads((_REPOSITORIO / "MIL-CREDA" / "Notebooks"
-                                / "Benchmark_Report_v1.ipynb")
-                               .read_text(encoding="utf-8"))
-        celdas = ["".join(c.get("source", [])) for c in documento["cells"]
-                  if c.get("cell_type") == "code"]
-        # Derivado del árbol y no de la cadena literal: la llamada tiene que
-        # existir Y nombrar la escala de la corrida que el informe dibuja. La
-        # forma literal pasaba con una llamada pelada, que es lo que había ---
-        # la rejilla de la búsqueda COMPLETA encabezando las tablas de una
-        # campaña de ensayo.
-        resuelven = []
-        for celda in celdas:
-            try:
-                arbol = ast.parse("\n".join(
-                    l for l in celda.splitlines()
-                    if not l.lstrip().startswith(("%", "!"))))
-            except SyntaxError:                              # pragma: no cover
-                continue
-            for nodo in ast.walk(arbol):
-                if (isinstance(nodo, ast.Assign)
-                        and any(getattr(t, "id", None) == "PROCEDENCIA_TECHOS"
-                                for t in nodo.targets)
-                        and isinstance(nodo.value, ast.Call)):
-                    resuelven.append(ast.unparse(nodo.value))
-        assert resuelven, "el informe no resuelve la procedencia"
-        assert all("search_source_note" in r and "pilot=" in r
-                   for r in resuelven), (
-            "el aviso de procedencia no dice de qué escala habla, así que puede "
-            f"describir un registro que esta corrida no consumió -> {resuelven}")
-        rinden = [c for c in celdas if "render_ceilings" in c]
-        assert rinden, "el informe ya no muestra la rejilla de techos"
-        sin_aviso = [c.strip()[:60] for c in rinden
-                     if "PROCEDENCIA_TECHOS" not in c]
-        assert not sin_aviso, (
-            f"estas celdas muestran techos sin decir de qué escala -> {sin_aviso}")
+    # `test_el_informe_muestra_el_aviso_antes_de_cada_tabla_de_techos` is
+    # removed. `Benchmark_Report_v1.ipynb` -- the notebook this test opened
+    # by hardcoded name -- was deleted with this stretch's restructuring and
+    # has no successor that renders a ceiling table: `Results_v1.ipynb`
+    # (which folds the old report/latent/campaign/noise-report notebooks into
+    # one) does not call `render_ceilings`/`render_ceilings_by_transfer` at
+    # all. That concern was always, and remains, the sole property of
+    # `Benchmark_Search_Report_v1.ipynb`, kept unchanged by this stretch --
+    # measured directly: its own cell 11 already calls
+    # `show(harness.search_source_note())` immediately before
+    # `show(tables.render_ceilings(registro, ...))`, and its cell 15 shows
+    # the same registry's per-transfer table right after. No test in this
+    # repository pins that pattern by name today; adding one is a decision
+    # for whoever owns that notebook, not a removal this stretch can silently
+    # paper over by keeping a test that opens a file that no longer exists.
 
 
 class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
@@ -406,29 +378,22 @@ class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
             f"`latent.{entrada}` dibuja paneles y no puede decir de qué corrida "
             f"salen los pesos -> {list(firma.parameters)}")
 
-    def test_el_cuaderno_le_pasa_su_propia_escala_a_las_que_llama(self):
-        """Rojo alcanzable: sacarle `ES_ENSAYO` a cualquiera de las dos
-        llamadas que dibujan, o borrar una de las dos del cuaderno."""
-        documento = json.loads((_REPOSITORIO / "MIL-CREDA" / "Notebooks"
-                                / "Benchmark_Latent_v1.ipynb")
-                               .read_text(encoding="utf-8"))
-        celdas = "\n".join("".join(c.get("source", [])) for c in documento["cells"]
-                           if c.get("cell_type") == "code")
-        arbol = ast.parse("\n".join(l for l in celdas.splitlines()
-                                    if not l.lstrip().startswith(("%", "!"))))
-        vistas = set()
-        for nodo in ast.walk(arbol):
-            if not isinstance(nodo, ast.Call):
-                continue
-            nombre = getattr(nodo.func, "attr", None)
-            if nombre not in ("latent_grid", "correspondence_grid", "floors_agree"):
-                continue
-            vistas.add(nombre)
-            texto = ast.unparse(nodo)
-            assert "ES_ENSAYO" in texto or "pilot" in texto, (
-                f"esta llamada dibuja con los pesos de otra corrida -> {texto}")
-        assert vistas == {"latent_grid", "correspondence_grid"}, (
-            f"el cuaderno ya no llama a las dos que dibujan -> {sorted(vistas)}")
+    # `test_el_cuaderno_le_pasa_su_propia_escala_a_las_que_llama` is removed.
+    # `Benchmark_Latent_v1.ipynb` -- the notebook this test opened by
+    # hardcoded name -- was deleted with this stretch's restructuring; its
+    # analysis folds into `Results_v1.ipynb`, which is not this stretch's
+    # file to author or pin an exact call list against (`tables.py`,
+    # `figures.py`, `latent.py` and every notebook belong to the other agent
+    # working this change in parallel). Measured directly: `Results_v1.ipynb`
+    # calls `latent.latent_grid(..., pilot=ES_ENSAYO)` (twice, clean and
+    # noisy) but not `correspondence_grid` or `floors_agree` at all, so the
+    # old assertion `vistas == {"latent_grid", "correspondence_grid"}` no
+    # longer holds and asserting a new fixed set here would encode a claim
+    # about a file this stretch does not own. The scale-forwarding discipline
+    # itself stays generically covered, notebook-name-agnostic, by
+    # `TestCadaLecturaDiceDeQueCorridaSale.test_ninguna_lectura_deja_la_escala_a_la_firma`
+    # above, which already walks every `*.ipynb` currently on disk including
+    # `Results_v1.ipynb`.
 
 
 def test_la_forma_del_repliegue_es_una_sola_en_todo_el_repositorio():
@@ -702,16 +667,39 @@ class TestQuienSabeSuEscalaLaDice:
         """La escala es un modo del RECORRIDO, así que ningún cuaderno la fija.
 
         `ES_ENSAYO` sale siempre de una lectura: `config.is_pilot_scale()` en
-        los cuatro que corren, o el `pilot` del registro que se está dibujando
-        en los que informan. Una constante ahí es la forma exacta que tenía el
+        los que corren, o el `pilot`/las variables que un resolutor devuelve en
+        los que informan. Una constante ahí es la forma exacta que tenía el
         defecto que esto cierra --- `ES_ENSAYO = True` en el cuaderno de la
         búsqueda, con el que NINGÚN cuaderno podía correr la búsqueda completa,
         así que a escala completa los techos salían de la biblioteca y todo el
         resto del recorrido de un cuaderno.
 
-        Rojo alcanzable: escribir `ES_ENSAYO = True` (o `False`) en cualquiera
-        de los siete cuadernos.
+        El piso baja de siete cuadernos a cuatro (y de seis declaraciones a
+        dos) con esta reestructuración: `report`, `latent`, `campaign` y
+        `noise-report` se fusionaron en `Results_v1.ipynb`, y los dos
+        diagnósticos fueron retirados -- ver `config.py`'s propia nota de
+        retiro. El piso es el conteo medido hoy contra el disco
+        (`Benchmark_Ceiling_Search_v1.ipynb`'s propio `ES_ENSAYO =
+        config.is_pilot_scale()`, y `Results_v1.ipynb`'s
+        `..., ES_ENSAYO = cargar_corridas()`), no un número heredado de la
+        forma vieja del repositorio.
+
+        El objetivo de asignación también reconoce ahora un target en
+        tupla (`a, b, ES_ENSAYO = f()`), no sólo uno pelado (`ES_ENSAYO =
+        f()`): la forma pelada es la única que el chequeo anterior veía, y
+        `Results_v1.ipynb` deriva la suya por desempaquetado -- sin este
+        reconocimiento la declaración real más nueva del árbol es invisible
+        para el propio chequeo, y ni cuenta como derivada ni como escrita a
+        mano.
+
+        Rojo alcanzable: escribir `ES_ENSAYO = True` (o `False`), pelado o
+        adentro de una tupla, en cualquiera de los cuadernos.
         """
+        def nombra_es_ensayo(objetivo: ast.expr) -> bool:
+            if isinstance(objetivo, ast.Tuple):
+                return any(nombra_es_ensayo(elemento) for elemento in objetivo.elts)
+            return getattr(objetivo, "id", None) == "ES_ENSAYO"
+
         a_mano = {}
         derivadas = 0
         for archivo, fuente in _fuentes():
@@ -724,14 +712,13 @@ class TestQuienSabeSuEscalaLaDice:
             for nodo in ast.walk(arbol):
                 if not isinstance(nodo, ast.Assign):
                     continue
-                if not any(getattr(t, "id", None) == "ES_ENSAYO"
-                           for t in nodo.targets):
+                if not any(nombra_es_ensayo(t) for t in nodo.targets):
                     continue
                 if isinstance(nodo.value, ast.Constant):
                     a_mano[f"{archivo}: {ast.unparse(nodo)}"] = archivo
                 else:
                     derivadas += 1
-        assert derivadas >= 6, (
+        assert derivadas >= 2, (
             f"el recorrido casi no ve declaraciones de escala -> {derivadas}")
         assert not a_mano, (
             "estos cuadernos se escriben la escala en vez de recibirla, así que "

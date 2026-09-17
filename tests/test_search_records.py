@@ -17,6 +17,7 @@ import json
 
 import pytest
 
+from MIL_CREDA_Benchmark import ceiling_record as cr
 from MIL_CREDA_Benchmark import config, harness
 
 
@@ -210,16 +211,22 @@ def test_search_record_etiqueta_currentStamp_false_sobre_un_registro_sin_estampa
     assert encontrado["creda"]["currentStamp"] is False
 
 
-def test_sellar_techos_estampa_los_cuatro_campos_de_procedencia():
+def test_sellar_techos_estampa_la_revision_de_procedencia():
     """`sellar_techos` es lo único que escribe el registro de verdad; esto
-    prueba el escritor directamente y no sólo la lectura de un fixture."""
+    prueba el escritor directamente y no sólo la lectura de un fixture.
+
+    `kernelSigma`/`attentionGamma`/`attentionTemperature` ya no se estampan
+    acá: el motor por trials los busca a los tres (junto con `rampDelta` y
+    `tauLocal`), así que cada entrada carga su propio VALOR GANADOR, no un
+    telón de fondo estampado encima -- ver `ceiling_record.STAMP_FIELDS`.
+    """
     entradas = {"creda": {"ceiling": 0.01}, "milcreda": {"ceiling": 1.0}}
     sellado = harness.sellar_techos(entradas, harness.Reduction())
     for familia in ("creda", "milcreda"):
         assert sellado[familia]["revision"] == config.REVISION
-        assert sellado[familia]["kernelSigma"] == config.KERNEL_SIGMA
-        assert sellado[familia]["attentionGamma"] == config.ATTENTION_GAMMA
-        assert sellado[familia]["attentionTemperature"] == config.ATTENTION_TEMPERATURE
+        assert set(cr.STAMP_FIELDS) == {"revision"}
+        for campo in ("kernelSigma", "attentionGamma", "attentionTemperature"):
+            assert campo not in sellado[familia]
 
 
 def test_ceilings_in_force_rechaza_un_registro_sin_estampar(registros, monkeypatch):
@@ -241,8 +248,13 @@ def test_ceilings_in_force_rechaza_un_registro_sin_estampar(registros, monkeypat
                                   progress=lambda *_: None, pilot=False)
 
 
-def test_ceilings_in_force_rechaza_un_registro_estampado_con_otro_kernelsigma(
+def test_ceilings_in_force_rechaza_un_registro_estampado_con_otra_revision(
         registros, monkeypatch):
+    """El único telón de fondo que sigue siendo drift: `revision`.
+    `kernelSigma`/`attentionGamma`/`attentionTemperature` dejaron de estarlo
+    -- son ahora el VALOR GANADOR de cada entrada, no un fondo fijo contra el
+    que compararse -- así que estampar cualquier valor de esos tres ya no
+    dispara este rechazo; sólo `revision` lo hace."""
     lleno, _ = registros
     lleno.write_text(json.dumps({"creda": {
         "ceiling": 0.01, "epochs": config.SEARCH_EPOCHS, "seeds": [0, 1, 2],
@@ -250,9 +262,7 @@ def test_ceilings_in_force_rechaza_un_registro_estampado_con_otro_kernelsigma(
         "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
                           "seeds": config.FULL_SEARCH_SEEDS},
         "byTransfer": {"M->U": 0.01},
-        "revision": config.REVISION, "kernelSigma": config.KERNEL_SIGMA * 3,
-        "attentionGamma": config.ATTENTION_GAMMA,
-        "attentionTemperature": config.ATTENTION_TEMPERATURE}}), encoding="utf-8")
+        "revision": "research-concept-r99.md"}}), encoding="utf-8")
     monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
         "no debía volver a buscar: el registro ya existe"))
     with pytest.raises(SystemExit):

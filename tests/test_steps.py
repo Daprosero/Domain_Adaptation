@@ -61,23 +61,23 @@ class PasosDeclaradosTests(unittest.TestCase):
         """
         import ast
 
-        entrada = paquete.__steps__["campaign-local"]
-        self.assertEqual(entrada["function"], "campana")
+        entrada = paquete.__steps__["results"]
+        self.assertEqual(entrada["function"], "resultados")
         self.assertEqual(
-            _cuadernos_nombrados_por_los_pasos().get("Benchmark_Campaign_v1.ipynb"),
-            "campana", "la campaña no corre su propio cuaderno")
+            _cuadernos_nombrados_por_los_pasos().get("Results_v1.ipynb"),
+            "resultados", "los resultados no corren su propio cuaderno")
 
         fuente = Path(steps.__file__).read_text(encoding="utf-8")
         (definicion,) = [nodo for nodo in ast.parse(fuente).body
                          if isinstance(nodo, ast.FunctionDef)
-                         and nodo.name == "campana"]
+                         and nodo.name == "resultados"]
         computa = [nodo for nodo in ast.walk(definicion)
                    if isinstance(nodo, ast.Call)
                    and isinstance(nodo.func, ast.Attribute)
                    and nodo.func.attr in ("campaign", "run_search",
                                           "search_ceilings", "run_one")]
         self.assertEqual(computa, [],
-                         "la campaña computa al lado del cuaderno que corre")
+                         "los resultados computan al lado del cuaderno que corre")
 
     def test_la_busqueda_de_ensayo_corre_su_cuaderno_en_vez_de_computar_en_su_lugar(
             self):
@@ -174,58 +174,15 @@ class PasosDeclaradosTests(unittest.TestCase):
                          "un paso con dos cuadernos ejecuta `--inplace` dos "
                          "veces y la segunda le pisa a la primera")
 
-    def test_el_cuaderno_de_campana_deriva_su_escala_en_vez_de_escribir_en_la_completa(
-            self):
-        """Dónde escribe el cuaderno lo decide la escala, y una sola expresión.
-
-        `Reduction.pilot` decide el árbol y `EPOCHS`/`SEEDS` deciden la escala,
-        y hasta acá nada unía las dos: el cuaderno construía su reducción sin
-        `pilot`, o sea `False`, así que una corrida de tres épocas y una semilla
-        escribía en `Results/Benchmark/` --- el árbol de la corrida completa ---
-        y sus números quedaban ahí para que alguien los citara. Es la falla que
-        la docstring del propio campo nombra.
-
-        Las dos mitades: el cuaderno pasa `pilot=` derivado de
-        `config.is_pilot_scale()`, y el paso se niega cuando esa lectura dice
-        que la escala es la completa, porque sus `produces` nombran el árbol de
-        ensayo y ninguno más.
-
-        Rojo alcanzable: sacarle el `pilot=` a la `Reduction` del cuaderno,
-        escribir la regla a mano en vez de leerla, o sacarle la guarda al paso.
-        """
-        import ast
-
-        celdas = "\n".join(_celdas_de_codigo("Benchmark_Campaign_v1.ipynb"))
-        arbol = ast.parse(celdas)
-        reducciones = [nodo for nodo in ast.walk(arbol)
-                       if isinstance(nodo, ast.Call)
-                       and isinstance(nodo.func, ast.Attribute)
-                       and nodo.func.attr == "Reduction"]
-        self.assertTrue(reducciones, "el cuaderno de campaña no arma reducción")
-        for llamada in reducciones:
-            with self.subTest(linea=llamada.lineno):
-                nombres = {k.arg for k in llamada.keywords}
-                self.assertIn("pilot", nombres,
-                              "la reducción no dice a qué escala escribe")
-
-        # y el nombre que pasa sale de la única lectura de la regla
-        asignado = [nodo for nodo in ast.walk(arbol)
-                    if isinstance(nodo, ast.Assign)
-                    and any(isinstance(t, ast.Name) and t.id == "ES_ENSAYO"
-                            for t in nodo.targets)]
-        self.assertTrue(asignado, "el cuaderno no deriva su escala")
-        for nodo in asignado:
-            with self.subTest(linea=nodo.lineno):
-                self.assertIn("is_pilot_scale", ast.dump(nodo.value),
-                              "la escala se escribió a mano en vez de leerse")
-
-        # la guarda del paso, sobre la misma lectura
-        fuente = Path(steps.__file__).read_text(encoding="utf-8")
-        (definicion,) = [nodo for nodo in ast.parse(fuente).body
-                         if isinstance(nodo, ast.FunctionDef)
-                         and nodo.name == "campana"]
-        self.assertIn("is_pilot_scale", ast.dump(definicion),
-                      "el paso no se niega a escala completa")
+    # `test_el_cuaderno_de_campana_deriva_su_escala_en_vez_de_escribir_en_la_completa`
+    # is removed. `campana`/`Benchmark_Campaign_v1.ipynb` and the
+    # `campaign-local` step are retired: nothing in this stretch's restructured
+    # `__steps__` calls `harness.campaign()` from a notebook any more (see
+    # `resultados`'s own docstring in `steps.py`). `Results_v1.ipynb` derives
+    # its scale through `cargar_corridas()` -- a resolver, not a hand-built
+    # `Reduction(pilot=...)` -- and that discipline is already covered
+    # generically, notebook-name-agnostic, by
+    # `test_scale_readings.py::TestCadaLecturaDiceDeQueCorridaSale.test_ninguna_lectura_deja_la_escala_a_la_firma`.
 
     def test_todo_cuaderno_del_arbol_lo_corre_un_paso_o_dice_por_que_no(self):
         """El defecto no es un cuaderno sin paso: es que nada lo note.
@@ -625,61 +582,23 @@ class RaicesDeclaradasTests(unittest.TestCase):
             return f"Notebooks/{nombre}"
 
         rho = config.NOISE_REPORTED
-        ensayo = config.results_for(0.0, "campaign", True)
-        contaminada = config.results_for(rho, "campaign", True)
         curva = config.results_for(0.0, "curve", True).parent
 
         esperado = {
             "search-pilot": [relativa(config.ceilings_record_for(True)),
                              cuaderno_de("ensayo_de_busqueda")],
-            # Las dos pasadas, cada una con su árbol: la campaña corre la rejilla
-            # entera en `NOISE` y otra vez en `NOISE_REPORTED`, y el segundo árbol
-            # es el que el informe y el latente leen. `Probe_results.json` es uno
-            # solo porque `campaign()` lo ancla en la raíz limpia para las dos.
-            "campaign-local": [f"{relativa(ensayo)}/runs.jsonl",
-                               f"{relativa(ensayo)}/summary.json",
-                               f"{relativa(ensayo)}/shard.json",
-                               f"{relativa(contaminada)}/runs.jsonl",
-                               f"{relativa(contaminada)}/summary.json",
-                               f"{relativa(contaminada)}/shard.json",
-                               f"{relativa(ensayo.parent)}/Probe_results.json",
-                               relativa(config.models_for(0.0, "campaign", True)),
-                               relativa(config.models_for(rho, "campaign", True)),
-                               cuaderno_de("campana")],
             "noise-sweep": [relativa(curva),
                             relativa(config.models_for(0.0, "curve", True).parent),
                             cuaderno_de("barrido_de_ruido")],
-            "noise-diagnostic": [
-                f"{relativa(config.results_for(0.0, 'curve', True).parents[1])}"
-                "/diagnostic.json",
-                cuaderno_de("diagnostico_de_ruido")],
+            # `results` es local y presenta lo que ya exista: su única raíz
+            # propia, además de su cuaderno, es el árbol de figuras sin
+            # segmento de escala -- ver `config.DESTINOS_SIN_COORDENADA` para
+            # la nota completa sobre por qué no lleva coordenada.
+            "results": ["Results/figures", cuaderno_de("resultados")],
         }
         for paso, raices in esperado.items():
             with self.subTest(paso=paso):
                 self.assertEqual(paquete.__steps__[paso]["produces"], raices)
-
-        # Las dos escalas de los cuadernos, cada una compuesta por el helper.
-        for pilot in (False, True):
-            raiz = relativa(config.results_for(0.0, "campaign", pilot))
-            with self.subTest(cuaderno="report", pilot=pilot):
-                for hoja in ("curves", "report.txt", "report.md"):
-                    self.assertIn(f"{raiz}/{hoja}",
-                                  paquete.__steps__["report"]["produces"])
-            with self.subTest(cuaderno="report", pilot=pilot, rho=rho):
-                self.assertIn(
-                    f"{relativa(config.results_for(rho, 'campaign', pilot))}/curves",
-                    paquete.__steps__["report"]["produces"])
-            with self.subTest(cuaderno="latent", pilot=pilot, rho=rho):
-                self.assertIn(
-                    f"{relativa(config.results_for(rho, 'campaign', pilot))}/latent",
-                    paquete.__steps__["latent"]["produces"])
-
-        # La mitad limpia del latente escribe en el árbol COMPLETO aunque lea
-        # los pesos del ensayo: el cuaderno nombra `config.RESULTS` a secas.
-        completo = relativa(config.RESULTS)
-        for hoja in ("latent", "latent.json", "latent.md"):
-            self.assertIn(f"{completo}/{hoja}",
-                          paquete.__steps__["latent"]["produces"])
 
 
 def _raices_declaradas() -> list[tuple[str, str]]:
@@ -828,163 +747,18 @@ def _sin_maquina(monkeypatch, tmp_path):
     monkeypatch.setattr(harness, "environment", lambda: {"stub": True})
 
 
-def _correr_el_diagnostico(monkeypatch, tmp_path) -> dict:
-    """Ejecuta el cuaderno del diagnóstico sin máquina, y devuelve lo que pidió.
-
-    Sus celdas y no una lectura de su texto: `NOISE_DIAGNOSTIC_LEVEL` puede
-    estar bien mientras el cuaderno arma su reducción con otra cosa, y las dos
-    cosas dan una suite verde.
-    """
-    from MIL_CREDA_Benchmark import contamination, harness
-
-    _sin_maquina(monkeypatch, tmp_path)
-
-    buscadas, campanas = [], []
-
-    def _search_ceilings(reduccion, dispositivo, **kwargs):
-        buscadas.append({"reduction": reduccion, **kwargs})
-        return {"milcreda": {"ceiling": 1e-2, "byTransfer": {"M->U": 1e-2}}}
-
-    monkeypatch.setattr(harness, "search_ceilings", _search_ceilings)
-    monkeypatch.setattr(harness, "campaign",
-                        lambda *a, **k: campanas.append((a, k)))
-    monkeypatch.setattr(contamination, "load", lambda *a, **k: None)
-
-    ambito = _correr_las_celdas("Benchmark_Noise_Diagnostic_Search_v1.ipynb")
-    return {"buscadas": buscadas, "campanas": campanas,
-            "registro": ambito["registro"], "ambito": ambito}
+# `_correr_el_diagnostico` and the noise diagnostic (its notebook,
+# `NOISE_DIAGNOSTIC_ARMS`/`NOISE_DIAGNOSTIC_LEVEL`, and the `noise-diagnostic`/
+# `noise-diagnostic-report` steps) are removed entirely with this stretch.
+# Reason, from `config.py`'s own retirement note: the diagnostic re-searched
+# the ceiling under contamination, which contradicts the decision that the
+# search always runs on clean material.
 
 
-def test_el_diagnostico_corre_en_el_tope_del_rango_y_paga_una_sola_medicion(
-        tmp_path, monkeypatch, capsys) -> None:
-    """Dónde corre el diagnóstico, sobre qué, con quiénes, y cuánto cuesta.
-
-    El nivel es el tope del rango declarado y no un número escrito acá: en el
-    extremo el coeficiente está bajo la mayor presión, así que un techo
-    re-buscado que no recupera nada ahí no recupera nada en ningún lado, y la
-    lectura no depende de dónde eligió mirar nadie. El tope lo fija el rango y no
-    un resultado.
-
-    Necesita tres puntos y paga uno solo. Lo que se afirma acá es la MEDICIÓN
-    nueva: una sola llamada a la búsqueda, sobre la transferencia de la curva y
-    ninguna otra, y ninguna campaña. Los otros dos puntos ya están en el
-    registro del barrido -- este cuaderno los lee, no los vuelve a correr.
-
-    `D` y `G` y nadie más: los dos métodos completos, uno por familia, y los
-    únicos que llevan coeficiente. `A` y `B` no tienen término de adaptación al
-    que re-buscarle un techo.
-
-    Se ejecutan las celdas del cuaderno y no el paso: desde que el paso sólo
-    corre `_ejecutar`, lo que decide todo esto vive en el cuaderno, y un test
-    contra el paso mediría `nbconvert`.
-
-    Rojo alcanzable: correr en el medio del rango, buscar sobre las seis
-    transferencias, llamar a `campaign`, o agregar un brazo sin coeficiente.
-    """
-    from MIL_CREDA_Benchmark import config
-
-    corrido = _correr_el_diagnostico(monkeypatch, tmp_path)
-    capsys.readouterr()
-    registro, buscadas = corrido["registro"], corrido["buscadas"]
-
-    # el tope del rango, leído del rango y no escrito
-    assert config.NOISE_DIAGNOSTIC_LEVEL == config.NOISE_LEVELS[-1]
-    assert config.NOISE_DIAGNOSTIC_LEVEL == max(config.NOISE_LEVELS)
-    assert registro["level"] == config.NOISE_DIAGNOSTIC_LEVEL
-
-    # una sola medición nueva, y ninguna campaña
-    assert len(buscadas) == 1, "el diagnóstico paga más de una búsqueda"
-    assert corrido["campanas"] == [], "el diagnóstico corrió una campaña que no le toca"
-    (buscada,) = buscadas
-    assert buscada["transfers"] == [config.NOISE_TRANSFER]
-    assert buscada["noise"] == config.NOISE_DIAGNOSTIC_LEVEL
-    assert buscada["reduction"].labelNoise == config.NOISE_DIAGNOSTIC_LEVEL
-
-    # sobre M->U, la misma transferencia que recorre la curva
-    assert config.NOISE_TRANSFER == ("M", "U")
-    assert registro["transfer"] == "M->U"
-
-    # el completo de la familia declarada
-    assert list(registro["arms"]) == list(config.NOISE_DIAGNOSTIC_ARMS) == ["G"]
-    familias = {config.ARMS_BY_ID[a]["adaptation"] for a in registro["arms"]}
-    assert familias == {"milcreda"}
-    for arm in registro["arms"]:
-        spec = config.ARMS_BY_ID[arm]
-        assert spec["adaptation"] is not None, "un brazo sin techo que re-buscar"
-        assert spec["weighting"], "no es el método completo de su familia"
-        assert spec["selection"] is None, "una ablación de selección, no el completo"
-
-
-def test_los_numeros_del_diagnostico_no_entran_en_las_tablas_del_veredicto(
-        tmp_path, monkeypatch, capsys) -> None:
-    """Diagnóstico y nunca veredicto, afirmado donde puede fallar.
-
-    Lo único que decide es si vale reestructurar para techos por nivel, y eso se
-    sostiene en cuatro cosas a la vez, cada una verde por su cuenta mientras la
-    de al lado está rota:
-
-    * escribe UN `diagnostic.json` y ningún `runs.jsonl`, así que no hay corridas
-      suyas que ninguna tabla pueda agregar;
-    * escribe bajo la raíz del ENSAYO, no encima del árbol de la campaña;
-    * los árboles del nivel que diagnostica quedan intactos, así que el barrido
-      no hereda un directorio que él no escribió;
-    * su registro se lee en una sola expresión, que alimenta dos presentadores, y
-      ninguno de los dos aparece en los cuadernos del veredicto.
-
-    No deja pesos tampoco: `keeps_checkpoints` dice que no a este nivel, y un
-    nivel que escribiera 8 GB que nadie abre dejaría un directorio que parece
-    evidencia.
-
-    Rojo alcanzable: escribir el registro bajo la raíz de la campaña, dejar que
-    el cuaderno corra una campaña al nivel de diagnóstico, o mostrar
-    `render_diagnostic` en el informe del veredicto.
-    """
-    import json
-    from pathlib import Path as _Path
-
-    from MIL_CREDA_Benchmark import config, harness, steps, tables
-
-    monkeypatch.setattr(harness, "campaign", lambda *a, **k: pytest.fail(
-        "el diagnóstico no corre campañas"))
-    corrido = _correr_el_diagnostico(monkeypatch, tmp_path)
-    capsys.readouterr()
-    registro = corrido["registro"]
-
-    escritos = sorted(p.name for p in tmp_path.rglob("*") if p.is_file())
-    assert escritos == ["diagnostic.json"]
-    assert list(tmp_path.rglob("runs.jsonl")) == []
-    assert list(tmp_path.rglob("summary.json")) == []
-
-    # bajo la raíz del ensayo, que es de donde `_diagnostic_record` lo lee
-    (escrito,) = list(tmp_path.rglob("diagnostic.json"))
-    assert escrito.parent == config.results_for(0.0, "curve", True).parents[1]
-    assert "Pilot" in escrito.parts
-
-    # el nivel que diagnostica queda sin árbol: sus números no son una corrida
-    nivel = config.NOISE_DIAGNOSTIC_LEVEL
-    for kind in ("curve", "campaign"):
-        for pilot in (False, True):
-            assert not config.results_for(nivel, kind, pilot).exists()
-    assert not config.keeps_checkpoints(nivel)
-    assert not config.models_for(nivel, pilot=True).exists()
-
-    # y lo dice de sí mismo, en el propio registro
-    assert "diagnosticOnly" in registro
-    assert registro["diagnosticOnly"] == json.loads(
-        escrito.read_text(encoding="utf-8"))["diagnosticOnly"]
-
-    # una sola expresión lo lee, y alimenta dos presentadores y nada más
-    fuente = _Path(tables.__file__).read_text(encoding="utf-8")
-    assert fuente.count('"diagnostic.json"') == 1
-    assert _quien_llama(fuente, "_diagnostic_record") == {
-        "render_diagnostic", "conclusion_diagnostic", "diagnostic_source_note"}
-
-    # y ninguno de los dos llega a un cuaderno del veredicto
-    for cuaderno in ("Benchmark_Report_v1.ipynb", "Benchmark_Latent_v1.ipynb"):
-        texto = (steps.CUADERNOS / cuaderno).read_text(encoding="utf-8")
-        assert "render_diagnostic" not in texto
-        assert "conclusion_diagnostic" not in texto
-
+# `test_el_diagnostico_corre_en_el_tope_del_rango_y_paga_una_sola_medicion` and
+# `test_los_numeros_del_diagnostico_no_entran_en_las_tablas_del_veredicto` are
+# removed along with the noise diagnostic itself -- see the retirement note
+# above `_correr_el_diagnostico` used to sit at.
 
 def _correr_el_barrido(monkeypatch, tmp_path) -> dict:
     """Ejecuta el cuaderno del barrido sin máquina, y devuelve lo que pidió.
@@ -1206,12 +980,12 @@ def test_el_cuaderno_de_la_busqueda_sigue_la_escala_configurada_y_su_paso_se_nie
     assert "escala" in str(caido.value)
 
 
-def test_el_barrido_y_el_diagnostico_siguen_la_escala_configurada_y_su_paso_se_niega(
+def test_el_barrido_sigue_la_escala_configurada_y_su_paso_se_niega(
         tmp_path, monkeypatch, capsys) -> None:
     """La regla contraria, y su otra mitad, que sólo valen juntas.
 
-    Los dos son formas de una campaña y escriben donde una campaña escribe, así
-    que derivan su escala de la misma lectura que la campaña
+    El barrido es una forma de campaña y escribe donde una campaña escribe, así
+    que deriva su escala de la misma lectura que la campaña
     (`config.is_pilot_scale()`) en vez de fijarla. Fijada en `True`, una corrida
     de veinte épocas y treinta semillas se archivaba bajo `Pilot/`: una medición
     completa etiquetada como ensayo, que es la falla inversa de la que
@@ -1220,11 +994,14 @@ def test_el_barrido_y_el_diagnostico_siguen_la_escala_configurada_y_su_paso_se_n
     Derivar sola sería peor que fijar: `produces` nombra el árbol de ENSAYO y
     ninguno más, así que a escala completa el cuaderno escribiría donde nadie lo
     vigila y la forja lo leería como `foreign`. Por eso el paso se niega antes
-    de abrir el cuaderno --- la misma forma que `campana` ---, y las dos mitades
-    se afirman juntas porque cada una sin la otra es un defecto.
+    de abrir el cuaderno, y las dos mitades se afirman juntas porque cada una
+    sin la otra es un defecto.
 
-    Rojo alcanzable: fijar `ES_ENSAYO = True` en cualquiera de los dos
-    cuadernos, o sacarle la guarda de escala a cualquiera de los dos pasos.
+    (Esta prueba cubría también al diagnóstico de ruido; se retiró junto con
+    él -- ver la nota de retiro sobre `_correr_el_diagnostico`.)
+
+    Rojo alcanzable: fijar `ES_ENSAYO = True` en el cuaderno, o sacarle la
+    guarda de escala al paso.
     """
     from MIL_CREDA_Benchmark import config, steps
 
@@ -1238,23 +1015,12 @@ def test_el_barrido_y_el_diagnostico_siguen_la_escala_configurada_y_su_paso_se_n
             "el barrido fijó su escala en vez de leerla, así que a escala "
             "completa archivaría bajo `Pilot/`")
 
-    monkeypatch.setattr(config, "is_pilot_scale", lambda: False)
-    diagnostico = _correr_el_diagnostico(monkeypatch, tmp_path)
-    capsys.readouterr()
-    (buscada,) = diagnostico["buscadas"]
-    assert buscada["reduction"].pilot is False
-    assert buscada["pilot"] is False
-    (escrito,) = list(tmp_path.rglob("diagnostic.json"))
-    assert "Pilot" not in escrito.parts, (
-        "el diagnóstico compuso su destino con una constante")
-
     # la mitad del paso: se niega antes de abrir el cuaderno
     monkeypatch.setattr(steps, "_ejecutar", lambda nombre: pytest.fail(
         f"el paso abrió {nombre} a escala completa, fuera de sus raíces"))
-    for paso in (steps.barrido_de_ruido, steps.diagnostico_de_ruido):
-        with pytest.raises(SystemExit) as caido:
-            paso()
-        assert "escala" in str(caido.value)
+    with pytest.raises(SystemExit) as caido:
+        steps.barrido_de_ruido()
+    assert "escala" in str(caido.value)
 
 
 # ----------------------------------------------------------- el ensayo remoto
@@ -1300,21 +1066,16 @@ def test_la_cadena_de_pasos_se_deriva_de_las_dos_listas(monkeypatch) -> None:
 
     Rojo alcanzable: escribir la cadena a mano, comparar raíces por prefijo de
     cadena en vez de por segmentos, o dejar de normalizar la escala --- con
-    cualquiera de las tres, `campaign-local` deja de ver a `search-pilot`, porque
-    lo que la búsqueda declara es `ceilings.pilot.json` y lo que la campaña lee es
+    cualquiera de las tres, `noise-sweep` deja de ver a `search-pilot`, porque
+    lo que la búsqueda declara es `ceilings.pilot.json` y lo que el barrido lee es
     `ceilings.json`.
     """
     esperada = {
         "verification": (),
         "search-pilot": (),
         "search-report": ("search-pilot",),
-        "campaign-local": ("search-pilot",),
-        "report": ("campaign-local", "search-pilot"),
-        "latent": ("campaign-local",),
         "noise-sweep": ("search-pilot",),
-        "noise-report": ("noise-sweep",),
-        "noise-diagnostic": ("noise-sweep",),
-        "noise-diagnostic-report": ("noise-diagnostic",),
+        "results": ("search-pilot", "noise-sweep"),
     }
     assert set(esperada) == set(paquete.__steps__), (
         "se declaró un paso nuevo y nadie dijo qué consume")
@@ -1329,10 +1090,10 @@ def test_la_cadena_de_pasos_se_deriva_de_las_dos_listas(monkeypatch) -> None:
     # y es derivada: un paso nuevo se encadena solo
     inventados = dict(paquete.__steps__)
     inventados["paso-inventado"] = {
-        "module": "MIL_CREDA_Benchmark.steps", "function": "informe",
-        "reads": ["Results/Benchmark/report.md"], "produces": []}
+        "module": "MIL_CREDA_Benchmark.steps", "function": "resultados",
+        "reads": ["Results/Noise/curve"], "produces": []}
     monkeypatch.setattr(paquete, "__steps__", inventados)
-    assert steps.predecesores("paso-inventado") == ("report",), (
+    assert steps.predecesores("paso-inventado") == ("noise-sweep",), (
         "la cadena no se deriva de las dos listas")
 
 
@@ -1376,56 +1137,10 @@ def test_la_normalizacion_de_escala_sale_de_las_puertas_y_no_de_una_ortografia(
     assert steps.raiz_a_escala_completa(completa) == completa
 
 
-def test_el_ensayo_remoto_de_la_campana_corre_bajo_los_techos_de_la_busqueda_completa(
-        tmp_path, monkeypatch, capsys) -> None:
-    """Lo que el ensayo remoto de la campaña consume, pinchado a su origen.
-
-    Ésta es la afirmación que la regla pide y la que una versión débil no hace.
-    El doble de `ceilings_on_record` contesta `9e-1` por la corrida completa y
-    `1e-2` por el ensayo, así que el número que llega a `campaign()` dice de qué
-    ARCHIVO salió. Una prueba que sólo mirara que la lectura ocurrió, o que los
-    techos no están vacíos, la pasa un ensayo corriendo bajo `ceilings.pilot.json`
-    --- y la pasa también uno corriendo bajo `harness.SMOKE_CEILINGS`, el neutral
-    declarado del módulo, que es la forma exacta que la regla vino a reemplazar.
-
-    Las dos escalas se corren acá y no sólo la del ensayo remoto: fuera de ese
-    modo la campaña tiene que seguir consumiendo el registro del ENSAYO, que es la
-    regla del recorrido local y el defecto que se cerró antes ---una campaña de
-    ensayo bajo techos medidos a veinte épocas en otro experimento---. Una sola
-    de las dos mitades deja pasar una implementación que lee siempre lo completo.
-
-    La ESCRITURA no se mueve: el ensayo remoto corre a escala reducida y archiva
-    donde archiva un ensayo, que es lo que lo hace un ensayo y no una corrida.
-
-    Rojo alcanzable: leer los techos con `reduction.pilot` en la celda 6, o hacer
-    que `upstream_pilot_scale()` conteste lo mismo en los dos modos.
-    """
-    from MIL_CREDA_Benchmark import config
-
-    _sin_ensayo_remoto(monkeypatch)
-    local = _correr_las_celdas_de_la_campana(monkeypatch, tmp_path)
-    capsys.readouterr()
-    assert local["corridas"], "la campaña no corrió ninguna pasada"
-    for corrida in local["corridas"]:
-        assert corrida["reduction"].ceilings == local["agrupadoPorEscala"][True], (
-            "fuera del ensayo remoto la campaña dejó de consumir el registro "
-            "del ensayo")
-        assert corrida["reduction"].pilot is True
-
-    monkeypatch.setenv(config.REHEARSAL_ENV, "1")
-    remoto = _correr_las_celdas_de_la_campana(monkeypatch, tmp_path)
-    capsys.readouterr()
-    assert remoto["corridas"], "la campaña no corrió ninguna pasada"
-    for corrida in remoto["corridas"]:
-        assert corrida["reduction"].ceilings == remoto["agrupadoPorEscala"][False], (
-            "el ensayo remoto no corrió bajo los techos de la búsqueda COMPLETA")
-        assert corrida["reduction"].ceilings != remoto["agrupadoPorEscala"][True]
-        assert (corrida["reduction"].ceilingsByTransfer
-                == remoto["porTransferenciaPorEscala"][False])
-        assert corrida["reduction"].pilot is True, (
-            "el ensayo remoto archivó fuera del árbol de ensayo")
-    assert remoto["escalas"]["agrupado"] == [False]
-    assert remoto["escalas"]["por_transferencia"] == [False]
+# `test_el_ensayo_remoto_de_la_campana_corre_bajo_los_techos_de_la_busqueda_completa`
+# is removed along with `campana`/`Benchmark_Campaign_v1.ipynb`/the
+# `campaign-local` step (see the retirement note above
+# `test_todo_cuaderno_del_arbol_lo_corre_un_paso_o_dice_por_que_no`).
 
 
 def test_el_ensayo_remoto_del_barrido_corre_bajo_los_techos_de_la_busqueda_completa(
@@ -1463,64 +1178,9 @@ def test_el_ensayo_remoto_del_barrido_corre_bajo_los_techos_de_la_busqueda_compl
         assert corrida["reduction"].pilot is True
 
 
-def test_el_ensayo_remoto_del_diagnostico_lee_la_linea_limpia_del_barrido_completo(
-        tmp_path, monkeypatch, capsys) -> None:
-    """La única lectura del diagnóstico, pinchada a la corrida que la produjo.
-
-    El diagnóstico paga UN punto ---la re-búsqueda bajo contaminación--- y saca
-    los otros dos del barrido. Toda la pregunta del cuaderno es la diferencia
-    entre esos dos números, así que de qué corrida sale la línea limpia no es un
-    detalle del destino: es la mitad de la resta.
-
-    El doble contesta un resumen DISTINTO por escala, y lo que se afirma es cuál
-    quedó adentro de `diagnostic.json`. Una prueba que sólo mirara que
-    `cleanCeilingRun` no es nulo la pasa un diagnóstico que se llevó la línea del
-    barrido de ensayo.
-
-    Rojo alcanzable: volver a `pilot=reduccion.pilot` en la celda 8.
-    """
-    from MIL_CREDA_Benchmark import config, contamination, harness
-
-    RESUMEN = {True: {"origen": "ensayo"}, False: {"origen": "completa"}}
-    pedidas: list = []
-
-    def _correr(escala_de_entrada: bool) -> dict:
-        import json as _json
-
-        _sin_maquina(monkeypatch, tmp_path)
-        monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: {
-            "milcreda": {"ceiling": 1e-2, "byTransfer": {"M->U": 1e-2}}})
-        monkeypatch.setattr(harness, "campaign", lambda *a, **k: pytest.fail(
-            "el diagnóstico corrió una campaña"))
-
-        def _load(tasa, kind="campaign", pilot=None):
-            pedidas.append({"kind": kind, "pilot": pilot})
-            return {"summary": RESUMEN[bool(pilot)], "pilot": bool(pilot)}
-
-        monkeypatch.setattr(contamination, "load", _load)
-        ambito = _correr_las_celdas("Benchmark_Noise_Diagnostic_Search_v1.ipynb")
-        capsys.readouterr()
-        (escrito,) = list(tmp_path.rglob("diagnostic.json"))
-        return {"registro": _json.loads(escrito.read_text(encoding="utf-8")),
-                "escrito": escrito, "ambito": ambito}
-
-    _sin_ensayo_remoto(monkeypatch)
-    local = _correr(True)
-    assert local["registro"]["cleanCeilingRun"] == RESUMEN[True], (
-        "fuera del ensayo remoto el diagnóstico dejó de leer el barrido de su "
-        "propia escala")
-
-    pedidas.clear()
-    monkeypatch.setenv(config.REHEARSAL_ENV, "1")
-    remoto = _correr(False)
-    assert pedidas == [{"kind": "curve", "pilot": False}], (
-        f"el diagnóstico leyó otra cosa -> {pedidas}")
-    assert remoto["registro"]["cleanCeilingRun"] == RESUMEN[False], (
-        "el ensayo remoto del diagnóstico se llevó la línea limpia del barrido "
-        "de ENSAYO, que es la mitad equivocada de la resta")
-    assert remoto["registro"]["cleanCeilingRun"] != RESUMEN[True]
-    assert "Pilot" in remoto["escrito"].parts, (
-        "el ensayo remoto escribió fuera del árbol de ensayo")
+# `test_el_ensayo_remoto_del_diagnostico_lee_la_linea_limpia_del_barrido_completo`
+# is removed along with the noise diagnostic itself (see the retirement note
+# above).
 
 
 def test_el_ensayo_remoto_se_niega_cuando_falta_una_salida_de_escala_completa(
@@ -1545,12 +1205,12 @@ def test_el_ensayo_remoto_se_niega_cuando_falta_una_salida_de_escala_completa(
     monkeypatch.setattr(steps, "_ejecutar", lambda nombre: pytest.fail(
         f"el ensayo abrió {nombre} sin la entrada que dice consumir"))
 
-    faltan = steps.entradas_faltantes("campaign-local")
+    faltan = steps.entradas_faltantes("noise-sweep")
     assert faltan == [{"root": "Results/Benchmark/ceilings.json",
                        "producedBy": "search-pilot"}], faltan
 
     with pytest.raises(SystemExit) as caido:
-        steps.ensayo_remoto("campaign-local")
+        steps.ensayo_remoto("noise-sweep")
     mensaje = str(caido.value)
     assert "Results/Benchmark/ceilings.json" in mensaje
     assert "search-pilot" in mensaje
@@ -1562,7 +1222,7 @@ def test_el_ensayo_remoto_se_niega_cuando_falta_una_salida_de_escala_completa(
     # la corrida real desde adentro de un test.
     (ensayo,) = [r for r in paquete.__steps__["search-pilot"]["produces"]
                  if r.endswith(".json")]
-    (completa,) = paquete.__steps__["campaign-local"]["reads"]
+    (completa,) = paquete.__steps__["noise-sweep"]["reads"]
     assert steps.raiz_a_escala_completa(ensayo) == completa
 
     (tmp_path / ensayo).parent.mkdir(parents=True, exist_ok=True)
@@ -1622,22 +1282,26 @@ def test_todo_paso_con_predecesor_o_lee_la_escala_de_entrada_o_se_niega(
     eso convertir uno lo habilita y este test lo sigue solo, en vez de ponerse en
     rojo por un cambio que es una mejora.
 
-    Los cuatro que computan sí tienen que saber, y ésos sí se nombran: son los que
-    se envían al worker, y son los únicos donde el ensayo compra algo --- los
-    otros leen y dibujan en segundos, sin GPU.
+    El que computa Y tiene predecesor sí tiene que saber, y se nombra: es el
+    único que se envía al worker con algo previo que consumir, y el único
+    donde el ensayo compra algo --- los otros leen y dibujan en segundos, sin
+    GPU, o no tienen predecesor (`search-pilot`, exento por la otra rama de
+    esta misma regla). Eran tres remotos con predecesor antes de esta
+    reestructuración (`campaign-local`, `noise-sweep`, `noise-diagnostic`);
+    `campaign-local` y el diagnóstico se retiraron, así que sólo queda
+    `noise-sweep`.
 
-    Rojo alcanzable: sacarle `upstream_pilot_scale` a cualquiera de los cuatro
-    cuadernos que computan, o dejar que un paso que no sabe leer corra igual.
+    Rojo alcanzable: sacarle `upstream_pilot_scale` al cuaderno del barrido, o
+    dejar que un paso que no sabe leer corra igual.
     """
     _sin_ensayo_remoto(monkeypatch)
     _sin_maquina(monkeypatch, tmp_path)
     abiertos: list = []
     monkeypatch.setattr(steps, "_ejecutar", lambda nombre: abiertos.append(nombre))
 
-    for paso in ("campaign-local", "noise-sweep", "noise-diagnostic"):
-        assert steps.honra_la_escala_de_entrada(paso), (
-            f"{paso} se envía al worker y su cuaderno no sabe leer la escala de "
-            "entrada")
+    assert steps.honra_la_escala_de_entrada("noise-sweep"), (
+        "noise-sweep se envía al worker y su cuaderno no sabe leer la escala "
+        "de entrada")
 
     for paso in paquete.__steps__:
         if not steps.predecesores(paso) or steps.honra_la_escala_de_entrada(paso):
@@ -1652,7 +1316,7 @@ def test_todo_paso_con_predecesor_o_lee_la_escala_de_entrada_o_se_niega(
 def test_todo_paso_que_lee_dice_de_que_arbol_salieron_sus_numeros() -> None:
     """Leer el árbol completo y caer al del ensayo es correcto; hacerlo callado no.
 
-    Los cinco cuadernos locales ---los que dibujan, no los que computan--- ya
+    Los cuadernos locales ---los que dibujan, no los que computan--- ya
     prefieren la corrida completa y caen al ensayo cuando no hay ninguna. Eso es
     lo que los hace útiles mientras la campaña completa todavía no volvió del
     worker: se miran las tablas y las figuras con lo que haya.
@@ -1662,13 +1326,13 @@ def test_todo_paso_que_lee_dice_de_que_arbol_salieron_sus_numeros() -> None:
     único lugar donde la diferencia existe es el encabezado. Sin él, el informe
     cambia de fuente sin que nadie lo toque y sigue leyéndose igual.
 
-    La partición se DERIVA y no se escribe: quien nombra
-    `config.upstream_pilot_scale()` lee un árbol exacto y no eligió nada; quien
-    no la nombra resolvió su propia fuente y tiene que decir cuál. Un sexto
-    cuaderno de informe entra solo en la mitad exigente.
+    La partición se DERIVA y no se escribe, sobre TODO paso con `reads`, sin una
+    lista de cuáles: quien nombra `config.upstream_pilot_scale()` lee un árbol
+    exacto y no eligió nada; quien no la nombra resolvió su propia fuente y
+    tiene que decir cuál.
 
-    Rojo alcanzable: sacarle el `source_note` a cualquiera de los cinco, o
-    agregar un cuaderno que lea y no declare.
+    Rojo alcanzable: sacarle el `source_note` a cualquier paso que resuelve su
+    propia fuente, o agregar un paso que lea y no declare.
     """
     assert steps.notas_de_fuente(), (
         "ninguna función `*source_note` en el paquete: el control no tiene con "
@@ -1710,7 +1374,7 @@ def test_el_ensayo_remoto_marca_el_modo_para_el_kernel_y_deja_el_entorno_como_es
 
     _sin_ensayo_remoto(monkeypatch)
     _sin_maquina(monkeypatch, tmp_path)
-    (completa,) = paquete.__steps__["campaign-local"]["reads"]
+    (completa,) = paquete.__steps__["noise-sweep"]["reads"]
     (tmp_path / completa).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / completa).write_text("{}", encoding="utf-8")
 
@@ -1728,7 +1392,7 @@ def test_el_ensayo_remoto_marca_el_modo_para_el_kernel_y_deja_el_entorno_como_es
     monkeypatch.setattr(steps, "_ejecutar", lambda nombre: (
         visto.append(config.is_rehearsal()) or nombre))
 
-    salida = steps.ensayo_remoto("campaign-local")
+    salida = steps.ensayo_remoto("noise-sweep")
     assert visto == [True], "el kernel del cuaderno no habría visto el modo"
     assert preguntas == [False], (
         "la precondición del paso preguntó por un registro que el ensayo remoto "
@@ -1740,7 +1404,7 @@ def test_el_ensayo_remoto_marca_el_modo_para_el_kernel_y_deja_el_entorno_como_es
 
     # y lo que hubiera antes se restaura, en vez de borrarse
     monkeypatch.setenv(config.REHEARSAL_ENV, "1")
-    steps.ensayo_remoto("campaign-local")
+    steps.ensayo_remoto("noise-sweep")
     assert config.is_rehearsal() is True
 
 
@@ -1815,228 +1479,13 @@ def test_el_ensayo_remoto_no_ablanda_la_guarda_que_gobierna_la_campana(
     assert "creda" in str(caido.value)
 
 
-# --------------------------------------------------- las dos pasadas de la campaña
-#
-# El cuaderno se ejecuta de verdad --- sus celdas, no una lectura de su texto ---
-# con `harness` sustituido: lo que se afirma es a qué niveles corre la campaña, en
-# qué árbol cae cada pasada y de dónde salen los techos con los que corre. Nada de
-# eso se puede leer de las constantes: `NOISE_REPORTED` puede valer 0.2 mientras el
-# cuaderno corre dos veces el nivel limpio, y las dos cosas dan una suite verde.
-
-
-def _correr_las_celdas_de_la_campana(monkeypatch, tmp_path) -> dict:
-    """Ejecuta el cuaderno de la campaña sin máquina, y devuelve lo que pidió.
-
-    Todas las celdas menos la de arranque: ésa busca el repositorio en el disco y
-    manosea `sys.path`, y adentro de la suite el paquete ya está importado. Cuál
-    es se deriva de su contenido y no de un índice --- una celda que se agregue
-    arriba correría el índice y dejaría este helper leyendo otra cosa.
-
-    Las corridas se registran con la lectura de techos que había en el momento de
-    pedirlas, que es lo que permite afirmar «una sola vez, antes del bucle» en vez
-    de «una sola vez en total»: las dos son verdes hoy y se rompen distinto.
-    """
-    import json
-
-    from MIL_CREDA_Benchmark import bags, config, harness
-
-    _sin_maquina(monkeypatch, tmp_path)
-    # `_sin_maquina` deja un ambiente de una sola clave y la celda 3 lo imprime
-    # por campo, así que acá lleva los tres campos que esa celda nombra.
-    monkeypatch.setattr(harness, "environment", lambda: {
-        "platform": "stub", "torch": "stub", "selfHosted": False})
-    escalas = {"agrupado": [], "por_transferencia": [], "registro": []}
-
-    def _registro(pilot=None):
-        escalas["registro"].append(pilot)
-        return {"stub": True}
-
-    monkeypatch.setattr(harness, "search_record", _registro)
-    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
-        "la campaña lanzó una búsqueda: mediría el método y la falta de "
-        "coeficiente a la vez, y a escala completa son nueve horas y media"))
-    monkeypatch.setattr(harness, "run_search", lambda *a, **k: pytest.fail(
-        "la campaña lanzó una búsqueda"))
-    monkeypatch.setattr(bags, "build", lambda *a, **k: {"stub": True})
-    monkeypatch.setattr(harness, "run_one", lambda *a, **k: {"seconds": 1.0})
-
-    # Un valor DISTINTO por escala, por el mismo motivo que en el barrido: un
-    # doble que contestara lo mismo por las dos dejaría verde a una campaña de
-    # ensayo corriendo bajo los techos de la búsqueda COMPLETA.
-    AGRUPADO = {True: {"milcreda": 1e-2, "creda": 1e-4},
-                False: {"milcreda": 9e-1, "creda": 9e-1}}
-    POR_TRANSFERENCIA = {True: {"milcreda": {"M->U": 1e-2}},
-                         False: {"milcreda": {"M->U": 9e-1}}}
-    techos = AGRUPADO[True]
-    por_transferencia = POR_TRANSFERENCIA[True]
-    lecturas = {"agrupado": 0, "por_transferencia": 0, "en_vigor": 0}
-
-    def _agrupado(pilot=None):
-        lecturas["agrupado"] += 1
-        escalas["agrupado"].append(pilot)
-        return AGRUPADO[bool(pilot)]
-
-    def _por_transferencia(pilot=None):
-        lecturas["por_transferencia"] += 1
-        escalas["por_transferencia"].append(pilot)
-        return POR_TRANSFERENCIA[bool(pilot)]
-
-    def _en_vigor(reduccion, dispositivo, **kwargs):
-        from dataclasses import replace as _replace
-
-        lecturas["en_vigor"] += 1
-        return _replace(reduccion, ceilings=techos,
-                        ceilingsByTransfer=por_transferencia)
-
-    monkeypatch.setattr(config, "ceilings_on_record", _agrupado)
-    monkeypatch.setattr(config, "ceilings_by_transfer_on_record", _por_transferencia)
-    monkeypatch.setattr(harness, "with_ceilings_in_force", _en_vigor)
-
-    corridas: list[dict] = []
-
-    def _campaign(reduccion, dispositivo, **kwargs):
-        corridas.append({"reduction": reduccion, "lecturas": dict(lecturas)})
-        return {"stub": reduccion.labelNoise}
-
-    monkeypatch.setattr(harness, "campaign", _campaign)
-
-    # Las corridas que cada pasada va a LEER, escritas acá y no por el doble de
-    # `campaign`: si las escribiera el doble, el cuaderno leería el archivo que
-    # él mismo eligió y la lectura no probaría ningún destino. Con una cantidad
-    # distinta por nivel, lo que imprime dice cuál de los dos árboles abrió.
-    escala = config.is_pilot_scale()
-    lineas = {config.NOISE: 2, config.NOISE_REPORTED: 3}
-    raices = {}
-    for nivel, cuantas in lineas.items():
-        raiz = config.results_for(nivel, "campaign", escala)
-        raiz.mkdir(parents=True, exist_ok=True)
-        (raiz / "runs.jsonl").write_text(
-            "".join(json.dumps({"nivel": nivel, "i": i}) + "\n"
-                    for i in range(cuantas)), encoding="utf-8")
-        raices[nivel] = raiz
-
-    ambito = _correr_las_celdas("Benchmark_Campaign_v1.ipynb")
-
-    return {"corridas": corridas, "lecturas": lecturas, "raices": raices,
-            "lineas": lineas, "escala": escala, "techos": techos,
-            "porTransferencia": por_transferencia, "escalas": escalas,
-            "agrupadoPorEscala": AGRUPADO,
-            "porTransferenciaPorEscala": POR_TRANSFERENCIA, "ambito": ambito}
-
-
-def test_la_campana_corre_las_dos_pasadas_y_la_segunda_es_la_contaminada(
-        tmp_path, monkeypatch, capsys) -> None:
-    """Dos pasadas, y la segunda al nivel que el informe muestra.
-
-    La campaña es cada transferencia a UNA tasa, así que los dos niveles del
-    informe son dos pasadas de esa misma forma. Corría sólo la limpia, y por eso
-    las celdas contaminadas del informe y la mitad contaminada del latente decían
-    «no hay corridas»: leen `results_for(NOISE_REPORTED, "campaign", ...)`, que
-    ningún paso escribía.
-
-    Lo que se afirma no es «corre a más de un nivel» --- eso lo cumple un cuaderno
-    que repita dos veces el limpio, que es exactamente la segunda pasada que no
-    sirve para nada ---, sino que el segundo nivel es `NOISE_REPORTED`, que es
-    distinto del primero, y que cada pasada abrió el árbol de SU tasa: las dos
-    `runs.jsonl` traen distinta cantidad de líneas, así que lo que el cuaderno
-    imprime dice cuál abrió.
-
-    Y el destino de la contaminada es una raíz declarada de este paso. Sin ese
-    último tramo la campaña podría escribir donde nadie la vigila y la forja lo
-    leería como `foreign`.
-
-    Rojo alcanzable: sacarle el bucle a la celda 8, poner `(config.NOISE,
-    config.NOISE)` en `NIVELES`, componer la raíz desde la constante en vez de
-    desde la reducción de la pasada, o sacarle las raíces contaminadas a
-    `produces`.
-    """
-    from MIL_CREDA_Benchmark import config
-
-    corrido = _correr_las_celdas_de_la_campana(monkeypatch, tmp_path)
-    salida = capsys.readouterr().out
-    corridas = corrido["corridas"]
-
-    # los dos niveles, en orden, y el segundo no es el primero otra vez
-    assert [c["reduction"].labelNoise for c in corridas] == [
-        config.NOISE, config.NOISE_REPORTED]
-    assert config.NOISE_REPORTED != config.NOISE, (
-        "el nivel contaminado es el limpio: no hay segunda pasada que valga")
-    assert len(corridas) == 2
-
-    # la misma forma y la misma escala en las dos: una campaña, no un barrido
-    for corrida in corridas:
-        assert corrida["reduction"].kind == "campaign"
-        assert corrida["reduction"].pilot == corrido["escala"]
-        assert corrida["reduction"].seeds == list(config.SEEDS)
-
-    # cada pasada abrió el árbol de su propia tasa, medido por lo que leyó ahí
-    for nivel, raiz in corrido["raices"].items():
-        assert str(raiz) in salida, f"la pasada a ρ={nivel:g} no nombró {raiz}"
-        assert f"{corrido['lineas'][nivel]} corridas" in salida, (
-            f"la pasada a ρ={nivel:g} leyó otro árbol que el suyo")
-    assert corrido["raices"][config.NOISE] != corrido["raices"][config.NOISE_REPORTED]
-
-    # y el árbol de la contaminada es raíz declarada de este paso
-    contaminada = corrido["raices"][config.NOISE_REPORTED]
-    declaradas = paquete.__steps__["campaign-local"]["produces"]
-    relativa = contaminada.relative_to(config.PRODUCT).as_posix()
-    for hoja in ("runs.jsonl", "summary.json", "shard.json"):
-        assert f"{relativa}/{hoja}" in declaradas, (
-            f"la pasada contaminada escribe {relativa}/{hoja} sin declararlo")
-    assert config.models_for(
-        config.NOISE_REPORTED, "campaign", corrido["escala"]
-    ).relative_to(config.PRODUCT).as_posix() in declaradas
-    assert config.keeps_checkpoints(config.NOISE_REPORTED), (
-        "la pasada contaminada no guardaría pesos y el latente no tendría qué leer")
-
-
-def test_la_pasada_contaminada_reusa_los_techos_limpios_sin_volver_a_buscar(
-        tmp_path, monkeypatch, capsys) -> None:
-    """El coeficiente se elige en limpio una vez, y las dos pasadas corren bajo él.
-
-    Es la decisión que el eje del ruido ya declara --- los techos salen de la
-    búsqueda en limpio y se mantienen fijos --- y lo que esa decisión cuesta lo
-    separa `noise-diagnostic`, que re-busca a su nivel y no gobierna el registro.
-    Acá se afirma la mitad que puede romperse sola: que la segunda pasada no
-    dispare una búsqueda nueva.
-
-    Y no alcanza con contarlas al final. Los techos se leen UNA vez y ARRIBA del
-    bucle: leerlos por pasada daría los mismos números hoy, dejaría la campaña a
-    merced de un registro que cambie a mitad de corrida y --- a escala completa,
-    donde la rama que resuelve techos es `with_ceilings_in_force` --- sería la
-    puerta por la que la búsqueda entera entra sin que nadie la autorice. Por eso
-    cada corrida trae la cuenta de lecturas que había cuando se la pidió: las dos
-    tienen que traer la misma, y esa misma tiene que ser la final.
-
-    Rojo alcanzable: mover la celda de los techos adentro del bucle, armar una
-    `Reduction` nueva por pasada en vez de un `replace`, o buscar techos al nivel
-    contaminado.
-    """
-    from MIL_CREDA_Benchmark import config
-
-    corrido = _correr_las_celdas_de_la_campana(monkeypatch, tmp_path)
-    capsys.readouterr()
-    corridas, lecturas = corrido["corridas"], corrido["lecturas"]
-
-    # una sola resolución de techos en todo el cuaderno...
-    assert sum(lecturas.values()) in (1, 2), lecturas
-    assert lecturas["en_vigor"] + lecturas["agrupado"] == 1, (
-        "los techos se resolvieron más de una vez")
-
-    # ...y ninguna adentro del bucle: las dos pasadas vieron la misma cuenta,
-    # y esa cuenta es la final
-    assert [c["lecturas"] for c in corridas] == [lecturas, lecturas]
-
-    # los mismos techos, el mismo objeto, en las dos pasadas
-    assert len({id(c["reduction"].ceilings) for c in corridas}) == 1
-    for corrida in corridas:
-        assert corrida["reduction"].ceilings == corrido["techos"]
-        assert corrida["reduction"].ceilingsByTransfer == corrido["porTransferencia"]
-
-    # y los techos son los del registro, no unos buscados acá: `search_ceilings`
-    # está sustituida por una falla, así que llegar hasta acá ya lo dice
-    assert corridas[-1]["reduction"].labelNoise == config.NOISE_REPORTED
-    assert corridas[-1]["reduction"].ceilings == corridas[0]["reduction"].ceilings
+# `_correr_las_celdas_de_la_campana` and the two tests that exercised
+# `Benchmark_Campaign_v1.ipynb`'s two passes
+# (`test_la_campana_corre_las_dos_pasadas_y_la_segunda_es_la_contaminada`,
+# `test_la_pasada_contaminada_reusa_los_techos_limpios_sin_volver_a_buscar`)
+# are removed along with `campana`/that notebook/the `campaign-local` step
+# (see the retirement note above
+# `test_todo_cuaderno_del_arbol_lo_corre_un_paso_o_dice_por_que_no`).
 
 
 if __name__ == "__main__":

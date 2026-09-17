@@ -71,12 +71,30 @@ class Pool:
 class Arm(nn.Module):
     """One row of the ladder, trainable end to end."""
 
-    def __init__(self, spec: dict, classes: int, source: Pool, target: Pool):
+    def __init__(self, spec: dict, classes: int, source: Pool, target: Pool,
+                hyper: dict | None = None):
         super().__init__()
         self.spec = spec
         self.classes = classes
         self.source = source
         self.target = target
+
+        # Decision 1's bandwidth and Eq. (15)/(16)/(28)'s three hyperparameters,
+        # resolved once at construction rather than read off `config` at every
+        # call site. `hyper` is the ceiling search's own override -- every key
+        # absent from it (or `hyper is None`, the ordinary campaign run before a
+        # search wires its winner in) falls back to the declared constant, so a
+        # caller that never searches trains exactly as before.
+        hyper = hyper or {}
+        self.sigma = hyper.get("kernelSigma", config.KERNEL_SIGMA)
+        self.attention_gamma = hyper.get("attentionGamma", config.ATTENTION_GAMMA)
+        self.attention_temperature = hyper.get(
+            "attentionTemperature", config.ATTENTION_TEMPERATURE)
+        self.tau_local = hyper.get("tauLocal", config.TAU_LOCAL)
+        #: `GN`'s own captured source-batch BatchNorm statistics for the
+        #: current step, set by `_source_embeddings` and consumed by
+        #: `_target_embeddings`; `None` for every other arm, always.
+        self._source_bn_stats: dict | None = None
 
         self.encoder = FeatureExtractor(backbone=config.BACKBONE, pretrained=config.PRETRAINED)
         self.head = nn.Linear(self.encoder.output_dim, classes)
@@ -92,19 +110,10 @@ class Arm(nn.Module):
             self.v_R = nn.Parameter(torch.empty(config.ATTENTION_WIDTH))
             nn.init.xavier_uniform_(self.V_R)
             nn.init.normal_(self.v_R, std=0.1)
-        if spec["selection"] in ("regular", "arbitrary"):
-            # Fixed positions, decided once. `regular` walks the bag at an even
-            # stride; `arbitrary` draws from a generator of its own, so the choice
-            # is arbitrary without consuming a single number of the training
-            # generator — otherwise every later draw of the run would shift, and
-            # the rung would credit the selection rule with what the offset did.
-            m, k = config.INSTANCES_PER_BAG, min(config.SELECT_K, config.INSTANCES_PER_BAG)
-            if spec["selection"] == "regular":
-                positions = torch.arange(k) * (m // k)
-            else:
-                own = torch.Generator().manual_seed(config.SELECTION_SEED)
-                positions = torch.randperm(m, generator=own)[:k].sort().values
-            self.register_buffer("positions", positions)
+        # Selection arms (SU, SA, SK) are removed. Every declared arm's
+        # `spec["selection"]` is `None`, so `select` always returns every
+        # instance of a bag unchanged; this branch stays only as the
+        # construction that would feed a future arm declaring one again.
 
         if spec["adaptation"] == "creda":
             # lambda_creda is one because the coefficient is applied outside, from
@@ -132,17 +141,18 @@ class Arm(nn.Module):
     def weights_for(self, H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
         """The in-bag weights beta of Eq. (16), over whatever instances survive.
 
-        `sigma` is Decision 1's one constant bandwidth, `config.KERNEL_SIGMA`
-        at every call site -- passed explicitly and with no default, so a
+        `sigma` is Decision 1's one constant bandwidth -- `self.sigma` at every
+        call site, resolved once at construction from the search's override or
+        `config.KERNEL_SIGMA` -- passed explicitly and with no default, so a
         caller supplying a different value is a visible, deliberate choice
         rather than something this method could quietly default to.
         """
         if self.spec["attention"] == "learned":
             logits = relevance_logits(
                 H, self.V_R, self.b_R, self.v_R,
-                config.ATTENTION_GAMMA, sigma,
+                self.attention_gamma, sigma,
             )
-            return bag_weights(logits, config.ATTENTION_TEMPERATURE)
+            return bag_weights(logits, self.attention_temperature)
         # uniform: Eq. (19) with beta = 1/m
         return torch.full((H.shape[0],), 1.0 / H.shape[0],
                           dtype=H.dtype, device=H.device)
@@ -150,35 +160,24 @@ class Arm(nn.Module):
     def select(self, H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
         """The instances of ONE bag this arm is allowed to look at: (m, d) -> (k, d).
 
-        An arm with no rule keeps all of them. The three that do keep the same
-        number and differ only in which — so a rung between any two of them is
-        attributable to the rule, and the rung against the arm that keeps all of
-        them is the separate question of what the budget costs.
-
-        Selection happens here and nowhere else, so the kernels, the attention,
-        the bag representation and the decision at evaluation all see the same
-        instances. An arm that trained on ten and decided on thirty would be two
-        arms wearing one name.
-
-        The ranking for `topk` is the full Eq. (15) logit — relevance plus the
-        gamma-weighted consensus, not the learned relevance alone. At today's
-        neutral (`ATTENTION_GAMMA = 0.0`) the two rank identically; which of
-        the two a nonzero gamma should rank by is an experiments decision, not
-        settled here. `sigma` is the same one constant `weights_for` receives —
-        see Decision 1.
+        Every declared arm keeps every instance of a bag: the selection arms
+        (`SU`, `SA`, `SK`) that once budgeted this down to `SELECT_K` are
+        removed, and no arm this package declares sets `spec["selection"]` to
+        anything but `None`. The method stays -- selection happens here and
+        nowhere else, so the kernels, the attention, the bag representation and
+        the decision at evaluation would all see the same instances if a future
+        arm declared a rule again -- but the budgeted rules themselves
+        (`"regular"`, `"arbitrary"`, `"topk"`) are gone along with `SELECT_K`
+        and `SELECTION_SEED`, which no longer exist in `config`.
         """
         rule = self.spec["selection"]
-        if rule is None:
-            return H
-        k = min(config.SELECT_K, H.shape[0])
-        if rule == "topk":
-            scores = relevance_logits(
-                H, self.V_R, self.b_R, self.v_R,
-                config.ATTENTION_GAMMA, sigma,
-            ).reshape(-1)
-            keep = torch.topk(scores, k=k).indices.sort().values
-            return H[keep]
-        return H[self.positions[:k].to(H.device)]
+        if rule is not None:
+            raise ValueError(
+                f"unknown selection rule {rule!r}: every declared arm keeps "
+                "every instance of a bag; the budgeted rules were removed "
+                "with the selection arms"
+            )
+        return H
 
     def bags_of(self, embeddings: torch.Tensor, sigma: float | torch.Tensor) -> list[tuple]:
         """Every bag as the (instances, weights) pair the rest of the file consumes.
@@ -208,7 +207,7 @@ class Arm(nn.Module):
         """
         embeddings = self.instance_embeddings(bags)
         if self.spec["unit"] == "bag":
-            Z, _ = self.bag_representations(embeddings, config.KERNEL_SIGMA)
+            Z, _ = self.bag_representations(embeddings, self.sigma)
             return self.head(Z)
         probabilities = F.softmax(self.head(embeddings), dim=-1).mean(dim=1)
         return torch.log(probabilities + config.EPSILON)
@@ -226,15 +225,100 @@ class Arm(nn.Module):
     def _target_embeddings(self, target_bags: torch.Tensor) -> torch.Tensor:
         """Encode a target batch during training.
 
-        Every adapted arm passes the target batch through the encoder exactly
-        as it passes the source batch: normalization layers stay in training
-        mode and learn from this forward like the rest of the model does.
-        There is no separate treatment to honour here -- normalization is
-        part of the architecture, not a per-arm switch -- and this method
-        exists only so `_milcreda_term`/`_creda_term` have one name for
-        "encode the target batch" beside `instance_embeddings`.
+        Every adapted arm but `GN` passes the target batch through the encoder
+        exactly as it passes the source batch: normalization layers stay in
+        training mode and learn from this forward like the rest of the model
+        does. `GN` (`spec["normalization"] == "sourceBatch"`) is the one
+        exception -- its target forward is normalized with the CURRENT SOURCE
+        BATCH statistics of this same step (`self._source_bn_stats`, captured
+        by `_source_embeddings` a few lines above it in `training_step`) and
+        never updates the running statistics the source forward already set.
+        `self._source_bn_stats` is `None` outside of training (`forward`,
+        used for evaluation, never calls this method at all) and for every
+        arm that never captures it, so the fallback below is exact and not a
+        guess.
         """
+        if self.spec.get("normalization") == "sourceBatch" and self._source_bn_stats is not None:
+            return self._encode_with_frozen_stats(target_bags, self._source_bn_stats)
         return self.instance_embeddings(target_bags)
+
+    # ------------------------------------------------------- GN's normalization
+
+    def _batchnorm_modules(self) -> list[nn.Module]:
+        """Every BatchNorm layer of the encoder, in the order `.modules()` walks them."""
+        return [m for m in self.encoder.modules()
+                if isinstance(m, nn.modules.batchnorm._BatchNorm)]
+
+    def _source_embeddings(self, bags: torch.Tensor) -> torch.Tensor:
+        """Encode the step's source batch, capturing `GN`'s own statistics along the way.
+
+        For every arm but `GN` this is `instance_embeddings` and nothing else.
+        For `GN` it also records, per BatchNorm layer, the batch mean and
+        variance that layer's own train-mode forward just normalized WITH --
+        not the EMA-blended running statistics the same forward updates as a
+        side effect (Eq.-free bookkeeping `torch.nn.BatchNorm2d` does
+        internally) -- into `self._source_bn_stats`, so `_target_embeddings`
+        can reuse the identical numbers a few lines later in the same step.
+        Every other arm leaves `self._source_bn_stats` at `None`, so
+        `_target_embeddings`'s guard above never takes the frozen-stats path
+        for them.
+        """
+        if self.spec.get("normalization") != "sourceBatch":
+            self._source_bn_stats = None
+            return self.instance_embeddings(bags)
+
+        captured: dict[int, tuple[torch.Tensor, torch.Tensor]] = {}
+
+        def _capture(module, inputs):
+            x = inputs[0]
+            reduce_dims = tuple(d for d in range(x.dim()) if d != 1)
+            captured[id(module)] = (
+                x.mean(dim=reduce_dims).detach(),
+                x.var(dim=reduce_dims, unbiased=False).detach(),
+            )
+
+        hooks = [module.register_forward_pre_hook(_capture)
+                for module in self._batchnorm_modules()]
+        try:
+            embeddings = self.instance_embeddings(bags)
+        finally:
+            for hook in hooks:
+                hook.remove()
+        self._source_bn_stats = captured
+        return embeddings
+
+    def _encode_with_frozen_stats(
+            self, bags: torch.Tensor,
+            captured: dict[int, tuple[torch.Tensor, torch.Tensor]]) -> torch.Tensor:
+        """Encode `bags` with every BatchNorm layer normalizing from `captured`.
+
+        Every layer's `running_mean`/`running_var` is temporarily overwritten
+        with `captured`'s (mean, var) -- the source batch's own, from this
+        same step -- and the layer switched to evaluation mode, which
+        normalizes from those two buffers and, unlike training mode, never
+        updates them. Both are restored and training mode resumed once the
+        forward returns, whether it raised or not, so this leaves no trace on
+        the module beyond the encoded output: the running statistics the
+        SOURCE forward already set are exactly what a caller reads afterward.
+        """
+        saved: list[tuple[nn.Module, torch.Tensor, torch.Tensor, bool]] = []
+        try:
+            for module in self._batchnorm_modules():
+                stats = captured.get(id(module))
+                if stats is None:
+                    continue
+                mean, var = stats
+                saved.append((module, module.running_mean.clone(),
+                             module.running_var.clone(), module.training))
+                module.running_mean.copy_(mean.to(module.running_mean.dtype))
+                module.running_var.copy_(var.to(module.running_var.dtype))
+                module.eval()
+            return self.instance_embeddings(bags)
+        finally:
+            for module, mean, var, was_training in saved:
+                module.running_mean.copy_(mean)
+                module.running_var.copy_(var)
+                module.train(was_training)
 
     def _milcreda_term(self, H_s, source_labels, target_bags):
         """Eqs. (14), (16)-(20), (22)-(38): the global score, and the local
@@ -253,10 +337,11 @@ class Arm(nn.Module):
 
         # Decision 1: one constant bandwidth for the whole method -- the
         # consensus term, the top-k ranking, every kernel block below and
-        # `local_distance` all read `config.KERNEL_SIGMA` and nothing else.
-        # r21 l.715: "Un unico ancho de banda sigma gobierna los tres
-        # bloques, ya que los tres derivan del mismo kernel de instancia."
-        sigma = config.KERNEL_SIGMA
+        # `local_distance` all read `self.sigma` (`config.KERNEL_SIGMA`, or the
+        # ceiling search's override) and nothing else. r21 l.715: "Un unico
+        # ancho de banda sigma gobierna los tres bloques, ya que los tres
+        # derivan del mismo kernel de instancia."
+        sigma = self.sigma
         bags_s = self.bags_of(H_s, sigma)
         bags_t = self.bags_of(H_t, sigma)
 
@@ -296,7 +381,7 @@ class Arm(nn.Module):
             for column in range(len(bags_t)):
                 cross = K_st[:, column]
                 pi = total_correspondence(cross, source_labels, G_t[column],
-                                          config.TAU_LOCAL)
+                                          self.tau_local)
                 H_j, w_j = bags_t[column]
                 distances.append(
                     local_distance(bag_kernel(H_j, w_j, H_j, w_j, sigma), cross, K_ss, pi)
@@ -333,9 +418,13 @@ class Arm(nn.Module):
         removed — un-normalizing this side to make the two look alike would
         delete the very thing the comparison exists to show.
         """
-        embeddings = self.instance_embeddings(bags)
+        # `_source_embeddings`, not `instance_embeddings` directly: for every
+        # arm but `GN` the two are identical, and for `GN` this is also where
+        # `self._source_bn_stats` gets captured for `_target_embeddings`, a
+        # few lines below inside `_milcreda_term`, to reuse.
+        embeddings = self._source_embeddings(bags)
         if self.spec["unit"] == "bag":
-            Z, _ = self.bag_representations(embeddings, config.KERNEL_SIGMA)
+            Z, _ = self.bag_representations(embeddings, self.sigma)
             logits = self.head(Z)
             supervised = source_loss(                                 # Eq. (21)
                 F.softmax(logits, dim=1),
@@ -393,8 +482,15 @@ class Arm(nn.Module):
         }
 
 
-def build(arm_id: str, classes: int, source: Pool, target: Pool) -> Arm:
-    """One arm, by the identifier the ladder names it with."""
+def build(arm_id: str, classes: int, source: Pool, target: Pool,
+         hyper: dict | None = None) -> Arm:
+    """One arm, by the identifier the ladder names it with.
+
+    `hyper` is the ceiling search's own override for Decision 1's bandwidth and
+    Eq. (15)/(16)/(28)'s three hyperparameters -- see `Arm.__init__`. Omitted,
+    every arm trains at the declared `config` constants, exactly as before this
+    override existed.
+    """
     if arm_id not in config.ARMS_BY_ID:
         raise ValueError(f"unknown arm {arm_id!r}; known: {list(config.ARMS_BY_ID)}")
-    return Arm(config.ARMS_BY_ID[arm_id], classes, source, target)
+    return Arm(config.ARMS_BY_ID[arm_id], classes, source, target, hyper=hyper)

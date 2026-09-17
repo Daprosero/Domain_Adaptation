@@ -62,6 +62,20 @@ def _labels(dataset) -> np.ndarray:
     raise ValueError("the dataset exposes neither `targets` nor `labels`")
 
 
+#: How many of a domain's bags fall under one of the noised roles, per class.
+#: `NOISE_ROLES` names which roles (`train`, `valid`, `eval` today) the
+#: contamination reaches; this is the total bag count across exactly those
+#: roles, which is what `_reserve_size` and `_contaminate` both need to agree
+#: on rather than each re-deriving from `NOISE_ROLES` its own way.
+_ROLE_BAGS = {"train": config.TRAIN_BAGS, "valid": config.VALID_BAGS,
+             "eval": config.EVAL_BAGS}
+
+
+def _noised_bag_count() -> int:
+    """Total bags (every class) subject to contamination, across `NOISE_ROLES`."""
+    return sum(_ROLE_BAGS[role] for role in config.NOISE_ROLES)
+
+
 def _reserve_size(rate: float) -> int:
     """How many spare images per class the contamination needs.
 
@@ -73,14 +87,17 @@ def _reserve_size(rate: float) -> int:
 
     Donors are balanced across the `CLASSES - 1` classes that are not the bag's,
     so no single class supplies the whole contamination; the slack absorbs the
-    remainder of that division. USPS is what binds -- 542 images in its smallest
-    class against the 360 the bags take -- and this fits under it at the cap.
+    remainder of that division. Sized over every role `NOISE_ROLES` names (all
+    three, `train`/`valid`/`eval`, since the noisy condition contaminates all
+    three with one shared draw) rather than `TRAIN_BAGS` alone -- USPS is what
+    binds, and a caller sizing the reserve over the wrong role count would
+    refuse mid-draw instead of up front.
     """
     per_bag = config.noise_instances(rate)
     if per_bag == 0:
         return 0
     donors = config.CLASSES - 1
-    return -(-config.TRAIN_BAGS * per_bag // donors) + config.INSTANCES_PER_BAG
+    return -(-_noised_bag_count() * per_bag // donors) + config.INSTANCES_PER_BAG
 
 
 def _select(labels: np.ndarray, rng: np.random.Generator,
@@ -115,9 +132,9 @@ def _select(labels: np.ndarray, rng: np.random.Generator,
 
 
 def _contaminate(flat: list[int], members: list[list[int]], bag_labels: list[int],
-                 train_positions: list[int], spare: dict[int, np.ndarray],
+                 role_positions: dict[str, list[int]], spare: dict[int, np.ndarray],
                  rate: float, seed: int, code: str) -> dict:
-    """Replace part of every training bag with images of other classes.
+    """Replace part of every noised-role bag with images of other classes.
 
     The bag's label is left exactly as it was. Bags are pure and no instance
     carries a label of its own, so there is nothing to flip: what this corrupts is
@@ -132,10 +149,13 @@ def _contaminate(flat: list[int], members: list[list[int]], bag_labels: list[int
     contaminants. The record written beside it exists so a reader can tell a
     contaminated slot from a clean one without re-deriving the draw.
 
-    Only `train_positions` is touched. The selection role is where the ceiling
-    search reads its criterion and the evaluation role is the verdict's answer
-    key; contaminating either would corrupt a measurement rather than the material
-    under measurement.
+    Every role `config.NOISE_ROLES` names is touched -- `train`, `valid` and
+    `eval` today -- with ONE shared draw: `rng` below is seeded from `(seed,
+    code)` alone, never from the arm or the role, so the identical instances are
+    replaced regardless of which arm's material this call built for, and the
+    walk below covers every named role's positions in one pass rather than one
+    stream per role, which is what makes the draw a single shared one instead of
+    three independent ones that happened to use the same seed.
     """
     per_bag = config.noise_instances(rate)
     if per_bag == 0:
@@ -150,7 +170,15 @@ def _contaminate(flat: list[int], members: list[list[int]], bag_labels: list[int
     cursor = {class_id: 0 for class_id in range(config.CLASSES)}
     record: list[dict] = []
 
-    for position in train_positions:
+    # One combined, ordered walk over every noised role's positions -- never one
+    # loop per role -- so `rng`'s draws land in one deterministic sequence and the
+    # draw is reproducible from `(seed, code)` alone, independent of how many
+    # roles happen to be named.
+    noised_positions = [position for role in config.NOISE_ROLES
+                        for position in role_positions.get(role, [])]
+    role_of = {position: role for role in config.NOISE_ROLES
+              for position in role_positions.get(role, [])}
+    for position in noised_positions:
         own = bag_labels[position]
         others = [c for c in range(config.CLASSES) if c != own]
         # Balanced rather than uniform: an unbalanced draw would let one class
@@ -177,8 +205,9 @@ def _contaminate(flat: list[int], members: list[list[int]], bag_labels: list[int
             flat[members[position][slot]] = image
             replaced.append(image)
 
-        record.append({"bag": position, "label": own, "slots": slots,
-                       "donorClasses": donors, "imageIndices": replaced})
+        record.append({"bag": position, "role": role_of[position], "label": own,
+                       "slots": slots, "donorClasses": donors,
+                       "imageIndices": replaced})
 
     return {"rate": rate, "instancesPerBag": per_bag,
             "roles": list(config.NOISE_ROLES), "bags": record}
@@ -302,9 +331,13 @@ def build(code: str, root: Path, seed: int, noise: float | None = None) -> BagSe
                 eval_positions.append(position)
 
     # Before the images are decoded, so `rebuild` needs to know nothing about
-    # noise: `imageIndices` below already names whatever replaced what.
-    contamination = _contaminate(flat, members, bag_labels, train_positions,
-                                 spare, rate, seed, code)
+    # noise: `imageIndices` below already names whatever replaced what. All
+    # three roles are handed over; `_contaminate` itself decides which of them
+    # `config.NOISE_ROLES` actually reaches.
+    contamination = _contaminate(
+        flat, members, bag_labels,
+        {"train": train_positions, "valid": valid_positions, "eval": eval_positions},
+        spare, rate, seed, code)
 
     images = torch.stack([dataset[i][0] for i in flat])
 

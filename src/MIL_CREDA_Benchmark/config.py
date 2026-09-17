@@ -196,10 +196,19 @@ NOISE_LEVELS = [0.0, 0.1, 0.2, 0.3, 0.4]
 #: edits `NOISE_LEVELS` next.
 NOISE_CAP = 0.5
 
-#: Which roles the noise reaches: training only, in both domains. `valid` is where
-#: the ceiling search reads its criterion and `eval` is the answer key of the
-#: verdict, so contaminating either would corrupt a measurement rather than the
-#: material being measured. Train dirty, measure clean.
+#: Which roles the noise reaches: all three, `train`, `valid` and `eval`, in both
+#: domains, with ONE shared draw across every arm -- the same instances are
+#: replaced for `B`, `E`, `F`, `G` and `GN` alike, because the draw is a property
+#: of the material (`bags.build` is called once per domain/seed and the same
+#: `BagSet` is handed to every arm) and never a property of which arm is training.
+#:
+#: This replaces an earlier decision that kept `valid`/`eval` clean on the
+#: argument that `valid` is where the ceiling search reads its criterion and
+#: `eval` is the answer key of the verdict, so contaminating either would corrupt
+#: a measurement rather than the material being measured. That argument is
+#: superseded: the noise axis is about how the METHOD behaves when every role it
+#: touches is corrupted, selection and verdict included, not only about how it
+#: trains on corrupted evidence while being judged on clean evidence.
 #:
 #: One rate for source and target alike. The two are not the same perturbation --
 #: the target trains unsupervised, through `pseudolabel` (Eq. 22) and
@@ -208,7 +217,7 @@ NOISE_CAP = 0.5
 #: would make the sweep two-dimensional and multiply a campaign that already
 #: costs `len(ARMS) * len(TRANSFERS) * len(FULL_SEEDS)` runs. Which of the two
 #: domains hurts more is a rung of its own, later, on one transfer.
-NOISE_ROLES = ("train",)
+NOISE_ROLES = ("train", "valid", "eval")
 
 
 def noise_instances(rate: float) -> int:
@@ -243,25 +252,14 @@ NOISE_REPORTED = NOISE_LEVELS[len(NOISE_LEVELS) // 2]
 #: curve. The gap is a property of the material and not of any measurement.
 NOISE_TRANSFER = ("M", "U")
 
-#: The diagnostic that separates *the term failed* from *the coefficient was too
-#: small*, once the campaign's ceilings are known to have been searched clean.
-#:
-#: `G` is the complete method and the only arm carrying the coefficient at all:
-#: `B` has no adaptation term to re-search a ceiling for, and `E` and `F` are
-#: ablations that would multiply the search without adding diagnosis.
-#:
-#: `NOISE_DIAGNOSTIC_LEVEL` is the cap of the range, fixed here rather than after
-#: the curve exists. At the extreme the coefficient is under the most pressure, so
-#: a re-searched ceiling that recovers nothing there recovers nothing anywhere and
-#: the reading does not depend on where anyone chose to look.
-#:
-#: It needs three points and pays for one: the arm at this level under the
-#: campaign's clean ceiling comes out of the campaign, and what is run is the
-#: ceiling searched at this level plus the arm under it. Its numbers are
-#: diagnostic and never enter the verdict tables; what it decides is whether
-#: per-level ceilings are worth restructuring for.
-NOISE_DIAGNOSTIC_ARMS = ["G"]
-NOISE_DIAGNOSTIC_LEVEL = NOISE_LEVELS[-1]
+# The noise diagnostic -- the re-search that separated *the term failed* from
+# *the coefficient was too small* -- is removed. Reason: it re-searched the
+# ceiling under contamination, which contradicts the decision that the search
+# always runs on clean material (see `harness.search_ceilings`'s own doctrine
+# and `__benchmark__["search"]`'s `what`). Its config entries
+# (`NOISE_DIAGNOSTIC_ARMS`, `NOISE_DIAGNOSTIC_LEVEL`), its steps
+# (`noise-diagnostic`, `noise-diagnostic-report`) and its notebooks are gone with
+# it.
 
 # -------------------------------------------------------------------- network
 
@@ -508,6 +506,64 @@ SEARCH_ENGINE = "optuna"
 #: sino un continuo.
 CEILING_RANGE = (1e-4, 1.0)
 
+# ---------------------------------------------- las otras cinco dimensiones
+#
+# The search covers six dimensions now, not one: the ramp ceiling above, and the
+# five below. Every one is an Eq. (39)/Eq. (15)/Eq. (16)/Eq. (28) constant this
+# file otherwise declares fixed -- `lambda_glob`/`lambda_loc` are NOT among them,
+# because both come out of the shared ramp (`harness.ramp`, then
+# `total_objective(..., coefficient, coefficient)`) and a second, independent
+# coefficient for each would be a change to Eq. (39) itself, not a search over
+# it. `ATTENTION_WIDTH` also stays out and fixed: it sizes `R_phi`'s hidden
+# layer, an architectural choice with no equation attached, never a
+# hyperparameter Eq. (15) itself names.
+#
+# Each range is declared beside where it came from, the same discipline
+# `CEILING_RANGE`'s own comment already applies -- log scale where the constant
+# is inherently a ratio or a bandwidth, linear where it is a bounded mixing
+# weight.
+
+#: How fast the ramp climbs. CREDA's own `delta = 20` is the interior point this
+#: range is built around, not its edge: the existing note on `RAMP_DELTA` below
+#: already measures what happens at the two ends of a wide range -- at three
+#: epochs `delta = 20` reaches 0.9975 by the second, i.e. a near-instant step
+#: function, and a much smaller delta would still be ramping past the twentieth
+#: epoch of a full run. `(1.0, 100.0)`, log scale, spans "barely past the
+#: neutral by the end of a full run" to "a step function in the first epoch" --
+#: the two qualitative regimes a growth-rate search has to be able to reach.
+RAMP_DELTA_RANGE = (1.0, 100.0)
+
+#: Decision 1's one bandwidth. `KERNEL_SIGMA`'s own docstring already declares it
+#: "a placeholder to be tuned with Optuna alongside the ceiling search", measured
+#: once by the median heuristic at 36.135014304860874. The range is one order of
+#: magnitude either side of that measured value, log scale, because a kernel
+#: bandwidth is a ratio quantity (it rescales a squared distance) and an
+#: order-of-magnitude sweep is the standard way to bracket a median-heuristic
+#: estimate without asserting the heuristic itself is exactly right.
+KERNEL_SIGMA_RANGE = (KERNEL_SIGMA / 10.0, KERNEL_SIGMA * 10.0)
+
+#: gamma of Eq. (15): the weight of the within-bag consensus term against the
+#: learned relevance R_phi. `ATTENTION_GAMMA`'s own docstring already declares
+#: zero the neutral (R_phi alone, l1-normalized); the mixing weight is not
+#: declared with an upper bound past one anywhere in the revision, and `(0.0,
+#: 1.0)` is the natural closed range for a term that never exceeds giving the
+#: consensus term the whole logit.
+ATTENTION_GAMMA_RANGE = (0.0, 1.0)
+
+#: tau_att of Eq. (16): the attention temperature. `ATTENTION_TEMPERATURE`'s own
+#: docstring declares one the neutral (a plain softmax, no scaling). `(0.1,
+#: 10.0)`, log scale, is the ordinary bracket for a softmax temperature: at the
+#: low end the distribution is far sharper than the neutral, at the high end far
+#: flatter, and the neutral sits at the geometric range's own centre.
+ATTENTION_TEMPERATURE_RANGE = (0.1, 10.0)
+
+#: The local temperature of Eq. (28). `TAU_LOCAL`'s own docstring declares one
+#: the fixed neutral, with no counterpart in CREDA to measure a range from --
+#: it plays the identical role Eq. (16)'s temperature plays, scaling a softmax
+#: rather than a kernel bandwidth or a mixing weight, so it is given the same
+#: bracket for the same reason.
+TAU_LOCAL_RANGE = (0.1, 10.0)
+
 #: Cuántas evaluaciones por `(familia, transferencia)`. Una por trial: la
 #: repetición que daban las semillas la reemplaza el término de ruido que el GP
 #: estima para decidir dónde mirar.
@@ -551,10 +607,14 @@ SEARCH_ROLE = "valid"
 #: as evidence about a schedule.
 RAMP_DELTA = 20
 
-#: CREDA's own `creda_lr_special` and the decay of `get_eta`.
+#: One fixed, declared learning rate -- CREDA's own `creda_lr_special` -- for
+#: every arm, with no decay. `LR_ALPHA`/`LR_BETA` and the decay of `get_eta` are
+#: removed: this stretch's own decision is one fixed rate rather than a schedule,
+#: and it is not searched -- the ceiling search's six dimensions
+#: (`RAMP_CEILING`, `RAMP_DELTA`, `KERNEL_SIGMA`, `ATTENTION_GAMMA`,
+#: `ATTENTION_TEMPERATURE`, `TAU_LOCAL`) are all Eq. (39)/Eq. (15)/Eq. (16)/
+#: Eq. (28) constants; the optimizer's own rate is not one of them.
 LR = 1e-3
-LR_ALPHA = 20
-LR_BETA = 0.75
 
 #: Held equal across the two units. One bag per class covers every class in every
 #: step, which the local correspondence requires; the instance arms take the same
@@ -586,28 +646,35 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 #: `MIL-CREDA**` lacks the local term and the weighting, `MIL-CREDA*` lacks only
 #: the local term, and an unmarked name is the complete method.
 
+#: `normalization` is `"shared"` for every arm except `GN`: the target forward
+#: passes through the encoder's normalization layers exactly as the source
+#: forward does, in training mode, learning from both domains like the rest of
+#: the model (the `_target_embeddings` doctrine above `wiring.Arm` states this).
+#: `GN` is the one exception -- `"sourceBatch"` -- and it is the only thing that
+#: separates it from `G`: its normalization layers never learn from the target at
+#: all. The target forward of that one step is normalized with the CURRENT
+#: SOURCE BATCH statistics of that same step (never the accumulated running
+#: statistics -- those were measured to scale the two domains apart before this
+#: arm existed), and the running statistics the source forward already updated
+#: are left exactly as the source forward last set them: the target forward
+#: never calls into a form that would update them again.
 ARMS = [
     {"id": "B", "name": "MIL-Baseline", "label": "source-only (bags)",
      "unit": "bag", "adaptation": None, "weighting": False, "local": False,
-     "attention": "learned", "selection": None},
+     "attention": "learned", "selection": None, "normalization": "shared"},
     {"id": "E", "name": "MIL-CREDA**", "label": "MIL-CREDA global, unweighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": False, "local": False,
-     "attention": "learned", "selection": None},
+     "attention": "learned", "selection": None, "normalization": "shared"},
     {"id": "F", "name": "MIL-CREDA*", "label": "MIL-CREDA global, weighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": False,
-     "attention": "learned", "selection": None},
+     "attention": "learned", "selection": None, "normalization": "shared"},
     {"id": "G", "name": "MIL-CREDA", "label": "MIL-CREDA full (global + local)",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": None},
-    {"id": "SU", "name": "MIL-CREDA-U", "label": "MIL-CREDA full, regular selection",
+     "attention": "learned", "selection": None, "normalization": "shared"},
+    {"id": "GN", "name": "MIL-CREDA-GN",
+     "label": "MIL-CREDA full, target normalized by source-batch statistics",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "regular"},
-    {"id": "SA", "name": "MIL-CREDA-A", "label": "MIL-CREDA full, arbitrary selection",
-     "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "arbitrary"},
-    {"id": "SK", "name": "MIL-CREDA-K", "label": "MIL-CREDA full, top-K selection",
-     "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "topk"},
+     "attention": "learned", "selection": None, "normalization": "sourceBatch"},
 ]
 
 ARMS_BY_ID = {arm["id"]: arm for arm in ARMS}
@@ -616,18 +683,11 @@ ARMS_BY_ID = {arm["id"]: arm for arm in ARMS}
 ARM_ORDER = [arm["id"] for arm in ARMS]
 NAME_OF = {arm["id"]: arm["name"] for arm in ARMS}
 
-#: How many of a bag's instances a selecting arm keeps. The three selecting arms
-#: hold this budget fixed and differ only in the rule that picks them, so the rung
-#: between any two of them is attributable to the rule. `SK -> G` is the separate
-#: question of what the budget itself costs.
-SELECT_K = 10
-
-#: The arbitrary selection is drawn once from a generator of its own and never
-#: again. Two reasons: re-drawing every step would test noise rather than test the
-#: rule, and drawing from the training generator would shift every later draw, so
-#: the rung would credit the selection with what the offset did.
-SELECTION_SEED = 20250812
-
+#: Selection arms (`SU`, `SA`, `SK`) and their budget (`SELECT_K`,
+#: `SELECTION_SEED`) are removed: every remaining arm keeps every instance of a
+#: bag. `wiring.Arm.select` still exists and still returns `H` unchanged for
+#: every declared arm's `spec["selection"] is None`.
+#:
 #: What each rung of the ladder reads. A comparison is only attributable when its
 #: two arms differ in one thing, so the pairs are written out rather than left to
 #: whoever reads the table.
@@ -635,21 +695,16 @@ LADDER = [
     ("B", "E", "qué compra el término global, sin ponderar"),
     ("E", "F", "qué compra la ponderación por confianza en MIL-CREDA"),
     ("F", "G", "qué compra la correspondencia local"),
-    # The three below hold the instance budget at SELECT_K and differ only in the
-    # rule that spends it, except the last, which is the budget itself.
-    ("SU", "SK", "qué compra la selección por atención frente a una regular"),
-    ("SA", "SK", "qué compra frente a una selección fija arbitraria"),
-    ("SK", "G", "qué cuesta quedarse solo con las mejores instancias frente a quedarse con todas"),
 ]
 
-#: Which direction wins each dimension. The two costs and the parameter count are
-#: reported and not contested: peak memory as measured is Python's heap and says
-#: nothing about tensors, and a parameter count is a fact rather than a contest.
+#: Which direction wins each dimension. The parameter count is reported and not
+#: contested: it is a fact rather than a contest. Time and memory
+#: (`seconds`/`peakMiB`) are removed from this comparison entirely -- not one
+#: dimension, not one record field, not one reader of either.
 HIGHER, LOWER, DESCRIPTIVE = "higher", "lower", None
 DIMENSIONS = {
     "targetAccuracy": HIGHER,
     "sourceAccuracy": HIGHER,
-    "seconds": LOWER,
     "contribution": DESCRIPTIVE,
     #: The supervised magnitude and the adaptation's share of the objective.
     #: `contribution` alone cannot separate a term that commanded nothing from a
@@ -659,7 +714,6 @@ DIMENSIONS = {
     #: whose two arms differ in share is a rung whose reading has to say so.
     "supervised": DESCRIPTIVE,
     "adaptationShare": DESCRIPTIVE,
-    "peakMiB": DESCRIPTIVE,
     "parameters": DESCRIPTIVE,
 }
 
@@ -679,7 +733,7 @@ CHECKPOINTS = {arm["id"]: 3 for arm in ARMS}
 
 #: Which floor each adapted arm is read against: same unit, same everything, with
 #: the adaptation term switched off.
-FLOOR_OF = {"G": "B", "F": "B", "E": "B", "SU": "B", "SA": "B", "SK": "B"}
+FLOOR_OF = {"G": "B", "F": "B", "E": "B", "GN": "B"}
 
 # ------------------------------------------------------------------- figures
 
@@ -994,11 +1048,14 @@ def ceilings_provenance(pilot: "bool | None" = None) -> dict:
 #: creating that cycle; `tests/test_ceiling_record.py` and this module's own
 #: tests hold the two mappings equal so a field added to one and not the other
 #: is caught rather than silently checked on one side and not the other.
+#: `kernelSigma`/`attentionGamma`/`attentionTemperature` are no longer here:
+#: the search now explores all three itself (alongside `rampDelta`/
+#: `tauLocal`), per transfer, so an entry's own value is that search's
+#: winner rather than a fixed backdrop it ran under -- comparing it against
+#: this module's bare declared default would flag drift on every search that
+#: found anything else. `revision` is the one genuine backdrop left.
 _STAMP_FIELDS: dict[str, str] = {
     "revision": "REVISION",
-    "kernelSigma": "KERNEL_SIGMA",
-    "attentionGamma": "ATTENTION_GAMMA",
-    "attentionTemperature": "ATTENTION_TEMPERATURE",
 }
 
 
@@ -1174,6 +1231,22 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "es donde el backend remoto desempaqueta lo que devuelve, antes de que "
         "nada haya leido una reduccion: la escala de lo que viene adentro la "
         "deciden los sellos de cada shard, no el directorio que los recibe"),
+    "Results_v1.ipynb: config.PRODUCT / 'Results' / 'figures'": (
+        "el directorio de figuras del cuaderno de resultados: un solo arbol "
+        "compartido, sin segmento de pilot/full ni de tasa -- distingue limpio "
+        "de contaminado por NOMBRE de archivo (`latent_grid_clean.pdf` / "
+        "`latent_grid_noisy.pdf`) y no por directorio. Esta declaracion "
+        "registra el hecho, no lo avala: `Results_v1.ipynb` no es un archivo "
+        "que este stretch posea (ver el mapa de propiedad del cambio), asi que "
+        "si una figura de ensayo y una de la corrida completa debieran vivir "
+        "aparte, corregirlo es trabajo de quien sea dueno de ese cuaderno"),
+    "Results_v1.ipynb: config.PRODUCT / tables.MECHANISM_RECORD": (
+        "una lectura, no una escritura -- `tables.MECHANISM_RECORD` es la "
+        "cadena fija que ese modulo ya declara "
+        "(`Results/Benchmark/attention_mechanisms.json`), sin escala propia, "
+        "la misma forma que `harness.py: config.CEILINGS_RECORD` ya tiene "
+        "excusada arriba: nombra el registro de la corrida COMPLETA y nunca "
+        "el de ensayo"),
 }
 
 
@@ -1251,13 +1324,16 @@ LECTURAS_QUE_NO_REENVIAN: dict[str, str] = {
         "uno dice adónde va a escribir esta corrida, el otro dice qué archivo "
         "gobierna las campañas mientras tanto. Reenviarle la escala haría que "
         "los dos dijeran lo mismo y el segundo dejaría de informar nada"),
-    "Benchmark_Noise_Report_v1.ipynb: contamination.load(tasa)": (
-        "relee los MISMOS niveles que `contamination.curve_is_pilot` acaba de "
-        "resolver para esa celda, para contrastar la tasa que cada campaña "
-        "selló contra el directorio "
-        "que la contiene. Un resolutor consultado dos veces en una celda "
-        "contesta lo mismo; darle la escala derivada de su propia respuesta "
-        "sería cerrar el círculo y no agregaría una sola garantía"),
+    # "Benchmark_Noise_Report_v1.ipynb: contamination.load(tasa)" is removed:
+    # that notebook is deleted with this stretch's restructuring (its
+    # analysis folds into Results_v1.ipynb), and the pattern it excused --
+    # `contamination.load(tasa)` re-reading the same level
+    # `curve_is_pilot`/`ES_ENSAYO` just resolved for that cell -- does not
+    # appear anywhere on disk any more (measured: neither `contamination.load`
+    # nor `curve_is_pilot` is called in `Results_v1.ipynb`). Keeping the
+    # exclusion would let it survive its own call, which is exactly the
+    # defect `test_ninguna_lectura_que_ya_tiene_escala_deja_de_reenviarla`
+    # exists to catch.
 }
 
 

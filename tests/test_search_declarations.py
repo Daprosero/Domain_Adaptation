@@ -183,7 +183,8 @@ def estudios(tmp_path, monkeypatch):
     def _build(code, cache, seed, noise=0.0):
         return _Bags()
 
-    def _run_one(arm, transfer, seed, reduction, device, material, *, ceiling, role):
+    def _run_one(arm, transfer, seed, reduction, device, material, *, ceiling,
+                role, hyper=None):
         return {config.SEARCH_CRITERION: 1.0 - abs(ceiling - 0.01)}
 
     monkeypatch.setattr(optuna, "create_study", _create_study)
@@ -201,23 +202,32 @@ def _correr_trials(transfers: int = 1) -> dict:
         transfers=list(config.SEARCH_TRANSFERS[:transfers]))
 
 
-def test_los_trials_buscan_una_sola_dimension_y_es_el_techo(estudios) -> None:
-    """La velocidad de crecimiento sigue sin buscarse, y ahora la razón es otra:
-    las dos familias ya están a un orden de magnitud en `adaptationShare`, así que
-    una segunda dimensión libre amplifica ese desbalance en vez de resolverlo.
+#: Las seis dimensiones que el motor por trials explora hoy -- el techo y las
+#: cinco que se agregaron con él. `lambda_glob`/`lambda_loc` NO están: las dos
+#: salen de la misma rampa compartida (`harness.ramp`, después
+#: `total_objective(..., coefficient, coefficient)`), así que un segundo
+#: coeficiente libre para cada una cambiaría la Ec. (39) en vez de buscar
+#: sobre ella.
+DIMENSIONES_BUSCADAS = {"ceiling", "rampDelta", "kernelSigma", "attentionGamma",
+                        "attentionTemperature", "tauLocal"}
+
+
+def test_los_trials_buscan_las_seis_dimensiones_declaradas(estudios) -> None:
+    """El techo, `RAMP_DELTA`, `KERNEL_SIGMA` y los dos hiperparámetros de la
+    Ec. (16)/(28) -- seis dimensiones, no una.
 
     Se mide sobre el espacio que optuna realmente exploró y no sobre la prosa:
-    cada trial declara sus propias distribuciones, y ahí una segunda dimensión
-    aparecería sin que nadie tenga que acordarse de mirarla.
+    cada trial declara sus propias distribuciones, y ahí una dimensión de más
+    o de menos aparecería sin que nadie tenga que acordarse de mirarla.
 
-    Rojo alcanzable: agregar un `trial.suggest_*` más al objetivo.
+    Rojo alcanzable: agregar o sacar un `trial.suggest_*` del objetivo.
     """
     _correr_trials()
     assert estudios["studies"], "ningún estudio corrió"
     for study in estudios["studies"]:
         for trial in study.trials:
-            assert set(trial.distributions) == {"ceiling"}
-            assert set(trial.params) == {"ceiling"}
+            assert set(trial.distributions) == DIMENSIONES_BUSCADAS
+            assert set(trial.params) == DIMENSIONES_BUSCADAS
 
 
 def test_la_meseta_es_la_resolucion_del_instrumento_y_no_el_ruido_del_gp(

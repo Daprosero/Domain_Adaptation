@@ -38,9 +38,9 @@ def motor(tmp_path, monkeypatch):
         return _Bolsa()
 
     def _run_one(arm, transfer, seed, reduction, device, material, *,
-                 ceiling, role):
+                 ceiling, role, hyper=None):
         vistos.append({"arm": arm, "transfer": transfer, "seed": seed,
-                       "ceiling": ceiling, "role": role})
+                       "ceiling": ceiling, "role": role, "hyper": hyper})
         # Un óptimo real adentro del rango, para que el GP tenga qué encontrar.
         return {config.SEARCH_CRITERION: 1.0 - abs(ceiling - 0.01)}
 

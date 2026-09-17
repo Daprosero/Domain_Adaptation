@@ -18,15 +18,17 @@ def _trials(*pares):
     return [{"ceiling": c, "value": v} for c, v in pares]
 
 
-def test_stamp_estampa_los_cuatro_campos_del_config_vigente():
-    """El mismo mecanismo que `latent.HYPERPARAMETER_FIELDS` usa para un
-    checkpoint, aplicado a una entrada por familia del registro de techos."""
+def test_stamp_estampa_la_revision_vigente():
+    """`kernelSigma`/`attentionGamma`/`attentionTemperature` ya no se estampan
+    acá: el motor por trials los busca a los tres (junto con `rampDelta` y
+    `tauLocal`), así que la propia entrada por familia carga su VALOR
+    GANADOR, no un telón de fondo fijo contra el que comparar. `revision` es
+    el único telón de fondo que queda -- ver la nota del propio `STAMP_FIELDS`.
+    """
     entrada = {"ceiling": 0.01}
     cr.stamp(entrada)
     assert entrada["revision"] == config.REVISION
-    assert entrada["kernelSigma"] == config.KERNEL_SIGMA
-    assert entrada["attentionGamma"] == config.ATTENTION_GAMMA
-    assert entrada["attentionTemperature"] == config.ATTENTION_TEMPERATURE
+    assert set(cr.STAMP_FIELDS) == {"revision"}
 
 
 def test_stamp_muta_en_el_lugar_y_devuelve_la_misma_entrada():
@@ -38,46 +40,27 @@ def test_stamp_drift_vacio_cuando_la_entrada_estampada_coincide_con_config():
     assert cr.stamp_drift(cr.stamp({"ceiling": 0.01})) == {}
 
 
-def test_stamp_drift_no_vacio_cuando_un_campo_difiere():
+def test_stamp_drift_no_vacio_cuando_la_revision_difiere():
     entrada = cr.stamp({"ceiling": 0.01})
-    entrada["kernelSigma"] = config.KERNEL_SIGMA * 3
+    entrada["revision"] = "research-concept-r99.md"
     drift = cr.stamp_drift(entrada)
-    assert set(drift) == {"kernelSigma"}
-    assert drift["kernelSigma"] == {"record": config.KERNEL_SIGMA * 3,
-                                     "current": config.KERNEL_SIGMA}
+    assert set(drift) == {"revision"}
+    assert drift["revision"] == {"record": "research-concept-r99.md",
+                                 "current": config.REVISION}
 
 
-@pytest.mark.parametrize("campo,otro", [
-    ("revision", "research-concept-r99.md"),
-    ("kernelSigma", None),
-    ("attentionGamma", None),
-    ("attentionTemperature", None),
-])
-def test_stamp_drift_detecta_un_desacuerdo_en_cada_campo_por_separado(campo, otro):
-    """El test de arriba sólo mueve `kernelSigma`; un `stamp_drift` que
-    comparara `revision`/`attentionGamma`/`attentionTemperature` a medias
-    --- o no los comparara --- pasaría igual. Cada campo se mueve solo, con
-    los otros tres intactos, para que un desacuerdo ignorado en cualquiera
-    de los cuatro se note por su propio nombre.
+def test_stamp_drift_ignora_kernel_sigma_gamma_y_temperatura():
+    """Estos tres ya no son un telón de fondo fijo: el motor por trials los
+    busca, así que una entrada legítima trae su propio valor GANADOR, que
+    puede diferir de `config.KERNEL_SIGMA`/etc. sin que eso sea drift.
 
-    Rojo alcanzable: `stamp_drift` ignorando un desacuerdo en `revision`,
-    `attentionGamma` o `attentionTemperature` (cada uno por separado).
+    Rojo alcanzable: reintroducir `kernelSigma`/`attentionGamma`/
+    `attentionTemperature` en `STAMP_FIELDS`.
     """
-    entrada = cr.stamp({"ceiling": 0.01})
-    if otro is not None:
-        valor_movido = otro
-    else:
-        # `* 3` no mueve un cero (ATTENTION_GAMMA es 0 por declaración: "nunca
-        # se barre el techo de la rampa; 1 es el neutro de la Ec. (39)" no
-        # aplica acá, pero gamma sí puede valer 0 como neutro propio), así que
-        # el desplazamiento es aditivo y nunca depende de que el valor de hoy
-        # sea distinto de cero.
-        valor_movido = entrada[campo] + 1.0
-    entrada[campo] = valor_movido
-    drift = cr.stamp_drift(entrada)
-    assert set(drift) == {campo}, f"esperaba sólo {campo!r}, salió {sorted(drift)}"
-    assert drift[campo] == {"record": valor_movido,
-                            "current": getattr(config, cr.STAMP_FIELDS[campo])}
+    entrada = cr.stamp({"ceiling": 0.01, "kernelSigma": config.KERNEL_SIGMA * 3,
+                        "attentionGamma": config.ATTENTION_GAMMA + 1.0,
+                        "attentionTemperature": config.ATTENTION_TEMPERATURE + 1.0})
+    assert cr.stamp_drift(entrada) == {}
 
 
 def test_stamp_drift_una_entrada_sin_ninguno_de_los_cuatro_campos_es_drift_completo():

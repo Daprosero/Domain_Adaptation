@@ -26,7 +26,6 @@ import subprocess
 import sys
 import time
 import zlib
-import tracemalloc
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 
@@ -50,28 +49,16 @@ def resolve_device() -> torch.device:
     return torch.device("cpu")
 
 
-def synchronize(device: torch.device) -> None:
-    """Wait for the device before reading the clock.
-
-    CUDA and MPS queue their kernels, so a timer stopped without this measures
-    when the work was submitted rather than when it finished — a wall time that
-    looks precise and describes nothing.
-    """
-    if device.type == "cuda":
-        torch.cuda.synchronize()
-    elif device.type == "mps":
-        torch.mps.synchronize()
-
 
 def environment() -> dict:
     """Where this ran, recorded rather than assumed.
 
-    The guard exists because wall time and peak memory describe whichever
-    environment produced them. It refuses when the repository has its own
-    virtualenv and something else is running — that is a mistake worth stopping.
-    On a hosted runtime there is no such virtualenv and nothing to compare
-    against, so the environment is stamped into the summary instead: a table made
-    in Colab is labelled as made in Colab rather than attributed to this machine.
+    The guard exists because a run's provenance describes whichever environment
+    produced it. It refuses when the repository has its own virtualenv and
+    something else is running — that is a mistake worth stopping. On a hosted
+    runtime there is no such virtualenv and nothing to compare against, so the
+    environment is stamped into the summary instead: a table made in Colab is
+    labelled as made in Colab rather than attributed to this machine.
     """
     prefix = Path(sys.prefix).resolve()
     inside = prefix.is_relative_to(config.REPOSITORY)
@@ -97,9 +84,8 @@ def device_class() -> dict:
 
     Requesting a class and receiving it are two obligations, and only the second
     is a fact. A remote service allocates by availability, so a run can ask for
-    one accelerator and land on another without a word — and `seconds` and
-    `peakMiB` are dimensions of the verdict, so grouping them by an environment
-    that cannot tell two GPU classes apart is grouping by a label that lies.
+    one accelerator and land on another without a word, and the device class is
+    part of a run's own provenance regardless of whether anything times it.
 
     The name is what the driver reports; `kind` is the backend, which is what
     survives when a platform gives no model name at all.
@@ -140,11 +126,11 @@ def environment_key(stamp: dict) -> str:
 def power_state() -> dict:
     """Whether the machine was on mains when the run happened.
 
-    `seconds` and `peakMiB` are dimensions of the verdict, not decoration, and a
-    measurement describes whichever environment produced it. A laptop that drops
-    to battery partway through a long grid throttles, and if that catches some
-    arms and not others it is a difference between arms nobody declared — the
-    ladder would credit a mechanism with what the power state did.
+    Recorded as provenance rather than as a guard against a comparison
+    dimension -- time and memory (`seconds`/`peakMiB`) are removed from this
+    comparison entirely, so the power state no longer protects either of them
+    from a throttled machine. It is kept because it is cheap, best-effort, and
+    still a fact about the environment a run happened in.
 
     Recorded rather than enforced. Refusing to run on battery would stop work that
     is often fine — the ceiling search measures accuracy, which is deterministic
@@ -204,9 +190,17 @@ def ramp(epoch: int, epochs: int, family: str | None,
 
 
 def learning_rate(epoch: int, epochs: int) -> float:
-    """`get_eta` of CREDA's pipeline: 1e-3 decaying toward 1.4e-4."""
-    p = epoch / epochs
-    return config.LR * (1 + config.LR_ALPHA * p) ** (-config.LR_BETA)
+    """One fixed, declared rate for every arm, at every epoch: `config.LR`.
+
+    The decay of CREDA's own `get_eta` (`LR_ALPHA`/`LR_BETA`) is removed: this
+    stretch's own decision replaces the dynamic schedule with a single constant,
+    not searched, identical for every arm. `epoch`/`epochs` stay in the
+    signature so every call site -- which passes them unconditionally, once per
+    epoch -- does not have to change, and so a future schedule has the same two
+    numbers this one never needed.
+    """
+    del epoch, epochs
+    return config.LR
 
 
 def balanced_batches(targets: list[int], steps: int, generator: torch.Generator):
@@ -442,12 +436,23 @@ def ceiling_for(reduction: Reduction, family: str | None,
 def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
             reduction: Reduction, device: torch.device,
             material: dict, ceiling: float | None = None,
-            role: str = "eval") -> dict:
+            role: str = "eval", hyper: dict | None = None) -> dict:
     """One arm, one transfer, one repetition, end to end.
 
     `ceiling` overrides the family's for this run. The search passes it to walk
     the grid; the campaign passes each family's found value, so every arm derived
     from a family inherits the one that family searched.
+
+    `hyper` overrides Decision 1's bandwidth and Eq. (15)/(16)/(28)'s three
+    hyperparameters (`kernelSigma`, `attentionGamma`, `attentionTemperature`,
+    `tauLocal`) and the ramp's own growth rate (`rampDelta`) for this run --
+    `search_ceilings_trials` is the one caller that passes it, walking its own
+    six-dimensional space. Omitted, every arm trains at the declared `config`
+    constants exactly as it did before this override existed: a campaign never
+    passes `hyper`, so what the search finds is recorded (`ceiling_record`,
+    `__benchmark__["search"]["record"]`) rather than applied automatically --
+    the same workflow `KERNEL_SIGMA`'s own current value already follows,
+    measured once and hand-set as a declared constant.
 
     `role` is which material the run is judged on. The search reads `valid` and
     the campaign reads `eval`, and they are disjoint by construction — a
@@ -478,17 +483,16 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         arm_id, config.CLASSES,
         pool_of(source, source.train_idx, device),
         pool_of(target, target.train_idx, device),
+        hyper=hyper,
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
     steps = -(-config.TRAIN_BAGS // config.BAGS_PER_STEP)
+    ramp_delta = (hyper or {}).get("rampDelta", config.RAMP_DELTA)
 
     curve: list[dict] = []
     epochs_record: list[dict] = []
 
-    tracemalloc.start()
-    synchronize(device)
-    started = time.perf_counter()
     model.train()
     for epoch in range(reduction.epochs):
         family = config.ARMS_BY_ID[arm_id]["adaptation"]
@@ -498,7 +502,8 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         # own pick rather than the pooled one.
         top = (ceiling_for(reduction, family, transfer)
                if ceiling is None else ceiling)
-        coefficient = ramp(epoch, reduction.epochs, family, ceiling=top)
+        coefficient = ramp(epoch, reduction.epochs, family, ceiling=top,
+                          delta=ramp_delta)
         for group in optimizer.param_groups:
             group["lr"] = learning_rate(epoch, reduction.epochs)
 
@@ -520,11 +525,6 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
             "sourceAccuracy": accuracy(model, judged_source, device),
             "targetAccuracy": accuracy(model, judged_target, device),
         })
-
-    synchronize(device)
-    seconds = time.perf_counter() - started
-    peak = tracemalloc.get_traced_memory()[1] / (1024 * 1024)
-    tracemalloc.stop()
 
     contributions = [abs(point["contribution"]) for point in curve]
     # The supervised magnitude has to leave this function or it is gone: the curve
@@ -551,8 +551,6 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         "env": environment_key(reduction.environment),
         "targetAccuracy": final["targetAccuracy"],
         "sourceAccuracy": final["sourceAccuracy"],
-        "seconds": seconds,
-        "peakMiB": peak,
         "parameters": sum(p.numel() for p in model.parameters()),
         "contribution": mean_contribution,
         "supervised": mean_supervised,
@@ -1256,6 +1254,20 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
     low, high = config.CEILING_RANGE
     seed = config.SEARCH_SEED
     ruido = config.SEARCH_RESOLUTION
+    # The other five dimensions, each with its own declared range -- see
+    # `config.RAMP_DELTA_RANGE`/`KERNEL_SIGMA_RANGE`/`ATTENTION_GAMMA_RANGE`/
+    # `ATTENTION_TEMPERATURE_RANGE`/`TAU_LOCAL_RANGE` for where every one came
+    # from. Not `lambda_glob`/`lambda_loc`: both are the shared ramp
+    # (`ramp(...)`, then `total_objective(..., coefficient, coefficient)`), and
+    # a second, independent coefficient for each would change Eq. (39) itself
+    # rather than search over it.
+    hyper_ranges = {
+        "rampDelta": (config.RAMP_DELTA_RANGE, True),
+        "kernelSigma": (config.KERNEL_SIGMA_RANGE, True),
+        "attentionGamma": (config.ATTENTION_GAMMA_RANGE, False),
+        "attentionTemperature": (config.ATTENTION_TEMPERATURE_RANGE, True),
+        "tauLocal": (config.TAU_LOCAL_RANGE, True),
+    }
 
     found: dict[str, dict] = {}
     for family, arm_id in config.SEARCH_ARMS.items():
@@ -1277,8 +1289,12 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
 
             def objective(trial, _t=transfer, _m=material, _a=arm_id):
                 ceiling = trial.suggest_float("ceiling", low, high, log=True)
+                hyper = {
+                    dim: trial.suggest_float(dim, *bounds, log=log)
+                    for dim, (bounds, log) in hyper_ranges.items()
+                }
                 run = run_one(_a, _t, seed, reduction, device, _m,
-                              ceiling=ceiling, role=config.SEARCH_ROLE)
+                              ceiling=ceiling, hyper=hyper, role=config.SEARCH_ROLE)
                 return run[config.SEARCH_CRITERION]
 
             # Una semilla por estudio, derivada y no compartida. Con
@@ -1295,8 +1311,12 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
             study = optuna.create_study(direction="maximize",
                                         sampler=GPSampler(seed=semilla_estudio))
             study.optimize(objective, n_trials=n_trials)
-            visitados = [{"ceiling": t.params["ceiling"], "value": t.value}
-                         for t in study.trials if t.value is not None]
+            visitados = [
+                {"ceiling": t.params["ceiling"],
+                 **{dim: t.params[dim] for dim in hyper_ranges},
+                 "value": t.value}
+                for t in study.trials if t.value is not None
+            ]
             elegido = ceiling_record.choose(visitados, ruido)
             elegido["minutes"] = (time.perf_counter() - started) / 60
             per_transfer[label] = elegido
@@ -1309,11 +1329,27 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
         # Se calcula igual, con la misma regla sobre las seis elecciones, para que
         # el registro no tenga un campo que nadie sabe de dónde salió.
         agrupado = ceiling_record.choose(
-            [{"ceiling": d["ceiling"], "value": d["best"]}
+            [{"ceiling": d["ceiling"], "value": d["best"],
+              **{dim: d[dim] for dim in hyper_ranges}}
              for d in per_transfer.values()], ruido)
         found[family] = {
             "arm": arm_id,
             "ceiling": agrupado["ceiling"],
+            # The five other searched dimensions, pooled the identical way
+            # `ceiling` itself is: the smallest-ceiling winner among the
+            # per-transfer plateau, and whichever combination of the other
+            # four that trial happened to run under -- see `ceiling_record.
+            # choose`'s own docstring. `harness.run_one` never resolves these
+            # from `reduction` automatically (only the search's explicit
+            # `hyper=` reaches them); a searched value here is recorded, not
+            # applied, exactly as `KERNEL_SIGMA`'s own declared default is a
+            # hand-set number from a one-time measurement rather than
+            # something a run reads out of this file.
+            "rampDelta": agrupado["rampDelta"],
+            "kernelSigma": agrupado["kernelSigma"],
+            "attentionGamma": agrupado["attentionGamma"],
+            "attentionTemperature": agrupado["attentionTemperature"],
+            "tauLocal": agrupado["tauLocal"],
             "criterion": config.SEARCH_CRITERION,
             "role": config.SEARCH_ROLE,
             "epochs": reduction.epochs,
@@ -1325,7 +1361,11 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
             "search": {"kind": "optuna", "sampler": "GPSampler",
                        "trials": n_trials, "seed": seed,
                        "perStudySeed": "crc32(familia|transferencia) + seed",
-                       "space": {"low": low, "high": high, "log": True},
+                       "space": {
+                           "ceiling": {"low": low, "high": high, "log": True},
+                           **{dim: {"low": bounds[0], "high": bounds[1], "log": log}
+                              for dim, (bounds, log) in hyper_ranges.items()},
+                       },
                        "resolution": ruido},
             "decidedByFlatRule": agrupado["decidedByFlatRule"],
             "plateau": agrupado["plateau"],
@@ -1802,20 +1842,14 @@ def campaign(reduction: Reduction, device: torch.device,
             # 180 lines where a line per run would be 1800, and 1800 lines is
             # a report nobody reads rather than a sign of life.
             #
-            # The slowest arm and its seconds ride along because that is what
-            # the cell granularity would otherwise cost. Printed per run, an
-            # arm taking ten times its neighbours showed up while it was still
-            # the only thing that had happened; summarised per cell, it would
-            # be invisible until the cell closed unless the summary names it.
-            # `runs.jsonl` keeps every reading either way -- this line is
-            # progress, not the record.
+            # No timing rides along any more: time and memory (`seconds`/
+            # `peakMiB`) are removed from this comparison entirely, so there
+            # is nothing left to name as "slowest". `runs.jsonl` keeps every
+            # reading either way -- this line is progress, not the record.
             if of_cell:
-                slowest = max(of_cell, key=lambda r: r["seconds"])
                 targets = [r["targetAccuracy"] for r in of_cell]
                 progress(f"  {label} seed {seed}: {len(of_cell)} arms  "
-                         f"target {min(targets):.3f}-{max(targets):.3f}  "
-                         f"slowest {slowest['arm']:>2} {slowest['seconds']:.1f}s  "
-                         f"cell {sum(r['seconds'] for r in of_cell):.1f}s")
+                         f"target {min(targets):.3f}-{max(targets):.3f}")
         del drawn
 
     records.close()
@@ -2154,7 +2188,6 @@ def run_smoke(seed: int = 0, shard: str | None = None,
         "seed": seed,
         "targetAccuracy": run["targetAccuracy"],
         "sourceAccuracy": run["sourceAccuracy"],
-        "seconds": run["seconds"],
     }
 
 
