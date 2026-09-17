@@ -271,25 +271,71 @@ ATTENTION_WIDTH = 128
 #: gamma of Eq. (15): the weight of the within-bag consensus term against the
 #: learned relevance R_phi. The proposal fixes it as a hyperparameter during
 #: training but gives it no value. Zero sits at the neutral where Eq. (15)
-#: reduces exactly to the r17 attention (no consensus term at all), which is
-#: where this comparison starts; it stays tunable and is not asserted as the
-#: last word on it.
+#: reduces to R_phi with the l1-normalized v_R (r21 l.456) -- not to a bare,
+#: unconstrained v_R^T tanh(...), which is what a prior revision's attention
+#: computed and which this one no longer does at any value of gamma. The
+#: l1-ball reparametrization is not gated by gamma; only the consensus term
+#: is. It stays tunable and is not asserted as the last word on it.
 ATTENTION_GAMMA = 0.0
 
 #: tau_att of Eq. (16): the attention temperature. The proposal fixes it as a
 #: hyperparameter during training but gives it no value. One sits at the
-#: neutral where Eq. (16) reduces exactly to the r17 softmax (no temperature
-#: scaling at all); it stays tunable and is not asserted as the last word on
-#: it.
+#: neutral where Eq. (16) reduces to a plain softmax of Eq. (15)'s logit (no
+#: temperature scaling at all) -- and, at ATTENTION_GAMMA = 0.0 as well, of
+#: R_phi with the l1-normalized v_R alone, per the note above. It stays
+#: tunable and is not asserted as the last word on it.
 ATTENTION_TEMPERATURE = 1.0
 
 #: The local temperature of Eq. (28). Also without a counterpart in CREDA, so it
 #: is fixed at one and reported as fixed rather than chosen.
 TAU_LOCAL = 1.0
 
-#: The stabilizer inside a logarithm. Eq. (21) normalizes its own; this one only
-#: keeps the averaged instance distribution off zero before it is logged.
+#: sigma of Eq. (14): the one bandwidth of the one instance kernel. r21 l.715
+#: is explicit that a single sigma governs the three blocks of a class's mixed
+#: matrix "ya que los tres derivan del mismo kernel de instancia", and l.458
+#: says the attention consensus reuses that same kernel and its bandwidth
+#: rather than a second one of its own -- so one constant serves the
+#: consensus term inside the attention logit (Eq. 15), the top-k selection
+#: ranking, every bag kernel block Eq. (17)-(18) builds (K_ss, K_st, K_tt),
+#: and the local correspondence's own kernel evaluations (Eq. 28, 31). Every
+#: caller passes this explicitly, with no default anywhere in the call
+#: chain -- a constant carries no gradient, so there is no question of it
+#: being learned, and the value below is not asserted as final.
+#:
+#: Measured once, by the median heuristic prior work already applies per
+#: batch (`CREDALoss._compute_sigma`, and MIL-CREDA's own former per-call
+#: rule before this constant replaced it): sqrt(median(||h_a - h_a'||^2)
+#: + 1e-6) over the off-diagonal pairwise squared distances of embeddings
+#: h = F_theta(x), computed on the pilot configuration's source training
+#: material -- domain M (MNIST), seed SEEDS[0] = 0, the 64 TRAIN_BAGS x 30
+#: INSTANCES_PER_BAG = 1920 images that role draws, passed once through the
+#: ImageNet-pretrained resnet18 FeatureExtractor in eval mode, before any
+#: training step. Median squared distance measured: 75.848252431748. This is
+#: a placeholder to be tuned with Optuna alongside the ceiling search -- not
+#: added to that search by this stretch of work, which was not asked to make
+#: that change.
+KERNEL_SIGMA = 8.709090275783575
+
+#: The stabilizer inside a logarithm, shared by two call sites rather than
+#: private to either: `wiring.py` passes it as eps_src, `source_loss`'s (and
+#: `source_bound`'s) own stabilizer for Eq. (21) -- what fixes B_src's scale --
+#: and, for an instance-unit arm's `forward`, it also keeps the averaged
+#: instance distribution off zero before it is logged. A prior version of this
+#: comment said Eq. (21) "normalizes its own", which read as though this
+#: constant played no part in it; it does, at the one call site that matters:
+#: `wiring.py`'s `source_loss(..., config.EPSILON)`.
 EPSILON = 1e-8
+
+#: eps_loc: the stabilizer of Eq. (38)'s `local_loss`, declared here rather
+#: than left at that function's own default. `local_loss(squared_distances,
+#: target_weights, epsilon=1e-8)` has a default of its own -- one a caller
+#: could omit without anyone noticing which value governed the run. Passing
+#: this explicitly from `wiring.py` is what makes the number a declared fact
+#: of the comparison rather than an implicit one; it happens to equal
+#: `EPSILON` today, and the two are kept as separate names because they
+#: stabilize two different equations and nothing requires them to move
+#: together.
+EPSILON_LOCAL = 1e-8
 
 # ------------------------------------------------------- schedules, shared by all
 
@@ -488,6 +534,14 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 # weighting   confidence weighting of the target blocks
 # local       the subject-to-subject correspondence, which CREDA has no analogue of
 # attention   how a bag becomes a representation, for bag-unit arms
+# targetNormalization  "frozen" (every running-stats layer of the encoder
+#             normalizes the target forward with the source's own running
+#             statistics and leaves them unchanged) or "live" (today's
+#             pre-existing behaviour: the target forward updates them too).
+#             Read by `wiring.Arm`; irrelevant to a floor, since a floor
+#             (Decision 2) never encodes a target image during training at
+#             all, but declared on every arm rather than left to a default
+#             so nothing here is implicit.
 
 #: selection   which instances of a bag the arm is allowed to look at: None for
 #:             all of them, or a rule that keeps `SELECT_K` of the `INSTANCES_PER_BAG`
@@ -500,25 +554,28 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 ARMS = [
     {"id": "B", "name": "MIL-Baseline", "label": "source-only (bags)",
      "unit": "bag", "adaptation": None, "weighting": False, "local": False,
-     "attention": "learned", "selection": None},
+     "attention": "learned", "selection": None, "targetNormalization": "frozen"},
     {"id": "E", "name": "MIL-CREDA**", "label": "MIL-CREDA global, unweighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": False, "local": False,
-     "attention": "learned", "selection": None},
+     "attention": "learned", "selection": None, "targetNormalization": "frozen"},
     {"id": "F", "name": "MIL-CREDA*", "label": "MIL-CREDA global, weighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": False,
-     "attention": "learned", "selection": None},
+     "attention": "learned", "selection": None, "targetNormalization": "frozen"},
     {"id": "G", "name": "MIL-CREDA", "label": "MIL-CREDA full (global + local)",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": None},
+     "attention": "learned", "selection": None, "targetNormalization": "frozen"},
+    {"id": "GN", "name": "MIL-CREDA-BN", "label": "full, normalization on both domains",
+     "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
+     "attention": "learned", "selection": None, "targetNormalization": "live"},
     {"id": "SU", "name": "MIL-CREDA-U", "label": "MIL-CREDA full, regular selection",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "regular"},
+     "attention": "learned", "selection": "regular", "targetNormalization": "frozen"},
     {"id": "SA", "name": "MIL-CREDA-A", "label": "MIL-CREDA full, arbitrary selection",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "arbitrary"},
+     "attention": "learned", "selection": "arbitrary", "targetNormalization": "frozen"},
     {"id": "SK", "name": "MIL-CREDA-K", "label": "MIL-CREDA full, top-K selection",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": "topk"},
+     "attention": "learned", "selection": "topk", "targetNormalization": "frozen"},
 ]
 
 ARMS_BY_ID = {arm["id"]: arm for arm in ARMS}
@@ -546,6 +603,7 @@ LADDER = [
     ("B", "E", "qué compra el término global, sin ponderar"),
     ("E", "F", "qué compra la ponderación por confianza en MIL-CREDA"),
     ("F", "G", "qué compra la correspondencia local"),
+    ("G", "GN", "qué aporta que la normalización aprenda también del dominio objetivo"),
     # The three below hold the instance budget at SELECT_K and differ only in the
     # rule that spends it, except the last, which is the budget itself.
     ("SU", "SK", "qué compra la selección por atención frente a una regular"),
@@ -590,7 +648,7 @@ CHECKPOINTS = {arm["id"]: 3 for arm in ARMS}
 
 #: Which floor each adapted arm is read against: same unit, same everything, with
 #: the adaptation term switched off.
-FLOOR_OF = {"G": "B", "F": "B", "E": "B", "SU": "B", "SA": "B", "SK": "B"}
+FLOOR_OF = {"G": "B", "GN": "B", "F": "B", "E": "B", "SU": "B", "SA": "B", "SK": "B"}
 
 # ------------------------------------------------------------------- figures
 

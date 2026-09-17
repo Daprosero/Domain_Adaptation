@@ -22,6 +22,11 @@ __benchmark__ = {
         "E": {"sections": ["1", "2", "3", "5"]},
         "F": {"sections": ["1", "2", "3", "5"]},
         "G": {"sections": ["1", "2", "3", "4", "5"]},
+        # Identical to G in every respect except whether the encoder's
+        # running-stats layers update from the target forward during
+        # training (Decision 4); it calls the same modules over the same
+        # sections.
+        "GN": {"sections": ["1", "2", "3", "4", "5"]},
         # The three selecting arms compute exactly what G computes, over a subset
         # of each bag's instances. Same sections, different budget.
         "SU": {"sections": ["1", "2", "3", "4", "5"]},
@@ -276,7 +281,7 @@ __benchmark__ = {
         #
         # `contribution` on its own is the numerator: it cannot separate a term
         # that commanded nothing from a term that was scaled to nothing, and both
-        # print small. Eq. (18) is divided by B_src precisely so the three terms
+        # print small. Eq. (21) is divided by B_src precisely so the three terms
         # can be read against each other, so the ratio is the quantity the
         # normalization exists to make meaningful.
         #
