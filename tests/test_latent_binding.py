@@ -183,6 +183,57 @@ def test_a_checkpoint_of_an_undeclared_arm_is_tagged_and_never_dropped(tmp_path,
     assert por_brazo[ajeno] is False
 
 
+def test_a_checkpoint_stamped_under_an_earlier_revision_is_tagged_and_never_dropped(
+        tmp_path, monkeypatch):
+    """Defect (f): a manifest carrying an earlier managed revision (r17 pilot
+    checkpoints are on disk under r21 today) comes back tagged rather than
+    silently analysed as though it were current -- the same `tag, do not
+    drop` choice `declared` already makes, applied to the revision a
+    checkpoint's own manifest carries.
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import config
+
+    vigente = next(iter(config.ARMS_BY_ID))
+    (tmp_path / f"{vigente}_M-U_seed0.pt").write_bytes(b"")
+    (tmp_path / f"{vigente}_M-U_seed0.manifest.json").write_text(
+        json.dumps({"arm": vigente, "transfer": "M-U", "seed": 0,
+                    "reduction": {"epochs": 20, "revision": "research-concept-r17.md"}}),
+        encoding="utf-8")
+    (tmp_path / f"{vigente}_M-S_seed0.pt").write_bytes(b"")
+    (tmp_path / f"{vigente}_M-S_seed0.manifest.json").write_text(
+        json.dumps({"arm": vigente, "transfer": "M-S", "seed": 0,
+                    "reduction": {"epochs": 20, "revision": config.REVISION}}),
+        encoding="utf-8")
+    monkeypatch.setattr(config, "models_for", lambda *a, **k: tmp_path)
+
+    found = latent.available(0.0, True)
+
+    assert len(found) == 2, "etiquetado, no filtrado: los dos tienen que volver"
+    by_transfer = {entry["transfer"]: entry["currentRevision"] for entry in found}
+    assert by_transfer["M-U"] is False
+    assert by_transfer["M-S"] is True
+
+    summary = latent.stale_revisions(found)
+    assert summary == {"count": 1, "byRevision": {"research-concept-r17.md": 1}}
+
+
+def test_load_refuses_a_checkpoint_stamped_under_an_earlier_revision():
+    """`load()` is where a stale-revision checkpoint would otherwise be
+    measured and rendered under today's stamp without a word; this is the
+    refusal half of defect (f), beside the tag `available()` already adds.
+    """
+    from MIL_CREDA_Benchmark import config
+
+    stale = {"reduction": {"revision": "research-concept-r17.md"},
+             "source": {}, "target": {}}
+    with pytest.raises(latent.StaleCheckpointRevision) as raised:
+        latent.load(stale, device=None)
+    assert "research-concept-r17.md" in str(raised.value)
+    assert config.REVISION in str(raised.value)
+
+
 def test_a_floor_the_bench_no_longer_declares_is_an_undefined_question():
     """Not "the checkpoints are missing". The two read the same and mean opposite
     things: one is a file to go and produce, the other is a comparison that has

@@ -635,8 +635,8 @@ def test_the_nearest_source_bag_is_found_with_the_bag_kernel_in_the_representati
     """The pairing is the method's own geometry, and it is not a distance the
     method never computes.
 
-    Euclidean distance between the bag representations of Eq. (16) is a different
-    quantity from the relevance-weighted bag kernel of Eq. (21), and distance in
+    Euclidean distance between the bag representations of Eq. (19) is a different
+    quantity from the relevance-weighted bag kernel of Eq. (18), and distance in
     the two-dimensional projection is a third: that one would illustrate UMAP
     rather than the correspondence. All three are available at this point in the
     code, which is why the one that is used has to be asserted rather than
@@ -659,9 +659,8 @@ def test_the_nearest_source_bag_is_found_with_the_bag_kernel_in_the_representati
     # function under test
     H_s = model.instance_embeddings(source.images[source.members[source.train_idx]])
     H_t = model.instance_embeddings(target.images[target.members[target.eval_idx]])
-    pairs_s, pairs_t = model.bags_of(H_s), model.bags_of(H_t)
-    sigma = wiring._median_sigma(torch.cat([torch.cat([H for H, _ in pairs_s]),
-                                            torch.cat([H for H, _ in pairs_t])]))
+    sigma = config.KERNEL_SIGMA
+    pairs_s, pairs_t = model.bags_of(H_s, sigma), model.bags_of(H_t, sigma)
     K_st = bag_kernel_matrix(pairs_s, pairs_t, sigma)
 
     assert torch.equal(reading["nearest"], K_st.argmax(dim=0))
