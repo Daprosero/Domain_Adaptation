@@ -1,7 +1,7 @@
 """Section 4's attention-mechanism comparison: what each mechanism computes.
 
 Comparison-only plumbing (`wiring.MECHANISMS`/`mechanism_weights`/
-`mechanism_embedding`/`MechanismArm`) -- no declared arm reads any of it, and
+`MechanismArm`) -- no declared arm reads any of it, and
 `config.ARMS`'s own `G` still trains under Eq. (15)/(16) exactly as before this
 file existed. Every test here recomputes a mechanism's own definition by hand,
 never by calling the function under test a second time: a copy that called
@@ -130,26 +130,37 @@ def test_abmil_gated_is_the_published_gated_form() -> None:
 
 # ------------------------------------------------------------------------- max
 
-def test_max_pooling_is_the_coordinatewise_maximum_and_has_no_weights() -> None:
-    """Max pooling: one embedding per bag, the coordinatewise maximum over
-    instances -- never a weighted sum, so `mechanism_weights` reports `None`
-    rather than a vector a caller could average with.
+def test_max_pooling_is_the_winning_instance_whole_and_its_one_hot() -> None:
+    """Max pooling, instance-level: the bag is the instance holding the largest
+    activation in it, entire -- `beta` one on that instance and zero on the
+    other twenty-nine, and `z` its own `d` coordinates rather than `d`
+    coordinates collected from `d` different instances.
 
-    Reachable red: `mechanism_embedding("max", ...)` returning a weighted
-    average that happens to equal the max on this fixture, or
-    `mechanism_weights("max", ...)` returning a one-hot vector instead of
-    `None`.
+    The winner is recomputed here from `H` directly, never by calling the
+    function under test a second time.
+
+    Reachable red: rank the instances by their sum instead of their maximum
+    (this fixture's two candidates disagree), or return the coordinatewise
+    maximum, which equals no row of `H`.
     """
-    H = _bag()
-    expected = torch.stack([H[:, j].max() for j in range(H.shape[1])])
+    from MIL_CREDA.attention import bag_embedding
 
-    assert wiring.mechanism_weights("max", H, {}) is None
-    got = wiring.mechanism_embedding("max", H, {})
-    assert torch.allclose(got, expected)
-    # Not a one-hot-weighted sum either: the maximum is taken PER FEATURE,
-    # so unless one instance dominates every coordinate, no single row of
-    # `H` equals the result.
-    assert not any(torch.allclose(got, H[row]) for row in range(H.shape[0]))
+    H = _bag()
+    # one instance holds the largest single activation, another the largest
+    # total, so the two rankings cannot both be right on this fixture
+    H = H.clone()
+    H[2] = 0.1
+    H[2, 3] = 9.0          # the largest single activation in the bag
+    H[4] = 2.5             # the largest total, with no peak of its own
+
+    assert int(torch.argmax(H.sum(dim=1))) == 4, "the fixture does not separate them"
+    beta = wiring.mechanism_weights("max", H, {})
+    expected = torch.zeros(H.shape[0])
+    expected[2] = 1.0
+    assert torch.allclose(beta, expected)
+
+    z = bag_embedding(H, beta)
+    assert torch.allclose(z, H[2]), "the bag is not the winning instance, entire"
 
 
 # ------------------------------------------------------------------------ mean
@@ -164,7 +175,7 @@ def test_mean_pooling_equals_eq16_with_uniform_weights() -> None:
     normalization are exercised too, not sidestepped).
 
     Reachable red: `mechanism_weights("mean", ...)` returning any
-    non-uniform vector, or `mechanism_embedding` computing the mean some
+    non-uniform vector, or Eq. (19) computing the mean some
     other way than a weighted sum with those weights.
     """
     from MIL_CREDA.attention import bag_embedding, bag_weights
@@ -182,7 +193,7 @@ def test_mean_pooling_equals_eq16_with_uniform_weights() -> None:
     via_eq16 = bag_weights(uniform_logits, tau_att=3.7)
     assert torch.allclose(via_eq16, weights, atol=1e-6)
 
-    got = wiring.mechanism_embedding("mean", H, {})
+    got = bag_embedding(H, wiring.mechanism_weights("mean", H, {}))
     assert torch.allclose(got, H.mean(dim=0), atol=1e-6)
     assert torch.allclose(got, bag_embedding(H, weights), atol=1e-6)
 
@@ -193,6 +204,8 @@ def test_the_five_mechanisms_give_five_different_embeddings_on_the_same_bag(
     embeddings are pairwise distinct. A comparison whose five branches
     silently collapsed to one function would still pass every test above in
     isolation; this is the one that would catch it."""
+    from MIL_CREDA.attention import bag_embedding
+
     H = _bag()
     width = H.shape[1]
     common = {"V_R": torch.randn(3, width), "b_R": torch.randn(3),
@@ -202,7 +215,7 @@ def test_the_five_mechanisms_give_five_different_embeddings_on_the_same_bag(
     params = {"ours": common, "abmil-published": common,
              "abmil-gated": gated, "max": {}, "mean": {}}
 
-    embeddings = {m: wiring.mechanism_embedding(m, H, params[m])
+    embeddings = {m: bag_embedding(H, wiring.mechanism_weights(m, H, params[m]))
                  for m in wiring.MECHANISMS}
     values = list(embeddings.values())
     for i in range(len(values)):

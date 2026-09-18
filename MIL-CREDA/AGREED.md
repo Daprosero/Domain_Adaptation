@@ -41,6 +41,7 @@ these is raised, not resolved in passing.
 
 ## Ladder
 
+- [ ] Max pooling enters the comparison at the instance level: the bag is the instance holding the largest activation in it, entire, and its weights are that one-hot. The coordinatewise maximum is not expressible here -- it lies outside the convex hull of the instances, so no weight vector reproduces it and Eq. (18) bag kernel would have to be handed a fallback nobody chose. `test_max_pooling_is_the_winning_instance_whole_and_its_one_hot`
 - [ ] The attention is compared on the full method alone, against ABMIL as published with its output vector unnormalized, ABMIL gated, max pooling and mean pooling, in source and target, clean and contaminated.
 - [ ] Arm GN is the full method with its normalization layers not learning from target, normalized with the source batch statistics of the same step; every other adapted arm keeps normalization as part of the model.
 - [ ] Every adapted arm passes source and unlabelled target through the same extractor, because the adaptation needs both domains; its normalization layers are part of the model and are neither frozen nor handled per domain. `test_an_adapted_arms_target_forward_updates_running_statistics`
