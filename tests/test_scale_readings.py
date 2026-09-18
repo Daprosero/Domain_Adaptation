@@ -343,7 +343,7 @@ class TestUnEnsayoNoSePuedeLeerComoUnaCorridaCompleta:
     # `test_el_informe_muestra_el_aviso_antes_de_cada_tabla_de_techos` is
     # removed. `Benchmark_Report_v1.ipynb` -- the notebook this test opened
     # by hardcoded name -- was deleted with this stretch's restructuring and
-    # has no successor that renders a ceiling table: `Results_v1.ipynb`
+    # has no successor that renders a ceiling table: `Results.ipynb`
     # (which folds the old report/latent/campaign/noise-report notebooks into
     # one) does not call `render_ceilings`/`render_ceilings_by_transfer` at
     # all. That concern was always, and remains, the sole property of
@@ -377,10 +377,10 @@ class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
     # `test_el_cuaderno_le_pasa_su_propia_escala_a_las_que_llama` is removed.
     # `Benchmark_Latent_v1.ipynb` -- the notebook this test opened by
     # hardcoded name -- was deleted with this stretch's restructuring; its
-    # analysis folds into `Results_v1.ipynb`, which is not this stretch's
+    # analysis folds into `Results.ipynb`, which is not this stretch's
     # file to author or pin an exact call list against (`tables.py`,
     # `figures.py`, `latent.py` and every notebook belong to the other agent
-    # working this change in parallel). Measured directly: `Results_v1.ipynb`
+    # working this change in parallel). Measured directly: `Results.ipynb`
     # calls `latent.latent_grid(..., pilot=ES_ENSAYO)` (twice, clean and
     # noisy) but not `correspondence_grid` at all, so the
     # old assertion `vistas == {"latent_grid", "correspondence_grid"}` no
@@ -389,7 +389,7 @@ class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
     # itself stays generically covered, notebook-name-agnostic, by
     # `TestCadaLecturaDiceDeQueCorridaSale.test_ninguna_lectura_deja_la_escala_a_la_firma`
     # above, which already walks every `*.ipynb` currently on disk including
-    # `Results_v1.ipynb`.
+    # `Results.ipynb`.
 
 
 def test_la_forma_del_repliegue_es_una_sola_en_todo_el_repositorio():
@@ -672,18 +672,18 @@ class TestQuienSabeSuEscalaLaDice:
 
         El piso baja de siete cuadernos a cuatro (y de seis declaraciones a
         dos) con esta reestructuración: `report`, `latent`, `campaign` y
-        `noise-report` se fusionaron en `Results_v1.ipynb`, y los dos
+        `noise-report` se fusionaron en `Results.ipynb`, y los dos
         diagnósticos fueron retirados -- ver `config.py`'s propia nota de
         retiro. El piso es el conteo medido hoy contra el disco
-        (`Benchmark_Ceiling_Search_v1.ipynb`'s propio `ES_ENSAYO =
-        config.is_pilot_scale()`, y `Results_v1.ipynb`'s
+        (`Benchmark_Ceiling_Search.ipynb`'s propio `ES_ENSAYO =
+        config.is_pilot_scale()`, y `Results.ipynb`'s
         `..., ES_ENSAYO = cargar_corridas()`), no un número heredado de la
         forma vieja del repositorio.
 
         El objetivo de asignación también reconoce ahora un target en
         tupla (`a, b, ES_ENSAYO = f()`), no sólo uno pelado (`ES_ENSAYO =
         f()`): la forma pelada es la única que el chequeo anterior veía, y
-        `Results_v1.ipynb` deriva la suya por desempaquetado -- sin este
+        `Results.ipynb` deriva la suya por desempaquetado -- sin este
         reconocimiento la declaración real más nueva del árbol es invisible
         para el propio chequeo, y ni cuenta como derivada ni como escrita a
         mano.

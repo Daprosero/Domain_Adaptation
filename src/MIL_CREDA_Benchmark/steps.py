@@ -78,7 +78,7 @@ def verificacion() -> str:
 def ensayo_de_busqueda() -> str:
     """Corre el ENSAYO de la búsqueda de techos ejecutando SU cuaderno.
 
-    `Benchmark_Ceiling_Search_v1.ipynb` recibe su escala de
+    `Benchmark_Ceiling_Search.ipynb` recibe su escala de
     `config.is_pilot_scale()`, igual que la campaña, el barrido y el
     diagnóstico, y la guarda de abajo es lo que hace que por ACÁ corra siempre
     el ensayo. Se llamaba `Benchmark_Search_Pilot_v1.ipynb` y fijaba `pilot=True`
@@ -144,7 +144,7 @@ def ensayo_de_busqueda() -> str:
             "`ceilings.pilot.json` y el cuaderno escribiría `ceilings.json`, "
             "que es el registro que gobierna toda campaña: la búsqueda a escala "
             "completa se lanza con su propia autorización, no por acá.")
-    return _ejecutar("Benchmark_Ceiling_Search_v1.ipynb")
+    return _ejecutar("Benchmark_Ceiling_Search.ipynb")
 
 
 def resultados() -> str:
@@ -152,7 +152,7 @@ def resultados() -> str:
 
     El único paso de presentación: reemplaza lo que antes eran tres pasos
     separados (`report`, `latent`, `noise-report`), cuyas tres notebooks
-    fueron borradas junto con esta reestructuración. `Results_v1.ipynb` sólo
+    fueron borradas junto con esta reestructuración. `Results.ipynb` sólo
     lee y dibuja --- medido contra el archivo: ninguna celda llama a
     `harness.campaign()` ni a `config.is_pilot_scale()`, sólo a
     `cargar_corridas()`, que resuelve viendo cuál de los dos árboles tiene
@@ -165,7 +165,7 @@ def resultados() -> str:
     `campaign` (`campana`, abajo) invoca `harness.run_campaign_shard()`
     directamente.
     """
-    return _ejecutar("Results_v1.ipynb")
+    return _ejecutar("Results.ipynb")
 
 
 def campana() -> dict:
@@ -221,7 +221,7 @@ def mecanismos_de_atencion() -> dict:
     """Corre la comparación de mecanismos de atención de la Sección 4,
     llamando a `harness.run_mechanism_sweep_shard` DIRECTAMENTE -- sin
     cuaderno, la misma forma que `campana` y por la misma razón (ver su
-    propia docstring): lo que la Sección 4 lee (`Results_v1.ipynb`, celdas
+    propia docstring): lo que la Sección 4 lee (`Results.ipynb`, celdas
     26/29) es `Results/Benchmark/attention_mechanisms.json`, nunca corre
     nada, así que el paso que genera ese registro no tiene notebook propio
     tampoco -- el `run-config.json` remoto nombra `{module:
@@ -254,7 +254,7 @@ def informe_de_busqueda() -> str:
 
     La llamada comentada de su celda 7 tampoco está más. Existía porque era la
     única forma de pedir el ensayo de la búsqueda desde un cuaderno, y esa razón
-    murió con `Benchmark_Ceiling_Search_v1.ipynb`: descomentarla ahora le daría dos
+    murió con `Benchmark_Ceiling_Search.ipynb`: descomentarla ahora le daría dos
     dueños al ensayo y haría que abrir este informe cueste lo que cuesta correrlo.
     """
     return _ejecutar("Benchmark_Search_Report_v1.ipynb")
@@ -323,7 +323,7 @@ def barrido_de_ruido() -> str:
             "primero la búsqueda (`search-pilot`): un barrido sin techos mide "
             "dos cosas a la vez, y uno de ensayo bajo los techos de la búsqueda "
             "completa mide un coeficiente que no midió acá.")
-    return _ejecutar("Benchmark_Noise_Sweep_v1.ipynb")
+    return _ejecutar("Benchmark_Noise_Sweep.ipynb")
 
 
 # --------------------------------------------------------------- el ensayo remoto

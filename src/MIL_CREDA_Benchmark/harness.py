@@ -1258,7 +1258,7 @@ def campaign_source_note(ensayo: bool | None) -> str:
     """De qué árbol salieron los números que un lector está por ver.
 
     El mismo mecanismo que `search_source_note`/`contamination.source_note`,
-    aplicado a la campaña que `Results_v1.ipynb` lee: `cargar_corridas()`
+    aplicado a la campaña que `Results.ipynb` lee: `cargar_corridas()`
     prefiere la corrida completa y cae al ensayo cuando no hay ninguna, la
     misma regla que `Benchmark_Search_Report_v1.ipynb` ya aplica a la
     búsqueda de techos -- y esa caída es correcta y tiene que ser visible.

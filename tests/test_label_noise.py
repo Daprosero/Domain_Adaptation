@@ -464,7 +464,7 @@ class TestTheAxisReadsWhatRan:
         Only `noise` remains declared: `noise.share` and `noise.diagnostic`
         framed the retired adaptation-share sweep and the retired ceiling
         diagnostic, neither of which the required report carries any more --
-        section 1 of `Results_v1.ipynb` is the floor-only accuracy curve, and
+        section 1 of `Results.ipynb` is the floor-only accuracy curve, and
         nothing else in the six required sections reads either objective."""
         from MIL_CREDA_Benchmark import tables
 
@@ -1027,7 +1027,7 @@ class TestTheNoiseAxisRefusesToPoolAPerRunDimension:
 
         # `tables.render_noise`, `conclusion_noise`, `conclusion_versus_clean`,
         # `conclusion_weighting_under_noise` and `conclusion_rungs_versus_clean`
-        # are retired: none of the six required sections of `Results_v1.ipynb`
+        # are retired: none of the six required sections of `Results.ipynb`
         # reads any of them (the noise-diagnostic renderers and the rungs/gains
         # table are gone). `figures.noise_curves` stays, and stays general over
         # `arms` -- section 1 calls it with the floor arm(s) only, derived from
