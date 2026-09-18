@@ -195,22 +195,34 @@ def campana() -> str:
     artefacto --- y sigue declarado en
     `tests/test_steps.py::CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO`.
 
-    **Por qué no deriva escala, y por qué no lleva guarda.**
-    `harness.run_campaign_shard` entrena
-    siempre a `config.FULL_EPOCHS`/`config.FULL_SEEDS` -- nunca al ensayo, la
-    misma razón por la que la búsqueda no lo es tampoco (`config.SEARCH_
-    EPOCHS`'s propia nota) -- así que este paso no deriva `config.
-    is_pilot_scale()` ni tiene un árbol de ensayo propio que declarar en
-    `produces`: escribe siempre en `Results/Benchmark`/`Models/Benchmark`, la
-    corrida completa y nada más.
+    **Por qué SÍ deriva escala, y por qué SÍ lleva guarda.** Estos dos
+    párrafos decían lo contrario y los dos eran ciertos sobre una versión de
+    `run_campaign_shard` que ya no existe. Decían: que la función entrena
+    siempre a `config.FULL_EPOCHS`/`config.FULL_SEEDS`, que por eso este paso
+    no tiene un árbol de ensayo propio que declarar en `produces`, y que «acá
+    no hay dos destinos entre los que el cuaderno pueda mudarse en silencio,
+    así que una guarda no separaría nada». Las tres frases eran descripciones
+    del hueco, no propiedades del paso, y quedan escritas acá en vez de
+    reemplazadas en silencio.
 
-    Por eso tampoco lleva la guarda de escala que `ensayo_de_busqueda` y
-    `barrido_de_ruido` tienen. La de ellos existe porque su `produces` nombra
-    el árbol de ENSAYO y su cuaderno escribiría en el completo si la escala
-    configurada cambiara; acá no hay dos destinos entre los que el cuaderno
-    pueda mudarse en silencio, así que una guarda no separaría nada. Que la
-    corrida larga se lance es una autorización que se da afuera, y este paso
-    no la fabrica.
+    Lo que el hueco costaba está medido y no argumentado: el recorrido
+    declarado se caminó a escala de ENSAYO y este paso entrenó la rejilla
+    COMPLETA --- cinco brazos, seis transferencias, treinta semillas, veinte
+    épocas --- durante 56 minutos, hasta que una persona lo mató a mano. Nada
+    se negó, porque nada podía distinguir un ensayo de una campaña.
+
+    Hoy `harness.run_campaign_shard` RECIBE la escala (`pilot=`), igual que
+    `run_search`, así que este paso tiene las dos mitades que
+    `ensayo_de_busqueda` y `barrido_de_ruido` ya tenían: `produces` nombra el
+    árbol de ENSAYO --- `Results/Pilot/Benchmark`, `Models/Pilot/Benchmark`
+    --- y el cuaderno deriva su escala de `config.is_pilot_scale()`. A escala
+    completa escribiría en `Results/Benchmark`/`Models/Benchmark`, que es de
+    la corrida que una autorización explícita libera, así que la guarda de
+    abajo se niega en vez de dejarlo mudarse en silencio.
+
+    La autorización de la corrida larga sigue dándose afuera y este paso
+    sigue sin fabricarla; lo que cambia es que ahora hay un lugar donde la
+    ausencia de esa autorización se nota antes de gastar 73 horas.
 
     **Por qué `reads` está vacío.** Consume el registro de techos a escala
     completa (`ceilings_in_force`, adentro de `campaign()`), pero ningún paso
@@ -227,7 +239,23 @@ def campana() -> str:
     el cable (`harness.run_smoke()`) y nada más -- que es lo correcto: una
     campaña de ensayo entrenaría a escala completa, nueve horas y media, y
     "ensayar" eso no ahorra nada.
+
+    La guarda es una precondición, no cómputo, y es la misma forma que
+    `ensayo_de_busqueda` y `barrido_de_ruido`: `produces` nombra el árbol de
+    ENSAYO y ninguna otra raíz, y a escala completa el cuaderno escribiría en
+    `Results/Benchmark`/`Models/Benchmark`. Que la escala sea un modo del
+    recorrido no significa que la forja pueda elegirla: significa que hay UN
+    lugar donde se declara, y que este paso corre el modo de ensayo.
     """
+    from MIL_CREDA_Benchmark import config
+
+    if not config.is_pilot_scale():
+        raise SystemExit(
+            f"la escala configurada es la completa ({config.EPOCHS} épocas, "
+            f"{len(config.SEEDS)} semillas). Este paso declara el árbol de "
+            "ensayo y el cuaderno escribiría en el de la corrida completa "
+            "(`Results/Benchmark`, `Models/Benchmark`): la campaña a escala "
+            "completa se lanza con su propia autorización, no por acá.")
     return _ejecutar("Benchmark_Campaign.ipynb")
 
 
@@ -257,10 +285,31 @@ def mecanismos_de_atencion() -> str:
     `Results/Benchmark/attention_mechanisms.json`, y ese archivo sigue siendo
     la única raíz de datos de este paso.
 
-    Sin guarda de escala, por lo mismo que `campana`: `run_mechanism_sweep_
-    shard` fija `config.FULL_EPOCHS`/`config.FULL_SEEDS` adentro, así que no
-    hay un árbol de ensayo al que el cuaderno pueda mudarse en silencio.
+    **Con guarda de escala, por lo mismo que `campana`.** Acá decía lo
+    contrario --- «sin guarda de escala, por lo mismo que `campana`:
+    `run_mechanism_sweep_shard` fija `config.FULL_EPOCHS`/`config.FULL_SEEDS`
+    adentro, así que no hay un árbol de ensayo al que el cuaderno pueda
+    mudarse en silencio» --- y era una descripción del hueco, no una
+    propiedad del paso: la función no tomaba dial, y por eso el recorrido de
+    ensayo la corría a escala completa sin que nada se negara.
+
+    Hoy `run_mechanism_sweep_shard` recibe `pilot=` y el registro viaja con
+    él (`run_mechanism_sweep` lo pide por `config.results_for`), así que
+    `produces` nombra `Results/Pilot/Benchmark/attention_mechanisms.json` y a
+    escala completa el cuaderno escribiría el registro que la Sección 4 se
+    lee. Dos destinos, y la guarda es lo que impide mudarse entre ellos en
+    silencio.
     """
+    from MIL_CREDA_Benchmark import config
+
+    if not config.is_pilot_scale():
+        raise SystemExit(
+            f"la escala configurada es la completa ({config.EPOCHS} épocas, "
+            f"{len(config.SEEDS)} semillas). Este paso declara el árbol de "
+            "ensayo y el cuaderno escribiría el registro de la corrida "
+            "completa (`Results/Benchmark/attention_mechanisms.json`), que es "
+            "el que la Sección 4 presenta: el barrido de mecanismos a escala "
+            "completa se lanza con su propia autorización, no por acá.")
     return _ejecutar("Benchmark_Attention_Mechanisms.ipynb")
 
 

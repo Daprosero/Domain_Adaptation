@@ -1289,15 +1289,16 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "escritas en la ortografia de la corrida completa: la escala esta "
         "adentro de la raiz y no al lado de ella, asi que una coordenada aca "
         "seria una segunda respuesta a una pregunta que la raiz ya contesto"),
-    "harness.py: config.PRODUCT / tables.MECHANISM_RECORD": (
-        "la escritura del mismo registro `Benchmark_Results.ipynb` ya lee sin "
-        "escala, excusada abajo (`Benchmark_Results.ipynb: config.PRODUCT / "
-        "tables.MECHANISM_RECORD`): `run_mechanism_sweep` multiplexa limpio "
-        "y contaminado ADENTRO del JSON (`clean`/`noisy`), nunca por "
-        "directorio ni por nombre de archivo, así que no hay coordenada de "
-        "tasa que llevar en la ruta -- y `pilot`/`kind` tampoco: la sección "
-        "4 no declara un `Reduction` de ensayo propio, corre siempre a la "
-        "escala que `reduction.epochs`/`seeds` diga"),
+    # `harness.py: config.PRODUCT / tables.MECHANISM_RECORD` estaba aca, y se
+    # retira porque su destino dejo de componerse a mano: `run_mechanism_sweep`
+    # ahora lo pide por `results_for(rate=0.0, kind="campaign",
+    # pilot=reduction.pilot)`. La excusa decia que `pilot` no era coordenada
+    # suya porque "la seccion 4 no declara un `Reduction` de ensayo propio", y
+    # eso describia la ausencia de un dial, no una propiedad del registro: en
+    # cuanto `run_mechanism_sweep_shard` toma `pilot`, un camino fijo escribe
+    # el ensayo encima de la corrida completa. Lo que la excusa decia bien ---
+    # que la TASA no es coordenada, porque limpio y contaminado se multiplexan
+    # adentro del JSON --- sigue valiendo y esta escrito en el sitio.
     "promote.py: config.PRODUCT / '.remote-execution' / 'campaign'": (
         "es donde el backend remoto desempaqueta lo que devuelve, antes de que "
         "nada haya leido una reduccion: la escala de lo que viene adentro la "
