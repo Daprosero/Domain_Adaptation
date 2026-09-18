@@ -100,22 +100,25 @@ def test_un_registro_con_sello_vencido_lleva_un_aviso_visible():
     Un aviso, no un rechazo -- consistente con `latent.available()`, que
     ETIQUETA un checkpoint con hiperparametros vencidos en vez de negarse,
     porque esto es un INFORME de varias familias y no una carga para
-    calcular con ella (esa es `latent.load()`, que sí se niega)."""
+    calcular con ella (esa es `latent.load()`, que sí se niega).
+
+    `kernelSigma`/`attentionGamma`/`attentionTemperature` dejaron de ser el
+    sello: `ceiling_record.STAMP_FIELDS` se redujo a `revision` sola (commit
+    `60836d2`, "...six-dim search...") porque la búsqueda ahora explora esas
+    tres dimensiones ella misma -- el valor de una entrada es el GANADOR de
+    ese trial, no una precondición fija, y compararlo contra
+    `config.KERNEL_SIGMA` marcaría vencida cualquier búsqueda que encontrara
+    otra cosa que el default. Sólo `revision` sigue siendo un trasfondo
+    genuino, así que es la única que puede envejecer."""
     from MIL_CREDA_Benchmark import config
 
     vencida = {"milcreda": {**TRIALS["milcreda"],
-                            "revision": config.REVISION,
-                            "kernelSigma": config.KERNEL_SIGMA * 3,
-                            "attentionGamma": config.ATTENTION_GAMMA,
-                            "attentionTemperature": config.ATTENTION_TEMPERATURE}}
+                            "revision": "research-concept-r99.md"}}
     assert "Sello vencido" in tables.render_ceilings(vencida)
     assert "Sello vencido" in tables.conclusion_ceilings(vencida)
 
     vigente = {"milcreda": {**TRIALS["milcreda"],
-                            "revision": config.REVISION,
-                            "kernelSigma": config.KERNEL_SIGMA,
-                            "attentionGamma": config.ATTENTION_GAMMA,
-                            "attentionTemperature": config.ATTENTION_TEMPERATURE}}
+                            "revision": config.REVISION}}
     assert "Sello vencido" not in tables.render_ceilings(vigente)
     assert "Sello vencido" not in tables.conclusion_ceilings(vigente)
 

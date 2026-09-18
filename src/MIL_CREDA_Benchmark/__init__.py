@@ -22,11 +22,12 @@ __benchmark__ = {
         "E": {"sections": ["1", "2", "3", "5"]},
         "F": {"sections": ["1", "2", "3", "5"]},
         "G": {"sections": ["1", "2", "3", "4", "5"]},
-        # The three selecting arms compute exactly what G computes, over a subset
-        # of each bag's instances. Same sections, different budget.
-        "SU": {"sections": ["1", "2", "3", "4", "5"]},
-        "SA": {"sections": ["1", "2", "3", "4", "5"]},
-        "SK": {"sections": ["1", "2", "3", "4", "5"]},
+        # Identical to G's sections: `GN` exercises the same equations, and the
+        # single axis that separates it -- the target forward normalized with
+        # the current source-batch statistics instead of learning from the
+        # target -- is a wiring decision (`config.ARMS[...]["normalization"]`),
+        # not a section of its own the revision names.
+        "GN": {"sections": ["1", "2", "3", "4", "5"]},
     },
     # The ceiling search, declared as the experiment it is. A value chosen by
     # looking at outcomes needs everything a run needs, and the three below are
@@ -34,16 +35,28 @@ __benchmark__ = {
     # on the material the verdict rests on, or by a tie nobody wrote a rule for,
     # is indistinguishable from one that was measured.
     "search": {
-        "what": "the ceiling of the adaptation coefficient, measured on every "
-                "transfer and shared by all arms of that family within a "
-                "transfer -- never per arm, or the term and the coefficient "
-                "could not be told apart. Nothing is inherited: the six are each "
-                "measured, so the pooled fallback is unreachable. The growth "
-                "rate is not searched: it stays at RAMP_DELTA, which is CREDA's "
-                "own, because a second free dimension amplifies the imbalance "
-                "between the two families rather than resolving it, and ceiling "
-                "and growth rate are confounded -- a high ceiling reached slowly "
-                "and a low one reached fast give similar trajectories",
+        "what": "six dimensions of the complete method (arm G): the ceiling of "
+                "the adaptation coefficient, the ramp's growth rate "
+                "(`rampDelta`), Decision 1's bandwidth (`kernelSigma`), and "
+                "Eq. (15)/(16)/(28)'s attention gamma, attention temperature "
+                "and local temperature (`tauLocal`). Searched by trials over a "
+                "continuous range (`harness.search_ceilings_trials`, the "
+                "`optuna` GPSampler), never a grid. Each of the six transfers "
+                "gets its OWN search -- nothing is inherited, so the pooled "
+                "fallback (`ceiling_for`'s out-of-sample reading) is unreachable "
+                "while every transfer stays measured -- and every trial runs on "
+                "material contaminated at NOISE=0.0: the search always runs on "
+                "clean material, never under the label noise the degradation "
+                "sweep applies afterwards, because a coefficient chosen to cope "
+                "with contamination could not tell a term that fails under "
+                "noise from one whose coefficient was never large enough for "
+                "clean material either. Every arm sharing G's family "
+                "(`E`, `F`, `G`, `GN`) trains under the winner this search finds "
+                "for the transfer it runs on; the floor (`B`) trains under the "
+                "same five architecture dimensions (the ceiling does not apply "
+                "to it, since it adapts nothing) so that a difference between it "
+                "and an adapted arm is never partly a difference of bandwidth or "
+                "attention shape.",
         "requiredScale": {"epochs": 20, "trials": 30},
         "role": "valid",
         # Reemplaza al desempate, que sobre un rango continuo no se activaria
@@ -416,7 +429,12 @@ __benchmark__ = {
         "poolable": ["sourceAccuracy", "targetAccuracy", "contribution",
                      "supervised", "adaptationShare", "parameters"],
         "perEnvironment": [],
-        "perRun": ["seconds", "peakMiB"],
+        # `seconds`/`peakMiB` are gone, not merely reclassified: time and memory
+        # were removed from `config.DIMENSIONS` entirely ("drop timing"), so
+        # there is no longer a dimension for a `perRun` group to hold. Every
+        # dimension the harness still measures pools, and this group stays
+        # declared and empty -- a measured fact, not an unfilled block.
+        "perRun": [],
         # `labelNoise` refuses the merge that no averaging could repair: two shards
     # contaminated at different rates are two experiments, and one table drawn
     # over both is a table nobody can attribute. It is a flat top-level field of

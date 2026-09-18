@@ -587,15 +587,22 @@ def test_the_benchmark_declares_the_components_its_objective_is_made_of() -> Non
 
 # ------------------------------------------- what the declaration forbids pooling
 
-def test_render_refuses_a_dimension_the_declaration_calls_per_run() -> None:
-    """`render_per_run`'s argument, enforced instead of only written down.
+def test_render_refuses_a_dimension_the_declaration_calls_per_run(monkeypatch) -> None:
+    """`render`'s guard, enforced instead of only written down.
 
-    No reading of `seconds`/`peakMiB` was stable enough to stand for the method,
-    or even for one machine across two of its own runs, so a `mean ± stdev` over
-    them describes none of the runs behind it and reads exactly as rigorous as
-    one that does. That argument lived in `render_per_run`'s docstring, which is
-    the one function that was never going to pool them; `render` checked nothing
-    and pooled whatever it was handed.
+    No reading of a `perRun` dimension is stable enough to stand for the
+    method, or even for one machine across two of its own runs, so a
+    `mean ± stdev` over it describes none of the runs behind it and reads
+    exactly as rigorous as one that does. `render` checked nothing and
+    pooled whatever it was handed; the guard is what changed that.
+
+    `config.DIMENSIONS` declares no `perRun` dimension today --
+    `seconds`/`peakMiB` are gone entirely (commit `60836d2`,
+    "...drop timing"), not merely reclassified, along with the
+    `render_per_run`/`conclusion_per_run` that used to print them
+    (commit `177ce09`). The guard itself is not retired -- `pooling.refuse`
+    stays generic over whatever the declaration names -- so a synthetic
+    `perRun` dimension drives it here: "the class, not the instance."
 
     Read from the declaration and not listed here: which dimensions do not pool
     is the target's own statement, and a copy of the list in this file would be a
@@ -604,8 +611,10 @@ def test_render_refuses_a_dimension_the_declaration_calls_per_run() -> None:
     Reachable red: delete the guard and `render` prints the pooled table again,
     ± and all.
     """
+    monkeypatch.setattr(config, "DIMENSIONS", {**config.DIMENSIONS, "seconds": None})
+    monkeypatch.setitem(MIL_CREDA_Benchmark.__benchmark__["distribution"],
+                        "perRun", ["seconds"])
     declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["perRun"]
-    assert declared, "the declaration names no per-run dimension to refuse"
     assert tables.per_run_dimensions() == list(declared), \
         "the renderer's idea of what does not pool is not the declaration's"
 
@@ -616,7 +625,7 @@ def test_render_refuses_a_dimension_the_declaration_calls_per_run() -> None:
         said = str(raised.value)
         assert metric in said and "perRun" in said, \
             f"the refusal does not say which dimension it is about: {said}"
-        assert "render_per_run" in said, "the refusal names no way forward"
+        assert "gridPerRun" in said, "the refusal names no way forward"
 
     # And it still renders what the same declaration says does pool, so the
     # guard is a refusal and not an outage.
@@ -669,26 +678,37 @@ def test_no_function_that_pools_a_dimension_accepts_one_the_declaration_forbids(
     Reachable red: delete `_refuse_pooling`'s call from any one of `cells`,
     `render`, `conclusion`, `ranking` or `best_transfers`, and the entry
     points that reach the number through it stop refusing.
-    """
-    declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["perRun"]
-    assert declared, "the declaration names no per-run dimension to refuse"
 
-    for metric in declared:
-        for name, call in _pooling_calls(metric).items():
-            # `pytest.raises` on its own reports `DID NOT RAISE ValueError` and
-            # names nothing: with ten entry points in one loop that failure tells
-            # whoever broke a guard only that one of them is open. The point of
-            # driving the family together is lost if the red does not say which.
-            try:
-                call()
-            except ValueError as refusal:
-                said = str(refusal)
-            else:
-                pytest.fail(f"`{name}` pooled `{metric}` instead of refusing it")
-            assert metric in said and "perRun" in said, \
-                f"`{name}` refused without saying which dimension: {said}"
-            assert "render_per_run" in said, \
-                f"`{name}` refuses and names no way forward: {said}"
+    `config.DIMENSIONS` declares no `perRun` dimension today (see the sibling
+    test above, `test_render_refuses_a_dimension_the_declaration_calls_per_
+    run`, for why): a synthetic one drives the mechanism here instead of
+    relying on a live example that no longer exists.
+    """
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setattr(config, "DIMENSIONS", {**config.DIMENSIONS, "seconds": None})
+        monkeypatch.setitem(MIL_CREDA_Benchmark.__benchmark__["distribution"],
+                            "perRun", ["seconds"])
+        declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["perRun"]
+
+        for metric in declared:
+            for name, call in _pooling_calls(metric).items():
+                # `pytest.raises` on its own reports `DID NOT RAISE ValueError` and
+                # names nothing: with ten entry points in one loop that failure tells
+                # whoever broke a guard only that one of them is open. The point of
+                # driving the family together is lost if the red does not say which.
+                try:
+                    call()
+                except ValueError as refusal:
+                    said = str(refusal)
+                else:
+                    pytest.fail(f"`{name}` pooled `{metric}` instead of refusing it")
+                assert metric in said and "perRun" in said, \
+                    f"`{name}` refused without saying which dimension: {said}"
+                assert "gridPerRun" in said, \
+                    f"`{name}` refuses and names no way forward: {said}"
+    finally:
+        monkeypatch.undo()
 
 
 def test_the_same_functions_still_pool_what_the_declaration_says_pools() -> None:
