@@ -66,3 +66,8 @@ MIL-CREDA/Models/Pilot/Benchmark/*.pt
 # El ledger de proposal-implementation: contiene autorizaciones de lanzamiento,
 # que no deben viajar en un clon. Ver "What this skill has not written down".
 .implementation/
+
+# CodeGraph's own SQLite index of this checkout. Rebuilt from the tree on
+# demand, specific to this working copy's root, and never source: a second
+# checkout that copied it would query paths that do not exist there.
+.codegraph/
