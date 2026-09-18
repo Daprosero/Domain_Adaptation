@@ -361,6 +361,45 @@ class TestUnEnsayoNoSePuedeLeerComoUnaCorridaCompleta:
     # before this comment.
 
 
+def test_la_seccion_de_mecanismos_lee_del_arbol_del_que_salieron_las_corridas() -> None:
+    """`Benchmark_Results.ipynb` resuelve el registro de mecanismos con la MISMA
+    respuesta con la que cargó sus corridas, y no con un literal.
+
+    `test_ninguna_lectura_deja_la_escala_a_la_firma` ya exige que la coordenada
+    se PASE, y eso no alcanza acá: `pilot=False` escrito a mano la pasa y pasa
+    ese test --- medido, la mutación sobrevive. Lo que falta afirmar es que el
+    valor pasado sea el vivo, porque el defecto no es omitir la escala sino
+    fijarla: con el barrido de mecanismos escribiendo en el árbol de ensayo
+    cuando corre en ensayo, una ruta fija a la corrida completa dibuja la
+    Sección 4 como ausente al lado de tablas de piloto que sí tienen números, y
+    la página queda mezclando dos experimentos sin un solo error.
+
+    Rojo alcanzable: reemplazar `ES_ENSAYO` por `True` o por `False` en esa
+    celda.
+    """
+    import json as _json
+
+    cuaderno = _REPOSITORIO / "MIL-CREDA" / "Notebooks" / "Benchmark_Results.ipynb"
+    celdas = [
+        "".join(c["source"])
+        for c in _json.loads(cuaderno.read_text(encoding="utf-8"))["cells"]
+        if c["cell_type"] == "code"]
+
+    origen = [c for c in celdas if "cargar_corridas()" in c]
+    assert origen, "el cuaderno no carga corridas: no hay escala viva que reenviar"
+    bandera = "ES_ENSAYO"
+    assert any(f"{bandera} = cargar_corridas()" in c or f", {bandera} = " in c
+               for c in origen), (
+        f"`{bandera}` no sale de `cargar_corridas()`; si se renombró, este test "
+        f"está mirando un nombre que ya no existe")
+
+    lectura = [c for c in celdas if "MECHANISM_RECORD" in c]
+    assert len(lectura) == 1, f"la lectura del registro no está en una sola celda: {len(lectura)}"
+    assert f"results_for(0.0, \"campaign\", {bandera})" in lectura[0], (
+        "la Sección 4 resuelve su registro con un literal en vez de la escala "
+        f"de la que salieron las corridas -> {lectura[0][-220:]}")
+
+
 class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
     """Las entradas que dibujan paneles llevan la escala, o el ensayo mira un
     árbol vacío y dibuja una grilla apagada sin un solo error.
