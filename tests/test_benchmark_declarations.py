@@ -236,11 +236,10 @@ def test_the_figure_transfer_rule_ranks_by_the_outcome_it_declares() -> None:
     assert config.FIGURE_TRANSFER_RULE.strip(), "the rule is not declared anywhere"
 
 
-def test_both_floors_stay_in_the_grid_until_a_measurement_removes_one() -> None:
-    """Whether the two floors are redundant is a measurement, not an assumption:
-    they train the same encoder through different objectives, so their instance
-    embeddings have no reason to agree. `latent.floors_agree` is what may retire
-    one of these columns, and nothing else."""
+def test_every_declared_floor_stays_in_the_grid() -> None:
+    """A floor is what makes an aligned column readable, so every declared one is
+    drawn. Dropping one is a declaration change and never a side effect: with a
+    single unit declared there is a single floor, and the grid keeps it."""
     floors = [arm["id"] for arm in config.ARMS if arm["adaptation"] is None]
     assert set(floors).issubset(set(config.LATENT_PANELS)), (
         f"a floor was dropped from the grid without a measurement: "

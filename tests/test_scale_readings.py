@@ -186,7 +186,7 @@ class TestCadaLecturaDiceDeQueCorridaSale:
         escribir por qué.
 
         Rojo alcanzable: sacarle `pilot=` a cualquier llamada a `search_record`,
-        `latent_grid`, `floors_agree`, `correspondence_grid`, `checkpoint_for`,
+        `latent_grid`, `correspondence_grid`, `checkpoint_for`,
         `available` o `ceilings_in_force`, en un módulo, en `tools/` o en una
         celda de cualquiera de los siete cuadernos.
         """
@@ -361,17 +361,13 @@ class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
     """Las entradas que dibujan paneles llevan la escala, o el ensayo mira un
     árbol vacío y dibuja una grilla apagada sin un solo error.
 
-    La firma se le exige a las TRES, y el cuaderno llama a DOS. `floors_agree`
-    medía si los dos pisos eran redundantes entre sí; con una sola unidad
-    declarada queda un solo piso y la sección que la llamaba ya no existe. La
-    función sigue en el paquete con su escala intacta, sin llamador, para el
-    día en que se declare un segundo piso: retirar la comparación fue una
-    decisión y volver a traerla tiene que ser otra. Aflojarle la firma mientras
-    tanto sería dejar que ese día la llame alguien sin escala.
+    Eran TRES: `floors_agree` medía si los dos pisos eran redundantes entre sí
+    y se fue con su segundo piso, porque una comparación sin las dos mitades no
+    es una comparación que espera --- es código muerto con una firma que parece
+    viva. Quedan las dos que dibujan hoy, y la exigencia es la misma.
     """
 
-    @pytest.mark.parametrize("entrada", ["latent_grid", "correspondence_grid",
-                                         "floors_agree"])
+    @pytest.mark.parametrize("entrada", ["latent_grid", "correspondence_grid"])
     def test_toda_entrada_que_dibuja_toma_la_escala(self, entrada):
         firma = inspect.signature(getattr(latent, entrada))
         assert {"rate", "pilot"} <= set(firma.parameters), (
@@ -386,7 +382,7 @@ class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:
     # `figures.py`, `latent.py` and every notebook belong to the other agent
     # working this change in parallel). Measured directly: `Results_v1.ipynb`
     # calls `latent.latent_grid(..., pilot=ES_ENSAYO)` (twice, clean and
-    # noisy) but not `correspondence_grid` or `floors_agree` at all, so the
+    # noisy) but not `correspondence_grid` at all, so the
     # old assertion `vistas == {"latent_grid", "correspondence_grid"}` no
     # longer holds and asserting a new fixed set here would encode a claim
     # about a file this stretch does not own. The scale-forwarding discipline
