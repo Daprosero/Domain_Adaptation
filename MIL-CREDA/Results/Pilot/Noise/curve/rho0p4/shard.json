@@ -1,0 +1,51 @@
+{
+  "shard": null,
+  "env": "4bef9265ee57",
+  "environment": {
+    "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+    "python": "3.12.13",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "torch": "2.13.0",
+    "selfHosted": true,
+    "power": {
+      "source": "battery",
+      "charge": 20
+    },
+    "device": {
+      "name": "mps",
+      "kind": "mps"
+    }
+  },
+  "seeds": [
+    0
+  ],
+  "epochs": 3,
+  "labelNoise": 0.4,
+  "pilot": true,
+  "kind": "curve",
+  "revision": "research-concept-r21.md",
+  "ceilings": {
+    "milcreda": 0.010796012633645448
+  },
+  "ceilingsByTransfer": {
+    "milcreda": {
+      "M->U": 0.7117782412223816,
+      "U->M": 0.010796012633645448,
+      "M->S": 0.0005247933940780908,
+      "S->M": 0.0008875530880758854,
+      "U->S": 0.008911638421286783,
+      "S->U": 0.10294579502332135
+    }
+  },
+  "hyperByTransfer": {},
+  "evidence": {
+    "codeDigest": "39656385de5db5a9b97c8454c261c2b302db65416c828291a9886659685944f9",
+    "importsFrom": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark",
+    "commit": "457f8592e2998cfa37ebe520fce8230fd2f789b2",
+    "outputs": [
+      "runs.jsonl",
+      "shard.json",
+      "summary.json"
+    ]
+  }
+}

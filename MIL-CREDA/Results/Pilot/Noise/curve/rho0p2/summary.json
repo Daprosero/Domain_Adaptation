@@ -1,0 +1,313 @@
+{
+  "kind": "bounded",
+  "reduction": {
+    "setting": "trained",
+    "revision": "research-concept-r21.md",
+    "backbone": "resnet18",
+    "instancesPerBag": 30,
+    "bagsPerDomain": 120,
+    "trainBags": 64,
+    "validBags": 20,
+    "evalBags": 36,
+    "searchRole": "valid",
+    "epochs": 3,
+    "seeds": [
+      0
+    ],
+    "labelNoise": 0.2,
+    "pilot": true,
+    "kind": "curve",
+    "rampCeiling": 1.0,
+    "kernelSigma": 36.135014304860874,
+    "attentionGamma": 0.0,
+    "attentionTemperature": 1.0,
+    "tauLocal": 1.0,
+    "ceilings": {
+      "milcreda": 0.010796012633645448
+    },
+    "ceilingsByTransfer": {
+      "milcreda": {
+        "M->U": 0.7117782412223816,
+        "U->M": 0.010796012633645448,
+        "M->S": 0.0005247933940780908,
+        "S->M": 0.0008875530880758854,
+        "U->S": 0.008911638421286783,
+        "S->U": 0.10294579502332135
+      }
+    },
+    "hyperByTransfer": {},
+    "ceilingSearch": {
+      "milcreda": {
+        "arm": "G",
+        "ceiling": 0.010796012633645448,
+        "rampDelta": 1.9071433953026697,
+        "kernelSigma": 60.7729889121759,
+        "attentionGamma": 0.01365767469209711,
+        "attentionTemperature": 0.711723564948792,
+        "tauLocal": 4.466752700001235,
+        "criterion": "targetAccuracy",
+        "role": "valid",
+        "epochs": 3,
+        "trials": 4,
+        "search": {
+          "kind": "optuna",
+          "sampler": "GPSampler",
+          "trials": 4,
+          "seed": 0,
+          "perStudySeed": "crc32(familia|transferencia) + seed",
+          "space": {
+            "ceiling": {
+              "low": 0.0001,
+              "high": 1.0,
+              "log": true
+            },
+            "rampDelta": {
+              "low": 1.0,
+              "high": 100.0,
+              "log": true
+            },
+            "kernelSigma": {
+              "low": 3.6135014304860875,
+              "high": 361.35014304860874,
+              "log": true
+            },
+            "attentionGamma": {
+              "low": 0.0,
+              "high": 1.0,
+              "log": false
+            },
+            "attentionTemperature": {
+              "low": 0.1,
+              "high": 10.0,
+              "log": true
+            },
+            "tauLocal": {
+              "low": 0.1,
+              "high": 10.0,
+              "log": true
+            }
+          },
+          "resolution": 0.05
+        },
+        "decidedByFlatRule": false,
+        "plateau": [
+          0.010796012633645448
+        ],
+        "noise": 0.05,
+        "labelNoise": 0.0,
+        "flatRule": "dentro de la meseta gana el techo m\u00e1s chico: el mismo resultado con menos adaptaci\u00f3n es la afirmaci\u00f3n m\u00e1s d\u00e9bil, y una b\u00fasqueda no deber\u00eda darle a un t\u00e9rmino m\u00e1s peso del que la medici\u00f3n pidi\u00f3. La meseta la define la resoluci\u00f3n del criterio sobre el rol de b\u00fasqueda \u2014 una bolsa de las que tiene \u2014 y no una cantidad que el GP ajust\u00f3: atribu\u00edrsela al modelo har\u00eda que el ancho de la meseta dependiera de qu\u00e9 tan bien ajust\u00f3, que es la propiedad equivocada. Tampoco es una igualdad exacta: sobre un rango continuo dos evaluaciones nunca empatan y una regla de empate exacto no se activar\u00eda jam\u00e1s",
+        "atRequiredScale": false,
+        "requiredScale": {
+          "epochs": 20,
+          "trials": 30
+        },
+        "seconds": 239.38599195802817,
+        "transfers": [
+          "M->U",
+          "U->M",
+          "M->S",
+          "S->M",
+          "U->S",
+          "S->U"
+        ],
+        "neutral": 1.0,
+        "byTransfer": {
+          "M->U": 0.7117782412223816,
+          "U->M": 0.010796012633645448,
+          "M->S": 0.0005247933940780908,
+          "S->M": 0.0008875530880758854,
+          "U->S": 0.008911638421286783,
+          "S->U": 0.10294579502332135
+        },
+        "perTransfer": {
+          "M->U": {
+            "ceiling": 0.7117782412223816,
+            "rampDelta": 1.1459150621714134,
+            "kernelSigma": 30.931736326763957,
+            "attentionGamma": 0.8665927080924227,
+            "attentionTemperature": 0.12300535032448288,
+            "tauLocal": 1.530867687382285,
+            "value": 0.8,
+            "best": 0.8,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.7117782412223816
+            ],
+            "decidedByFlatRule": false,
+            "minutes": 0.7824462583332206
+          },
+          "U->M": {
+            "ceiling": 0.010796012633645448,
+            "rampDelta": 1.9071433953026697,
+            "kernelSigma": 60.7729889121759,
+            "attentionGamma": 0.01365767469209711,
+            "attentionTemperature": 0.711723564948792,
+            "tauLocal": 4.466752700001235,
+            "value": 0.95,
+            "best": 1.0,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.010796012633645448,
+              0.011660437435785431
+            ],
+            "decidedByFlatRule": true,
+            "minutes": 0.5724203777834191
+          },
+          "M->S": {
+            "ceiling": 0.0005247933940780908,
+            "rampDelta": 96.29576984475433,
+            "kernelSigma": 133.9727025616371,
+            "attentionGamma": 0.49959661167655944,
+            "attentionTemperature": 0.39812333984284914,
+            "tauLocal": 0.9814803531488547,
+            "value": 0.3,
+            "best": 0.3,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.0005247933940780908,
+              0.0030676860676691303
+            ],
+            "decidedByFlatRule": true,
+            "minutes": 0.6671589229163752
+          },
+          "S->M": {
+            "ceiling": 0.0008875530880758854,
+            "rampDelta": 9.734793243960574,
+            "kernelSigma": 262.9202599732451,
+            "attentionGamma": 0.18683122468306068,
+            "attentionTemperature": 3.0795556078209914,
+            "tauLocal": 0.10432511547211254,
+            "value": 0.65,
+            "best": 0.7,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.0008875530880758854,
+              0.0013264142426544668
+            ],
+            "decidedByFlatRule": true,
+            "minutes": 0.637637627083556
+          },
+          "U->S": {
+            "ceiling": 0.008911638421286783,
+            "rampDelta": 1.1687734964272058,
+            "kernelSigma": 41.60352607028823,
+            "attentionGamma": 0.6774089868066343,
+            "attentionTemperature": 7.208405598508218,
+            "tauLocal": 1.303496723980585,
+            "value": 0.3,
+            "best": 0.3,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.008911638421286783
+            ],
+            "decidedByFlatRule": false,
+            "minutes": 0.6306974895832052
+          },
+          "S->U": {
+            "ceiling": 0.10294579502332135,
+            "rampDelta": 1.7563489345356125,
+            "kernelSigma": 167.54575081713534,
+            "attentionGamma": 0.9117472918680046,
+            "attentionTemperature": 2.2536076353685393,
+            "tauLocal": 4.229037310968515,
+            "value": 0.8,
+            "best": 0.8,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.10294579502332135
+            ],
+            "decidedByFlatRule": false,
+            "minutes": 0.6308614958329902
+          }
+        },
+        "inheritanceRule": "ninguna: las seis transferencias se midieron",
+        "env": "4bef9265ee57",
+        "environment": {
+          "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+          "python": "3.12.13",
+          "platform": "macOS-26.5.2-arm64-arm-64bit",
+          "torch": "2.13.0",
+          "selfHosted": true,
+          "power": {
+            "source": "battery",
+            "charge": 27
+          },
+          "device": {
+            "name": "mps",
+            "kind": "mps"
+          }
+        },
+        "revision": "research-concept-r21.md",
+        "currentStamp": true
+      }
+    },
+    "rampDelta": 20,
+    "device": "cpu",
+    "environment": {}
+  },
+  "verdictsMeaningful": false,
+  "grid": {
+    "M->U": {
+      "B": {
+        "targetAccuracy": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011241538698976953,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "gridPerRun": {
+    "M->U": {
+      "B": {}
+    }
+  },
+  "perTransfer": {
+    "M->U": []
+  },
+  "panorama": [],
+  "checkpoints": {
+    "B M->U": [
+      "MIL-CREDA/Models/Pilot/Noise/curve/rho0p2/B_M-U_seed0.pt"
+    ]
+  },
+  "tally": {
+    "M->U": {
+      "new": [],
+      "baseline": [],
+      "indistinguishable": [],
+      "not applicable": []
+    }
+  }
+}
