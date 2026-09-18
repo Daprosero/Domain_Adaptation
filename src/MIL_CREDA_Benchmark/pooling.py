@@ -54,6 +54,10 @@ def refuse(metric: str) -> None:
         "  No reading of it was stable enough to stand for the method, or "
         "even for one machine across two of its own runs, so a "
         "`mean ± stdev` here would describe none of the runs behind it.\n"
-        "  Use `render_per_run(summary['gridPerRun'], ...)`, which prints "
-        "every reading with the run that produced it."
+        "  Read `summary['gridPerRun']` instead, which carries every "
+        "reading untouched and tagged with the run that produced it -- "
+        "`render_per_run`/`conclusion_per_run` are retired along with "
+        "`seconds`/`peakMiB`, the two dimensions that made `perRun` "
+        "necessary, so no declared dimension reaches this refusal today; a "
+        "future one would need its own renderer, the way those two did."
     )

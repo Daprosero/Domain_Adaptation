@@ -237,15 +237,28 @@ def test_ladder_rows_default_dimensions_unchanged() -> None:
         bridge.harness.ladder_rows({"F": redacted_cell, "G": redacted_cell}, "M->U")
 
 
-def test_the_summary_carries_gridperrun_for_the_report_to_read() -> None:
+def test_the_summary_carries_gridperrun_for_the_report_to_read(monkeypatch) -> None:
     """`shards.merge()` already computes `gridPerRun` — every `perRun` reading,
     tagged with its own environment, never averaged. `build_summary` must not
     let it die here: without this key the report notebook has no way to render
-    `seconds`/`peakMiB` honestly, and falls back to pooling them across
-    machines into a mean that describes none of them."""
+    a `perRun` dimension honestly, and falls back to pooling it across
+    machines into a mean that describes none of them.
+
+    `config.DIMENSIONS` declares no `perRun` dimension today -- `seconds`/
+    `peakMiB` are gone entirely (commit `60836d2`, "...drop timing"), not
+    merely reclassified, so there is nothing live to demonstrate this with.
+    The mechanism itself is not retired (`shards.py`'s own `_grid_per_run`/
+    `per_run_grid` stay generic over whatever the declaration names), so a
+    synthetic `perRun` dimension drives it here -- "the class, not the
+    instance" -- the same discipline `test_report_tables.py`'s sibling tests
+    use for the same reason.
+    """
+    monkeypatch.setattr(config, "DIMENSIONS", {**config.DIMENSIONS, "seconds": None})
+    synthetic_dist = {**REAL_DIST, "perRun": [*REAL_DIST["perRun"], "seconds"]}
+
     found = [_shard("a", 0, 0.5, 0.8, seconds=12.0, env="e1"),
              _shard("b", 1, 0.6, 0.7, seconds=34.0, env="e2")]
-    summary, _ = bridge.build_summary(found)
+    summary, _ = bridge.build_summary(found, dist=synthetic_dist)
 
     per_run = summary["gridPerRun"]["M->U"]["G"]["seconds"]
     assert {r["env"] for r in per_run} == {"e1", "e2"}

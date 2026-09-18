@@ -1028,21 +1028,41 @@ class TestTheNoiseAxisRefusesToPoolAPerRunDimension:
 
     def test_the_refused_set_comes_from_the_declaration(self):
         """Ni una lista literal acá ni una lista literal allá: quién es `perRun`
-        lo dice el banco, y una segunda copia envejece en silencio."""
+        lo dice el banco, y una segunda copia envejece en silencio.
+
+        `perRun` está vacía hoy -- `seconds`/`peakMiB`, las únicas dos que
+        alguna vez la ocuparon, se fueron enteras de `config.DIMENSIONS`
+        (commit `60836d2`, "...drop timing"), no sólo se reclasificaron --
+        así que lo que se afirma es la IGUALDAD entre las dos lecturas, vacía
+        o no, y no que haya al menos una.
+        """
         from MIL_CREDA_Benchmark import pooling
 
         declared = pooling.per_run_dimensions()
-        assert declared, "el banco no declara ninguna dimensión `perRun`"
         assert set(declared) == set(
             (__import__("MIL_CREDA_Benchmark").__benchmark__["distribution"]
              ["perRun"]))
 
     def test_every_public_noise_entry_refuses_every_declared_per_run_dimension(
             self, tmp_path, monkeypatch):
+        """The guard itself is not retired -- every entry point below still
+        calls `pooling.refuse`, which stays generic over whatever the
+        declaration names -- so a synthetic `perRun` dimension drives it
+        here instead of relying on `seconds`/`peakMiB`, which no longer
+        exist. Without this a still-empty `declared` would make both loops
+        below run zero times and pass trivially, which is the reachable-red
+        failure this whole class exists to avoid ("`cells` la lleva... la
+        familia del ruido no pasa por ahí" -- a guard that cannot fire
+        proves nothing about the one this class checks)."""
+        import MIL_CREDA_Benchmark
         from MIL_CREDA_Benchmark import pooling
 
+        monkeypatch.setattr(config, "DIMENSIONS", {**config.DIMENSIONS, "seconds": None})
+        monkeypatch.setitem(MIL_CREDA_Benchmark.__benchmark__["distribution"],
+                            "perRun", ["seconds"])
         self._empty_tree(tmp_path, monkeypatch)
         declared = pooling.per_run_dimensions()
+        assert declared, "the synthetic dimension did not reach the declaration"
         for name, call in self._entries().items():
             for metric in declared:
                 with pytest.raises(ValueError, match="perRun"):
