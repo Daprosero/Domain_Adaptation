@@ -582,10 +582,21 @@ def correspondence(model, source: bags.BagSet, target: bags.BagSet,
 
     The true target labels appear here and nowhere in training. They are read at
     analysis time only, to score a quantity the method produced without them.
+
+    **Both sides are the EVALUATION role**, and the source side used to be
+    training. The whole of section 5 now asks one question at three
+    resolutions -- the ratio and the separability in numbers, the latent grid
+    in a picture, and the neighbour table by name -- so the three have to be
+    measured over the same material or the last one validates something
+    adjacent to the first two rather than the same claim. Reading against the
+    training anchors answers a different and legitimate question: it is what
+    the local term aligns to while it trains. That question is not asked here
+    any more, and asking it again means saying so and carving a reading for
+    it.
     """
     from MIL_CREDA.bag_kernel import bag_kernel_matrix
 
-    source_positions = source.train_idx
+    source_positions = source.eval_idx
     target_positions = target.eval_idx
     H_s = model.instance_embeddings(source.images[source.members[source_positions]].to(device))
     H_t = model.instance_embeddings(target.images[target.members[target_positions]].to(device))
@@ -614,6 +625,11 @@ def correspondence(model, source: bags.BagSet, target: bags.BagSet,
         "massOnTrueClass": sum(on_truth) / len(on_truth),
         "chance": 1.0 / config.CLASSES,
         "subjects": len(on_truth),
+        # Over how many source bags that mass spread. Published because it is
+        # what says WHICH ROLE this reading read: the count is the evaluation
+        # role's or the training role's, and from outside the two answers were
+        # indistinguishable -- a role change passed every test in the suite.
+        "sourceBags": int(source_positions.numel()),
     }
 
 
@@ -882,7 +898,10 @@ def bag_pairs(model, source: bags.BagSet, target: bags.BagSet, device: torch.dev
     from MIL_CREDA.attention import bag_embedding
     from MIL_CREDA.bag_kernel import bag_kernel_matrix
 
-    s_pos, t_pos = source.train_idx, target.eval_idx
+    # Both sides on the evaluation role, for the reason `correspondence`'s own
+    # docstring gives: section 5 asks one question at three resolutions, and
+    # they have to be measured over the same material.
+    s_pos, t_pos = source.eval_idx, target.eval_idx
     H_s = model.instance_embeddings(source.images[source.members[s_pos]].to(device))
     H_t = model.instance_embeddings(target.images[target.members[t_pos]].to(device))
     sigma = config.KERNEL_SIGMA

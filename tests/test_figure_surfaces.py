@@ -526,6 +526,57 @@ def _domains() -> tuple[bags.BagSet, bags.BagSet]:
     return one("S", source_images), one("T", target_images)
 
 
+def test_the_correspondence_reads_both_domains_on_the_evaluation_role() -> None:
+    """Section 5 asks one question at three resolutions, over one material.
+
+    The ratio and the separability (5a), the latent grid (5b) and the neighbour
+    table (5d) are the same claim in numbers, in a picture and by name, so all
+    of them read `eval` on both sides. The source side used to be `train` --
+    the anchors the local term aligns to while it trains, which is a different
+    and legitimate question, and not the one this section asks.
+
+    It needs its own domains because `_domains` gives all three roles the same
+    indices, so the fixture every other test here shares cannot tell a role
+    change from no change at all: reverting the source side to `train_idx`
+    passes the whole of this file. Measured, not assumed.
+
+    Reachable red: `source.train_idx` on either reading.
+    """
+    count = config.CLASSES
+    per_bag = config.INSTANCES_PER_BAG
+    total = 3 * count
+    images = torch.randn(total * per_bag, 3, 8, 8,
+                         generator=torch.Generator().manual_seed(3))
+    members = torch.arange(images.shape[0]).reshape(total, per_bag)
+    labels = torch.arange(total) % count
+
+    # disjoint and of DIFFERENT sizes, which is what makes the count decisive
+    train_idx = torch.arange(0, 2 * count)
+    eval_idx = torch.arange(2 * count, 3 * count)
+
+    def one(domain: str) -> bags.BagSet:
+        return bags.BagSet(domain, images, members, labels,
+                           train_idx, eval_idx, eval_idx, {})
+
+    source, target = one("S"), one("T")
+    monkeypatch_free_model = wiring.build(
+        "G", config.CLASSES,
+        wiring.Pool(images, members, labels), wiring.Pool(images, members, labels))
+
+    reading = latent.bag_pairs(monkeypatch_free_model, source, target,
+                               torch.device("cpu"))
+    assert reading["sourceRows"].shape[0] == len(eval_idx), (
+        "the source side is not the evaluation role; it has "
+        f"{reading['sourceRows'].shape[0]} bags and `eval_idx` has {len(eval_idx)}")
+    assert reading["kernel"].shape[0] == len(eval_idx)
+
+    mass = latent.correspondence(monkeypatch_free_model, source, target,
+                                 torch.device("cpu"))
+    assert mass["sourceBags"] == len(eval_idx), (
+        f"`correspondence` read {mass['sourceBags']} source bags, and the "
+        f"evaluation role has {len(eval_idx)}")
+
+
 @pytest.fixture
 def trained(monkeypatch):
     """A tiny model over synthetic bags, and the two stubs a grid needs.
@@ -592,7 +643,7 @@ def test_the_nearest_source_bag_is_found_with_the_bag_kernel_in_the_representati
 
     # the same kernel, rebuilt from the published pieces rather than from the
     # function under test
-    H_s = model.instance_embeddings(source.images[source.members[source.train_idx]])
+    H_s = model.instance_embeddings(source.images[source.members[source.eval_idx]])
     H_t = model.instance_embeddings(target.images[target.members[target.eval_idx]])
     sigma = config.KERNEL_SIGMA
     pairs_s, pairs_t = model.bags_of(H_s, sigma), model.bags_of(H_t, sigma)
