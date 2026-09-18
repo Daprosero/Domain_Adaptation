@@ -86,7 +86,7 @@ class PasosDeclaradosTests(unittest.TestCase):
         entrada = paquete.__steps__["results"]
         self.assertEqual(entrada["function"], "resultados")
         self.assertEqual(
-            _cuadernos_nombrados_por_los_pasos().get("Results.ipynb"),
+            _cuadernos_nombrados_por_los_pasos().get("Benchmark_Results.ipynb"),
             "resultados", "los resultados no corren su propio cuaderno")
 
         fuente = Path(steps.__file__).read_text(encoding="utf-8")
@@ -204,7 +204,7 @@ class PasosDeclaradosTests(unittest.TestCase):
     # is removed. `campana`/`Benchmark_Campaign_v1.ipynb` and the
     # `campaign-local` step are retired: nothing in this stretch's restructured
     # `__steps__` calls `harness.campaign()` from a notebook any more (see
-    # `resultados`'s own docstring in `steps.py`). `Results.ipynb` derives
+    # `resultados`'s own docstring in `steps.py`). `Benchmark_Results.ipynb` derives
     # its scale through `cargar_corridas()` -- a resolver, not a hand-built
     # `Reduction(pilot=...)` -- and that discipline is already covered
     # generically, notebook-name-agnostic, by
@@ -302,14 +302,14 @@ CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
         "(ver su entrada más abajo)"),
     "Benchmark_Report_v1.ipynb": (
         "borrado: era el informe de la campaña completa. "
-        "`Results.ipynb` lo reemplaza, junto con "
+        "`Benchmark_Results.ipynb` lo reemplaza, junto con "
         "`Benchmark_Latent_v1.ipynb`, en un solo cuaderno -- las seis "
         "secciones que reemplazan a las dos leen el mismo registro y se "
         "citan entre sí"),
     "Benchmark_Latent_v1.ipynb": (
         "borrado: era el análisis latente por separado. Ver "
         "`Benchmark_Report_v1.ipynb`, con quien se fusionó en "
-        "`Results.ipynb`"),
+        "`Benchmark_Results.ipynb`"),
     "Benchmark_Noise_Report_v1.ipynb": (
         "borrado junto con el eje de ruido de dos pasos (barrido + informe): "
         "`noise-sweep` (`barrido_de_ruido`) hoy corre y presenta en un solo "
