@@ -2359,6 +2359,20 @@ def run_campaign_shard(shard: str | None = None,
     scale: that is the shard split, and a caller naming one has already said
     which repetitions this machine owns.
 
+    **Both conditions in one call**, the same shape `run_mechanism_sweep_shard`
+    already has and for the same reason: every accuracy table declares a clean
+    block and a contaminated one, so a call that ran only `rate=0.0` left the
+    report with half of every table missing and the whole family of readings
+    that compares the two — the contaminated grids, the "versus clean"
+    conclusions — never exercised at all. Two separate submissions an operator
+    has to remember to both send is how one of them does not get sent.
+
+    The searched values are resolved ONCE and applied to both, which is the
+    agreement rather than a convenience: the search runs always on clean
+    material and its values are used unchanged when the material is corrupted,
+    so whatever mitigates the contamination is the method and not a tuning
+    fitted to it.
+
     Refuses nothing here that `campaign()` does not already refuse: it still
     demands a ceiling record, and a worker that clones only `src/` does not
     receive one. That is a property of what the job declares it clones, not
@@ -2371,7 +2385,9 @@ def run_campaign_shard(shard: str | None = None,
         epochs=config.EPOCHS if pilot else config.FULL_EPOCHS,
         pilot=pilot, device=str(device), environment=environment())
     reduction = with_ceilings_in_force(reduction, device, shard=shard)
-    return campaign(reduction, device, shard=shard)
+    campaign(replace(reduction, labelNoise=0.0), device, shard=shard)
+    return campaign(replace(reduction, labelNoise=config.NOISE_REPORTED),
+                    device, shard=shard)
 
 
 def run_mechanism_sweep_shard(seeds: list[int] | None = None,

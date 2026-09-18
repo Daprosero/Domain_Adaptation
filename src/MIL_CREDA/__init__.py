@@ -385,6 +385,14 @@ __steps__: dict = {
                             # en el contrato del banco. Reportado `foreign` en
                             # la primera corrida de piloto que llegó al final.
                             "Results/Pilot/Probe_results.json",
+                            # La condición contaminada, que este paso corre en
+                            # la misma llamada: cada tabla declara un bloque
+                            # limpio y uno con ruido, y una corrida que dejara
+                            # sólo el primero deja la mitad de cada tabla sin
+                            # existir y toda la familia de lecturas que compara
+                            # las dos sin ejercitar.
+                            "Results/Pilot/Noise/rho0p2",
+                            "Models/Pilot/Noise/rho0p2",
                             "Models/Pilot/Benchmark",
                             "Notebooks/Benchmark_Campaign.ipynb"],
                 "placement": "remote",

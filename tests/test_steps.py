@@ -734,6 +734,12 @@ class RaicesDeclaradasTests(unittest.TestCase):
                          # lo escribe para que la verificación lo encuentre.
                          f"{relativa(config.results_for(0.0, 'campaign', True).parent)}"
                          "/Probe_results.json",
+                         # La condición contaminada, por la misma puerta y con
+                         # la tasa que `NOISE_REPORTED` declara.
+                         relativa(config.results_for(config.NOISE_REPORTED,
+                                                     "campaign", True)),
+                         relativa(config.models_for(config.NOISE_REPORTED,
+                                                    "campaign", True)),
                          relativa(config.models_for(0.0, "campaign", True)),
                          cuaderno_de("campana")],
             # El registro de la Sección 4, por la MISMA puerta que
