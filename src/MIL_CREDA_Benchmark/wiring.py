@@ -228,11 +228,14 @@ class Arm(nn.Module):
         as a branch -- it is where a freeze would have to be reintroduced, and
         `tests/test_arm_objectives.py` points its guard at this exact name.
 
-        `GN` is retired, and with it the one `spec["normalization"] ==
-        "sourceBatch"` branch that used to stand here, plus the three helpers
-        that served only it (`_source_embeddings`, `_encode_with_frozen_stats`,
-        `_batchnorm_modules`). No declared arm normalizes its target forward
-        with anything but the encoder's own training-mode statistics.
+        `GN` is retired, and with it the one branch that used to stand here
+        and the three helpers that served only it (`_source_embeddings`,
+        `_encode_with_frozen_stats`, `_batchnorm_modules`). The
+        `spec["normalization"]` key went with them: nothing read it once the
+        branch was gone, and a declared field nobody reads is a field the next
+        reader has to work out and discard. No declared arm normalizes its
+        target forward with anything but the encoder's own training-mode
+        statistics.
         """
         return self.instance_embeddings(target_bags)
 
