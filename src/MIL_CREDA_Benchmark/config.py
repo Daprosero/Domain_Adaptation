@@ -664,16 +664,16 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 ARMS = [
     {"id": "B", "name": "MIL-Baseline", "label": "source-only (bags)",
      "unit": "bag", "adaptation": None, "weighting": False, "local": False,
-     "attention": "learned", "selection": None, "normalization": "shared"},
+     "attention": "learned", "selection": None},
     {"id": "E", "name": "MIL-CREDA**", "label": "MIL-CREDA global, unweighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": False, "local": False,
-     "attention": "learned", "selection": None, "normalization": "shared"},
+     "attention": "learned", "selection": None},
     {"id": "F", "name": "MIL-CREDA*", "label": "MIL-CREDA global, weighted",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": False,
-     "attention": "learned", "selection": None, "normalization": "shared"},
+     "attention": "learned", "selection": None},
     {"id": "G", "name": "MIL-CREDA", "label": "MIL-CREDA full (global + local)",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": None, "normalization": "shared"},
+     "attention": "learned", "selection": None},
 ]
 
 ARMS_BY_ID = {arm["id"]: arm for arm in ARMS}

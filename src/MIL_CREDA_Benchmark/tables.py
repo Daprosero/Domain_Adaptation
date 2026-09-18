@@ -398,11 +398,6 @@ def objective(key: str, markdown: bool = True) -> str:
             "separadas entre sí, sobre material limpio.** Un panel por método, "
             "el espacio original primero: «alineado» no se ve sin un «no "
             "alineado» al lado, que es lo que el primer panel de la fila da.",
-        "latent.grid.noisy":
-            "**Buscamos cuánta de la mezcla entre clases que se veía en limpio "
-            "sobrevive cuando el entrenamiento se ensucia.** La misma rejilla, "
-            "sobre el material contaminado: lo que importa acá no es el panel "
-            "por sí solo sino la comparación con la rejilla limpia de arriba.",
         "correspondence.grid.clean":
             "**Buscamos que el triángulo destacado caiga entre círculos de su "
             "mismo color, en material limpio**, y que eso pase más en la "
