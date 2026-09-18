@@ -297,7 +297,7 @@ def test_a_rung_subtracts_left_minus_right_everywhere_it_is_computed() -> None:
     conclusion, and the panorama that outlives both in the record. Commit
     `177ce09` ("replace the report and latent notebooks with Results_v1")
     retired `tables.render_rungs`/`conclusion_rungs`: none of the six required
-    sections of `Results.ipynb` reads a rung table any more, and no other
+    sections of `Benchmark_Results.ipynb` reads a rung table any more, and no other
     notebook did either (see `__benchmark__["search"]`'s own retirement note
     in `src/MIL_CREDA_Benchmark/__init__.py`). What survives is
     `harness.paired_across_transfers` itself -- `campaign()` still calls it to
@@ -1013,7 +1013,7 @@ def test_run_pilot_is_reachable_under_src_for_a_remote_run_module() -> None:
 # What genuinely went with it, said plainly rather than folded away: no
 # notebook in this tree renders a ceiling table any more. Whether the results
 # notebook should show one is a decision for whoever owns Section 0 of
-# `Results.ipynb`, not something this removal may take by adding a cell.
+# `Benchmark_Results.ipynb`, not something this removal may take by adding a cell.
 
 
 def _searched(**overrides) -> dict:

@@ -152,7 +152,7 @@ def resultados() -> str:
 
     El único paso de presentación: reemplaza lo que antes eran tres pasos
     separados (`report`, `latent`, `noise-report`), cuyas tres notebooks
-    fueron borradas junto con esta reestructuración. `Results.ipynb` sólo
+    fueron borradas junto con esta reestructuración. `Benchmark_Results.ipynb` sólo
     lee y dibuja --- medido contra el archivo: ninguna celda llama a
     `harness.campaign()` ni a `config.is_pilot_scale()`, sólo a
     `cargar_corridas()`, que resuelve viendo cuál de los dos árboles tiene
@@ -166,7 +166,7 @@ def resultados() -> str:
     `campaign` (`campana`, abajo) invoca `harness.run_campaign_shard()`
     directamente.
     """
-    return _ejecutar("Results.ipynb")
+    return _ejecutar("Benchmark_Results.ipynb")
 
 
 def campana() -> str:
@@ -253,7 +253,7 @@ def mecanismos_de_atencion() -> str:
     completo (`G`, nunca un id declarado -- `wiring.MechanismArm` hereda todo
     lo demás de `G`), limpio y contaminado, y escribe el registro que
     `tables.render_mechanisms`/`conclusion_mechanisms` leen. Lo que la Sección
-    4 lee (`Results.ipynb`, celdas 26/29) sigue siendo
+    4 lee (`Benchmark_Results.ipynb`, celdas 26/29) sigue siendo
     `Results/Benchmark/attention_mechanisms.json`, y ese archivo sigue siendo
     la única raíz de datos de este paso.
 

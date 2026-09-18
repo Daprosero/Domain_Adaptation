@@ -399,7 +399,7 @@ __steps__: dict = {
     # El único paso que PRESENTA: reemplaza lo que `report`, `latent` y
     # `noise-report` dibujaban por separado -- las tres notebooks de esos
     # pasos fueron borradas junto con la reestructuración de este stretch.
-    # `Results.ipynb` sólo lee y dibuja -- medido contra el archivo: no
+    # `Benchmark_Results.ipynb` sólo lee y dibuja -- medido contra el archivo: no
     # llama a `harness.campaign()` ni a `config.is_pilot_scale()` en ninguna
     # celda, sólo a `cargar_corridas()`, que resuelve viendo cuál de los dos
     # árboles (completo o ensayo) tiene `runs.jsonl` y `summary.json` --
@@ -421,6 +421,6 @@ __steps__: dict = {
                                "Models/Benchmark",
                                "Models/Noise/rho0p2"],
                      "produces": ["Results/figures",
-                                  "Notebooks/Results.ipynb"],
+                                  "Notebooks/Benchmark_Results.ipynb"],
                      "placement": "local"},
 }

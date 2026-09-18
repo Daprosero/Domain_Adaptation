@@ -105,7 +105,7 @@ def test_the_figure_is_written_where_it_is_asked_for_and_only_as_a_pdf(
 
 
 # `test_the_contribution_panel_reports_the_realized_share_arm_by_arm` removed:
-# `figures.contribution_curves` is retired. Section 6 of `Results.ipynb` is
+# `figures.contribution_curves` is retired. Section 6 of `Benchmark_Results.ipynb` is
 # loss curves "only to check the normalization" (Eq. 39's terms on the common
 # [0, 1) scale) -- `adaptation_curves` and `supervised_curves` -- and the task
 # that built this notebook explicitly removes "the contribution panel beside
@@ -382,7 +382,7 @@ def test_a_repetition_that_stopped_early_truncates_the_band_and_never_extends_it
 # `test_the_contribution_panel_is_shown_beside_the_other_two_curve_figures`
 # removed: it read `Benchmark_Report_v1.ipynb`, which no longer exists, to
 # assert a contribution-panel cell that no longer exists either. Section 6 of
-# `Results.ipynb` -- the notebook's replacement -- shows `supervised_curves`
+# `Benchmark_Results.ipynb` -- the notebook's replacement -- shows `supervised_curves`
 # and `adaptation_curves` only, "only to check the normalization", and the
 # task that built it explicitly retires the contribution panel.
 
@@ -702,7 +702,7 @@ def test_the_bag_figure_keeps_the_projection_and_never_becomes_a_bipartite_diagr
 
 # ------------------------------------- the three lines a figure carries above it
 
-LATENT = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / "Results.ipynb"
+LATENT = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / "Benchmark_Results.ipynb"
 
 
 def test_every_figure_carries_the_same_three_lines_a_table_does() -> None:
