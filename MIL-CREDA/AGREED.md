@@ -27,18 +27,19 @@ these is raised, not resolved in passing.
 | `E` | `MIL-CREDA**` | the local term and the weighting |
 | `F` | `MIL-CREDA*` | the local term |
 | `G` | `MIL-CREDA` | nothing |
-| `GN` | `MIL-CREDA-GN` | nothing of the method; its normalization does not learn from target |
 
-`GN` carries no asterisk because it lacks no piece of the method: it is `G` with
-the target forward normalized by the source batch statistics of the same step.
-The convention counts absent terms, and that is not one.
+Four arms and no fifth: `GN` sat here as `G` with its target forward normalized
+by the source batch statistics of the same step, and it is retired. It is worth
+keeping why it was hard to name — it lacked no piece of the method, so it
+carried no asterisk while every other row's name counts what is absent, and a
+convention with one row outside it is a convention a reader has to be told
+about twice.
 
 
 ## Ladder
 
 - [ ] Max pooling enters the comparison at the instance level: the bag is the instance holding the largest activation in it, entire, and its weights are that one-hot. The coordinatewise maximum is not expressible here -- it lies outside the convex hull of the instances, so no weight vector reproduces it and Eq. (18) bag kernel would have to be handed a fallback nobody chose. `test_max_pooling_is_the_winning_instance_whole_and_its_one_hot`
 - [ ] The attention is compared on the full method alone, against ABMIL as published with its output vector unnormalized, ABMIL gated, max pooling and mean pooling, in source and target, clean and contaminated.
-- [ ] Arm GN is the full method with its normalization layers not learning from target, normalized with the source batch statistics of the same step; every other adapted arm keeps normalization as part of the model.
 - [ ] Every adapted arm passes source and unlabelled target through the same extractor, because the adaptation needs both domains; its normalization layers are part of the model and are neither frozen nor handled per domain. `test_an_adapted_arms_target_forward_updates_running_statistics`
 - [ ] The floor B trains on source only with the normalized supervised loss and predicts on target: no target image passes through its encoder during training, and it consumes the random generator identically to the adapted arms. `test_a_floor_never_encodes_a_target_image_during_training`
       The first two hold the budget at 10 instances; the third reads what
@@ -70,9 +71,9 @@ The convention counts absent terms, and that is not one.
 
 ## Figures — phase 2
 
+- [ ] For every target bag of the evaluation role, the five source training bags it is closest to, in order, ranked by the bag kernel over all source bags, each shown with its own class beside the target bag own class, so whether a bag points at similar classes is read off the row rather than inferred from a tick.
+- [ ] Latent grid is the shared original space and then one column per declared arm -- the floor and the three adapted ones -- drawn on CLEAN material only. `Original` is the images themselves before any model, shared because preprocessing already brings both domains to one tensor shape, sampled representatively and stratified by class. `test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_method`
 - [ ] **Every panel of the grid is drawn at the instance level.** Every arm encodes instances, so it is a space they all have and the only one where every panel carries the same number of points. The bag-level view stays in the phase-two tables, which measure each arm in its own unit. `test_every_panel_of_the_grid_is_drawn_at_the_instance_level`
-- [ ] Latent grid is the shared original space and then one column per declared arm — the floor and the four adapted ones. `Original` is the images themselves before any model, shared because preprocessing already brings both domains to one tensor shape, sampled representatively and stratified by class. `test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_method`
-- [ ] For every target bag of the evaluation role, the five source training bags it is closest to, in order, ranked by the bag kernel over all source bags and marking which carry the true class; and the reverse table, how many target bags took each source bag into account, which is what names the source bags nobody uses.
 - [ ] Two quantitative tables precede the grids: the distance ratio that reads whether classes group across domains, and domain separability read against chance, each in its clean and contaminated block.
 - [ ] Bag figure highlights **the same bags in every panel**: the median bag of each class by correspondence mass, one colour each, and every other bag in its own class colour.
 - [x] **Three transfers in every figure, not six.** Six rows at a legible panel size do not fit on a page and the tables already carry all six. Fixed in `FIGURE_TRANSFER_COUNT`; which three is the bullet below. `test_no_figure_draws_more_transfers_than_the_count_fixes`
@@ -123,7 +124,7 @@ The convention counts absent terms, and that is not one.
 
 ## Figures — phase 1
 
-- [ ] Loss curves for every declared arm, as the median across seeds with an interquartile band. `test_a_loss_curve_is_the_median_across_seeds_with_an_interquartile_band`
+- [ ] The loss section is the adaptation term alone, drawn for every declared arm as the median across seeds with an interquartile band, over two rows of three transfers: clean above, contaminated below, so a column reads top to bottom. `test_a_loss_curve_is_the_median_across_seeds_with_an_interquartile_band`
       median curve with an interquartile band across seeds.
       share ranging from 0.03 to 0.99 across arms at a fixed coefficient, which
       is the thing the curves exist to make visible.
@@ -369,6 +370,14 @@ This reversal was made **without reading this file**, which is the failure the f
 **"**Two tables**: target accuracy as the headline, source accuracy as the"** Its own continuation had been orphaned by two earlier reversals, and the printed order is the other way round: the notebook shows source first.
 
 **"**Every panel of the grid is drawn at the instance level**, bag-unit arms"** Its argument was about instance-unit columns looking dense beside bag-unit ones, and there is no instance-unit arm left: every declared arm decides at the bag.
+
+**"Arm GN is the full method with its normalization layers not learning from target, normalized with the source batch statistics of the same step; every other adapted arm keeps normalization as part of the model."** The arm is retired: the operator removed it from the ladder after reading the pilot, so nothing declares a normalization axis of its own and the machinery that served only it goes with it.
+
+**"Latent grid is the shared original space and then one column per declared arm — the floor and the four adapted ones. `Original` is the images themselves before any model, shared because preprocessing already brings both domains to one tensor shape, sampled representatively and stratified by class."** It counted four adapted arms, and GN is retired; it also left the grid drawn in both conditions, and the operator kept only the clean one.
+
+**"For every target bag of the evaluation role, the five source training bags it is closest to, in order, ranked by the bag kernel over all source bags and marking which carry the true class; and the reverse table, how many target bags took each source bag into account, which is what names the source bags nobody uses."** The reverse table is retired -- it listed sixty-four source bags by a usage count and named no reading anybody took. The forward table stays and its neighbours now carry each source bag class rather than the kernel value and a tick, which is what lets a reader see whether a target bag points at bags of a similar class.
+
+**"Loss curves for every declared arm, as the median across seeds with an interquartile band."** The supervised-term curves are retired, so the section is the adaptation term alone; and that one figure now carries both conditions rather than one, which the old sentence did not say.
 
 <!-- position revision=research-concept-r21.md sha256=cc55237fd6f7d9c6418a66671b64b87573cb5103465b31894fa1f1dc460178c2 derivedAt=2026-09-18T13:14:56Z session=52829b86 target=none -->
 - [x] 1. The invariants hold against the tree as it stands: the suite is green and the verification notebook ran against this exact source. Two-state on purpose -- it runs here and nowhere else, and giving it a rung would be the position asserting a state it does not have. Nothing below is worth reading until this is ticked: every later step measures something, and a broken tree makes every measurement a description of the break. `@notebook Notebooks/verification.ipynb`
