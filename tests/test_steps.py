@@ -437,6 +437,46 @@ def _secuencia_de_posicion() -> dict[int, str]:
     return encontrados
 
 
+class CeldasQueCompilanTests(unittest.TestCase):
+    """Cada celda de código de cada cuaderno es Python que parsea.
+
+    La suite entera —seiscientos tests— no lee una sola celda COMO CÓDIGO: mira
+    rutas, nombres de función y llamadas por su texto. Una celda truncada a la
+    mitad de una expresión pasa todo eso y revienta con `SyntaxError: incomplete
+    input` recién cuando alguien la ejecuta, que es minutos de corrida más tarde
+    y, en un paso remoto, después de haber gastado la cuota.
+
+    Pasó: una edición programática de `Benchmark_Results.ipynb` se comió el
+    renglón de cierre de una celda y el paso 6 del piloto murió ahí.
+
+    No afirma que la celda HAGA lo correcto —para eso está el resto del
+    archivo—, sólo que es Python. Es la mitad barata y es la que faltaba.
+
+    Rojo alcanzable: borrar el último renglón de cualquier celda cuya expresión
+    quede abierta.
+    """
+
+    def test_toda_celda_de_codigo_parsea(self):
+        import ast
+        import json
+
+        cuadernos = sorted((_RAIZ / "MIL-CREDA" / "Notebooks").glob("*.ipynb"))
+        self.assertTrue(cuadernos, "no se encontró ningún cuaderno en el árbol")
+        for cuaderno in cuadernos:
+            documento = json.loads(cuaderno.read_text(encoding="utf-8"))
+            for indice, celda in enumerate(documento["cells"]):
+                if celda["cell_type"] != "code":
+                    continue
+                fuente = "".join(celda["source"])
+                if not fuente.strip() or fuente.lstrip().startswith(("!", "%")):
+                    continue
+                with self.subTest(cuaderno=cuaderno.name, celda=indice):
+                    try:
+                        ast.parse(fuente)
+                    except SyntaxError as error:
+                        self.fail(f"{cuaderno.name} celda {indice}: {error}")
+
+
 class ReferenciasACuadernosTests(unittest.TestCase):
     """Todo `.ipynb` que este repositorio se nombra a sí mismo está en el árbol.
 
