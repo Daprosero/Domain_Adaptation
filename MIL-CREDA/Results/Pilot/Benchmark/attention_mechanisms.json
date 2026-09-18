@@ -1,0 +1,433 @@
+{
+  "mechanisms": [
+    "ours",
+    "abmil-published",
+    "abmil-gated",
+    "max",
+    "mean"
+  ],
+  "clean": [
+    {
+      "mechanism": "ours",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.8611111111111112,
+      "targetAccuracy": 0.75
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.6111111111111112,
+      "targetAccuracy": 0.3055555555555556
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.6388888888888888,
+      "targetAccuracy": 0.4722222222222222
+    },
+    {
+      "mechanism": "max",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.1388888888888889,
+      "targetAccuracy": 0.3611111111111111
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.9444444444444444,
+      "targetAccuracy": 0.6666666666666666
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.9722222222222222
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 0.8055555555555556,
+      "targetAccuracy": 0.6388888888888888
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 0.9722222222222222,
+      "targetAccuracy": 0.7777777777777778
+    },
+    {
+      "mechanism": "max",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 0.9444444444444444,
+      "targetAccuracy": 0.6111111111111112
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 1.0
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.2222222222222222
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 0.5555555555555556,
+      "targetAccuracy": 0.16666666666666666
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 0.5,
+      "targetAccuracy": 0.25
+    },
+    {
+      "mechanism": "max",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 0.3888888888888889,
+      "targetAccuracy": 0.2222222222222222
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.1111111111111111
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.5555555555555556,
+      "targetAccuracy": 0.6666666666666666
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.4722222222222222,
+      "targetAccuracy": 0.6111111111111112
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.4444444444444444,
+      "targetAccuracy": 0.3055555555555556
+    },
+    {
+      "mechanism": "max",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.08333333333333333,
+      "targetAccuracy": 0.08333333333333333
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.3055555555555556,
+      "targetAccuracy": 0.75
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.2777777777777778
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.3611111111111111
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.25
+    },
+    {
+      "mechanism": "max",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 0.8055555555555556,
+      "targetAccuracy": 0.08333333333333333
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.2777777777777778
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.6111111111111112,
+      "targetAccuracy": 0.8055555555555556
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.7777777777777778,
+      "targetAccuracy": 0.4166666666666667
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.5833333333333334,
+      "targetAccuracy": 0.7222222222222222
+    },
+    {
+      "mechanism": "max",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.05555555555555555,
+      "targetAccuracy": 0.08333333333333333
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.4444444444444444,
+      "targetAccuracy": 0.5833333333333334
+    }
+  ],
+  "noisy": [
+    {
+      "mechanism": "ours",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.8611111111111112,
+      "targetAccuracy": 0.8333333333333334
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.16666666666666666,
+      "targetAccuracy": 0.19444444444444445
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.19444444444444445,
+      "targetAccuracy": 0.19444444444444445
+    },
+    {
+      "mechanism": "max",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 0.1111111111111111,
+      "targetAccuracy": 0.19444444444444445
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "M->U",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.9166666666666666
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.8888888888888888
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.4166666666666667
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 0.9444444444444444,
+      "targetAccuracy": 0.9166666666666666
+    },
+    {
+      "mechanism": "max",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 0.16666666666666666,
+      "targetAccuracy": 0.1111111111111111
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "U->M",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.8611111111111112
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.16666666666666666
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 0.4444444444444444,
+      "targetAccuracy": 0.19444444444444445
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 0.4166666666666667,
+      "targetAccuracy": 0.1388888888888889
+    },
+    {
+      "mechanism": "max",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 0.2222222222222222,
+      "targetAccuracy": 0.2222222222222222
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "M->S",
+      "seed": 0,
+      "sourceAccuracy": 1.0,
+      "targetAccuracy": 0.16666666666666666
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.2777777777777778,
+      "targetAccuracy": 0.6944444444444444
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.3333333333333333,
+      "targetAccuracy": 0.4444444444444444
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.3888888888888889,
+      "targetAccuracy": 0.2222222222222222
+    },
+    {
+      "mechanism": "max",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.05555555555555555,
+      "targetAccuracy": 0.05555555555555555
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "S->M",
+      "seed": 0,
+      "sourceAccuracy": 0.4444444444444444,
+      "targetAccuracy": 0.75
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 0.9444444444444444,
+      "targetAccuracy": 0.2777777777777778
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 0.9166666666666666,
+      "targetAccuracy": 0.3611111111111111
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 0.9444444444444444,
+      "targetAccuracy": 0.3055555555555556
+    },
+    {
+      "mechanism": "max",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 0.19444444444444445,
+      "targetAccuracy": 0.16666666666666666
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "U->S",
+      "seed": 0,
+      "sourceAccuracy": 0.9722222222222222,
+      "targetAccuracy": 0.2777777777777778
+    },
+    {
+      "mechanism": "ours",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.5,
+      "targetAccuracy": 0.5277777777777778
+    },
+    {
+      "mechanism": "abmil-published",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.5833333333333334,
+      "targetAccuracy": 0.2777777777777778
+    },
+    {
+      "mechanism": "abmil-gated",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.3333333333333333,
+      "targetAccuracy": 0.3888888888888889
+    },
+    {
+      "mechanism": "max",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.19444444444444445,
+      "targetAccuracy": 0.027777777777777776
+    },
+    {
+      "mechanism": "mean",
+      "transfer": "S->U",
+      "seed": 0,
+      "sourceAccuracy": 0.4722222222222222,
+      "targetAccuracy": 0.4722222222222222
+    }
+  ]
+}
