@@ -1260,8 +1260,10 @@ def campaign_source_note(ensayo: bool | None) -> str:
     El mismo mecanismo que `search_source_note`/`contamination.source_note`,
     aplicado a la campaña que `Results.ipynb` lee: `cargar_corridas()`
     prefiere la corrida completa y cae al ensayo cuando no hay ninguna, la
-    misma regla que `Benchmark_Search_Report_v1.ipynb` ya aplica a la
-    búsqueda de techos -- y esa caída es correcta y tiene que ser visible.
+    misma regla que `search_source_note` aplica a la búsqueda de techos --
+    y esa caída es correcta y tiene que ser visible. (El cuaderno que la
+    mostraba para los techos, `Benchmark_Search_Report_v1.ipynb`, fue
+    retirado; la regla no vivía en él sino en la función de al lado.)
     Escrito siempre, nunca sólo en el caso malo: un aviso que sólo aparece
     cuando algo anda mal no le enseña a nadie qué vigila.
 

@@ -264,15 +264,17 @@ __steps__: dict = {
                      "placement": "remote",
                      "job": "ceiling-search",
                      "service": "kaggle"},
-    # Sólo lee y presenta --- la llamada que corre la búsqueda está comentada
-    # adentro del cuaderno --- y aun así escribe: se ejecuta `--inplace`, así
-    # que su propio cuaderno es su raíz y la única.
-    "search-report": {"module": "MIL_CREDA_Benchmark.steps",
-                      "function": "informe_de_busqueda",
-                     "advances": 3,
-                     "reads": ["Results/Benchmark/ceilings.json"],
-                     "produces": ["Notebooks/Benchmark_Search_Report_v1.ipynb"],
-                     "placement": "local"},
+    # `search-report` (`informe_de_busqueda`, que corría
+    # `Benchmark_Search_Report_v1.ipynb`) fue retirado entero, y no por
+    # duplicación: el informe de la búsqueda no es un resultado de este paper.
+    # Lo que la búsqueda deja es el registro de techos, y ese registro ya
+    # atraviesa el recorrido entero --- lo consume el barrido, lo consume la
+    # campaña, y lo que un lector tiene que poder juzgar es la corrida que
+    # corrió bajo esos techos, no la elección de los techos presentada como
+    # experimento propio. Un paso que sólo presenta un insumo le pone al
+    # recorrido un ordinal, una notebook y un ítem de posición que ninguna
+    # afirmación del paper necesita.
+    #
     # El eje de ruido, reducido a un solo paso que lo genera y lo corre. La
     # separación previa entre el barrido y su informe, más el diagnóstico y el
     # suyo, era el eje del noise-diagnostic que este stretch retira (ver el
@@ -303,7 +305,7 @@ __steps__: dict = {
     # muestra a los cinco.
     "noise-sweep": {"module": "MIL_CREDA_Benchmark.steps",
                     "function": "barrido_de_ruido",
-                    "advances": 4,
+                    "advances": 3,
                     "reads": ["Results/Benchmark/ceilings.json"],
                     "produces": ["Results/Pilot/Noise/curve",
                                  "Models/Pilot/Noise/curve",
@@ -336,7 +338,7 @@ __steps__: dict = {
     # (`harness.run_smoke()`) y no una campaña de ensayo a nueve horas y
     # media.
     "campaign": {"module": "MIL_CREDA_Benchmark.steps", "function": "campana",
-                "advances": 5,
+                "advances": 4,
                 "reads": [],
                 # Los dos archivos, no el directorio: `Results/Benchmark` es
                 # compartido -- `search-pilot` escribe `ceilings.pilot.json`
@@ -370,7 +372,7 @@ __steps__: dict = {
     # colisión que la entrada de `campaign` ya explica.
     "mechanisms": {"module": "MIL_CREDA_Benchmark.steps",
                    "function": "mecanismos_de_atencion",
-                   "advances": 6,
+                   "advances": 5,
                    "reads": [],
                    "produces": ["Results/Benchmark/attention_mechanisms.json"],
                    "placement": "remote",
@@ -392,7 +394,7 @@ __steps__: dict = {
     # `results_for` habría dado. `config.DESTINOS_SIN_COORDENADA` ya declara
     # por qué esa raíz no lleva coordenada.
     "results": {"module": "MIL_CREDA_Benchmark.steps", "function": "resultados",
-                     "advances": 7,
+                     "advances": 6,
                      "reads": ["Results/Benchmark/runs.jsonl",
                                "Results/Benchmark/summary.json",
                                "Results/Benchmark/ceilings.json",

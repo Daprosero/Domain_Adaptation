@@ -346,15 +346,19 @@ class TestUnEnsayoNoSePuedeLeerComoUnaCorridaCompleta:
     # has no successor that renders a ceiling table: `Results.ipynb`
     # (which folds the old report/latent/campaign/noise-report notebooks into
     # one) does not call `render_ceilings`/`render_ceilings_by_transfer` at
-    # all. That concern was always, and remains, the sole property of
-    # `Benchmark_Search_Report_v1.ipynb`, kept unchanged by this stretch --
-    # measured directly: its own cell 11 already calls
-    # `show(harness.search_source_note())` immediately before
-    # `show(tables.render_ceilings(registro, ...))`, and its cell 15 shows
-    # the same registry's per-transfer table right after. No test in this
-    # repository pins that pattern by name today; adding one is a decision
-    # for whoever owns that notebook, not a removal this stretch can silently
-    # paper over by keeping a test that opens a file that no longer exists.
+    # all. That concern was the sole property of
+    # `Benchmark_Search_Report_v1.ipynb`, and that notebook has since been
+    # retired entire, with its step (`search-report`) and its function
+    # (`steps.informe_de_busqueda`): the search's own report is not a result
+    # of this paper. So there is no notebook left that shows a ceiling table,
+    # and nothing for this assertion to open.
+    #
+    # What did NOT go with it: `harness.search_source_note()` itself, and the
+    # rule that a reading says which tree its numbers came from. That rule is
+    # pinned generically, notebook-name-agnostic, by
+    # `TestCadaLecturaDiceDeQueCorridaSale.test_ninguna_lectura_deja_la_escala_a_la_firma`
+    # above, and the note's own text is pinned by the fixtures immediately
+    # before this comment.
 
 
 class TestElCuadernoLatenteLeeLosPesosDeSuPropiaCorrida:

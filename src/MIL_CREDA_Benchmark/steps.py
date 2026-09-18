@@ -107,10 +107,10 @@ def ensayo_de_busqueda() -> str:
 
     * «`Benchmark_Search_Report_v1.ipynb` es el INFORME de la búsqueda y ya lo
       corre `informe_de_busqueda`. Que este paso lo corriera también dejaría un
-      cuaderno con dos dueños.» Sigue siendo verdad y ya no aplica: la búsqueda
-      corre el suyo, el informe corre el suyo, y cada raíz declarada sigue
-      teniendo un solo dueño --- que es lo que
-      `test_ninguna_raiz_es_de_dos_pasos` mide.
+      cuaderno con dos dueños.» Sigue siendo verdad y ya no aplica, dos veces:
+      la búsqueda corre el suyo, y el informe fue retirado entero --- no es un
+      resultado de este paper, y su paso, su función y su cuaderno se fueron
+      con él.
     * «Un cuaderno nuevo cuyo único contenido fuera esta llamada sería una
       segunda forma, más débil, de pedir lo mismo: `run_search` existe justamente
       para que un trabajo remoto pueda nombrar `module.function` y pasarle JSON, y
@@ -157,9 +157,10 @@ def resultados() -> str:
     `harness.campaign()` ni a `config.is_pilot_scale()`, sólo a
     `cargar_corridas()`, que resuelve viendo cuál de los dos árboles tiene
     `runs.jsonl`/`summary.json` --- así que no lleva guarda de escala ni de
-    techos, la misma forma que `informe_de_busqueda` tiene: sólo lee lo que
-    ya existe y sigue adelante, con una ausencia honesta, si no existe nada
-    todavía.
+    techos: sólo lee lo que ya existe y sigue adelante, con una ausencia
+    honesta, si no existe nada todavía. Es el único paso que quedó con esa
+    forma; `informe_de_busqueda`, que la compartía, fue retirado con el resto
+    del informe de la búsqueda.
 
     Dónde corre la campaña que este cuaderno lee ya tiene sucesor: el paso
     `campaign` (`campana`, abajo) invoca `harness.run_campaign_shard()`
@@ -205,7 +206,7 @@ def campana() -> dict:
     dejaría a este paso sin predecesores exactamente igual que dejarlo vacío
     -- `predecesores` deriva de lo que otro PASO produce, nunca de un
     `__records__` -- así que se declara vacío en vez de repetir la
-    ortografía de `search-report`/`noise-sweep`, cuyo `reads` apunta al mismo
+    ortografía de `noise-sweep`, cuyo `reads` apunta al mismo
     lugar por la misma razón sin que nada lo distinga de un paso sin
     predecesores real. Sin predecesores, el ensayo remoto de este paso prueba
     el cable (`harness.run_smoke()`) y nada más -- que es lo correcto: una
@@ -235,29 +236,6 @@ def mecanismos_de_atencion() -> dict:
     from MIL_CREDA_Benchmark import harness
 
     return harness.run_mechanism_sweep_shard()
-
-
-def informe_de_busqueda() -> str:
-    """El INFORME de la búsqueda de techos, no la búsqueda.
-
-    El cuaderno lee un registro que ya existe (`harness.search_record()`) y lo
-    presenta; la llamada que corre la búsqueda está comentada adentro, a
-    propósito -- un cuaderno de informe que además ejecutara horas de cómputo
-    haría que abrirlo cueste lo que cuesta correrlo.
-
-    El nombre dice cuál de las dos cosas es. La primera versión de esta función
-    se llamaba `busqueda` y prometía en su docstring "la búsqueda de techos",
-    que es exactamente lo que NO hace: un lector la habría llamado esperando un
-    registro nuevo y habría recibido el viejo, presentado. El cuaderno arrastraba
-    la misma mentira en su nombre --- se llamaba `Benchmark_Search_v1` --- y por
-    eso ahora lleva `_Report_`.
-
-    La llamada comentada de su celda 7 tampoco está más. Existía porque era la
-    única forma de pedir el ensayo de la búsqueda desde un cuaderno, y esa razón
-    murió con `Benchmark_Ceiling_Search.ipynb`: descomentarla ahora le daría dos
-    dueños al ensayo y haría que abrir este informe cueste lo que cuesta correrlo.
-    """
-    return _ejecutar("Benchmark_Search_Report_v1.ipynb")
 
 
 def barrido_de_ruido() -> str:

@@ -90,9 +90,16 @@ __benchmark__ = {
             # governs every table below is chosen here, so the report has to show
             # what it was chosen over: a ceiling that wins among four identical
             # scores and one that wins by a real difference are the same number and
-            # not the same evidence. Shown by `Benchmark_Search_Report_v1.ipynb`,
-            # not by `Results.ipynb` -- the ceiling search is its own
-            # experiment and reads as one, with its own report.
+            # not the same evidence. `Benchmark_Search_Report_v1.ipynb` was
+            # what showed them, and it has been retired entire with its
+            # `search-report` step: the search's own report is not a result of
+            # this paper, and what the recorrido carries forward is the RECORD
+            # (`__records__["ceilings"]`) that the sweep and the campaign both
+            # consume. The two calls stay declared because they still exist,
+            # still read that record, and are still pinned by
+            # `tests/test_ceiling_readers.py` -- what no notebook does today is
+            # show them, which is a gap named here rather than papered over by
+            # deleting the declaration.
             "tables.render_ceilings",
             "tables.render_ceilings_by_transfer",
             # `render_rungs`, `render_per_run`, `render_per_run_summary`,

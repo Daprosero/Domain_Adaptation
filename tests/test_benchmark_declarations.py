@@ -690,15 +690,12 @@ def _notebook_code_cells(name: str) -> list[dict]:
     return [cell for cell in notebook["cells"] if cell["cell_type"] == "code"]
 
 
-def _search_report_notebook() -> list[dict]:
-    """The notebook that reads the ceiling record and presents it.
-
-    It searches nothing -- the run that searches lives in
-    `Benchmark_Ceiling_Search.ipynb`, its own notebook, driven by its own
-    `search-pilot` step (`steps.ensayo_de_busqueda`) -- every number here
-    comes from `harness.search_record()`, read back from disk.
-    """
-    return _notebook_code_cells("Benchmark_Search_Report_v1.ipynb")
+# `_search_report_notebook()` is removed along with
+# `Benchmark_Search_Report_v1.ipynb`, its `search-report` step and
+# `steps.informe_de_busqueda`: the search's own report is not a result of this
+# paper. The run that searches keeps its own notebook
+# (`Benchmark_Ceiling_Search.ipynb`, driven by `search-pilot`); what went is
+# the notebook that only presented the record it leaves.
 
 
 # `test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign` and
@@ -989,36 +986,34 @@ def test_run_pilot_is_reachable_under_src_for_a_remote_run_module() -> None:
         config.REPOSITORY / "src")
 
 
-def test_the_ceilings_reach_the_written_report_and_not_only_the_screen() -> None:
-    """The agreement is that the *report* says which ceiling each family found.
-
-    A cell that prints it to the console satisfies a reader watching the run and
-    nobody afterwards, and the record is what a later session reads.
-
-    The `report.md` this test used to look for is gone: no module under
-    `src/MIL_CREDA_Benchmark/` writes one any more (`grep`-measured -- neither
-    `harness.py` nor any renderer names the string), and every remaining
-    notebook renders inline with `show(...)`, executed `--inplace` so the
-    executed output IS the report (`verify`'s own `notebooks.executedBy`/
-    `interpreterMatch` reads exactly that artefact). What the agreement still
-    requires -- that the ceilings reach something durable a session did not
-    have to be present for, not only a `print` that scrolls off -- is what an
-    executed, in-place cell satisfies, and `Benchmark_Search_Report_v1.ipynb`
-    is that cell: it `show()`s `render_ceilings`/`conclusion_ceilings` from
-    the record read off disk, in that order, so a later session opens the
-    executed notebook and reads exactly what a live run would have printed.
-
-    Reachable red: dropping either call from the search report notebook, or
-    reordering them so the conclusion prints before the table it explains.
-    """
-    sources = ["".join(c["source"]) for c in _search_report_notebook()]
-    renders = [i for i, s in enumerate(sources) if "render_ceilings" in s]
-    conclusions = [i for i, s in enumerate(sources)
-                   if "conclusion_ceilings" in s]
-    assert renders, "no cell renders the ceiling table"
-    assert conclusions, "no cell concludes over the ceiling table"
-    assert min(renders) <= min(conclusions), (
-        "the ceiling conclusion is shown before its own table")
+# `test_the_ceilings_reach_the_written_report_and_not_only_the_screen` is
+# removed, and the agreement it stood for is NOT quietly dropped -- it is
+# answered somewhere else, which is why this is a removal and not a hole.
+#
+# What it asserted: the ceilings reach something durable a later session can
+# open, not only a `print` that scrolls off. The cell it read was
+# `Benchmark_Search_Report_v1.ipynb`'s `show(render_ceilings)` /
+# `show(conclusion_ceilings)` pair, and that notebook has been retired entire
+# together with its `search-report` step -- the search's own report is not a
+# result of this paper.
+#
+# What still satisfies the agreement, measured rather than assumed: the
+# durable artefact is the RECORD, `Results/Benchmark/ceilings.json`, which the
+# search writes through `config.ceilings_record_for(pilot)` and reads back
+# through `harness.search_record(pilot=...)`. It carries each family's
+# ceiling, its grid, its ties and `atRequiredScale`, and it is what the sweep
+# and the campaign both consume -- so it outlives any session by construction,
+# where a rendered table only outlived one by being executed in place.
+# `__records__["ceilings"]` declares it, `tests/test_ceiling_record.py` and
+# `tests/test_search_records.py` pin its contents, and
+# `tests/test_ceiling_readers.py` pins `render_ceilings`/`conclusion_ceilings`
+# themselves -- the renderers stay declared and stay tested; what went is the
+# notebook that showed them.
+#
+# What genuinely went with it, said plainly rather than folded away: no
+# notebook in this tree renders a ceiling table any more. Whether the results
+# notebook should show one is a decision for whoever owns Section 0 of
+# `Results.ipynb`, not something this removal may take by adding a cell.
 
 
 def _searched(**overrides) -> dict:
