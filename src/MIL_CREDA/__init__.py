@@ -379,6 +379,12 @@ __steps__: dict = {
                             # el `ceilings.pilot.json` de `search-pilot`, y una
                             # raíz no puede ser de dos pasos.
                             "Results/Pilot/Benchmark/shard.json",
+                            # El registro que la verificación busca, escrito
+                            # por `campaign()` en el PADRE de su propio árbol
+                            # --- `results_for(...).parent` --- y ya declarado
+                            # en el contrato del banco. Reportado `foreign` en
+                            # la primera corrida de piloto que llegó al final.
+                            "Results/Pilot/Probe_results.json",
                             "Models/Pilot/Benchmark",
                             "Notebooks/Benchmark_Campaign.ipynb"],
                 "placement": "remote",

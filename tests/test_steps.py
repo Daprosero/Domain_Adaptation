@@ -690,6 +690,10 @@ class RaicesDeclaradasTests(unittest.TestCase):
                          # había salteado.
                          f"{relativa(config.results_for(0.0, 'campaign', True))}"
                          "/shard.json",
+                         # En el PADRE de ese árbol, que es donde `campaign()`
+                         # lo escribe para que la verificación lo encuentre.
+                         f"{relativa(config.results_for(0.0, 'campaign', True).parent)}"
+                         "/Probe_results.json",
                          relativa(config.models_for(0.0, "campaign", True)),
                          cuaderno_de("campana")],
             # El registro de la Sección 4, por la MISMA puerta que
