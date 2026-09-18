@@ -402,11 +402,13 @@ __benchmark__ = {
     # such dimension as every run's own reading rather than averaging it —
     # see `merge()`'s own docstring for why a mean is not offered here.
     #
-    # `identicalAcrossShards`: `epochs`, `ceilings` and `ceilingsByTransfer`.
-    # The ceilings are here because the search is what most recently changed
-    # them: two shards straddling that search would merge into one table with
-    # adaptation inert on one half and not on the other, and nothing would
-    # object. Both are real flat top-level fields of every stamp, which is the
+    # `identicalAcrossShards`: `epochs`, `ceilings`, `ceilingsByTransfer` and
+    # `hyperByTransfer`. The searched values are here because the search is what
+    # most recently changed them, and it moves SIX parameters rather than one:
+    # two shards straddling that search would otherwise merge into one table
+    # with adaptation inert on one half and not on the other, or with different
+    # kernel bandwidths, attention temperatures or ramp growths on each half,
+    # and nothing would object. Both are real flat top-level fields of every stamp, which is the
     # property the next paragraph is about. `commit` and `codeDigest` were
     # approved alongside it, but neither is a name `shards.disagreements()`
     # can actually check: both live nested at `evidence.commit` /
@@ -455,7 +457,7 @@ __benchmark__ = {
     # over both is a table nobody can attribute. It is a flat top-level field of
     # every stamp, which is what `disagreements()` needs to be able to see it.
     "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
-                              "labelNoise"],
+                              "hyperByTransfer", "labelNoise"],
         # Donde aterriza un shard que volvio. No es una eleccion nueva: es el
         # mismo lugar que `shards.read_shards()` ya usa cuando quien la llama no
         # dice otro --- la campana completa, limpia y de forma campania. Lo que
