@@ -494,8 +494,11 @@ class Arm(nn.Module):
 # hybrid, exactly `Arm.weights_for`'s own "learned" branch), ABMIL as
 # published (Ilse, Tomczak & Welling 2018 -- `v_R` unconstrained, no
 # consensus term), ABMIL with a gating unit (the same paper's gated variant),
-# max pooling, and mean pooling (Eq. (16) with uniform weights, already
-# `Arm.weights_for`'s own "uniform" branch under a different name).
+# max pooling read at the INSTANCE level (the bag is the instance holding its
+# largest activation, entire -- see `_max_weights` for why the coordinatewise
+# reading cannot be one of these five), and mean pooling (Eq. (16) with uniform
+# weights, already `Arm.weights_for`'s own "uniform" branch under a different
+# name).
 MECHANISMS = ("ours", "abmil-published", "abmil-gated", "max", "mean")
 
 
@@ -525,6 +528,39 @@ def _abmil_gated_logits(H: torch.Tensor, V: torch.Tensor, U: torch.Tensor,
     return gate @ w.reshape(-1)
 
 
+def _max_weights(H: torch.Tensor) -> torch.Tensor:
+    """Max pooling, instance-level: `beta` is one on the winning instance and
+    zero on every other, where the winner is the instance holding the largest
+    activation in the whole bag -- `argmax_a (max_j H[a, j])`.
+
+    This is the MIL "max operator" reading and NOT the coordinatewise maximum
+    `H.max(dim=0).values`, and the difference is what makes this mechanism
+    expressible at all. The coordinatewise maximum takes each of the `d`
+    coordinates from whichever instance happens to win it, so the vector it
+    builds is generally no instance of the bag and lies OUTSIDE their convex
+    hull -- it dominates every `h_a` in every coordinate. Eq. (19)'s `z = sum_a
+    beta_a h_a` with `beta >= 0` summing to one is a convex combination, so it
+    is always INSIDE that hull: no weight vector whatsoever reproduces the
+    coordinatewise maximum, and Eq. (18)'s bag kernel, which weights instance
+    kernels pairwise by that same `beta`, has nothing to be handed.
+
+    Under this reading both consumers see the same instance: `z = h_{a*}` for
+    the head, `beta = one-hot(a*)` for the kernel, neither approximated. The
+    ranking is by the largest single activation rather than by the norm because
+    that is what max pooling asserts -- one strong activation carries the bag --
+    and ranking by norm would slide the mechanism toward `mean`, which is the
+    other arm of this comparison.
+
+    The gradient is the gradient max pooling already had: `beta` is a constant
+    here (a hard `argmax` is not differentiable in its selection), so Eq. (19)
+    passes gradient to the winning row alone.
+    """
+    scores = H.max(dim=1).values
+    weights = torch.zeros(H.shape[0], dtype=H.dtype, device=H.device)
+    weights[int(torch.argmax(scores))] = 1.0
+    return weights
+
+
 def _mean_weights(H: torch.Tensor) -> torch.Tensor:
     """Mean pooling: beta_a = 1/m for every instance -- Eq. (16) with uniform
     weights, exactly `Arm.weights_for`'s own "uniform" branch, named for this
@@ -534,11 +570,14 @@ def _mean_weights(H: torch.Tensor) -> torch.Tensor:
     return torch.full((m,), 1.0 / m, dtype=H.dtype, device=H.device)
 
 
-def mechanism_weights(mechanism: str, H: torch.Tensor, params: dict) -> torch.Tensor | None:
-    """The per-instance weights `mechanism` assigns to one bag's embeddings
-    `H`, or `None` for `"max"`, which has none: max pooling selects a
-    winning instance per feature and reports no per-instance importance a
-    weighted sum could reconstruct.
+def mechanism_weights(mechanism: str, H: torch.Tensor, params: dict) -> torch.Tensor:
+    """The per-instance weights `mechanism` assigns to one bag's embeddings `H`.
+
+    Every mechanism has them, `"max"` included -- see `_max_weights` for why
+    that is a statement about WHICH max, not a convenience. So every one of
+    them reduces to Eq. (19)'s own `bag_embedding(H, beta)`, and the bag kernel
+    of Eq. (18) is handed a real `beta` in all five cases rather than a fallback
+    in one of them.
 
     `params` carries exactly the parameters the named mechanism reads --
     `MechanismArm._params()` builds it -- so a caller mismatching a
@@ -546,7 +585,7 @@ def mechanism_weights(mechanism: str, H: torch.Tensor, params: dict) -> torch.Te
     than silently mixing two mechanisms' weights.
     """
     if mechanism == "max":
-        return None
+        return _max_weights(H)
     if mechanism == "mean":
         return _mean_weights(H)
     if mechanism == "ours":
@@ -561,16 +600,6 @@ def mechanism_weights(mechanism: str, H: torch.Tensor, params: dict) -> torch.Te
     return bag_weights(logits, params["tau_att"])
 
 
-def mechanism_embedding(mechanism: str, H: torch.Tensor, params: dict) -> torch.Tensor:
-    """Eq. (19)'s bag representation under `mechanism` -- the coordinatewise
-    maximum over instances for `"max"`, `bag_embedding` (the weighted
-    average every other mechanism reduces to) otherwise.
-    """
-    if mechanism == "max":
-        return H.max(dim=0).values
-    return bag_embedding(H, mechanism_weights(mechanism, H, params))
-
-
 class MechanismArm(Arm):
     """`G`'s full method -- encoder, head, the weighted global term, the local
     correspondence, `GN`'s normalization axis untouched since this reuses
@@ -583,23 +612,13 @@ class MechanismArm(Arm):
     `config.ARMS` ever names one of `MECHANISMS`, so nothing here is
     reachable from a declared arm's own construction path.
 
-    **What `"max"` costs, named rather than silently decided.** `bag_kernel`/
-    `local_distance` (Eq. (14)/(28)'s bag kernel and the local correspondence
-    it feeds) are built on a WEIGHTED kernel mean over instances -- every
-    mechanism but `"max"` produces exactly the weight vector that machinery
-    already expects, because Eq. (16)'s hybrid, ABMIL published, ABMIL gated
-    and mean pooling are all, structurally, a softmax (or a uniform one) over
-    instance logits. Max pooling is not: it selects a winning instance per
-    feature and reports no per-instance importance a weighted kernel could
-    read. Section 4 asks for `sourceAccuracy`/`targetAccuracy` alone, so the
-    decision actually needed is narrow -- what feeds the bag KERNEL used by
-    the adaptation term's internal machinery when the FINAL bag
-    representation `self.head` reads came from `"max"` -- and this class
-    answers it by falling back to `_mean_weights` there and only there: a
-    neutral choice that favours no OTHER mechanism, rather than an
-    unreviewed guess about what "the max-pooling kernel" would mean. Flagged
-    here, in one place, exactly so it can be found and revisited rather than
-    inherited silently by every reader downstream.
+    All five mechanisms reduce to Eq. (19) over their own weights, `"max"`
+    included, so this class overrides `weights_for` and nothing else: the bag
+    representation the head reads and the `beta` the bag kernel of Eq. (18)
+    weights instance kernels by are the same object for every mechanism, and
+    no consumer is handed a fallback. `_max_weights` carries why that is true
+    of max pooling only under its instance-level reading, and what the
+    coordinatewise reading would have cost.
     """
 
     def __init__(self, mechanism: str, classes: int, source: Pool, target: Pool,
@@ -644,27 +663,13 @@ class MechanismArm(Arm):
         return {}
 
     def weights_for(self, H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
-        """Overrides `Arm.weights_for`: every caller that pools through it
-        (`bags_of`, `bag_representations`, and so every kernel `training_step`
-        builds from them) reads this mechanism's own weights instead of
-        `G`'s Eq. (15)/(16) -- see this class's own docstring for `"max"`,
-        the one mechanism with none, which falls back to uniform here.
+        """Overrides `Arm.weights_for`, and it is the ONLY override: every
+        caller that pools through it (`bags_of`, `bag_representations`, and so
+        every kernel `training_step` builds from them) reads this mechanism's
+        own weights instead of `G`'s Eq. (15)/(16), and `Arm`'s own Eq. (19)
+        then builds the bag representation from them unchanged.
         """
-        weights = mechanism_weights(self.mechanism, H, self._params())
-        return weights if weights is not None else _mean_weights(H)
-
-    def bag_representations(self, embeddings: torch.Tensor,
-                            sigma: float | torch.Tensor):
-        """Overrides `Arm.bag_representations`: the FINAL bag embedding
-        `self.head` reads is `mechanism_embedding`'s own -- true max pooling
-        for `"max"`, never the uniform-weight fallback `weights_for` reports
-        for the kernel machinery.
-        """
-        params = self._params()
-        kept = [self.select(H, sigma) for H in embeddings]
-        Z = torch.stack([mechanism_embedding(self.mechanism, H, params) for H in kept])
-        weights = [self.weights_for(H, sigma) for H in kept]
-        return Z, weights
+        return mechanism_weights(self.mechanism, H, self._params())
 
 
 def build_mechanism(mechanism: str, classes: int, source: Pool,
