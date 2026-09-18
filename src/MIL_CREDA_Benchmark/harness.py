@@ -762,7 +762,25 @@ def run_mechanism_sweep(reduction: Reduction, device: torch.device,
                 progress(f"  mechanisms {transfer_label(transfer)} seed {seed} "
                          f"{mechanism}: target={run['targetAccuracy']:.3f}")
 
-    record_path = config.PRODUCT / tables.MECHANISM_RECORD
+    # The destination, through its gate and with every coordinate written. It
+    # was `config.PRODUCT / tables.MECHANISM_RECORD`, a fixed path no scale
+    # reached, excused in `config.DESTINOS_SIN_COORDENADA` on the ground that
+    # section 4 "declares no pilot `Reduction` of its own". That described the
+    # absence of a dial, never a property of the record: the moment
+    # `run_mechanism_sweep_shard` takes `pilot`, a fixed path writes
+    # three-epoch numbers over the full record section 4 is read from —
+    # silently, and in exactly the right shape.
+    #
+    # `rate=0.0` and not `reduction.labelNoise`: the two conditions are
+    # multiplexed INSIDE the json (`clean`/`noisy`), which is what the old
+    # excuse had right, so the rate is not a coordinate of this destination
+    # and the one that is — the scale — now travels. The file NAME comes from
+    # the constant its readers already name rather than from a fresh literal:
+    # at full scale this is byte for byte the path it always was, and there
+    # are no two spellings that can drift apart.
+    record_path = (config.results_for(rate=0.0, kind="campaign",
+                                      pilot=reduction.pilot)
+                   / Path(tables.MECHANISM_RECORD).name)
     record_path.parent.mkdir(parents=True, exist_ok=True)
     existing = {"mechanisms": list(wiring.MECHANISMS), "clean": [], "noisy": []}
     if record_path.exists():
@@ -2287,7 +2305,8 @@ def run_search(shard: str | None = None, pilot: bool = False) -> dict:
 
 
 def run_campaign_shard(shard: str | None = None,
-                       seeds: list[int] | None = None) -> dict:
+                       seeds: list[int] | None = None,
+                       pilot: bool = False) -> dict:
     """One shard of the campaign, headless, callable with JSON alone.
 
     `tools/distribute.py`'s `run_shard()` already does this and a remote worker
@@ -2298,18 +2317,47 @@ def run_campaign_shard(shard: str | None = None,
     from a job. This is that way, and it is the same three lines, placed where a
     clone can see them.
 
-    The seed list is the whole parameterisation, because the seed axis is what
-    the declaration says may be split (`__benchmark__["distribution"]["axis"]`).
-    Everything else is the campaign's own: epochs stay at `config.FULL_EPOCHS`
-    for the reason `run_search` takes no dial either — a shard measured at pilot
-    scale is not a cheaper shard, it is a different experiment, and it would be
-    merged with the others as though it were one.
+    The seed list is the whole parameterisation of a SHARD, because the seed
+    axis is what the declaration says may be split
+    (`__benchmark__["distribution"]["axis"]`). `pilot` is a different
+    coordinate and not a second way to spell that one: it moves the scale AND
+    the destination together, exactly as `run_search(pilot=...)` does.
+
+    **The scale is received, never guessed.** This function used to hardcode
+    `config.FULL_SEEDS`/`config.FULL_EPOCHS` and take no dial, and the
+    argument written here was that a shard measured at pilot scale is not a
+    cheaper shard but a different experiment, which would be merged with the
+    others as though it were one. **That argument is still true, and it is
+    still the reason the full path below is untouched** — a `pilot=False`
+    call builds the identical `Reduction` it always did and writes where it
+    always wrote. What it did not establish is the conclusion it was used
+    for: a run routed to the PILOT tree is never merged with anything,
+    because it is not in the tree anything merges from. That is precisely
+    what `barrido_de_ruido` already relies on, one experiment over.
+
+    What the missing dial cost is measured rather than argued: the declared
+    flow was walked at pilot scale and this function trained the FULL grid —
+    five arms, six transfers, thirty seeds, twenty epochs — for 56 minutes
+    before a person killed it by hand. Nothing refused, because nothing here
+    could tell a pilot walk from a campaign.
+
+    `pilot=True` carries `config.SEEDS`/`config.EPOCHS` — the two constants
+    `config.is_pilot_scale()` reads, and the only two that separate the
+    scales — and `pilot=True` on the `Reduction` itself, which is what
+    `results_for`/`models_for` route on. It also decides which ceiling record
+    `with_ceilings_in_force` reads, through `reduction.pilot`: a pilot
+    campaign consumes `ceilings.pilot.json`, which is what `search-pilot`
+    produces, and never the full record it has no business consuming.
 
     `shard` names this call's own namespace and is passed through to
     `campaign()`, which hands it to `shard_paths()`. Without it two shards
     running at once write one `runs.jsonl` and one stamp between them, and the
     loser is a silent partial. Defaulting to `None` is the single-machine case,
     where there is nothing to collide with.
+
+    An explicit `seeds` still wins over the scale's own list, at either
+    scale: that is the shard split, and a caller naming one has already said
+    which repetitions this machine owns.
 
     Refuses nothing here that `campaign()` does not already refuse: it still
     demands a ceiling record, and a worker that clones only `src/` does not
@@ -2318,27 +2366,47 @@ def run_campaign_shard(shard: str | None = None,
     """
     device = resolve_device()
     reduction = Reduction(
-        seeds=list(seeds) if seeds is not None else list(config.FULL_SEEDS),
-        epochs=config.FULL_EPOCHS, device=str(device), environment=environment())
+        seeds=list(seeds) if seeds is not None
+        else list(config.SEEDS if pilot else config.FULL_SEEDS),
+        epochs=config.EPOCHS if pilot else config.FULL_EPOCHS,
+        pilot=pilot, device=str(device), environment=environment())
     reduction = with_ceilings_in_force(reduction, device, shard=shard)
     return campaign(reduction, device, shard=shard)
 
 
-def run_mechanism_sweep_shard(seeds: list[int] | None = None) -> dict:
+def run_mechanism_sweep_shard(seeds: list[int] | None = None,
+                              pilot: bool = False) -> dict:
     """The attention-mechanism comparison, headless, callable with JSON
     alone -- `run_campaign_shard`'s own sibling for Section 4.
 
     Runs both conditions section 4 reads (`clean`, rate `0.0`, then `noisy`,
     `config.NOISE_REPORTED`) in one call, so a single job submission leaves
     the record complete rather than requiring two separate ones the operator
-    would have to remember to both send. Full scale always, the same reason
-    `run_campaign_shard` never takes a pilot dial: a comparison measured at
-    three epochs is a different experiment, not a cheaper one.
+    would have to remember to both send.
+
+    **The scale is received, never guessed** -- the same dial
+    `run_campaign_shard` now takes, and the same reasoning, which is written
+    out there rather than restated here. The sentence this docstring used to
+    carry -- "full scale always, the same reason `run_campaign_shard` never
+    takes a pilot dial: a comparison measured at three epochs is a different
+    experiment, not a cheaper one" -- was true about MERGING and was used to
+    conclude something about the DIAL. A pilot comparison is a different
+    experiment, which is exactly why it is written to a different tree and
+    merged with nothing.
+
+    `pilot` here moves the record too, and it has to be said out loud
+    because this one does not route through `results_for` the way a campaign
+    does: `run_mechanism_sweep` writes one JSON file whose path was a fixed
+    string, so a pilot dial alone would have written three-epoch numbers over
+    the full record Section 4 is read from. That is the defect this whole
+    change exists to close, wearing the opposite mask.
     """
     device = resolve_device()
     reduction = Reduction(
-        seeds=list(seeds) if seeds is not None else list(config.FULL_SEEDS),
-        epochs=config.FULL_EPOCHS, device=str(device), environment=environment())
+        seeds=list(seeds) if seeds is not None
+        else list(config.SEEDS if pilot else config.FULL_SEEDS),
+        epochs=config.EPOCHS if pilot else config.FULL_EPOCHS,
+        pilot=pilot, device=str(device), environment=environment())
     reduction = with_ceilings_in_force(reduction, device)
     run_mechanism_sweep(reduction, device, noise=0.0)
     return run_mechanism_sweep(reduction, device, noise=config.NOISE_REPORTED)

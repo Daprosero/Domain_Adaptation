@@ -725,21 +725,36 @@ def test_run_campaign_shard_is_callable_with_json_alone() -> None:
 
     Reachable red: before this, `harness` exposed `run_pilot`, `run_smoke`,
     `run_one` and `run_search`, and none of them runs one shard of the grid.
+
+    `pilot` is the third parameter and is JSON-native like the other two,
+    which is the whole property this asserts: a remote job names
+    `{module, function, kwargs}` and hands over plain JSON, so a dial it
+    cannot spell is a dial only a notebook has.
     """
     import inspect
 
     from MIL_CREDA_Benchmark import harness
 
     parameters = inspect.signature(harness.run_campaign_shard).parameters
-    assert list(parameters) == ["shard", "seeds"]
+    assert list(parameters) == ["shard", "seeds", "pilot"]
     assert all(p.default is not inspect.Parameter.empty for p in parameters.values())
 
 
 def test_run_campaign_shard_runs_at_full_scale_never_the_pilots(
         tmp_path, monkeypatch) -> None:
-    """A shard is a slice of the campaign, not a cheaper version of it. The
-    seed axis is what splits across machines; the epoch count is not a dial,
-    for the same reason it is not one on the search.
+    """Called with no scale, a shard is a slice of the FULL campaign.
+
+    This docstring used to say the epoch count is not a dial at all, "for the
+    same reason it is not one on the search". That sentence outlived its
+    mechanism twice over: the search took a `pilot` dial first, and this
+    function has one now. What the sentence was right about is merger --- a
+    shard measured at pilot scale would be pooled with the full ones as
+    though it were one of them --- and that is still why the default is the
+    full scale and why THIS test exists: the path a remote job takes when it
+    names no scale must be byte-identical to what it always was. A pilot
+    shard is never merged with anything, because it is not written where
+    anything merges from; `test_run_campaign_shard_at_pilot_routes_to_the_
+    pilot_tree` is the other half.
 
     `config.CEILINGS_RECORD` is pinned to an isolated `tmp_path` record so
     this test can never reach the real `Results/Benchmark/ceilings.json` —
@@ -775,6 +790,159 @@ def test_run_campaign_shard_runs_at_full_scale_never_the_pilots(
     # each obtain ceilings in force before running — proven behaviourally,
     # against the record's own winners, not only against source text.
     assert seen["reduction"].ceilings == {"creda": 1e-4, "milcreda": 1.0}
+
+
+def test_run_campaign_shard_at_pilot_routes_to_the_pilot_tree(
+        tmp_path, monkeypatch) -> None:
+    """The two calls, side by side, because either one alone is green.
+
+    What this closes was measured and not argued: the declared flow was
+    walked at pilot scale and this function trained the FULL grid --- five
+    arms, six transfers, thirty seeds, twenty epochs --- for 56 minutes
+    before a person killed it by hand. Nothing refused, because
+    `run_campaign_shard` hardcoded `config.FULL_SEEDS`/`config.FULL_EPOCHS`
+    and took no dial at all.
+
+    Three things have to move together and are asserted together, because a
+    `Reduction` that carries a pilot scale and a full destination is exactly
+    the record that lies about itself. The DESTINATION is asserted through
+    `results_for`/`models_for` --- the gates that turn `pilot` into a path
+    --- rather than against a spelled path, so a change to how the `Pilot/`
+    segment is composed moves the expectation with it.
+
+    And the full call is asserted in the same test rather than left to the
+    one above: `pilot=False` has to reach the same tree it always reached,
+    and the two destinations have to DIFFER. Asserting only the pilot side
+    would pass a `results_for` that ignored its own coordinate.
+
+    Reachable red, proven by mutation and restore: hardcoding `pilot=False`
+    on the `Reduction` (its previous behaviour) leaves the pilot call
+    writing into `Results/Benchmark`; hardcoding `config.FULL_EPOCHS` leaves
+    it training twenty epochs into the pilot tree.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    record = tmp_path / "ceilings.json"
+    payload = json.dumps({
+        "creda": _stamped({"ceiling": 1e-4, "atRequiredScale": True}),
+        "milcreda": _stamped({"ceiling": 1.0, "atRequiredScale": True}),
+    })
+    record.write_text(payload, encoding="utf-8")
+    pilot_record = tmp_path / "ceilings.pilot.json"
+    pilot_record.write_text(payload, encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", pilot_record)
+    monkeypatch.setattr(config, "CEILINGS", {})
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
+        "the unit suite reached the real ceiling search"))
+
+    seen: dict = {}
+
+    def _spy(reduction, device, arms=None, progress=print, shard=None):
+        seen[reduction.pilot] = reduction
+        return {}
+
+    monkeypatch.setattr(harness, "campaign", _spy)
+    harness.run_campaign_shard(pilot=True)
+    harness.run_campaign_shard(pilot=False)
+
+    piloted, full = seen[True], seen[False]
+
+    # the scale, from the two constants `is_pilot_scale` reads and no others
+    assert piloted.epochs == config.EPOCHS
+    assert piloted.seeds == list(config.SEEDS)
+    assert full.epochs == config.FULL_EPOCHS
+    assert full.seeds == list(config.FULL_SEEDS)
+
+    # the destination, through the gates and never through a spelling written here
+    for reduction, pilot in ((piloted, True), (full, False)):
+        assert reduction.pilot is pilot
+        assert (config.results_for(reduction.labelNoise, reduction.kind,
+                                   reduction.pilot)
+                == config.results_for(0.0, "campaign", pilot))
+        assert (config.models_for(reduction.labelNoise, reduction.kind,
+                                  reduction.pilot)
+                == config.models_for(0.0, "campaign", pilot))
+
+    # and they DIFFER: without this, a gate ignoring its own coordinate would pass
+    assert (config.results_for(0.0, "campaign", True)
+            != config.results_for(0.0, "campaign", False))
+    assert (config.models_for(0.0, "campaign", True)
+            != config.models_for(0.0, "campaign", False))
+
+
+def test_run_mechanism_sweep_shard_at_pilot_routes_its_record_to_the_pilot_tree(
+        tmp_path, monkeypatch) -> None:
+    """Section 4's own half, and it is not the campaign's with a name changed.
+
+    `run_mechanism_sweep` writes ONE json file, and its path was a fixed
+    string (`config.PRODUCT / tables.MECHANISM_RECORD`) that no coordinate
+    reached --- excused in `config.DESTINOS_SIN_COORDENADA` on the ground
+    that "section 4 declares no pilot `Reduction` of its own", which
+    described the absence of a dial rather than a property of the record.
+    So a `pilot` dial alone would have written three-epoch numbers over the
+    full record section 4 is read from: the exact defect this change closes,
+    wearing the opposite mask.
+
+    The record is therefore asserted on DISK --- which file exists after each
+    call --- and not through the signature or the source, because the
+    signature was never the thing that was wrong. The full-scale path is
+    asserted to be byte-identical to the one the old fixed string composed,
+    so "derived, not respelled" is a measurement rather than a claim.
+
+    Reachable red, proven by mutation and restore: restoring the fixed
+    `config.PRODUCT / tables.MECHANISM_RECORD` leaves the pilot call writing
+    the full record.
+    """
+    from pathlib import Path
+
+    from MIL_CREDA_Benchmark import harness, tables
+
+    monkeypatch.setattr(config, "PRODUCT", tmp_path)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
+    monkeypatch.setattr(harness, "with_ceilings_in_force", lambda r, d, **k: r)
+    monkeypatch.setattr(harness, "run_mechanism", lambda *a, **k: {
+        "mechanism": "abmil", "transfer": "M->U", "targetAccuracy": 0.5})
+    monkeypatch.setattr(harness.bags, "build", lambda *a, **k: {"stub": True})
+
+    completo = config.results_for(0.0, "campaign", False) / Path(
+        tables.MECHANISM_RECORD).name
+    ensayo = config.results_for(0.0, "campaign", True) / Path(
+        tables.MECHANISM_RECORD).name
+
+    # the full-scale spelling is the one the fixed path composed, byte for byte
+    assert completo == config.PRODUCT / tables.MECHANISM_RECORD
+    assert ensayo != completo
+
+    harness.run_mechanism_sweep_shard(pilot=True, seeds=[0])
+    assert ensayo.is_file(), "the pilot call wrote nothing into the pilot tree"
+    assert not completo.exists(), (
+        "the pilot call wrote the full run's record, which is the one section 4 "
+        "presents")
+
+    harness.run_mechanism_sweep_shard(pilot=False, seeds=[0])
+    assert completo.is_file(), "the full call wrote nothing into its own tree"
+
+
+def test_run_mechanism_sweep_shard_is_callable_with_json_alone() -> None:
+    """Its scale dial has to be spellable by a remote job too.
+
+    Section 4 reaches a worker the same way the campaign does --- a
+    `run-config.json` naming `{module, function, kwargs}` --- so a dial that
+    only a notebook could pass would leave the two entrypoints asymmetric for
+    no reason anybody declared.
+
+    Reachable red: dropping `pilot` from the signature, or giving it no
+    default, which would make the plain full-scale call a usage error.
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import harness
+
+    parameters = inspect.signature(harness.run_mechanism_sweep_shard).parameters
+    assert list(parameters) == ["seeds", "pilot"]
+    assert all(p.default is not inspect.Parameter.empty for p in parameters.values())
 
 
 def test_run_campaign_shard_obtains_ceilings_before_it_runs_the_campaign() -> None:

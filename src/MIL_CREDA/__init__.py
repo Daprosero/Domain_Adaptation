@@ -328,10 +328,24 @@ __steps__: dict = {
     # así que el ensayo y el envío real ejercitan el mismo código por dos
     # puertas y no dos códigos distintos.
     #
-    # Sin `Pilot/` en `produces`: `run_campaign_shard` entrena siempre a
-    # escala completa (la misma razón que la búsqueda), así que no hay árbol
-    # de ensayo propio que declarar -- escribe siempre en
-    # `Results/Benchmark`/`Models/Benchmark`.
+    # **Con `Pilot/` en `produces`, y antes sin él.** Acá decía: «sin `Pilot/`
+    # en `produces`: `run_campaign_shard` entrena siempre a escala completa
+    # (la misma razón que la búsqueda), así que no hay árbol de ensayo propio
+    # que declarar -- escribe siempre en `Results/Benchmark`/
+    # `Models/Benchmark`». Era una descripción del hueco y no una propiedad
+    # del paso: la función no tomaba dial de escala, así que el recorrido de
+    # ensayo la corría a escala completa --- cinco brazos, seis
+    # transferencias, treinta semillas, veinte épocas, 56 minutos antes de
+    # que alguien la matara a mano --- sin que nada se negara.
+    #
+    # Hoy la función RECIBE la escala (`run_campaign_shard(pilot=...)`), el
+    # cuaderno la deriva de `config.is_pilot_scale()` y el paso se niega
+    # cuando esa lectura no es la del ensayo, así que estas raíces son las de
+    # ensayo y no pueden ser otras. Las dos salen de las puertas ---
+    # `config.results_for(0.0, "campaign", True)` y
+    # `config.models_for(0.0, "campaign", True)` --- y `steps.
+    # raiz_a_escala_completa` las traduce de vuelta a la ortografía completa,
+    # que es lo que deja a `results` encadenado a este paso por su `reads`.
     #
     # `reads` vacío y no `["Results/Benchmark/ceilings.json"]`, a propósito:
     # ver la docstring de `steps.campana` para el porqué -- ningún paso
@@ -356,9 +370,9 @@ __steps__: dict = {
                 # Y el cuaderno mismo, que se ejecuta `--inplace`: la salida
                 # ejecutada ES lo que queda de esta corrida, la misma forma
                 # que `search-pilot` y `noise-sweep` ya tenían.
-                "produces": ["Results/Benchmark/runs.jsonl",
-                            "Results/Benchmark/summary.json",
-                            "Models/Benchmark",
+                "produces": ["Results/Pilot/Benchmark/runs.jsonl",
+                            "Results/Pilot/Benchmark/summary.json",
+                            "Models/Pilot/Benchmark",
                             "Notebooks/Benchmark_Campaign.ipynb"],
                 "placement": "remote",
                 "job": "campaign",
@@ -384,14 +398,28 @@ __steps__: dict = {
     # (`harness.run_smoke()`).
     #
     # `produces` nombra un solo archivo de datos, no un directorio:
-    # `Results/Benchmark` sigue siendo compartido con `search-pilot` y
-    # `campaign`, la misma colisión que la entrada de `campaign` ya explica.
+    # `Results/Pilot/Benchmark` sigue siendo compartido con `campaign`, la
+    # misma colisión que la entrada de `campaign` ya explica.
     # Y el cuaderno mismo, ejecutado `--inplace`.
+    #
+    # **Con `Pilot/`, y antes sin él, y esta mitad costó más que la de
+    # `campaign`.** El registro de la Sección 4 no viajaba con la escala:
+    # `run_mechanism_sweep` lo componía como `config.PRODUCT /
+    # tables.MECHANISM_RECORD`, un camino fijo, excusado en
+    # `config.DESTINOS_SIN_COORDENADA` con el argumento de que «la sección 4
+    # no declara un `Reduction` de ensayo propio». Ese argumento describía la
+    # ausencia del dial. Darle el dial sin mover el destino habría escrito los
+    # números de tres épocas encima del registro completo que la Sección 4
+    # presenta --- el mismo defecto que este cambio cierra, del otro lado ---
+    # así que el destino se pide hoy por `config.results_for(rate=0.0,
+    # kind="campaign", pilot=reduction.pilot)`, y el NOMBRE del archivo sale
+    # de `tables.MECHANISM_RECORD`, que es lo que los lectores ya nombran: a
+    # escala completa el camino es byte por byte el de antes.
     "mechanisms": {"module": "MIL_CREDA_Benchmark.steps",
                    "function": "mecanismos_de_atencion",
                    "advances": 5,
                    "reads": [],
-                   "produces": ["Results/Benchmark/attention_mechanisms.json",
+                   "produces": ["Results/Pilot/Benchmark/attention_mechanisms.json",
                                 "Notebooks/Benchmark_Attention_Mechanisms.ipynb"],
                    "placement": "remote",
                    "job": "attention-mechanisms",

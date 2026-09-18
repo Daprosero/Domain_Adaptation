@@ -652,7 +652,7 @@ class RaicesDeclaradasTests(unittest.TestCase):
         Rojo alcanzable: declarar la raíz completa donde el paso escribe la de
         ensayo, o al revés.
         """
-        from MIL_CREDA_Benchmark import config
+        from MIL_CREDA_Benchmark import config, tables
 
         def relativa(ruta) -> str:
             return ruta.relative_to(config.PRODUCT).as_posix()
@@ -671,6 +671,26 @@ class RaicesDeclaradasTests(unittest.TestCase):
             "noise-sweep": [relativa(curva),
                             relativa(config.models_for(0.0, "curve", True).parent),
                             cuaderno_de("barrido_de_ruido")],
+            # `campaign` y `mechanisms` no estaban acá, y su ausencia era lo
+            # que dejaba pasar una declaración a escala completa: los dos
+            # nombraban `Results/Benchmark`/`Models/Benchmark` mientras sus
+            # pasos no tenían guarda y su biblioteca no tenía dial. Los dos
+            # archivos y no el directorio, porque `Results/Pilot/Benchmark` lo
+            # comparten --- la misma colisión que
+            # `test_ninguna_raiz_es_de_dos_pasos` vigila del otro lado.
+            "campaign": [f"{relativa(config.results_for(0.0, 'campaign', True))}"
+                         "/runs.jsonl",
+                         f"{relativa(config.results_for(0.0, 'campaign', True))}"
+                         "/summary.json",
+                         relativa(config.models_for(0.0, "campaign", True)),
+                         cuaderno_de("campana")],
+            # El registro de la Sección 4, por la MISMA puerta que
+            # `run_mechanism_sweep` usa adentro y con el nombre de archivo que
+            # `tables` ya declara: si el destino deja de llevar escala, o si
+            # alguien respelea la ruta, esto se pone en rojo.
+            "mechanisms": [f"{relativa(config.results_for(0.0, 'campaign', True))}"
+                           f"/{Path(tables.MECHANISM_RECORD).name}",
+                           cuaderno_de("mecanismos_de_atencion")],
             # `results` es local y presenta lo que ya exista: su única raíz
             # propia, además de su cuaderno, es el árbol de figuras sin
             # segmento de escala -- ver `config.DESTINOS_SIN_COORDENADA` para
@@ -1101,6 +1121,194 @@ def test_el_barrido_sigue_la_escala_configurada_y_su_paso_se_niega(
         f"el paso abrió {nombre} a escala completa, fuera de sus raíces"))
     with pytest.raises(SystemExit) as caido:
         steps.barrido_de_ruido()
+    assert "escala" in str(caido.value)
+
+
+def _correr_la_campana(monkeypatch, tmp_path, escala_de_ensayo: bool) -> dict:
+    """Ejecuta el cuaderno de la campaña con la escala configurada que se pida.
+
+    `run_campaign_shard` se sustituye y no se corre: lo que se afirma acá es
+    qué le PIDE el cuaderno, no qué hace la biblioteca --- eso lo afirma
+    `test_run_campaign_shard_at_pilot_routes_to_the_pilot_tree`, del otro
+    lado del cable. Las dos mitades juntas son lo que cierra el hueco; cada
+    una sola es verde.
+    """
+    from MIL_CREDA_Benchmark import config, harness
+
+    _sin_maquina(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "is_pilot_scale", lambda: escala_de_ensayo)
+
+    pedidas = []
+
+    def _run_campaign_shard(shard=None, seeds=None, pilot=False):
+        pedidas.append({"shard": shard, "seeds": seeds, "pilot": pilot})
+        return {"grid": {}}
+
+    monkeypatch.setattr(harness, "run_campaign_shard", _run_campaign_shard)
+    monkeypatch.setattr(harness, "campaign", lambda *a, **k: pytest.fail(
+        "el cuaderno recorrió la rejilla por su cuenta en vez de pedir "
+        "`run_campaign_shard`"))
+    monkeypatch.setattr(harness, "with_ceilings_in_force",
+                        lambda *a, **k: pytest.fail(
+                            "el cuaderno resolvió techos en vez de leerlos: sin "
+                            "`ceilings.json` esa llamada ES la búsqueda completa"))
+
+    ambito = _correr_las_celdas("Benchmark_Campaign.ipynb")
+    return {"pedidas": pedidas, "ambito": ambito}
+
+
+def _correr_los_mecanismos(monkeypatch, tmp_path, escala_de_ensayo: bool) -> dict:
+    """Lo mismo para el barrido de mecanismos de la Sección 4."""
+    from MIL_CREDA_Benchmark import config, harness
+
+    _sin_maquina(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "is_pilot_scale", lambda: escala_de_ensayo)
+
+    pedidas = []
+
+    def _run_mechanism_sweep_shard(seeds=None, pilot=False):
+        pedidas.append({"seeds": seeds, "pilot": pilot})
+        return {"mechanisms": [], "clean": [], "noisy": []}
+
+    monkeypatch.setattr(harness, "run_mechanism_sweep_shard",
+                        _run_mechanism_sweep_shard)
+    monkeypatch.setattr(harness, "run_mechanism_sweep", lambda *a, **k: pytest.fail(
+        "el cuaderno corrió el barrido por su cuenta en vez de pedir "
+        "`run_mechanism_sweep_shard`"))
+    monkeypatch.setattr(harness, "with_ceilings_in_force",
+                        lambda *a, **k: pytest.fail(
+                            "el cuaderno resolvió techos en vez de leerlos"))
+
+    ambito = _correr_las_celdas("Benchmark_Attention_Mechanisms.ipynb")
+    return {"pedidas": pedidas, "ambito": ambito}
+
+
+def test_la_campana_sigue_la_escala_configurada_y_su_paso_se_niega(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Las dos mitades, que sólo valen juntas --- la misma forma que el barrido.
+
+    Acá no había ninguna de las dos, y lo que eso costaba está medido y no
+    argumentado: el recorrido declarado se caminó a escala de ENSAYO y este
+    paso entrenó la rejilla COMPLETA --- cinco brazos, seis transferencias,
+    treinta semillas, veinte épocas --- durante 56 minutos, hasta que una
+    persona lo mató a mano. Nada se negó, porque `run_campaign_shard` fijaba
+    `config.FULL_EPOCHS`/`config.FULL_SEEDS` adentro y no tomaba dial, y
+    porque el paso no tenía guarda: la docstring de `steps.campana` decía
+    que «acá no hay dos destinos entre los que el cuaderno pueda mudarse en
+    silencio», que describía el hueco y no una propiedad del paso.
+
+    **El cuaderno deriva.** Con la escala configurada en la completa pide la
+    campaña completa; en ensayo pide el ensayo. Las dos escalas se corren y
+    no sólo la configurada de hoy: a escala completa un `False` fijo y una
+    lectura derivada dan el mismo número, y sólo una de las dos es una
+    puerta.
+
+    **El encabezado dice la escala que rige de verdad.** Se afirma contra las
+    constantes y contra las PUERTAS, no contra un texto: la celda leía
+    `EPOCAS = config.FULL_EPOCHS` fijo, con una nota que advertía que un
+    encabezado de 3 épocas sobre una corrida de 20 es cómo un número de
+    ensayo termina citado como resultado. Con el dial, la mentira se da
+    vuelta --- 20 anunciadas sobre 3 corridas --- y es peor, porque cita una
+    ausencia como campaña.
+
+    **El paso se niega.** `produces` nombra el árbol de ensayo y ninguna otra
+    raíz, así que a escala completa el cuaderno escribiría donde nadie lo
+    vigila y la forja lo leería como `foreign`.
+
+    Rojo alcanzable: fijar `ES_ENSAYO` en el cuaderno, dejar `EPOCAS` o
+    `DESTINO_RESULTADOS` atados a una constante en vez de a `ES_ENSAYO`, no
+    pasarle la escala a `run_campaign_shard`, o sacarle la guarda al paso.
+    """
+    from MIL_CREDA_Benchmark import config, steps
+
+    for escala in (True, False):
+        corrido = _correr_la_campana(monkeypatch, tmp_path, escala)
+        capsys.readouterr()
+        ambito = corrido["ambito"]
+        assert corrido["pedidas"] == [{"shard": None, "seeds": None,
+                                       "pilot": escala}], (
+            f"con la escala configurada en {escala!r} el cuaderno pidió otra "
+            f"cosa -> {corrido['pedidas']}")
+        assert ambito["ES_ENSAYO"] is escala
+        # el encabezado, contra las constantes que separan las dos escalas
+        assert ambito["EPOCAS"] == (config.EPOCHS if escala
+                                    else config.FULL_EPOCHS)
+        assert ambito["SEMILLAS"] == list(config.SEEDS if escala
+                                          else config.FULL_SEEDS)
+        # y los destinos, por sus puertas y no por una ortografía escrita acá
+        assert ambito["DESTINO_RESULTADOS"] == config.results_for(
+            config.NOISE, "campaign", escala)
+        assert ambito["DESTINO_PESOS"] == config.models_for(
+            config.NOISE, "campaign", escala)
+        assert ambito["DESTINO_RESULTADOS"] != config.results_for(
+            config.NOISE, "campaign", not escala)
+        # y el registro de techos que esta corrida consume de verdad
+        assert ambito["REGISTRO_TECHOS"] == config.ceilings_record_for(escala)
+
+    # la mitad del paso: se niega antes de abrir el cuaderno
+    monkeypatch.setattr(config, "is_pilot_scale", lambda: False)
+    monkeypatch.setattr(steps, "_ejecutar", lambda nombre: pytest.fail(
+        f"el paso abrió {nombre} a escala completa, fuera de sus raíces: la "
+        "campaña completa se lanza con su propia autorización"))
+    with pytest.raises(SystemExit) as caido:
+        steps.campana()
+    assert "escala" in str(caido.value)
+
+
+def test_los_mecanismos_siguen_la_escala_configurada_y_su_paso_se_niega(
+        tmp_path, monkeypatch, capsys) -> None:
+    """La Sección 4, con la mitad que a la campaña no le hacía falta.
+
+    El registro de este barrido no viajaba con la escala: `run_mechanism_
+    sweep` lo componía como un camino fijo, excusado en
+    `config.DESTINOS_SIN_COORDENADA` con el argumento de que la sección «no
+    declara un `Reduction` de ensayo propio». Ese argumento describía la
+    ausencia del dial. Con dial y sin mover el destino, un ensayo escribiría
+    los números de tres épocas encima del registro completo que la Sección 4
+    presenta --- que es el mismo defecto que este cambio cierra, del otro
+    lado --- así que el encabezado se afirma contra la PUERTA y contra el
+    nombre que los lectores ya nombran, nunca contra una ruta escrita acá.
+
+    Rojo alcanzable: fijar `ES_ENSAYO`, volver a imprimir
+    `tables.MECHANISM_RECORD` a secas, no pasarle la escala a
+    `run_mechanism_sweep_shard`, o sacarle la guarda al paso.
+    """
+    from pathlib import Path
+
+    from MIL_CREDA_Benchmark import config, steps, tables
+
+    for escala in (True, False):
+        corrido = _correr_los_mecanismos(monkeypatch, tmp_path, escala)
+        capsys.readouterr()
+        ambito = corrido["ambito"]
+        assert corrido["pedidas"] == [{"seeds": None, "pilot": escala}], (
+            f"con la escala configurada en {escala!r} el cuaderno pidió otra "
+            f"cosa -> {corrido['pedidas']}")
+        assert ambito["ES_ENSAYO"] is escala
+        assert ambito["EPOCAS"] == (config.EPOCHS if escala
+                                    else config.FULL_EPOCHS)
+        assert ambito["SEMILLAS"] == list(config.SEEDS if escala
+                                          else config.FULL_SEEDS)
+        esperado = (config.results_for(0.0, "campaign", escala)
+                    / Path(tables.MECHANISM_RECORD).name)
+        assert ambito["DESTINO_REGISTRO"] == esperado
+        assert ambito["DESTINO_REGISTRO"] != (
+            config.results_for(0.0, "campaign", not escala)
+            / Path(tables.MECHANISM_RECORD).name)
+        assert ambito["REGISTRO_TECHOS"] == config.ceilings_record_for(escala)
+
+    # y a escala completa la ortografía es la que el camino fijo componía
+    assert (config.results_for(0.0, "campaign", False)
+            / Path(tables.MECHANISM_RECORD).name
+            == config.PRODUCT / tables.MECHANISM_RECORD)
+
+    # la mitad del paso: se niega antes de abrir el cuaderno
+    monkeypatch.setattr(config, "is_pilot_scale", lambda: False)
+    monkeypatch.setattr(steps, "_ejecutar", lambda nombre: pytest.fail(
+        f"el paso abrió {nombre} a escala completa, fuera de sus raíces: el "
+        "registro que escribiría es el que la Sección 4 presenta"))
+    with pytest.raises(SystemExit) as caido:
+        steps.mecanismos_de_atencion()
     assert "escala" in str(caido.value)
 
 
