@@ -47,27 +47,32 @@ def test_every_arm_declares_which_sections_it_exercises() -> None:
         f"sections declared for arms that no longer exist: {sorted(declared - configured)}")
 
 
-def test_the_declared_arms_and_rungs_are_exactly_the_operators_seven_and_six() -> None:
-    """Defect (11): arm `GN` was retired (commit `af796f8`, "normalization is
-    part of the architecture, not a per-arm switch") and every guard that
-    caught its re-addition before this test did so only by counting --
-    `len(config.ARMS) == 7` -- which a re-added `GN` paired with a dropped
-    arm elsewhere would satisfy while still being wrong. This asserts the
-    actual identities: the seven arms are exactly `B, E, F, G, SU, SA, SK`
-    and the ladder's six rungs are exactly the operator's six.
+def test_the_declared_arms_and_rungs_are_exactly_the_operators_five_and_three() -> None:
+    """Defect (11)'s guard, re-measured against the current identities.
 
-    Reachable red: re-add `GN` (with or without also dropping a real arm), or
-    add, drop or repoint any rung of `config.LADDER`.
+    This test used to pin `GN` retired and the three selection arms (`SU`,
+    `SA`, `SK`) present -- the state commit `af796f8` left behind. Commit
+    `60836d2` ("retire selection arms, add GN, six-dim search...") reversed
+    both halves of that decision: the selection arms and their budget
+    (`SELECT_K`/`SELECTION_SEED`) are gone from `wiring.Arm.select`, and `GN`
+    is back, this time as an architecture variant (`normalization:
+    "sourceBatch"`) rather than the per-arm switch `af796f8` retired. Pinning
+    the old identities here would fail the very change that superseded them,
+    so the pin is re-measured rather than kept: it exists to catch a
+    SILENT reversal of whichever decision is current, never to hold one
+    revision's decision against the next.
+
+    Reachable red: dropping or renaming any of `B, E, F, G, GN`, adding a
+    sixth arm without a decision behind it, or repointing any rung of
+    `config.LADDER`.
     """
-    assert {arm["id"] for arm in config.ARMS} == {"B", "E", "F", "G", "SU", "SA", "SK"}
-    assert set(config.ARM_ORDER) == {"B", "E", "F", "G", "SU", "SA", "SK"}
-    assert "GN" not in config.ARMS_BY_ID
+    assert {arm["id"] for arm in config.ARMS} == {"B", "E", "F", "G", "GN"}
+    assert set(config.ARM_ORDER) == {"B", "E", "F", "G", "GN"}
+    assert not hasattr(config, "SELECT_K")
+    assert not hasattr(config, "SELECTION_SEED")
 
     rungs = {(left, right) for left, right, _ in config.LADDER}
-    assert rungs == {
-        ("B", "E"), ("E", "F"), ("F", "G"),
-        ("SU", "SK"), ("SA", "SK"), ("SK", "G"),
-    }
+    assert rungs == {("B", "E"), ("E", "F"), ("F", "G")}
 
 
 def test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration() -> None:
@@ -82,11 +87,17 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
     same-machine control) settled every one of `config.DIMENSIONS`:
     `sourceAccuracy`, `targetAccuracy`, `contribution`, `supervised`,
     `adaptationShare` and `parameters` came back bit-identical across all
-    three runs, so all six pool. `seconds` and `peakMiB` differed on every
-    pair — including the control, same machine both times — which is what
-    moved them out of `perEnvironment` (a label that claims the value is
-    stable *on* that machine, which the control disproves) and into
-    `perRun` (a value that belongs to one execution and nothing wider).
+    three runs, so all six pool.
+
+    `seconds` and `peakMiB` are not among them any more. They are what the
+    replication's own `perRun` group existed for -- the two differed on every
+    pair, including the control, same machine both times -- but commit
+    `60836d2` ("...drop timing") removed time and memory from
+    `config.DIMENSIONS` entirely, not merely reclassified them: `run_one`'s
+    return, the campaign's progress line, `run_smoke`'s return and
+    `shards.py`'s own per-run grid stopped naming either. `perRun` stays
+    declared and empty rather than deleted: it is a measured fact (nothing the
+    harness reports today needs it) and not an unfilled block.
 
     `ceilings` and `ceilingsByTransfer` joined `epochs` when the ceiling
     stopped being one number per family. They are the parameter the search
@@ -142,7 +153,7 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
         "poolable": ["sourceAccuracy", "targetAccuracy", "contribution",
                      "supervised", "adaptationShare", "parameters"],
         "perEnvironment": [],
-        "perRun": ["seconds", "peakMiB"],
+        "perRun": [],
         "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
                                   "labelNoise"],
     }
@@ -247,23 +258,15 @@ def test_the_bag_figure_shows_the_rung_the_local_term_lives_on() -> None:
     assert any(spec["adaptation"] is None for spec in specs), "no floor to read against"
 
 
-def test_the_selecting_arms_hold_one_budget_and_differ_only_in_the_rule() -> None:
-    """The rung between two of them is attributable only if this holds."""
-    selecting = [arm for arm in config.ARMS if arm["selection"] is not None]
-    assert len(selecting) >= 2, "a selection rung needs at least two selecting arms"
-    assert len({arm["selection"] for arm in selecting}) == len(selecting), (
-        "two selecting arms share a rule, so the rung between them differs in nothing")
-    for arm in selecting:
-        for axis in ("unit", "adaptation", "weighting", "local", "attention"):
-            assert arm[axis] == config.ARMS_BY_ID["G"][axis], (
-                f"{arm['id']} differs from the complete method in {axis} as well as "
-                f"in its selection, so its rung is not attributable")
-
-
-def test_the_budget_is_smaller_than_the_bag() -> None:
-    """A selection that keeps everything is not a selection, and its rung against
-    the arm that keeps everything would compare an arm with itself."""
-    assert 0 < config.SELECT_K < config.INSTANCES_PER_BAG
+# `test_the_selecting_arms_hold_one_budget_and_differ_only_in_the_rule` and
+# `test_the_budget_is_smaller_than_the_bag` are removed. Commit `60836d2`
+# ("retire selection arms...") removed the selection arms (`SU`, `SA`, `SK`)
+# and their budget (`config.SELECT_K`, `SELECTION_SEED`,
+# `wiring.Arm.select`'s budgeted rules) entirely: every declared arm's
+# `spec["selection"]` is `None` now, so the first test's own `selecting` list
+# is permanently empty and the second names a constant that no longer exists.
+# Both asserted a mechanism the operator's decision retired, not a live
+# property of the current arms.
 
 
 def test_the_pilot_and_the_full_run_are_the_same_program() -> None:
@@ -289,91 +292,52 @@ def _one_rung_grid(left_mean: float, right_mean: float) -> dict:
 
 def test_a_rung_subtracts_left_minus_right_everywhere_it_is_computed() -> None:
     """The sign is a reading convention, and a convention only holds if every
-    place that computes it agrees. It is computed three times — the rung table,
-    its conclusion, and the panorama that outlives both in the record — and the
-    prose in the notebook is written against it. Nothing else pins it, so an
-    inversion here comes back as a heading that says the opposite of its own
-    table while every number stays correct.
+    place that computes it agrees.
+
+    This used to check the claim three ways -- the rung (gains) table, its
+    conclusion, and the panorama that outlives both in the record. Commit
+    `177ce09` ("replace the report and latent notebooks with Results_v1")
+    retired `tables.render_rungs`/`conclusion_rungs`: none of the six required
+    sections of `Results_v1.ipynb` reads a rung table any more, and no other
+    notebook did either (see `__benchmark__["search"]`'s own retirement note
+    in `src/MIL_CREDA_Benchmark/__init__.py`). What survives is
+    `harness.paired_across_transfers` itself -- `campaign()` still calls it to
+    write `"panorama"` into every `summary.json` (line ~1890), so the
+    convention still has to hold for the one place it is still computed and
+    read, even with no table printing it.
+
+    Reachable red: flipping the subtraction inside `paired_across_transfers`
+    without flipping `favouringRight`'s own count.
     """
-    from MIL_CREDA_Benchmark import harness, tables
+    from MIL_CREDA_Benchmark import harness
 
     left, right, _ = config.LADDER[0]
     grid = _one_rung_grid(left_mean=0.40, right_mean=0.70)
-    summary = {"grid": grid, "reduction": {"seeds": config.SEEDS},
-               "panorama": harness.paired_across_transfers(grid)}
+    panorama = harness.paired_across_transfers(grid)
 
+    row = [r for r in panorama
+           if r["rung"] == f"{left}->{right}" and r["metric"] == "targetAccuracy"][0]
     # The right arm is 30 points above, so left - right is negative.
-    printed = tables.render_rungs(summary, "targetAccuracy", markdown=True)
-    assert "-30.0" in printed, printed
-
-    panorama = [row for row in summary["panorama"]
-                if row["rung"] == f"{left}->{right}"
-                and row["metric"] == "targetAccuracy"][0]
-    assert panorama["meanDifference"] < 0
+    assert row["meanDifference"] == pytest.approx(-0.30)
+    assert row["meanDifference"] < 0
     # The field counts transfers won by the right arm, which is now the negative
     # side. Flipping the subtraction without flipping this would report the right
     # arm losing all six of the transfers it won.
-    assert panorama["favouringRight"] == len(config.TRANSFERS)
+    assert row["favouringRight"] == len(config.TRANSFERS)
 
 
-def test_the_rung_conclusion_names_who_is_ahead_not_how_far_it_moved() -> None:
-    """A conclusion that reports a signed magnitude makes the reader reconstruct
-    the direction against the row's own name. Naming the arm is the whole job."""
-    from MIL_CREDA_Benchmark import tables
-
-    left, right, _ = config.LADDER[0]
-    summary = {"grid": _one_rung_grid(left_mean=0.40, right_mean=0.70),
-               "reduction": {"seeds": config.SEEDS}}
-    text = tables.conclusion_rungs(summary, "targetAccuracy")
-    assert config.NAME_OF[right] in text, text
-    assert "por encima de" in text, text
-    assert f"**{config.NAME_OF[right]}**" in text, text
-
-
-# ------------------------------------------------------------------ perRun table
-
-def test_the_per_run_table_prints_one_row_per_run_tagged_with_its_environment() -> None:
-    """A `perRun` dimension (`seconds`, `peakMiB`) has no mean this report is
-    willing to print: the replication that created the category found no value
-    stable enough to stand for the method, or even for one fixed machine across
-    two of its own runs. Pooling `n` readings into a single `mean ± stdev`, the
-    way `render` does for a `poolable` dimension, would print a number that
-    describes none of the runs behind it and looks exactly as rigorous as one
-    that does. So every row here names the run that produced it — its own
-    environment and seed — and no aggregate figure appears anywhere."""
-    from MIL_CREDA_Benchmark import tables
-
-    grid_per_run = {
-        "M->U": {"G": {"seconds": [
-            {"env": "c888ccf4ecc8", "seed": 0, "value": 64.8256},
-            {"env": "a111a111a111", "seed": 1, "value": 70.2},
-        ]}},
-    }
-    printed = tables.render_per_run(grid_per_run, "seconds", markdown=True)
-    assert "c888ccf4ecc8" in printed
-    assert "a111a111a111" in printed
-    assert "64.83" in printed or "64.8" in printed
-    assert "70.2" in printed
-    # No pooled figure anywhere: a mean over two machines would look exactly
-    # like a real one and describe neither.
-    assert "±" not in printed
-
-
-def test_the_per_run_table_reports_nothing_measured_when_the_grid_is_empty() -> None:
-    from MIL_CREDA_Benchmark import tables
-
-    assert "sin corridas" in tables.render_per_run({}, "seconds").lower()
-
-
-def test_the_per_run_conclusion_declines_to_pool_and_points_back_at_the_table() -> None:
-    """The table above already refuses to average; a conclusion that then
-    printed 'best/worst average' over the same readings would take back with
-    prose exactly what the table just refused to claim with numbers."""
-    from MIL_CREDA_Benchmark import tables
-
-    text = tables.conclusion_per_run("seconds")
-    assert "no se promedia" in text.lower()
-    assert "tabla" in text.lower()
+# `test_the_rung_conclusion_names_who_is_ahead_not_how_far_it_moved` and the
+# `perRun` table's three tests (`test_the_per_run_table_prints_one_row_per_
+# run_tagged_with_its_environment`, `test_the_per_run_table_reports_nothing_
+# measured_when_the_grid_is_empty`, `test_the_per_run_conclusion_declines_to_
+# pool_and_points_back_at_the_table`) are removed. `tables.conclusion_rungs`,
+# `render_per_run` and `conclusion_per_run` are retired along with
+# `render_rungs` (see the note on the test above): the rungs table had no
+# reader left to write a conclusion for, and `seconds`/`peakMiB` -- the only
+# dimensions `perRun` ever held anything for -- are gone from
+# `config.DIMENSIONS` entirely (commit `60836d2`, "...drop timing"), not
+# merely reclassified, so there is no longer a `perRun` dimension for either
+# function to render.
 
 
 # --------------------------------------------------------------- the three roles
@@ -560,66 +524,17 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
     assert "creda" in str(raised.value)
 
 
-def test_a_single_machine_campaign_records_its_per_run_readings(
-        tmp_path, monkeypatch) -> None:
-    """A `perRun` dimension has no mean anybody here is willing to hand a
-    reader, so the report reads it run by run out of `gridPerRun` -- and that
-    shape was assembled by `shards.merge` alone. A campaign on one machine
-    wrote a summary without it, so the report's whole first section rendered a
-    sentence where its table belongs while every reading sat in `runs.jsonl`.
-    One machine is one environment, and the median across seeds inside it is
-    exactly what that section says it shows.
-
-    Asserted over the real `campaign()` writer with only `run_one` and
-    `bags.build` faked, because a bespoke summary built in the test would prove
-    nothing about the path that actually writes the file."""
-    import json as _json
-    from MIL_CREDA_Benchmark import harness, shards
-
-    record = tmp_path / "ceilings.json"
-    record.write_text(_json.dumps({
-        "creda": _stamped({"ceiling": 1e-4, "atRequiredScale": True}),
-        "milcreda": _stamped({"ceiling": 1.0, "atRequiredScale": True}),
-    }), encoding="utf-8")
-    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
-    # Two roots and not one, for the reason the refusal test beside this states:
-    # `MODELS` is `RESULTS`' sibling and redirecting one leaves the other
-    # pointing at the owner's real run.
-    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
-    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
-    # `keep_median` writes a manifest whose paths are relative to the
-    # repository root, so the root moves with the other two or the write
-    # raises on a path outside it.
-    monkeypatch.setattr(config, "REPOSITORY", tmp_path)
-    monkeypatch.setattr(harness, "run_one",
-                        _fake_run_one({"weight": torch.zeros(1)}))
-    # Its own and not `_fake_build()`: the campaign passes the contamination
-    # rate as a fourth argument and `run_smoke` does not, so the shared fake
-    # cannot be widened without changing what its own tests exercise.
-    from types import SimpleNamespace
-    monkeypatch.setattr(
-        harness.bags, "build",
-        lambda code, cache, seed, noise=0.0: SimpleNamespace(
-            manifest={"code": code, "seed": seed, "labelNoise": noise}))
-
-    reduction = harness.Reduction(ceilings={"creda": 1e-4, "milcreda": 1.0},
-                                  seeds=[0, 1])
-    harness.campaign(reduction, torch.device("cpu"), arms=["B"],
-                     progress=lambda *a: None)
-
-    written = next(tmp_path.rglob("summary.json"))
-    summary = _json.loads(written.read_text(encoding="utf-8"))
-    assert "gridPerRun" in summary, "a one-machine summary carries it too"
-
-    _, _, per_run = shards.partition(config.DIMENSIONS, shards.declaration())
-    assert per_run, "the declaration has to name at least one for this to mean anything"
-    transfer = f"{config.VERDICT_TRANSFERS[0][0]}->{config.VERDICT_TRANSFERS[0][1]}"
-    readings = summary["gridPerRun"][transfer]["B"][per_run[0]]
-    # One reading per seed, each keeping its own environment and seed rather
-    # than an average across them -- which is the whole reason the dimension is
-    # `perRun` and the reason `render_per_run_summary` can group by machine.
-    assert sorted(r["seed"] for r in readings) == [0, 1]
-    assert all(r["env"] for r in readings)
+# `test_a_single_machine_campaign_records_its_per_run_readings` is removed.
+# It asserted that `config.DIMENSIONS` names at least one `perRun` dimension
+# ("the declaration has to name at least one for this to mean anything") --
+# true when `seconds`/`peakMiB` were still measured, and false now that
+# commit `60836d2` ("...drop timing") removed both from `config.DIMENSIONS`
+# entirely rather than merely reclassifying them. `gridPerRun` itself is not
+# retired -- `campaign()` still assembles it from whatever `shards.
+# declaration()["perRun"]` names, which is `[]` today -- so a one-machine
+# summary still carries the key and it is legitimately empty; there is no
+# longer a per-run reading for this test to demonstrate keeps its own seed
+# and environment.
 
 
 def test_the_contaminated_correspondence_is_its_own_rendering() -> None:
@@ -776,60 +691,31 @@ def _notebook_code_cells(name: str) -> list[dict]:
     return [cell for cell in notebook["cells"] if cell["cell_type"] == "code"]
 
 
-def _phase_one_run() -> list[dict]:
-    """The notebook that runs the campaign: the forecast, the search, the grid.
+def _search_report_notebook() -> list[dict]:
+    """The notebook that reads the ceiling record and presents it.
 
-    It renders nothing and writes no report — only the records the reporting
-    notebook reads back from disk.
+    It searches nothing -- the run that searches lives in
+    `Benchmark_Ceiling_Search_v1.ipynb`, its own notebook, driven by its own
+    `search-pilot` step (`steps.ensayo_de_busqueda`) -- every number here
+    comes from `harness.search_record()`, read back from disk.
     """
-    return _notebook_code_cells("Benchmark_Campaign_v1.ipynb")
+    return _notebook_code_cells("Benchmark_Search_Report_v1.ipynb")
 
 
-def _phase_one_report() -> list[dict]:
-    """The notebook that reads those records and writes the readable report.
-
-    It trains and searches nothing; every number in it comes from
-    `summary.json`, `runs.jsonl` and the ceiling search's own record.
-    """
-    return _notebook_code_cells("Benchmark_Report_v1.ipynb")
-
-
-def test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign() -> None:
-    """The join, checked from the notebook's end and not only from the harness'.
-
-    `campaign` refuses without ceilings and `ceilings_in_force` supplies them, and
-    both were green while the only caller that matters never called one from the
-    other: the notebook built its `Reduction` with the empty mapping `config`
-    imports and died on the refusal. Testing each half against a fixture written
-    here verifies both halves and never the connection, which is the only thing
-    this rule was ever about.
-
-    Both calls live in the run notebook: obtaining the ceilings is what lets the
-    campaign that follows in the same notebook proceed.
-    """
-    sources = ["".join(cell["source"]) for cell in _phase_one_run()]
-    obtains = [i for i, s in enumerate(sources) if "ceilings_in_force" in s]
-    runs = [i for i, s in enumerate(sources) if "harness.campaign(" in s]
-    assert obtains, "no cell obtains the ceilings; the campaign will refuse"
-    assert runs, "no cell runs the campaign"
-    assert min(obtains) < min(runs), (
-        f"the ceilings are obtained at cell {min(obtains)}, after the campaign at "
-        f"{min(runs)}")
-
-
-def test_the_notebook_forecasts_the_search_before_spending_it() -> None:
-    """The search is the longest single wait and the one part with no pilot scale.
-
-    A notebook forecasting only the grid puts it ahead of the estimate that exists
-    to precede it. Both the forecast and the obtaining call live in the run
-    notebook, ahead of the search and the campaign they precede.
-    """
-    sources = ["".join(cell["source"]) for cell in _phase_one_run()]
-    forecasts = [i for i, s in enumerate(sources) if '["search"]' in s]
-    obtains = [i for i, s in enumerate(sources) if "ceilings_in_force" in s]
-    assert forecasts, "nothing forecasts what the ceiling search costs"
-    assert min(forecasts) < min(obtains), (
-        "the search is forecast after it is spent, which is not a forecast")
+# `test_the_notebook_obtains_the_ceilings_before_it_runs_the_campaign` and
+# `test_the_notebook_forecasts_the_search_before_spending_it` are removed.
+# Both read `Benchmark_Campaign_v1.ipynb`, deleted along with report, latent,
+# campaign, noise-report and both diagnostic notebooks (commit `2f9bf32`,
+# "delete every artefact the new structure will not overwrite"): the campaign
+# is no longer notebook-driven at all -- `src/MIL_CREDA/__init__.py`'s own
+# `resultados` docstring names the gap explicitly ("nada en `__steps__`
+# invoca `harness.campaign()`/`run_campaign_shard` hoy"), which is what this
+# stretch's own campaign step closes (see `__steps__["campaign"]` below).
+# The harness-level equivalent of the join these two tested --
+# `ceilings_in_force`/the record read before `campaign()` runs -- is already
+# covered, unconditionally of any notebook, by
+# `test_run_campaign_shard_obtains_ceilings_before_it_runs_the_campaign`
+# further down this file, and stays green.
 
 
 # --------------------- run_campaign_shard(): one shard's campaign, asked by name
@@ -1108,16 +994,32 @@ def test_the_ceilings_reach_the_written_report_and_not_only_the_screen() -> None
     """The agreement is that the *report* says which ceiling each family found.
 
     A cell that prints it to the console satisfies a reader watching the run and
-    nobody afterwards, and the record is what a later session reads. The report
-    notebook is the one that writes `report.md`, reading the ceiling record back
-    from disk rather than from a run still live in memory.
+    nobody afterwards, and the record is what a later session reads.
+
+    The `report.md` this test used to look for is gone: no module under
+    `src/MIL_CREDA_Benchmark/` writes one any more (`grep`-measured -- neither
+    `harness.py` nor any renderer names the string), and every remaining
+    notebook renders inline with `show(...)`, executed `--inplace` so the
+    executed output IS the report (`verify`'s own `notebooks.executedBy`/
+    `interpreterMatch` reads exactly that artefact). What the agreement still
+    requires -- that the ceilings reach something durable a session did not
+    have to be present for, not only a `print` that scrolls off -- is what an
+    executed, in-place cell satisfies, and `Benchmark_Search_Report_v1.ipynb`
+    is that cell: it `show()`s `render_ceilings`/`conclusion_ceilings` from
+    the record read off disk, in that order, so a later session opens the
+    executed notebook and reads exactly what a live run would have printed.
+
+    Reachable red: dropping either call from the search report notebook, or
+    reordering them so the conclusion prints before the table it explains.
     """
-    written = [s for s in ("".join(c["source"]) for c in _phase_one_report())
-               if "report.md" in s]
-    assert written, "no cell writes the readable report"
-    assert any("render_ceilings" in s and "conclusion_ceilings" in s
-               for s in written), (
-        "the written report carries no ceiling section")
+    sources = ["".join(c["source"]) for c in _search_report_notebook()]
+    renders = [i for i, s in enumerate(sources) if "render_ceilings" in s]
+    conclusions = [i for i, s in enumerate(sources)
+                   if "conclusion_ceilings" in s]
+    assert renders, "no cell renders the ceiling table"
+    assert conclusions, "no cell concludes over the ceiling table"
+    assert min(renders) <= min(conclusions), (
+        "the ceiling conclusion is shown before its own table")
 
 
 def _searched(**overrides) -> dict:
@@ -1900,6 +1802,80 @@ def test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given(monkeypatch) 
             harness.run_one("G", transfer, 0, reduction, device, material,
                             role="valid")
         assert seen == [expected], (transfer, seen)
+
+
+def test_run_one_resolves_the_hyperparameters_of_the_transfer_it_was_given(
+) -> None:
+    """The other five searched dimensions, reaching `wiring.build` the same
+    way the ceiling reaches `ramp` in the test above.
+
+    Before this stretch's build, a record with non-default winners changed
+    NOTHING: `search_ceilings_trials` explored `rampDelta`/`kernelSigma`/
+    `attentionGamma`/`attentionTemperature`/`tauLocal` and recorded a winner
+    per transfer, but `campaign()` never passed `hyper=` to `run_one`, so
+    every arm trained at the bare `config` constant regardless of what the
+    search found (`harness.hyper_for`'s own docstring names this
+    explicitly). This is the wiring that closes it: two transfers with
+    different winners in `reduction.hyperByTransfer` must reach
+    `wiring.build` with two different `hyper` dicts.
+
+    Reachable red (the mutation this test exists to catch): revert `run_one`
+    to `if hyper is None: hyper = hyper` (a no-op) instead of
+    `hyper = hyper_for(reduction, family, transfer)`, and both transfers
+    below arrive at `wiring.build` with the bare `config`-default `hyper` --
+    the two captured dicts stop differing and this test goes red.
+    """
+    from MIL_CREDA_Benchmark import harness, wiring
+
+    captured: list[dict] = []
+
+    def _spy(arm_id, classes, source, target, hyper=None):
+        captured.append(hyper)
+        raise _StopAtCeiling
+
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        # `wiring.build` is `run_one`'s very first call after resolving
+        # `hyper`, so raising from the spy itself captures the resolved
+        # value and stops before anything trains -- no need to also stub
+        # `ramp`, which `run_one` never reaches.
+        monkeypatch.setattr(wiring, "build", _spy)
+
+        winner_sm = {"rampDelta": 55.0, "kernelSigma": 12.5,
+                    "attentionGamma": 0.4, "attentionTemperature": 3.3,
+                    "tauLocal": 0.7}
+        reduction = harness.Reduction(
+            epochs=1, seeds=[0],
+            ceilings={"milcreda": 1e-2},
+            ceilingsByTransfer={"milcreda": {"S->M": 1e-4}},
+            hyperByTransfer={"milcreda": {"S->M": winner_sm}},
+        )
+        material = {"source": _synthetic_bagset("S"), "target": _synthetic_bagset("M")}
+        device = torch.device("cpu")
+
+        # The searched transfer: `wiring.build` must receive exactly the
+        # winner attached above, not the bare `config` defaults.
+        with pytest.raises(_StopAtCeiling):
+            harness.run_one("G", ("S", "M"), 0, reduction, device, material,
+                            role="valid")
+        assert captured[-1] == winner_sm, captured[-1]
+
+        # A transfer the search never saw: falls back to `reduction`'s own
+        # scalar fields, `config`'s bare declared defaults here since none
+        # were overridden at construction -- never the OTHER transfer's
+        # winner.
+        with pytest.raises(_StopAtCeiling):
+            harness.run_one("G", ("M", "U"), 0, reduction, device, material,
+                            role="valid")
+        assert captured[-1] != winner_sm, captured[-1]
+        assert captured[-1] == {
+            "rampDelta": config.RAMP_DELTA, "kernelSigma": config.KERNEL_SIGMA,
+            "attentionGamma": config.ATTENTION_GAMMA,
+            "attentionTemperature": config.ATTENTION_TEMPERATURE,
+            "tauLocal": config.TAU_LOCAL,
+        }
+    finally:
+        monkeypatch.undo()
 
 
 def test_the_campaign_refuses_up_front_on_a_stale_ceiling_record_before_writing_anything(

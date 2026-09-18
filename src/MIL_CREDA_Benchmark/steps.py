@@ -161,12 +161,80 @@ def resultados() -> str:
     ya existe y sigue adelante, con una ausencia honesta, si no existe nada
     todavía.
 
-    Dónde corre la campaña que este cuaderno lee es una pregunta que este
-    paso no contesta: no hay, en este árbol, un paso que invoque
-    `harness.campaign()`/`run_campaign_shard()` hoy -- ver el informe de este
-    stretch.
+    Dónde corre la campaña que este cuaderno lee ya tiene sucesor: el paso
+    `campaign` (`campana`, abajo) invoca `harness.run_campaign_shard()`
+    directamente.
     """
     return _ejecutar("Results_v1.ipynb")
+
+
+def campana() -> dict:
+    """Corre la campaña completa, llamando a `harness.run_campaign_shard`
+    DIRECTAMENTE -- sin cuaderno, a propósito.
+
+    **Por qué no hay cuaderno.** `Benchmark_Campaign_v1.ipynb` fue borrado
+    junto con el resto de esta reestructuración (commit `2f9bf32`) y no vuelve:
+    el artefacto que este paso manda a un worker no es un cuaderno, es un
+    `run-config.json` que nombra `{module: "MIL_CREDA_Benchmark.harness",
+    function: "run_campaign_shard"}` directamente -- la misma forma que
+    `run_search`'s propia docstring ya declaraba para la búsqueda antes de que
+    ésta tuviera su propio cuaderno: "un `run-config.json` nombra
+    `{module, function, kwargs}` y no puede nombrar un `.ipynb`". Un cuaderno
+    cuyo único contenido fuera esta llamada sería una segunda forma, más
+    débil, de pedir lo mismo.
+
+    Este paso (`steps.campana`) es el mismo callable que el `run-config.json`
+    remoto nombra, llamado LOCALMENTE: el ensayo (`ensayo_remoto`) y el envío
+    real ejercitan el mismo artefacto, nunca dos formas distintas de pedir la
+    misma corrida.
+
+    **Por qué no deriva escala.** `harness.run_campaign_shard` entrena
+    siempre a `config.FULL_EPOCHS`/`config.FULL_SEEDS` -- nunca al ensayo, la
+    misma razón por la que la búsqueda no lo es tampoco (`config.SEARCH_
+    EPOCHS`'s propia nota) -- así que este paso no deriva `config.
+    is_pilot_scale()` ni tiene un árbol de ensayo propio que declarar en
+    `produces`: escribe siempre en `Results/Benchmark`/`Models/Benchmark`, la
+    corrida completa y nada más.
+
+    **Por qué `reads` está vacío.** Consume el registro de techos a escala
+    completa (`ceilings_in_force`, adentro de `campaign()`), pero ningún paso
+    de `__steps__` produce esa raíz: la búsqueda completa es una entrada
+    única declarada en `__records__`, corrida una vez por fuera del
+    recorrido de pasos (ver el comentario grande sobre `__records__` más
+    arriba). Declarar un `reads` que apunta a un productor que no existe
+    dejaría a este paso sin predecesores exactamente igual que dejarlo vacío
+    -- `predecesores` deriva de lo que otro PASO produce, nunca de un
+    `__records__` -- así que se declara vacío en vez de repetir la
+    ortografía de `search-report`/`noise-sweep`, cuyo `reads` apunta al mismo
+    lugar por la misma razón sin que nada lo distinga de un paso sin
+    predecesores real. Sin predecesores, el ensayo remoto de este paso prueba
+    el cable (`harness.run_smoke()`) y nada más -- que es lo correcto: una
+    campaña de ensayo entrenaría a escala completa, nueve horas y media, y
+    "ensayar" eso no ahorra nada.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    return harness.run_campaign_shard()
+
+
+def mecanismos_de_atencion() -> dict:
+    """Corre la comparación de mecanismos de atención de la Sección 4,
+    llamando a `harness.run_mechanism_sweep_shard` DIRECTAMENTE -- sin
+    cuaderno, la misma forma que `campana` y por la misma razón (ver su
+    propia docstring): lo que la Sección 4 lee (`Results_v1.ipynb`, celdas
+    26/29) es `Results/Benchmark/attention_mechanisms.json`, nunca corre
+    nada, así que el paso que genera ese registro no tiene notebook propio
+    tampoco -- el `run-config.json` remoto nombra `{module:
+    "MIL_CREDA_Benchmark.harness", function: "run_mechanism_sweep_shard"}`.
+
+    Entrena los cinco mecanismos (`wiring.MECHANISMS`) sobre el método
+    completo (`G`, nunca un id declarado -- `wiring.MechanismArm` hereda todo
+    lo demás de `G`), limpio y contaminado, y escribe el registro que
+    `tables.render_mechanisms`/`conclusion_mechanisms` leen.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    return harness.run_mechanism_sweep_shard()
 
 
 def informe_de_busqueda() -> str:

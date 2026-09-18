@@ -311,6 +311,71 @@ __steps__: dict = {
                      "placement": "remote",
                      "job": "noise-sweep",
                      "service": "kaggle"},
+    # La campaña completa: cada arm declarado, sobre cada transferencia que
+    # `config.VERDICT_TRANSFERS` nombra, a `config.FULL_EPOCHS`/`FULL_SEEDS`.
+    # `campaign-local` -- el paso que antes ejercitaba `harness.campaign()`
+    # corriendo `Benchmark_Campaign_v1.ipynb` -- fue retirado junto con esa
+    # notebook (commit `2f9bf32`) y este paso es su sucesor, no su reemplazo
+    # exacto: donde `campaign-local` corría un cuaderno, éste llama a
+    # `harness.run_campaign_shard()` DIRECTAMENTE (`steps.campana`, ver su
+    # propia docstring para el porqué) -- el mismo callable JSON que un
+    # `run-config.json` remoto nombra, así que el ensayo y el envío real
+    # ejercitan el mismo artefacto.
+    #
+    # Sin `Pilot/` en `produces`: `run_campaign_shard` entrena siempre a
+    # escala completa (la misma razón que la búsqueda), así que no hay árbol
+    # de ensayo propio que declarar -- escribe siempre en
+    # `Results/Benchmark`/`Models/Benchmark`.
+    #
+    # `reads` vacío y no `["Results/Benchmark/ceilings.json"]`, a propósito:
+    # ver la docstring de `steps.campana` para el porqué -- ningún paso
+    # declarado produce esa raíz (la búsqueda completa es la entrada única de
+    # `__records__`, corrida por fuera del recorrido de pasos), así que
+    # declararla no encadenaría nada que `predecesores` pudiera derivar. Sin
+    # predecesores, el ensayo remoto de este paso prueba el cable
+    # (`harness.run_smoke()`) y no una campaña de ensayo a nueve horas y
+    # media.
+    "campaign": {"module": "MIL_CREDA_Benchmark.steps", "function": "campana",
+                "advances": 5,
+                "reads": [],
+                # Los dos archivos, no el directorio: `Results/Benchmark` es
+                # compartido -- `search-pilot` escribe `ceilings.pilot.json`
+                # ahí mismo, la búsqueda completa (fuera de `__steps__`)
+                # escribiría `ceilings.json`, y el paso de la Sección 4
+                # (`attention_mechanisms.json`, ver ese `__steps__`) también
+                # -- y declarar el directorio entero se tragaría las raíces de
+                # los otros por segmentos, exactamente la colisión
+                # `test_ninguna_raiz_es_de_dos_pasos` existe para atrapar.
+                "produces": ["Results/Benchmark/runs.jsonl",
+                            "Results/Benchmark/summary.json",
+                            "Models/Benchmark"],
+                "placement": "remote",
+                "job": "campaign",
+                "service": "kaggle"},
+    # Sección 4: los cinco mecanismos de atención (`wiring.MECHANISMS`), sobre
+    # el método completo (`G`, nunca un id declarado -- `wiring.MechanismArm`
+    # hereda todo lo demás de `G` por herencia, nunca por copia). Mismo
+    # patrón que `campaign`, por la misma razón (ver la docstring de
+    # `steps.mecanismos_de_atencion`): sin cuaderno propio, `run-config.json`
+    # nombra `{module: "MIL_CREDA_Benchmark.harness", function:
+    # "run_mechanism_sweep_shard"}` directamente.
+    #
+    # `reads` vacío: consume el registro de techos a escala completa, y por
+    # la misma razón que `campaign` ningún paso declarado lo produce (ver esa
+    # entrada). Sin predecesores, su ensayo remoto prueba el cable
+    # (`harness.run_smoke()`).
+    #
+    # `produces` es un solo archivo, no un directorio: `Results/Benchmark`
+    # sigue siendo compartido con `search-pilot` y `campaign`, la misma
+    # colisión que la entrada de `campaign` ya explica.
+    "mechanisms": {"module": "MIL_CREDA_Benchmark.steps",
+                   "function": "mecanismos_de_atencion",
+                   "advances": 6,
+                   "reads": [],
+                   "produces": ["Results/Benchmark/attention_mechanisms.json"],
+                   "placement": "remote",
+                   "job": "attention-mechanisms",
+                   "service": "kaggle"},
     # El único paso que PRESENTA: reemplaza lo que `report`, `latent` y
     # `noise-report` dibujaban por separado -- las tres notebooks de esos
     # pasos fueron borradas junto con la reestructuración de este stretch.
@@ -321,20 +386,13 @@ __steps__: dict = {
     # así que es LOCAL, como `report`/`latent` lo eran, y no lleva `job`/
     # `service`: no envía nada.
     #
-    # **Dónde corre la campaña que este paso lee queda fuera de este
-    # stretch.** `campaign-local`, el paso que antes ejercitaba
-    # `harness.campaign()` corriendo `Benchmark_Campaign_v1.ipynb`, fue
-    # retirado junto con esa notebook y no tiene sucesor declarado acá: nada
-    # en `__steps__` invoca `harness.campaign()`/`run_campaign_shard` hoy.
-    # Ver el informe de este stretch para el detalle.
-    #
     # `FIGURES = config.PRODUCT / "Results" / "figures"`, un solo árbol sin
     # segmento de escala ni de tasa -- medido en la notebook, no supuesto --
     # así que la raíz es la que el archivo compone de verdad y no la que
     # `results_for` habría dado. `config.DESTINOS_SIN_COORDENADA` ya declara
     # por qué esa raíz no lleva coordenada.
     "results": {"module": "MIL_CREDA_Benchmark.steps", "function": "resultados",
-                     "advances": 5,
+                     "advances": 7,
                      "reads": ["Results/Benchmark/runs.jsonl",
                                "Results/Benchmark/summary.json",
                                "Results/Benchmark/ceilings.json",

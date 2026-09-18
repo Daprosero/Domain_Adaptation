@@ -19,6 +19,33 @@ from MIL_CREDA_Benchmark import steps
 #: (`steps.CUADERNOS` es `<raíz>/MIL-CREDA/Notebooks`) y nunca escrita.
 _RAIZ = steps.CUADERNOS.parents[1]
 
+#: Los pasos que legítimamente no corren ningún cuaderno, cada uno con su
+#: razón al lado --- la misma forma que `steps.CUADERNOS_SIN_PASO`, y por la
+#: misma razón: un nombre pelado en una exención y un olvido se leen igual.
+#:
+#: `campaign` es el primero: el artefacto que manda a un worker no es un
+#: cuaderno, es un `run-config.json` que nombra `{module, function}`
+#: directamente (`steps.campana`'s propia docstring). El ensayo de un paso
+#: sin cuaderno sigue probando el artefacto real -- llama al mismo callable
+#: que el envío remoto nombra -- así que la razón que
+#: `test_cada_paso_declara_exactamente_un_cuaderno_entre_sus_raices` existe
+#: para prevenir (un ensayo que prueba la biblioteca y no lo que se manda) no
+#: aplica acá: lo que se manda YA ES la biblioteca, llamada directamente.
+PASOS_SIN_CUADERNO_A_PROPOSITO: dict[str, str] = {
+    "campaign": (
+        "sin cuaderno a propósito: el artefacto que este paso manda a un "
+        "worker es `run-config.json` nombrando `{module: "
+        "\"MIL_CREDA_Benchmark.harness\", function: \"run_campaign_shard\"}` "
+        "directamente, no un `.ipynb` -- `Benchmark_Campaign_v1.ipynb` fue "
+        "borrado y no vuelve (ver `steps.campana`)"),
+    "mechanisms": (
+        "sin cuaderno a propósito, la misma forma que `campaign` y por la "
+        "misma razón: `run-config.json` nombra `{module: "
+        "\"MIL_CREDA_Benchmark.harness\", function: "
+        "\"run_mechanism_sweep_shard\"}` directamente (ver "
+        "`steps.mecanismos_de_atencion`)"),
+}
+
 
 class PasosDeclaradosTests(unittest.TestCase):
 
@@ -155,11 +182,19 @@ class PasosDeclaradosTests(unittest.TestCase):
         dos dueños de una ejecución `--inplace`, y la segunda le pisa a la
         primera lo único que deja.
 
-        Rojo alcanzable: declarar un paso que compute sin correr un cuaderno, o
-        sacarle el `Notebooks/...` a las raíces de cualquiera de los diez.
+        Un paso puede eximirse declarándose en `PASOS_SIN_CUADERNO_A_
+        PROPOSITO`, con su razón al lado -- la misma disciplina que
+        `steps.CUADERNOS_SIN_PASO` ya impone del otro lado. Eximir cuesta
+        escribir por qué; un nombre pelado no alcanza.
+
+        Rojo alcanzable: declarar un paso que compute sin correr un cuaderno
+        y sin eximirlo, sacarle el `Notebooks/...` a las raíces de un paso no
+        eximido, o eximir uno sin razón.
         """
         sin_cuaderno, con_varios = [], []
         for nombre, entrada in paquete.__steps__.items():
+            if nombre in PASOS_SIN_CUADERNO_A_PROPOSITO:
+                continue
             cuadernos = [raiz for raiz in entrada.get("produces", [])
                          if raiz.endswith(".ipynb")]
             if not cuadernos:
@@ -173,6 +208,11 @@ class PasosDeclaradosTests(unittest.TestCase):
         self.assertEqual(con_varios, [],
                          "un paso con dos cuadernos ejecuta `--inplace` dos "
                          "veces y la segunda le pisa a la primera")
+        for nombre, razon in PASOS_SIN_CUADERNO_A_PROPOSITO.items():
+            with self.subTest(paso=nombre):
+                self.assertIn(nombre, paquete.__steps__,
+                             "la exención le sobrevivió al paso")
+                self.assertTrue(razon.strip(), "eximido sin decir por qué")
 
     # `test_el_cuaderno_de_campana_deriva_su_escala_en_vez_de_escribir_en_la_completa`
     # is removed. `campana`/`Benchmark_Campaign_v1.ipynb` and the
@@ -249,6 +289,40 @@ CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
         "--- y mientras la afirmaba ningún cuaderno podía correr la búsqueda "
         "completa. Hoy se llama `Benchmark_Ceiling_Search_v1.ipynb` y recibe su "
         "escala"),
+    # Los seis borrados junto con la reestructuración de este stretch (commit
+    # `2f9bf32`, "delete every artefact the new structure will not
+    # overwrite"): sus checkpoints, registros y cuadernos medían el árbol de
+    # r17 y ninguno se regenera en el lugar. `Benchmark_Noise_Sweep_v1.ipynb`
+    # -- el séptimo que ese commit retiró -- no entra acá: este stretch lo
+    # repuso, y su nombre vuelve a resolver contra el árbol.
+    "Benchmark_Campaign_v1.ipynb": (
+        "borrado junto con el resto: era el cuaderno que corría la campaña "
+        "completa (`harness.campaign()`) y el `campaign-local` step que lo "
+        "ejecutaba. Sin sucesor notebook-driven -- el `campaign` step que "
+        "este stretch agrega a `__steps__` corre remoto, sin cuaderno propio "
+        "(ver su entrada más abajo)"),
+    "Benchmark_Report_v1.ipynb": (
+        "borrado: era el informe de la campaña completa. "
+        "`Results_v1.ipynb` lo reemplaza, junto con "
+        "`Benchmark_Latent_v1.ipynb`, en un solo cuaderno -- las seis "
+        "secciones que reemplazan a las dos leen el mismo registro y se "
+        "citan entre sí"),
+    "Benchmark_Latent_v1.ipynb": (
+        "borrado: era el análisis latente por separado. Ver "
+        "`Benchmark_Report_v1.ipynb`, con quien se fusionó en "
+        "`Results_v1.ipynb`"),
+    "Benchmark_Noise_Report_v1.ipynb": (
+        "borrado junto con el eje de ruido de dos pasos (barrido + informe): "
+        "`noise-sweep` (`barrido_de_ruido`) hoy corre y presenta en un solo "
+        "cuaderno, `Benchmark_Noise_Sweep_v1.ipynb`"),
+    "Benchmark_Noise_Diagnostic_Search_v1.ipynb": (
+        "borrado junto con el diagnóstico de ruido entero: re-buscaba el "
+        "techo de la adaptación bajo material contaminado, lo que "
+        "contradice la decisión de que la búsqueda del techo corre siempre "
+        "sobre material limpio (ver la nota de retiro en `config.py`)"),
+    "Benchmark_Noise_Diagnostic_Report_v1.ipynb": (
+        "borrado junto con el diagnóstico de ruido entero -- ver "
+        "`Benchmark_Noise_Diagnostic_Search_v1.ipynb`"),
 }
 
 
@@ -1054,10 +1128,14 @@ def test_la_cadena_de_pasos_se_deriva_de_las_dos_listas(monkeypatch) -> None:
     """Quién depende de quién, leído de `reads` contra `produces` y de nada más.
 
     Lo que se afirma es la cadena entera y no una arista: la búsqueda no depende
-    de nadie ---escribe el registro de techos y no lo lee--- y `verification`
+    de nadie ---escribe el registro de techos y no lo lee--- `verification`
     tampoco, porque corre la suite sobre `src/MIL_CREDA`, que viaja con el clon y
-    no lo produce ningún paso. Los dos son los únicos exentos de la regla, y esa
-    lista sale de que su `reads` esté vacío.
+    no lo produce ningún paso, y `campaign`/`mechanisms` tampoco: los dos
+    consumen el registro de techos a escala COMPLETA, y ningún paso declarado
+    lo produce -- la búsqueda completa es la entrada única de `__records__`,
+    corrida por fuera de este recorrido (ver la docstring de `steps.campana`).
+    Los cuatro son los únicos exentos de la regla, y esa lista sale de que su
+    `reads` esté vacío.
 
     Y se afirma que es DERIVADA: un paso inventado acá, que lea una raíz que
     `report` escribe, queda encadenado a `report` sin que nadie toque una lista de
@@ -1075,7 +1153,14 @@ def test_la_cadena_de_pasos_se_deriva_de_las_dos_listas(monkeypatch) -> None:
         "search-pilot": (),
         "search-report": ("search-pilot",),
         "noise-sweep": ("search-pilot",),
-        "results": ("search-pilot", "noise-sweep"),
+        "campaign": (),
+        "mechanisms": (),
+        # Encuentro y no orden canónico: `predecesores` recorre `reads` en el
+        # orden declarado y devuelve cada dueño la primera vez que aparece.
+        # `runs.jsonl` es el primer `reads` de `results` y lo produce
+        # `campaign`, así que sale primero; `attention_mechanisms.json` es
+        # el cuarto `reads` y lo produce `mechanisms`.
+        "results": ("campaign", "search-pilot", "mechanisms", "noise-sweep"),
     }
     assert set(esperada) == set(paquete.__steps__), (
         "se declaró un paso nuevo y nadie dijo qué consume")
@@ -1083,7 +1168,8 @@ def test_la_cadena_de_pasos_se_deriva_de_las_dos_listas(monkeypatch) -> None:
         assert steps.predecesores(paso) == previos, paso
 
     sin_predecesor = [p for p in paquete.__steps__ if not steps.predecesores(p)]
-    assert sin_predecesor == ["verification", "search-pilot"], (
+    assert sin_predecesor == ["verification", "search-pilot", "campaign",
+                              "mechanisms"], (
         "cambió quién está exento de la regla, y eso es una decisión, no un "
         f"detalle -> {sin_predecesor}")
 
@@ -1228,11 +1314,11 @@ def test_el_ensayo_remoto_se_niega_cuando_falta_una_salida_de_escala_completa(
     (tmp_path / ensayo).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / ensayo).write_text("{}", encoding="utf-8")
     with pytest.raises(SystemExit):
-        steps.ensayo_remoto("campaign-local")
+        steps.ensayo_remoto("noise-sweep")
 
     # con la salida COMPLETA en disco deja de faltar
     (tmp_path / completa).write_text("{}", encoding="utf-8")
-    assert steps.entradas_faltantes("campaign-local") == []
+    assert steps.entradas_faltantes("noise-sweep") == []
 
 
 def test_el_paso_sin_predecesor_ensaya_el_cable_y_no_abre_ningun_cuaderno(
