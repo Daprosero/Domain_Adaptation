@@ -196,19 +196,18 @@ NOISE_LEVELS = [0.0, 0.1, 0.2, 0.3, 0.4]
 #: edits `NOISE_LEVELS` next.
 NOISE_CAP = 0.5
 
-#: Which roles the noise reaches: all three, `train`, `valid` and `eval`, in both
-#: domains, with ONE shared draw across every arm -- the same instances are
-#: replaced for `B`, `E`, `F`, `G` and `GN` alike, because the draw is a property
-#: of the material (`bags.build` is called once per domain/seed and the same
-#: `BagSet` is handed to every arm) and never a property of which arm is training.
+#: Which roles the noise reaches: `train` and `eval`, in both domains, with ONE
+#: shared draw across every arm -- the same instances are replaced for `B`, `E`,
+#: `F`, `G` and `GN` alike, because the draw is a property of the material
+#: (`bags.build` is called once per domain/seed and the same `BagSet` is handed
+#: to every arm) and never a property of which arm is training.
 #:
-#: This replaces an earlier decision that kept `valid`/`eval` clean on the
-#: argument that `valid` is where the ceiling search reads its criterion and
-#: `eval` is the answer key of the verdict, so contaminating either would corrupt
-#: a measurement rather than the material being measured. That argument is
-#: superseded: the noise axis is about how the METHOD behaves when every role it
-#: touches is corrupted, selection and verdict included, not only about how it
-#: trains on corrupted evidence while being judged on clean evidence.
+#: `valid` stays clean, and the reason is not that contaminating it would corrupt
+#: a measurement: it is that nothing reads it under noise. The search runs always
+#: on clean material and its values are used unchanged when the material is
+#: corrupted, so a contaminated `valid` would be drawn and never opened. `eval`
+#: IS contaminated, because the sharpest half of this question is whether the
+#: method still decides when the evidence it is judged on is corrupted too.
 #:
 #: One rate for source and target alike. The two are not the same perturbation --
 #: the target trains unsupervised, through `pseudolabel` (Eq. 22) and
@@ -217,7 +216,7 @@ NOISE_CAP = 0.5
 #: would make the sweep two-dimensional and multiply a campaign that already
 #: costs `len(ARMS) * len(TRANSFERS) * len(FULL_SEEDS)` runs. Which of the two
 #: domains hurts more is a rung of its own, later, on one transfer.
-NOISE_ROLES = ("train", "valid", "eval")
+NOISE_ROLES = ("train", "eval")
 
 
 def noise_instances(rate: float) -> int:

@@ -53,40 +53,35 @@ def _drawn(figure) -> dict[str, tuple[list[float], list[float]]]:
             for line in axis.lines if not line.get_label().startswith("_")}
 
 
-def test_the_degradation_figure_draws_the_share_against_rho_and_not_only_accuracy(
+def test_the_sweep_draws_the_floor_against_rho_in_each_domain(
         tmp_path, monkeypatch) -> None:
-    """Two instruments over one axis, and the second is the one that says which
-    of the two failures happened.
+    """One instrument over one axis, in the two domains, measured on the floor.
 
-    Accuracy against rho for every arm says that something fell. The share of the
-    objective the adaptation term commanded, against the same rho, is what
-    separates a term that stopped working from a term that was never given any
-    weight to work with -- and both instruments are already recorded, so the axis
-    is the only thing being added.
+    The sweep is the arm that does not adapt, so what it says is that the
+    contamination hurts -- without crediting the fall to any method. There is no
+    share series beside it: a floor carries no adaptation term, so the quantity
+    that used to separate "the term stopped working" from "the term was never
+    given weight" has nothing to report here, and the notebook asks for source
+    and target instead.
 
     Reachable red: draw `targetAccuracy` whatever the caller asked for, and the
-    share series comes out as the accuracy one.
+    source series comes out as the target one.
     """
     _levels(tmp_path, monkeypatch, {
-        0.0: {"B": {"targetAccuracy": 0.80, "adaptationShare": 0.0},
-              "G": {"targetAccuracy": 0.82, "adaptationShare": 0.10}},
-        0.2: {"B": {"targetAccuracy": 0.60, "adaptationShare": 0.0},
-              "G": {"targetAccuracy": 0.75, "adaptationShare": 0.30}},
-        0.4: {"B": {"targetAccuracy": 0.40, "adaptationShare": 0.0},
-              "G": {"targetAccuracy": 0.70, "adaptationShare": 0.55}},
+        0.0: {"B": {"targetAccuracy": 0.80, "sourceAccuracy": 0.95}},
+        0.2: {"B": {"targetAccuracy": 0.60, "sourceAccuracy": 0.88}},
+        0.4: {"B": {"targetAccuracy": 0.40, "sourceAccuracy": 0.71}},
     })
 
-    accuracy = _drawn(figures.noise_curves("targetAccuracy"))
-    assert accuracy[config.NAME_OF["G"]] == ([0.0, 0.2, 0.4], [0.82, 0.75, 0.70])
-    assert accuracy[config.NAME_OF["B"]] == ([0.0, 0.2, 0.4], [0.80, 0.60, 0.40])
+    target = _drawn(figures.noise_curves("targetAccuracy"))
+    assert target[config.NAME_OF["B"]] == ([0.0, 0.2, 0.4], [0.80, 0.60, 0.40])
 
-    share = _drawn(figures.noise_curves("adaptationShare"))
-    assert share[config.NAME_OF["G"]] == ([0.0, 0.2, 0.4], [0.10, 0.30, 0.55])
-    # every arm that carries the term is on the share figure, and the axis is
-    # the same rate axis the accuracy figure ran over
-    for arm in (a["id"] for a in config.ARMS if a["adaptation"]):
-        if config.NAME_OF[arm] in accuracy:
-            assert config.NAME_OF[arm] in share
+    source = _drawn(figures.noise_curves("sourceAccuracy"))
+    assert source[config.NAME_OF["B"]] == ([0.0, 0.2, 0.4], [0.95, 0.88, 0.71])
+
+    # the floor is the whole sweep: no adapted arm is drawn beside it
+    assert set(target) == {config.NAME_OF["B"]}
+    assert set(source) == {config.NAME_OF["B"]}
 
 
 def test_the_degradation_figure_never_draws_a_level_that_did_not_run(
