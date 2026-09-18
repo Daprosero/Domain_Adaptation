@@ -33,7 +33,7 @@ import torch
 import torch.nn as nn
 
 from CREDA.schedules import creda_ramp
-from MIL_CREDA_Benchmark import bags, ceiling_record, config, report_digest, wiring
+from MIL_CREDA_Benchmark import bags, ceiling_record, config, report_digest, tables, wiring
 from MIL_CREDA_Benchmark.schedules import milcreda_ramp
 from MIL_CREDA_Benchmark.verdict import judge, render, standard_error, tally
 
@@ -265,24 +265,38 @@ class Reduction:
     kind: str = "campaign"
     #: The neutral each family's searched ceiling is read against.
     rampCeiling: float = config.RAMP_CEILING
-    #: Decision 1's one bandwidth, and Eq. (16)'s two hyperparameters,
+    #: Decision 1's one bandwidth, and Eq. (16)/(28)'s three hyperparameters,
     #: stamped beside every other bound. A checkpoint whose manifest recorded
-    #: a different value for any of the three was trained under a different
-    #: objective, exactly as one trained under an earlier `revision` was --
-    #: `latent.load` refuses on a mismatch here the same way it refuses on a
-    #: mismatched `revision`.
+    #: a different value for any of the four than the RUN that produced it --
+    #: never than today's bare `config` default, see `hyper_for` below -- was
+    #: trained under a different objective, exactly as one trained under an
+    #: earlier `revision` was: `latent.load` refuses on a mismatch here the
+    #: same way it refuses on a mismatched `revision`.
     #:
-    #: `init=False`: these three stamp the values the run actually used, and
-    #: the run always reads them off `config` (every consumer in `wiring`/
-    #: `harness` calls `config.KERNEL_SIGMA` etc. directly, never
-    #: `reduction.kernelSigma`). Leaving them as ordinary constructor
-    #: parameters would let `Reduction(kernelSigma=x)` stamp a value nothing
-    #: downstream ever read -- a manifest that lies about what trained the
-    #: checkpoint beside it.
-    kernelSigma: float = field(init=False, default_factory=lambda: config.KERNEL_SIGMA)
-    attentionGamma: float = field(init=False, default_factory=lambda: config.ATTENTION_GAMMA)
+    #: Ordinary constructor parameters, and no longer `init=False`. They used
+    #: to stamp only `config`'s own bare default because nothing downstream
+    #: read anything else: the six-dimensional search
+    #: (`search_ceilings_trials`) explores all four per transfer and records
+    #: its winners, but `run_one`/`wiring.build` never consumed them -- a
+    #: searched value was recorded, never applied, and every campaign trained
+    #: at the same declared constant regardless of what the search found.
+    #: `hyper_for` is what closes that: it resolves the searched winner for
+    #: the transfer actually being run, falling back to these four scalars
+    #: -- still `config`'s own defaults, unchanged -- only where nothing was
+    #: searched. Keeping them as plain fields is what lets `keep_median` stamp
+    #: a PER-TRANSFER copy of this reduction (`dataclasses.replace`) into each
+    #: checkpoint's own manifest, rather than the campaign's one shared,
+    #: pooled instance.
+    kernelSigma: float = field(default_factory=lambda: config.KERNEL_SIGMA)
+    attentionGamma: float = field(default_factory=lambda: config.ATTENTION_GAMMA)
     attentionTemperature: float = field(
-        init=False, default_factory=lambda: config.ATTENTION_TEMPERATURE)
+        default_factory=lambda: config.ATTENTION_TEMPERATURE)
+    #: Eq. (28)'s local temperature, the fourth searched dimension `Reduction`
+    #: did not carry until now -- `run_one` accepted it only through the
+    #: search's own explicit `hyper=` override, with no field here for a
+    #: campaign to stamp. Same rule as the three above: `hyper_for`'s winner
+    #: first, this scalar (`config.TAU_LOCAL`) only where nothing was searched.
+    tauLocal: float = field(default_factory=lambda: config.TAU_LOCAL)
     #: What each family searched and kept for its derivations. Empty until the
     #: search has run, and then carried beside every number it produced — a
     #: coefficient chosen by measurement is part of the bounds, not a detail.
@@ -294,6 +308,13 @@ class Reduction:
     ceilingsByTransfer: dict = field(
         default_factory=lambda: {family: dict(picks) for family, picks
                                  in config.CEILINGS_BY_TRANSFER.items()})
+    #: The other four searched dimensions' per-transfer picks -- `rampDelta`,
+    #: `kernelSigma`, `attentionGamma`, `attentionTemperature`, `tauLocal` --
+    #: keyed the same way `ceilingsByTransfer` is (`{family: {label: {dim:
+    #: value}}}`). `hyper_for` reads this before falling back to the scalar
+    #: fields above, the identical two-reading rule `ceiling_for` already
+    #: applies to the coefficient.
+    hyperByTransfer: dict = field(default_factory=dict)
     ceilingSearch: dict = field(default_factory=dict)
     rampDelta: float = config.RAMP_DELTA
     device: str = "cpu"
@@ -433,6 +454,48 @@ def ceiling_for(reduction: Reduction, family: str | None,
             .get(transfer_label(transfer), pooled))
 
 
+def hyper_for(reduction: Reduction, family: str | None,
+             transfer: tuple[str, str]) -> dict:
+    """The other five searched dimensions in force for one family on one
+    transfer: `rampDelta`, `kernelSigma`, `attentionGamma`,
+    `attentionTemperature`, `tauLocal`.
+
+    The identical two-reading rule `ceiling_for` already applies to the
+    coefficient, carried to the five dimensions beside it: on a transfer the
+    search measured, that transfer's own winner (`reduction.hyperByTransfer`);
+    on one it never saw, or with nothing searched at all, `reduction`'s own
+    scalar fields -- which are `config`'s declared constants unless a caller
+    overrode them, exactly what every arm trained at before this search
+    existed.
+
+    **Read for every arm, `family=None` included.** `ceiling_for` returns the
+    neutral for a family with no adaptation term, because the coefficient it
+    would multiply is not in that arm's objective at all -- but Eq. (15)/(16)'s
+    attention and Decision 1's bandwidth shape EVERY arm's pooling, adaptation
+    or not, so the floor has to train under the same transfer's winner an
+    adapted arm does. Reading `family`'s own entry first and falling back to
+    whichever family `reduction.hyperByTransfer` actually names is what makes
+    that work today, with `config.SEARCH_ARMS` naming exactly one family
+    (`milcreda`): the floor has no family of its own to look up, and the
+    single searched family's winners are what it reads instead.
+
+    This function never refuses on a stale stamp the way `ceiling_for` does:
+    `reduction.hyperByTransfer` is populated by the identical call
+    (`with_ceilings_in_force`) that populates `ceilingsByTransfer`, at the
+    identical `pilot`, so a drifted record is refused there, before either
+    dict is ever attached to a `Reduction`.
+    """
+    pooled = {"rampDelta": reduction.rampDelta, "kernelSigma": reduction.kernelSigma,
+              "attentionGamma": reduction.attentionGamma,
+              "attentionTemperature": reduction.attentionTemperature,
+              "tauLocal": reduction.tauLocal}
+    lookup = family if family in reduction.hyperByTransfer else next(
+        iter(reduction.hyperByTransfer), None)
+    per_transfer = reduction.hyperByTransfer.get(lookup) if lookup else None
+    winner = (per_transfer or {}).get(transfer_label(transfer))
+    return {**pooled, **(winner or {})}
+
+
 def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
             reduction: Reduction, device: torch.device,
             material: dict, ceiling: float | None = None,
@@ -446,13 +509,21 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     `hyper` overrides Decision 1's bandwidth and Eq. (15)/(16)/(28)'s three
     hyperparameters (`kernelSigma`, `attentionGamma`, `attentionTemperature`,
     `tauLocal`) and the ramp's own growth rate (`rampDelta`) for this run --
-    `search_ceilings_trials` is the one caller that passes it, walking its own
-    six-dimensional space. Omitted, every arm trains at the declared `config`
-    constants exactly as it did before this override existed: a campaign never
-    passes `hyper`, so what the search finds is recorded (`ceiling_record`,
-    `__benchmark__["search"]["record"]`) rather than applied automatically --
-    the same workflow `KERNEL_SIGMA`'s own current value already follows,
-    measured once and hand-set as a declared constant.
+    `search_ceilings_trials` is the one caller that passes it explicitly,
+    walking its own six-dimensional space, one trial at a time.
+
+    **Omitted, and this is the wiring that changed**: this call resolves
+    `hyper_for(reduction, family, transfer)` itself -- the identical
+    two-reading rule `ceiling` already gets from `ceiling_for` when a caller
+    omits IT, carried to the other five dimensions. A campaign never passes
+    `hyper` explicitly and never needed to: what the search found already
+    reaches every arm of the transfer it was measured on, through
+    `reduction.hyperByTransfer` (populated by `with_ceilings_in_force`, the
+    identical call that populates `ceilingsByTransfer`). A `reduction` with
+    nothing searched (`hyperByTransfer` empty, the bare `Reduction()` shape)
+    resolves to exactly its own scalar fields -- `config`'s declared constants
+    unless a caller overrode them -- so a caller with no search record trains
+    exactly as every caller did before this override existed.
 
     `role` is which material the run is judged on. The search reads `valid` and
     the campaign reads `eval`, and they are disjoint by construction — a
@@ -462,6 +533,10 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     """
     torch.manual_seed(seed)
     generator = torch.Generator().manual_seed(seed + 9973)
+
+    family = config.ARMS_BY_ID[arm_id]["adaptation"]
+    if hyper is None:
+        hyper = hyper_for(reduction, family, transfer)
 
     source, target = material["source"], material["target"]
     source_train, source_valid, source_eval = bags.roles(source)
@@ -488,14 +563,17 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
     steps = -(-config.TRAIN_BAGS // config.BAGS_PER_STEP)
-    ramp_delta = (hyper or {}).get("rampDelta", config.RAMP_DELTA)
+    # `hyper` is never `None` past the resolution above -- `hyper_for` always
+    # returns all five keys, `config`'s own defaults where nothing searched --
+    # so this reads the resolved value directly rather than defending against
+    # an absence that cannot happen here any more.
+    ramp_delta = hyper.get("rampDelta", config.RAMP_DELTA)
 
     curve: list[dict] = []
     epochs_record: list[dict] = []
 
     model.train()
     for epoch in range(reduction.epochs):
-        family = config.ARMS_BY_ID[arm_id]["adaptation"]
         # The family's ceiling on this transfer, or the one this call was
         # handed. Never a global: each family keeps what it searched, its
         # derivations inherit it, and a transfer the search measured keeps its
@@ -564,6 +642,136 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         "epochs": epochs_record,
         "state": model.state_dict() if arm_id in config.CHECKPOINTS else None,
     }
+
+
+# ----------------------------------------------------- attention mechanisms
+#
+# Section 4's comparison: which attention mechanism, on the full arm (`G`)
+# and nothing else -- never a declared arm's own training path. Mirrors
+# `run_one` deliberately close (same roles, same ramp, same optimizer) so a
+# difference between two mechanisms is a difference of pooling, exactly the
+# property `wiring.MechanismArm`'s own docstring states; it is not `run_one`
+# itself because a `mechanism` is not an `arm_id` -- `wiring.build_mechanism`
+# takes the former, `config.ARMS_BY_ID` has no entry for it, and threading a
+# mechanism string through every branch `run_one` takes on a real arm id
+# would read as one function serving two different questions.
+
+#: Every declared arm sharing `G`'s family -- what the search record's
+#: winners (`ceiling_for`/`hyper_for`) resolve against, and the ramp's own
+#: floor: the comparison trains the COMPLETE method's family, never a
+#: declared arm id, so this is the one constant the five mechanisms share
+#: rather than a per-mechanism lookup.
+MECHANISM_FAMILY = config.ARMS_BY_ID["G"]["adaptation"]
+
+
+def run_mechanism(mechanism: str, transfer: tuple[str, str], seed: int,
+                  reduction: Reduction, device: torch.device,
+                  material: dict, role: str = "eval") -> dict:
+    """One mechanism, one transfer, one repetition, end to end -- the
+    comparison's own `run_one`.
+
+    Trains `G`'s full method (`wiring.build_mechanism`, always) with
+    Eq. (15)/(16) replaced by `mechanism`; the ceiling and the other five
+    searched dimensions still resolve through `ceiling_for`/`hyper_for`
+    against `MECHANISM_FAMILY`, the identical two-reading rule every declared
+    arm of that family already gets, so the comparison trains under the same
+    searched bounds a real campaign would.
+    """
+    torch.manual_seed(seed)
+    generator = torch.Generator().manual_seed(seed + 9973)
+
+    hyper = hyper_for(reduction, MECHANISM_FAMILY, transfer)
+
+    source, target = material["source"], material["target"]
+    source_train, source_valid, source_eval = bags.roles(source)
+    target_train, target_valid, target_eval = bags.roles(target)
+
+    if role == "valid":
+        judged_source, judged_target = source_valid, target_valid
+    elif role == "eval":
+        judged_source, judged_target = source_eval, target_eval
+    else:
+        raise ValueError(f"unknown role {role!r}; the roles are 'valid' and 'eval'")
+
+    model = wiring.build_mechanism(
+        mechanism, config.CLASSES,
+        pool_of(source, source.train_idx, device),
+        pool_of(target, target.train_idx, device),
+        hyper=hyper,
+    ).to(device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
+    steps = -(-config.TRAIN_BAGS // config.BAGS_PER_STEP)
+    ramp_delta = hyper.get("rampDelta", config.RAMP_DELTA)
+
+    model.train()
+    for epoch in range(reduction.epochs):
+        top = ceiling_for(reduction, MECHANISM_FAMILY, transfer)
+        coefficient = ramp(epoch, reduction.epochs, MECHANISM_FAMILY,
+                          ceiling=top, delta=ramp_delta)
+        for group in optimizer.param_groups:
+            group["lr"] = learning_rate(epoch, reduction.epochs)
+
+        for batch in balanced_batches(source_train.targets, steps, generator):
+            items = [source_train[i] for i in batch]
+            x = torch.stack([item[0] for item in items]).to(device)
+            y = torch.tensor([item[1] for item in items], device=device)
+            optimizer.zero_grad()
+            step = model.training_step(x, y, coefficient, generator)
+            step["loss"].backward()
+            optimizer.step()
+
+    return {
+        "mechanism": mechanism,
+        "transfer": transfer_label(transfer),
+        "seed": seed,
+        "sourceAccuracy": accuracy(model, judged_source, device),
+        "targetAccuracy": accuracy(model, judged_target, device),
+    }
+
+
+def run_mechanism_sweep(reduction: Reduction, device: torch.device,
+                        transfers: list | None = None, noise: float = 0.0,
+                        progress=print) -> dict:
+    """Every mechanism, over `config.VERDICT_TRANSFERS` (or `transfers`) and
+    `reduction.seeds` -- the record `tables.MECHANISM_RECORD` names,
+    `{"mechanisms": [...], "clean": [...], "noisy": [...]}`.
+
+    Writes to `noisy` when `noise` is non-zero, `clean` otherwise -- called
+    twice (once per condition) rather than folding both into one call the
+    way `campaign` folds transfers, because the two conditions are two
+    separate questions section 4 asks and a partial sweep (clean finished,
+    noisy not yet) has to be representable on disk.
+
+    `noise` overwrites `reduction.labelNoise` rather than living beside it,
+    the same reconciliation `search_ceilings_trials` already makes for the
+    identical reason: two live coordinates for one destination is how a
+    write ends up in the wrong tree with nothing raising.
+    """
+    reduction = replace(reduction, labelNoise=noise)
+    drawn = {code: bags.build(code, config.DATA_CACHE, seed, noise)
+             for seed in reduction.seeds for code in config.DOMAINS}
+    runs: list[dict] = []
+    for transfer in (transfers or config.VERDICT_TRANSFERS):
+        for seed in reduction.seeds:
+            material = {"source": drawn[transfer[0]], "target": drawn[transfer[1]]}
+            for mechanism in wiring.MECHANISMS:
+                run = run_mechanism(mechanism, transfer, seed, reduction, device,
+                                    material, role="eval")
+                runs.append(run)
+                progress(f"  mechanisms {transfer_label(transfer)} seed {seed} "
+                         f"{mechanism}: target={run['targetAccuracy']:.3f}")
+
+    record_path = config.PRODUCT / tables.MECHANISM_RECORD
+    record_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = {"mechanisms": list(wiring.MECHANISMS), "clean": [], "noisy": []}
+    if record_path.exists():
+        existing = json.loads(record_path.read_text(encoding="utf-8"))
+    key = "noisy" if noise else "clean"
+    existing["mechanisms"] = list(wiring.MECHANISMS)
+    existing[key] = runs
+    record_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    return existing
 
 
 # ------------------------------------------------------------------ aggregation
@@ -695,6 +903,19 @@ def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
     pesos = config.models_for(reduction.labelNoise, reduction.kind,
                              reduction.pilot)
 
+    # The manifest stamps what this CELL's own run actually trained under, not
+    # the campaign's one shared, pooled `reduction`. `hyper_for` resolves the
+    # five dimensions `run_one` itself resolved for this exact
+    # (family, transfer) pair -- the same call, the same record -- so a
+    # checkpoint's manifest and the run that produced it can never disagree.
+    # `family=None` for a floor still reads the searched family's own winners
+    # (`hyper_for`'s own docstring: Eq. (15)/(16)'s attention shapes every
+    # arm's pooling, adaptation or not), so this is correct for every declared
+    # arm and not only the adapted ones.
+    family = config.ARMS_BY_ID.get(arm_id, {}).get("adaptation")
+    stamped = replace(reduction, **hyper_for(reduction, family,
+                                             tuple(transfer.split("->"))))
+
     kept: list[str] = []
     for run in cell_runs:
         stem = f"{arm_id}_{transfer.replace('->', '-')}_seed{run['seed']}"
@@ -707,7 +928,7 @@ def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
             arm=arm_id, transfer=transfer, seed=run["seed"],
             targetAccuracy=run["targetAccuracy"],
             sourceAccuracy=run["sourceAccuracy"],
-            reduction=asdict(reduction),
+            reduction=asdict(stamped),
             **manifests[(transfer, run["seed"])],
         )
         kept.append(str(weights.relative_to(config.REPOSITORY)))
@@ -1023,6 +1244,32 @@ def search_source_note(pilot: bool | None = None) -> str:
     return f"Búsqueda completa, {procedencia['epochs']} épocas."
 
 
+def campaign_source_note(ensayo: bool | None) -> str:
+    """De qué árbol salieron los números que un lector está por ver.
+
+    El mismo mecanismo que `search_source_note`/`contamination.source_note`,
+    aplicado a la campaña que `Results_v1.ipynb` lee: `cargar_corridas()`
+    prefiere la corrida completa y cae al ensayo cuando no hay ninguna, la
+    misma regla que `Benchmark_Search_Report_v1.ipynb` ya aplica a la
+    búsqueda de techos -- y esa caída es correcta y tiene que ser visible.
+    Escrito siempre, nunca sólo en el caso malo: un aviso que sólo aparece
+    cuando algo anda mal no le enseña a nadie qué vigila.
+
+    `ensayo=None` es "todavía no hay corrida en ningún árbol" -- el estado
+    que `cargar_corridas()` reporta con `reduccion is None`, y en el que no
+    hay épocas ni semillas que citar.
+    """
+    if ensayo is None:
+        return ("**Sin corrida todavía.** Ni completa ni ensayo: no hay "
+                "número que este aviso pueda fechar.")
+    if ensayo:
+        return ("**Estos números son de un ENSAYO**, no de la corrida "
+                "completa: no hay campaña a escala completa en disco. No se "
+                "citan como resultados, ni en el informe, ni en el resumen, "
+                "ni en conversación.")
+    return "Corrida completa."
+
+
 def ceilings_in_force(reduction: Reduction, device: torch.device,
                       progress=print, shard: str | None = None,
                       pilot: bool = False) -> dict[str, float]:
@@ -1114,6 +1361,15 @@ def with_ceilings_in_force(reduction: Reduction, device: torch.device,
                                pilot=reduction.pilot)
     return replace(reduction, ceilings=pooled,
                    ceilingsByTransfer=config.ceilings_by_transfer_on_record(
+                       pilot=reduction.pilot),
+                   # The other five searched dimensions' per-transfer picks,
+                   # read at the SAME `pilot` and in the SAME call as the
+                   # ceiling above -- the identical reason `ceilingsByTransfer`
+                   # is read here rather than left at whatever `config` was
+                   # imported with: two halves of one search read from two
+                   # different records would mix two experiments into the
+                   # values `hyper_for` resolves.
+                   hyperByTransfer=config.hyper_by_transfer_on_record(
                        pilot=reduction.pilot))
 
 
@@ -2054,6 +2310,26 @@ def run_campaign_shard(shard: str | None = None,
         epochs=config.FULL_EPOCHS, device=str(device), environment=environment())
     reduction = with_ceilings_in_force(reduction, device, shard=shard)
     return campaign(reduction, device, shard=shard)
+
+
+def run_mechanism_sweep_shard(seeds: list[int] | None = None) -> dict:
+    """The attention-mechanism comparison, headless, callable with JSON
+    alone -- `run_campaign_shard`'s own sibling for Section 4.
+
+    Runs both conditions section 4 reads (`clean`, rate `0.0`, then `noisy`,
+    `config.NOISE_REPORTED`) in one call, so a single job submission leaves
+    the record complete rather than requiring two separate ones the operator
+    would have to remember to both send. Full scale always, the same reason
+    `run_campaign_shard` never takes a pilot dial: a comparison measured at
+    three epochs is a different experiment, not a cheaper one.
+    """
+    device = resolve_device()
+    reduction = Reduction(
+        seeds=list(seeds) if seeds is not None else list(config.FULL_SEEDS),
+        epochs=config.FULL_EPOCHS, device=str(device), environment=environment())
+    reduction = with_ceilings_in_force(reduction, device)
+    run_mechanism_sweep(reduction, device, noise=0.0)
+    return run_mechanism_sweep(reduction, device, noise=config.NOISE_REPORTED)
 
 
 #: What a smoke run stamps as its ceiling, for both families, so

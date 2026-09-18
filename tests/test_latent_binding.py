@@ -488,20 +488,27 @@ def test_reduction_from_record_refuses_a_missing_hyperparameter_field():
         harness.Reduction.from_record(record)
 
 
-def test_reduction_refuses_kernel_sigma_as_a_constructor_keyword():
-    """`kernelSigma`, `attentionGamma` and `attentionTemperature` are
-    `init=False` on purpose (`harness.py`'s own comment beside the three
-    fields): a `Reduction` always stamps what the run actually trained
-    under, read off `config` at construction time, and a constructor
-    keyword would let a caller stamp a value the run never used -- a
-    manifest that lies about what trained the checkpoint beside it.
-    `dataclasses` itself is what refuses; this only asserts that the
-    refusal is still reachable.
+def test_reduction_accepts_kernel_sigma_as_a_constructor_keyword():
+    """The inverse of what this test used to assert.
+
+    `kernelSigma`, `attentionGamma`, `attentionTemperature` and `tauLocal`
+    were `init=False` -- a `Reduction` always stamped `config`'s bare current
+    value, and a constructor keyword would have let a caller stamp a value
+    the run never used. That premise is what this stretch's own build closes:
+    the six-dimensional search explores these per transfer and used to
+    record its winners without applying them (`harness.hyper_for`'s own
+    docstring), so `keep_median` now stamps a PER-TRANSFER `Reduction`
+    (`dataclasses.replace(reduction, **hyper_for(...))`) into each
+    checkpoint's manifest -- which requires exactly the constructor keyword
+    this test used to forbid. Fields, not `init=False`, are what carry a
+    manifest that could lie about what trained the checkpoint beside it now:
+    `hyper_for` is the only caller that ever overrides them away from
+    `config`'s own default.
     """
     from MIL_CREDA_Benchmark import harness
 
-    with pytest.raises(TypeError):
-        harness.Reduction(kernelSigma=1.0)
+    reduction = harness.Reduction(kernelSigma=1.0)
+    assert reduction.kernelSigma == 1.0
 
 
 def test_reduction_stamps_kernel_sigma_from_config_at_construction_time(
@@ -623,6 +630,64 @@ def test_load_succeeds_on_a_checkpoint_whose_stamp_matches_the_current_config(
 
     model, source, target = latent.load(record, device=None)
     assert isinstance(model, _FakeModel)
+
+
+def test_a_checkpoint_stamped_with_a_different_per_transfer_winner_is_refused(
+        tmp_path, monkeypatch):
+    """The RUN that produced a checkpoint, not today's bare `config` default,
+    is what its stamp is held to now: the six-dimensional search records a
+    winner per transfer, so two checkpoints of the SAME revision legitimately
+    carry different `kernelSigma` when they trained on different transfers --
+    `test_run_one_resolves_the_hyperparameters_of_the_transfer_it_was_given`
+    (`test_benchmark_declarations.py`) is the sibling test that the winner
+    actually reaches the run; this is the sibling that a checkpoint claiming
+    a DIFFERENT value than what the record says its own transfer won is
+    refused, as if the record had been re-searched since that checkpoint
+    trained.
+
+    Two checkpoints, the same transfer, the same record on disk: one stamped
+    with exactly what the record's `perTransfer["S->M"]` says (agrees, loads),
+    one stamped with a different `kernelSigma` (refused).
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import config
+
+    winner = {"ceiling": 1e-2, "rampDelta": 40.0, "kernelSigma": 20.0,
+             "attentionGamma": 0.3, "attentionTemperature": 2.0,
+             "tauLocal": 0.5}
+    record_path = tmp_path / "ceilings.json"
+    record_path.write_text(json.dumps({
+        "milcreda": {**winner, "revision": config.REVISION,
+                    "byTransfer": {"S->M": winner["ceiling"]},
+                    "perTransfer": {"S->M": dict(winner)}},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record_path)
+
+    vigente = next(a for a, spec in config.ARMS_BY_ID.items()
+                  if spec["adaptation"] == "milcreda")
+
+    def _record(**overrides):
+        reduction = {"epochs": 20, "pilot": False,
+                    "kernelSigma": winner["kernelSigma"],
+                    "attentionGamma": winner["attentionGamma"],
+                    "attentionTemperature": winner["attentionTemperature"]}
+        reduction.update(overrides)
+        return {"arm": vigente, "transfer": "S->M", "seed": 0,
+               "reduction": reduction}
+
+    agreeing = latent.hyperparameter_drift(_record())
+    assert agreeing == {}, agreeing
+
+    stale = latent.hyperparameter_drift(
+        _record(kernelSigma=winner["kernelSigma"] * 3))
+    assert set(stale) == {"kernelSigma"}, stale
+    assert stale["kernelSigma"]["checkpoint"] == winner["kernelSigma"] * 3
+    assert stale["kernelSigma"]["current"] == winner["kernelSigma"], (
+        "the comparison read today's per-transfer winner, not the bare "
+        "config default -- the checkpoint's OWN sigma is not config's "
+        f"default either, {config.KERNEL_SIGMA!r}, so a comparison against "
+        "that would report a different drift")
 
 
 def test_a_floor_the_bench_no_longer_declares_is_an_undefined_question():

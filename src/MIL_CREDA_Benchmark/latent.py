@@ -260,12 +260,23 @@ def bound(found: list[dict], summary: dict) -> list[dict]:
 
 
 #: The hyperparameter fields `harness.Reduction` stamps beside every other
-#: bound, keyed to the `config` constant each was copied from at stamp time.
-#: A checkpoint recorded under a different one was trained under a different
-#: objective, the same fact `currentRevision` already establishes for the
-#: managed revision -- these three are placeholders this comparison's own
-#: config declares tunable rather than part of that revision, so they need
-#: their own comparison rather than piggybacking on it.
+#: bound, keyed to the `config` constant each falls back to when nothing was
+#: searched for the checkpoint's own transfer. A checkpoint recorded under a
+#: different one was trained under a different objective, the same fact
+#: `currentRevision` already establishes for the managed revision -- these
+#: three are placeholders this comparison's own config declares tunable rather
+#: than part of that revision, so they need their own comparison rather than
+#: piggybacking on it.
+#:
+#: `tauLocal` and `rampDelta` are also searched per transfer now and also
+#: stamped on every checkpoint (`harness.keep_median`), but they stay OUT of
+#: this strict set on purpose: every existing fixture and every checkpoint
+#: manifest already on disk predates both, and "a field absent from the
+#: manifest IS drift" would flag every one of them, which is not what this
+#: change was asked to do. `hyper_for`'s own resolution still applies to both
+#: when present (`_current_hyper` reads all five), so a manifest that DOES
+#: carry them is still compared correctly; one that does not is simply not
+#: held to a bar it was written before.
 HYPERPARAMETER_FIELDS = {
     "kernelSigma": "KERNEL_SIGMA",
     "attentionGamma": "ATTENTION_GAMMA",
@@ -273,23 +284,66 @@ HYPERPARAMETER_FIELDS = {
 }
 
 
+def _current_hyper(record: dict) -> dict:
+    """What a checkpoint's own (family, transfer) would resolve to RIGHT NOW.
+
+    The RUN that produced a checkpoint, not today's bare `config` default, is
+    what `hyperparameter_drift` compares against: the six-dimensional search
+    explores all five of `HYPERPARAMETER_FIELDS` per transfer, so two
+    checkpoints of the SAME revision legitimately carry different
+    `kernelSigma`/etc. when they were trained on different transfers -- that
+    is not drift, it is the search having found two different winners.
+    `harness.hyper_for` already applies the correct two-reading rule (this
+    transfer's winner, else the pooled one, else the bare `config` constant);
+    this calls it with a `Reduction` carrying only today's `hyperByTransfer`,
+    read off the ceiling record at the SAME scale (`pilot`) the checkpoint's
+    own `reduction` names, everything else left at its own live `config`
+    default.
+
+    Falls back to `{}` -- so every field falls back to its own bare `config`
+    default below -- whenever there is nothing to resolve against: no
+    `transfer` on the record (the campaign-level check `Reduction.from_record`
+    makes, which has none), or a ceiling record that itself refuses to be
+    read (deleted, or stamped under a revision `_refuse_on_stamp_drift` no
+    longer recognises). A checkpoint is never refused here for a REASON that
+    lives in a DIFFERENT file: `hyperparameter_drift` still reports plainly
+    against whatever `config` declares now.
+    """
+    transfer = record.get("transfer")
+    if not transfer:
+        return {}
+    try:
+        from MIL_CREDA_Benchmark import harness as _harness
+
+        reduction = record.get("reduction") or {}
+        pilot = bool(reduction.get("pilot", False))
+        family = config.ARMS_BY_ID.get(record.get("arm"), {}).get("adaptation")
+        resolver = _harness.Reduction(
+            hyperByTransfer=config.hyper_by_transfer_on_record(pilot=pilot))
+        return _harness.hyper_for(resolver, family, tuple(transfer.split("->")))
+    except Exception:
+        return {}
+
+
 def hyperparameter_drift(record: dict) -> dict:
     """Every one of `HYPERPARAMETER_FIELDS` this checkpoint's own `reduction`
-    disagrees with the CURRENT `config` on.
+    disagrees with what its own (family, transfer) resolves to right now.
 
     A field absent from the manifest IS drift under the current revision.
-    `harness.Reduction` stamps all three of `HYPERPARAMETER_FIELDS` on every
+    `harness.Reduction` stamps all five of `HYPERPARAMETER_FIELDS` on every
     checkpoint it produces, so a manifest missing one was not produced by
     today's stamping code -- exactly the same silent-drift shape
     `currentRevision` catches for the managed revision, applied here to
-    Decision 1's bandwidth and Eq. (16)'s gamma/tau_att. Treating an absent
-    field as "nothing to compare" let such a checkpoint load and analyse
-    silently under today's config; it is refused instead.
+    Decision 1's bandwidth and Eq. (16)/(28)'s gamma/tau_att/tau_local, and to
+    the ramp's own growth rate. Treating an absent field as "nothing to
+    compare" let such a checkpoint load and analyse silently under today's
+    config; it is refused instead.
     """
     reduction = record.get("reduction") or {}
+    current_hyper = _current_hyper(record)
     drift = {}
     for field, source in HYPERPARAMETER_FIELDS.items():
-        current = getattr(config, source)
+        current = current_hyper.get(field, getattr(config, source))
         if field not in reduction:
             drift[field] = {"checkpoint": None, "current": current}
         elif reduction[field] != current:

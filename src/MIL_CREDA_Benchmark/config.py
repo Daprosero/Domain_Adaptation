@@ -1166,6 +1166,68 @@ def ceilings_by_transfer_on_record(
             for family, entry in found.items()}
 
 
+#: The other five dimensions the six-dimensional search explores beside the
+#: ceiling, in the order `harness.search_ceilings_trials` declares them. Named
+#: once here so `hyper_by_transfer_on_record`/`hyper_pooled_on_record` and
+#: `harness.Reduction`'s own field list cannot drift apart on which five they
+#: mean.
+HYPER_DIMENSIONS = ("rampDelta", "kernelSigma", "attentionGamma",
+                    "attentionTemperature", "tauLocal")
+
+
+def hyper_by_transfer_on_record(
+        pilot: "bool | None" = None) -> dict[str, dict[str, dict[str, float]]]:
+    """The OTHER five searched dimensions' per-transfer winners, read from the
+    same record `ceilings_by_transfer_on_record` reads its own pick from.
+
+    `harness.search_ceilings_trials` writes `rampDelta`/`kernelSigma`/
+    `attentionGamma`/`attentionTemperature`/`tauLocal` into `perTransfer[label]`
+    beside `ceiling` itself -- that transfer's own winning trial, entire, not
+    only its ceiling. This reads that same sub-dict back, narrowed to
+    `HYPER_DIMENSIONS`, keyed the same way `ceilingsByTransfer` is
+    (`{family: {label: {dim: value}}}`). A record written before this stretch's
+    six-dimensional search simply has no `perTransfer[label][dim]` for any of
+    the five, and an absent dimension is read exactly like an absent transfer:
+    the caller falls back to the pooled winner, and `harness.hyper_for` falls
+    back further, to the declared `config` constant.
+    """
+    record, _ = ceilings_record_at(pilot)
+    if record is None:
+        return {}
+    import json as _json
+    found = _json.loads(record.read_text(encoding="utf-8"))
+    if pilot is not None:
+        _refuse_on_stamp_drift(found, record)
+    result: dict[str, dict[str, dict[str, float]]] = {}
+    for family, entry in found.items():
+        per_transfer = entry.get("perTransfer") or {}
+        result[family] = {
+            label: {dim: winner[dim] for dim in HYPER_DIMENSIONS if dim in winner}
+            for label, winner in per_transfer.items()
+        }
+    return result
+
+
+def hyper_pooled_on_record(pilot: "bool | None" = None) -> dict[str, dict[str, float]]:
+    """The OTHER five searched dimensions' pooled winner, one per family --
+    the sibling of `ceilings_on_record`, over `HYPER_DIMENSIONS` instead of
+    `ceiling` alone.
+
+    Read for the same reason `ceilings_on_record`'s own pooled reading is:
+    a transfer the search never measured falls back to this rather than to
+    nothing, out of sample and declared as such.
+    """
+    record, _ = ceilings_record_at(pilot)
+    if record is None:
+        return {}
+    import json as _json
+    found = _json.loads(record.read_text(encoding="utf-8"))
+    if pilot is not None:
+        _refuse_on_stamp_drift(found, record)
+    return {family: {dim: entry[dim] for dim in HYPER_DIMENSIONS if dim in entry}
+            for family, entry in found.items()}
+
+
 # ------------------------------------------------- las puertas de cada destino
 
 #: Cada puerta por la que una coordenada se vuelve un camino, y bajo que nombre
@@ -1227,6 +1289,15 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "escritas en la ortografia de la corrida completa: la escala esta "
         "adentro de la raiz y no al lado de ella, asi que una coordenada aca "
         "seria una segunda respuesta a una pregunta que la raiz ya contesto"),
+    "harness.py: config.PRODUCT / tables.MECHANISM_RECORD": (
+        "la escritura del mismo registro `Results_v1.ipynb` ya lee sin "
+        "escala, excusada abajo (`Results_v1.ipynb: config.PRODUCT / "
+        "tables.MECHANISM_RECORD`): `run_mechanism_sweep` multiplexa limpio "
+        "y contaminado ADENTRO del JSON (`clean`/`noisy`), nunca por "
+        "directorio ni por nombre de archivo, así que no hay coordenada de "
+        "tasa que llevar en la ruta -- y `pilot`/`kind` tampoco: la sección "
+        "4 no declara un `Reduction` de ensayo propio, corre siempre a la "
+        "escala que `reduction.epochs`/`seeds` diga"),
     "promote.py: config.PRODUCT / '.remote-execution' / 'campaign'": (
         "es donde el backend remoto desempaqueta lo que devuelve, antes de que "
         "nada haya leido una reduccion: la escala de lo que viene adentro la "
