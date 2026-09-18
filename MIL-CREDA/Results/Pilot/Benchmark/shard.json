@@ -1,0 +1,96 @@
+{
+  "shard": null,
+  "env": "7c284fdfafc7",
+  "environment": {
+    "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+    "python": "3.12.13",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "torch": "2.13.0",
+    "selfHosted": true,
+    "power": {
+      "source": "mains",
+      "charge": 79
+    },
+    "device": {
+      "name": "mps",
+      "kind": "mps"
+    }
+  },
+  "seeds": [
+    0
+  ],
+  "epochs": 3,
+  "labelNoise": 0.0,
+  "pilot": true,
+  "kind": "campaign",
+  "revision": "research-concept-r21.md",
+  "ceilings": {
+    "milcreda": 0.010796012633645448
+  },
+  "ceilingsByTransfer": {
+    "milcreda": {
+      "M->U": 0.7117782412223816,
+      "U->M": 0.010796012633645448,
+      "M->S": 0.0005247933940780908,
+      "S->M": 0.0008875530880758854,
+      "U->S": 0.008911638421286783,
+      "S->U": 0.10294579502332135
+    }
+  },
+  "hyperByTransfer": {
+    "milcreda": {
+      "M->U": {
+        "rampDelta": 1.1459150621714134,
+        "kernelSigma": 30.931736326763957,
+        "attentionGamma": 0.8665927080924227,
+        "attentionTemperature": 0.12300535032448288,
+        "tauLocal": 1.530867687382285
+      },
+      "U->M": {
+        "rampDelta": 1.9071433953026697,
+        "kernelSigma": 60.7729889121759,
+        "attentionGamma": 0.01365767469209711,
+        "attentionTemperature": 0.711723564948792,
+        "tauLocal": 4.466752700001235
+      },
+      "M->S": {
+        "rampDelta": 96.29576984475433,
+        "kernelSigma": 133.9727025616371,
+        "attentionGamma": 0.49959661167655944,
+        "attentionTemperature": 0.39812333984284914,
+        "tauLocal": 0.9814803531488547
+      },
+      "S->M": {
+        "rampDelta": 9.734793243960574,
+        "kernelSigma": 262.9202599732451,
+        "attentionGamma": 0.18683122468306068,
+        "attentionTemperature": 3.0795556078209914,
+        "tauLocal": 0.10432511547211254
+      },
+      "U->S": {
+        "rampDelta": 1.1687734964272058,
+        "kernelSigma": 41.60352607028823,
+        "attentionGamma": 0.6774089868066343,
+        "attentionTemperature": 7.208405598508218,
+        "tauLocal": 1.303496723980585
+      },
+      "S->U": {
+        "rampDelta": 1.7563489345356125,
+        "kernelSigma": 167.54575081713534,
+        "attentionGamma": 0.9117472918680046,
+        "attentionTemperature": 2.2536076353685393,
+        "tauLocal": 4.229037310968515
+      }
+    }
+  },
+  "evidence": {
+    "codeDigest": "bcda246cc21894cb82f2830bcf5efc61f910f729de5be0afe46a02cea587b78c",
+    "importsFrom": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark",
+    "commit": "43af26331bf1640f8f621e6181b087bbdb326f82",
+    "outputs": [
+      "runs.jsonl",
+      "shard.json",
+      "summary.json"
+    ]
+  }
+}
