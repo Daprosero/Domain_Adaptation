@@ -367,8 +367,8 @@ __steps__: dict = {
     # el método completo (`G`, nunca un id declarado -- `wiring.MechanismArm`
     # hereda todo lo demás de `G` por herencia, nunca por copia). Mismo
     # patrón que `campaign`, por la misma razón (ver la docstring de
-    # `steps.mecanismos_de_atencion`): corre `Benchmark_Attention_
-    # Mechanisms.ipynb`, y ese cuaderno llama a
+    # `steps.mecanismos_de_atencion`): corre
+    # `Benchmark_Attention_Mechanisms.ipynb`, y ese cuaderno llama a
     # `harness.run_mechanism_sweep_shard()` en su celda de la corrida --- la
     # función queda intacta y sigue siendo lo que un `run-config.json` remoto
     # nombra.
