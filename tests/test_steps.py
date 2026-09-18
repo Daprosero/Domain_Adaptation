@@ -116,19 +116,22 @@ class PasosDeclaradosTests(unittest.TestCase):
         declarada. El razonamiento era bueno y el hecho que lo sostenía dejó de
         ser cierto: la búsqueda tiene el suyo, y cada raíz sigue con un dueño.
 
-        Las tres mitades, cada una capaz de volver sola: que el paso corra
-        `Benchmark_Ceiling_Search.ipynb`, que no compute al lado del cuaderno
-        que corre, y que el informe siga sin ejecutar ninguna búsqueda ---
-        abrirlo tiene que seguir costando lo que cuesta leer, no lo que cuesta
-        buscar.
+        Dos mitades, cada una capaz de volver sola: que el paso corra
+        `Benchmark_Ceiling_Search.ipynb`, y que no compute al lado del cuaderno
+        que corre.
 
-        La mención en prosa no cuenta: la celda del informe NOMBRA la llamada
-        que tenía comentada, para decir por qué ya no está, y eso es texto. Lo
-        que se afirma es el árbol de sintaxis, así que descomentarla es rojo y
-        contarla es verde.
+        Eran tres. La tercera afirmaba que el INFORME de la búsqueda
+        (`Benchmark_Search_Report_v1.ipynb`, paso `search-report`) no volviera
+        a buscar --- abrirlo tenía que costar lo que cuesta leer y no lo que
+        cuesta correr la búsqueda. Ese cuaderno fue retirado entero junto con
+        su paso y su función, así que la afirmación no quedó débil: se quedó
+        sin sujeto. Su razón vive hoy en
+        `CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO`, y
+        `test_toda_exencion_sigue_nombrando_algo_que_de_verdad_no_existe` es lo
+        que se pone en rojo si el nombre vuelve.
 
         Rojo alcanzable: devolver `harness.run_search(...)` al cuerpo del paso,
-        apuntarlo al informe, o volver a poner la llamada viva en el informe.
+        o apuntarlo a otro cuaderno.
         """
         import ast
 
@@ -138,9 +141,6 @@ class PasosDeclaradosTests(unittest.TestCase):
         self.assertEqual(corridos.get("Benchmark_Ceiling_Search.ipynb"),
                          "ensayo_de_busqueda",
                          "la búsqueda no corre su propio cuaderno")
-        self.assertEqual(corridos.get("Benchmark_Search_Report_v1.ipynb"),
-                         "informe_de_busqueda",
-                         "el informe de la búsqueda dejó de tener su dueño")
 
         fuente = Path(steps.__file__).read_text(encoding="utf-8")
         (definicion,) = [nodo for nodo in ast.parse(fuente).body
@@ -153,15 +153,6 @@ class PasosDeclaradosTests(unittest.TestCase):
                                           "search_ceilings", "run_one")]
         self.assertEqual(computa, [],
                          "el paso computa al lado del cuaderno que corre")
-
-        arbol = ast.parse("\n".join(
-            _celdas_de_codigo("Benchmark_Search_Report_v1.ipynb")))
-        llamadas = {getattr(nodo.func, "attr", getattr(nodo.func, "id", None))
-                    for nodo in ast.walk(arbol) if isinstance(nodo, ast.Call)}
-        for computo in ("run_search", "search_ceilings", "with_ceilings_in_force"):
-            self.assertNotIn(computo, llamadas,
-                             "el informe de la búsqueda volvió a buscar: "
-                             "abrirlo cuesta lo que cuesta correrla")
 
     def test_cada_paso_declara_exactamente_un_cuaderno_entre_sus_raices(self):
         """Los dos ejes de cada mitad, cada uno con su artefacto, mirado desde
@@ -279,10 +270,23 @@ CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
     # `test_toda_exencion_sigue_nombrando_algo_que_de_verdad_no_existe` se pone
     # en rojo el día que alguien recicle uno.
     "Benchmark_Search_v1.ipynb": (
-        "liberado: era el INFORME de la búsqueda y hoy se llama "
+        "liberado: era el INFORME de la búsqueda y pasó a llamarse "
         "`Benchmark_Search_Report_v1.ipynb`, porque su nombre prometía la "
-        "búsqueda y lo que hacía era presentarla. No se recicla para el "
-        "cuaderno que sí la corre"),
+        "búsqueda y lo que hacía era presentarla. Ese sucesor tampoco existe "
+        "ya --- ver su propia entrada acá abajo --- y ninguno de los dos se "
+        "recicla para el cuaderno que sí la corre"),
+    "Benchmark_Search_Report_v1.ipynb": (
+        "retirado entero, con su paso (`search-report`) y su función "
+        "(`steps.informe_de_busqueda`): el informe de la búsqueda no es un "
+        "resultado de este paper. Lo que la búsqueda deja es el registro de "
+        "techos, que ya atraviesa el recorrido entero --- lo consumen el "
+        "barrido y la campaña ---, y lo que un lector juzga es la corrida que "
+        "corrió bajo esos techos, no la elección de los techos presentada "
+        "como experimento propio. `tables.render_ceilings`/"
+        "`render_ceilings_by_transfer`/`conclusion_ceilings`/"
+        "`conclusion_ceilings_by_transfer` siguen declarados y siguen con sus "
+        "propias pruebas (`tests/test_ceiling_readers.py`); lo que se fue es "
+        "el cuaderno que los mostraba"),
     "Benchmark_Search_Pilot_v1.ipynb": (
         "liberado: era el cuaderno que corre la búsqueda y fijaba `pilot=True` "
         "adentro, así que su nombre afirmaba una escala que no le toca elegir "
@@ -330,13 +334,17 @@ class OrdinalesDelRecorridoTests(unittest.TestCase):
     """El orden del recorrido, declarado en `advances`, y lo que tiene que cumplir.
 
     Un paso sin ordinal corre sin puerta y la forja lo dice así: queda AFUERA
-    del recorrido ordenado. Cuatro de los diez estaban afuera --- todo el eje del
-    ruido --- y el lugar que les toca no era una decisión libre: el barrido y su
-    informe van entre la búsqueda y la campaña, y el diagnóstico y el suyo al
-    final.
+    del recorrido ordenado. Cuatro de los diez que hubo estaban afuera --- todo
+    el eje del ruido --- y el lugar que les tocaba no era una decisión libre: el
+    barrido va entre la búsqueda y la campaña.
+
+    Ningún número se escribe acá abajo: los ordinales se contrastan contra
+    `len(__steps__)` y contra la cadena derivada, así que retirar un paso o
+    agregar uno no deja una cuenta vieja en verde. Un título que diga «los
+    diez» sí envejece, y por eso estos no lo dicen.
 
     Las dos afirmaciones de abajo son distintas y ninguna se lee de la otra. Que
-    los diez tengan ordinal no dice nada sobre el orden, y un orden que respete
+    todos tengan ordinal no dice nada sobre el orden, y un orden que respete
     la cadena puede tener un hueco o un empate.
     """
 
@@ -347,11 +355,15 @@ class OrdinalesDelRecorridoTests(unittest.TestCase):
         return {nombre: entrada.get("advances")
                 for nombre, entrada in paquete.__steps__.items()}
 
-    def test_los_diez_pasos_llevan_ordinal_y_son_uno_a_diez_sin_repetir(self):
-        """Diez pasos, diez cuadernos, diez ordinales.
+    def test_todo_paso_lleva_ordinal_y_son_uno_a_N_sin_repetir(self):
+        """Tantos ordinales como pasos declarados, sin hueco y sin empate.
 
-        Rojo alcanzable: sacarle el `advances` a cualquiera de los cuatro del
-        eje del ruido, o darle a dos pasos el mismo número.
+        `N` es `len(__steps__)` y nunca un literal: el día que un paso se
+        retira ---`search-report` se retiró--- una cuenta escrita acá seguiría
+        en verde sobre una numeración con un agujero.
+
+        Rojo alcanzable: sacarle el `advances` a cualquier paso, darle a dos el
+        mismo número, o retirar un paso sin renumerar los que quedan.
         """
         ordinales = self._ordinales()
         sin_ordinal = sorted(n for n, o in ordinales.items()
@@ -530,7 +542,7 @@ class RaicesDeclaradasTests(unittest.TestCase):
     """
 
     def test_cada_paso_declara_las_raices_que_escribe(self):
-        """Presente y con forma, para los diez, sin nombrar a ninguno.
+        """Presente y con forma, para todos, sin nombrar a ninguno.
 
         La forma es la que `cmd_step` valida del otro lado: una lista NO vacía
         de cadenas no vacías. La lista vacía no es "este paso no escribe nada"
@@ -539,7 +551,7 @@ class RaicesDeclaradasTests(unittest.TestCase):
         cómo decirlo y no hay ninguno acá.
 
         Rojo alcanzable: agregar un paso sin `produces`, o vaciarle la lista a
-        cualquiera de los diez.
+        cualquiera de los declarados.
         """
         self.assertTrue(paquete.__steps__, "no hay pasos declarados")
         for nombre, entrada in paquete.__steps__.items():
@@ -1151,7 +1163,6 @@ def test_la_cadena_de_pasos_se_deriva_de_las_dos_listas(monkeypatch) -> None:
     esperada = {
         "verification": (),
         "search-pilot": (),
-        "search-report": ("search-pilot",),
         "noise-sweep": ("search-pilot",),
         "campaign": (),
         "mechanisms": (),
