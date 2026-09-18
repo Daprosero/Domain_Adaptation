@@ -47,10 +47,7 @@ PERCENT = ("targetAccuracy", "sourceAccuracy")
 SPANISH = {
     "targetAccuracy": ("exactitud en destino", "%"),
     "sourceAccuracy": ("exactitud en fuente", "%"),
-    "seconds": ("tiempo de entrenamiento", "s"),
-    "peakMiB": ("memoria pico", "MiB"),
     "parameters": ("parámetros", ""),
-    "contribution": ("peso del término de adaptación", ""),
 }
 
 BETTER = {config.HIGHER: "más alto es mejor", config.LOWER: "más bajo es mejor",
@@ -226,7 +223,6 @@ def table(runs: Iterable[dict], metric: str) -> list[dict]:
     """
     runs = list(runs)
     grid = cells(runs, metric)
-    shares = cells(runs, "contribution")
     labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
 
     rows = []
@@ -244,9 +240,6 @@ def table(runs: Iterable[dict], metric: str) -> list[dict]:
             "max": sum(c["max"] for c in present) / len(present),
             "se": se,
             "n": len(raw),
-            "share": (sum(shares[(arm, label)]["mean"] for label in labels
-                          if (arm, label) in shares)
-                      / max(1, sum(1 for label in labels if (arm, label) in shares))),
         })
     return rows
 
@@ -356,10 +349,6 @@ def objective(key: str, markdown: bool = True) -> str:
     clase = 1.0 / config.CLASSES
     transferencias = len(config.VERDICT_TRANSFERS)
     metas = {
-        "seconds":
-            "**Buscamos el número más bajo**, y sobre todo que la diferencia entre "
-            "métodos sea chica: uno más lento sigue siendo utilizable, uno diez "
-            "veces más lento deja de serlo.",
         "sourceAccuracy":
             f"**Buscamos que sea alta y que no caiga** al sumar la adaptación. El "
             f"piso es el azar de acertar una clase entre {config.CLASSES}, o sea "
@@ -368,12 +357,6 @@ def objective(key: str, markdown: bool = True) -> str:
             f"**Buscamos el valor más alto posible**, entre el azar de "
             f"{clase:.3f} y 1.000 — y leído junto a la tabla de fuente, porque una "
             f"subida acá pagada con una caída allá no es adaptación.",
-        "rungs":
-            f"**Buscamos acuerdo, no magnitud**: que el peldaño se incline para el "
-            f"mismo lado en las {transferencias} transferencias, o sea "
-            f"{transferencias}/{transferencias} o 0/{transferencias}. Cualquier "
-            f"cosa entre medio —3/{transferencias}, por ejemplo— promedia parecido "
-            f"y no dice nada.",
         "supervised":
             "**Buscamos que la curva baje y se quede baja.** Que caiga más rápido "
             "es mejor, y que no se desestabilice al sumarle la adaptación: si el "
@@ -382,12 +365,6 @@ def objective(key: str, markdown: bool = True) -> str:
             "**Buscamos que la curva viva dentro de [0, 1] y tienda a cero**, y que "
             "ocupe la misma parte del intervalo en las seis transferencias. Salirse "
             "de la banda o cambiar de escala entre pares de dominios es el hallazgo.",
-        "contribution":
-            f"**Buscamos que ningún método quede en cero y que los valores sean "
-            f"comparables entre sí.** En cero, «el término no hizo nada» y «el "
-            f"término no pesó nada» son la misma figura; con órdenes distintos "
-            f"entre métodos, el peldaño le acredita al mecanismo lo que hizo la "
-            f"escala.",
         "noise":
             f"**Buscamos que la caída sea chica y que el orden entre métodos no se "
             f"invierta.** Contaminado el material de entrenamiento, todos caen; lo "

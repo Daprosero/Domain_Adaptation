@@ -200,15 +200,21 @@ class TestWhatItReplaces:
     RATE = 0.4
 
     def test_every_noised_role_bag_loses_exactly_the_declared_count(self):
-        """`train`, `valid` and `eval` are all noised roles now, with ONE
-        shared draw: the noisy condition contaminates every one of them, and
-        the same instances are replaced regardless of which arm the material
-        ends up training (the arm is not even in scope here -- one `BagSet`
-        is built per domain/seed and handed to every arm unchanged)."""
+        """`train` and `eval` are the noised roles, with ONE shared draw: the
+        noisy condition contaminates both of them, and the same instances are
+        replaced regardless of which arm the material ends up training (the arm
+        is not even in scope here -- one `BagSet` is built per domain/seed and
+        handed to every arm unchanged).
+
+        `valid` is not among them and the reason is not delicacy about a
+        measurement: the search runs always on clean material and its values are
+        used unchanged under noise, so a contaminated `valid` would be drawn and
+        never read. It is also what lets USPS fund the draw at every declared
+        level -- with three roles, `bags.build('U', ..., 0.4)` refused."""
         drawn = _material(self.RATE)
         expected = config.noise_instances(self.RATE)
         assert expected > 0, "a rate that replaces nothing proves nothing below"
-        assert set(config.NOISE_ROLES) == {"train", "valid", "eval"}
+        assert set(config.NOISE_ROLES) == {"train", "eval"}
         for role in config.NOISE_ROLES:
             for position in drawn[role]:
                 slots = drawn["members"][position]
@@ -643,14 +649,17 @@ class TestTheContaminationReachesTheMaterializedBags:
 
     def test_a_clean_build_and_a_contaminated_one_differ_in_every_noised_role(
             self, torch):
-        """All three roles (`train`, `valid`, `eval`) are noised roles now:
-        the noisy condition contaminates every one of them, with the SAME
-        shared draw. There is no longer a role this build leaves untouched."""
+        """`train` and `eval` are contaminated with the SAME shared draw, and
+        `valid` comes out byte-identical to the clean build.
+
+        Both halves are asserted here, because the leak this catches goes in two
+        directions: a role that should have been corrupted and was not, and a
+        role the search reads that got corrupted anyway."""
         limpio = bags.build("M", config.DATA_CACHE, 0, noise=0.0)
         sucio = bags.build("M", config.DATA_CACHE, 0, noise=0.4)
 
-        assert set(config.NOISE_ROLES) == {"train", "valid", "eval"}
-        for role in ("train_idx", "valid_idx", "eval_idx"):
+        assert set(config.NOISE_ROLES) == {"train", "eval"}
+        for role in ("train_idx", "eval_idx"):
             movidas = 0
             positions = getattr(limpio, role).tolist()
             for position in positions:
@@ -659,6 +668,14 @@ class TestTheContaminationReachesTheMaterializedBags:
                 movidas += int((~torch.isclose(a, b).flatten(1).all(dim=1)).sum())
             assert movidas == config.noise_instances(0.4) * len(positions), (
                 f"role {role!r} did not lose exactly the declared count"
+            )
+
+        for position in limpio.valid_idx.tolist():
+            a = limpio.images[limpio.members[position]]
+            b = sucio.images[sucio.members[position]]
+            assert torch.isclose(a, b).all(), (
+                "the selection role was contaminated; the search reads it and "
+                "the search always runs on clean material"
             )
 
     def test_the_labels_never_move(self, torch):

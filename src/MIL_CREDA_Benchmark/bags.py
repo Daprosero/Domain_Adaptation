@@ -63,7 +63,7 @@ def _labels(dataset) -> np.ndarray:
 
 
 #: How many of a domain's bags fall under one of the noised roles, per class.
-#: `NOISE_ROLES` names which roles (`train`, `valid`, `eval` today) the
+#: `NOISE_ROLES` names which roles (`train` and `eval` today) the
 #: contamination reaches; this is the total bag count across exactly those
 #: roles, which is what `_reserve_size` and `_contaminate` both need to agree
 #: on rather than each re-deriving from `NOISE_ROLES` its own way.
@@ -149,13 +149,14 @@ def _contaminate(flat: list[int], members: list[list[int]], bag_labels: list[int
     contaminants. The record written beside it exists so a reader can tell a
     contaminated slot from a clean one without re-deriving the draw.
 
-    Every role `config.NOISE_ROLES` names is touched -- `train`, `valid` and
-    `eval` today -- with ONE shared draw: `rng` below is seeded from `(seed,
-    code)` alone, never from the arm or the role, so the identical instances are
-    replaced regardless of which arm's material this call built for, and the
-    walk below covers every named role's positions in one pass rather than one
-    stream per role, which is what makes the draw a single shared one instead of
-    three independent ones that happened to use the same seed.
+    Every role `config.NOISE_ROLES` names is touched -- `train` and `eval`
+    today, `valid` deliberately not -- with ONE shared draw: `rng` below is
+    seeded from `(seed, code)` alone, never from the arm or the role, so the
+    identical instances are replaced regardless of which arm's material this
+    call built for, and the walk below covers every named role's positions in
+    one pass rather than one stream per role, which is what makes the draw a
+    single shared one instead of independent ones that happened to use the same
+    seed.
     """
     per_bag = config.noise_instances(rate)
     if per_bag == 0:
@@ -333,7 +334,8 @@ def build(code: str, root: Path, seed: int, noise: float | None = None) -> BagSe
     # Before the images are decoded, so `rebuild` needs to know nothing about
     # noise: `imageIndices` below already names whatever replaced what. All
     # three roles are handed over; `_contaminate` itself decides which of them
-    # `config.NOISE_ROLES` actually reaches.
+    # `config.NOISE_ROLES` actually reaches -- today `valid` is not among them,
+    # and handing it over anyway is what keeps that a one-line decision.
     contamination = _contaminate(
         flat, members, bag_labels,
         {"train": train_positions, "valid": valid_positions, "eval": eval_positions},
