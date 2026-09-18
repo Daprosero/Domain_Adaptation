@@ -762,11 +762,12 @@ FIGURE_TRANSFER_RULE = "mayor exactitud media en destino sobre todos los método
 #:
 #: One floor and not two, because there is one unit left: with the instance-unit
 #: arms undeclared, `MIL-Baseline` is the only source-only column the grid has to
-#: draw. `latent.floors_agree` — which measured whether the two floors were
-#: redundant, and found they were not: drawn at the instance level on the pilot,
-#: their distance ratios differed by up to 0.38 and their domain separabilities by
-#: 0.07 — has no second floor left to read against, and is kept for the day one is
-#: declared again rather than removed as though the question had been answered.
+#: draw. The comparison that measured whether two floors were redundant is gone
+#: with its second floor; what it found while it had one is kept here as the
+#: record it left: drawn at the instance level on the pilot, the two differed by
+#: up to 0.38 in distance ratio and 0.07 in domain separability, so they were
+#: never redundant. Declaring a second floor again means writing that comparison
+#: again, which is the honest cost of having retired one.
 #:
 #: The selecting arms are left out because they differ from `G` in their instance
 #: budget rather than in what they align: a phase-one question, not a picture.

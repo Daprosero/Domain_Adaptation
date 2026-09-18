@@ -265,8 +265,7 @@ def test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_me
 def test_the_latent_grid_keeps_every_declared_floor_as_a_trained_column(
         stubbed, tmp_path) -> None:
     """A floor is what makes an aligned column readable, so every declared one is
-    drawn. Only a measurement -- `latent.floors_agree` -- may ever retire one, and
-    with a single unit declared there is a single floor for it to keep."""
+    drawn. With a single unit declared there is a single floor for it to keep."""
     figure = latent.latent_grid(tmp_path / "grid.pdf", config.LATENT_PANELS,
                                 TRANSFERS[:1], seed=3, device=torch.device("cpu"))
     titles = [axis.get_title() for axis in figure.axes]
