@@ -23,21 +23,16 @@ these is raised, not resolved in passing.
 
 | id | display name | what it lacks |
 | --- | --- | --- |
-| `A` | `Baseline` | everything |
-| `C` | `CREDA*` | the confidence weighting |
-| `D` | `CREDA` | nothing |
-| `B` | `MIL-Baseline` | everything |
+| `B` | `MIL-Baseline` | everything: no adaptation term, and no target image reaches it |
 | `E` | `MIL-CREDA**` | the local term and the weighting |
 | `F` | `MIL-CREDA*` | the local term |
 | `G` | `MIL-CREDA` | nothing |
-| `SU` | `MIL-CREDA-U` | 20 of its 30 instances, regular selection |
-| `SA` | `MIL-CREDA-A` | 20 of its 30 instances, arbitrary fixed selection |
-| `SK` | `MIL-CREDA-K` | 20 of its 30 instances, top-K by learned attention |
+| `GN` | `MIL-CREDA-GN` | nothing of the method; its normalization does not learn from target |
 
-      attention over the selected ones, so the trio differs in one thing: the
-      selection rule.
-      generator would shift every later draw and the rung would credit the
-      selection with what the offset did.
+`GN` carries no asterisk because it lacks no piece of the method: it is `G` with
+the target forward normalized by the source batch statistics of the same step.
+The convention counts absent terms, and that is not one.
+
 
 ## Ladder
 
@@ -51,13 +46,9 @@ these is raised, not resolved in passing.
 
 ## Tables (phase 1) — Table 6 of the reference, our names
 
+- [ ] **Two tables**: source accuracy first as the control, target accuracy after it as the headline. A method that wins on target by wrecking source is the degenerate case, and one table cannot distinguish it from a success. `test_the_report_shows_the_target_table_and_its_source_complement`
 - [ ] Each accuracy table carries a rank column per block, independent between the clean and the contaminated block, and arms whose difference does not exceed their combined standard error share a place rather than being ordered by noise.
 - [x] Rows are arms by display name, columns are the six transfers, plus `Avg`. `test_the_table_is_arms_by_display_name_over_the_six_transfers_and_an_average`
-- [x] **Two tables**: target accuracy as the headline, source accuracy as the `test_the_report_shows_the_target_table_and_its_source_complement`
-      complement. A method that wins on target by wrecking source is the
-      degenerate case, and one table cannot distinguish it from a success.
-      peak is a number rather than a picture.
-      rungs say which piece did the work.
 - [x] Below the declared repetition floor, no verdicts are granted, the reason is `test_below_the_repetition_floor_the_reason_is_stamped_and_the_table_still_prints`
       stamped in the header, and the table is printed anyway.
       accuracy. It replaces the per-run listing, which repeated in prose what the
@@ -79,6 +70,8 @@ these is raised, not resolved in passing.
 
 ## Figures — phase 2
 
+- [ ] **Every panel of the grid is drawn at the instance level.** Every arm encodes instances, so it is a space they all have and the only one where every panel carries the same number of points. The bag-level view stays in the phase-two tables, which measure each arm in its own unit. `test_every_panel_of_the_grid_is_drawn_at_the_instance_level`
+- [ ] Latent grid is the shared original space and then one column per declared arm — the floor and the four adapted ones. `Original` is the images themselves before any model, shared because preprocessing already brings both domains to one tensor shape, sampled representatively and stratified by class. `test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_method`
 - [ ] For every target bag of the evaluation role, the five source training bags it is closest to, in order, ranked by the bag kernel over all source bags and marking which carry the true class; and the reverse table, how many target bags took each source bag into account, which is what names the source bags nobody uses.
 - [ ] Two quantitative tables precede the grids: the distance ratio that reads whether classes group across domains, and domain separability read against chance, each in its clean and contaminated block.
 - [ ] Bag figure highlights **the same bags in every panel**: the median bag of each class by correspondence mass, one colour each, and every other bag in its own class colour.
@@ -98,24 +91,6 @@ these is raised, not resolved in passing.
       the latent space of a transfer where everything sits near chance is a
       picture of a model that did not learn. It never touches *which draw* is
       shown — that stays the display seed.
-- [x] Latent grid is the **shared original space** and then one column per method: `test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_method`
-      both floors, both CREDA, all three MIL-CREDA. `Original` is the images
-      themselves before any model — shared because preprocessing already brings
-      both domains to one tensor shape — sampled representatively and stratified
-      by class.
-      Drawn at the instance level on the pilot, `Baseline` and `MIL-Baseline`
-      differ by up to 0.38 in distance ratio and 0.07 in domain separability.
-      They train the same encoder through different objectives — per instance
-      against per bag through the attention pooling — so their instance
-      embeddings had no reason to agree. `latent.floors_agree` re-runs that check
-      every campaign, and only it may retire one of the columns.
-- [x] **Every panel of the grid is drawn at the instance level**, bag-unit arms `test_every_panel_of_the_grid_is_drawn_at_the_instance_level`
-      included. Every arm encodes instances, so it is a space they all have and
-      the only one where every panel carries the same number of points. One point
-      per subject beside one point per instance made the instance-unit columns
-      look like they covered the space and the bag-unit ones look sparse — the
-      statistical unit drawn, not the alignment. The bag-level view stays in the
-      phase-two tables, which measure each arm in its own unit.
 - [x] Colour is the **class**; the marker is the domain — source circles, target `test_colour_is_the_class_and_the_marker_is_the_domain`
       triangles. Target markers larger with a dark edge, source smaller and
       semi-transparent, categorical 10-class palette.
@@ -179,19 +154,19 @@ already existed: they are two halves of one contract and they live in one. -->
 
 ## The two ramps
 
-- [x] Each method names its own ramp and carries its own default: `creda_ramp` at 1e-4, `milcreda_ramp` at 1.0. The defaults serve each method's own runs; the benchmark never uses them, it always passes explicit values. `test_each_family_keeps_the_default_its_own_method_was_defined_with`
+- [ ] The experiment hands the ramp its `ceiling` and its `delta` explicitly, both resolved from the record for the transfer being run, never from a default and never pooled across transfers. `test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given`
+- [ ] `milcreda_ramp` carries its own default of 1.0 and binds to `creda_ramp` in `src/CREDA/` rather than copying it, so the curve is written once. The default serves the method's own runs; the benchmark never uses it, it always passes explicit values. `test_each_family_keeps_the_default_its_own_method_was_defined_with`
 - [x] A floor with no adaptation term gets a coefficient of zero, not the curve. It has no coefficient, and handing it one would suggest a term it does not carry. `test_a_floor_gets_no_coefficient_rather_than_one_it_does_not_carry`
-- [x] The experiment hands both the same `delta` and the same `ceiling`, explicitly. `test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given`
 - [x] The curve is written once. `milcreda_ramp` binds to `creda_ramp` rather than copying it, and a test pins them to the same numbers. `test_the_two_families_get_the_same_curve_for_the_same_arguments`
 
 ## The record and the report
 
+- [ ] `identicalAcrossShards` names every searched dimension, not only the ceilings: two shards straddling a search would otherwise merge into one table with different bandwidths, temperatures or ramps on each half, and nothing would refuse.
 - [ ] The full method runs under per-transfer values, so its row averaged over transfers mixes configurations. Within a transfer every arm still shares them, which is what keeps each rung attributable; the report says which of the two readings it is giving. `test_the_per_transfer_conclusion_can_come_out_different`
 - [ ] The record keeps the supervised term's magnitude and the ratio between terms. Without a denominator, "the term commanded nothing" and "the term was scaled to nothing" print alike. `test_the_distribution_declares_exactly_what_was_approved`
 - [ ] The benchmark declares revision r21 and which sections each arm exercises. `test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration`
 - [ ] One results notebook carries every result, in this order: the noise sweep, source accuracy, target accuracy, the attention mechanisms, the representation, and the loss curves. The report and latent notebooks are gone: two documents over one campaign drift apart, and the reader had to hold both.
 - [x] The benchmark declares `components` in its report contract. `test_the_benchmark_declares_the_components_its_objective_is_made_of`
-- [x] `identicalAcrossShards` names the ceilings. They are the parameter the search just changed, so two shards straddling the search would merge into one table with adaptation inert on one half and not on the other, and nothing would refuse. `test_the_ceilings_are_what_has_to_agree_across_shards`
 
 
 ## The ceiling search
@@ -204,7 +179,6 @@ already existed: they are two halves of one contract and they live in one. -->
 - [x] Ceilings are compared **paired** by cell (seed, transfer): every ceiling is measured on the same material, so the cell's difficulty cancels instead of drowning the effect. `test_the_pairing_survives_a_cell_that_is_simply_harder`
 - [x] Whether each seed would have chosen the same on its own is recorded. Three seeds on three different ceilings and three on the same one produce the same winner and are not the same evidence. `test_el_registro_dice_si_cada_semilla_habria_elegido_lo_mismo`
 - [x] The tie rule is written down: the **smallest** ceiling among the tied wins. Below some point a term is inert and everything ties, so there the tie-break is what actually chooses. `test_a_tie_goes_to_the_smallest_ceiling`
-- [x] The grid runs between the two declared defaults, 1e-4 and 1.0, so nothing outside what was already defensible can come out. `test_the_search_grid_runs_between_the_two_declared_defaults`
 - [x] The verdict is read over **all six** transfers. Withholding the two that funded the search bought nothing with the roles already disjoint by bag, and cost a third of the units the paired reading rests on. `test_the_campaign_runs_every_one_of_the_six_transfers_and_withholds_none`
 
 ## The full run
@@ -221,6 +195,7 @@ Agreed 2026-08-26/27, while replacing the grid engine. Every item here is
 carried by code and by a test that dies when the code is mutated, except the one
 marked open, which is open because the run has not happened.
 
+- [ ] Each searched dimension declares its own range in `config`, with the argument for that range beside it, so nothing outside what was already defensible can come out. The ceiling keeps the two declared defaults, 1e-4 and 1.0, as its own. `test_the_search_grid_runs_between_the_two_declared_defaults`
 - [ ] Only the full method is searched, `G`. The searched values are per transfer and never per arm, so a per-arm ceiling is not expressible. If it were, the term and the coefficient could not be told apart. `test_solo_busca_sobre_los_metodos_completos`
 - [ ] The record carries one searched configuration per transfer and no pooled entry, so a run reading it cannot silently apply one transfer's values to another. `test_el_registro_sale_con_la_forma_que_los_lectores_esperan`
 - [ ] Every transfer runs under the values searched on that transfer, by the paired rule and its tie-break. Nothing is inherited across transfers and no pooled fallback is reachable. `test_a_measured_transfer_keeps_its_own_pick_over_the_pooled_one`
@@ -379,6 +354,20 @@ This reversal was made **without reading this file**, which is the failure the f
 **"The ceilings are searched at rho 0 and held fixed across all five levels. The curve is declared as the coefficient chosen clean, applied dirty — which is also the practical situation, since nobody recalibrates per noise level. Searching per level would multiply 2 families x 6 transfers x 30 trials x 20 epochs by five, another whole campaign before the campaign."** Its cost arithmetic counted two families, and one of them was undeclared.
 
 **"The sweep shows the whole curve over the five levels, so it chooses nothing: accuracy against rho for the floor, in source and in target. The instrument already exists and is already recorded; only the axis is new."** Placed a minute ago carrying a witness that names the share-against-rho figure, which this very line retires; a witness has to name a test that will still exist.
+
+**"Each method names its own ramp and carries its own default: `creda_ramp` at 1e-4, `milcreda_ramp` at 1.0. The defaults serve each method's own runs; the benchmark never uses them, it always passes explicit values."** It framed two families' defaults against each other, and only one family is declared. `creda_ramp` still lives in `src/CREDA/` untouched, but nothing in this benchmark runs it.
+
+**"The experiment hands both the same `delta` and the same `ceiling`, explicitly."** It named the growth as something handed in alongside the ceiling; the growth is now a searched dimension of its own, resolved per transfer like every other.
+
+**"`identicalAcrossShards` names the ceilings. They are the parameter the search just changed, so two shards straddling the search would merge into one table with adaptation inert on one half and not on the other, and nothing would refuse."** It named one searched parameter because there was one. The search now moves six, and a shard straddling it can disagree on any of them.
+
+**"The grid runs between the two declared defaults, 1e-4 and 1.0, so nothing outside what was already defensible can come out."** It declared one range because one dimension was searched. There are six now, and each carries a range of its own.
+
+**"Latent grid is the **shared original space** and then one column per method:"** Its columns were both floors, both CREDA families and the three MIL-CREDA arms; there is one floor, no CREDA, and four adapted arms.
+
+**"**Two tables**: target accuracy as the headline, source accuracy as the"** Its own continuation had been orphaned by two earlier reversals, and the printed order is the other way round: the notebook shows source first.
+
+**"**Every panel of the grid is drawn at the instance level**, bag-unit arms"** Its argument was about instance-unit columns looking dense beside bag-unit ones, and there is no instance-unit arm left: every declared arm decides at the bag.
 
 <!-- position revision=research-concept-r21.md sha256=cc55237fd6f7d9c6418a66671b64b87573cb5103465b31894fa1f1dc460178c2 derivedAt=2026-09-18T01:10:47Z session=52829b86 target=none -->
 - [ ] 1. The invariants hold against the tree as it stands: the suite is green and the verification notebook ran against this exact source. Two-state on purpose -- it runs here and nowhere else, and giving it a rung would be the position asserting a state it does not have. Nothing below is worth reading until this is ticked: every later step measures something, and a broken tree makes every measurement a description of the break. `@notebook Notebooks/verification.ipynb`
