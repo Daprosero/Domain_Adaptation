@@ -155,7 +155,7 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
         "perEnvironment": [],
         "perRun": [],
         "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
-                                  "labelNoise"],
+                                  "hyperByTransfer", "labelNoise"],
     }
 
 
@@ -1435,6 +1435,45 @@ def test_a_shard_records_its_own_stamp_beside_its_runs(tmp_path, monkeypatch) ->
     assert stored["shard"] == "alpha"
     assert stored["env"] == harness.environment_key(stored["environment"])
     assert "device" in stored["environment"]
+
+
+def test_two_shards_straddling_a_search_disagree_on_more_than_the_ceiling(
+        tmp_path, monkeypatch) -> None:
+    """The search moves six parameters, so the guard has to see all six.
+
+    `shards.disagreements()` reads `identicalAcrossShards` entries with a flat
+    `stamp.get(field)`, so the five dimensions beside the ceiling are only
+    checkable if `write_shard_stamp` writes them flat and the declaration names
+    them. Both halves are asserted here, because either alone passes while the
+    guard checks nothing: a field written and not declared is never compared,
+    and a field declared and not written compares `None` against `None` on every
+    shard and agrees forever.
+
+    Reachable red: drop `hyperByTransfer` from either side.
+    """
+    from MIL_CREDA_Benchmark import harness, shards
+
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    assert "hyperByTransfer" in shards.declaration()["identicalAcrossShards"]
+
+    before = harness.Reduction()
+    before.hyperByTransfer = {"milcreda": {"M-U": {"kernelSigma": 36.1}}}
+    after = harness.Reduction()
+    after.hyperByTransfer = {"milcreda": {"M-U": {"kernelSigma": 3.61}}}
+    harness.write_shard_stamp("s00", before)
+    harness.write_shard_stamp("s01", after)
+
+    entries = [{"shard": name,
+                "stamp": json.loads(harness.shard_paths(name)["stamp"].read_text()),
+                "runs": []}
+               for name in ("s00", "s01")]
+    assert all("hyperByTransfer" in e["stamp"] for e in entries), (
+        "the field is not a flat top-level key, so `disagreements()` cannot read it")
+    fields = [d["field"] for d in shards.disagreements(
+        entries, shards.declaration()["identicalAcrossShards"])]
+    assert "hyperByTransfer" in fields, (
+        "two shards trained under bandwidths an order of magnitude apart merged "
+        f"without a word -> {fields}")
 
 
 # --------------------------------------------------------------- shard evidence

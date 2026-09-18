@@ -1050,6 +1050,16 @@ def write_shard_stamp(shard: str | None, reduction: Reduction) -> Path:
         "ceilings": dict(reduction.ceilings),
         "ceilingsByTransfer": {family: dict(picks) for family, picks
                                in reduction.ceilingsByTransfer.items()},
+        # The other five searched dimensions, on the same footing and for the
+        # same reason: the search moves six parameters, so a shard straddling a
+        # search can disagree on any of them, not only on the ceiling. Empty
+        # here is itself the reading that matters -- a record carrying no
+        # per-transfer hyperparameters is one `hyper_for` answered from
+        # `config`'s own constants, and this is where that shows rather than
+        # being a silence two shards could share without meaning the same thing.
+        "hyperByTransfer": {family: {label: dict(dims) for label, dims
+                                     in picks.items()}
+                            for family, picks in reduction.hyperByTransfer.items()},
         "evidence": _evidence(),
     }, indent=2), encoding="utf-8")
     return path
