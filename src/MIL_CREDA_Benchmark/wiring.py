@@ -91,10 +91,6 @@ class Arm(nn.Module):
         self.attention_temperature = hyper.get(
             "attentionTemperature", config.ATTENTION_TEMPERATURE)
         self.tau_local = hyper.get("tauLocal", config.TAU_LOCAL)
-        #: `GN`'s own captured source-batch BatchNorm statistics for the
-        #: current step, set by `_source_embeddings` and consumed by
-        #: `_target_embeddings`; `None` for every other arm, always.
-        self._source_bn_stats: dict | None = None
 
         self.encoder = FeatureExtractor(backbone=config.BACKBONE, pretrained=config.PRETRAINED)
         self.head = nn.Linear(self.encoder.output_dim, classes)
@@ -225,112 +221,20 @@ class Arm(nn.Module):
     def _target_embeddings(self, target_bags: torch.Tensor) -> torch.Tensor:
         """Encode a target batch during training.
 
-        Every adapted arm but `GN` passes the target batch through the encoder
-        exactly as it passes the source batch: normalization layers stay in
-        training mode and learn from this forward like the rest of the model
-        does. `GN` (`spec["normalization"] == "sourceBatch"`) is the one
-        exception -- its target forward is normalized with the CURRENT SOURCE
-        BATCH statistics of this same step (`self._source_bn_stats`, captured
-        by `_source_embeddings` a few lines above it in `training_step`) and
-        never updates the running statistics the source forward already set.
-        `self._source_bn_stats` is `None` outside of training (`forward`,
-        used for evaluation, never calls this method at all) and for every
-        arm that never captures it, so the fallback below is exact and not a
-        guess.
+        Every adapted arm passes the target batch through the encoder exactly
+        as it passes the source batch: normalization layers stay in training
+        mode and learn from this forward like the rest of the model does. That
+        is the whole of it, and this method exists as a named place rather than
+        as a branch -- it is where a freeze would have to be reintroduced, and
+        `tests/test_arm_objectives.py` points its guard at this exact name.
+
+        `GN` is retired, and with it the one `spec["normalization"] ==
+        "sourceBatch"` branch that used to stand here, plus the three helpers
+        that served only it (`_source_embeddings`, `_encode_with_frozen_stats`,
+        `_batchnorm_modules`). No declared arm normalizes its target forward
+        with anything but the encoder's own training-mode statistics.
         """
-        if self.spec.get("normalization") == "sourceBatch" and self._source_bn_stats is not None:
-            return self._encode_with_frozen_stats(target_bags, self._source_bn_stats)
         return self.instance_embeddings(target_bags)
-
-    # ------------------------------------------------------- GN's normalization
-
-    def _batchnorm_modules(self) -> list[nn.Module]:
-        """Every BatchNorm layer of the encoder, in the order `.modules()` walks them."""
-        return [m for m in self.encoder.modules()
-                if isinstance(m, nn.modules.batchnorm._BatchNorm)]
-
-    def _source_embeddings(self, bags: torch.Tensor) -> torch.Tensor:
-        """Encode the step's source batch, capturing `GN`'s own statistics along the way.
-
-        For every arm but `GN` this is `instance_embeddings` and nothing else.
-        For `GN` it also records, per BatchNorm layer, the batch mean and
-        variance that layer's own train-mode forward just normalized WITH --
-        not the EMA-blended running statistics the same forward updates as a
-        side effect (Eq.-free bookkeeping `torch.nn.BatchNorm2d` does
-        internally) -- into `self._source_bn_stats`, so `_target_embeddings`
-        can reuse the identical numbers a few lines later in the same step.
-        Every other arm leaves `self._source_bn_stats` at `None`, so
-        `_target_embeddings`'s guard above never takes the frozen-stats path
-        for them.
-        """
-        if self.spec.get("normalization") != "sourceBatch":
-            self._source_bn_stats = None
-            return self.instance_embeddings(bags)
-
-        captured: dict[int, tuple[torch.Tensor, torch.Tensor]] = {}
-
-        def _capture(module, inputs):
-            x = inputs[0]
-            reduce_dims = tuple(d for d in range(x.dim()) if d != 1)
-            captured[id(module)] = (
-                x.mean(dim=reduce_dims).detach(),
-                x.var(dim=reduce_dims, unbiased=False).detach(),
-            )
-
-        hooks = [module.register_forward_pre_hook(_capture)
-                for module in self._batchnorm_modules()]
-        try:
-            embeddings = self.instance_embeddings(bags)
-        finally:
-            for hook in hooks:
-                hook.remove()
-        self._source_bn_stats = captured
-        return embeddings
-
-    def _encode_with_frozen_stats(
-            self, bags: torch.Tensor,
-            captured: dict[int, tuple[torch.Tensor, torch.Tensor]]) -> torch.Tensor:
-        """Encode `bags` with every BatchNorm layer normalizing from `captured`.
-
-        Every layer's `running_mean`/`running_var` is temporarily REBOUND to
-        `captured`'s (mean, var) -- the source batch's own, from this same
-        step -- and the layer switched to evaluation mode, which normalizes
-        from those two buffers and, unlike training mode, never updates them.
-        Both are rebound back and training mode resumed once the forward
-        returns, whether it raised or not, so this leaves no trace on the
-        module beyond the encoded output: the running statistics the SOURCE
-        forward already set are exactly what a caller reads afterward.
-
-        **Rebound and never written into, and that is the whole of it.** An
-        earlier form did `running_mean.copy_(...)` on the way in and again on
-        the way out, and it cannot work: under `eval()` BatchNorm normalizes
-        FROM those two buffers, so the target forward's graph holds them, and
-        the restore then mutates a tensor that graph still needs. Backward
-        found `running_mean` at version 2 where it expected version 1 and
-        raised -- measured on the pilot, on a `[512]` buffer, which is
-        resnet18's pooled width. Rebinding the attribute leaves every tensor
-        autograd captured exactly as it captured it; `nn.Module.__setattr__`
-        routes the assignment into `_buffers`, so the module stays a module
-        and `state_dict` still finds them.
-        """
-        saved: list[tuple[nn.Module, torch.Tensor, torch.Tensor, bool]] = []
-        try:
-            for module in self._batchnorm_modules():
-                stats = captured.get(id(module))
-                if stats is None:
-                    continue
-                mean, var = stats
-                saved.append((module, module.running_mean,
-                             module.running_var, module.training))
-                module.running_mean = mean.detach().to(module.running_mean.dtype)
-                module.running_var = var.detach().to(module.running_var.dtype)
-                module.eval()
-            return self.instance_embeddings(bags)
-        finally:
-            for module, mean, var, was_training in saved:
-                module.running_mean = mean
-                module.running_var = var
-                module.train(was_training)
 
     def _milcreda_term(self, H_s, source_labels, target_bags):
         """Eqs. (14), (16)-(20), (22)-(38): the global score, and the local
@@ -430,11 +334,7 @@ class Arm(nn.Module):
         removed — un-normalizing this side to make the two look alike would
         delete the very thing the comparison exists to show.
         """
-        # `_source_embeddings`, not `instance_embeddings` directly: for every
-        # arm but `GN` the two are identical, and for `GN` this is also where
-        # `self._source_bn_stats` gets captured for `_target_embeddings`, a
-        # few lines below inside `_milcreda_term`, to reuse.
-        embeddings = self._source_embeddings(bags)
+        embeddings = self.instance_embeddings(bags)
         if self.spec["unit"] == "bag":
             Z, _ = self.bag_representations(embeddings, self.sigma)
             logits = self.head(Z)
@@ -614,8 +514,7 @@ def mechanism_weights(mechanism: str, H: torch.Tensor, params: dict) -> torch.Te
 
 class MechanismArm(Arm):
     """`G`'s full method -- encoder, head, the weighted global term, the local
-    correspondence, `GN`'s normalization axis untouched since this reuses
-    `G`'s own `"shared"` -- with Eq. (15)/(16)'s attention swapped for one of
+    correspondence -- with Eq. (15)/(16)'s attention swapped for one of
     `MECHANISMS`. Every axis but pooling is exactly `G`'s, unchanged, by
     inheriting `Arm` rather than reimplementing beside it: a difference
     between two mechanisms is a difference of pooling and nothing else.

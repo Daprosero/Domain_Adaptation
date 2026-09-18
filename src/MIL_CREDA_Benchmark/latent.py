@@ -908,9 +908,9 @@ def bag_pairs(model, source: bags.BagSet, target: bags.BagSet, device: torch.dev
         "nearest": K_st.argmax(dim=0).cpu(),
         "mass": torch.tensor(mass),
         # El kernel completo, fuente por destino -- lo que `top_k_source_bags`
-        # y `source_bag_usage` necesitan y `nearest` (que ya sólo guarda el
-        # argmax) no puede darles: el máximo pierde el orden por debajo del
-        # primero, y esa lista es justamente la pregunta de la sección 5.
+        # necesita y `nearest` (que ya sólo guarda el argmax) no puede darle:
+        # el máximo pierde el orden por debajo del primero, y esa lista es
+        # justamente la pregunta de la sección 5.
         "kernel": K_st.float().cpu(),
     }
 
@@ -920,10 +920,16 @@ def top_k_source_bags(reference: dict, k: int = 5) -> list[dict]:
 
     Rankeadas por el kernel de bolsa de la Sección 3 sobre TODAS las bolsas
     fuente de entrenamiento -- nunca un subconjunto, y nunca en la proyección
-    de dos dimensiones, que ilustraría UMAP y no la correspondencia. Cada
-    vecino lleva si su clase coincide con la clase verdadera de la bolsa de
-    destino, para que una fila se lea de un vistazo sin tener que cruzar dos
-    columnas.
+    de dos dimensiones, que ilustraría UMAP y no la correspondencia.
+
+    Cada vecino lleva tres cosas y cada una tiene su lector. `sourceLabel` es la
+    clase de esa bolsa fuente, y es lo que la tabla MUESTRA: con la clase de la
+    bolsa de destino ya en su propia columna al lado, un lector ve de un vistazo
+    si las vecinas más cercanas son de clases parecidas, sin que la tabla le
+    resuelva la comparación. `trueClass` es esa misma comparación ya hecha, y la
+    conclusión la agrega sobre todas las bolsas; `kernel` es el valor que fija el
+    orden. Ninguno de los dos se muestra por fila -- un número de kernel por
+    vecino son veinticinco números por pantalla que nadie compara.
     """
     kernel = reference["kernel"]
     n_source = kernel.shape[0]
@@ -939,6 +945,7 @@ def top_k_source_bags(reference: dict, k: int = 5) -> list[dict]:
             source_index = int(indices[rank, column])
             neighbours.append({
                 "sourceBag": source_index,
+                "sourceLabel": int(source_labels[source_index]),
                 "kernel": float(values[rank, column]),
                 "trueClass": bool(source_labels[source_index] == target_labels[column]),
             })
@@ -947,26 +954,13 @@ def top_k_source_bags(reference: dict, k: int = 5) -> list[dict]:
     return out
 
 
-def source_bag_usage(reference: dict, k: int = 5) -> dict[int, int]:
-    """Por cada bolsa fuente, cuántas bolsas de destino la tuvieron en su top-`k`.
-
-    La contracara de `top_k_source_bags`: expone las bolsas fuente que el top-
-    `k` de nadie nombra, algo que la tabla de destino-a-fuente no puede
-    mostrar porque está indexada al revés. Toda bolsa fuente aparece, incluso
-    con cuenta cero -- una bolsa ausente de este diccionario en vez de en cero
-    sería una bolsa que nadie puede distinguir de una que sí se usó una vez.
-    """
-    kernel = reference["kernel"]
-    n_source = kernel.shape[0]
-    k = min(k, n_source)
-    usage: dict[int, int] = {index: 0 for index in range(n_source)}
-    if k <= 0 or kernel.shape[1] == 0:
-        return usage
-    _, indices = kernel.topk(k, dim=0)
-    for column in range(kernel.shape[1]):
-        for rank in range(k):
-            usage[int(indices[rank, column])] += 1
-    return usage
+# `source_bag_usage` removed: it was the inverse reading of
+# `top_k_source_bags` -- per source bag, how many target bags carried it in
+# their top-`k` -- and its only caller was section 5e of
+# `Benchmark_Results.ipynb`, retired with `tables.render_source_bag_usage` and
+# `tables.conclusion_source_bag_usage`. The forward reading the section kept
+# (5d) reads `kernel` through `top_k_source_bags`, so the field `bag_pairs`
+# writes stays load-bearing.
 
 
 def median_bag_per_class(reference: dict) -> dict:

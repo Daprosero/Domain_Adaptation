@@ -47,27 +47,26 @@ def test_every_arm_declares_which_sections_it_exercises() -> None:
         f"sections declared for arms that no longer exist: {sorted(declared - configured)}")
 
 
-def test_the_declared_arms_and_rungs_are_exactly_the_operators_five_and_three() -> None:
+def test_the_declared_arms_and_rungs_are_exactly_the_operators_four_and_three() -> None:
     """Defect (11)'s guard, re-measured against the current identities.
 
-    This test used to pin `GN` retired and the three selection arms (`SU`,
-    `SA`, `SK`) present -- the state commit `af796f8` left behind. Commit
-    `60836d2` ("retire selection arms, add GN, six-dim search...") reversed
-    both halves of that decision: the selection arms and their budget
-    (`SELECT_K`/`SELECTION_SEED`) are gone from `wiring.Arm.select`, and `GN`
-    is back, this time as an architecture variant (`normalization:
-    "sourceBatch"`) rather than the per-arm switch `af796f8` retired. Pinning
-    the old identities here would fail the very change that superseded them,
-    so the pin is re-measured rather than kept: it exists to catch a
-    SILENT reversal of whichever decision is current, never to hold one
-    revision's decision against the next.
+    This pin has been re-measured twice, and both times because a decision
+    about which arms exist was taken and the pin exists to catch the NEXT
+    silent reversal of whichever decision is current -- never to hold one
+    revision's decision against the next. `af796f8` had `GN` retired and the
+    three selection arms (`SU`, `SA`, `SK`) present; `60836d2` ("retire
+    selection arms, add GN, six-dim search...") reversed both halves, so the
+    selection arms and their budget (`SELECT_K`/`SELECTION_SEED`) went from
+    `wiring.Arm.select` and `GN` came back as an architecture variant
+    (`normalization: "sourceBatch"`). `GN` is now retired again, deliberately
+    and with the whole `"sourceBatch"` axis, so the ladder is `B, E, F, G`.
 
-    Reachable red: dropping or renaming any of `B, E, F, G, GN`, adding a
-    sixth arm without a decision behind it, or repointing any rung of
+    Reachable red: dropping or renaming any of `B, E, F, G`, adding a fifth
+    arm without a decision behind it, or repointing any rung of
     `config.LADDER`.
     """
-    assert {arm["id"] for arm in config.ARMS} == {"B", "E", "F", "G", "GN"}
-    assert set(config.ARM_ORDER) == {"B", "E", "F", "G", "GN"}
+    assert {arm["id"] for arm in config.ARMS} == {"B", "E", "F", "G"}
+    assert set(config.ARM_ORDER) == {"B", "E", "F", "G"}
     assert not hasattr(config, "SELECT_K")
     assert not hasattr(config, "SELECTION_SEED")
 

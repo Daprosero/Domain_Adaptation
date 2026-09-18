@@ -107,10 +107,10 @@ def test_the_figure_is_written_where_it_is_asked_for_and_only_as_a_pdf(
 # `test_the_contribution_panel_reports_the_realized_share_arm_by_arm` removed:
 # `figures.contribution_curves` is retired. Section 6 of `Benchmark_Results.ipynb` is
 # loss curves "only to check the normalization" (Eq. 39's terms on the common
-# [0, 1) scale) -- `adaptation_curves` and `supervised_curves` -- and the task
-# that built this notebook explicitly removes "the contribution panel beside
-# the loss curves". Nothing in the required report reads a realized-share
-# curve any more.
+# [0, 1) scale) -- `adaptation_curves` alone now, over both conditions at once,
+# since `supervised_curves` went with section 6b -- and the task that built this
+# notebook explicitly removes "the contribution panel beside the loss curves".
+# Nothing in the required report reads a realized-share curve any more.
 
 
 # ------------------------------------------------------------- the display seed
@@ -382,9 +382,10 @@ def test_a_repetition_that_stopped_early_truncates_the_band_and_never_extends_it
 # `test_the_contribution_panel_is_shown_beside_the_other_two_curve_figures`
 # removed: it read `Benchmark_Report_v1.ipynb`, which no longer exists, to
 # assert a contribution-panel cell that no longer exists either. Section 6 of
-# `Benchmark_Results.ipynb` -- the notebook's replacement -- shows `supervised_curves`
-# and `adaptation_curves` only, "only to check the normalization", and the
-# task that built it explicitly retires the contribution panel.
+# `Benchmark_Results.ipynb` -- the notebook's replacement -- shows
+# `adaptation_curves` only, "only to check the normalization" (`supervised_curves`
+# went with section 6b), and the task that built it explicitly retires the
+# contribution panel.
 
 
 # ------------------------------------------------------- what one cell draws with
@@ -911,10 +912,12 @@ def test_no_figure_draws_more_transfers_than_the_count_fixes(tmp_path) -> None:
     assert len(TODAS) > config.FIGURE_TRANSFER_COUNT, \
         "con seis o menos transferencias esta prueba no probaría nada"
 
-    for nombre in ("adaptation_curves", "supervised_curves"):
-        with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
-            getattr(figures, nombre)(tmp_path / f"{nombre}.pdf",
-                                     arms=("E", "F", "G"), runs=runs)
+    # `supervised_curves` corría acá también y se retiró con la sección 6b; el
+    # tope vive en `_panelled`, que las dos compartían, así que lo que queda
+    # ejercita el mismo código por el único llamador que sobrevive.
+    with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
+        figures.adaptation_curves(tmp_path / "adaptation_curves.pdf",
+                                  arms=("E", "F", "G"), runs=runs)
 
 
 def test_the_count_is_the_declared_one_and_not_a_number_written_twice(tmp_path) -> None:
@@ -992,3 +995,154 @@ def test_the_latent_grids_are_bounded_by_the_same_count(tmp_path) -> None:
         with pytest.raises(ValueError, match="FIGURE_TRANSFER_COUNT"):
             dibujo(tmp_path / "grid.pdf", config.BAG_PANELS, demasiadas,
                    seed=3, device=torch.device("cpu"))
+
+
+# --------------------------------- una fila por condición, una columna por transferencia
+
+def _curvas_en(path, transfers, valor, arms=("E", "F", "G"), steps=4):
+    """Como `_curves_over`, con el valor del término fijado por el llamador.
+
+    Es lo que separa una fila de la otra: con el mismo número en las dos, una
+    figura que leyera el árbol limpio para las dos filas dibujaría exactamente lo
+    mismo que una correcta, y la prueba pasaría sobre el defecto que busca.
+    """
+    import json
+
+    with path.open("w", encoding="utf-8") as handle:
+        for transfer in transfers:
+            for arm in arms:
+                for seed in range(2):
+                    curve = [{"contribution": valor, "supervised": valor,
+                              "adaptation": valor} for _ in range(steps)]
+                    handle.write(json.dumps({"transfer": transfer, "arm": arm,
+                                             "seed": seed, "curve": curve}) + "\n")
+    return path
+
+
+def _tres(tmp_path, pasos_sucios=4):
+    """Las tres transferencias, dos árboles, un valor distinto en cada uno."""
+    tres = TODAS[:config.FIGURE_TRANSFER_COUNT]
+    limpio = _curvas_en(tmp_path / "limpio.jsonl", tres, 0.25)
+    sucio = _curvas_en(tmp_path / "sucio.jsonl", tres, 0.75, steps=pasos_sucios)
+    return tres, limpio, sucio
+
+
+def test_the_figure_is_one_row_per_condition_over_the_same_three_transfers(
+        tmp_path) -> None:
+    """Dos filas y tres columnas, y cada fila leída de SU propio árbol.
+
+    Lo que compra la forma es la columna: la misma transferencia arriba y abajo,
+    así que un término que se sale del intervalo bajo contaminación y no en
+    limpio se ve sin cruzar dos figuras. Que cada fila salga de su propio
+    registro se mide por el valor ---0.25 arriba, 0.75 abajo--- y no por la
+    ruta: dos filas leídas del mismo árbol dibujan seis paneles igual de
+    llenos.
+
+    Rojo alcanzable: pasarle a las dos filas el mismo `load_curves`, o volver a
+    acomodar las transferencias por índice plano (`index // columns`), que
+    pondría las tres en una fila y dejaría la segunda vacía.
+    """
+    tres, limpio, sucio = _tres(tmp_path)
+
+    figura = figures.adaptation_curves(
+        tmp_path / "dos_filas.pdf", arms=("E", "F", "G"),
+        runs=[("limpio", limpio), ("contaminado", sucio)], transfers=tres)
+
+    ejes = figura.axes
+    assert len(ejes) == 2 * config.FIGURE_TRANSFER_COUNT, \
+        f"la figura salió con {len(ejes)} paneles y no con 2x3"
+    assert all(axis.has_data() for axis in ejes), "algún panel quedó vacío"
+
+    arriba, abajo = ejes[:3], ejes[3:]
+    for axis in arriba:
+        alturas = {round(float(y), 6) for line in axis.lines
+                   for y in line.get_ydata() if float(y) not in (0.0, 1.0)}
+        assert alturas == {0.25}, f"la fila limpia dibujó {alturas}"
+    for axis in abajo:
+        alturas = {round(float(y), 6) for line in axis.lines
+                   for y in line.get_ydata() if float(y) not in (0.0, 1.0)}
+        assert alturas == {0.75}, f"la fila contaminada dibujó {alturas}"
+
+
+def test_each_row_is_named_and_each_transfer_is_named_once(tmp_path) -> None:
+    """Nadie tiene que deducir cuál fila es cuál, y nada se dice dos veces.
+
+    La transferencia es la identidad de la COLUMNA: se escribe arriba, una sola
+    vez, porque la columna entera es la misma. La condición es la identidad de la
+    FILA: se escribe a la izquierda de cada una. Las dos juntas son lo que hace
+    que un panel se ubique sin leer el código que lo dibujó.
+
+    Rojo alcanzable: titular también la fila de abajo (la misma decoración dos
+    veces), o dibujar las filas sin etiqueta, que deja el orden como única pista.
+    """
+    tres, limpio, sucio = _tres(tmp_path)
+
+    figura = figures.adaptation_curves(
+        tmp_path / "etiquetas.pdf", arms=("E", "F", "G"),
+        runs=[("limpio", limpio), ("contaminado", sucio)], transfers=tres)
+
+    ejes = figura.axes
+    titulos = [axis.get_title() for axis in ejes]
+    assert titulos[:3] == tres, titulos
+    assert titulos[3:] == ["", "", ""], \
+        "la fila de abajo repite el título de su columna"
+
+    etiquetas = [axis.get_ylabel() for axis in ejes]
+    assert etiquetas[0] == "limpio" and etiquetas[3] == "contaminado", etiquetas
+    assert etiquetas[1:3] == ["", ""] and etiquetas[4:] == ["", ""], \
+        "la etiqueta de la fila se repitió en paneles que no son el primero"
+
+
+def test_the_shared_x_axis_is_measured_across_both_rows(tmp_path) -> None:
+    """El polo doble: colapsa cuando de verdad comparten, y no cuando no.
+
+    El eje x son pasos del optimizador. Dos condiciones que corrieron distinta
+    cantidad comparten tan poco como dos transferencias que lo hicieron, y
+    dibujarlas bajo una sola etiqueta las presentaría bajo una regla común que no
+    existe. Se mide sobre las dos filas a la vez.
+
+    Rojo alcanzable: medir `lengths` sobre la primera fila solamente ---con lo
+    que dos filas de distinto largo colapsarían igual--- o fijar `shared_x` en
+    `True`.
+    """
+    tres, limpio, sucio = _tres(tmp_path)
+
+    igual = figures.adaptation_curves(
+        tmp_path / "igual.pdf", arms=("E", "F", "G"),
+        runs=[("limpio", limpio), ("contaminado", sucio)], transfers=tres)
+    assert igual.get_supxlabel() == "optimizer step", \
+        "los dos árboles corrieron los mismos pasos y no hubo etiqueta compartida"
+    assert not [axis for axis in igual.axes if axis.get_xlabel()], \
+        "colapsó la etiqueta y la dejó además en cada panel"
+
+    corto = tmp_path / "corto"
+    corto.mkdir()
+    _, limpio2, sucio_corto = _tres(corto, pasos_sucios=2)
+    distinto = figures.adaptation_curves(
+        tmp_path / "distinto.pdf", arms=("E", "F", "G"),
+        runs=[("limpio", limpio2), ("contaminado", sucio_corto)], transfers=tres)
+    assert distinto.get_supxlabel() == "", \
+        "las dos filas corrieron distinta cantidad de pasos y colapsó el eje igual"
+    assert all(axis.get_xlabel() == "optimizer step" for axis in distinto.axes), \
+        "sin eje compartido cada panel lleva la suya, y alguno no la llevó"
+
+
+def test_two_rows_that_would_draw_different_transfers_are_refused(tmp_path) -> None:
+    """Una columna que no es la misma transferencia arriba y abajo no es una columna.
+
+    Pasa de verdad: la campaña contaminada puede haber corrido menos que la
+    limpia. Dibujar la intersección dejaría dos filas de distinto ancho, y
+    dibujar cada una con las suyas dejaría una columna que el ojo compara y que
+    no compara nada.
+
+    Rojo alcanzable: quitar la comprobación y dejar que cada fila resuelva sus
+    propias transferencias.
+    """
+    tres = TODAS[:config.FIGURE_TRANSFER_COUNT]
+    limpio = _curvas_en(tmp_path / "limpio.jsonl", tres, 0.25)
+    otras = _curvas_en(tmp_path / "otras.jsonl", TODAS[3:6], 0.75)
+
+    with pytest.raises(ValueError):
+        figures.adaptation_curves(
+            tmp_path / "no.pdf", arms=("E", "F", "G"),
+            runs=[("limpio", limpio), ("contaminado", otras)])

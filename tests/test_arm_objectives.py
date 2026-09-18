@@ -287,9 +287,10 @@ def test_every_sigma_consumer_receives_the_one_declared_constant(
     monkeypatch.setattr(wiring, "bag_kernel", spy_bag_kernel)
 
     # G exercises weights_for and every kernel block plus local_distance's
-    # self-similarity; GN exercises the same path with its own frozen-stats
-    # target forward.
-    for arm_id in ("G", "GN"):
+    # self-similarity. `GN` drove the same path here with its own frozen-stats
+    # target forward and is retired with the arm; every consumer this test
+    # watches is reached by `G` alone.
+    for arm_id in ("G",):
         arm = _arm(arm_id)
         x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
         y = arm.source.labels[:config.BAGS_PER_STEP]
@@ -442,7 +443,7 @@ def test_a_floor_never_calls_take_on_the_target_pool(encoder, monkeypatch) -> No
     )
 
 
-@pytest.mark.parametrize("arm_id", ["E", "F", "G", "GN"])
+@pytest.mark.parametrize("arm_id", ["E", "F", "G"])
 def test_an_adapted_arms_target_forward_carries_gradient_to_the_encoder(
         encoder, arm_id) -> None:
     """The adaptation term trains the shared encoder through the TARGET
@@ -558,20 +559,20 @@ def test_an_adapted_arms_target_forward_updates_running_statistics(
 def test_every_adapted_arms_full_training_step_updates_running_statistics_a_source_only_twin_does_not(
         bn_encoder, arm_id) -> None:
     """The guard above covers `G` alone, and only at `_target_embeddings`
-    directly. This drives every adapted arm but `GN` through a full
-    `training_step` and compares its encoder's running statistics against a
-    `B` twin built from identical initial weights (`_arm` resets the seed
-    before building each one, over the same deterministic pools) and fed the
-    identical batch and generator. `B` never lets a target image reach the
-    encoder (Decision 2), so its running statistics move only from the source
-    forward; if the adapted arm's landed in the same place, its own target
-    forward would have to have been skipped or frozen somewhere between
-    `training_step` and `_target_embeddings`.
+    directly. This drives every adapted arm through a full `training_step` and
+    compares its encoder's running statistics against a `B` twin built from
+    identical initial weights (`_arm` resets the seed before building each one,
+    over the same deterministic pools) and fed the identical batch and
+    generator. `B` never lets a target image reach the encoder (Decision 2), so
+    its running statistics move only from the source forward; if the adapted
+    arm's landed in the same place, its own target forward would have to have
+    been skipped or frozen somewhere between `training_step` and
+    `_target_embeddings`.
 
-    `GN` is excluded here on purpose and covered by its own test below: it is
-    the one declared arm whose running statistics ARE expected to match its
-    source-only twin's, because its target forward never touches them at all
-    (`normalization: "sourceBatch"`).
+    Every adapted arm now, with no exception carved out of the list: `GN` was
+    the one arm excluded here -- its running statistics were expected to MATCH
+    its source-only twin's, because `normalization: "sourceBatch"` kept its
+    target forward off them entirely -- and it is retired.
 
     Reachable red, two ways: freeze the target forward for `arm_id` (wrap it
     in `eval()`) anywhere from `training_step` down to `_target_embeddings`
@@ -604,108 +605,23 @@ def test_every_adapted_arms_full_training_step_updates_running_statistics_a_sour
                            adapted.encoder.bn.running_var)
 
 
-def test_gns_full_training_step_matches_a_source_only_twins_running_statistics(
-        bn_encoder) -> None:
-    """`GN`'s own claim, the mirror of the test above: its running statistics
-    after a full `training_step` equal a source-only twin's exactly, because
-    its target forward is normalized with the CURRENT SOURCE BATCH statistics
-    of that same step and never updates `running_mean`/`running_var` at all
-    -- `wiring.Arm._encode_with_frozen_stats` restores whatever the source
-    forward already left there.
-
-    Reachable red: `_encode_with_frozen_stats` failing to restore the
-    original running statistics after the target forward (leaking the
-    temporarily-injected source-batch numbers into the buffer permanently),
-    or `_target_embeddings` routing `GN` through the ordinary
-    `instance_embeddings` path instead.
-    """
-    floor = _arm("B")
-    gn = _arm("GN")
-
-    floor.encoder.train()
-    gn.encoder.train()
-    assert torch.equal(floor.encoder.bn.running_mean, gn.encoder.bn.running_mean), (
-        "the twins did not start with identical running statistics"
-    )
-
-    x = floor.source.take(torch.arange(config.BAGS_PER_STEP))
-    y = floor.source.labels[:config.BAGS_PER_STEP]
-    gen_floor = torch.Generator().manual_seed(41)
-    gen_gn = torch.Generator().manual_seed(41)
-
-    floor.training_step(x, y, 0.5, gen_floor)
-    gn.training_step(x, y, 0.5, gen_gn)
-
-    assert torch.equal(floor.encoder.bn.running_mean, gn.encoder.bn.running_mean), (
-        "GN's running statistics moved away from its source-only twin's: "
-        "its target forward touched them, which normalization: "
-        "\"sourceBatch\" says it must never do"
-    )
-    assert torch.equal(floor.encoder.bn.running_var, gn.encoder.bn.running_var)
-
-
-def test_gns_objective_survives_its_own_backward(bn_encoder) -> None:
-    """`GN`'s loss can be differentiated, which is the whole of what an arm is for.
-
-    Every other `GN` test here calls `training_step` and stops: `training_step`
-    BUILDS the objective and `harness` is what calls `.backward()` on it. So the
-    suite exercised the forward pass and the running statistics and never the
-    gradient, and stayed green over an arm that could not complete a single
-    training step. The pilot found it on its fifth run, after `B`, `E`, `F` and
-    `G` had already written their rows.
-
-    What it found: under `eval()` BatchNorm normalizes FROM `running_mean`/
-    `running_var`, so the target forward's graph holds those two buffers, and
-    `_encode_with_frozen_stats` restored them with `copy_` -- an in-place write
-    on a tensor the graph still needed. Backward raised `one of the variables
-    needed for gradient computation has been modified by an inplace operation`
-    on a `[512]` buffer, resnet18's pooled width.
-
-    Reachable red: restore with `running_mean.copy_(mean)` instead of rebinding
-    the attribute.
-    """
-    gn = _arm("GN")
-    gn.encoder.train()
-
-    x = gn.source.take(torch.arange(config.BAGS_PER_STEP))
-    y = gn.source.labels[:config.BAGS_PER_STEP]
-    step = gn.training_step(x, y, 0.5, torch.Generator().manual_seed(41))
-
-    step["loss"].backward()
-
-    reached = [name for name, p in gn.named_parameters()
-               if p.grad is not None and torch.any(p.grad != 0)]
-    assert reached, (
-        "backward completed and reached no parameter: the objective is "
-        "detached from everything this arm trains")
-
-
-def test_gns_target_embeddings_scale_comparably_to_the_source(bn_encoder) -> None:
-    """The other half of `GN`'s claim: normalizing the target batch with the
-    SOURCE batch's own statistics still produces embeddings on a comparable
-    scale to the source's -- not a blow-up or a collapse -- asserted as a
-    stated factor rather than an exact match, since the two domains' raw
-    activations are not identical to begin with.
-    """
-    gn = _arm("GN")
-    gn.encoder.train()
-
-    source_bags = gn.source.take(torch.arange(config.BAGS_PER_STEP))
-    target_bags = gn.target.take(torch.arange(config.BAGS_PER_STEP))
-
-    source_embeddings = gn._source_embeddings(source_bags)
-    target_embeddings = gn._target_embeddings(target_bags)
-
-    source_scale = source_embeddings.detach().abs().mean().item()
-    target_scale = target_embeddings.detach().abs().mean().item()
-    assert source_scale > 0, "the source embeddings collapsed to zero"
-
-    factor = target_scale / source_scale
-    assert 0.1 <= factor <= 10.0, (
-        f"GN's target embeddings scale by a factor of {factor:.4g} against "
-        "the source's -- outside the [0.1, 10.0] band this test treats as "
-        "\"comparable\""
-    )
+# `test_gns_full_training_step_matches_a_source_only_twins_running_statistics`,
+# `test_gns_objective_survives_its_own_backward` and
+# `test_gns_target_embeddings_scale_comparably_to_the_source` removed: the arm
+# `GN` is retired from `config.ARMS`, and with it the whole `normalization:
+# "sourceBatch"` axis -- `wiring.Arm._source_embeddings`,
+# `_encode_with_frozen_stats` and `_batchnorm_modules`, which existed to serve
+# only that arm, are retired too. All three tests asserted a claim about that
+# axis and nothing else: that the frozen-stats target forward left the running
+# statistics exactly where the source forward set them, that its objective
+# survived its own backward (the rebind-versus-`copy_` defect the pilot found
+# on its fifth run), and that its target embeddings stayed on a scale
+# comparable to the source's. No declared arm normalizes its target forward
+# with anything but the encoder's own training-mode statistics any more, so
+# there is no such claim left to hold. What replaces them for every arm that
+# remains is the test directly above -- every adapted arm's running statistics
+# MUST move away from its source-only twin's -- which `GN` was the one
+# exception carved out of.
 
 
 # ------------------------------------------------- the supervised term of a bag
@@ -817,7 +733,7 @@ def test_one_draw_of_the_material_is_shared_by_every_arm(campana) -> None:
 
     runs = campana["runs"]
     arms = {run["arm"] for run in runs}
-    assert len(arms) == len(config.ARMS) == 5
+    assert len(arms) == len(config.ARMS) == 4
     for transfer in {run["transfer"] for run in runs}:
         of_cell = [run for run in runs if run["transfer"] == transfer]
         assert len({run["source"] for run in of_cell}) == 1, \
