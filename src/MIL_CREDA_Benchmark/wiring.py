@@ -292,14 +292,26 @@ class Arm(nn.Module):
             captured: dict[int, tuple[torch.Tensor, torch.Tensor]]) -> torch.Tensor:
         """Encode `bags` with every BatchNorm layer normalizing from `captured`.
 
-        Every layer's `running_mean`/`running_var` is temporarily overwritten
-        with `captured`'s (mean, var) -- the source batch's own, from this
-        same step -- and the layer switched to evaluation mode, which
-        normalizes from those two buffers and, unlike training mode, never
-        updates them. Both are restored and training mode resumed once the
-        forward returns, whether it raised or not, so this leaves no trace on
-        the module beyond the encoded output: the running statistics the
-        SOURCE forward already set are exactly what a caller reads afterward.
+        Every layer's `running_mean`/`running_var` is temporarily REBOUND to
+        `captured`'s (mean, var) -- the source batch's own, from this same
+        step -- and the layer switched to evaluation mode, which normalizes
+        from those two buffers and, unlike training mode, never updates them.
+        Both are rebound back and training mode resumed once the forward
+        returns, whether it raised or not, so this leaves no trace on the
+        module beyond the encoded output: the running statistics the SOURCE
+        forward already set are exactly what a caller reads afterward.
+
+        **Rebound and never written into, and that is the whole of it.** An
+        earlier form did `running_mean.copy_(...)` on the way in and again on
+        the way out, and it cannot work: under `eval()` BatchNorm normalizes
+        FROM those two buffers, so the target forward's graph holds them, and
+        the restore then mutates a tensor that graph still needs. Backward
+        found `running_mean` at version 2 where it expected version 1 and
+        raised -- measured on the pilot, on a `[512]` buffer, which is
+        resnet18's pooled width. Rebinding the attribute leaves every tensor
+        autograd captured exactly as it captured it; `nn.Module.__setattr__`
+        routes the assignment into `_buffers`, so the module stays a module
+        and `state_dict` still finds them.
         """
         saved: list[tuple[nn.Module, torch.Tensor, torch.Tensor, bool]] = []
         try:
@@ -308,16 +320,16 @@ class Arm(nn.Module):
                 if stats is None:
                     continue
                 mean, var = stats
-                saved.append((module, module.running_mean.clone(),
-                             module.running_var.clone(), module.training))
-                module.running_mean.copy_(mean.to(module.running_mean.dtype))
-                module.running_var.copy_(var.to(module.running_var.dtype))
+                saved.append((module, module.running_mean,
+                             module.running_var, module.training))
+                module.running_mean = mean.detach().to(module.running_mean.dtype)
+                module.running_var = var.detach().to(module.running_var.dtype)
                 module.eval()
             return self.instance_embeddings(bags)
         finally:
             for module, mean, var, was_training in saved:
-                module.running_mean.copy_(mean)
-                module.running_var.copy_(var)
+                module.running_mean = mean
+                module.running_var = var
                 module.train(was_training)
 
     def _milcreda_term(self, H_s, source_labels, target_bags):
