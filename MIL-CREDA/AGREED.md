@@ -71,6 +71,7 @@ about twice.
 
 ## Figures — phase 2
 
+- [ ] The whole of section 5 reads clean material: no contaminated grid, no contaminated correspondence figure and no contaminated hit counts. The tables above keep their clean and contaminated blocks; the figures of this section do not, because a picture drawn twice asks a reader to hold two of them while the number beside it already carries both.
 - [ ] For every target bag of the evaluation role, the five source training bags it is closest to, in order, ranked by the bag kernel over all source bags, each shown with its own class beside the target bag own class, so whether a bag points at similar classes is read off the row rather than inferred from a tick.
 - [ ] Latent grid is the shared original space and then one column per declared arm -- the floor and the three adapted ones -- drawn on CLEAN material only. `Original` is the images themselves before any model, shared because preprocessing already brings both domains to one tensor shape, sampled representatively and stratified by class. `test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_method`
 - [ ] **Every panel of the grid is drawn at the instance level.** Every arm encodes instances, so it is a space they all have and the only one where every panel carries the same number of points. The bag-level view stays in the phase-two tables, which measure each arm in its own unit. `test_every_panel_of_the_grid_is_drawn_at_the_instance_level`

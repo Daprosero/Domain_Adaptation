@@ -404,10 +404,6 @@ def objective(key: str, markdown: bool = True) -> str:
             "columna con término local que en la de al lado -- esa comparación "
             "es la razón de que el piso, la versión sin término local y la "
             "completa compartan la misma fila.",
-        "correspondence.grid.noisy":
-            "**Buscamos si la correspondencia local sobrevive al ruido mejor "
-            "que la global.** La misma figura, sobre el material contaminado, "
-            "leída junto a la limpia y nunca por separado.",
         "floors":
             "**Buscamos que la diferencia entre los dos pisos sea menor que la que "
             "los separa de cualquier método con adaptación.** Si lo es, la segunda "
@@ -2109,39 +2105,11 @@ def conclusion_readings_versus_clean(limpias: Iterable[dict], sucias: Iterable[d
     )
 
 
-def render_correspondence_contaminated(scored: Iterable[dict], rate: float,
-                                       markdown: bool = False) -> str:
-    """Los mismos aciertos y la misma masa, sobre la campaña contaminada.
+# `render_correspondence_contaminated` removed: its only caller was section
+# 5c-ii of `Benchmark_Results.ipynb`, retired with the contaminated bag
+# figure. Section 5 reads clean material on both sides now, so there is no
+# contaminated correspondence to render.
 
-    Declarado aparte de `render_correspondence`: el chequeo de duplicación mira
-    la llamada, y acá las dos mitades llamaban a la misma función sin nombrar
-    ninguna dimensión, de modo que la contaminada se leía como una segunda
-    renderización de la tabla limpia. No lo es: una mide sobre material limpio y
-    la otra a ρ, y son dos números distintos. Nombrarlo aparte no esquiva el
-    chequeo, dice lo que efectivamente hay, y lo deja intacto para el caso que sí
-    tiene que atrapar.
-
-    Las otras cinco tablas salieron de este arreglo: llevan ahora una columna
-    `Ruido` con un bloque por material y una sola llamada por cantidad. Esta no
-    se unificó --- sus filas son sujetos y no brazos, así que el bloque `con` no
-    tendría con qué fila del `sin` aparearse --- y por eso el par de nombres
-    sigue existiendo acá y sólo acá.
-
-    La tabla es idéntica porque tiene que serlo: dos formas distintas para la
-    misma cantidad obligarían al lector a traducir entre ellas para comparar,
-    que es justamente lo que estas dos tablas existen para no pedir.
-    """
-    scored = list(scored)
-    if not scored:
-        return (f"La campaña a ρ={rate:g} todavía no dejó checkpoints, así que no "
-                f"hay segunda tabla. No está vacía: no existe.")
-    return render_correspondence(scored, markdown=markdown)
-
-
-#: El peldaño del peso por confianza: el brazo sin pesar contra el que pesa.
-#: Declarado acá y no adivinado de `ARMS`, porque «cuál es el par que difiere
-#: sólo en el peso» es una lectura de la formulación y no una propiedad que se
-#: pueda derivar de un diccionario.
 def conclusion_with_noise(runs: Iterable[dict], metric: str, reduction: dict,
                           rate: float) -> str:
     """Dónde quedó cada método y cuánto lo movió la contaminación, junto.

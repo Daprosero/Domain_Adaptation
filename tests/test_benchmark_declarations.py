@@ -535,34 +535,13 @@ def test_the_campaign_refuses_ceilings_searched_below_scale(tmp_path, monkeypatc
 # and environment.
 
 
-def test_the_contaminated_correspondence_is_its_own_rendering() -> None:
-    """Two halves calling one renderer with no dimension named read as one
-    measurement rendered twice, and the contaminated correspondence was exactly
-    that. It gets its own name because they are two different numbers, and
-    saying so is not dodging the duplication check -- it leaves it intact for
-    the case it exists to catch.
-
-    The other five took the other exit: `render_readings`, `render`,
-    `render_rungs`, `render_gains` and `render_per_run_summary` grew a `Ruido`
-    column with a block per material, and their contaminated twins are gone, so
-    one call renders both numbers. This one did not --- its rows are subjects and
-    not arms, so a `con` block would have no `sin` row to pair with --- and the
-    pair of names survives here and only here.
-
-    And the empty case states the rate rather than a bare parenthesis, so a
-    reader meets which campaign has not left checkpoints yet."""
-    from MIL_CREDA_Benchmark import tables
-
-    declared = MIL_CREDA_Benchmark.__benchmark__["report"]["renderers"]
-    assert "tables.render_correspondence_contaminated" in declared
-
-    empty = tables.render_correspondence_contaminated([], 0.2)
-    assert "0.2" in empty and "no existe" in empty
-
-    scored = [{"arm": arm, "transfer": "M->U", "hits": 2, "classes": 3,
-               "mass": 0.5} for arm in config.BAG_PANELS]
-    assert (tables.render_correspondence_contaminated(scored, 0.2, markdown=True)
-            == tables.render_correspondence(scored, markdown=True))
+# `test_the_contaminated_correspondence_is_its_own_rendering` removed with the
+# renderer it pinned. Its argument still holds and is worth keeping: two
+# halves calling one renderer with no dimension named read as one
+# measurement rendered twice, so a contaminated twin earns its own name
+# rather than dodging the duplication check. What changed is that section 5
+# reads clean material on both sides now, so there is no contaminated
+# correspondence left to render and no twin to name.
 
 
 def test_the_ceiling_record_says_which_machine_measured_it() -> None:
