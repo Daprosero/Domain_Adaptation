@@ -836,17 +836,33 @@ def test_run_campaign_shard_at_pilot_routes_to_the_pilot_tree(
     monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
         "the unit suite reached the real ceiling search"))
 
-    seen: dict = {}
+    seen: list = []
 
     def _spy(reduction, device, arms=None, progress=print, shard=None):
-        seen[reduction.pilot] = reduction
+        seen.append(reduction)
         return {}
 
     monkeypatch.setattr(harness, "campaign", _spy)
     harness.run_campaign_shard(pilot=True)
     harness.run_campaign_shard(pilot=False)
 
-    piloted, full = seen[True], seen[False]
+    # Two calls per scale, not one: every accuracy table declares a clean block
+    # and a contaminated one, and a shard that ran only the first leaves half of
+    # every table with nothing behind it. Asserted as a count so a call silently
+    # dropping back to one condition cannot pass by having the clean one right.
+    assert len(seen) == 4, [r.labelNoise for r in seen]
+    by_scale = {True: [r for r in seen if r.pilot], False: [r for r in seen if not r.pilot]}
+    for pilot, pair in by_scale.items():
+        assert [r.labelNoise for r in pair] == [0.0, config.NOISE_REPORTED], (
+            f"pilot={pilot} did not run clean then contaminated: "
+            f"{[r.labelNoise for r in pair]}")
+        # the searched values are resolved ONCE and carried into both, which is
+        # the agreement: the search runs clean and its values are used unchanged
+        # under noise, so what mitigates the contamination is the method
+        assert pair[0].ceilings == pair[1].ceilings
+        assert pair[0].hyperByTransfer == pair[1].hyperByTransfer
+
+    piloted, full = by_scale[True][0], by_scale[False][0]
 
     # the scale, from the two constants `is_pilot_scale` reads and no others
     assert piloted.epochs == config.EPOCHS
@@ -957,10 +973,16 @@ def test_run_campaign_shard_obtains_ceilings_before_it_runs_the_campaign() -> No
     from MIL_CREDA_Benchmark import harness
 
     source = inspect.getsource(harness.run_campaign_shard)
-    # "campaign(reduction" and not the bare "campaign(": the docstring above
-    # already mentions "`campaign()`, which hands it to `shard_paths()`" —
-    # matching on "campaign(" alone would find that prose, not the call.
-    assert source.index("ceilings_in_force(") < source.index("campaign(reduction")
+    # "campaign(replace(reduction" and not the bare "campaign(": the docstring
+    # above already mentions "`campaign()`, which hands it to `shard_paths()`" —
+    # matching on "campaign(" alone would find that prose, not the call. Both
+    # conditions are asserted, and the LAST of them: the ceilings are resolved
+    # once, before either runs, so a second call placed above the resolution
+    # would run the contaminated half against nothing.
+    calls = [i for i in range(len(source))
+             if source.startswith("campaign(replace(reduction", i)]
+    assert len(calls) == 2, f"expected both conditions, found {len(calls)}"
+    assert source.index("ceilings_in_force(") < min(calls)
 
 
 def test_run_campaign_shard_writes_into_its_own_namespace() -> None:
