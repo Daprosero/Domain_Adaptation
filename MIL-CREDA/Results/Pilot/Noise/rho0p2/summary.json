@@ -301,8 +301,8 @@
       "torch": "2.13.0",
       "selfHosted": true,
       "power": {
-        "source": "mains",
-        "charge": 100
+        "source": "battery",
+        "charge": 60
       },
       "device": {
         "name": "mps",
@@ -432,38 +432,6 @@
         },
         "adaptationShare": {
           "mean": 0.5712133519228777,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "parameters": {
-          "mean": 11247434.0,
-          "stdev": 0.0,
-          "n": 1
-        }
-      },
-      "GN": {
-        "targetAccuracy": {
-          "mean": 0.1111111111111111,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "sourceAccuracy": {
-          "mean": 0.08333333333333333,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "contribution": {
-          "mean": 0.03389502068360647,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "supervised": {
-          "mean": 0.01555105577114903,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "adaptationShare": {
-          "mean": 0.6854946461651277,
           "stdev": 0.0,
           "n": 1
         },
@@ -602,38 +570,6 @@
           "stdev": 0.0,
           "n": 1
         }
-      },
-      "GN": {
-        "targetAccuracy": {
-          "mean": 0.5555555555555556,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "sourceAccuracy": {
-          "mean": 1.0,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "contribution": {
-          "mean": 0.0008807881663198627,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "supervised": {
-          "mean": 0.011658493307116996,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "adaptationShare": {
-          "mean": 0.07024231557332207,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "parameters": {
-          "mean": 11247434.0,
-          "stdev": 0.0,
-          "n": 1
-        }
       }
     },
     "M->S": {
@@ -756,38 +692,6 @@
         },
         "adaptationShare": {
           "mean": 0.0031979716284496534,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "parameters": {
-          "mean": 11247434.0,
-          "stdev": 0.0,
-          "n": 1
-        }
-      },
-      "GN": {
-        "targetAccuracy": {
-          "mean": 0.08333333333333333,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "sourceAccuracy": {
-          "mean": 1.0,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "contribution": {
-          "mean": 0.00011598537994792597,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "supervised": {
-          "mean": 0.01136610666188582,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "adaptationShare": {
-          "mean": 0.010101415275661083,
           "stdev": 0.0,
           "n": 1
         },
@@ -926,38 +830,6 @@
           "stdev": 0.0,
           "n": 1
         }
-      },
-      "GN": {
-        "targetAccuracy": {
-          "mean": 0.4444444444444444,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "sourceAccuracy": {
-          "mean": 0.3888888888888889,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "contribution": {
-          "mean": 0.00011562581667454825,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "supervised": {
-          "mean": 0.0351263724760862,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "adaptationShare": {
-          "mean": 0.003280909774582776,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "parameters": {
-          "mean": 11247434.0,
-          "stdev": 0.0,
-          "n": 1
-        }
       }
     },
     "U->S": {
@@ -1080,38 +952,6 @@
         },
         "adaptationShare": {
           "mean": 0.025207860330737998,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "parameters": {
-          "mean": 11247434.0,
-          "stdev": 0.0,
-          "n": 1
-        }
-      },
-      "GN": {
-        "targetAccuracy": {
-          "mean": 0.08333333333333333,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "sourceAccuracy": {
-          "mean": 1.0,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "contribution": {
-          "mean": 0.0005980541075890263,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "supervised": {
-          "mean": 0.011659769783277409,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "adaptationShare": {
-          "mean": 0.04878958230380917,
           "stdev": 0.0,
           "n": 1
         },
@@ -1250,38 +1090,6 @@
           "stdev": 0.0,
           "n": 1
         }
-      },
-      "GN": {
-        "targetAccuracy": {
-          "mean": 0.3333333333333333,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "sourceAccuracy": {
-          "mean": 0.75,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "contribution": {
-          "mean": 0.007117581309839373,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "supervised": {
-          "mean": 0.034713984153876526,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "adaptationShare": {
-          "mean": 0.17014857634273958,
-          "stdev": 0.0,
-          "n": 1
-        },
-        "parameters": {
-          "mean": 11247434.0,
-          "stdev": 0.0,
-          "n": 1
-        }
       }
     }
   },
@@ -1290,43 +1098,37 @@
       "B": {},
       "E": {},
       "F": {},
-      "G": {},
-      "GN": {}
+      "G": {}
     },
     "U->M": {
       "B": {},
       "E": {},
       "F": {},
-      "G": {},
-      "GN": {}
+      "G": {}
     },
     "M->S": {
       "B": {},
       "E": {},
       "F": {},
-      "G": {},
-      "GN": {}
+      "G": {}
     },
     "S->M": {
       "B": {},
       "E": {},
       "F": {},
-      "G": {},
-      "GN": {}
+      "G": {}
     },
     "U->S": {
       "B": {},
       "E": {},
       "F": {},
-      "G": {},
-      "GN": {}
+      "G": {}
     },
     "S->U": {
       "B": {},
       "E": {},
       "F": {},
-      "G": {},
-      "GN": {}
+      "G": {}
     }
   },
   "perTransfer": {
@@ -3938,9 +3740,6 @@
     "G M->U": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_M-U_seed0.pt"
     ],
-    "GN M->U": [
-      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_M-U_seed0.pt"
-    ],
     "B U->M": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_U-M_seed0.pt"
     ],
@@ -3952,9 +3751,6 @@
     ],
     "G U->M": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_U-M_seed0.pt"
-    ],
-    "GN U->M": [
-      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_U-M_seed0.pt"
     ],
     "B M->S": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_M-S_seed0.pt"
@@ -3968,9 +3764,6 @@
     "G M->S": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_M-S_seed0.pt"
     ],
-    "GN M->S": [
-      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_M-S_seed0.pt"
-    ],
     "B S->M": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_S-M_seed0.pt"
     ],
@@ -3982,9 +3775,6 @@
     ],
     "G S->M": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_S-M_seed0.pt"
-    ],
-    "GN S->M": [
-      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_S-M_seed0.pt"
     ],
     "B U->S": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_U-S_seed0.pt"
@@ -3998,9 +3788,6 @@
     "G U->S": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_U-S_seed0.pt"
     ],
-    "GN U->S": [
-      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_U-S_seed0.pt"
-    ],
     "B S->U": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_S-U_seed0.pt"
     ],
@@ -4012,9 +3799,6 @@
     ],
     "G S->U": [
       "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_S-U_seed0.pt"
-    ],
-    "GN S->U": [
-      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_S-U_seed0.pt"
     ]
   },
   "tally": {
