@@ -1312,13 +1312,6 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "que este stretch posea (ver el mapa de propiedad del cambio), asi que "
         "si una figura de ensayo y una de la corrida completa debieran vivir "
         "aparte, corregirlo es trabajo de quien sea dueno de ese cuaderno"),
-    "Benchmark_Results.ipynb: config.PRODUCT / tables.MECHANISM_RECORD": (
-        "una lectura, no una escritura -- `tables.MECHANISM_RECORD` es la "
-        "cadena fija que ese modulo ya declara "
-        "(`Results/Benchmark/attention_mechanisms.json`), sin escala propia, "
-        "la misma forma que `harness.py: config.CEILINGS_RECORD` ya tiene "
-        "excusada arriba: nombra el registro de la corrida COMPLETA y nunca "
-        "el de ensayo"),
 }
 
 
