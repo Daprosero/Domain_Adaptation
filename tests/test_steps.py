@@ -682,6 +682,14 @@ class RaicesDeclaradasTests(unittest.TestCase):
                          "/runs.jsonl",
                          f"{relativa(config.results_for(0.0, 'campaign', True))}"
                          "/summary.json",
+                         # El sello del shard, que `write_shard_stamp` escribe
+                         # al lado de las corridas que citan su manija. Estaba
+                         # sin declarar y el paso lo reportó como `foreign` en
+                         # su primera corrida de piloto --- el chequeo haciendo
+                         # su trabajo, sobre un archivo que la declaración se
+                         # había salteado.
+                         f"{relativa(config.results_for(0.0, 'campaign', True))}"
+                         "/shard.json",
                          relativa(config.models_for(0.0, "campaign", True)),
                          cuaderno_de("campana")],
             # El registro de la Sección 4, por la MISMA puerta que
