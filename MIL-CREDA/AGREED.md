@@ -183,6 +183,7 @@ already existed: they are two halves of one contract and they live in one. -->
 
 ## The full run
 
+- [ ] Every run says which of the six searched values were in force: the shard stamp carries `hyperByTransfer` flat beside the ceilings, so a record that funded only the ceiling shows as an empty entry rather than as a silence, and two shards straddling a re-search refuse instead of merging. `test_two_shards_straddling_a_search_disagree_on_more_than_the_ceiling`
 - [ ] Every artefact measured before this structure is deleted rather than kept: the pilot checkpoints, every pilot result and the unstamped ceiling record described another attention, another bandwidth and a floor that saw the target.
 - [ ] Nothing runs (pilot, shard, notebook or search) until the record-provenance guard is closed for every record the decided experiments keep: stale ceilings reaching a run through import-time defaults, Reduction.from_record ignoring the revision, and the noise diagnostic re-stamping an unchecked sweep.
 - [ ] The full grid — 30 seeds, 20 epochs — is not launched without an explicit authorization. Neither a clean verification nor a green pilot is permission.
