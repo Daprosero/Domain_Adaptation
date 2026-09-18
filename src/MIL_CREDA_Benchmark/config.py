@@ -1068,7 +1068,7 @@ def _refuse_on_stamp_drift(found: dict, record: "Path") -> None:
     above for why this cannot call that function directly), moved to where
     these two functions actually read the file -- both were reachable straight
     from a notebook (`Benchmark_Campaign_v1.ipynb`'s `ES_ENSAYO` branch,
-    `Benchmark_Noise_Sweep_v1.ipynb`) building `ceilings=`/`ceilingsByTransfer=`
+    `Benchmark_Noise_Sweep.ipynb`) building `ceilings=`/`ceilingsByTransfer=`
     from these two calls directly, never through `harness.with_ceilings_in_force`,
     so neither of those refusals ever ran: a campaign built that way trained
     every arm under a ceiling searched under a `KERNEL_SIGMA`/`ATTENTION_GAMMA`/
@@ -1290,8 +1290,8 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "adentro de la raiz y no al lado de ella, asi que una coordenada aca "
         "seria una segunda respuesta a una pregunta que la raiz ya contesto"),
     "harness.py: config.PRODUCT / tables.MECHANISM_RECORD": (
-        "la escritura del mismo registro `Results_v1.ipynb` ya lee sin "
-        "escala, excusada abajo (`Results_v1.ipynb: config.PRODUCT / "
+        "la escritura del mismo registro `Results.ipynb` ya lee sin "
+        "escala, excusada abajo (`Results.ipynb: config.PRODUCT / "
         "tables.MECHANISM_RECORD`): `run_mechanism_sweep` multiplexa limpio "
         "y contaminado ADENTRO del JSON (`clean`/`noisy`), nunca por "
         "directorio ni por nombre de archivo, así que no hay coordenada de "
@@ -1302,16 +1302,16 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "es donde el backend remoto desempaqueta lo que devuelve, antes de que "
         "nada haya leido una reduccion: la escala de lo que viene adentro la "
         "deciden los sellos de cada shard, no el directorio que los recibe"),
-    "Results_v1.ipynb: config.PRODUCT / 'Results' / 'figures'": (
+    "Results.ipynb: config.PRODUCT / 'Results' / 'figures'": (
         "el directorio de figuras del cuaderno de resultados: un solo arbol "
         "compartido, sin segmento de pilot/full ni de tasa -- distingue limpio "
         "de contaminado por NOMBRE de archivo (`latent_grid_clean.pdf` / "
         "`latent_grid_noisy.pdf`) y no por directorio. Esta declaracion "
-        "registra el hecho, no lo avala: `Results_v1.ipynb` no es un archivo "
+        "registra el hecho, no lo avala: `Results.ipynb` no es un archivo "
         "que este stretch posea (ver el mapa de propiedad del cambio), asi que "
         "si una figura de ensayo y una de la corrida completa debieran vivir "
         "aparte, corregirlo es trabajo de quien sea dueno de ese cuaderno"),
-    "Results_v1.ipynb: config.PRODUCT / tables.MECHANISM_RECORD": (
+    "Results.ipynb: config.PRODUCT / tables.MECHANISM_RECORD": (
         "una lectura, no una escritura -- `tables.MECHANISM_RECORD` es la "
         "cadena fija que ese modulo ya declara "
         "(`Results/Benchmark/attention_mechanisms.json`), sin escala propia, "
@@ -1387,7 +1387,7 @@ LECTURAS_SIN_COORDENADA: dict[str, str] = {
 #: La clave es el archivo y la expresión tal como la escribe `ast.unparse`, igual
 #: que en las otras dos reglas y por el mismo motivo.
 LECTURAS_QUE_NO_REENVIAN: dict[str, str] = {
-    "Benchmark_Ceiling_Search_v1.ipynb: config.ceilings_provenance()": (
+    "Benchmark_Ceiling_Search.ipynb: config.ceilings_provenance()": (
         "no habla de la corrida que ese cuaderno está por lanzar sino del "
         "registro que rige AHORA, y lo imprime con esa etiqueta --- «registro "
         "en vigor ahora mismo» --- al lado del destino que sí lleva la escala. "
@@ -1397,11 +1397,11 @@ LECTURAS_QUE_NO_REENVIAN: dict[str, str] = {
         "los dos dijeran lo mismo y el segundo dejaría de informar nada"),
     # "Benchmark_Noise_Report_v1.ipynb: contamination.load(tasa)" is removed:
     # that notebook is deleted with this stretch's restructuring (its
-    # analysis folds into Results_v1.ipynb), and the pattern it excused --
+    # analysis folds into Results.ipynb), and the pattern it excused --
     # `contamination.load(tasa)` re-reading the same level
     # `curve_is_pilot`/`ES_ENSAYO` just resolved for that cell -- does not
     # appear anywhere on disk any more (measured: neither `contamination.load`
-    # nor `curve_is_pilot` is called in `Results_v1.ipynb`). Keeping the
+    # nor `curve_is_pilot` is called in `Results.ipynb`). Keeping the
     # exclusion would let it survive its own call, which is exactly the
     # defect `test_ninguna_lectura_que_ya_tiene_escala_deja_de_reenviarla`
     # exists to catch.

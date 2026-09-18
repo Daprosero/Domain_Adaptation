@@ -91,7 +91,7 @@ __benchmark__ = {
             # what it was chosen over: a ceiling that wins among four identical
             # scores and one that wins by a real difference are the same number and
             # not the same evidence. Shown by `Benchmark_Search_Report_v1.ipynb`,
-            # not by `Results_v1.ipynb` -- the ceiling search is its own
+            # not by `Results.ipynb` -- the ceiling search is its own
             # experiment and reads as one, with its own report.
             "tables.render_ceilings",
             "tables.render_ceilings_by_transfer",
@@ -100,7 +100,7 @@ __benchmark__ = {
             # everything that made them necessary: the rungs (gains) table and
             # its ladder, the `seconds`/`peakMiB` `perRun` dimensions, and the
             # noise-diagnostic apparatus. None of the six required sections of
-            # `Results_v1.ipynb` reads any of them, and no other notebook did
+            # `Results.ipynb` reads any of them, and no other notebook did
             # either.
             #
             # Section 1's floor-only degradation curve is a figure
@@ -191,7 +191,7 @@ __benchmark__ = {
         # reported a filename, and with `emit` named that comes out as a finding
         # instead of passing quietly.
         # `figures.contribution_curves` is retired -- the contribution panel
-        # beside the loss curves is gone, and section 6 of `Results_v1.ipynb`
+        # beside the loss curves is gone, and section 6 of `Results.ipynb`
         # shows `adaptation_curves`/`supervised_curves` only, "only to check
         # the normalization". `latent.projection` is retired too: a
         # single-panel UMAP helper with no caller anywhere, not even in
@@ -297,7 +297,7 @@ __benchmark__ = {
             "Results/Benchmark",
             "Results/Benchmark/ceilings.json",
             "Results/local_distance_bound.pdf",
-            # Where `Results_v1.ipynb` archives every figure it draws --
+            # Where `Results.ipynb` archives every figure it draws --
             # `figures.emit`'s vector copy, one directory and not one line per
             # file, because a report figure is the same kind of output as the
             # rest of what a run leaves.

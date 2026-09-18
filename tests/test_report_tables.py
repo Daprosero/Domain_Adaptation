@@ -27,7 +27,7 @@ import MIL_CREDA_Benchmark
 from MIL_CREDA_Benchmark import config, harness, tables
 
 NOTEBOOKS = config.REPOSITORY / "MIL-CREDA" / "Notebooks"
-REPORT = NOTEBOOKS / "Results_v1.ipynb"
+REPORT = NOTEBOOKS / "Results.ipynb"
 
 LABELS = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
 
@@ -181,7 +181,7 @@ def test_at_the_declared_scale_nothing_is_stamped() -> None:
 # `test_the_rung_table_labels_its_rows_with_the_name_and_not_the_pair` removed:
 # `tables.rung_name` and `tables.render_rungs` are retired along with the
 # rungs (gains) table and its conclusion -- none of the six required sections
-# of `Results_v1.ipynb` shows a ladder of adjacent-arm differences any more.
+# of `Results.ipynb` shows a ladder of adjacent-arm differences any more.
 # Section 2/3's own attribution reading (each arm against its own floor) is
 # `tables.conclusion`, already covered by
 # `test_every_conclusion_the_report_produces_is_read_off_its_own_numbers` and
@@ -646,7 +646,7 @@ def test_render_refuses_a_dimension_the_declaration_calls_per_run(monkeypatch) -
 #: declaration permits would need to print. `render_rungs`/`conclusion_rungs`
 #: (the rungs table) and `paired_gains`/`render_gains` (the gains table) are
 #: gone for the same reason every reader of them is: neither has a place in
-#: the six required sections of `Results_v1.ipynb`.
+#: the six required sections of `Results.ipynb`.
 def _pooling_calls(metric: str):
     """One callable per aggregating entry point, ready to invoke with `metric`."""
     runs = _runs({(arm, label): [10.0 + index, 30.0 + index]
@@ -1391,5 +1391,5 @@ def test_conclusion_attention_prints_this_exact_arms_own_floor(arm: str) -> None
 # `test_diagnostic_record_accepts_a_correctly_stamped_measurement` removed:
 # `tables._diagnostic_record`, `render_diagnostic`, `diagnostic_source_note`
 # and `conclusion_diagnostic` are retired along with the noise-diagnostic
-# apparatus. None of the six required sections of `Results_v1.ipynb` reads a
+# apparatus. None of the six required sections of `Results.ipynb` reads a
 # re-searched-ceiling-under-noise diagnostic any more.

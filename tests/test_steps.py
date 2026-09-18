@@ -91,7 +91,7 @@ class PasosDeclaradosTests(unittest.TestCase):
         entrada = paquete.__steps__["results"]
         self.assertEqual(entrada["function"], "resultados")
         self.assertEqual(
-            _cuadernos_nombrados_por_los_pasos().get("Results_v1.ipynb"),
+            _cuadernos_nombrados_por_los_pasos().get("Results.ipynb"),
             "resultados", "los resultados no corren su propio cuaderno")
 
         fuente = Path(steps.__file__).read_text(encoding="utf-8")
@@ -117,7 +117,7 @@ class PasosDeclaradosTests(unittest.TestCase):
         ser cierto: la búsqueda tiene el suyo, y cada raíz sigue con un dueño.
 
         Las tres mitades, cada una capaz de volver sola: que el paso corra
-        `Benchmark_Ceiling_Search_v1.ipynb`, que no compute al lado del cuaderno
+        `Benchmark_Ceiling_Search.ipynb`, que no compute al lado del cuaderno
         que corre, y que el informe siga sin ejecutar ninguna búsqueda ---
         abrirlo tiene que seguir costando lo que cuesta leer, no lo que cuesta
         buscar.
@@ -135,7 +135,7 @@ class PasosDeclaradosTests(unittest.TestCase):
         entrada = paquete.__steps__["search-pilot"]
         self.assertEqual(entrada["function"], "ensayo_de_busqueda")
         corridos = _cuadernos_nombrados_por_los_pasos()
-        self.assertEqual(corridos.get("Benchmark_Ceiling_Search_v1.ipynb"),
+        self.assertEqual(corridos.get("Benchmark_Ceiling_Search.ipynb"),
                          "ensayo_de_busqueda",
                          "la búsqueda no corre su propio cuaderno")
         self.assertEqual(corridos.get("Benchmark_Search_Report_v1.ipynb"),
@@ -218,7 +218,7 @@ class PasosDeclaradosTests(unittest.TestCase):
     # is removed. `campana`/`Benchmark_Campaign_v1.ipynb` and the
     # `campaign-local` step are retired: nothing in this stretch's restructured
     # `__steps__` calls `harness.campaign()` from a notebook any more (see
-    # `resultados`'s own docstring in `steps.py`). `Results_v1.ipynb` derives
+    # `resultados`'s own docstring in `steps.py`). `Results.ipynb` derives
     # its scale through `cargar_corridas()` -- a resolver, not a hand-built
     # `Reduction(pilot=...)` -- and that discipline is already covered
     # generically, notebook-name-agnostic, by
@@ -287,12 +287,12 @@ CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
         "liberado: era el cuaderno que corre la búsqueda y fijaba `pilot=True` "
         "adentro, así que su nombre afirmaba una escala que no le toca elegir "
         "--- y mientras la afirmaba ningún cuaderno podía correr la búsqueda "
-        "completa. Hoy se llama `Benchmark_Ceiling_Search_v1.ipynb` y recibe su "
+        "completa. Hoy se llama `Benchmark_Ceiling_Search.ipynb` y recibe su "
         "escala"),
     # Los seis borrados junto con la reestructuración de este stretch (commit
     # `2f9bf32`, "delete every artefact the new structure will not
     # overwrite"): sus checkpoints, registros y cuadernos medían el árbol de
-    # r17 y ninguno se regenera en el lugar. `Benchmark_Noise_Sweep_v1.ipynb`
+    # r17 y ninguno se regenera en el lugar. `Benchmark_Noise_Sweep.ipynb`
     # -- el séptimo que ese commit retiró -- no entra acá: este stretch lo
     # repuso, y su nombre vuelve a resolver contra el árbol.
     "Benchmark_Campaign_v1.ipynb": (
@@ -303,18 +303,18 @@ CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
         "(ver su entrada más abajo)"),
     "Benchmark_Report_v1.ipynb": (
         "borrado: era el informe de la campaña completa. "
-        "`Results_v1.ipynb` lo reemplaza, junto con "
+        "`Results.ipynb` lo reemplaza, junto con "
         "`Benchmark_Latent_v1.ipynb`, en un solo cuaderno -- las seis "
         "secciones que reemplazan a las dos leen el mismo registro y se "
         "citan entre sí"),
     "Benchmark_Latent_v1.ipynb": (
         "borrado: era el análisis latente por separado. Ver "
         "`Benchmark_Report_v1.ipynb`, con quien se fusionó en "
-        "`Results_v1.ipynb`"),
+        "`Results.ipynb`"),
     "Benchmark_Noise_Report_v1.ipynb": (
         "borrado junto con el eje de ruido de dos pasos (barrido + informe): "
         "`noise-sweep` (`barrido_de_ruido`) hoy corre y presenta en un solo "
-        "cuaderno, `Benchmark_Noise_Sweep_v1.ipynb`"),
+        "cuaderno, `Benchmark_Noise_Sweep.ipynb`"),
     "Benchmark_Noise_Diagnostic_Search_v1.ipynb": (
         "borrado junto con el diagnóstico de ruido entero: re-buscaba el "
         "techo de la adaptación bajo material contaminado, lo que "
@@ -893,7 +893,7 @@ def _correr_el_barrido(monkeypatch, tmp_path) -> dict:
 
     monkeypatch.setattr(harness, "campaign", _campaign)
 
-    ambito = _correr_las_celdas("Benchmark_Noise_Sweep_v1.ipynb")
+    ambito = _correr_las_celdas("Benchmark_Noise_Sweep.ipynb")
     return {"corridas": corridas, "lecturas": lecturas, "escalas": escalas,
             "agrupadoPorEscala": AGRUPADO,
             "porTransferenciaPorEscala": POR_TRANSFERENCIA,
@@ -994,7 +994,7 @@ def _correr_la_busqueda(monkeypatch, tmp_path, escala_de_ensayo: bool) -> dict:
         "`ceilings.json` esa llamada ES la búsqueda completa, unas nueve horas y "
         "media que nadie autorizó"))
 
-    ambito = _correr_las_celdas("Benchmark_Ceiling_Search_v1.ipynb")
+    ambito = _correr_las_celdas("Benchmark_Ceiling_Search.ipynb")
     return {"pedidas": pedidas, "ambito": ambito}
 
 

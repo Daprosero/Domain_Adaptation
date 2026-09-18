@@ -297,7 +297,7 @@ def test_a_rung_subtracts_left_minus_right_everywhere_it_is_computed() -> None:
     conclusion, and the panorama that outlives both in the record. Commit
     `177ce09` ("replace the report and latent notebooks with Results_v1")
     retired `tables.render_rungs`/`conclusion_rungs`: none of the six required
-    sections of `Results_v1.ipynb` reads a rung table any more, and no other
+    sections of `Results.ipynb` reads a rung table any more, and no other
     notebook did either (see `__benchmark__["search"]`'s own retirement note
     in `src/MIL_CREDA_Benchmark/__init__.py`). What survives is
     `harness.paired_across_transfers` itself -- `campaign()` still calls it to
@@ -694,7 +694,7 @@ def _search_report_notebook() -> list[dict]:
     """The notebook that reads the ceiling record and presents it.
 
     It searches nothing -- the run that searches lives in
-    `Benchmark_Ceiling_Search_v1.ipynb`, its own notebook, driven by its own
+    `Benchmark_Ceiling_Search.ipynb`, its own notebook, driven by its own
     `search-pilot` step (`steps.ensayo_de_busqueda`) -- every number here
     comes from `harness.search_record()`, read back from disk.
     """
@@ -1711,7 +1711,7 @@ def test_ceiling_for_accepts_a_correctly_stamped_attached_record() -> None:
 def test_config_ceilings_on_record_refuses_a_stamp_mismatch_at_an_explicit_scale(
         tmp_path, monkeypatch) -> None:
     """The bypass a notebook actually reached: `Benchmark_Campaign_v1.ipynb`'s
-    `ES_ENSAYO` branch and `Benchmark_Noise_Sweep_v1.ipynb` both build
+    `ES_ENSAYO` branch and `Benchmark_Noise_Sweep.ipynb` both build
     `ceilings=`/`ceilingsByTransfer=` from `config.ceilings_on_record(pilot=...)`
     directly, never through `harness.with_ceilings_in_force` -- so
     `ceilings_in_force`'s own refusal never ran. The stamp check has to live

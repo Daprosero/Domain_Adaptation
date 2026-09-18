@@ -230,7 +230,7 @@ __steps__: dict = {
                      "produces": ["Results/local_distance_bound.pdf",
                                   "Notebooks/verification.ipynb"],
                      "placement": "local"},
-    # Corre `Benchmark_Ceiling_Search_v1.ipynb`, que es el cuaderno que CORRE la
+    # Corre `Benchmark_Ceiling_Search.ipynb`, que es el cuaderno que CORRE la
     # búsqueda, y no computa en su lugar. Su celda de la corrida llama a
     # `harness.run_search(pilot=ES_ENSAYO)` con `ES_ENSAYO` derivado de
     # `config.is_pilot_scale()`, igual que los otros tres, y el paso se niega si
@@ -260,7 +260,7 @@ __steps__: dict = {
                      "advances": 2,
                      "reads": [],
                      "produces": ["Results/Benchmark/ceilings.pilot.json",
-                                  "Notebooks/Benchmark_Ceiling_Search_v1.ipynb"],
+                                  "Notebooks/Benchmark_Ceiling_Search.ipynb"],
                      "placement": "remote",
                      "job": "ceiling-search",
                      "service": "kaggle"},
@@ -281,7 +281,7 @@ __steps__: dict = {
     # diagnóstico re-buscaba el techo bajo contaminación, lo que contradice la
     # decisión de que la búsqueda corre siempre sobre material limpio).
     #
-    # Corre `Benchmark_Noise_Sweep_v1.ipynb` y no computa en su lugar. Ya no
+    # Corre `Benchmark_Noise_Sweep.ipynb` y no computa en su lugar. Ya no
     # una campaña por nivel sobre cada arm/transferencia: la celda de la
     # corrida llama a `harness.campaign(reduction, device, arms=["B"],
     # transfers=[config.NOISE_TRANSFER], ...)` por nivel, con
@@ -307,7 +307,7 @@ __steps__: dict = {
                     "reads": ["Results/Benchmark/ceilings.json"],
                     "produces": ["Results/Pilot/Noise/curve",
                                  "Models/Pilot/Noise/curve",
-                                 "Notebooks/Benchmark_Noise_Sweep_v1.ipynb"],
+                                 "Notebooks/Benchmark_Noise_Sweep.ipynb"],
                      "placement": "remote",
                      "job": "noise-sweep",
                      "service": "kaggle"},
@@ -379,7 +379,7 @@ __steps__: dict = {
     # El único paso que PRESENTA: reemplaza lo que `report`, `latent` y
     # `noise-report` dibujaban por separado -- las tres notebooks de esos
     # pasos fueron borradas junto con la reestructuración de este stretch.
-    # `Results_v1.ipynb` sólo lee y dibuja -- medido contra el archivo: no
+    # `Results.ipynb` sólo lee y dibuja -- medido contra el archivo: no
     # llama a `harness.campaign()` ni a `config.is_pilot_scale()` en ninguna
     # celda, sólo a `cargar_corridas()`, que resuelve viendo cuál de los dos
     # árboles (completo o ensayo) tiene `runs.jsonl` y `summary.json` --
@@ -401,6 +401,6 @@ __steps__: dict = {
                                "Models/Benchmark",
                                "Models/Noise/rho0p2"],
                      "produces": ["Results/figures",
-                                  "Notebooks/Results_v1.ipynb"],
+                                  "Notebooks/Results.ipynb"],
                      "placement": "local"},
 }
