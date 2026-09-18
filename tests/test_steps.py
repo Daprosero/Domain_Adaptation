@@ -23,28 +23,23 @@ _RAIZ = steps.CUADERNOS.parents[1]
 #: razón al lado --- la misma forma que `steps.CUADERNOS_SIN_PASO`, y por la
 #: misma razón: un nombre pelado en una exención y un olvido se leen igual.
 #:
-#: `campaign` es el primero: el artefacto que manda a un worker no es un
-#: cuaderno, es un `run-config.json` que nombra `{module, function}`
-#: directamente (`steps.campana`'s propia docstring). El ensayo de un paso
-#: sin cuaderno sigue probando el artefacto real -- llama al mismo callable
-#: que el envío remoto nombra -- así que la razón que
-#: `test_cada_paso_declara_exactamente_un_cuaderno_entre_sus_raices` existe
-#: para prevenir (un ensayo que prueba la biblioteca y no lo que se manda) no
-#: aplica acá: lo que se manda YA ES la biblioteca, llamada directamente.
-PASOS_SIN_CUADERNO_A_PROPOSITO: dict[str, str] = {
-    "campaign": (
-        "sin cuaderno a propósito: el artefacto que este paso manda a un "
-        "worker es `run-config.json` nombrando `{module: "
-        "\"MIL_CREDA_Benchmark.harness\", function: \"run_campaign_shard\"}` "
-        "directamente, no un `.ipynb` -- `Benchmark_Campaign_v1.ipynb` fue "
-        "borrado y no vuelve (ver `steps.campana`)"),
-    "mechanisms": (
-        "sin cuaderno a propósito, la misma forma que `campaign` y por la "
-        "misma razón: `run-config.json` nombra `{module: "
-        "\"MIL_CREDA_Benchmark.harness\", function: "
-        "\"run_mechanism_sweep_shard\"}` directamente (ver "
-        "`steps.mecanismos_de_atencion`)"),
-}
+#: Está VACÍO, y vacío es una afirmación: hoy todo paso declarado nombra un
+#: cuaderno entre sus raíces.
+#:
+#: Tenía dos, `campaign` y `mechanisms`, con la razón «el artefacto que manda
+#: a un worker no es un cuaderno, es un `run-config.json` que nombra
+#: `{module, function}` directamente». La premisa era verdadera y se midió; la
+#: conclusión no se seguía. Un `run-config.json` no puede nombrar un `.ipynb`
+#: --- y por eso `harness.run_campaign_shard`/`run_mechanism_sweep_shard`
+#: siguen intactas y siguen siendo ese camino --- pero las dos formas no
+#: compiten: la remota manda una función a otra máquina, el cuaderno ejercita
+#: acá el artefacto que un lector abre. Con la exención puesta, `verify`
+#: reportaba los dos pasos bajo `undeclaredStepNotebooks` y el ensayo los
+#: recorría probando la biblioteca.
+#:
+#: La forma sigue disponible: un paso puede eximirse acá, con su razón al
+#: lado. Lo que no puede es eximirse sin decir por qué.
+PASOS_SIN_CUADERNO_A_PROPOSITO: dict[str, str] = {}
 
 
 class PasosDeclaradosTests(unittest.TestCase):
@@ -1587,3 +1582,289 @@ def test_el_ensayo_remoto_no_ablanda_la_guarda_que_gobierna_la_campana(
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ------------------------------------------------- el paso orquesta, el cuaderno corre
+#
+# Las tres afirmaciones de abajo cierran el defecto que `verify` reportaba bajo
+# `undeclaredStepNotebooks`: `campaign` y `mechanisms` --- dos de seis pasos ---
+# llamaban a `harness.run_campaign_shard()`/`run_mechanism_sweep_shard()` desde
+# la biblioteca, sin cuaderno propio. El ensayo los recorría probando la
+# biblioteca y el artefacto que llevaría el mismo trabajo a otra máquina no lo
+# ejecutaba nadie.
+#
+# Ninguna nombra un cuaderno: las tres recorren `__steps__` entero y resuelven
+# el cuaderno de cada paso con `steps.cuaderno_de`. Un paso nuevo entra solo.
+
+
+def _entradas_que_entrenan() -> set[str]:
+    """Las funciones de `harness` que llegan a `run_one`, cerradas transitivamente.
+
+    DERIVADO y no una lista: `run_one` es donde se entrena un modelo, así que
+    «esta función entrena» es «desde acá se llega hasta ahí», y la clausura lo
+    contesta sola. Una lista escrita a mano se queda vieja en el sentido que no
+    se ve --- una entrada nueva que entrena no entra, y el control sigue verde
+    sobre un cuaderno que ella nunca miró.
+    """
+    import ast
+
+    arbol = ast.parse(
+        Path(_harness_modulo().__file__).read_text(encoding="utf-8"))
+    definidas = {nodo.name: nodo for nodo in arbol.body
+                 if isinstance(nodo, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    llama = {}
+    for nombre, nodo in definidas.items():
+        salidas = set()
+        for hijo in ast.walk(nodo):
+            if isinstance(hijo, ast.Call):
+                llamado = (hijo.func.id if isinstance(hijo.func, ast.Name)
+                           else getattr(hijo.func, "attr", None))
+                if llamado in definidas:
+                    salidas.add(llamado)
+        llama[nombre] = salidas
+
+    entrenan = {"run_one"}
+    creciendo = True
+    while creciendo:
+        creciendo = False
+        for nombre, salidas in llama.items():
+            if nombre not in entrenan and salidas & entrenan:
+                entrenan.add(nombre)
+                creciendo = True
+    return entrenan
+
+
+def _harness_modulo():
+    from MIL_CREDA_Benchmark import harness
+
+    return harness
+
+
+def _llamadas_del_cuaderno(cuaderno: str) -> tuple[set[str], list]:
+    """`({nombres llamados}, [árbol por celda])` de un cuaderno.
+
+    Los nombres vienen con y sin dueño (`harness.campaign` y `campaign`), para
+    que una llamada importada por su nombre corto no se escape del recorrido.
+    """
+    import ast
+
+    nombres, arboles = set(), []
+    for celda in _celdas_de_codigo(cuaderno):
+        limpia = "\n".join(linea for linea in celda.splitlines()
+                           if not linea.lstrip().startswith(("%", "!")))
+        try:
+            arbol = ast.parse(limpia)
+        except SyntaxError:                                  # pragma: no cover
+            continue
+        arboles.append(arbol)
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Call):
+                continue
+            if isinstance(nodo.func, ast.Attribute):
+                nombres.add(nodo.func.attr)
+                if isinstance(nodo.func.value, ast.Name):
+                    nombres.add(f"{nodo.func.value.id}.{nodo.func.attr}")
+            elif isinstance(nodo.func, ast.Name):
+                nombres.add(nodo.func.id)
+    return nombres, arboles
+
+
+def test_ningun_paso_computa_al_lado_del_cuaderno_que_corre() -> None:
+    """La mitad que el paso debe: orquestar y no computar.
+
+    `campana` y `mecanismos_de_atencion` devolvían `harness.run_campaign_shard()`
+    y `harness.run_mechanism_sweep_shard()` desde el cuerpo del paso, sin abrir
+    ningún cuaderno. Eso ya estaba afirmado, paso por paso, para `results` y
+    para `search-pilot`; escrito así, un paso NUEVO que computara entraba sin
+    que nada lo mirara --- y entraron dos.
+
+    Acá el recorrido es `__steps__` entero y el conjunto prohibido se deriva
+    (`_entradas_que_entrenan`), así que ni el paso ni la entrada hacen falta
+    escribirlos.
+
+    Las guardas no cuentan y no son una excepción escrita: `barrido_de_ruido`
+    llama a `harness.search_record(...)` para negarse antes de abrir su
+    cuaderno, y `search_record` no llega a `run_one`, así que la clausura no la
+    incluye. Lo que se prohíbe es ENTRENAR al lado del cuaderno, no leer.
+
+    Rojo alcanzable: devolver `harness.run_campaign_shard()` al cuerpo de
+    `campana`, o poner `harness.campaign(...)` en el de cualquier otro paso.
+    """
+    import ast
+
+    entrenan = _entradas_que_entrenan()
+    assert {"run_one", "campaign", "run_campaign_shard",
+            "run_mechanism_sweep_shard", "run_search"} <= entrenan, (
+        "la clausura no reconoce las entradas que sí entrenan, así que este "
+        f"control estaría verde por vacío -> {sorted(entrenan)}")
+
+    fuente = Path(steps.__file__).read_text(encoding="utf-8")
+    definidas = {nodo.name: nodo for nodo in ast.parse(fuente).body
+                 if isinstance(nodo, ast.FunctionDef)}
+
+    computan = {}
+    for paso, entrada in paquete.__steps__.items():
+        cuerpo = definidas[entrada["function"]]
+        adentro = sorted({
+            nodo.func.attr for nodo in ast.walk(cuerpo)
+            if isinstance(nodo, ast.Call)
+            and isinstance(nodo.func, ast.Attribute)
+            and nodo.func.attr in entrenan})
+        if adentro:
+            computan[paso] = adentro
+    assert not computan, (
+        "estos pasos entrenan en el cuerpo del paso en vez de dejar que lo "
+        f"haga el cuaderno que corren -> {computan}")
+
+
+def test_el_cuaderno_de_cada_paso_que_entrena_llama_a_la_biblioteca_y_no_la_copia() -> None:
+    """La otra mitad: el cuaderno orquesta, la biblioteca computa.
+
+    Un paso puede correr su cuaderno y el cuaderno reimplementar el bucle
+    adentro, y entonces el ensayo ejercita el artefacto y mide otra cosa que la
+    corrida real --- la misma bifurcación que `unreachedModules` vigila entre
+    un brazo y los módulos del método, un nivel más abajo.
+
+    Lo prohibido es `run_one` y sus vecinos de UNA corrida: son el cuerpo del
+    bucle, así que un cuaderno que los alcanza ya lo forkeó. Llamar a una
+    ENTRADA (`run_search`, `run_campaign_shard`, `run_mechanism_sweep_shard`,
+    `campaign`) es exactamente lo correcto y es lo que se exige del otro lado.
+
+    Cada nombre prohibido se resuelve contra el módulo vivo: un renombre deja
+    este control en rojo en vez de vaciarlo en silencio, que es la única forma
+    en que una lista escrita a mano falla sin que se vea.
+
+    **Se mira TODO cuaderno de TODO paso, y no sólo los que llaman a una
+    entrada que entrena.** Esa era la versión anterior y la mutación se la
+    comió: reemplazar `harness.run_mechanism_sweep_shard()` por
+    `harness.run_mechanism(...)` en la celda de la corrida ---que es
+    exactamente el fork que esto existe para atrapar--- dejaba al cuaderno sin
+    ninguna entrada de la clausura, así que salía del conjunto examinado y el
+    control pasaba en VERDE. Un conjunto derivado de lo que el cuaderno llama
+    no puede vigilar lo que el cuaderno llama. Medido, no razonado: la
+    mutación corrió y pasó.
+
+    Hoy ninguno de los seis cuadernos alcanza una primitiva ---medido, no
+    supuesto--- así que la regla más fuerte es también la verdadera, y un
+    cuaderno que dibuja y de verdad necesitara materializar una bolsa se exime
+    escribiendo por qué, como todo lo demás acá.
+
+    Y es la mitad que le cierra la puerta de atrás a
+    `test_todo_cuaderno_que_entrena_imprime_la_escala_a_la_que_entrena`: con
+    las primitivas prohibidas para todos, la única forma de entrenar adentro de
+    un cuaderno es llamar a una entrada, que es justo la condición con la que
+    aquel elige a quién mirar.
+
+    Rojo alcanzable: reemplazar `harness.run_campaign_shard()` en la celda de
+    la corrida por `harness.run_one(...)`, o por `harness.run_mechanism(...)`
+    en la del barrido de mecanismos.
+    """
+    from MIL_CREDA_Benchmark import bags, harness, wiring
+
+    primitivas = {"harness": (harness, ("run_one", "run_mechanism")),
+                  "wiring": (wiring, ("build",)),
+                  "bags": (bags, ("build",))}
+    prohibidas = set()
+    for modulo_nombre, (modulo, nombres) in primitivas.items():
+        for nombre in nombres:
+            assert callable(getattr(modulo, nombre, None)), (
+                f"{modulo_nombre}.{nombre} ya no existe: este control estaría "
+                "prohibiendo un nombre que no es nada")
+            prohibidas.add(f"{modulo_nombre}.{nombre}")
+
+    miradas, forkeados = [], {}
+    for paso in paquete.__steps__:
+        cuaderno = steps.cuaderno_de(paso)
+        assert cuaderno, f"{paso} dejó de declarar exactamente un cuaderno"
+        llamadas, _ = _llamadas_del_cuaderno(cuaderno)
+        miradas.append(cuaderno)
+        copiadas = sorted(llamadas & prohibidas)
+        if copiadas:
+            forkeados[cuaderno] = copiadas
+    assert len(miradas) == len(paquete.__steps__) and miradas, (
+        "el recorrido no abrió un cuaderno por paso declarado, así que este "
+        f"control estaría verde sin haber mirado todo -> {miradas}")
+    assert not forkeados, (
+        "estos cuadernos alcanzan el cuerpo de una corrida en vez de llamar a "
+        f"la entrada de biblioteca -> {forkeados}")
+
+
+def test_todo_cuaderno_que_entrena_imprime_la_escala_a_la_que_entrena() -> None:
+    """Una salida de ensayo y una completa tienen la misma forma.
+
+    El único lugar donde la diferencia existe es lo que el cuaderno imprime, y
+    por eso se exige que la escala LLEGUE a quien mira: una escala leída y
+    nunca mostrada deja este control en verde sobre un cuaderno que no dice
+    nada --- la misma falla que `steps.declara_su_fuente` ya evita del lado de
+    la fuente, un paso más allá.
+
+    El conjunto se deriva de la clausura y los nombres de escala del módulo
+    vivo: el que entrena tiene que decirlo, el que sólo lee y dibuja no le debe
+    nada a este control.
+
+    Rojo alcanzable: sacarle el `print` de la escala a cualquiera de los
+    cuadernos que entrenan, o dejar la escala calculada en una variable que
+    ninguna celda muestre.
+    """
+    import ast
+
+    from MIL_CREDA_Benchmark import config
+
+    escalas = tuple(nombre for nombre in
+                    ("EPOCHS", "SEEDS", "FULL_EPOCHS", "FULL_SEEDS",
+                     "is_pilot_scale", "upstream_pilot_scale")
+                    if hasattr(config, nombre))
+    assert len(escalas) == 6, (
+        f"`config` dejó de declarar alguna escala que este control lee -> "
+        f"{escalas}")
+
+    entrenan = _entradas_que_entrenan()
+    mostradores = {"print", "show", "display"}
+
+    miradas, mudos = [], []
+    for paso in paquete.__steps__:
+        cuaderno = steps.cuaderno_de(paso)
+        llamadas, arboles = _llamadas_del_cuaderno(cuaderno)
+        if not (llamadas & entrenan):
+            continue
+        miradas.append(cuaderno)
+
+        # Los nombres que llevan una escala adentro: la escala misma, y toda
+        # variable asignada desde una expresión que la nombra.
+        portadores = set(escalas)
+        for arbol in arboles:
+            for nodo in ast.walk(arbol):
+                if not isinstance(nodo, ast.Assign):
+                    continue
+                dentro = {hijo.id for hijo in ast.walk(nodo.value)
+                          if isinstance(hijo, ast.Name)}
+                dentro |= {getattr(hijo, "attr", "")
+                           for hijo in ast.walk(nodo.value)
+                           if isinstance(hijo, ast.Attribute)}
+                if dentro & portadores:
+                    portadores |= {destino.id for destino in nodo.targets
+                                   if isinstance(destino, ast.Name)}
+
+        dicho = False
+        for arbol in arboles:
+            for nodo in ast.walk(arbol):
+                if not (isinstance(nodo, ast.Call)
+                        and (getattr(nodo.func, "id", None) in mostradores
+                             or getattr(nodo.func, "attr", None) in mostradores)):
+                    continue
+                nombrados = {hijo.id for hijo in ast.walk(nodo)
+                             if isinstance(hijo, ast.Name)}
+                nombrados |= {getattr(hijo, "attr", "")
+                              for hijo in ast.walk(nodo)
+                              if isinstance(hijo, ast.Attribute)}
+                if nombrados & portadores:
+                    dicho = True
+        if not dicho:
+            mudos.append(cuaderno)
+
+    assert miradas, (
+        "ningún cuaderno entrena, así que este control estaría verde sin "
+        "haber mirado nada")
+    assert not mudos, (
+        "estos cuadernos entrenan y no dicen a qué escala, así que una salida "
+        f"de ensayo se lee igual que una completa -> {mudos}")
