@@ -482,6 +482,200 @@ class Arm(nn.Module):
         }
 
 
+# ------------------------------------------------------- attention mechanisms
+#
+# Section 4's comparison ("which attention mechanism") and nothing a declared
+# arm reads: `config.ARMS`'s own `G` keeps Eq. (15)/(16) exactly as `Arm`
+# above computes them. Everything below is comparison-only plumbing -- it
+# carries no `__provenance__` and implements no numbered equation of the
+# revision, the same reason `harness`/`tables` do not either.
+#
+# Five mechanisms, on the full method (`G`) and nothing else: ours (Eq. (15)'s
+# hybrid, exactly `Arm.weights_for`'s own "learned" branch), ABMIL as
+# published (Ilse, Tomczak & Welling 2018 -- `v_R` unconstrained, no
+# consensus term), ABMIL with a gating unit (the same paper's gated variant),
+# max pooling, and mean pooling (Eq. (16) with uniform weights, already
+# `Arm.weights_for`'s own "uniform" branch under a different name).
+MECHANISMS = ("ours", "abmil-published", "abmil-gated", "max", "mean")
+
+
+def _abmil_published_logits(H: torch.Tensor, V_R: torch.Tensor, b_R: torch.Tensor,
+                            v_R: torch.Tensor) -> torch.Tensor:
+    """ABMIL as published: a_k = w^T tanh(V h_k^T), read here as
+    `R(h) = v_R^T tanh(V_R h + b_R)` per instance -- `Arm`'s own
+    `relevance_component` (Eq. (15)'s `R_phi`) with two differences, both
+    deliberate: `v_R` is used RAW, never passed through the l1-ball
+    reparametrization `_l1_ball_reparametrization` applies, and there is no
+    bias-free variant either way -- the published gate has none, so `b_R`
+    reproduces exactly what the paper's affine layer already has.
+    """
+    hidden = torch.tanh(H @ V_R.transpose(0, 1) + b_R)
+    return hidden @ v_R.reshape(-1)
+
+
+def _abmil_gated_logits(H: torch.Tensor, V: torch.Tensor, U: torch.Tensor,
+                        w: torch.Tensor) -> torch.Tensor:
+    """ABMIL's gated attention: a_k = w^T (tanh(V h_k^T) (dot) sigm(U h_k^T)),
+    per instance -- the same paper's gated variant, own `V`/`U`/`w`, never
+    `Arm`'s `V_R`/`b_R`/`v_R`: the gate is a product of two projections, not
+    one affine layer, so it cannot share parameters with either the hybrid or
+    the published mechanism above without secretly becoming a fourth thing.
+    """
+    gate = torch.tanh(H @ V.transpose(0, 1)) * torch.sigmoid(H @ U.transpose(0, 1))
+    return gate @ w.reshape(-1)
+
+
+def _mean_weights(H: torch.Tensor) -> torch.Tensor:
+    """Mean pooling: beta_a = 1/m for every instance -- Eq. (16) with uniform
+    weights, exactly `Arm.weights_for`'s own "uniform" branch, named for this
+    comparison rather than for a declared arm's `spec["attention"]`.
+    """
+    m = H.shape[0]
+    return torch.full((m,), 1.0 / m, dtype=H.dtype, device=H.device)
+
+
+def mechanism_weights(mechanism: str, H: torch.Tensor, params: dict) -> torch.Tensor | None:
+    """The per-instance weights `mechanism` assigns to one bag's embeddings
+    `H`, or `None` for `"max"`, which has none: max pooling selects a
+    winning instance per feature and reports no per-instance importance a
+    weighted sum could reconstruct.
+
+    `params` carries exactly the parameters the named mechanism reads --
+    `MechanismArm._params()` builds it -- so a caller mismatching a
+    mechanism with the wrong parameter set fails on a missing key rather
+    than silently mixing two mechanisms' weights.
+    """
+    if mechanism == "max":
+        return None
+    if mechanism == "mean":
+        return _mean_weights(H)
+    if mechanism == "ours":
+        logits = relevance_logits(H, params["V_R"], params["b_R"], params["v_R"],
+                                  params["gamma"], params["sigma"])
+    elif mechanism == "abmil-published":
+        logits = _abmil_published_logits(H, params["V_R"], params["b_R"], params["v_R"])
+    elif mechanism == "abmil-gated":
+        logits = _abmil_gated_logits(H, params["V"], params["U"], params["w"])
+    else:
+        raise ValueError(f"unknown mechanism {mechanism!r}; known: {MECHANISMS}")
+    return bag_weights(logits, params["tau_att"])
+
+
+def mechanism_embedding(mechanism: str, H: torch.Tensor, params: dict) -> torch.Tensor:
+    """Eq. (19)'s bag representation under `mechanism` -- the coordinatewise
+    maximum over instances for `"max"`, `bag_embedding` (the weighted
+    average every other mechanism reduces to) otherwise.
+    """
+    if mechanism == "max":
+        return H.max(dim=0).values
+    return bag_embedding(H, mechanism_weights(mechanism, H, params))
+
+
+class MechanismArm(Arm):
+    """`G`'s full method -- encoder, head, the weighted global term, the local
+    correspondence, `GN`'s normalization axis untouched since this reuses
+    `G`'s own `"shared"` -- with Eq. (15)/(16)'s attention swapped for one of
+    `MECHANISMS`. Every axis but pooling is exactly `G`'s, unchanged, by
+    inheriting `Arm` rather than reimplementing beside it: a difference
+    between two mechanisms is a difference of pooling and nothing else.
+
+    Built by `build_mechanism` below, never by `wiring.build`: no entry in
+    `config.ARMS` ever names one of `MECHANISMS`, so nothing here is
+    reachable from a declared arm's own construction path.
+
+    **What `"max"` costs, named rather than silently decided.** `bag_kernel`/
+    `local_distance` (Eq. (14)/(28)'s bag kernel and the local correspondence
+    it feeds) are built on a WEIGHTED kernel mean over instances -- every
+    mechanism but `"max"` produces exactly the weight vector that machinery
+    already expects, because Eq. (16)'s hybrid, ABMIL published, ABMIL gated
+    and mean pooling are all, structurally, a softmax (or a uniform one) over
+    instance logits. Max pooling is not: it selects a winning instance per
+    feature and reports no per-instance importance a weighted kernel could
+    read. Section 4 asks for `sourceAccuracy`/`targetAccuracy` alone, so the
+    decision actually needed is narrow -- what feeds the bag KERNEL used by
+    the adaptation term's internal machinery when the FINAL bag
+    representation `self.head` reads came from `"max"` -- and this class
+    answers it by falling back to `_mean_weights` there and only there: a
+    neutral choice that favours no OTHER mechanism, rather than an
+    unreviewed guess about what "the max-pooling kernel" would mean. Flagged
+    here, in one place, exactly so it can be found and revisited rather than
+    inherited silently by every reader downstream.
+    """
+
+    def __init__(self, mechanism: str, classes: int, source: Pool, target: Pool,
+                hyper: dict | None = None):
+        if mechanism not in MECHANISMS:
+            raise ValueError(f"unknown mechanism {mechanism!r}; known: {MECHANISMS}")
+        super().__init__(config.ARMS_BY_ID["G"], classes, source, target, hyper=hyper)
+        self.mechanism = mechanism
+        width = self.encoder.output_dim
+        if mechanism == "abmil-published":
+            # Own parameters, never `self.V_R`/`b_R`/`v_R`: those are trained
+            # WITH the l1-ball reparametrization and a fair comparison trains
+            # each mechanism under its own definition, not one mechanism's
+            # weights read through another's rule.
+            self.mech_V = nn.Parameter(torch.empty(config.ATTENTION_WIDTH, width))
+            self.mech_b = nn.Parameter(torch.zeros(config.ATTENTION_WIDTH))
+            self.mech_v = nn.Parameter(torch.empty(config.ATTENTION_WIDTH))
+            nn.init.xavier_uniform_(self.mech_V)
+            nn.init.normal_(self.mech_v, std=0.1)
+        elif mechanism == "abmil-gated":
+            self.mech_V = nn.Parameter(torch.empty(config.ATTENTION_WIDTH, width))
+            self.mech_U = nn.Parameter(torch.empty(config.ATTENTION_WIDTH, width))
+            self.mech_w = nn.Parameter(torch.empty(config.ATTENTION_WIDTH))
+            nn.init.xavier_uniform_(self.mech_V)
+            nn.init.xavier_uniform_(self.mech_U)
+            nn.init.normal_(self.mech_w, std=0.1)
+        # "ours" reuses `self.V_R`/`b_R`/`v_R`, already allocated by
+        # `Arm.__init__` (`G`'s own `spec["attention"] == "learned"`).
+        # "mean"/"max" need no parameters of their own.
+
+    def _params(self) -> dict:
+        if self.mechanism == "ours":
+            return {"V_R": self.V_R, "b_R": self.b_R, "v_R": self.v_R,
+                    "gamma": self.attention_gamma, "sigma": self.sigma,
+                    "tau_att": self.attention_temperature}
+        if self.mechanism == "abmil-published":
+            return {"V_R": self.mech_V, "b_R": self.mech_b, "v_R": self.mech_v,
+                    "tau_att": self.attention_temperature}
+        if self.mechanism == "abmil-gated":
+            return {"V": self.mech_V, "U": self.mech_U, "w": self.mech_w,
+                    "tau_att": self.attention_temperature}
+        return {}
+
+    def weights_for(self, H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
+        """Overrides `Arm.weights_for`: every caller that pools through it
+        (`bags_of`, `bag_representations`, and so every kernel `training_step`
+        builds from them) reads this mechanism's own weights instead of
+        `G`'s Eq. (15)/(16) -- see this class's own docstring for `"max"`,
+        the one mechanism with none, which falls back to uniform here.
+        """
+        weights = mechanism_weights(self.mechanism, H, self._params())
+        return weights if weights is not None else _mean_weights(H)
+
+    def bag_representations(self, embeddings: torch.Tensor,
+                            sigma: float | torch.Tensor):
+        """Overrides `Arm.bag_representations`: the FINAL bag embedding
+        `self.head` reads is `mechanism_embedding`'s own -- true max pooling
+        for `"max"`, never the uniform-weight fallback `weights_for` reports
+        for the kernel machinery.
+        """
+        params = self._params()
+        kept = [self.select(H, sigma) for H in embeddings]
+        Z = torch.stack([mechanism_embedding(self.mechanism, H, params) for H in kept])
+        weights = [self.weights_for(H, sigma) for H in kept]
+        return Z, weights
+
+
+def build_mechanism(mechanism: str, classes: int, source: Pool,
+                    target: Pool, hyper: dict | None = None) -> MechanismArm:
+    """One attention mechanism, by the name `MECHANISMS` declares -- the
+    comparison's own entry point, the sibling of `build` that never returns
+    a declared arm.
+    """
+    return MechanismArm(mechanism, classes, source, target, hyper=hyper)
+
+
 def build(arm_id: str, classes: int, source: Pool, target: Pool,
          hyper: dict | None = None) -> Arm:
     """One arm, by the identifier the ladder names it with.
