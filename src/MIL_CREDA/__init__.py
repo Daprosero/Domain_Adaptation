@@ -317,12 +317,16 @@ __steps__: dict = {
     # `config.VERDICT_TRANSFERS` nombra, a `config.FULL_EPOCHS`/`FULL_SEEDS`.
     # `campaign-local` -- el paso que antes ejercitaba `harness.campaign()`
     # corriendo `Benchmark_Campaign_v1.ipynb` -- fue retirado junto con esa
-    # notebook (commit `2f9bf32`) y este paso es su sucesor, no su reemplazo
-    # exacto: donde `campaign-local` corría un cuaderno, éste llama a
-    # `harness.run_campaign_shard()` DIRECTAMENTE (`steps.campana`, ver su
-    # propia docstring para el porqué) -- el mismo callable JSON que un
-    # `run-config.json` remoto nombra, así que el ensayo y el envío real
-    # ejercitan el mismo artefacto.
+    # notebook (commit `2f9bf32`) y este paso es su sucesor. Corrió un tiempo
+    # sin cuaderno, llamando a `harness.run_campaign_shard()` desde la
+    # biblioteca, y eso es lo que `verify` reportaba bajo
+    # `undeclaredStepNotebooks`: el ensayo lo recorría probando la biblioteca
+    # mientras el artefacto que llevaría el mismo trabajo a otra máquina no lo
+    # ejecutaba nadie. Hoy corre `Benchmark_Campaign.ipynb`, y ese cuaderno
+    # llama a `run_campaign_shard()` en su celda de la corrida -- la función
+    # queda intacta y sigue siendo lo que un `run-config.json` remoto nombra,
+    # así que el ensayo y el envío real ejercitan el mismo código por dos
+    # puertas y no dos códigos distintos.
     #
     # Sin `Pilot/` en `produces`: `run_campaign_shard` entrena siempre a
     # escala completa (la misma razón que la búsqueda), así que no hay árbol
@@ -348,9 +352,14 @@ __steps__: dict = {
                 # -- y declarar el directorio entero se tragaría las raíces de
                 # los otros por segmentos, exactamente la colisión
                 # `test_ninguna_raiz_es_de_dos_pasos` existe para atrapar.
+                #
+                # Y el cuaderno mismo, que se ejecuta `--inplace`: la salida
+                # ejecutada ES lo que queda de esta corrida, la misma forma
+                # que `search-pilot` y `noise-sweep` ya tenían.
                 "produces": ["Results/Benchmark/runs.jsonl",
                             "Results/Benchmark/summary.json",
-                            "Models/Benchmark"],
+                            "Models/Benchmark",
+                            "Notebooks/Benchmark_Campaign.ipynb"],
                 "placement": "remote",
                 "job": "campaign",
                 "service": "kaggle"},
@@ -358,23 +367,32 @@ __steps__: dict = {
     # el método completo (`G`, nunca un id declarado -- `wiring.MechanismArm`
     # hereda todo lo demás de `G` por herencia, nunca por copia). Mismo
     # patrón que `campaign`, por la misma razón (ver la docstring de
-    # `steps.mecanismos_de_atencion`): sin cuaderno propio, `run-config.json`
-    # nombra `{module: "MIL_CREDA_Benchmark.harness", function:
-    # "run_mechanism_sweep_shard"}` directamente.
+    # `steps.mecanismos_de_atencion`): corre `Benchmark_Attention_
+    # Mechanisms.ipynb`, y ese cuaderno llama a
+    # `harness.run_mechanism_sweep_shard()` en su celda de la corrida --- la
+    # función queda intacta y sigue siendo lo que un `run-config.json` remoto
+    # nombra.
+    #
+    # **Dos cuadernos y no uno, decidido y no heredado.** Este barrido son
+    # cinco mecanismos sobre UNA configuración; la campaña es la rejilla
+    # entera. Meterlos en un cuaderno ataría para siempre el barato al caro:
+    # re-correr la Sección 4 pediría volver a pagar la campaña.
     #
     # `reads` vacío: consume el registro de techos a escala completa, y por
     # la misma razón que `campaign` ningún paso declarado lo produce (ver esa
     # entrada). Sin predecesores, su ensayo remoto prueba el cable
     # (`harness.run_smoke()`).
     #
-    # `produces` es un solo archivo, no un directorio: `Results/Benchmark`
-    # sigue siendo compartido con `search-pilot` y `campaign`, la misma
-    # colisión que la entrada de `campaign` ya explica.
+    # `produces` nombra un solo archivo de datos, no un directorio:
+    # `Results/Benchmark` sigue siendo compartido con `search-pilot` y
+    # `campaign`, la misma colisión que la entrada de `campaign` ya explica.
+    # Y el cuaderno mismo, ejecutado `--inplace`.
     "mechanisms": {"module": "MIL_CREDA_Benchmark.steps",
                    "function": "mecanismos_de_atencion",
                    "advances": 5,
                    "reads": [],
-                   "produces": ["Results/Benchmark/attention_mechanisms.json"],
+                   "produces": ["Results/Benchmark/attention_mechanisms.json",
+                                "Notebooks/Benchmark_Attention_Mechanisms.ipynb"],
                    "placement": "remote",
                    "job": "attention-mechanisms",
                    "service": "kaggle"},

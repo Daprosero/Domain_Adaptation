@@ -169,33 +169,48 @@ def resultados() -> str:
     return _ejecutar("Results.ipynb")
 
 
-def campana() -> dict:
-    """Corre la campaña completa, llamando a `harness.run_campaign_shard`
-    DIRECTAMENTE -- sin cuaderno, a propósito.
+def campana() -> str:
+    """Corre la campaña completa ejecutando SU cuaderno.
 
-    **Por qué no hay cuaderno.** `Benchmark_Campaign_v1.ipynb` fue borrado
-    junto con el resto de esta reestructuración (commit `2f9bf32`) y no vuelve:
-    el artefacto que este paso manda a un worker no es un cuaderno, es un
-    `run-config.json` que nombra `{module: "MIL_CREDA_Benchmark.harness",
-    function: "run_campaign_shard"}` directamente -- la misma forma que
-    `run_search`'s propia docstring ya declaraba para la búsqueda antes de que
-    ésta tuviera su propio cuaderno: "un `run-config.json` nombra
-    `{module, function, kwargs}` y no puede nombrar un `.ipynb`". Un cuaderno
-    cuyo único contenido fuera esta llamada sería una segunda forma, más
-    débil, de pedir lo mismo.
+    **Este paso llamaba a `harness.run_campaign_shard()` en vez de correr un
+    cuaderno**, y la razón escrita acá era que el artefacto que se manda a un
+    worker no es un `.ipynb` sino un `run-config.json` que nombra
+    `{module: "MIL_CREDA_Benchmark.harness", function: "run_campaign_shard"}`
+    directamente. La premisa es correcta y se midió --- un `run-config.json`
+    nombra `{module, function, kwargs}` ---, y por eso `run_campaign_shard`
+    queda intacta y sigue siendo ese camino. La conclusión no se seguía: las
+    dos formas no compiten. La remota manda una función a otra máquina; ésta
+    ejercita acá el artefacto que un lector abre. Es el mismo argumento que
+    `ensayo_de_busqueda` ya recorrió, y lo que la versión anterior costaba
+    está medido: `verify` reportaba este paso y `mechanisms` bajo
+    `undeclaredStepNotebooks` --- dos de seis pasos recorridos llamando a la
+    biblioteca, con el cuaderno que llevaría el mismo trabajo a otra máquina
+    sin ejecutar nunca por la corrida que existe para validarlo.
 
-    Este paso (`steps.campana`) es el mismo callable que el `run-config.json`
-    remoto nombra, llamado LOCALMENTE: el ensayo (`ensayo_remoto`) y el envío
-    real ejercitan el mismo artefacto, nunca dos formas distintas de pedir la
-    misma corrida.
+    `Benchmark_Campaign.ipynb` es ese cuaderno, y su celda de la corrida llama
+    a `harness.run_campaign_shard()`: la biblioteca computa y el cuaderno
+    orquesta, la misma división que `Benchmark_Ceiling_Search.ipynb` tiene con
+    `run_search`. El nombre liberado `Benchmark_Campaign_v1.ipynb` no se
+    recicla --- una referencia vieja seguiría resolviendo, contra otro
+    artefacto --- y sigue declarado en
+    `tests/test_steps.py::CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO`.
 
-    **Por qué no deriva escala.** `harness.run_campaign_shard` entrena
+    **Por qué no deriva escala, y por qué no lleva guarda.**
+    `harness.run_campaign_shard` entrena
     siempre a `config.FULL_EPOCHS`/`config.FULL_SEEDS` -- nunca al ensayo, la
     misma razón por la que la búsqueda no lo es tampoco (`config.SEARCH_
     EPOCHS`'s propia nota) -- así que este paso no deriva `config.
     is_pilot_scale()` ni tiene un árbol de ensayo propio que declarar en
     `produces`: escribe siempre en `Results/Benchmark`/`Models/Benchmark`, la
     corrida completa y nada más.
+
+    Por eso tampoco lleva la guarda de escala que `ensayo_de_busqueda` y
+    `barrido_de_ruido` tienen. La de ellos existe porque su `produces` nombra
+    el árbol de ENSAYO y su cuaderno escribiría en el completo si la escala
+    configurada cambiara; acá no hay dos destinos entre los que el cuaderno
+    pueda mudarse en silencio, así que una guarda no separaría nada. Que la
+    corrida larga se lance es una autorización que se da afuera, y este paso
+    no la fabrica.
 
     **Por qué `reads` está vacío.** Consume el registro de techos a escala
     completa (`ceilings_in_force`, adentro de `campaign()`), pero ningún paso
@@ -213,29 +228,40 @@ def campana() -> dict:
     campaña de ensayo entrenaría a escala completa, nueve horas y media, y
     "ensayar" eso no ahorra nada.
     """
-    from MIL_CREDA_Benchmark import harness
-
-    return harness.run_campaign_shard()
+    return _ejecutar("Benchmark_Campaign.ipynb")
 
 
-def mecanismos_de_atencion() -> dict:
-    """Corre la comparación de mecanismos de atención de la Sección 4,
-    llamando a `harness.run_mechanism_sweep_shard` DIRECTAMENTE -- sin
-    cuaderno, la misma forma que `campana` y por la misma razón (ver su
-    propia docstring): lo que la Sección 4 lee (`Results.ipynb`, celdas
-    26/29) es `Results/Benchmark/attention_mechanisms.json`, nunca corre
-    nada, así que el paso que genera ese registro no tiene notebook propio
-    tampoco -- el `run-config.json` remoto nombra `{module:
-    "MIL_CREDA_Benchmark.harness", function: "run_mechanism_sweep_shard"}`.
+def mecanismos_de_atencion() -> str:
+    """Corre la comparación de mecanismos de atención de la Sección 4
+    ejecutando SU cuaderno, la misma forma que `campana` y por la misma razón
+    (ver su propia docstring).
+
+    Este paso llamaba a `harness.run_mechanism_sweep_shard()` directamente,
+    con el argumento de que el `run-config.json` remoto nombra `{module:
+    "MIL_CREDA_Benchmark.harness", function: "run_mechanism_sweep_shard"}` y
+    que un cuaderno no puede ser eso. La premisa sigue siendo cierta y la
+    función queda intacta; lo que no se seguía es que entonces el paso no
+    deba tener cuaderno.
+
+    `Benchmark_Attention_Mechanisms.ipynb` es el suyo y no el de la campaña,
+    decidido y no heredado: este barrido son cinco mecanismos sobre una
+    configuración y la campaña es la rejilla entera, así que fundirlos
+    ataría para siempre el barato al caro --- re-correr la Sección 4 pediría
+    volver a pagar la campaña.
 
     Entrena los cinco mecanismos (`wiring.MECHANISMS`) sobre el método
     completo (`G`, nunca un id declarado -- `wiring.MechanismArm` hereda todo
     lo demás de `G`), limpio y contaminado, y escribe el registro que
-    `tables.render_mechanisms`/`conclusion_mechanisms` leen.
-    """
-    from MIL_CREDA_Benchmark import harness
+    `tables.render_mechanisms`/`conclusion_mechanisms` leen. Lo que la Sección
+    4 lee (`Results.ipynb`, celdas 26/29) sigue siendo
+    `Results/Benchmark/attention_mechanisms.json`, y ese archivo sigue siendo
+    la única raíz de datos de este paso.
 
-    return harness.run_mechanism_sweep_shard()
+    Sin guarda de escala, por lo mismo que `campana`: `run_mechanism_sweep_
+    shard` fija `config.FULL_EPOCHS`/`config.FULL_SEEDS` adentro, así que no
+    hay un árbol de ensayo al que el cuaderno pueda mudarse en silencio.
+    """
+    return _ejecutar("Benchmark_Attention_Mechanisms.ipynb")
 
 
 def barrido_de_ruido() -> str:
