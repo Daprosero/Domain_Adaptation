@@ -15,7 +15,7 @@
     "seeds": [
       0
     ],
-    "labelNoise": 0.0,
+    "labelNoise": 0.2,
     "pilot": true,
     "kind": "campaign",
     "rampCeiling": 1.0,
@@ -303,7 +303,7 @@
       "selfHosted": true,
       "power": {
         "source": "mains",
-        "charge": 79
+        "charge": 100
       },
       "device": {
         "name": "mps",
@@ -352,63 +352,63 @@
       "rung": "B->E",
       "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
       "metric": "targetAccuracy",
-      "meanDifference": -0.22685185185185186,
-      "stdev": 0.16797327339827514,
+      "meanDifference": -0.23148148148148148,
+      "stdev": 0.1250514297491417,
       "transfers": 6,
-      "favouringRight": 5,
-      "favouringLeft": 1
+      "favouringRight": 6,
+      "favouringLeft": 0
     },
     {
       "rung": "B->E",
       "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
       "metric": "sourceAccuracy",
-      "meanDifference": 0.027777777777777773,
-      "stdev": 0.06085806194501844,
-      "transfers": 6,
-      "favouringRight": 1,
-      "favouringLeft": 5
-    },
-    {
-      "rung": "E->F",
-      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
-      "metric": "targetAccuracy",
-      "meanDifference": -0.041666666666666664,
-      "stdev": 0.06514466333088095,
-      "transfers": 6,
-      "favouringRight": 3,
-      "favouringLeft": 3
-    },
-    {
-      "rung": "E->F",
-      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
-      "metric": "sourceAccuracy",
-      "meanDifference": -0.032407407407407406,
-      "stdev": 0.07938161203464002,
-      "transfers": 6,
-      "favouringRight": 1,
-      "favouringLeft": 5
-    },
-    {
-      "rung": "F->G",
-      "reading": "qu\u00e9 compra la correspondencia local",
-      "metric": "targetAccuracy",
-      "meanDifference": 0.018518518518518507,
-      "stdev": 0.06000685831859128,
-      "transfers": 6,
-      "favouringRight": 1,
-      "favouringLeft": 5
-    },
-    {
-      "rung": "F->G",
-      "reading": "qu\u00e9 compra la correspondencia local",
-      "metric": "sourceAccuracy",
-      "meanDifference": 0.02314814814814814,
-      "stdev": 0.05670115145331429,
+      "meanDifference": 0.07407407407407408,
+      "stdev": 0.08177556357710969,
       "transfers": 6,
       "favouringRight": 0,
       "favouringLeft": 6
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.041666666666666664,
+      "stdev": 0.10206207261596575,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.023148148148148157,
+      "stdev": 0.05670115145331433,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.03240740740740742,
+      "stdev": 0.07938161203464006,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.02777777777777779,
+      "stdev": 0.09622504486493767,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
     }
   ],
-  "detail": "MIL-CREDA/Results/Pilot/Benchmark/summary.json",
+  "detail": "MIL-CREDA/Results/Pilot/Noise/rho0p2/summary.json",
   "figures": []
 }

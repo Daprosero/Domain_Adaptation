@@ -1,0 +1,4109 @@
+{
+  "kind": "bounded",
+  "reduction": {
+    "setting": "trained",
+    "revision": "research-concept-r21.md",
+    "backbone": "resnet18",
+    "instancesPerBag": 30,
+    "bagsPerDomain": 120,
+    "trainBags": 64,
+    "validBags": 20,
+    "evalBags": 36,
+    "searchRole": "valid",
+    "epochs": 3,
+    "seeds": [
+      0
+    ],
+    "labelNoise": 0.2,
+    "pilot": true,
+    "kind": "campaign",
+    "rampCeiling": 1.0,
+    "kernelSigma": 36.135014304860874,
+    "attentionGamma": 0.0,
+    "attentionTemperature": 1.0,
+    "tauLocal": 1.0,
+    "ceilings": {
+      "milcreda": 0.010796012633645448
+    },
+    "ceilingsByTransfer": {
+      "milcreda": {
+        "M->U": 0.7117782412223816,
+        "U->M": 0.010796012633645448,
+        "M->S": 0.0005247933940780908,
+        "S->M": 0.0008875530880758854,
+        "U->S": 0.008911638421286783,
+        "S->U": 0.10294579502332135
+      }
+    },
+    "hyperByTransfer": {
+      "milcreda": {
+        "M->U": {
+          "rampDelta": 1.1459150621714134,
+          "kernelSigma": 30.931736326763957,
+          "attentionGamma": 0.8665927080924227,
+          "attentionTemperature": 0.12300535032448288,
+          "tauLocal": 1.530867687382285
+        },
+        "U->M": {
+          "rampDelta": 1.9071433953026697,
+          "kernelSigma": 60.7729889121759,
+          "attentionGamma": 0.01365767469209711,
+          "attentionTemperature": 0.711723564948792,
+          "tauLocal": 4.466752700001235
+        },
+        "M->S": {
+          "rampDelta": 96.29576984475433,
+          "kernelSigma": 133.9727025616371,
+          "attentionGamma": 0.49959661167655944,
+          "attentionTemperature": 0.39812333984284914,
+          "tauLocal": 0.9814803531488547
+        },
+        "S->M": {
+          "rampDelta": 9.734793243960574,
+          "kernelSigma": 262.9202599732451,
+          "attentionGamma": 0.18683122468306068,
+          "attentionTemperature": 3.0795556078209914,
+          "tauLocal": 0.10432511547211254
+        },
+        "U->S": {
+          "rampDelta": 1.1687734964272058,
+          "kernelSigma": 41.60352607028823,
+          "attentionGamma": 0.6774089868066343,
+          "attentionTemperature": 7.208405598508218,
+          "tauLocal": 1.303496723980585
+        },
+        "S->U": {
+          "rampDelta": 1.7563489345356125,
+          "kernelSigma": 167.54575081713534,
+          "attentionGamma": 0.9117472918680046,
+          "attentionTemperature": 2.2536076353685393,
+          "tauLocal": 4.229037310968515
+        }
+      }
+    },
+    "ceilingSearch": {
+      "milcreda": {
+        "arm": "G",
+        "ceiling": 0.010796012633645448,
+        "rampDelta": 1.9071433953026697,
+        "kernelSigma": 60.7729889121759,
+        "attentionGamma": 0.01365767469209711,
+        "attentionTemperature": 0.711723564948792,
+        "tauLocal": 4.466752700001235,
+        "criterion": "targetAccuracy",
+        "role": "valid",
+        "epochs": 3,
+        "trials": 4,
+        "search": {
+          "kind": "optuna",
+          "sampler": "GPSampler",
+          "trials": 4,
+          "seed": 0,
+          "perStudySeed": "crc32(familia|transferencia) + seed",
+          "space": {
+            "ceiling": {
+              "low": 0.0001,
+              "high": 1.0,
+              "log": true
+            },
+            "rampDelta": {
+              "low": 1.0,
+              "high": 100.0,
+              "log": true
+            },
+            "kernelSigma": {
+              "low": 3.6135014304860875,
+              "high": 361.35014304860874,
+              "log": true
+            },
+            "attentionGamma": {
+              "low": 0.0,
+              "high": 1.0,
+              "log": false
+            },
+            "attentionTemperature": {
+              "low": 0.1,
+              "high": 10.0,
+              "log": true
+            },
+            "tauLocal": {
+              "low": 0.1,
+              "high": 10.0,
+              "log": true
+            }
+          },
+          "resolution": 0.05
+        },
+        "decidedByFlatRule": false,
+        "plateau": [
+          0.010796012633645448
+        ],
+        "noise": 0.05,
+        "labelNoise": 0.0,
+        "flatRule": "dentro de la meseta gana el techo m\u00e1s chico: el mismo resultado con menos adaptaci\u00f3n es la afirmaci\u00f3n m\u00e1s d\u00e9bil, y una b\u00fasqueda no deber\u00eda darle a un t\u00e9rmino m\u00e1s peso del que la medici\u00f3n pidi\u00f3. La meseta la define la resoluci\u00f3n del criterio sobre el rol de b\u00fasqueda \u2014 una bolsa de las que tiene \u2014 y no una cantidad que el GP ajust\u00f3: atribu\u00edrsela al modelo har\u00eda que el ancho de la meseta dependiera de qu\u00e9 tan bien ajust\u00f3, que es la propiedad equivocada. Tampoco es una igualdad exacta: sobre un rango continuo dos evaluaciones nunca empatan y una regla de empate exacto no se activar\u00eda jam\u00e1s",
+        "atRequiredScale": false,
+        "requiredScale": {
+          "epochs": 20,
+          "trials": 30
+        },
+        "seconds": 239.38599195802817,
+        "transfers": [
+          "M->U",
+          "U->M",
+          "M->S",
+          "S->M",
+          "U->S",
+          "S->U"
+        ],
+        "neutral": 1.0,
+        "byTransfer": {
+          "M->U": 0.7117782412223816,
+          "U->M": 0.010796012633645448,
+          "M->S": 0.0005247933940780908,
+          "S->M": 0.0008875530880758854,
+          "U->S": 0.008911638421286783,
+          "S->U": 0.10294579502332135
+        },
+        "perTransfer": {
+          "M->U": {
+            "ceiling": 0.7117782412223816,
+            "rampDelta": 1.1459150621714134,
+            "kernelSigma": 30.931736326763957,
+            "attentionGamma": 0.8665927080924227,
+            "attentionTemperature": 0.12300535032448288,
+            "tauLocal": 1.530867687382285,
+            "value": 0.8,
+            "best": 0.8,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.7117782412223816
+            ],
+            "decidedByFlatRule": false,
+            "minutes": 0.7824462583332206
+          },
+          "U->M": {
+            "ceiling": 0.010796012633645448,
+            "rampDelta": 1.9071433953026697,
+            "kernelSigma": 60.7729889121759,
+            "attentionGamma": 0.01365767469209711,
+            "attentionTemperature": 0.711723564948792,
+            "tauLocal": 4.466752700001235,
+            "value": 0.95,
+            "best": 1.0,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.010796012633645448,
+              0.011660437435785431
+            ],
+            "decidedByFlatRule": true,
+            "minutes": 0.5724203777834191
+          },
+          "M->S": {
+            "ceiling": 0.0005247933940780908,
+            "rampDelta": 96.29576984475433,
+            "kernelSigma": 133.9727025616371,
+            "attentionGamma": 0.49959661167655944,
+            "attentionTemperature": 0.39812333984284914,
+            "tauLocal": 0.9814803531488547,
+            "value": 0.3,
+            "best": 0.3,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.0005247933940780908,
+              0.0030676860676691303
+            ],
+            "decidedByFlatRule": true,
+            "minutes": 0.6671589229163752
+          },
+          "S->M": {
+            "ceiling": 0.0008875530880758854,
+            "rampDelta": 9.734793243960574,
+            "kernelSigma": 262.9202599732451,
+            "attentionGamma": 0.18683122468306068,
+            "attentionTemperature": 3.0795556078209914,
+            "tauLocal": 0.10432511547211254,
+            "value": 0.65,
+            "best": 0.7,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.0008875530880758854,
+              0.0013264142426544668
+            ],
+            "decidedByFlatRule": true,
+            "minutes": 0.637637627083556
+          },
+          "U->S": {
+            "ceiling": 0.008911638421286783,
+            "rampDelta": 1.1687734964272058,
+            "kernelSigma": 41.60352607028823,
+            "attentionGamma": 0.6774089868066343,
+            "attentionTemperature": 7.208405598508218,
+            "tauLocal": 1.303496723980585,
+            "value": 0.3,
+            "best": 0.3,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.008911638421286783
+            ],
+            "decidedByFlatRule": false,
+            "minutes": 0.6306974895832052
+          },
+          "S->U": {
+            "ceiling": 0.10294579502332135,
+            "rampDelta": 1.7563489345356125,
+            "kernelSigma": 167.54575081713534,
+            "attentionGamma": 0.9117472918680046,
+            "attentionTemperature": 2.2536076353685393,
+            "tauLocal": 4.229037310968515,
+            "value": 0.8,
+            "best": 0.8,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.10294579502332135
+            ],
+            "decidedByFlatRule": false,
+            "minutes": 0.6308614958329902
+          }
+        },
+        "inheritanceRule": "ninguna: las seis transferencias se midieron",
+        "env": "4bef9265ee57",
+        "environment": {
+          "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+          "python": "3.12.13",
+          "platform": "macOS-26.5.2-arm64-arm-64bit",
+          "torch": "2.13.0",
+          "selfHosted": true,
+          "power": {
+            "source": "battery",
+            "charge": 27
+          },
+          "device": {
+            "name": "mps",
+            "kind": "mps"
+          }
+        },
+        "revision": "research-concept-r21.md",
+        "currentStamp": true
+      }
+    },
+    "rampDelta": 20,
+    "device": "mps",
+    "environment": {
+      "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
+      "python": "3.12.13",
+      "platform": "macOS-26.5.2-arm64-arm-64bit",
+      "torch": "2.13.0",
+      "selfHosted": true,
+      "power": {
+        "source": "mains",
+        "charge": 100
+      },
+      "device": {
+        "name": "mps",
+        "kind": "mps"
+      }
+    }
+  },
+  "verdictsMeaningful": false,
+  "grid": {
+    "M->U": {
+      "B": {
+        "targetAccuracy": {
+          "mean": 0.4444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.014319367782631855,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "E": {
+        "targetAccuracy": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.02033662148529575,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.015446918202325747,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.5683233593665621,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "F": {
+        "targetAccuracy": {
+          "mean": 0.6388888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.6388888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.02082307468212786,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.016208083860831158,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.5623122662492851,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "G": {
+        "targetAccuracy": {
+          "mean": 0.8333333333333334,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.8611111111111112,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.02186346169383753,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.01641201212034849,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.5712133519228777,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "GN": {
+        "targetAccuracy": {
+          "mean": 0.1111111111111111,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.08333333333333333,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.03389502068360647,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.01555105577114903,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.6854946461651277,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "U->M": {
+      "B": {
+        "targetAccuracy": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011653128073053918,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "E": {
+        "targetAccuracy": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0003814271448867484,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011652988403684936,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.031694696210820016,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "F": {
+        "targetAccuracy": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.00037962041928299835,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011653176126423031,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0315488106061652,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "G": {
+        "targetAccuracy": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.00041874466391856826,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011652707626212976,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.03468883891136227,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "GN": {
+        "targetAccuracy": {
+          "mean": 0.5555555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0008807881663198627,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011658493307116996,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.07024231557332207,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "M->S": {
+      "B": {
+        "targetAccuracy": {
+          "mean": 0.08333333333333333,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011366076532751668,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "E": {
+        "targetAccuracy": {
+          "mean": 0.16666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 3.713047806827706e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011366107480690906,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.003256134634966201,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "F": {
+        "targetAccuracy": {
+          "mean": 0.16666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 3.493366628910215e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011366108309153961,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.00306407663127164,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "G": {
+        "targetAccuracy": {
+          "mean": 0.16666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 3.6465113485714286e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011366110557078389,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0031979716284496534,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "GN": {
+        "targetAccuracy": {
+          "mean": 0.08333333333333333,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.00011598537994792597,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.01136610666188582,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.010101415275661083,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "S->M": {
+      "B": {
+        "targetAccuracy": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.3888888888888889,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.0351250098818647,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "E": {
+        "targetAccuracy": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 4.868019390241465e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.03512784150440157,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0013838831002089024,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "F": {
+        "targetAccuracy": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 4.852298202638936e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.035126291387270955,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0013794808273030457,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "G": {
+        "targetAccuracy": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 4.876727793349086e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.035125554616873465,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.001386445432532723,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "GN": {
+        "targetAccuracy": {
+          "mean": 0.4444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.3888888888888889,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.00011562581667454825,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.0351263724760862,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.003280909774582776,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "U->S": {
+      "B": {
+        "targetAccuracy": {
+          "mean": 0.1388888888888889,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.01165643142823163,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "E": {
+        "targetAccuracy": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0003358191586033042,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011657070428121924,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.02800152174960554,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "F": {
+        "targetAccuracy": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.00026567621500275676,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011656624391997909,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.022283972176205164,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "G": {
+        "targetAccuracy": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0003014164415487487,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011655823784080678,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.025207860330737998,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "GN": {
+        "targetAccuracy": {
+          "mean": 0.08333333333333333,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0005980541075890263,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011659769783277409,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.04878958230380917,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "S->U": {
+      "B": {
+        "targetAccuracy": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.6111111111111112,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.034724162969117366,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "E": {
+        "targetAccuracy": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.002419700621560748,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.0347456185928812,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.06510641298677408,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "F": {
+        "targetAccuracy": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.002467837963541526,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.034727449065983476,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.06634813603085243,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "G": {
+        "targetAccuracy": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.5,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.0025029942210364553,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.03472641932534143,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.06723163172899284,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "GN": {
+        "targetAccuracy": {
+          "mean": 0.3333333333333333,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.75,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.007117581309839373,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.034713984153876526,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.17014857634273958,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "parameters": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "gridPerRun": {
+    "M->U": {
+      "B": {},
+      "E": {},
+      "F": {},
+      "G": {},
+      "GN": {}
+    },
+    "U->M": {
+      "B": {},
+      "E": {},
+      "F": {},
+      "G": {},
+      "GN": {}
+    },
+    "M->S": {
+      "B": {},
+      "E": {},
+      "F": {},
+      "G": {},
+      "GN": {}
+    },
+    "S->M": {
+      "B": {},
+      "E": {},
+      "F": {},
+      "G": {},
+      "GN": {}
+    },
+    "U->S": {
+      "B": {},
+      "E": {},
+      "F": {},
+      "G": {},
+      "GN": {}
+    },
+    "S->U": {
+      "B": {},
+      "E": {},
+      "F": {},
+      "G": {},
+      "GN": {}
+    }
+  },
+  "perTransfer": {
+    "M->U": [
+      {
+        "dimension": "B->E targetAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.4444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.4444444444444444,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E sourceAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.2222222222222222,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E contribution",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02033662148529575,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E supervised",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.014319367782631855,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.015446918202325747,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E adaptationShare",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5683233593665621,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E parameters",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F targetAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6388888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.25,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F sourceAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6388888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.13888888888888895,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F contribution",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.02033662148529575,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02082307468212786,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F supervised",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.015446918202325747,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.016208083860831158,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F adaptationShare",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.5683233593665621,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5623122662492851,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F parameters",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G targetAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6388888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.8333333333333334,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.19444444444444453,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G sourceAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6388888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.8611111111111112,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.22222222222222232,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G contribution",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.02082307468212786,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02186346169383753,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G supervised",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.016208083860831158,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.01641201212034849,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G adaptationShare",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.5623122662492851,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5712133519228777,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G parameters",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      }
+    ],
+    "U->M": [
+      {
+        "dimension": "B->E targetAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->M",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.2222222222222222,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E sourceAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->M",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E contribution",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->M",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0003814271448867484,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E supervised",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->M",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.011653128073053918,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011652988403684936,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E adaptationShare",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->M",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.031694696210820016,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E parameters",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->M",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F targetAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->M",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F sourceAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->M",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F contribution",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->M",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0003814271448867484,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.00037962041928299835,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F supervised",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->M",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.011652988403684936,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011653176126423031,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F adaptationShare",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->M",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.031694696210820016,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0315488106061652,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F parameters",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->M",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G targetAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->M",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G sourceAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->M",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G contribution",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->M",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.00037962041928299835,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.00041874466391856826,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G supervised",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->M",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.011653176126423031,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011652707626212976,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G adaptationShare",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->M",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0315488106061652,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03468883891136227,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G parameters",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->M",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      }
+    ],
+    "M->S": [
+      {
+        "dimension": "B->E targetAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->S",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.08333333333333333,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.16666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.08333333333333333,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E sourceAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->S",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E contribution",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->S",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 3.713047806827706e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E supervised",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->S",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.011366076532751668,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011366107480690906,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E adaptationShare",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->S",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.003256134634966201,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E parameters",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "M->S",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F targetAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->S",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.16666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.16666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F sourceAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->S",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F contribution",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->S",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 3.713047806827706e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 3.493366628910215e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F supervised",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->S",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.011366107480690906,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011366108309153961,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F adaptationShare",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->S",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.003256134634966201,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.00306407663127164,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F parameters",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "M->S",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G targetAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->S",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.16666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.16666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G sourceAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->S",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G contribution",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->S",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 3.493366628910215e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 3.6465113485714286e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G supervised",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->S",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.011366108309153961,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011366110557078389,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G adaptationShare",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->S",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.00306407663127164,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0031979716284496534,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G parameters",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "M->S",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      }
+    ],
+    "S->M": [
+      {
+        "dimension": "B->E targetAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->M",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.4166666666666667,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.27777777777777773,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E sourceAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->M",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.3888888888888889,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.08333333333333331,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E contribution",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->M",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 4.868019390241465e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E supervised",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->M",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.0351250098818647,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03512784150440157,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E adaptationShare",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->M",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0013838831002089024,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E parameters",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->M",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F targetAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->M",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F sourceAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->M",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F contribution",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->M",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 4.868019390241465e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 4.852298202638936e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F supervised",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->M",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.03512784150440157,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.035126291387270955,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F adaptationShare",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->M",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0013838831002089024,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0013794808273030457,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F parameters",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->M",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G targetAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->M",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.6944444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G sourceAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->M",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.02777777777777779,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G contribution",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->M",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 4.852298202638936e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 4.876727793349086e-05,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G supervised",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->M",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.035126291387270955,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.035125554616873465,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G adaptationShare",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->M",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0013794808273030457,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.001386445432532723,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G parameters",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->M",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      }
+    ],
+    "U->S": [
+      {
+        "dimension": "B->E targetAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->S",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.1388888888888889,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.1388888888888889,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E sourceAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->S",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.05555555555555558,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E contribution",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->S",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0003358191586033042,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E supervised",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->S",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.01165643142823163,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011657070428121924,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E adaptationShare",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->S",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.02800152174960554,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E parameters",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "U->S",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F targetAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->S",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F sourceAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->S",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F contribution",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->S",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0003358191586033042,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.00026567621500275676,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F supervised",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->S",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.011657070428121924,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011656624391997909,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F adaptationShare",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->S",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.02800152174960554,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.022283972176205164,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F parameters",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "U->S",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G targetAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->S",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.2777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G sourceAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->S",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G contribution",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->S",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.00026567621500275676,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0003014164415487487,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G supervised",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->S",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.011656624391997909,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.011655823784080678,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G adaptationShare",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->S",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.022283972176205164,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.025207860330737998,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G parameters",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "U->S",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      }
+    ],
+    "S->U": [
+      {
+        "dimension": "B->E targetAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.3055555555555556,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "new",
+          "margin": 0.2222222222222222,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E sourceAccuracy",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.6111111111111112,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.08333333333333337,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "B->E contribution",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.002419700621560748,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E supervised",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.034724162969117366,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0347456185928812,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E adaptationShare",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.06510641298677408,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "B->E parameters",
+        "rung": "B->E",
+        "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+        "transfer": "S->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F targetAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F sourceAccuracy",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "E->F contribution",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.002419700621560748,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.002467837963541526,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F supervised",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.0347456185928812,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.034727449065983476,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F adaptationShare",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.06510641298677408,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.06634813603085243,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "E->F parameters",
+        "rung": "E->F",
+        "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+        "transfer": "S->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G targetAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->U",
+        "metric": "targetAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "indistinguishable",
+          "margin": 0.0,
+          "threshold": 0.0,
+          "reason": "the means are closer than their combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G sourceAccuracy",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->U",
+        "metric": "sourceAccuracy",
+        "better": "higher",
+        "baseline": {
+          "mean": 0.5277777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.5,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": "baseline",
+          "margin": -0.02777777777777779,
+          "threshold": 0.0,
+          "reason": "higher is better and the gap exceeds the combined standard error"
+        }
+      },
+      {
+        "dimension": "F->G contribution",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->U",
+        "metric": "contribution",
+        "better": null,
+        "baseline": {
+          "mean": 0.002467837963541526,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.0025029942210364553,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G supervised",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->U",
+        "metric": "supervised",
+        "better": null,
+        "baseline": {
+          "mean": 0.034727449065983476,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.03472641932534143,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G adaptationShare",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->U",
+        "metric": "adaptationShare",
+        "better": null,
+        "baseline": {
+          "mean": 0.06634813603085243,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 0.06723163172899284,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      },
+      {
+        "dimension": "F->G parameters",
+        "rung": "F->G",
+        "reading": "qu\u00e9 compra la correspondencia local",
+        "transfer": "S->U",
+        "metric": "parameters",
+        "better": null,
+        "baseline": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "new": {
+          "mean": 11247434.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "verdict": {
+          "winner": null,
+          "margin": null,
+          "reason": "descriptive: reported, not contested"
+        }
+      }
+    ]
+  },
+  "panorama": [
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.23148148148148148,
+      "stdev": 0.1250514297491417,
+      "transfers": 6,
+      "favouringRight": 6,
+      "favouringLeft": 0
+    },
+    {
+      "rung": "B->E",
+      "reading": "qu\u00e9 compra el t\u00e9rmino global, sin ponderar",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.07407407407407408,
+      "stdev": 0.08177556357710969,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "targetAccuracy",
+      "meanDifference": 0.041666666666666664,
+      "stdev": 0.10206207261596575,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "E->F",
+      "reading": "qu\u00e9 compra la ponderaci\u00f3n por confianza en MIL-CREDA",
+      "metric": "sourceAccuracy",
+      "meanDifference": 0.023148148148148157,
+      "stdev": 0.05670115145331433,
+      "transfers": 6,
+      "favouringRight": 0,
+      "favouringLeft": 6
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "targetAccuracy",
+      "meanDifference": -0.03240740740740742,
+      "stdev": 0.07938161203464006,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    },
+    {
+      "rung": "F->G",
+      "reading": "qu\u00e9 compra la correspondencia local",
+      "metric": "sourceAccuracy",
+      "meanDifference": -0.02777777777777779,
+      "stdev": 0.09622504486493767,
+      "transfers": 6,
+      "favouringRight": 1,
+      "favouringLeft": 5
+    }
+  ],
+  "checkpoints": {
+    "B M->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_M-U_seed0.pt"
+    ],
+    "E M->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/E_M-U_seed0.pt"
+    ],
+    "F M->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/F_M-U_seed0.pt"
+    ],
+    "G M->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_M-U_seed0.pt"
+    ],
+    "GN M->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_M-U_seed0.pt"
+    ],
+    "B U->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_U-M_seed0.pt"
+    ],
+    "E U->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/E_U-M_seed0.pt"
+    ],
+    "F U->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/F_U-M_seed0.pt"
+    ],
+    "G U->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_U-M_seed0.pt"
+    ],
+    "GN U->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_U-M_seed0.pt"
+    ],
+    "B M->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_M-S_seed0.pt"
+    ],
+    "E M->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/E_M-S_seed0.pt"
+    ],
+    "F M->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/F_M-S_seed0.pt"
+    ],
+    "G M->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_M-S_seed0.pt"
+    ],
+    "GN M->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_M-S_seed0.pt"
+    ],
+    "B S->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_S-M_seed0.pt"
+    ],
+    "E S->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/E_S-M_seed0.pt"
+    ],
+    "F S->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/F_S-M_seed0.pt"
+    ],
+    "G S->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_S-M_seed0.pt"
+    ],
+    "GN S->M": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_S-M_seed0.pt"
+    ],
+    "B U->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_U-S_seed0.pt"
+    ],
+    "E U->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/E_U-S_seed0.pt"
+    ],
+    "F U->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/F_U-S_seed0.pt"
+    ],
+    "G U->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_U-S_seed0.pt"
+    ],
+    "GN U->S": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_U-S_seed0.pt"
+    ],
+    "B S->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/B_S-U_seed0.pt"
+    ],
+    "E S->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/E_S-U_seed0.pt"
+    ],
+    "F S->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/F_S-U_seed0.pt"
+    ],
+    "G S->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/G_S-U_seed0.pt"
+    ],
+    "GN S->U": [
+      "MIL-CREDA/Models/Pilot/Noise/rho0p2/GN_S-U_seed0.pt"
+    ]
+  },
+  "tally": {
+    "M->U": {
+      "new": [
+        "B->E targetAccuracy",
+        "F->G targetAccuracy",
+        "F->G sourceAccuracy"
+      ],
+      "baseline": [
+        "B->E sourceAccuracy",
+        "E->F targetAccuracy",
+        "E->F sourceAccuracy"
+      ],
+      "indistinguishable": [],
+      "not applicable": []
+    },
+    "U->M": {
+      "new": [
+        "B->E targetAccuracy"
+      ],
+      "baseline": [],
+      "indistinguishable": [
+        "B->E sourceAccuracy",
+        "E->F targetAccuracy",
+        "E->F sourceAccuracy",
+        "F->G targetAccuracy",
+        "F->G sourceAccuracy"
+      ],
+      "not applicable": []
+    },
+    "M->S": {
+      "new": [
+        "B->E targetAccuracy"
+      ],
+      "baseline": [],
+      "indistinguishable": [
+        "B->E sourceAccuracy",
+        "E->F targetAccuracy",
+        "E->F sourceAccuracy",
+        "F->G targetAccuracy",
+        "F->G sourceAccuracy"
+      ],
+      "not applicable": []
+    },
+    "S->M": {
+      "new": [
+        "B->E targetAccuracy"
+      ],
+      "baseline": [
+        "B->E sourceAccuracy",
+        "F->G sourceAccuracy"
+      ],
+      "indistinguishable": [
+        "E->F targetAccuracy",
+        "E->F sourceAccuracy",
+        "F->G targetAccuracy"
+      ],
+      "not applicable": []
+    },
+    "U->S": {
+      "new": [
+        "B->E targetAccuracy"
+      ],
+      "baseline": [
+        "B->E sourceAccuracy"
+      ],
+      "indistinguishable": [
+        "E->F targetAccuracy",
+        "E->F sourceAccuracy",
+        "F->G targetAccuracy",
+        "F->G sourceAccuracy"
+      ],
+      "not applicable": []
+    },
+    "S->U": {
+      "new": [
+        "B->E targetAccuracy"
+      ],
+      "baseline": [
+        "B->E sourceAccuracy",
+        "F->G sourceAccuracy"
+      ],
+      "indistinguishable": [
+        "E->F targetAccuracy",
+        "E->F sourceAccuracy",
+        "F->G targetAccuracy"
+      ],
+      "not applicable": []
+    }
+  }
+}
