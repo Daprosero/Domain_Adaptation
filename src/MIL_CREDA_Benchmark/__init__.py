@@ -233,6 +233,21 @@ __benchmark__ = {
             # `NOISE_DIAGNOSTIC_ARMS`/`NOISE_DIAGNOSTIC_LEVEL` retired along with
             # the noise-diagnostic apparatus they selected for: `config` no
             # longer declares either constant.
+            # No es una selección y por eso la entrada dice eso y no una regla:
+            # `ATTENTION_GAMMA_RANGE` es el intervalo donde se busca gamma, y sus
+            # dos extremos coinciden con dos de las treinta semillas por accidente
+            # aritmético. El chequeo compara valores, ve 0 y 1 adentro de
+            # `range(30)` y pregunta quién eligió esos dos; nadie eligió ninguno.
+            "ATTENTION_GAMMA_RANGE": "no es un subconjunto de nada: es el rango "
+                                     "de búsqueda de gamma en la Ec. (15), y sus "
+                                     "extremos son los dos límites del término. "
+                                     "0 es el neutro —R_phi sola, normalizada en "
+                                     "l1, sin consenso— y 1 es darle al consenso "
+                                     "el logit entero. La revisión no declara "
+                                     "cota superior más allá de uno para un peso "
+                                     "de mezcla. Que 0 y 1 estén además en "
+                                     "FULL_SEEDS es una coincidencia de los "
+                                     "números, no una elección de semillas",
             "LATENT_PANELS": "los métodos que alinean, elegidos por lo que computan "
                              "y no por lo que puntúan, y el único piso que queda "
                              "declarado, que es lo que los hace legibles: "
