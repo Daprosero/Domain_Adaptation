@@ -171,85 +171,130 @@ def bounded_transfers(available: list[str],
     return chosen
 
 
+def _rows_of(runs) -> list[tuple[str | None, Path | None]]:
+    """Las filas de la figura: una condición por fila, en el orden recibido.
+
+    Una ruta sola ---o `None`--- es UNA fila sin etiqueta, que es la forma que
+    esta figura siempre tuvo. Una secuencia de `(etiqueta, ruta)` es una fila por
+    condición, cada una leída de SU propio árbol de resultados: el cuaderno
+    resuelve cada árbol por la misma puerta que ya usa (`cargar_corridas`) y pasa
+    lo que esa puerta devolvió, nunca una ruta escrita a mano.
+    """
+    if runs is None or isinstance(runs, (str, Path)):
+        return [(None, runs)]
+    rows = [(str(label), ruta) for label, ruta in runs]
+    if not rows:
+        raise ValueError(
+            "no se recibió ninguna fila: una figura por condición necesita al "
+            "menos una, y una lista vacía dibujaría ejes en blanco que se leen "
+            "como un resultado plano.")
+    return rows
+
+
 def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
               shade_unit: bool = False,
               ylim: tuple[float, float] | None = None,
-              runs: Path | None = None,
+              runs=None,
               transfers: list[str] | None = None) -> plt.Figure:
-    """One panel per transfer, one median-with-band per arm. The shape all three share.
+    """Una columna por transferencia, una fila por condición, una mediana-con-banda
+    por brazo.
 
     Carries no title and no footer. The heading above the figure already says what
     is being measured and the notebook already states the bounds the run was made
     under; repeating either here is the same measurement in two places, which is
     the failure the duplication rule exists for — in two media instead of one.
+
+    **Las columnas se comparan de arriba a abajo porque nada pudo desalinearlas,
+    no porque se suponga.** Las transferencias son UNA sola lista para toda la
+    figura, y `bounded_transfers` niega la fila cuyo registro no las tenga todas
+    --- dibujar la intersección dejaría dos filas con distinto número de paneles,
+    que el ojo compara como si fueran comparables. Que las dos filas terminen
+    pidiendo las mismas, en el mismo orden, se COMPRUEBA acá abajo en vez de
+    darse por hecho.
     """
     # `runs` explícito, porque `config.RESULTS` es el árbol de la corrida
     # completa y un informe de ensayo dibuja las curvas de OTRA corrida: el
     # cuaderno resuelve de cuál lee y lo pasa. Sin esto la figura salía del
     # árbol equivocado o no salía --- y en un repositorio con las dos, habría
     # salido de la equivocada en silencio.
-    curves = load_curves(runs)
-    transfers = bounded_transfers(list(curves), transfers)
-    columns = min(3, len(transfers)) or 1
-    rows = -(-len(transfers) // columns)
-    figure, axes = plt.subplots(rows, columns, figsize=(4.4 * columns, 3.2 * rows),
+    filas = [(label, load_curves(ruta)) for label, ruta in _rows_of(runs)]
+
+    columnas: list[str] | None = None
+    for label, curves in filas:
+        pedidas = bounded_transfers(list(curves), transfers)
+        if columnas is None:
+            columnas = pedidas
+        elif pedidas != columnas:
+            raise ValueError(
+                f"la fila «{label}» dibujaría {pedidas} donde la primera dibuja "
+                f"{columnas}: una columna sólo se compara de arriba a abajo si "
+                f"las dos filas son la misma transferencia.")
+
+    rows, columns = len(filas), len(columnas) or 1
+    figure, axes = plt.subplots(rows, columns,
+                                figsize=(4.4 * columns, 3.2 * rows),
                                 squeeze=False, sharey=True)
 
     # Whether the panels share an x axis is a claim about the data, never a layout
     # preference. The curves are indexed by optimizer step, and a transfer that ran
     # a different number of steps shares nothing with the others — collapsing the
     # axis anyway would draw them as if one ruler governed all of them. So it gets
-    # measured, and collapses only if it is true. The y axis needs no measurement:
-    # `sharey` makes every panel carry literally the same limits.
+    # measured, and collapses only if it is true. Se mide sobre TODAS las filas y
+    # no fila por fila: dos condiciones que corrieron distinta cantidad de pasos
+    # comparten tan poco como dos transferencias que lo hicieron.
+    # The y axis needs no measurement: `sharey` makes every panel carry literally
+    # the same limits.
     lengths = {len(band(reps, key)[1])
-               for transfer in transfers
+               for _, curves in filas
+               for transfer in columnas
                for arm in arms
                if (reps := curves[transfer].get(arm))}
     shared_x = len(lengths) <= 1
 
-    # The bottom-most drawn panel of each column, which is where the x tick labels
-    # belong. Counting rows would put them on a blank cell whenever the grid does
-    # not divide evenly.
-    lowest = {}
-    for index in range(len(transfers)):
-        lowest[index % columns] = index
-
-    for index, transfer in enumerate(transfers):
-        column = index % columns
-        axis = axes[index // columns][column]
-        if shade_unit:
-            axis.axhspan(0.0, 1.0, color="0.88", zorder=0,
-                         label="[0, 1]" if index == 0 else None)
-            axis.axhline(0.0, color="0.6", linewidth=0.8, zorder=1)
-        for arm in arms:
-            repetitions = curves[transfer].get(arm)
-            if not repetitions:
-                continue
-            low, mid, high = band(repetitions, key)
-            steps = range(len(mid))
-            line, = axis.plot(steps, mid, linewidth=1.3, zorder=3,
-                              label=config.NAME_OF[arm] if index == 0 else None)
-            if len(repetitions) > 1:
-                axis.fill_between(steps, low, high, alpha=0.18, zorder=2,
-                                  color=line.get_color(), linewidth=0)
-        # The panel title names the transfer, which is the panel's own identity and
-        # not a restatement of anything above the figure.
-        axis.set_title(transfer, fontsize=10)
-        axis.tick_params(labelsize=8)
-        if not shared_x:
-            axis.set_xlabel("optimizer step", fontsize=8)
-        elif index != lowest[column]:
-            axis.tick_params(labelbottom=False)
-        if column > 0:
-            axis.tick_params(labelleft=False)
-        if ylim:
-            axis.set_ylim(*ylim)
-
-    for spare in range(len(transfers), rows * columns):
-        axes[spare // columns][spare % columns].axis("off")
+    for row, (label, curves) in enumerate(filas):
+        for column, transfer in enumerate(columnas):
+            first = row == 0 and column == 0
+            axis = axes[row][column]
+            if shade_unit:
+                axis.axhspan(0.0, 1.0, color="0.88", zorder=0,
+                             label="[0, 1]" if first else None)
+                axis.axhline(0.0, color="0.6", linewidth=0.8, zorder=1)
+            for arm in arms:
+                repetitions = curves[transfer].get(arm)
+                if not repetitions:
+                    continue
+                low, mid, high = band(repetitions, key)
+                steps = range(len(mid))
+                line, = axis.plot(steps, mid, linewidth=1.3, zorder=3,
+                                  label=config.NAME_OF[arm] if first else None)
+                if len(repetitions) > 1:
+                    axis.fill_between(steps, low, high, alpha=0.18, zorder=2,
+                                      color=line.get_color(), linewidth=0)
+            # El título nombra la transferencia, que es la identidad de la
+            # COLUMNA y no del panel: una sola vez, arriba, porque la columna
+            # entera es la misma transferencia y repetirla en cada fila es la
+            # misma decoración dos veces.
+            if row == 0:
+                axis.set_title(transfer, fontsize=10)
+            # La etiqueta de la fila dice qué condición es, a la izquierda y una
+            # sola vez por fila. Sin ella un lector tiene que deducir cuál es
+            # cuál del orden, que es exactamente lo que una figura no debe pedir.
+            if column == 0 and label is not None:
+                axis.set_ylabel(label, fontsize=9)
+            axis.tick_params(labelsize=8)
+            if not shared_x:
+                axis.set_xlabel("optimizer step", fontsize=8)
+            elif row != rows - 1:
+                axis.tick_params(labelbottom=False)
+            if column > 0:
+                axis.tick_params(labelleft=False)
+            if ylim:
+                axis.set_ylim(*ylim)
 
     # One label for the whole figure instead of one per panel. Decoration that every
-    # panel repeats stops being read after the second panel.
+    # panel repeats stops being read after the second panel. La etiqueta de fila de
+    # arriba no es esta: aquella es la identidad de la fila, esta es la magnitud, y
+    # una figura sin la segunda deja al lector adivinando qué se midió.
     figure.supylabel(ylabel, fontsize=9)
 
     # La leyenda abajo del todo y la etiqueta del eje encima de ella, cada una en
@@ -281,31 +326,29 @@ def _panelled(path: Path, arms: tuple[str, ...], key: str, ylabel: str,
 
 def adaptation_curves(path: Path,
                       arms: tuple[str, ...] = ("E", "F", "G"),
-                      runs: Path | None = None,
+                      runs=None,
                       transfers: list[str] | None = None) -> plt.Figure:
-    """Each adaptation term across training, one panel per transfer.
+    """Each adaptation term across training, una columna por transferencia.
 
     The shaded band is [0, 1]. Section 5 normalizes MIL-CREDA's terms onto exactly
     that interval, and the prior work's score has no such bound — so whether a curve
     stays inside the band, and whether it occupies the same part of it from one
     transfer to the next, is the claim itself rather than an illustration of it.
+
+    `runs` acepta una ruta (una fila) o una secuencia de `(etiqueta, ruta)` (una
+    fila por condición: limpia y contaminada, la misma transferencia en cada
+    columna). La segunda forma es lo que hace comparable la columna de arriba a
+    abajo: si el término se sale del intervalo bajo contaminación y no en limpio,
+    eso se ve en la columna y no cruzando dos figuras.
     """
     return _panelled(path, arms, "adaptation", "adaptation term",
                      shade_unit=True, runs=runs, transfers=transfers)
 
 
-def supervised_curves(path: Path,
-                      arms: tuple[str, ...] = ("B", "G"),
-                      runs: Path | None = None,
-                      transfers: list[str] | None = None) -> plt.Figure:
-    """The supervised term beside the adaptation one.
-
-    This is where an adaptation term that destabilizes the fit shows up. Reading the
-    adaptation curve alone would call a term well-behaved while the classification it
-    shares an objective with comes apart underneath it.
-    """
-    return _panelled(path, arms, "supervised", "supervised term", runs=runs,
-                     transfers=transfers)
+# `supervised_curves` removed: section 6b of `Benchmark_Results.ipynb` -- the
+# supervised term drawn beside the adaptation one -- is retired, and it was
+# this function's only caller. `_panelled`, the shape it shared, stays:
+# `adaptation_curves` still calls it.
 
 
 def noise_curves(metric: str = "targetAccuracy", path: Path | None = None,

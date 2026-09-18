@@ -22,12 +22,12 @@ __benchmark__ = {
         "E": {"sections": ["1", "2", "3", "5"]},
         "F": {"sections": ["1", "2", "3", "5"]},
         "G": {"sections": ["1", "2", "3", "4", "5"]},
-        # Identical to G's sections: `GN` exercises the same equations, and the
-        # single axis that separates it -- the target forward normalized with
-        # the current source-batch statistics instead of learning from the
-        # target -- is a wiring decision (`config.ARMS[...]["normalization"]`),
-        # not a section of its own the revision names.
-        "GN": {"sections": ["1", "2", "3", "4", "5"]},
+        # `GN` is retired. It declared exactly G's sections -- it exercised the
+        # same equations, and the single axis that separated it (the target
+        # forward normalized with the current source-batch statistics instead
+        # of learning from the target) was a wiring decision and never a
+        # section of its own the revision names -- so retiring it removes an
+        # arm and no equation from what this comparison reaches.
     },
     # The ceiling search, declared as the experiment it is. A value chosen by
     # looking at outcomes needs everything a run needs, and the three below are
@@ -51,7 +51,7 @@ __benchmark__ = {
                 "with contamination could not tell a term that fails under "
                 "noise from one whose coefficient was never large enough for "
                 "clean material either. Every arm sharing G's family "
-                "(`E`, `F`, `G`, `GN`) trains under the winner this search finds "
+                "(`E`, `F`, `G`) trains under the winner this search finds "
                 "for the transfer it runs on; the floor (`B`) trains under the "
                 "same five architecture dimensions (the ceiling does not apply "
                 "to it, since it adapts nothing) so that a difference between it "
@@ -120,15 +120,18 @@ __benchmark__ = {
             # declared arm id, so it reads a dedicated record
             # (`tables.MECHANISM_RECORD`) and not `runs.jsonl`.
             "tables.render_mechanisms",
-            # Section 5's bag-kernel correspondence, both directions: per test
-            # target bag its ranked top-`k` source bags, and per source bag how
-            # many target bags took it into account. Neither is `render_
-            # correspondence`'s per-arm hit-rate summary, which stays declared
-            # because it is still shown (Section 5c, over the same figure the
-            # bag-highlight grid already draws) -- these two are additional,
-            # finer-grained readings the old report never had.
+            # Section 5d's bag-kernel correspondence: per test target bag its
+            # ranked top-`k` source bags, each shown with its own class. Not
+            # `render_correspondence`'s per-arm hit-rate summary, which stays
+            # declared because it is still shown (Section 5c, over the same
+            # figure the bag-highlight grid already draws) -- this is an
+            # additional, finer-grained reading the old report never had.
+            #
+            # `render_source_bag_usage` is retired with section 5e, the inverse
+            # direction (per source bag, how many target bags used it). So is
+            # `conclusion_source_bag_usage` below, and `latent.source_bag_usage`
+            # that fed both.
             "tables.render_bag_neighbors",
-            "tables.render_source_bag_usage",
         ],
         "conclusions": [
             "tables.conclusion",
@@ -161,13 +164,13 @@ __benchmark__ = {
             "tables.conclusion_with_noise",
             "tables.conclusion_readings_with_noise",
             # Section 1's floor-only degradation curve, section 4's attention-
-            # mechanism comparison, and section 5's bag-kernel correspondence
-            # in both directions -- see the matching renderers above for why
-            # each exists and what record each reads.
+            # mechanism comparison, and section 5d's bag-kernel correspondence
+            # -- see the matching renderers above for why each exists and what
+            # record each reads. `conclusion_source_bag_usage` is retired with
+            # section 5e, the inverse direction.
             "tables.conclusion_noise_floor",
             "tables.conclusion_mechanisms",
             "tables.conclusion_bag_neighbors",
-            "tables.conclusion_source_bag_usage",
             # Section 6's loss curves are shown "only to check the
             # normalization" -- not to read a trajectory -- so their
             # conclusion is not which arm's curve is lowest, it is whether
@@ -198,17 +201,18 @@ __benchmark__ = {
         # reported a filename, and with `emit` named that comes out as a finding
         # instead of passing quietly.
         # `figures.contribution_curves` is retired -- the contribution panel
-        # beside the loss curves is gone, and section 6 of `Benchmark_Results.ipynb`
-        # shows `adaptation_curves`/`supervised_curves` only, "only to check
-        # the normalization". `latent.projection` is retired too: a
-        # single-panel UMAP helper with no caller anywhere, not even in
-        # `latent.py` itself -- `latent_grid`/`correspondence_grid` draw their
-        # own panels and never called it.
+        # beside the loss curves is gone -- and so is `figures.supervised_curves`
+        # with section 6b, the supervised term drawn beside the adaptation one.
+        # Section 6 of `Benchmark_Results.ipynb` is `adaptation_curves` alone
+        # now, "only to check the normalization", over both conditions at once.
+        # `latent.projection` is retired too: a single-panel UMAP helper with no
+        # caller anywhere, not even in `latent.py` itself --
+        # `latent_grid`/`correspondence_grid` draw their own panels and never
+        # called it.
         "figures": [
             "figures.inline",
             "figures.emit",
             "figures.adaptation_curves",
-            "figures.supervised_curves",
             "figures.noise_curves",
             "latent.latent_grid",
             "latent.correspondence_grid",

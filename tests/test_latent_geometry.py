@@ -131,3 +131,79 @@ def test_the_raw_distances_are_kept_and_never_declared_as_a_dimension() -> None:
         assert not clave.startswith("geometry.euclidean"), clave
     assert "geometry.ratio" in dimensiones, \
         "la lectura sí se dibuja, y ahora es la del kernel"
+
+
+# ------------------------------- las bolsas fuente más cercanas, y su clase
+
+def _referencia(kernel: list[list[float]], clases_fuente: list[int],
+                clases_destino: list[int]) -> dict:
+    """La forma que `bag_pairs` deja y `top_k_source_bags` lee, escrita a mano.
+
+    Sólo los tres campos que este lector toca. El kernel se escribe en vez de
+    computarse porque lo que se mide acá es qué sale por vecino, no la Ec. (18):
+    esa ya la miden las pruebas de arriba, contra el módulo del método.
+    """
+    return {"kernel": torch.tensor(kernel),
+            "sourceLabels": torch.tensor(clases_fuente),
+            "targetLabels": torch.tensor(clases_destino)}
+
+
+def test_every_neighbour_carries_the_source_bags_own_class() -> None:
+    """Lo que la tabla 5d muestra por vecino es la clase de ESA bolsa fuente.
+
+    No la del destino, que ya está en su propia columna, y no la comparación
+    entre las dos, que es `trueClass` y la usa la conclusión. La distinción se
+    ve sólo con clases que no coinciden: con todas iguales, `sourceLabel` y
+    `targetLabel` imprimen lo mismo y la prueba no separaría un lector del otro.
+
+    Rojo alcanzable: escribir `targetLabel` en `sourceLabel`, o leer
+    `source_labels[rank]` en vez de `source_labels[source_index]`.
+    """
+    referencia = _referencia(
+        kernel=[[0.1, 0.9],      # bolsa fuente 0, clase 2
+                [0.8, 0.2],      # bolsa fuente 1, clase 0
+                [0.5, 0.4]],     # bolsa fuente 2, clase 1
+        clases_fuente=[2, 0, 1],
+        clases_destino=[0, 1])
+
+    filas = latent.top_k_source_bags(referencia, k=3)
+    clases = {0: 2, 1: 0, 2: 1}
+
+    for fila in filas:
+        assert [n["sourceBag"] for n in fila["neighbours"]] == \
+            sorted((n["sourceBag"] for n in fila["neighbours"]),
+                   key=lambda b: -referencia["kernel"][b][fila["targetBag"]]), \
+            "el orden dejó de ser el del kernel"
+        for vecino in fila["neighbours"]:
+            assert vecino["sourceLabel"] == clases[vecino["sourceBag"]], (
+                f"el vecino {vecino['sourceBag']} se declaró de clase "
+                f"{vecino['sourceLabel']} y es de la {clases[vecino['sourceBag']]}")
+            assert vecino["trueClass"] == (
+                vecino["sourceLabel"] == fila["targetLabel"]), \
+                "la comparación ya hecha dejó de ser la de esas dos clases"
+
+
+def test_the_neighbour_table_prints_the_class_and_not_the_kernel_value() -> None:
+    """La mitad del documento: lo que queda entre paréntesis es la clase.
+
+    El valor del kernel sigue calculándose ---fija el orden--- y deja de
+    imprimirse: cinco números por fila son veinticinco por pantalla que nadie
+    compara. Un lector compara clases.
+
+    Rojo alcanzable: volver a `f"{n['sourceBag']} ({n['kernel']:.3f}, ✓)"`, o
+    dejar el encabezado viejo mientras la celda cambia.
+    """
+    from MIL_CREDA_Benchmark import tables
+
+    referencia = _referencia(kernel=[[0.796], [0.795]],
+                             clases_fuente=[3, 1], clases_destino=[3])
+    filas = latent.top_k_source_bags(referencia, k=2)
+    rendered = tables.render_bag_neighbors(filas, markdown=True)
+
+    assert "Vecinos fuente (clase)" in rendered, \
+        "el encabezado sigue prometiendo el kernel"
+    assert "0 (3), 1 (1)" in rendered, rendered
+    assert "0.796" not in rendered and "0.795" not in rendered, \
+        "el valor del kernel volvió a la fila"
+    assert "✓" not in rendered and "✗" not in rendered, \
+        "la marca de coincidencia volvió a la fila"

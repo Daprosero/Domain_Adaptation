@@ -198,7 +198,7 @@ NOISE_CAP = 0.5
 
 #: Which roles the noise reaches: `train` and `eval`, in both domains, with ONE
 #: shared draw across every arm -- the same instances are replaced for `B`, `E`,
-#: `F`, `G` and `GN` alike, because the draw is a property of the material
+#: `F` and `G` alike, because the draw is a property of the material
 #: (`bags.build` is called once per domain/seed and the same `BagSet` is handed
 #: to every arm) and never a property of which arm is training.
 #:
@@ -645,18 +645,22 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 #: `MIL-CREDA**` lacks the local term and the weighting, `MIL-CREDA*` lacks only
 #: the local term, and an unmarked name is the complete method.
 
-#: `normalization` is `"shared"` for every arm except `GN`: the target forward
+#: `normalization` is `"shared"` for every declared arm: the target forward
 #: passes through the encoder's normalization layers exactly as the source
 #: forward does, in training mode, learning from both domains like the rest of
 #: the model (the `_target_embeddings` doctrine above `wiring.Arm` states this).
-#: `GN` is the one exception -- `"sourceBatch"` -- and it is the only thing that
-#: separates it from `G`: its normalization layers never learn from the target at
-#: all. The target forward of that one step is normalized with the CURRENT
-#: SOURCE BATCH statistics of that same step (never the accumulated running
-#: statistics -- those were measured to scale the two domains apart before this
-#: arm existed), and the running statistics the source forward already updated
-#: are left exactly as the source forward last set them: the target forward
-#: never calls into a form that would update them again.
+#:
+#: `GN` is retired, and the whole `"sourceBatch"` axis goes with it. It was the
+#: one arm that declared it -- its target forward normalized with the CURRENT
+#: SOURCE BATCH statistics of that same step, so its normalization layers never
+#: learned from the target at all -- and it was the only thing that separated it
+#: from `G`. `wiring.Arm._source_embeddings`, `_encode_with_frozen_stats` and
+#: `_batchnorm_modules` existed to serve exactly that one arm and are retired
+#: with it; nothing else reached any of the three. The `normalization` key stays
+#: declared on the four remaining arms, at one value on all of them, and no code
+#: reads it today: with the axis gone there is nothing left to branch on, and
+#: whether the key itself should go is a decision about the arm declaration's
+#: shape rather than part of retiring this arm.
 ARMS = [
     {"id": "B", "name": "MIL-Baseline", "label": "source-only (bags)",
      "unit": "bag", "adaptation": None, "weighting": False, "local": False,
@@ -670,10 +674,6 @@ ARMS = [
     {"id": "G", "name": "MIL-CREDA", "label": "MIL-CREDA full (global + local)",
      "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
      "attention": "learned", "selection": None, "normalization": "shared"},
-    {"id": "GN", "name": "MIL-CREDA-GN",
-     "label": "MIL-CREDA full, target normalized by source-batch statistics",
-     "unit": "bag", "adaptation": "milcreda", "weighting": True, "local": True,
-     "attention": "learned", "selection": None, "normalization": "sourceBatch"},
 ]
 
 ARMS_BY_ID = {arm["id"]: arm for arm in ARMS}
@@ -732,7 +732,7 @@ CHECKPOINTS = {arm["id"]: 3 for arm in ARMS}
 
 #: Which floor each adapted arm is read against: same unit, same everything, with
 #: the adaptation term switched off.
-FLOOR_OF = {"G": "B", "F": "B", "E": "B", "GN": "B"}
+FLOOR_OF = {"G": "B", "F": "B", "E": "B"}
 
 # ------------------------------------------------------------------- figures
 
@@ -1306,8 +1306,8 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
     "Benchmark_Results.ipynb: config.PRODUCT / 'Results' / 'figures'": (
         "el directorio de figuras del cuaderno de resultados: un solo arbol "
         "compartido, sin segmento de pilot/full ni de tasa -- distingue limpio "
-        "de contaminado por NOMBRE de archivo (`latent_grid_clean.pdf` / "
-        "`latent_grid_noisy.pdf`) y no por directorio. Esta declaracion "
+        "de contaminado por NOMBRE de archivo (`correspondence_grid_clean.pdf` / "
+        "`correspondence_grid_noisy.pdf`) y no por directorio. Esta declaracion "
         "registra el hecho, no lo avala: `Benchmark_Results.ipynb` no es un archivo "
         "que este stretch posea (ver el mapa de propiedad del cambio), asi que "
         "si una figura de ensayo y una de la corrida completa debieran vivir "

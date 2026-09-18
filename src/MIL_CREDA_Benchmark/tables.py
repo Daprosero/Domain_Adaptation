@@ -1865,20 +1865,24 @@ def render_bag_neighbors(entries: Iterable[dict], markdown: bool = False) -> str
     """Por cada bolsa de destino (evaluación), sus 5 bolsas fuente más cercanas.
 
     `entries` es lo que devuelve `latent.top_k_source_bags`: una lista de
-    `{"targetBag", "targetLabel", "neighbours": [{"sourceBag", "kernel",
-    "trueClass"}, ...]}`, ya en orden de cercanía. Cada vecino marca si es de
-    la clase verdadera, para leer de un vistazo si el top-5 de una bolsa es
-    mayormente de su propia clase o no.
+    `{"targetBag", "targetLabel", "neighbours": [{"sourceBag", "sourceLabel",
+    "kernel", "trueClass"}, ...]}`, ya en orden de cercanía.
+
+    Cada vecino se muestra como `<bolsa fuente> (<clase de esa bolsa>)`. La
+    clase de la bolsa de destino ya está en su propia columna al lado, así que
+    lo que la fila deja ver es si sus vecinas más cercanas son de clases
+    parecidas o no, y el lector hace esa lectura sobre las clases mismas en vez
+    de sobre una marca que ya la resolvió. El orden es el del kernel de bolsa de
+    la Sección 3 y no cambia: lo que cambia es qué se imprime de cada vecino.
     """
     entries = list(entries)
     if not entries:
         return ("Sin bolsas de evaluación medidas: no hay vecinos que mostrar. "
                 "No es una tabla vacía: es que esta lectura no corrió.")
-    columns = ["Bolsa destino", "Clase", "Vecinos fuente (kernel, clase)"]
+    columns = ["Bolsa destino", "Clase", "Vecinos fuente (clase)"]
 
     def vecino(n) -> str:
-        marca = "✓" if n["trueClass"] else "✗"
-        return f"{n['sourceBag']} ({n['kernel']:.3f}, {marca})"
+        return f"{n['sourceBag']} ({n['sourceLabel']})"
 
     if markdown:
         lines = ["| " + " | ".join(columns) + " |",
@@ -1886,12 +1890,12 @@ def render_bag_neighbors(entries: Iterable[dict], markdown: bool = False) -> str
         for entry in entries:
             vecinos = ", ".join(vecino(n) for n in entry["neighbours"])
             lines.append(f"| {entry['targetBag']} | {entry['targetLabel']} | {vecinos} |")
-        lines += ["", "✓ marca un vecino de la misma clase que la bolsa de destino; "
-                      "✗ de otra. El número entre paréntesis es el kernel de bolsa "
-                      "de la Sección 3, no una distancia -- más alto es más cerca."]
+        lines += ["", "Cada vecino es la bolsa fuente y, entre paréntesis, su propia "
+                      "clase; van en orden de cercanía por el kernel de bolsa de la "
+                      "Sección 3, de la más cercana a la más lejana."]
         return "\n".join(lines)
 
-    lines = [f"{'Bolsa destino':<15}{'Clase':<8}Vecinos fuente (kernel, clase)"]
+    lines = [f"{'Bolsa destino':<15}{'Clase':<8}Vecinos fuente (clase)"]
     for entry in entries:
         vecinos = ", ".join(vecino(n) for n in entry["neighbours"])
         lines.append(f"{entry['targetBag']:<15}{entry['targetLabel']:<8}{vecinos}")
@@ -1915,48 +1919,12 @@ def conclusion_bag_neighbors(entries: Iterable[dict]) -> str:
             f"entero de su propia clase; {none_correct} no tienen ninguno.")
 
 
-def render_source_bag_usage(usage: dict, markdown: bool = False) -> str:
-    """Por cada bolsa fuente, cuántas bolsas de destino la usaron -- la tabla inversa.
-
-    `usage` es lo que devuelve `latent.source_bag_usage`: `{bolsa_fuente:
-    cuenta}`, con cuenta cero incluida. Ordenada de menor a mayor uso, porque
-    lo que esta tabla existe para exponer son las bolsas fuente que nadie usa,
-    y esas son las que hay que ver primero.
-    """
-    if not usage:
-        return ("Sin bolsas fuente medidas: no hay uso que mostrar. No es una "
-                "tabla vacía: es que esta lectura no corrió.")
-    ordered = sorted(usage.items(), key=lambda kv: (kv[1], kv[0]))
-    unused = sum(1 for _, count in ordered if count == 0)
-    columns = ["Bolsa fuente", "Bolsas destino que la usaron"]
-    if markdown:
-        lines = ["| " + " | ".join(columns) + " |",
-                 "|" + "|".join(["---"] * len(columns)) + "|"]
-        for bag, count in ordered:
-            lines.append(f"| {bag} | {count} |")
-        lines += ["", f"{unused} de {len(ordered)} bolsas fuente no aparecen en "
-                      f"el top-`k` de ninguna bolsa de destino."]
-        return "\n".join(lines)
-
-    lines = [f"{'Bolsa fuente':<14}Bolsas destino que la usaron"]
-    lines += [f"{bag:<14}{count}" for bag, count in ordered]
-    lines.append(f"\n{unused} de {len(ordered)} bolsas fuente no aparecen en el "
-                 f"top-`k` de ninguna bolsa de destino.")
-    return "\n".join(lines)
-
-
-def conclusion_source_bag_usage(usage: dict) -> str:
-    """Cuántas bolsas fuente quedan afuera de todo top-5, calculado y no leído a ojo."""
-    if not usage:
-        return "Sin bolsas fuente medidas: no hay nada que concluir."
-    ordered = sorted(usage.items(), key=lambda kv: kv[1])
-    unused = [bag for bag, count in ordered if count == 0]
-    most_used_bag, most_used_count = max(usage.items(), key=lambda kv: kv[1])
-    share = len(unused) / len(usage)
-    return (f"{len(unused)} de {len(usage)} bolsas fuente "
-            f"({share:.0%}) no aparecen en el top-`k` de ninguna bolsa de "
-            f"destino. La más usada es la bolsa {most_used_bag}, en el top-`k` "
-            f"de {most_used_count} bolsas de destino.")
+# `render_source_bag_usage` and `conclusion_source_bag_usage` removed:
+# section 5e of `Benchmark_Results.ipynb` -- "la tabla inversa", how many
+# target bags used each source bag -- is retired, and it was the only caller
+# of either. `latent.source_bag_usage`, whose output they rendered, is retired
+# with them. The forward direction (5d, `render_bag_neighbors` /
+# `conclusion_bag_neighbors`) stays.
 
 
 def conclusions(record: dict) -> dict:
