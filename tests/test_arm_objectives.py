@@ -644,6 +644,42 @@ def test_gns_full_training_step_matches_a_source_only_twins_running_statistics(
     assert torch.equal(floor.encoder.bn.running_var, gn.encoder.bn.running_var)
 
 
+def test_gns_objective_survives_its_own_backward(bn_encoder) -> None:
+    """`GN`'s loss can be differentiated, which is the whole of what an arm is for.
+
+    Every other `GN` test here calls `training_step` and stops: `training_step`
+    BUILDS the objective and `harness` is what calls `.backward()` on it. So the
+    suite exercised the forward pass and the running statistics and never the
+    gradient, and stayed green over an arm that could not complete a single
+    training step. The pilot found it on its fifth run, after `B`, `E`, `F` and
+    `G` had already written their rows.
+
+    What it found: under `eval()` BatchNorm normalizes FROM `running_mean`/
+    `running_var`, so the target forward's graph holds those two buffers, and
+    `_encode_with_frozen_stats` restored them with `copy_` -- an in-place write
+    on a tensor the graph still needed. Backward raised `one of the variables
+    needed for gradient computation has been modified by an inplace operation`
+    on a `[512]` buffer, resnet18's pooled width.
+
+    Reachable red: restore with `running_mean.copy_(mean)` instead of rebinding
+    the attribute.
+    """
+    gn = _arm("GN")
+    gn.encoder.train()
+
+    x = gn.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = gn.source.labels[:config.BAGS_PER_STEP]
+    step = gn.training_step(x, y, 0.5, torch.Generator().manual_seed(41))
+
+    step["loss"].backward()
+
+    reached = [name for name, p in gn.named_parameters()
+               if p.grad is not None and torch.any(p.grad != 0)]
+    assert reached, (
+        "backward completed and reached no parameter: the objective is "
+        "detached from everything this arm trains")
+
+
 def test_gns_target_embeddings_scale_comparably_to_the_source(bn_encoder) -> None:
     """The other half of `GN`'s claim: normalizing the target batch with the
     SOURCE batch's own statistics still produces embeddings on a comparable

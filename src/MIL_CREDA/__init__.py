@@ -372,6 +372,13 @@ __steps__: dict = {
                 # que `search-pilot` y `noise-sweep` ya tenían.
                 "produces": ["Results/Pilot/Benchmark/runs.jsonl",
                             "Results/Pilot/Benchmark/summary.json",
+                            # `write_shard_stamp` lo escribe al lado de las
+                            # corridas que citan su manija. Nombrado archivo
+                            # por archivo y no como directorio: en la
+                            # ortografía completa `Results/Benchmark` contiene
+                            # el `ceilings.pilot.json` de `search-pilot`, y una
+                            # raíz no puede ser de dos pasos.
+                            "Results/Pilot/Benchmark/shard.json",
                             "Models/Pilot/Benchmark",
                             "Notebooks/Benchmark_Campaign.ipynb"],
                 "placement": "remote",
