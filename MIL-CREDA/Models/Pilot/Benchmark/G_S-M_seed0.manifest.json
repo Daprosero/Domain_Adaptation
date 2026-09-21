@@ -306,7 +306,7 @@
       "selfHosted": true,
       "power": {
         "source": "battery",
-        "charge": 60
+        "charge": 94
       },
       "device": {
         "name": "mps",
