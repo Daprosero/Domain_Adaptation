@@ -291,8 +291,19 @@ __benchmark__ = {
                                 "se lee igual sobre las seis: los roles ya son "
                                 "disjuntos por bolsa",
         },
-        # Where the record a conclusion is exercised against lives.
-        "record": "latent.json",
+        # Where the record a conclusion is exercised against lives: the exact
+        # file `harness.campaign` writes beside `runs.jsonl`
+        # (`(destino / "summary.json")`) and the exact file the results
+        # notebook's own `cargar_corridas` reads back (`raiz / "summary.json"`)
+        # for `reduction`. `"latent.json"` named here before was a file this
+        # repository never writes anywhere -- nothing under `MIL-CREDA/` is
+        # ever named that -- so the verification's own record search (which
+        # matches a `.json` file's basename against this string) found nothing
+        # and could never prove a conclusion was not inert. A full campaign's
+        # `Results/Benchmark/summary.json` sorts ahead of every pilot tree's
+        # own copy, so the full run outranks the pilot here exactly as it does
+        # everywhere else this repository reads a record back.
+        "record": "summary.json",
         # What a run leaves under `Results/`. Named so a later artefact — a second
         # experiment arriving as a file, with its own scale and its own material
         # role — has to be written down instead of appearing unremarked.
