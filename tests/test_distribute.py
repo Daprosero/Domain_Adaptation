@@ -199,6 +199,60 @@ def test_run_shard_obtains_the_ceilings_before_it_runs_the_campaign():
     assert source.index("ceilings_in_force(") < source.index("harness.campaign(")
 
 
+def test_run_shard_refreshes_the_per_transfer_ceilings_too(tmp_path, monkeypatch):
+    """`harness.ceilings_in_force()` alone refreshes only the pooled winner.
+    `harness.with_ceilings_in_force()`'s own docstring names the trap: "a
+    caller that sets only that leaves `ceilingsByTransfer` holding whatever
+    `config` was imported with -- empty, if the record did not exist yet ...
+    the run proceeds, the numbers look ordinary, and the two measured
+    transfers quietly ran at the wrong ceiling." `run_shard()` used
+    `ceilings_in_force()` and a bare `replace(reduction, ceilings=...)`,
+    which is exactly that trap: a shard launched in a process whose
+    `config.CEILINGS_BY_TRANSFER` was populated before a later re-search
+    would silently train `milcreda` under the STALE per-transfer pick while
+    the record on disk already carries a fresh one -- the record's own
+    `revision` stamp still matches, so nothing about the drift check catches
+    it, because that check only looks at whether a family's picks are
+    present, never at whether their values still agree with disk.
+    """
+    from MIL_CREDA_Benchmark import config as milcreda_config, harness
+
+    fresh_pick = {"S->M": 0.0077}
+    record_path = tmp_path / "ceilings.json"
+    record_path.write_text(json.dumps({
+        "milcreda": {
+            "ceiling": 0.05,
+            "byTransfer": fresh_pick,
+            "revision": milcreda_config.REVISION,
+        },
+    }), encoding="utf-8")
+    monkeypatch.setattr(milcreda_config, "CEILINGS_RECORD", record_path)
+    monkeypatch.setattr(milcreda_config, "CEILINGS_PILOT_RECORD",
+                        tmp_path / "no-pilot-record-here.json")
+
+    # The stale import-time snapshot: what an earlier search left behind in
+    # `config.CEILINGS_BY_TRANSFER`, which nothing re-reads after import.
+    stale_pick = {"S->M": 0.0002}
+    monkeypatch.setitem(milcreda_config.CEILINGS_BY_TRANSFER, "milcreda", stale_pick)
+
+    captured = {}
+
+    def _fake_campaign(reduction, device, **kwargs):
+        captured["reduction"] = reduction
+        return {}
+
+    monkeypatch.setattr(harness, "campaign", _fake_campaign)
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+
+    distribute.run_shard("s00", [1, 2, 3])
+
+    got = captured["reduction"].ceilingsByTransfer.get("milcreda")
+    assert got == fresh_pick, (
+        f"run_shard used {got} -- the stale import-time snapshot -- instead "
+        f"of re-reading the record currently on disk ({fresh_pick})"
+    )
+
+
 def test_distribute_py_makes_no_direct_service_call_itself():
     """The forge's adapter is the one place allowed to shell out to a
     service or its accounts CLI; this launcher delegates entirely and
