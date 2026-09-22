@@ -222,6 +222,58 @@ class TestWhatItReplaces:
                             if drawn["after"][s] != drawn["before"][s])
                 assert moved == expected, f"role {role!r}, bag {position}"
 
+    def test_every_training_bag_loses_exactly_the_declared_count(self):
+        """AGREED.md: "Contamination replaces k of the `INSTANCES_PER_BAG`
+        instances of a bag with images of another class and never touches
+        the bag label. Bags are pure and no instance carries a label, so
+        there is no label to flip: what is corrupted is the evidence, not
+        the answer."
+
+        Scoped directly at `bags._contaminate`, with its own minimal fixture
+        -- three `train`-role bags -- rather than through `_material`'s full
+        draw, so the "never touches the bag label" half has an actual
+        pre-call snapshot to compare against: `_material`'s own `bag_labels`
+        list is shared by reference throughout, with no pristine copy taken
+        before `_contaminate` runs. `test_every_noised_role_bag_loses_exactly_the_declared_count`
+        above already covers the instance count across BOTH noised roles;
+        this proves both halves of the one sentence together, on the role a
+        campaign actually trains on under noise.
+
+        Reachable red: pass `bag_labels[position] = donor` inside the loop
+        `_contaminate` walks (mutating the label alongside the instance) and
+        the snapshot comparison below catches it; drop the `per_bag` slots
+        drawn to less than `expected` and the count comparison catches that.
+        """
+        rate = self.RATE
+        expected = config.noise_instances(rate)
+        assert expected > 0, "a rate that replaces nothing proves nothing below"
+
+        instances = config.INSTANCES_PER_BAG
+        n_bags = 3
+        flat = list(range(n_bags * instances))
+        before_flat = list(flat)
+        members = [list(range(b * instances, (b + 1) * instances))
+                  for b in range(n_bags)]
+        bag_labels = [0, 1, 2]
+        before_labels = list(bag_labels)
+        spare = {c: np.arange(c * 10_000, c * 10_000 + 200) for c in range(config.CLASSES)}
+
+        bags._contaminate(flat, members, bag_labels,
+                          {"train": [0, 1, 2], "valid": [], "eval": []},
+                          spare, rate, seed=0, code="M")
+
+        assert bag_labels == before_labels, (
+            "contamination touched the bag label -- it must corrupt only the "
+            "evidence, never the answer"
+        )
+        for position in (0, 1, 2):
+            slots = members[position]
+            moved = sum(1 for s in slots if flat[s] != before_flat[s])
+            assert moved == expected, (
+                f"training bag {position} lost {moved} instances, "
+                f"declared {expected}"
+            )
+
     def test_every_bag_carries_its_own_role_in_the_record(self):
         """The manifest names which role each contaminated bag belongs to --
         needed now that all three are mixed into one combined draw."""

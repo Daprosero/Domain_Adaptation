@@ -377,6 +377,25 @@ def test_each_level_table_is_followed_by_its_own_computed_conclusion() -> None:
             f"the reading under the {metric} table is about {concluded[1]}"
 
 
+def test_the_conclusion_is_not_tied_to_nothing() -> None:
+    """AGREED.md: "That conclusion is computed from the table, never written
+    by hand: a hand-written conclusion is a second source of truth and goes
+    stale in silence."
+
+    Targets `tables.conclusion` directly -- the function each phase-1 cell's
+    own reading under the table is built from -- rather than the aggregate
+    `conclusions()` entry point `test_every_conclusion_the_report_produces_is_read_off_its_own_numbers`
+    below already covers. Reachable red: hand it a fixed string instead of
+    computing one from `runs`, and it reads identically under the permutation.
+    """
+    original = _record()
+    swapped = _record(swap=True)
+    said = tables.conclusion(original["runs"], "targetAccuracy", original["reduction"])
+    permuted = tables.conclusion(swapped["runs"], "targetAccuracy", swapped["reduction"])
+    assert said.strip(), "the conclusion said nothing at all"
+    assert said != permuted, "the conclusion reads the same whatever the numbers say"
+
+
 def test_a_cell_shows_one_table_and_not_two() -> None:
     """One table per cell, so the framing above it belongs to one reading.
 
