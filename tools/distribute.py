@@ -29,7 +29,6 @@ import argparse
 import importlib.util
 import json
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -222,10 +221,13 @@ def run_shard(shard: str, seeds: list[int]) -> dict:
     reduction = harness.Reduction(
         seeds=list(seeds), epochs=config.FULL_EPOCHS,
         device=str(device), environment=harness.environment())
-    # `pilot` de la reducción: `ceilings_in_force` lo sobrescribe con el de su
-    # firma, así que omitirlo no era heredarlo sino perderlo.
-    reduction = replace(reduction, ceilings=harness.ceilings_in_force(
-        reduction, device, pilot=reduction.pilot))
+    # `ceilings_in_force()` alone refreshes only the pooled winner and leaves
+    # `ceilingsByTransfer`/`hyperByTransfer` at whatever `config` was imported
+    # with -- the exact import-time staleness `with_ceilings_in_force()`'s own
+    # docstring warns a bare `ceilings_in_force()` caller into. This is the
+    # remote-worker's own campaign launcher, so it takes the same call every
+    # other real campaign path in `harness.py` takes.
+    reduction = harness.with_ceilings_in_force(reduction, device, shard=shard)
     return harness.campaign(reduction, device, shard=shard)
 
 
