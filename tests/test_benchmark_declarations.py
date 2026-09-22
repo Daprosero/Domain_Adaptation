@@ -16,6 +16,7 @@ from __future__ import annotations
 import MIL_CREDA
 import MIL_CREDA_Benchmark
 import json
+import math
 
 import pytest
 import torch
@@ -322,6 +323,60 @@ def test_a_rung_subtracts_left_minus_right_everywhere_it_is_computed() -> None:
     # side. Flipping the subtraction without flipping this would report the right
     # arm losing all six of the transfers it won.
     assert row["favouringRight"] == len(config.TRANSFERS)
+
+
+def test_the_error_is_between_transfers_not_over_the_pooled_pairs() -> None:
+    """AGREED.md: "The error of that mean is between transfers, not over the
+    pooled pairs. A transfer is a setting and not a repetition; pooling
+    claimed a stability across settings nobody measured, and understated the
+    uncertainty."
+
+    `paired_across_transfers` never receives a raw per-seed reading -- only
+    each cell's own `spread()` (already collapsed to a mean over that cell's
+    own repetitions) -- so its own dispersion can only ever be the spread of
+    the per-TRANSFER differences, never a pool of the raw (seed, transfer)
+    pairs behind them. Proven by feeding it two transfers whose means were
+    struck from wildly different repetition counts (3 and 30): a pooled
+    reading would weight -- or at least report an `n` shaped by -- those
+    repetition counts; this one reports exactly `2`, the number of transfers
+    compared, and a dispersion computed only from their two differences.
+
+    Reachable red: change `paired_across_transfers` to scale its dispersion by
+    each cell's own `n` (weighting toward the heavier-seeded transfer), which
+    would move the stdev away from the plain two-point spread asserted below.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    left, right, _ = config.LADDER[0]
+
+    def cell(mean: float, n: int) -> dict:
+        entry = {"mean": mean, "stdev": 0.0, "max": mean, "n": n}
+        return {"targetAccuracy": dict(entry), "sourceAccuracy": dict(entry)}
+
+    transfers = list(config.TRANSFERS)
+    (s0, d0), (s1, d1) = transfers[0], transfers[1]
+    grid = {
+        f"{s0}->{d0}": {left: cell(0.40, 3), right: cell(0.50, 3)},
+        f"{s1}->{d1}": {left: cell(0.40, 30), right: cell(0.70, 30)},
+    }
+
+    panorama = harness.paired_across_transfers(grid)
+    row = [r for r in panorama
+           if r["rung"] == f"{left}->{right}" and r["metric"] == "targetAccuracy"][0]
+
+    differences = [-0.10, -0.30]  # left - right, one per transfer above
+    mean_difference = sum(differences) / len(differences)
+    expected_stdev = math.sqrt(
+        sum((d - mean_difference) ** 2 for d in differences) / (len(differences) - 1))
+
+    assert row["transfers"] == 2, (
+        "the reported count is the number of TRANSFERS compared, not the "
+        f"seeds behind them (3 and 30): {row['transfers']}"
+    )
+    assert row["stdev"] == pytest.approx(expected_stdev), (
+        "the dispersion moved away from the plain spread of the two "
+        "per-transfer differences -- something pooled the raw pairs instead"
+    )
 
 
 # `test_the_rung_conclusion_names_who_is_ahead_not_how_far_it_moved` and the
