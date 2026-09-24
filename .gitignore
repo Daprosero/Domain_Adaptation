@@ -32,6 +32,15 @@ MIL-CREDA/Models/Benchmark/*.pt
 # leaves nothing, which is backwards. The manifests stay, so which images formed
 # every bag is still in the history.
 MIL-CREDA/Models/Pilot/Benchmark/*.pt
+# And the noise sweep's, for the same reason and with the same scope. The two
+# rules above name the `Benchmark` subtrees; the noise subtree was written
+# afterwards and fell outside both, so 4.4 GiB of its weights went into the
+# history raw — which is what made GitHub refuse the push with an HTTP 500. The
+# glob, rather than naming today's levels: the sweep writes under `rho<N>` and
+# under `curve/rho<N>`, and a rule spelling out the levels that exist now would
+# fall outside the next subtree exactly as this one did.
+MIL-CREDA/Models/Noise/**/*.pt
+MIL-CREDA/Models/Pilot/Noise/**/*.pt
 #
 # What stays out is the dataset cache, and only that. It is MNIST, USPS and SVHN
 # exactly as torchvision downloads them: somebody else's data, 243 MB of it, that a
