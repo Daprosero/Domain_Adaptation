@@ -101,7 +101,7 @@
           "epochs": 20,
           "trials": 30
         },
-        "seconds": 239.38599195802817,
+        "seconds": 441.23747774999356,
         "transfers": [
           "M->U",
           "U->M",
@@ -135,7 +135,7 @@
               0.7117782412223816
             ],
             "decidedByFlatRule": false,
-            "minutes": 0.7824462583332206
+            "minutes": 2.834407465267577
           },
           "U->M": {
             "ceiling": 0.010796012633645448,
@@ -153,7 +153,7 @@
               0.011660437435785431
             ],
             "decidedByFlatRule": true,
-            "minutes": 0.5724203777834191
+            "minutes": 0.998606179866086
           },
           "M->S": {
             "ceiling": 0.0005247933940780908,
@@ -171,7 +171,7 @@
               0.0030676860676691303
             ],
             "decidedByFlatRule": true,
-            "minutes": 0.6671589229163752
+            "minutes": 0.9148926083338059
           },
           "S->M": {
             "ceiling": 0.0008875530880758854,
@@ -189,7 +189,7 @@
               0.0013264142426544668
             ],
             "decidedByFlatRule": true,
-            "minutes": 0.637637627083556
+            "minutes": 0.9062773298666191
           },
           "U->S": {
             "ceiling": 0.008911638421286783,
@@ -206,7 +206,7 @@
               0.008911638421286783
             ],
             "decidedByFlatRule": false,
-            "minutes": 0.6306974895832052
+            "minutes": 0.8930542972171679
           },
           "S->U": {
             "ceiling": 0.10294579502332135,
@@ -223,7 +223,7 @@
               0.10294579502332135
             ],
             "decidedByFlatRule": false,
-            "minutes": 0.6308614958329902
+            "minutes": 0.7597395354163988
           }
         },
         "inheritanceRule": "ninguna: las seis transferencias se midieron",
@@ -236,7 +236,7 @@
           "selfHosted": true,
           "power": {
             "source": "battery",
-            "charge": 27
+            "charge": 1
           },
           "device": {
             "name": "mps",
