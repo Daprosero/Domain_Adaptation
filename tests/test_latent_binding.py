@@ -488,6 +488,27 @@ def test_reduction_from_record_refuses_a_missing_hyperparameter_field():
         harness.Reduction.from_record(record)
 
 
+def test_reduction_from_record_refuses_a_revision_mismatch():
+    """`revision` is not one of `latent.HYPERPARAMETER_FIELDS`
+    (`kernelSigma`/`attentionGamma`/`attentionTemperature`,
+    `latent.py:280-284`), so `_latent.hyperparameter_drift` alone never sees
+    it -- and `from_record`'s own docstring used to claim an equivalence
+    with `latent.load()`'s refusal that this gap contradicts. Measured by
+    mutation: a record rewritten to carry an old revision used to rebuild
+    into a `Reduction` that carries it right along, with no refusal at all,
+    exactly the silent-drift shape `latent.load()` exists to stop for a
+    checkpoint's own manifest.
+    """
+    from dataclasses import asdict
+
+    from MIL_CREDA_Benchmark import harness
+
+    record = asdict(harness.Reduction())
+    record["revision"] = "r17-fake-old-revision"
+    with pytest.raises(latent.StaleCheckpointRevision):
+        harness.Reduction.from_record(record)
+
+
 def test_reduction_accepts_kernel_sigma_as_a_constructor_keyword():
     """The inverse of what this test used to assert.
 

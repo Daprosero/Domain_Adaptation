@@ -342,15 +342,44 @@ class Reduction:
         under today's `KERNEL_SIGMA` while describing a run made under a
         different one, with nothing in the object itself to tell the two apart.
 
-        So this refuses on the same disagreement `latent.hyperparameter_drift`
-        already checks a checkpoint's manifest against, applied here to a
-        record's own `"reduction"` field: a field missing entirely, or present
-        and different from what `config` currently carries, is drift, and drift
-        refuses. Only once the drift check passes are the three dropped, along
-        with any other non-init field a future `Reduction` might add, and the
-        remaining keys become the constructor call.
+        **This does NOT refuse on the same disagreement `latent.load()` does,
+        in full -- an earlier version of this docstring claimed it did, which
+        was wrong.** `latent.hyperparameter_drift` only covers
+        `HYPERPARAMETER_FIELDS` (`kernelSigma`, `attentionGamma`,
+        `attentionTemperature`, `latent.py:280-284`); `revision` is not among
+        them, on purpose -- it is `latent.load()`'s OWN first check, made
+        separately, right before it ever calls `hyperparameter_drift`. A
+        record missing that check entirely rebuilds a `Reduction` stamped
+        `r17` while `config.REVISION` says `r21`, with nothing refusing:
+        proven by mutation, rewriting `revision` to
+        `"r17-fake-old-revision"` used to sail straight through. So this
+        performs `latent.load()`'s own revision check first, reusing its
+        `StaleCheckpointRevision` rather than inventing a second refusal for
+        the identical fact, and only then applies the three-field
+        hyperparameter check above. A field missing entirely, or present and
+        different from what `config` currently carries, is drift either way,
+        and drift refuses. Only once both checks pass are the three
+        `init=False` fields dropped, along with any other non-init field a
+        future `Reduction` might add, and the remaining keys become the
+        constructor call.
+
+        Its only callers today are tests (`tests/test_latent_binding.py`);
+        that is not a reason to leave either check out, since the crash this
+        replaces was itself hit from a notebook.
         """
         from MIL_CREDA_Benchmark import latent as _latent
+
+        revision = d.get("revision")
+        if revision != config.REVISION:
+            raise _latent.StaleCheckpointRevision(
+                f"refusing to rebuild a Reduction from a record stamped "
+                f"{revision!r}; the current managed revision is "
+                f"{config.REVISION!r}. `latent.load()` refuses this "
+                "identical disagreement on a checkpoint's own manifest -- "
+                "this is that same check, reused rather than reinvented, "
+                "applied here to a record's own `\"revision\"` field before "
+                "hyperparameter drift is even considered."
+            )
 
         drift = _latent.hyperparameter_drift({"reduction": d})
         if drift:
@@ -2046,6 +2075,48 @@ def campaign(reduction: Reduction, device: torch.device,
             "winner.\n"
             "  Build the reduction with `harness.with_ceilings_in_force(...)` "
             "rather than setting `ceilings=` alone."
+        )
+
+    # Ni ausente ni vacío: CAMBIADO. `reduction.ceilings`/`ceilingsByTransfer`
+    # llegan aquí, en el caso general, de las factories por omisión de
+    # `Reduction` (`config.py:471/480`), que copian `config.CEILINGS`/
+    # `CEILINGS_BY_TRANSFER` --- llenados UNA VEZ al importar `config`
+    # (`config.py:1405-1406`) y nunca releídos después. Si una búsqueda vuelve
+    # a correr más tarde en el mismo proceso, reescribe `ceilings.json` con un
+    # número distinto bajo la MISMA `revision`: `currentStamp` sigue en
+    # `True`, así que ni la guarda vacía de arriba ni la de arriba de ésta se
+    # disparan --- el mapeo no está vacío y el pick por transferencia no está
+    # ausente. `with_ceilings_in_force` (línea ~1363) es la única llamada que
+    # relee las dos mitades del disco; una `Reduction` armada a mano, o vieja
+    # dentro del mismo proceso, no pasa por ahí y llegaría a entrenar bajo el
+    # número de importación mientras el registro en disco ya dice otra cosa.
+    #
+    # Releer y sustituir en silencio sería la OTRA reparación, y es la
+    # equivocada para una función cuyo hábito ya declarado dos guardas más
+    # arriba es negarse en vez de buscar sobre la marcha: una campaña que
+    # entrenó calladamente bajo un número distinto del que va a imprimir es
+    # peor que una que se niega a empezar. Se niega, entonces, por el mismo
+    # motivo por el que las dos guardas de arriba se niegan en vez de
+    # corregir: un número que de otro modo se creería.
+    fresh_pooled = config.ceilings_on_record(pilot=reduction.pilot)
+    changed_pooled = sorted(
+        family for family, value in reduction.ceilings.items()
+        if family in fresh_pooled and fresh_pooled[family] != value)
+    changed_per_transfer = sorted(set(
+        family for family, picks in reduction.ceilingsByTransfer.items()
+        for label, value in picks.items()
+        if on_record.get(family, {}).get(label) not in (None, value)))
+    changed = sorted(set(changed_pooled) | set(changed_per_transfer))
+    if changed:
+        raise SystemExit(
+            "refusing to run: this reduction's ceilings disagree with the "
+            f"record currently on disk for {', '.join(changed)}, under an "
+            "UNCHANGED stamp -- the record was re-searched since this "
+            "`Reduction` was built (or was built by hand from stale values) "
+            "and its revision still matches, so neither guard above fired.\n"
+            "  Build the reduction with `harness.with_ceilings_in_force(...)` "
+            "immediately before running it, rather than reusing one built "
+            "earlier in the same process."
         )
     # And not a ceiling searched below the scale its answer needs. Missing is the
     # obvious failure; this is the quiet one — someone lowers the search to test

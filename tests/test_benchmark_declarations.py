@@ -2216,6 +2216,60 @@ def test_the_campaign_refuses_when_the_record_has_picks_and_the_run_does_not(
     assert "milcreda" in str(raised.value)
 
 
+def test_the_campaign_refuses_when_the_reductions_ceilings_disagree_with_the_record_under_an_unchanged_stamp(
+        tmp_path, monkeypatch) -> None:
+    """The defect the two guards above do NOT catch: a value that CHANGED.
+
+    `harness.Reduction`'s default factories (`ceilings`/`ceilingsByTransfer`)
+    read `config.CEILINGS`/`CEILINGS_BY_TRANSFER`, filled once at import time
+    (`config.py:1405-1406`) and never refreshed afterwards. A search that
+    re-runs later in the SAME process rewrites `ceilings.json` with a
+    different number under the identical `revision` -- `currentStamp` still
+    reads `True`, so neither the empty-mapping guard nor the missing-picks
+    guard above ever fires: the mapping is not empty and the family's picks
+    are not absent, only wrong. `harness.with_ceilings_in_force` is the one
+    call that re-reads both halves fresh (harness.py:1363); this reduction is
+    built by hand instead, the identical shape
+    `test_run_shard_refreshes_the_per_transfer_ceilings_too`
+    (`tests/test_distribute.py`) proved for `tools/distribute.py`'s one call
+    site, swept here to `campaign()` itself.
+
+    `run_one` is replaced with a failing stub, the same discipline
+    `test_the_campaign_refuses_up_front_on_a_stale_ceiling_record_before_writing_anything`
+    above already uses: without the guard this proves, nothing else stops
+    `campaign()` from actually training arm G over every declared transfer,
+    which is real work this test must never perform even by accident.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "milcreda": _stamped({"ceiling": 0.05, "byTransfer": {"S->M": 0.0077},
+                              "atRequiredScale": True}),
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "no-pilot-record.json")
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
+
+    def run_one_must_not_be_called(*args, **kwargs):
+        pytest.fail("run_one was called: the changed-ceilings guard did not "
+                    "stop the campaign before training started")
+
+    monkeypatch.setattr(harness, "run_one", run_one_must_not_be_called)
+
+    # The stale import-time snapshot: what an EARLIER search left `reduction`
+    # carrying, under the SAME `revision` the record above still stamps --
+    # present, not absent, which is exactly what the two guards above cannot
+    # see.
+    stale = harness.Reduction(ceilings={"milcreda": 1e-2},
+                              ceilingsByTransfer={"milcreda": {"S->M": 1e-4}})
+    with pytest.raises(SystemExit) as raised:
+        harness.campaign(stale, torch.device("cpu"), arms=["G"])
+    assert "disagree with the record" in str(raised.value)
+    assert "milcreda" in str(raised.value)
+
+
 def test_the_ceilings_are_what_has_to_agree_across_shards() -> None:
     """Both readings, and both reachable by a flat top-level lookup.
 
