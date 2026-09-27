@@ -22,6 +22,7 @@
     "attentionGamma": 0.0,
     "attentionTemperature": 1.0,
     "tauLocal": 1.0,
+    "ceilingLocal": 1.0,
     "ceilings": {
       "milcreda": 0.010796012633645448
     },
@@ -293,6 +294,7 @@
       }
     },
     "rampDelta": 20,
+    "rampDeltaLocal": 20,
     "device": "mps",
     "environment": {
       "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
@@ -416,22 +418,22 @@
           "n": 1
         },
         "sourceAccuracy": {
-          "mean": 0.8611111111111112,
+          "mean": 0.8055555555555556,
           "stdev": 0.0,
           "n": 1
         },
         "contribution": {
-          "mean": 0.02316647572886376,
+          "mean": 0.04870239148537318,
           "stdev": 0.0,
           "n": 1
         },
         "supervised": {
-          "mean": 0.01269223591199469,
+          "mean": 0.014399424082512269,
           "stdev": 0.0,
           "n": 1
         },
         "adaptationShare": {
-          "mean": 0.6460487471186,
+          "mean": 0.7718065010820292,
           "stdev": 0.0,
           "n": 1
         },
@@ -541,7 +543,7 @@
       },
       "G": {
         "targetAccuracy": {
-          "mean": 0.9722222222222222,
+          "mean": 0.75,
           "stdev": 0.0,
           "n": 1
         },
@@ -551,17 +553,17 @@
           "n": 1
         },
         "contribution": {
-          "mean": 0.00045754630922428553,
+          "mean": 0.006959506659075573,
           "stdev": 0.0,
           "n": 1
         },
         "supervised": {
-          "mean": 0.010012408569764375,
+          "mean": 0.0106253528635231,
           "stdev": 0.0,
           "n": 1
         },
         "adaptationShare": {
-          "mean": 0.043700886442452555,
+          "mean": 0.3957669750009526,
           "stdev": 0.0,
           "n": 1
         },
@@ -671,27 +673,27 @@
       },
       "G": {
         "targetAccuracy": {
-          "mean": 0.2222222222222222,
+          "mean": 0.16666666666666666,
           "stdev": 0.0,
           "n": 1
         },
         "sourceAccuracy": {
-          "mean": 1.0,
+          "mean": 0.7777777777777778,
           "stdev": 0.0,
           "n": 1
         },
         "contribution": {
-          "mean": 4.853434300111119e-05,
+          "mean": 0.0019999810454984462,
           "stdev": 0.0,
           "n": 1
         },
         "supervised": {
-          "mean": 0.009309869646780758,
+          "mean": 0.009601286105905837,
           "stdev": 0.0,
           "n": 1
         },
         "adaptationShare": {
-          "mean": 0.0051861773710671424,
+          "mean": 0.17239332733203694,
           "stdev": 0.0,
           "n": 1
         },
@@ -801,27 +803,27 @@
       },
       "G": {
         "targetAccuracy": {
-          "mean": 0.6666666666666666,
+          "mean": 0.6944444444444444,
           "stdev": 0.0,
           "n": 1
         },
         "sourceAccuracy": {
-          "mean": 0.5555555555555556,
+          "mean": 0.4722222222222222,
           "stdev": 0.0,
           "n": 1
         },
         "contribution": {
-          "mean": 5.131912448199555e-05,
+          "mean": 0.000519376943494925,
           "stdev": 0.0,
           "n": 1
         },
         "supervised": {
-          "mean": 0.025097879305359953,
+          "mean": 0.025075618145776735,
           "stdev": 0.0,
           "n": 1
         },
         "adaptationShare": {
-          "mean": 0.0020405868849124216,
+          "mean": 0.020292129054270684,
           "stdev": 0.0,
           "n": 1
         },
@@ -931,27 +933,27 @@
       },
       "G": {
         "targetAccuracy": {
-          "mean": 0.2777777777777778,
+          "mean": 0.08333333333333333,
           "stdev": 0.0,
           "n": 1
         },
         "sourceAccuracy": {
-          "mean": 1.0,
+          "mean": 0.8888888888888888,
           "stdev": 0.0,
           "n": 1
         },
         "contribution": {
-          "mean": 0.0003882082154242588,
+          "mean": 0.006868618153107707,
           "stdev": 0.0,
           "n": 1
         },
         "supervised": {
-          "mean": 0.00986558100066759,
+          "mean": 0.011183202992210031,
           "stdev": 0.0,
           "n": 1
         },
         "adaptationShare": {
-          "mean": 0.03785997617495607,
+          "mean": 0.3804944718771093,
           "stdev": 0.0,
           "n": 1
         },
@@ -1061,27 +1063,27 @@
       },
       "G": {
         "targetAccuracy": {
-          "mean": 0.8055555555555556,
+          "mean": 0.7777777777777778,
           "stdev": 0.0,
           "n": 1
         },
         "sourceAccuracy": {
-          "mean": 0.6111111111111112,
+          "mean": 0.5555555555555556,
           "stdev": 0.0,
           "n": 1
         },
         "contribution": {
-          "mean": 0.0021659411667358307,
+          "mean": 0.004059684279906963,
           "stdev": 0.0,
           "n": 1
         },
         "supervised": {
-          "mean": 0.024898605139848467,
+          "mean": 0.024870623451923684,
           "stdev": 0.0,
           "n": 1
         },
         "adaptationShare": {
-          "mean": 0.08002872622360929,
+          "mean": 0.14032634279379907,
           "stdev": 0.0,
           "n": 1
         },
@@ -1450,13 +1452,13 @@
           "n": 1
         },
         "new": {
-          "mean": 0.8611111111111112,
+          "mean": 0.8055555555555556,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
           "winner": "baseline",
-          "margin": -0.13888888888888884,
+          "margin": -0.19444444444444442,
           "threshold": 0.0,
           "reason": "higher is better and the gap exceeds the combined standard error"
         }
@@ -1474,7 +1476,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.02316647572886376,
+          "mean": 0.04870239148537318,
           "stdev": 0.0,
           "n": 1
         },
@@ -1497,7 +1499,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.01269223591199469,
+          "mean": 0.014399424082512269,
           "stdev": 0.0,
           "n": 1
         },
@@ -1520,7 +1522,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.6460487471186,
+          "mean": 0.7718065010820292,
           "stdev": 0.0,
           "n": 1
         },
@@ -1848,13 +1850,13 @@
           "n": 1
         },
         "new": {
-          "mean": 0.9722222222222222,
+          "mean": 0.75,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "new",
-          "margin": 0.02777777777777779,
+          "winner": "baseline",
+          "margin": -0.19444444444444442,
           "threshold": 0.0,
           "reason": "higher is better and the gap exceeds the combined standard error"
         }
@@ -1896,7 +1898,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.00045754630922428553,
+          "mean": 0.006959506659075573,
           "stdev": 0.0,
           "n": 1
         },
@@ -1919,7 +1921,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.010012408569764375,
+          "mean": 0.0106253528635231,
           "stdev": 0.0,
           "n": 1
         },
@@ -1942,7 +1944,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.043700886442452555,
+          "mean": 0.3957669750009526,
           "stdev": 0.0,
           "n": 1
         },
@@ -2270,15 +2272,15 @@
           "n": 1
         },
         "new": {
-          "mean": 0.2222222222222222,
+          "mean": 0.16666666666666666,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "indistinguishable",
-          "margin": 0.0,
+          "winner": "baseline",
+          "margin": -0.05555555555555555,
           "threshold": 0.0,
-          "reason": "the means are closer than their combined standard error"
+          "reason": "higher is better and the gap exceeds the combined standard error"
         }
       },
       {
@@ -2294,15 +2296,15 @@
           "n": 1
         },
         "new": {
-          "mean": 1.0,
+          "mean": 0.7777777777777778,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "indistinguishable",
-          "margin": 0.0,
+          "winner": "baseline",
+          "margin": -0.2222222222222222,
           "threshold": 0.0,
-          "reason": "the means are closer than their combined standard error"
+          "reason": "higher is better and the gap exceeds the combined standard error"
         }
       },
       {
@@ -2318,7 +2320,7 @@
           "n": 1
         },
         "new": {
-          "mean": 4.853434300111119e-05,
+          "mean": 0.0019999810454984462,
           "stdev": 0.0,
           "n": 1
         },
@@ -2341,7 +2343,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.009309869646780758,
+          "mean": 0.009601286105905837,
           "stdev": 0.0,
           "n": 1
         },
@@ -2364,7 +2366,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.0051861773710671424,
+          "mean": 0.17239332733203694,
           "stdev": 0.0,
           "n": 1
         },
@@ -2692,15 +2694,15 @@
           "n": 1
         },
         "new": {
-          "mean": 0.6666666666666666,
+          "mean": 0.6944444444444444,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "indistinguishable",
-          "margin": 0.0,
+          "winner": "new",
+          "margin": 0.02777777777777779,
           "threshold": 0.0,
-          "reason": "the means are closer than their combined standard error"
+          "reason": "higher is better and the gap exceeds the combined standard error"
         }
       },
       {
@@ -2716,15 +2718,15 @@
           "n": 1
         },
         "new": {
-          "mean": 0.5555555555555556,
+          "mean": 0.4722222222222222,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "indistinguishable",
-          "margin": 0.0,
+          "winner": "baseline",
+          "margin": -0.08333333333333337,
           "threshold": 0.0,
-          "reason": "the means are closer than their combined standard error"
+          "reason": "higher is better and the gap exceeds the combined standard error"
         }
       },
       {
@@ -2740,7 +2742,7 @@
           "n": 1
         },
         "new": {
-          "mean": 5.131912448199555e-05,
+          "mean": 0.000519376943494925,
           "stdev": 0.0,
           "n": 1
         },
@@ -2763,7 +2765,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.025097879305359953,
+          "mean": 0.025075618145776735,
           "stdev": 0.0,
           "n": 1
         },
@@ -2786,7 +2788,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.0020405868849124216,
+          "mean": 0.020292129054270684,
           "stdev": 0.0,
           "n": 1
         },
@@ -3114,15 +3116,15 @@
           "n": 1
         },
         "new": {
-          "mean": 0.2777777777777778,
+          "mean": 0.08333333333333333,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "indistinguishable",
-          "margin": 0.0,
+          "winner": "baseline",
+          "margin": -0.19444444444444448,
           "threshold": 0.0,
-          "reason": "the means are closer than their combined standard error"
+          "reason": "higher is better and the gap exceeds the combined standard error"
         }
       },
       {
@@ -3138,15 +3140,15 @@
           "n": 1
         },
         "new": {
-          "mean": 1.0,
+          "mean": 0.8888888888888888,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "indistinguishable",
-          "margin": 0.0,
+          "winner": "baseline",
+          "margin": -0.11111111111111116,
           "threshold": 0.0,
-          "reason": "the means are closer than their combined standard error"
+          "reason": "higher is better and the gap exceeds the combined standard error"
         }
       },
       {
@@ -3162,7 +3164,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.0003882082154242588,
+          "mean": 0.006868618153107707,
           "stdev": 0.0,
           "n": 1
         },
@@ -3185,7 +3187,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.00986558100066759,
+          "mean": 0.011183202992210031,
           "stdev": 0.0,
           "n": 1
         },
@@ -3208,7 +3210,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.03785997617495607,
+          "mean": 0.3804944718771093,
           "stdev": 0.0,
           "n": 1
         },
@@ -3536,15 +3538,15 @@
           "n": 1
         },
         "new": {
-          "mean": 0.8055555555555556,
+          "mean": 0.7777777777777778,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "indistinguishable",
-          "margin": 0.0,
+          "winner": "baseline",
+          "margin": -0.02777777777777779,
           "threshold": 0.0,
-          "reason": "the means are closer than their combined standard error"
+          "reason": "higher is better and the gap exceeds the combined standard error"
         }
       },
       {
@@ -3560,15 +3562,15 @@
           "n": 1
         },
         "new": {
-          "mean": 0.6111111111111112,
+          "mean": 0.5555555555555556,
           "stdev": 0.0,
           "n": 1
         },
         "verdict": {
-          "winner": "indistinguishable",
-          "margin": 0.0,
+          "winner": "baseline",
+          "margin": -0.05555555555555558,
           "threshold": 0.0,
-          "reason": "the means are closer than their combined standard error"
+          "reason": "higher is better and the gap exceeds the combined standard error"
         }
       },
       {
@@ -3584,7 +3586,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.0021659411667358307,
+          "mean": 0.004059684279906963,
           "stdev": 0.0,
           "n": 1
         },
@@ -3607,7 +3609,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.024898605139848467,
+          "mean": 0.024870623451923684,
           "stdev": 0.0,
           "n": 1
         },
@@ -3630,7 +3632,7 @@
           "n": 1
         },
         "new": {
-          "mean": 0.08002872622360929,
+          "mean": 0.14032634279379907,
           "stdev": 0.0,
           "n": 1
         },
@@ -3710,8 +3712,8 @@
       "rung": "F->G",
       "reading": "qu\u00e9 compra la correspondencia local",
       "metric": "targetAccuracy",
-      "meanDifference": 0.018518518518518507,
-      "stdev": 0.06000685831859128,
+      "meanDifference": 0.09722222222222221,
+      "stdev": 0.09254628471643156,
       "transfers": 6,
       "favouringRight": 1,
       "favouringLeft": 5
@@ -3720,8 +3722,8 @@
       "rung": "F->G",
       "reading": "qu\u00e9 compra la correspondencia local",
       "metric": "sourceAccuracy",
-      "meanDifference": 0.02314814814814814,
-      "stdev": 0.05670115145331429,
+      "meanDifference": 0.11111111111111112,
+      "stdev": 0.08425417160057277,
       "transfers": 6,
       "favouringRight": 0,
       "favouringLeft": 6
@@ -3819,10 +3821,11 @@
     "U->M": {
       "new": [
         "B->E targetAccuracy",
-        "E->F targetAccuracy",
+        "E->F targetAccuracy"
+      ],
+      "baseline": [
         "F->G targetAccuracy"
       ],
-      "baseline": [],
       "indistinguishable": [
         "B->E sourceAccuracy",
         "E->F sourceAccuracy",
@@ -3834,41 +3837,43 @@
       "new": [
         "B->E targetAccuracy"
       ],
-      "baseline": [],
+      "baseline": [
+        "F->G targetAccuracy",
+        "F->G sourceAccuracy"
+      ],
       "indistinguishable": [
         "B->E sourceAccuracy",
         "E->F targetAccuracy",
-        "E->F sourceAccuracy",
-        "F->G targetAccuracy",
-        "F->G sourceAccuracy"
+        "E->F sourceAccuracy"
       ],
       "not applicable": []
     },
     "S->M": {
       "new": [
-        "B->E targetAccuracy"
+        "B->E targetAccuracy",
+        "F->G targetAccuracy"
       ],
       "baseline": [
-        "B->E sourceAccuracy"
+        "B->E sourceAccuracy",
+        "F->G sourceAccuracy"
       ],
       "indistinguishable": [
         "E->F targetAccuracy",
-        "E->F sourceAccuracy",
-        "F->G targetAccuracy",
-        "F->G sourceAccuracy"
+        "E->F sourceAccuracy"
       ],
       "not applicable": []
     },
     "U->S": {
       "new": [],
-      "baseline": [],
+      "baseline": [
+        "F->G targetAccuracy",
+        "F->G sourceAccuracy"
+      ],
       "indistinguishable": [
         "B->E targetAccuracy",
         "B->E sourceAccuracy",
         "E->F targetAccuracy",
-        "E->F sourceAccuracy",
-        "F->G targetAccuracy",
-        "F->G sourceAccuracy"
+        "E->F sourceAccuracy"
       ],
       "not applicable": []
     },
@@ -3878,11 +3883,12 @@
         "B->E sourceAccuracy",
         "E->F targetAccuracy"
       ],
-      "baseline": [],
-      "indistinguishable": [
-        "E->F sourceAccuracy",
+      "baseline": [
         "F->G targetAccuracy",
         "F->G sourceAccuracy"
+      ],
+      "indistinguishable": [
+        "E->F sourceAccuracy"
       ],
       "not applicable": []
     }
