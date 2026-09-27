@@ -65,7 +65,7 @@ about twice.
 - [x] Notebook prose and table headings in Spanish; identifiers, JSON keys and `test_the_headings_are_spanish_and_the_keys_of_the_record_are_english`
       method names stay English, because they are a data contract rather than
       prose.
-- [x] Progress during the run prints one line per transfer, not one per run. It is `test_progress_prints_one_line_per_cell_and_names_that_cells_slowest_arm`
+- [x] Progress during the run prints one line per transfer, not one per run. It is `test_progress_prints_one_line_per_cell_and_names_no_timing`
       the only sign of life in a run measured in hours, so it is kept — but it is
       progress, not a report.
 
