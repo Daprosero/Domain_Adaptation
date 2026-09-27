@@ -20,6 +20,7 @@ the only thing standing between a pilot and a misquote.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -116,6 +117,142 @@ def upstream_pilot_scale() -> bool:
     lectura de siempre.
     """
     return False if is_rehearsal() else is_pilot_scale()
+
+
+# --------------------------------------------------- la escala de la ejecucion
+#
+# `is_pilot_scale()` lee un dial del ARCHIVO -- `EPOCHS`/`SEEDS` -- y ese dial
+# es una propiedad del REPOSITORIO, no de una corrida particular. Para el
+# recorrido LOCAL eso es exactamente correcto: es la misma persona editando el
+# mismo checkout entre un ensayo y el siguiente. Para un worker remoto es la
+# falla que el comentario de `REHEARSAL_ENV` ya describe para su propia
+# variable, un nivel mas abajo: el commit que la forja clono queda fijo desde
+# que se lo pidieron, asi que ese commit no puede tener una escala distinta
+# para el ensayo y para la corrida real sin dejar de ser el commit que se
+# pidio. Un cuaderno que sólo sabe leer `is_pilot_scale()` lee "ensayo" en
+# CUALQUIER worker -- hoy, `EPOCHS=3` y `SEEDS=[0]` son literales del archivo,
+# y nada que la sumision declare puede moverlos -- asi que a escala completa
+# los techos, la campaña y la comparacion de mecanismos venian de la
+# biblioteca mientras el cuaderno que un lector abre nunca corria a esa
+# escala. Las tres funciones de esta seccion son la lectura que falta: de que
+# EJECUCION se trata, nunca de que archivo.
+
+#: El directorio en el que la forja clono el commit fijado para ESTA
+#: submision. `runner_invoke.py` lo exporta con este mismo nombre para el
+#: kernel de cada cuaderno -- la celda 0 de cada uno ya lo lee para resolver
+#: `ROOT`, con la misma disciplina de "ausente es LOCAL, nunca `se adivina`"
+#: que esta lectura hereda en vez de reinventar. Su presencia es el unico
+#: hecho que distingue un worker de un portatil: nadie mas la pone.
+CLONE_ROOT_ENV = "FORGE_CLONE_ROOT"
+
+#: El modo de ESTA submision, y no del repositorio -- `"smoke"` en un ensayo
+#: remoto, ausente en una submision ordinaria. `runner_invoke.py`'s propio
+#: `submission_environment()` documenta por que la ausencia nunca es una
+#: cadena vacia: un `os.environ.get` tiene que poder distinguir "no se
+#: declaro modo" de "se declaro y da falso", y una cadena vacia confundiria
+#: las dos. Ausente NUNCA significa "local" -- sólo `CLONE_ROOT_ENV` decide
+#: eso -- significa "esta submision, sea local o remota, no se declaro un
+#: ensayo".
+RUN_MODE_ENV = "FORGE_RUN_MODE"
+
+#: Las unidades que ESTA submision posee: un arreglo JSON de strings, o la
+#: variable ausente por completo. `runner_invoke.py` las serializa con
+#: `json.dumps` en vez de unirlas con un separador por la razon que su propio
+#: comentario da -- un separador invita la ambiguedad que un JSON ya
+#: resuelve -- y la ausencia de la CLAVE, nunca el valor, es lo unico que
+#: separa "no se declararon unidades" de "se declararon cero". Esta lectura
+#: preserva esa distincion en vez de colapsarla, la misma disciplina que
+#: `is_rehearsal()` ya aplica sobre su propia variable.
+RUN_UNITS_ENV = "FORGE_RUN_UNITS"
+
+
+def execution_is_pilot_scale() -> bool:
+    """Si ESTA EJECUCION corre a escala de ensayo -- la pregunta que
+    `is_pilot_scale()` no puede contestar por si sola en un worker.
+
+    Tres casos, y los tres se distinguen:
+
+    - `CLONE_ROOT_ENV` ausente: esto corre en el portatil de una persona, y
+      el recorrido LOCAL no cambia ni un bit -- se repliega a
+      `is_pilot_scale()`, exactamente la lectura de siempre. Abrir un
+      cuaderno a mano hoy sigue haciendo lo mismo que hacia ayer.
+    - `CLONE_ROOT_ENV` puesto y `RUN_MODE_ENV == "smoke"`: un ensayo remoto,
+      la contraparte exacta de `is_rehearsal()` para la escala -- corre a
+      escala de ensayo PORQUE lo que se esta probando es si el cable lleva
+      corriente, nunca si el resultado se puede citar.
+    - `CLONE_ROOT_ENV` puesto y cualquier otro modo, o ninguno: una submision
+      ordinaria, remota y real, y la unica lectura que `is_pilot_scale()` no
+      podia dar jamas desde un cuaderno -- escala COMPLETA, sin que nadie
+      tenga que editar `EPOCHS`/`SEEDS` en el archivo para conseguirla.
+    """
+    if not os.environ.get(CLONE_ROOT_ENV):
+        return is_pilot_scale()
+    return os.environ.get(RUN_MODE_ENV) == "smoke"
+
+
+def execution_seed_units() -> "list[int] | None":
+    """Las `RUN_UNITS_ENV` de ESTA submision, en el vocabulario de este
+    repositorio: una unidad ES una semilla.
+
+    `__benchmark__["distribution"]["axis"]` declara `"seed"` como el unico eje
+    que una campaña puede repartir entre maquinas, y `run_campaign_shard`/
+    `run_mechanism_sweep_shard` sólo aceptan `seeds=` -- no hay un segundo eje
+    que una unidad pudiera nombrar. La forja misma no interpreta `units`: sus
+    propios comentarios en `remote_cli.py` las declaran identificadores
+    opacos que "esta funcion nunca lee", asi que decidir que es una unidad es
+    una decision de ESTE repositorio y no de la forja, y esta es su unica
+    lectura.
+
+    Tres formas, y las tres se distinguen:
+
+    - Ausente: esta submision nunca declaro unidades, asi que no hay reparto
+      que leer. Devuelve `None`, y el llamador lo lee como "la rejilla
+      entera" -- exactamente el valor por omision que `run_campaign_shard`/
+      `run_mechanism_sweep_shard` ya le dan a `seeds=None` hoy.
+    - Declarada vacia (`"[]"`): CERO unidades fueron decididas, un hecho
+      distinto de que nadie haya decidido nada. Devuelve `[]`, una lista
+      real y nunca `None` -- tratarla igual que la ausencia correria la
+      rejilla entera bajo una asignacion que dice explicitamente que a esta
+      maquina no le toco ninguna.
+    - Declarada con contenido: cada elemento tiene que ser el string de una
+      semilla entera. Cualquier otra cosa -- JSON invalido, un valor que no
+      es una lista, un elemento que no es string, o un string que `int()`
+      rechaza -- se RECHAZA, nunca se adivina: una semilla mal leida no
+      falla, corre con la semilla equivocada y el numero que produce se ve
+      exactamente igual al correcto.
+    """
+    crudo = os.environ.get(RUN_UNITS_ENV)
+    if crudo is None:
+        return None
+    try:
+        decodificado = json.loads(crudo)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"{RUN_UNITS_ENV}={crudo!r} no es JSON valido; una submision "
+            "que declara unidades tiene que declararlas en la forma que "
+            "`runner_invoke.py` serializa, o esta lectura no puede saber a "
+            "que semillas corresponden") from exc
+    if not isinstance(decodificado, list):
+        raise ValueError(
+            f"{RUN_UNITS_ENV}={crudo!r} no es un arreglo; `runner_invoke.py` "
+            "siempre serializa `units` como una lista de strings")
+    semillas: list[int] = []
+    for unidad in decodificado:
+        if not isinstance(unidad, str):
+            raise ValueError(
+                f"la unidad {unidad!r} de {RUN_UNITS_ENV} no es un string; "
+                "`runner_invoke.py` sólo serializa strings, y un elemento "
+                "que no lo sea es una submision que no siguio su propio "
+                "contrato")
+        try:
+            semillas.append(int(unidad))
+        except ValueError as exc:
+            raise ValueError(
+                f"la unidad {unidad!r} de {RUN_UNITS_ENV} no es una semilla "
+                "entera; este repositorio declara el eje de reparto como "
+                "semillas y ninguna otra cosa, asi que una unidad que no lo "
+                "sea no tiene una corrida que correr") from exc
+    return semillas
 
 
 # ------------------------------------------------------------------- material

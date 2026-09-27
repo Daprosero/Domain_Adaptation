@@ -2078,9 +2078,10 @@ def test_todo_cuaderno_que_entrena_imprime_la_escala_a_la_que_entrena() -> None:
 
     escalas = tuple(nombre for nombre in
                     ("EPOCHS", "SEEDS", "FULL_EPOCHS", "FULL_SEEDS",
-                     "is_pilot_scale", "upstream_pilot_scale")
+                     "is_pilot_scale", "upstream_pilot_scale",
+                     "execution_is_pilot_scale")
                     if hasattr(config, nombre))
-    assert len(escalas) == 6, (
+    assert len(escalas) == 7, (
         f"`config` dejó de declarar alguna escala que este control lee -> "
         f"{escalas}")
 
