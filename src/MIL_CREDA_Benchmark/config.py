@@ -758,7 +758,29 @@ TAU_LOCAL_RANGE = (0.1, 10.0)
 #: Cuántas evaluaciones por `(familia, transferencia)`. Una por trial: la
 #: repetición que daban las semillas la reemplaza el término de ruido que el GP
 #: estima para decidir dónde mirar.
-SEARCH_TRIALS = 30
+#:
+#: **Cuarenta y no treinta, y el número es del operador.** Separar los dos
+#: coeficientes de adaptación llevó el espacio de seis dimensiones a ocho
+#: (`CEILING_RANGE`/`CEILING_LOCAL_RANGE` y `RAMP_DELTA_RANGE`/
+#: `RAMP_DELTA_LOCAL_RANGE`), y treinta evaluaciones sobre ocho dimensiones son
+#: menos de cuatro por dimensión. La decisión fue subir a cuarenta y explícitamente
+#: no más: cuarenta son cinco por dimensión, sigue siendo una exploración fina, y
+#: el operador la eligió sabiéndolo.
+#:
+#: **Lo que este número NO resuelve, dicho acá para que nadie lo lea como que sí.**
+#: La búsqueda no se reparte entre máquinas --- `run_search` no toma `seeds`, su
+#: `shard` es sólo una etiqueta de directorio --- así que las seis transferencias
+#: por cuarenta trials corren en una sola sesión o no corren. Cuánto cuesta eso en
+#: la máquina que va a correrlo no está medido: la única proyección que existe es
+#: una regla de tres desde el ensayo local, y la propia forja se niega a proyectar
+#: porque el registro no guarda la duración de la corrida que lo produjo. Ese
+#: número se mide en el ensayo remoto, y es el que decide si ocho dimensiones son
+#: alcanzables.
+#:
+#: El ensayo se queda en cuatro y no acompaña la subida, a propósito: existe para
+#: probar que el cable anda, no para elegir nada. Subirlo lo haría más caro sin
+#: hacerlo más útil, y lo acercaría a parecer una búsqueda de verdad.
+SEARCH_TRIALS = 40
 PILOT_SEARCH_TRIALS = 4
 
 #: La única semilla que cada trial evalúa. Declarada y no sorteada: dos trials
