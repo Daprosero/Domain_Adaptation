@@ -2765,3 +2765,55 @@ def test_the_record_provenance_guard_is_closed(tmp_path, monkeypatch) -> None:
         "clause 3 of the record-provenance guard is open: a noise-diagnostic "
         f"step is declared again ({sorted(declared & retired)}), so a sweep "
         "can be re-stamped without having been checked")
+
+
+def test_las_tres_puertas_al_grid_completo_piden_autorizacion(monkeypatch) -> None:
+    """El testigo del acuerdo entero, que son tres puertas y dos direcciones.
+
+    El acuerdo dice que la rejilla completa no se lanza sin autorizacion
+    explicita, y que ni una verificacion limpia ni un piloto verde son
+    permiso. Hay TRES entradas que llegan a treinta semillas y veinte
+    epocas, y cada una tiene su propio test. Apuntarle el testigo a una sola
+    dejaria que la puerta probada se lea como prueba de las tres --- que es
+    exactamente como la tercera estuvo abierta mientras las otras dos
+    parecian cubiertas.
+
+    Y las dos direcciones juntas, no una: que se niegue localmente, y que NO
+    se niegue en un worker. Un guardia demasiado celoso clausura el unico
+    camino autorizado que existe --- el que la forja habilita con su token
+    antes de que el proceso arranque --- y eso seria peor que el agujero.
+
+    Mutaciones: quitar cualquiera de los tres guardias hace caer su mitad
+    local; hacer que cualquiera ignore `CLONE_ROOT_ENV` hace caer su mitad
+    de worker. Ninguna hace caer las otras dos puertas.
+    """
+    import sys
+    from pathlib import Path as _P
+    raiz = _P(__file__).resolve().parents[1]
+    if str(raiz / "tools") not in sys.path:
+        sys.path.insert(0, str(raiz / "tools"))
+    from MIL_CREDA_Benchmark import harness as _h
+    import distribute as _d
+
+    def no_debe_llegar(*a, **k):
+        raise AssertionError("el guardia no se interpuso antes de entrenar")
+
+    puertas = (
+        ("run_campaign_shard", lambda: _h.run_campaign_shard(pilot=False)),
+        ("run_mechanism_sweep_shard", lambda: _h.run_mechanism_sweep_shard(pilot=False)),
+        ("distribute.run_shard", lambda: _d.run_shard("s00", [0])),
+    )
+
+    monkeypatch.setattr(_h, "resolve_device", no_debe_llegar)
+
+    for nombre, llamar in puertas:
+        monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+        monkeypatch.delenv(config.LOCAL_FULL_SCALE_ENV, raising=False)
+        with pytest.raises(SystemExit) as caido:
+            llamar()
+        assert config.LOCAL_FULL_SCALE_ENV in str(caido.value), (
+            f"{nombre} se nego sin nombrar como autorizar")
+
+        monkeypatch.setenv(config.CLONE_ROOT_ENV, "/clon/del/worker")
+        with pytest.raises(AssertionError, match="no se interpuso"):
+            llamar()
