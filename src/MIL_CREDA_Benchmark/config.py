@@ -640,19 +640,63 @@ SEARCH_ENGINE = "optuna"
 #: El rango sobre el que se busca, en escala logarítmica. Son los extremos de la
 #: rejilla que reemplaza: lo que cambia es que adentro ya no hay cinco puntos
 #: sino un continuo.
+#:
+#: `lambda_glob` de la Ec. (39) -- Decision: leído por `ceiling_for`/
+#: `reduction.ceilings`. Ver `CEILING_LOCAL_RANGE` para el segundo coeficiente
+#: que esta constante ya no tiene que cubrir sola.
 CEILING_RANGE = (1e-4, 1.0)
 
-# ---------------------------------------------- las otras cinco dimensiones
+#: `lambda_loc` de la Ec. (39): el segundo coeficiente que este mismo `objective.
+#: total_objective` siempre aceptó por separado (su propia firma y docstring lo
+#: dicen) y que hasta esta etapa el harness financiaba con el MISMO número que
+#: `lambda_glob` -- una rampa, un techo, pasado dos veces. Ese acoplamiento era el
+#: defecto, no una decisión de la Ec. (39): el comentario que solía vivir en esta
+#: sección, más abajo, argumentaba lo contrario y quedó falsificado por este mismo
+#: cambio; ver la nota nueva donde estaba.
+#:
+#: **Su propio rango, no un alias del global, y la diferencia es la decisión.**
+#: Escrito `= CEILING_RANGE` quedaba acoplado a un número que tiene un paper
+#: detrás: el piso de `CEILING_RANGE` es el techo PUBLICADO de CREDA. Mover ese
+#: piso --legítimo, porque responde a CREDA-- arrastraba en silencio al
+#: coeficiente local, que es exactamente lo que este cambio acaba de declarar
+#: independiente. Dos números iguales hoy y una sola decisión mañana.
+#:
+#: **El tope, 1.0, no se presta del global: es el neutro de la Ec. (39) misma**
+#: (`MILCREDA_CEILING`). Peso uno significa "el término entra tal como la
+#: ecuación lo escribe"; pasar de ahí afirmaría que el término local necesita más
+#: peso que el supervisado, y esa es una decisión que nadie tomó.
+#:
+#: **El piso, 1e-4, es una ELECCIÓN declarada y no una medición**, y se dice así
+#: de frente: CREDA no tiene término local, así que no hay ningún valor publicado
+#: del que partir --- ni acá ni en ninguna parte. Lo que el número dice es
+#: "suficientemente chico para que el término esté apagado", y las cuatro décadas
+#: que abre en escala logarítmica son el espacio donde la búsqueda decide.
+#:
+#: **Y la búsqueda avisa si la ventana quedó mal puesta**: un ganador pegado a
+#: cualquiera de los dos bordes es la señal de que el rango, y no el criterio,
+#: eligió. Ese es el control que reemplaza al piso medido que este término no
+#: puede tener.
+CEILING_LOCAL_RANGE = (1e-4, 1.0)
+
+# ---------------------------------------------- las otras siete dimensiones
 #
-# The search covers six dimensions now, not one: the ramp ceiling above, and the
-# five below. Every one is an Eq. (39)/Eq. (15)/Eq. (16)/Eq. (28) constant this
-# file otherwise declares fixed -- `lambda_glob`/`lambda_loc` are NOT among them,
-# because both come out of the shared ramp (`harness.ramp`, then
-# `total_objective(..., coefficient, coefficient)`) and a second, independent
-# coefficient for each would be a change to Eq. (39) itself, not a search over
-# it. `ATTENTION_WIDTH` also stays out and fixed: it sizes `R_phi`'s hidden
-# layer, an architectural choice with no equation attached, never a
-# hyperparameter Eq. (15) itself names.
+# The search covers eight dimensions now, not six: the two ramp ceilings above
+# (`CEILING_RANGE`/`CEILING_LOCAL_RANGE`), the two ramp growth rates below
+# (`RAMP_DELTA_RANGE`/`RAMP_DELTA_LOCAL_RANGE`), and the four that follow them.
+# Every one is an Eq. (39)/Eq. (15)/Eq. (16)/Eq. (28) constant this file
+# otherwise declares fixed.
+#
+# `lambda_glob`/`lambda_loc` used NOT to be among them, on the premise that both
+# came out of the one shared ramp (`harness.ramp`, then `total_objective(...,
+# coefficient, coefficient)`) and a second, independent coefficient for each
+# would change Eq. (39) itself rather than search over it. That premise was
+# backwards: Eq. (39) already names two coefficients -- `MIL_CREDA.objective.
+# total_objective`'s own signature and docstring always took `lambda_global`
+# and `lambda_local` apart -- so giving each its own schedule is not a change to
+# the equation, it is the harness finally matching an equation it had been
+# under-applying. `ATTENTION_WIDTH` stays out and fixed for the reason this
+# section always gave: it sizes `R_phi`'s hidden layer, an architectural choice
+# with no equation attached, never a hyperparameter Eq. (15) itself names.
 #
 # Each range is declared beside where it came from, the same discipline
 # `CEILING_RANGE`'s own comment already applies -- log scale where the constant
@@ -668,6 +712,17 @@ CEILING_RANGE = (1e-4, 1.0)
 #: neutral by the end of a full run" to "a step function in the first epoch" --
 #: the two qualitative regimes a growth-rate search has to be able to reach.
 RAMP_DELTA_RANGE = (1.0, 100.0)
+
+#: How fast the LOCAL term's ramp climbs -- `lambda_loc`'s own growth rate,
+#: independent of `lambda_glob`'s above. Reuses `RAMP_DELTA_RANGE`'s bracket
+#: outright rather than re-deriving one, and unlike `CEILING_LOCAL_RANGE` this
+#: reuse is not a weaker stand-in: growth SPEED is a property of a schedule
+#: climbing from zero to whatever ceiling it was given, over the fraction of
+#: training elapsed (`CREDA.schedules.creda_ramp`'s own math), and nothing in
+#: that shape is specific to which term or which method the coefficient belongs
+#: to. The same "barely past neutral" to "step function in the first epoch"
+#: argument `RAMP_DELTA_RANGE` already makes applies unchanged.
+RAMP_DELTA_LOCAL_RANGE = RAMP_DELTA_RANGE
 
 #: Decision 1's one bandwidth. `KERNEL_SIGMA`'s own docstring already declares it
 #: "a placeholder to be tuned with Optuna alongside the ceiling search", measured
@@ -842,6 +897,19 @@ DIMENSIONS = {
     "targetAccuracy": HIGHER,
     "sourceAccuracy": HIGHER,
     "contribution": DESCRIPTIVE,
+    #: `contributionGlobal`/`contributionLocal` (the two terms `contribution`
+    #: sums, on their own coefficient each -- see `harness.run_one`'s own
+    #: docstring) are deliberately NOT declared here. This dict is
+    #: `summarize()`'s own iteration set (`harness.py`: `for dimension in
+    #: config.DIMENSIONS: ... r[dimension]`) and `shards.partition`'s
+    #: (`harness.py:2236`) -- both HARD-require every run dict to carry every
+    #: key declared here, across the whole campaign grid and every shard.
+    #: Widening that set is a decision about pooling and shard-agreement
+    #: policy for two new dimensions, which belongs to whoever owns
+    #: `MIL_CREDA_Benchmark/__init__.py`'s `distribution` declaration (outside
+    #: this stretch's authorized scope) and not to this constant alone. The two
+    #: fields still exist, on every run's own record (`harness.run_one`'s
+    #: returned dict) -- just not pooled, tabled or shard-compared yet.
     #: The supervised magnitude and the adaptation's share of the objective.
     #: `contribution` alone cannot separate a term that commanded nothing from a
     #: term that was scaled to nothing, and both print as a small number. The two
@@ -1303,30 +1371,43 @@ def ceilings_by_transfer_on_record(
             for family, entry in found.items()}
 
 
-#: The other five dimensions the six-dimensional search explores beside the
-#: ceiling, in the order `harness.search_ceilings_trials` declares them. Named
-#: once here so `hyper_by_transfer_on_record`/`hyper_pooled_on_record` and
-#: `harness.Reduction`'s own field list cannot drift apart on which five they
+#: The other seven dimensions the eight-dimensional search explores beside the
+#: GLOBAL ceiling (`ceiling_for`/`reduction.ceilings`/`ceilingsByTransfer`), in
+#: the order `harness.search_ceilings_trials` declares them. Named once here so
+#: `hyper_by_transfer_on_record`/`hyper_pooled_on_record` and
+#: `harness.Reduction`'s own field list cannot drift apart on which seven they
 #: mean.
-HYPER_DIMENSIONS = ("rampDelta", "kernelSigma", "attentionGamma",
-                    "attentionTemperature", "tauLocal")
+#:
+#: `ceilingLocal` and `rampDeltaLocal` are the two this stretch of work added:
+#: the LOCAL term's own ceiling and growth rate, resolved through this exact
+#: same per-transfer/pooled-fallback machinery `hyper_for` already gave the
+#: other five rather than through a second copy of `ceiling_for`'s own
+#: stamp-drift refusal. That refusal still protects both halves of the split:
+#: `ceiling_for`'s check runs against `reduction.ceilingSearch`, which stamps
+#: the whole family's search (both coefficients, searched together, in one
+#: record) and not the GLOBAL ceiling alone, so a stale record is caught before
+#: either coefficient is read, exactly the reasoning `hyper_for`'s own
+#: docstring already gives for the other five.
+HYPER_DIMENSIONS = ("rampDelta", "rampDeltaLocal", "ceilingLocal", "kernelSigma",
+                    "attentionGamma", "attentionTemperature", "tauLocal")
 
 
 def hyper_by_transfer_on_record(
         pilot: "bool | None" = None) -> dict[str, dict[str, dict[str, float]]]:
-    """The OTHER five searched dimensions' per-transfer winners, read from the
+    """The OTHER seven searched dimensions' per-transfer winners, read from the
     same record `ceilings_by_transfer_on_record` reads its own pick from.
 
-    `harness.search_ceilings_trials` writes `rampDelta`/`kernelSigma`/
-    `attentionGamma`/`attentionTemperature`/`tauLocal` into `perTransfer[label]`
-    beside `ceiling` itself -- that transfer's own winning trial, entire, not
-    only its ceiling. This reads that same sub-dict back, narrowed to
-    `HYPER_DIMENSIONS`, keyed the same way `ceilingsByTransfer` is
-    (`{family: {label: {dim: value}}}`). A record written before this stretch's
-    six-dimensional search simply has no `perTransfer[label][dim]` for any of
-    the five, and an absent dimension is read exactly like an absent transfer:
-    the caller falls back to the pooled winner, and `harness.hyper_for` falls
-    back further, to the declared `config` constant.
+    `harness.search_ceilings_trials` writes `rampDelta`/`rampDeltaLocal`/
+    `ceilingLocal`/`kernelSigma`/`attentionGamma`/`attentionTemperature`/
+    `tauLocal` into `perTransfer[label]` beside `ceiling` itself -- that
+    transfer's own winning trial, entire, not only its (global) ceiling. This
+    reads that same sub-dict back, narrowed to `HYPER_DIMENSIONS`, keyed the
+    same way `ceilingsByTransfer` is (`{family: {label: {dim: value}}}`). A
+    record written before this stretch's eight-dimensional search simply has
+    no `perTransfer[label][dim]` for any of the seven, and an absent dimension
+    is read exactly like an absent transfer: the caller falls back to the
+    pooled winner, and `harness.hyper_for` falls back further, to the declared
+    `config`/`Reduction` constant.
     """
     record, _ = ceilings_record_at(pilot)
     if record is None:
@@ -1346,7 +1427,7 @@ def hyper_by_transfer_on_record(
 
 
 def hyper_pooled_on_record(pilot: "bool | None" = None) -> dict[str, dict[str, float]]:
-    """The OTHER five searched dimensions' pooled winner, one per family --
+    """The OTHER seven searched dimensions' pooled winner, one per family --
     the sibling of `ceilings_on_record`, over `HYPER_DIMENSIONS` instead of
     `ceiling` alone.
 

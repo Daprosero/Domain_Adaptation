@@ -297,6 +297,21 @@ class Reduction:
     #: campaign to stamp. Same rule as the three above: `hyper_for`'s winner
     #: first, this scalar (`config.TAU_LOCAL`) only where nothing was searched.
     tauLocal: float = field(default_factory=lambda: config.TAU_LOCAL)
+    #: Eq. (39)'s SECOND coefficient's own ceiling -- `lambda_loc`'s, apart
+    #: from `lambda_glob`'s `ceilings`/`ceilingsByTransfer` below. Resolved
+    #: through `hyper_for` exactly like `kernelSigma`/`tauLocal` above (a
+    #: pooled scalar fallback, `hyperByTransfer`'s own per-transfer winner
+    #: first), never through `ceiling_for` -- that function, and the
+    #: `ceilings`/`ceilingsByTransfer` fields it reads, stay the GLOBAL
+    #: coefficient's alone, unrepointed, because every out-of-scope reader of
+    #: them (`tables.py`, `MIL_CREDA_Benchmark/__init__.py`) already assumes
+    #: one number is "the" ceiling. `config.RAMP_CEILING` is the right default
+    #: for the same reason it is `ceilings`' own fallback (`ceiling_for`'s
+    #: `pooled = reduction.ceilings.get(family, config.RAMP_CEILING)`): MIL-
+    #: CREDA's neutral of 1.0 is the neutral for EITHER coefficient of a
+    #: normalized Eq. (39), not only the global one -- see `objective.
+    #: total_objective`'s own docstring, "both coefficients at zero reduce...".
+    ceilingLocal: float = field(default_factory=lambda: config.RAMP_CEILING)
     #: What each family searched and kept for its derivations. Empty until the
     #: search has run, and then carried beside every number it produced — a
     #: coefficient chosen by measurement is part of the bounds, not a detail.
@@ -308,15 +323,21 @@ class Reduction:
     ceilingsByTransfer: dict = field(
         default_factory=lambda: {family: dict(picks) for family, picks
                                  in config.CEILINGS_BY_TRANSFER.items()})
-    #: The other four searched dimensions' per-transfer picks -- `rampDelta`,
-    #: `kernelSigma`, `attentionGamma`, `attentionTemperature`, `tauLocal` --
-    #: keyed the same way `ceilingsByTransfer` is (`{family: {label: {dim:
-    #: value}}}`). `hyper_for` reads this before falling back to the scalar
-    #: fields above, the identical two-reading rule `ceiling_for` already
-    #: applies to the coefficient.
+    #: The other seven searched dimensions' per-transfer picks -- `rampDelta`,
+    #: `rampDeltaLocal`, `ceilingLocal`, `kernelSigma`, `attentionGamma`,
+    #: `attentionTemperature`, `tauLocal` -- keyed the same way
+    #: `ceilingsByTransfer` is (`{family: {label: {dim: value}}}`). `hyper_for`
+    #: reads this before falling back to the scalar fields above, the
+    #: identical two-reading rule `ceiling_for` already applies to the global
+    #: coefficient.
     hyperByTransfer: dict = field(default_factory=dict)
     ceilingSearch: dict = field(default_factory=dict)
     rampDelta: float = config.RAMP_DELTA
+    #: `lambda_loc`'s own growth rate, apart from `lambda_glob`'s `rampDelta`
+    #: above -- the same pooled-scalar-with-per-transfer-override rule, read
+    #: through `hyper_for`, never through the bare field directly (exactly how
+    #: `rampDelta` itself is meant to be read: `hyper_for`'s own docstring).
+    rampDeltaLocal: float = config.RAMP_DELTA
     device: str = "cpu"
     environment: dict = field(default_factory=dict)
 
@@ -485,17 +506,25 @@ def ceiling_for(reduction: Reduction, family: str | None,
 
 def hyper_for(reduction: Reduction, family: str | None,
              transfer: tuple[str, str]) -> dict:
-    """The other five searched dimensions in force for one family on one
-    transfer: `rampDelta`, `kernelSigma`, `attentionGamma`,
-    `attentionTemperature`, `tauLocal`.
+    """The other seven searched dimensions in force for one family on one
+    transfer: `rampDelta`, `rampDeltaLocal`, `ceilingLocal`, `kernelSigma`,
+    `attentionGamma`, `attentionTemperature`, `tauLocal`.
+
+    `ceilingLocal`/`rampDeltaLocal` are Eq. (39)'s SECOND coefficient's own
+    bounds -- `lambda_loc`'s ceiling and growth rate, resolved here rather
+    than through `ceiling_for` because that function, and the
+    `ceilings`/`ceilingsByTransfer` fields it reads, are kept as the GLOBAL
+    coefficient's alone (see `Reduction.ceilingLocal`'s own field comment for
+    why). They get the identical two-reading rule the original five dimensions
+    already had, not a narrower one.
 
     The identical two-reading rule `ceiling_for` already applies to the
-    coefficient, carried to the five dimensions beside it: on a transfer the
-    search measured, that transfer's own winner (`reduction.hyperByTransfer`);
-    on one it never saw, or with nothing searched at all, `reduction`'s own
-    scalar fields -- which are `config`'s declared constants unless a caller
-    overrode them, exactly what every arm trained at before this search
-    existed.
+    (global) coefficient, carried to the seven dimensions beside it: on a
+    transfer the search measured, that transfer's own winner (`reduction.
+    hyperByTransfer`); on one it never saw, or with nothing searched at all,
+    `reduction`'s own scalar fields -- which are `config`'s declared constants
+    unless a caller overrode them, exactly what every arm trained at before
+    this search existed.
 
     **Read for every arm, `family=None` included.** `ceiling_for` returns the
     neutral for a family with no adaptation term, because the coefficient it
@@ -514,7 +543,10 @@ def hyper_for(reduction: Reduction, family: str | None,
     identical `pilot`, so a drifted record is refused there, before either
     dict is ever attached to a `Reduction`.
     """
-    pooled = {"rampDelta": reduction.rampDelta, "kernelSigma": reduction.kernelSigma,
+    pooled = {"rampDelta": reduction.rampDelta,
+              "rampDeltaLocal": reduction.rampDeltaLocal,
+              "ceilingLocal": reduction.ceilingLocal,
+              "kernelSigma": reduction.kernelSigma,
               "attentionGamma": reduction.attentionGamma,
               "attentionTemperature": reduction.attentionTemperature,
               "tauLocal": reduction.tauLocal}
@@ -535,16 +567,17 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     the grid; the campaign passes each family's found value, so every arm derived
     from a family inherits the one that family searched.
 
-    `hyper` overrides Decision 1's bandwidth and Eq. (15)/(16)/(28)'s three
+    `hyper` overrides Decision 1's bandwidth, Eq. (15)/(16)/(28)'s three
     hyperparameters (`kernelSigma`, `attentionGamma`, `attentionTemperature`,
-    `tauLocal`) and the ramp's own growth rate (`rampDelta`) for this run --
-    `search_ceilings_trials` is the one caller that passes it explicitly,
-    walking its own six-dimensional space, one trial at a time.
+    `tauLocal`), the GLOBAL ramp's own growth rate (`rampDelta`), and the
+    LOCAL term's own ceiling and growth rate (`ceilingLocal`, `rampDeltaLocal`)
+    for this run -- `search_ceilings_trials` is the one caller that passes it
+    explicitly, walking its own eight-dimensional space, one trial at a time.
 
     **Omitted, and this is the wiring that changed**: this call resolves
     `hyper_for(reduction, family, transfer)` itself -- the identical
     two-reading rule `ceiling` already gets from `ceiling_for` when a caller
-    omits IT, carried to the other five dimensions. A campaign never passes
+    omits IT, carried to the other seven dimensions. A campaign never passes
     `hyper` explicitly and never needed to: what the search found already
     reaches every arm of the transfer it was measured on, through
     `reduction.hyperByTransfer` (populated by `with_ceilings_in_force`, the
@@ -553,6 +586,21 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     resolves to exactly its own scalar fields -- `config`'s declared constants
     unless a caller overrode them -- so a caller with no search record trains
     exactly as every caller did before this override existed.
+
+    **Two ramps, not one.** Eq. (39) names two coefficients
+    (`total_objective`'s own signature); before this stretch of work this
+    function derived one `coefficient` and handed it to `training_step` twice
+    (`wiring.Arm.training_step`'s own docstring names the old call). Now it
+    derives `coefficient` (the global term's, from `ceiling`/`ceiling_for` and
+    `rampDelta` exactly as before) and `coefficient_local` (the local term's,
+    from `hyper["ceilingLocal"]`/`hyper["rampDeltaLocal"]`, new) and passes
+    both. `ceiling=` — the single-scalar override the ceiling search's grid
+    engine and every existing caller of this parameter already use — still
+    names the GLOBAL ceiling alone; the grid engine never searched the local
+    one and still does not (`config.SEARCH_ENGINE == "grid"`'s own docstring
+    in `ceiling_record.py`), so its runs keep training the local term at
+    whatever `hyper_for`/`hyper` resolves it to: the declared neutral unless a
+    caller overrode `ceilingLocal` by hand.
 
     `role` is which material the run is judged on. The search reads `valid` and
     the campaign reads `eval`, and they are disjoint by construction — a
@@ -593,24 +641,30 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
     steps = -(-config.TRAIN_BAGS // config.BAGS_PER_STEP)
     # `hyper` is never `None` past the resolution above -- `hyper_for` always
-    # returns all five keys, `config`'s own defaults where nothing searched --
-    # so this reads the resolved value directly rather than defending against
-    # an absence that cannot happen here any more.
+    # returns all seven keys, `config`'s/`reduction`'s own defaults where
+    # nothing searched -- so this reads the resolved values directly rather
+    # than defending against an absence that cannot happen here any more.
     ramp_delta = hyper.get("rampDelta", config.RAMP_DELTA)
+    ramp_delta_local = hyper.get("rampDeltaLocal", config.RAMP_DELTA)
 
     curve: list[dict] = []
     epochs_record: list[dict] = []
 
     model.train()
     for epoch in range(reduction.epochs):
-        # The family's ceiling on this transfer, or the one this call was
-        # handed. Never a global: each family keeps what it searched, its
-        # derivations inherit it, and a transfer the search measured keeps its
-        # own pick rather than the pooled one.
+        # The family's GLOBAL ceiling on this transfer, or the one this call
+        # was handed. Never a pooled cross-family value: each family keeps
+        # what it searched, its derivations inherit it, and a transfer the
+        # search measured keeps its own pick rather than the pooled one.
         top = (ceiling_for(reduction, family, transfer)
                if ceiling is None else ceiling)
         coefficient = ramp(epoch, reduction.epochs, family, ceiling=top,
                           delta=ramp_delta)
+        # The LOCAL term's own ceiling, resolved through `hyper` alone --
+        # `ceiling=` never overrides it, see the docstring above.
+        top_local = hyper.get("ceilingLocal", config.RAMP_CEILING)
+        coefficient_local = ramp(epoch, reduction.epochs, family,
+                                 ceiling=top_local, delta=ramp_delta_local)
         for group in optimizer.param_groups:
             group["lr"] = learning_rate(epoch, reduction.epochs)
 
@@ -619,12 +673,16 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
             x = torch.stack([item[0] for item in items]).to(device)
             y = torch.tensor([item[1] for item in items], device=device)
             optimizer.zero_grad()
-            step = model.training_step(x, y, coefficient, generator)
+            step = model.training_step(x, y, coefficient, generator,
+                                       ramp_local=coefficient_local)
             step["loss"].backward()
             optimizer.step()
             curve.append({"epoch": epoch, "ramp": coefficient,
+                          "rampLocal": coefficient_local,
                           "supervised": step["supervised"],
                           "adaptation": step["adaptation"],
+                          "contributionGlobal": step["contributionGlobal"],
+                          "contributionLocal": step["contributionLocal"],
                           "contribution": step["contribution"]})
 
         epochs_record.append({
@@ -633,7 +691,6 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
             "targetAccuracy": accuracy(model, judged_target, device),
         })
 
-    contributions = [abs(point["contribution"]) for point in curve]
     # The supervised magnitude has to leave this function or it is gone: the curve
     # is discarded at the end of the run and no checkpoint can recover it. Without
     # it `contribution` is a bare number, and "the term commanded nothing" and "the
@@ -642,7 +699,26 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     # the ratio is the quantity that normalization exists to make meaningful.
     supervised = [abs(point["supervised"]) for point in curve]
     mean_supervised = sum(supervised) / len(supervised) if supervised else 0.0
-    mean_contribution = sum(contributions) / len(contributions) if contributions else 0.0
+    # `contributionGlobal`/`contributionLocal`, meaned separately -- each on its
+    # OWN coefficient (`wiring.Arm.training_step`'s own return dict) -- so
+    # "the global term did the work and the local did nothing" is readable
+    # apart from its reverse, which a single meaned `contribution` could never
+    # show. `mean_contribution` stays the derivable SUM of the two, never
+    # recomputed from a re-summed curve: `MIL_CREDA_Benchmark/__init__.py`'s
+    # own `components`/`dimensions` declarations and `tables.py`'s renderers
+    # already read `contribution` as a bare total and neither file is in this
+    # stretch's authorized scope to repoint at the split, so a reader unaware
+    # of `contributionGlobal`/`contributionLocal` sees exactly the number it
+    # always did.
+    contributions_global = [abs(point["contributionGlobal"]) for point in curve]
+    contributions_local = [abs(point["contributionLocal"]) for point in curve]
+    mean_contribution_global = (
+        sum(contributions_global) / len(contributions_global)
+        if contributions_global else 0.0)
+    mean_contribution_local = (
+        sum(contributions_local) / len(contributions_local)
+        if contributions_local else 0.0)
+    mean_contribution = mean_contribution_global + mean_contribution_local
     # The last epoch's evaluation is the final one; measuring it again would cost
     # two more passes over both evaluation sets in every one of the runs.
     final = epochs_record[-1]
@@ -660,9 +736,14 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         "sourceAccuracy": final["sourceAccuracy"],
         "parameters": sum(p.numel() for p in model.parameters()),
         "contribution": mean_contribution,
+        "contributionGlobal": mean_contribution_global,
+        "contributionLocal": mean_contribution_local,
         "supervised": mean_supervised,
         # An arm with no adaptation term reports zero rather than a ratio, because
         # a floor has no share to command and a nan would propagate into the table.
+        # Unchanged in FORMULA by the split -- still the aggregate share of both
+        # terms together -- but now correctly computed from two potentially
+        # different coefficients rather than one shared one.
         "adaptationShare": (
             mean_contribution / (mean_supervised + mean_contribution)
             if (mean_supervised + mean_contribution) > 0 else 0.0
@@ -700,11 +781,16 @@ def run_mechanism(mechanism: str, transfer: tuple[str, str], seed: int,
     comparison's own `run_one`.
 
     Trains `G`'s full method (`wiring.build_mechanism`, always) with
-    Eq. (15)/(16) replaced by `mechanism`; the ceiling and the other five
+    Eq. (15)/(16) replaced by `mechanism`; the ceiling and the other seven
     searched dimensions still resolve through `ceiling_for`/`hyper_for`
     against `MECHANISM_FAMILY`, the identical two-reading rule every declared
     arm of that family already gets, so the comparison trains under the same
-    searched bounds a real campaign would.
+    searched bounds a real campaign would -- Eq. (39)'s two coefficients
+    included, resolved and passed apart exactly as `run_one` now does, rather
+    than left on the single shared `ramp` this function used before that
+    stretch of work: nothing about which attention mechanism a bag uses makes
+    the two adaptation terms any less independent than they are for a
+    declared arm of the same family.
     """
     torch.manual_seed(seed)
     generator = torch.Generator().manual_seed(seed + 9973)
@@ -732,12 +818,16 @@ def run_mechanism(mechanism: str, transfer: tuple[str, str], seed: int,
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
     steps = -(-config.TRAIN_BAGS // config.BAGS_PER_STEP)
     ramp_delta = hyper.get("rampDelta", config.RAMP_DELTA)
+    ramp_delta_local = hyper.get("rampDeltaLocal", config.RAMP_DELTA)
 
     model.train()
     for epoch in range(reduction.epochs):
         top = ceiling_for(reduction, MECHANISM_FAMILY, transfer)
         coefficient = ramp(epoch, reduction.epochs, MECHANISM_FAMILY,
                           ceiling=top, delta=ramp_delta)
+        top_local = hyper.get("ceilingLocal", config.RAMP_CEILING)
+        coefficient_local = ramp(epoch, reduction.epochs, MECHANISM_FAMILY,
+                                 ceiling=top_local, delta=ramp_delta_local)
         for group in optimizer.param_groups:
             group["lr"] = learning_rate(epoch, reduction.epochs)
 
@@ -746,7 +836,8 @@ def run_mechanism(mechanism: str, transfer: tuple[str, str], seed: int,
             x = torch.stack([item[0] for item in items]).to(device)
             y = torch.tensor([item[1] for item in items], device=device)
             optimizer.zero_grad()
-            step = model.training_step(x, y, coefficient, generator)
+            step = model.training_step(x, y, coefficient, generator,
+                                       ramp_local=coefficient_local)
             step["loss"].backward()
             optimizer.step()
 
@@ -1569,15 +1660,29 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
     low, high = config.CEILING_RANGE
     seed = config.SEARCH_SEED
     ruido = config.SEARCH_RESOLUTION
-    # The other five dimensions, each with its own declared range -- see
-    # `config.RAMP_DELTA_RANGE`/`KERNEL_SIGMA_RANGE`/`ATTENTION_GAMMA_RANGE`/
-    # `ATTENTION_TEMPERATURE_RANGE`/`TAU_LOCAL_RANGE` for where every one came
-    # from. Not `lambda_glob`/`lambda_loc`: both are the shared ramp
-    # (`ramp(...)`, then `total_objective(..., coefficient, coefficient)`), and
-    # a second, independent coefficient for each would change Eq. (39) itself
-    # rather than search over it.
+    # The other seven dimensions, each with its own declared range -- see
+    # `config.CEILING_LOCAL_RANGE`/`RAMP_DELTA_RANGE`/`RAMP_DELTA_LOCAL_RANGE`/
+    # `KERNEL_SIGMA_RANGE`/`ATTENTION_GAMMA_RANGE`/`ATTENTION_TEMPERATURE_RANGE`/
+    # `TAU_LOCAL_RANGE` for where every one came from.
+    #
+    # `ceilingLocal`/`rampDeltaLocal` -- `lambda_loc`'s own ceiling and growth
+    # rate -- used NOT to be here, on the premise that both coefficients came
+    # out of the one shared ramp (`ramp(...)`, then `total_objective(...,
+    # coefficient, coefficient)`) and a second, independent coefficient for
+    # each would change Eq. (39) itself rather than search over it. That
+    # premise was backwards: `MIL_CREDA.objective.total_objective`'s own
+    # signature always took `lambda_global` and `lambda_local` apart, so
+    # giving each its own schedule is not a change to the equation -- it is
+    # this search finally exploring the equation as written. `ceiling`/
+    # `rampDelta` above stay `lambda_glob`'s alone, read by `run_one` through
+    # `ceiling_for`/`hyper_for` exactly as before; `ceilingLocal`/
+    # `rampDeltaLocal` reach it through `hyper_for` alone (`Reduction.
+    # ceilingLocal`'s own field comment says why `ceiling_for` is not
+    # repointed).
     hyper_ranges = {
         "rampDelta": (config.RAMP_DELTA_RANGE, True),
+        "rampDeltaLocal": (config.RAMP_DELTA_LOCAL_RANGE, True),
+        "ceilingLocal": (config.CEILING_LOCAL_RANGE, True),
         "kernelSigma": (config.KERNEL_SIGMA_RANGE, True),
         "attentionGamma": (config.ATTENTION_GAMMA_RANGE, False),
         "attentionTemperature": (config.ATTENTION_TEMPERATURE_RANGE, True),
@@ -1649,18 +1754,29 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
              for d in per_transfer.values()], ruido)
         found[family] = {
             "arm": arm_id,
+            # `lambda_glob`'s ceiling. Kept under this bare, un-prefixed name
+            # deliberately -- `config.ceilings_on_record`'s own `entry["ceiling"]`
+            # and every out-of-scope reader of it (`tables.py`) already read it
+            # this way, and this stretch of work does not repoint them.
             "ceiling": agrupado["ceiling"],
-            # The five other searched dimensions, pooled the identical way
+            # The seven other searched dimensions, pooled the identical way
             # `ceiling` itself is: the smallest-ceiling winner among the
             # per-transfer plateau, and whichever combination of the other
-            # four that trial happened to run under -- see `ceiling_record.
-            # choose`'s own docstring. `harness.run_one` never resolves these
-            # from `reduction` automatically (only the search's explicit
-            # `hyper=` reaches them); a searched value here is recorded, not
-            # applied, exactly as `KERNEL_SIGMA`'s own declared default is a
-            # hand-set number from a one-time measurement rather than
-            # something a run reads out of this file.
+            # six that trial happened to run under -- see `ceiling_record.
+            # choose`'s own docstring. A searched value here is recorded, not
+            # applied by `run_one` from THIS dict directly -- `hyper_for`
+            # reads it back out of `reduction.hyperByTransfer`/`ceilingLocal`
+            # once `with_ceilings_in_force` has attached it -- exactly as
+            # `KERNEL_SIGMA`'s own declared default is a hand-set number from
+            # a one-time measurement rather than something a run reads out of
+            # this file directly.
+            #
+            # `ceilingLocal`/`rampDeltaLocal`: `lambda_loc`'s own ceiling and
+            # growth rate, apart from `lambda_glob`'s above -- see the note on
+            # `hyper_ranges` a few lines up for why these two are new.
             "rampDelta": agrupado["rampDelta"],
+            "rampDeltaLocal": agrupado["rampDeltaLocal"],
+            "ceilingLocal": agrupado["ceilingLocal"],
             "kernelSigma": agrupado["kernelSigma"],
             "attentionGamma": agrupado["attentionGamma"],
             "attentionTemperature": agrupado["attentionTemperature"],
