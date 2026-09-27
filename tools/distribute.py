@@ -216,7 +216,35 @@ def plan(parts: int | None = None, seeds: list[int] | None = None) -> dict:
 
 
 def run_shard(shard: str, seeds: list[int]) -> dict:
-    """One shard's campaign, here, writing only into its own namespace."""
+    """One shard's campaign, here, writing only into its own namespace.
+
+    **The third door to the full grid, and the one that had no dial at all.**
+    `run_campaign_shard` and `run_mechanism_sweep_shard` at least took a
+    `pilot=` argument; this one builds its `Reduction` at
+    `config.FULL_EPOCHS` unconditionally, so every call is a full-scale
+    launch by construction. It reached that state honestly --- it exists to
+    be called ON a worker, where the forge's own token authorized the
+    submission before the process started --- but nothing here checked that
+    it was in fact on one, so a local invocation trained the whole grid with
+    no human having decided to.
+
+    The same guard the other two entry points carry, for the same reason and
+    with the same exit: on a worker the forge already authorized this and
+    nothing is asked; locally it refuses and names the one-invocation
+    variable a human sets when they have actually decided to run it.
+    """
+    if not config.full_scale_launch_is_authorized():
+        raise SystemExit(
+            "refusing to launch the full grid (30 seeds, 20 epochs) here: "
+            f"{config.CLONE_ROOT_ENV} is not set, so nothing outside this "
+            "process authorized it, and neither a clean verification nor a "
+            "green pilot is permission (AGREED.md, 'The full run'). This "
+            "launcher has no pilot scale at all -- every call is the full "
+            "grid -- so there is no cheaper way to reach it. A worker the "
+            "forge submitted this to is authorized by its own token before "
+            f"submission and needs nothing here; a local launch needs "
+            f"{config.LOCAL_FULL_SCALE_ENV}=1 set for this one invocation."
+        )
     device = harness.resolve_device()
     reduction = harness.Reduction(
         seeds=list(seeds), epochs=config.FULL_EPOCHS,

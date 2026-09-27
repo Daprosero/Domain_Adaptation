@@ -894,14 +894,29 @@ def bag_pairs(model, source: bags.BagSet, target: bags.BagSet, device: torch.dev
     Nearest by the bag kernel of Section 3, in the representation space — never
     Euclidean, which the method does not use, and never in the two-dimensional
     projection, which would illustrate UMAP rather than the correspondence.
+
+    **The two sides read different roles, on purpose.** The target side is
+    `eval`, because it is the target bag the table names and explains — the
+    same bag 5a/5b measure. The source side is `train`: the bags the method
+    actually trained on, which is exactly the carved-out reading
+    `correspondence`'s own docstring names as a *different and legitimate
+    question* from the one 5a/5b ask — what the local term aligns to while it
+    trains — and says has to be asked on purpose rather than inherited by
+    accident. This table is where that question is asked: AGREED.md's own line
+    on it says so directly, "the five source training bags it is closest to",
+    and `top_k_source_bags` below reads this function's output on that same
+    understanding. Ranking against the evaluation role instead would not be a
+    smaller table over the same claim — it would silently re-validate 5a/5b on
+    fewer bags rather than answer the question this one exists to ask.
     """
     from MIL_CREDA.attention import bag_embedding
     from MIL_CREDA.bag_kernel import bag_kernel_matrix
 
-    # Both sides on the evaluation role, for the reason `correspondence`'s own
-    # docstring gives: section 5 asks one question at three resolutions, and
-    # they have to be measured over the same material.
-    s_pos, t_pos = source.eval_idx, target.eval_idx
+    # Asymmetric on purpose -- see the docstring above and `top_k_source_bags`'
+    # own docstring just below it, which name the same two roles for the same
+    # reason: the target side is what the table explains (`eval`), the source
+    # side is what the model actually trained on (`train`).
+    s_pos, t_pos = source.train_idx, target.eval_idx
     H_s = model.instance_embeddings(source.images[source.members[s_pos]].to(device))
     H_t = model.instance_embeddings(target.images[target.members[t_pos]].to(device))
     sigma = config.KERNEL_SIGMA
@@ -940,6 +955,15 @@ def top_k_source_bags(reference: dict, k: int = 5) -> list[dict]:
     Rankeadas por el kernel de bolsa de la Sección 3 sobre TODAS las bolsas
     fuente de entrenamiento -- nunca un subconjunto, y nunca en la proyección
     de dos dimensiones, que ilustraría UMAP y no la correspondencia.
+
+    Fuente de ENTRENAMIENTO y no de evaluación, a propósito y no por herencia:
+    la pregunta de esta tabla es a cuáles de las bolsas que el método vio
+    entrenar se parece cada bolsa de destino. Compararla contra las bolsas
+    fuente reservadas para el veredicto sería otra pregunta -- la que ya
+    responde `correspondence` (5a) leyendo ambos dominios en evaluación -- y
+    convertiría esta tabla en una revalidación silenciosa de esa lectura sobre
+    menos bolsas, en vez de la pregunta propia que `bag_pairs` (arriba) arma
+    para ella.
 
     Cada vecino lleva tres cosas y cada una tiene su lector. `sourceLabel` es la
     clase de esa bolsa fuente, y es lo que la tabla MUESTRA: con la clase de la

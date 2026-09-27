@@ -215,6 +215,11 @@ def test_run_shard_refreshes_the_per_transfer_ceilings_too(tmp_path, monkeypatch
     it, because that check only looks at whether a family's picks are
     present, never at whether their values still agree with disk.
     """
+    # Este test prueba el REFRESCO de techos, no la autorizacion: la puerta
+    # al grid completo que `run_shard` ahora lleva se le concede aca para
+    # que siga probando lo que siempre probo. Sin esto se negaria antes de
+    # llegar a los techos, que es el guardia funcionando y no una falla.
+    monkeypatch.setenv("MIL_CREDA_LOCAL_FULL_SCALE_AUTHORIZED", "1")
     from MIL_CREDA_Benchmark import config as milcreda_config, harness
 
     fresh_pick = {"S->M": 0.0077}
@@ -359,3 +364,51 @@ def test_main_merge_branch_prints_a_copy_pasteable_relaunch_hint(tmp_path, monke
     assert "--shard s01" in captured.out
     assert "--seeds 2,3" in captured.out
     assert "# missing" in captured.out
+
+
+def test_la_tercera_puerta_al_grid_completo_tambien_pide_autorizacion(monkeypatch):
+    """`run_shard` no tiene escala de ensayo: TODA llamada es la rejilla
+    completa.
+
+    Las otras dos puertas (`run_campaign_shard`,
+    `run_mechanism_sweep_shard`) por lo menos reciben `pilot=`, asi que una
+    llamada barata existe. Esta arma su `Reduction` con
+    `config.FULL_EPOCHS` sin dial, de modo que no hay forma de invocarla por
+    poco. Llego a ese estado honestamente --- existe para correr EN un
+    worker, donde el token de la forja autorizo el envio antes de que el
+    proceso arrancara --- pero nada verificaba que estuviera en uno.
+
+    Dos mitades, y las dos importan: local se niega, y en el worker NO se
+    niega. Un guardia que bloqueara el camino remoto seria peor que el
+    agujero, porque clausuraria justo la puerta a la que todo este trabajo
+    apunta.
+
+    Mutaciones: quitar el guardia hace caer la primera; hacer que ignore
+    `CLONE_ROOT_ENV` hace caer la segunda.
+    """
+    import sys
+    from pathlib import Path as _P
+    raiz = _P(__file__).resolve().parents[1]
+    sys.path.insert(0, str(raiz / "src"))
+    sys.path.insert(0, str(raiz / "tools"))
+    from MIL_CREDA_Benchmark import config, harness
+    import distribute
+
+    def no_debe_llegar(*a, **k):
+        raise AssertionError("el guardia no se interpuso antes de entrenar")
+
+    monkeypatch.setattr(harness, "resolve_device", no_debe_llegar)
+    monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+    monkeypatch.delenv(config.LOCAL_FULL_SCALE_ENV, raising=False)
+
+    import pytest as _pytest
+    with _pytest.raises(SystemExit) as caido:
+        distribute.run_shard("s00", [0, 1])
+    assert config.LOCAL_FULL_SCALE_ENV in str(caido.value), (
+        "el rechazo no nombra como autorizar")
+
+    # En un worker no se niega: llega a pedir el dispositivo, que es lo
+    # primero pasado el guardia.
+    monkeypatch.setenv(config.CLONE_ROOT_ENV, "/clon/del/worker")
+    with _pytest.raises(AssertionError, match="no se interpuso"):
+        distribute.run_shard("s00", [0, 1])
