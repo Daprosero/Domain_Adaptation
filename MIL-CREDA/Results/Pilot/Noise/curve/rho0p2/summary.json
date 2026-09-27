@@ -22,6 +22,7 @@
     "attentionGamma": 0.0,
     "attentionTemperature": 1.0,
     "tauLocal": 1.0,
+    "ceilingLocal": 1.0,
     "ceilings": {
       "milcreda": 0.010796012633645448
     },
@@ -248,6 +249,7 @@
       }
     },
     "rampDelta": 20,
+    "rampDeltaLocal": 20,
     "device": "cpu",
     "environment": {}
   },
