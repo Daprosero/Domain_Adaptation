@@ -131,6 +131,10 @@ __benchmark__ = {
             # `conclusion_source_bag_usage` below, and `latent.source_bag_usage`
             # that fed both.
             "tables.render_bag_neighbors",
+            # The two adaptation terms of Eq. (39), apart, brazo by brazo --
+            # `contributionGlobal`/`contributionLocal` on the record since
+            # today's harness fix, and unread by any renderer until this one.
+            "tables.render_term_shares",
         ],
         "conclusions": [
             "tables.conclusion",
@@ -176,6 +180,10 @@ __benchmark__ = {
             # every point of every curve stayed inside the interval Eq. (39)
             # promises.
             "tables.conclusion_normalization",
+            # The reading under `tables.render_term_shares`, wired into
+            # `tables.conclusions` as `"términos"` when the record's runs
+            # carry the split fields.
+            "tables.conclusion_term_shares",
         ],
         # One call that takes a record and returns {label: text}. It exists so the
         # verification can run every conclusion over permuted numbers without

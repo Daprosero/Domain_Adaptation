@@ -1412,3 +1412,228 @@ def test_conclusion_attention_prints_this_exact_arms_own_floor(arm: str) -> None
 # and `conclusion_diagnostic` are retired along with the noise-diagnostic
 # apparatus. None of the six required sections of `Benchmark_Results.ipynb` reads a
 # re-searched-ceiling-under-noise diagnostic any more.
+
+
+# ------------------------------------------- the two adaptation terms, apart
+#
+# Until today `harness.run_one` applied one shared ramp coefficient to both
+# terms of Eq. (39) and summed them before the record ever left the training
+# loop: `contribution` was the only field either term left behind. A term
+# that commands nothing (`contributionLocal == 0` for an arm with no local
+# correspondence) and a term that was scaled to almost nothing print the same
+# small number once summed, and no renderer anywhere read `contributionGlobal`
+# / `contributionLocal` -- `rg contributionGlobal` inside `tables.py` or any
+# notebook returned nothing before this section existed. These tests pin the
+# renderer that closes that gap.
+
+def _term_runs(specs: dict[str, tuple[float, float, float]],
+               transfer: str = LABELS[0], seed: int = 0) -> list[dict]:
+    """One run per arm, at a single transfer: `(supervised, global, local)`.
+
+    A single transfer is enough: `tables.term_shares` averages `cells()` over
+    whatever transfers are present, and with one transfer per arm that average
+    is just the one cell -- the averaging itself is `table`'s own machinery
+    and already has its own tests.
+
+    Carries flat `sourceAccuracy`/`targetAccuracy` too -- not because any test
+    below reads them, but because a real run always does, and
+    `tables.conclusions` unconditionally reads them off any non-empty `runs`
+    it is handed for the phase-one levels. A fixture missing them would crash
+    that unrelated section instead of exercising this one.
+    """
+    return [{"arm": arm, "transfer": transfer, "seed": seed,
+             "supervised": sup, "contributionGlobal": g, "contributionLocal": l,
+             "contribution": g + l,
+             "sourceAccuracy": 0.5, "targetAccuracy": 0.5}
+            for arm, (sup, g, l) in specs.items()]
+
+
+def test_render_term_shares_reads_the_two_terms_apart_from_the_record() -> None:
+    """The magnitude of each term, printed apart -- never the summed `contribution`.
+
+    Reachable red: `tables.render_term_shares` does not exist before this change;
+    a renderer that read `run["contribution"]` instead of the two split fields
+    could not print `0.0100` and `0.0300` as two different numbers because it
+    never has the two apart to begin with.
+    """
+    runs = _term_runs({"G": (0.04, 0.01, 0.03)})
+    printed = tables.render_term_shares(runs, markdown=True)
+    assert "0.0400" in printed  # supervised
+    assert "0.0100" in printed  # global
+    assert "0.0300" in printed  # local
+    assert "12.5%" in printed  # global / whole = 0.01 / 0.08
+    assert "37.5%" in printed  # local / whole = 0.03 / 0.08
+    assert "25.0%" in printed  # global / adaptation = 0.01 / 0.04
+    assert "75.0%" in printed  # local / adaptation = 0.03 / 0.04
+
+
+def test_an_arm_with_no_local_term_prints_zero_not_a_dash() -> None:
+    """`E`/`F` have no local correspondence: their local share is a measured
+    zero, not a missing measurement, and the table has to say so plainly.
+
+    Reachable red: render a `—` (or omit the row) for a term whose magnitude is
+    zero, which reads exactly like the renderer refusing to answer instead of
+    reporting that the term commands nothing.
+    """
+    runs = _term_runs({"E": (0.05, 0.02, 0.0)})
+    printed = tables.render_term_shares(runs, markdown=True)
+    assert "0.0000" in printed
+    assert "0.0%" in printed
+    assert "—" not in printed
+
+
+def test_an_arm_with_no_adaptation_reports_zero_never_a_division_by_zero() -> None:
+    """The floor (`B`) adapts nothing: both terms are zero, so the
+    over-the-adaptation-alone share has a zero denominator. `0.0`, not `nan`
+    and not an exception, is what `tables.py`'s own doctrine calls "an arm
+    with no adaptation term reports zero rather than a ratio".
+
+    Reachable red: divide `global / (global + local)` with no guard and this
+    raises `ZeroDivisionError` instead of returning `0.0`.
+    """
+    row = tables.term_shares(_term_runs({"B": (0.05, 0.0, 0.0)}))[0]
+    assert row["shareAdaptGlobal"] == 0.0
+    assert row["shareAdaptLocal"] == 0.0
+    assert row["shareWholeGlobal"] == 0.0
+    assert row["shareWholeLocal"] == 0.0
+    assert not math.isnan(row["shareAdaptGlobal"])
+
+
+def test_the_two_shares_answer_two_different_questions_as_a_relation() -> None:
+    """Never a constant: the claim is that the two families of share sum
+    differently, and that relation has to hold whatever the numbers are.
+
+    `shareWhole*` is each term over supervised+global+local -- what it weighs
+    in everything the model optimizes. `shareAdapt*` is each term over
+    global+local alone -- how the adaptation itself divides between the two.
+    An arm that adapts has the second pair sum to 1.0 (the two terms are the
+    whole of the adaptation) while the first pair sums to less than 1.0
+    (supervised is the rest) -- unless there is no supervised term at all,
+    which no declared arm exhibits.
+    """
+    row = tables.term_shares(_term_runs({"G": (0.04, 0.01, 0.03)}))[0]
+    whole = row["supervised"] + row["global"] + row["local"]
+    adapt = row["global"] + row["local"]
+    assert row["shareWholeGlobal"] == pytest.approx(row["global"] / whole)
+    assert row["shareWholeLocal"] == pytest.approx(row["local"] / whole)
+    assert row["shareAdaptGlobal"] == pytest.approx(row["global"] / adapt)
+    assert row["shareAdaptLocal"] == pytest.approx(row["local"] / adapt)
+    assert row["shareAdaptGlobal"] + row["shareAdaptLocal"] == pytest.approx(1.0)
+    assert row["shareWholeGlobal"] + row["shareWholeLocal"] < 1.0
+
+
+def test_render_term_shares_carries_a_contaminated_block_when_a_rate_is_given(
+        tmp_path, monkeypatch) -> None:
+    """Same two-block style as every other table in this report: `sin` first,
+    then `con`, sharing one `Ruido` column and one call. Isolated from any real
+    campaign on disk through the same `config.RESULTS` redirection every other
+    unified-table test in this file uses (`_campana_contaminada`), so this does
+    not depend on `MIL-CREDA/Results/Pilot/Noise/rho0p2` actually existing.
+    """
+    limpio = _term_runs({"G": (0.04, 0.01, 0.03)})
+    sucio = _term_runs({"G": (0.05, 0.02, 0.0)})
+    _campana_contaminada(tmp_path, monkeypatch, 0.2, runs=sucio)
+
+    printed = tables.render_term_shares(limpio, rate=0.2, markdown=True)
+    filas = _filas(printed)
+    assert any(f.startswith(f"| {tables.NOISE_CLEAN} |") for f in filas)
+    assert any(f.startswith(f"| {tables.NOISE_DIRTY} |") for f in filas)
+    assert "0.0200" in printed and "0.0500" in printed  # the dirty block's own numbers
+
+
+def test_render_term_shares_without_a_recorded_campaign_notes_it_rather_than_dropping_it(
+        tmp_path, monkeypatch) -> None:
+    """No campaign recorded at this ρ: the `sin` block still prints alone, with
+    the reason stated rather than a silently shorter table -- the same contract
+    `_level_or_note` already gives every other renderer that takes a `rate`.
+    """
+    monkeypatch.setattr(config, "PRODUCT", tmp_path)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    limpio = _term_runs({"G": (0.04, 0.01, 0.03)})
+
+    printed = tables.render_term_shares(limpio, rate=0.2, markdown=True)
+    filas = _filas(printed)
+    assert all(f.startswith(f"| {tables.NOISE_CLEAN} |") for f in filas)
+    assert f"ρ={0.2:g}" in printed
+    assert "todavía no corrió" in printed
+
+
+def test_conclusion_term_shares_moves_under_a_permutation_of_the_record() -> None:
+    """`tables.py`'s own mutation rule for a computed conclusion: permute which
+    arm holds which numbers and the sentence has to move, because a sentence
+    that reads the same regardless of who has no adaptation and who has a
+    local term dominating is tied to nothing.
+
+    Reachable red: replace the body with a fixed sentence naming `B` as the
+    floor and `G` as the arm whose local term dominates -- it would print
+    correctly for the ordinary record below and identically, and wrongly,
+    for its permutation.
+    """
+    original = _term_runs({"B": (0.05, 0.0, 0.0), "E": (0.05, 0.02, 0.0),
+                           "G": (0.05, 0.01, 0.03)})
+    permuted = _term_runs({"B": (0.05, 0.01, 0.03), "E": (0.05, 0.02, 0.0),
+                           "G": (0.05, 0.0, 0.0)})
+    said = tables.conclusion_term_shares(original)
+    said_permuted = tables.conclusion_term_shares(permuted)
+    assert said.strip() and said_permuted.strip()
+    assert said != said_permuted
+
+    # and in the right direction: the sentence names whichever arm the record
+    # actually says has no adaptation, not a fixed one.
+    assert f"`{config.NAME_OF['B']}`" in said.split(".")[0]
+    assert f"`{config.NAME_OF['G']}`" in said_permuted.split(".")[0]
+
+
+def test_conclusions_entry_point_includes_term_shares_when_the_record_carries_them() -> None:
+    """`tables.conclusions` is the one entry point the report and the
+    verification both go through (see its own docstring) -- a conclusion
+    wired only into the notebook and never into that dispatch is invisible to
+    whatever runs the permutation check over a full record.
+
+    Guarded on the split fields actually being present: a record built before
+    today's harness fix (or any of this suite's own older fixtures, which
+    predate the split and carry only the summed `contribution`) cannot feed
+    this conclusion, and `tables.conclusions` already returns only what a
+    record can feed rather than raising on what it cannot.
+    """
+    runs = _term_runs({"B": (0.05, 0.0, 0.0), "G": (0.05, 0.01, 0.03)})
+    produced = tables.conclusions({"runs": runs})
+    assert "términos" in produced
+    assert produced["términos"] == tables.conclusion_term_shares(runs)
+
+    # a record predating the split (this file's own `_runs()` fixture, used by
+    # every other `conclusions()` test) still concludes everything else and
+    # simply does not carry this one.
+    old_record = _record()
+    assert "términos" not in tables.conclusions(old_record)
+
+
+def test_the_term_shares_table_is_declared_in_the_report_contract() -> None:
+    """A renderer or conclusion `verify` cannot find in `__benchmark__["report"]`
+    is one it reports as an undeclared drawing -- see `tables.render`'s own
+    sibling assertions in `test_benchmark_declarations.py` for the established
+    shape of this check.
+    """
+    report = MIL_CREDA_Benchmark.__benchmark__["report"]
+    assert "tables.render_term_shares" in report["renderers"]
+    assert "tables.conclusion_term_shares" in report["conclusions"]
+
+
+def test_the_term_shares_table_is_shown_once_right_after_the_noise_figures() -> None:
+    """Placement: the first positions after Section 1's noise figures, and
+    before either accuracy table -- read straight off the notebook rather than
+    asserted about a module that cannot know its own position in a document.
+    """
+    shown = [name for name, _ in _shown(REPORT)]
+    assert shown.count("render_term_shares") == 1
+    index = shown.index("render_term_shares")
+    assert shown[index - 1] == "objective", \
+        "the table is not framed by its own objective() call directly above it"
+    assert shown[index + 1] == "conclusion_term_shares", \
+        "the table is not concluded directly under it"
+
+    last_noise_floor = max(i for i, n in enumerate(shown) if n == "conclusion_noise_floor")
+    assert index > last_noise_floor, \
+        "the term-shares table is not after Section 1's noise figures"
+    assert index < shown.index("render"), \
+        "the term-shares table is not before the accuracy tables"
