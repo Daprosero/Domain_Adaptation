@@ -202,19 +202,27 @@ def _correr_trials(transfers: int = 1) -> dict:
         transfers=list(config.SEARCH_TRANSFERS[:transfers]))
 
 
-#: Las seis dimensiones que el motor por trials explora hoy -- el techo y las
-#: cinco que se agregaron con él. `lambda_glob`/`lambda_loc` NO están: las dos
-#: salen de la misma rampa compartida (`harness.ramp`, después
-#: `total_objective(..., coefficient, coefficient)`), así que un segundo
-#: coeficiente libre para cada una cambiaría la Ec. (39) en vez de buscar
-#: sobre ella.
-DIMENSIONES_BUSCADAS = {"ceiling", "rampDelta", "kernelSigma", "attentionGamma",
+#: Las ocho dimensiones que el motor por trials explora hoy -- los DOS techos
+#: de la Ec. (39) (uno por coeficiente) y las seis que los acompañan. Hasta
+#: antes de este tramo de trabajo `lambda_glob`/`lambda_loc` NO estaban aquí,
+#: sobre la premisa de que las dos salían de la misma rampa compartida
+#: (`harness.ramp`, después `total_objective(..., coefficient, coefficient)`)
+#: y que un segundo coeficiente libre para cada una cambiaría la Ec. (39) en
+#: vez de buscar sobre ella. Esa premisa estaba al revés: la propia firma de
+#: `MIL_CREDA.objective.total_objective` siempre tomó `lambda_global` y
+#: `lambda_local` aparte, así que darle a cada una su propio techo y su propia
+#: velocidad de crecimiento (`ceiling`/`rampDelta` para la global,
+#: `ceilingLocal`/`rampDeltaLocal` para la local) no cambia la ecuación: es el
+#: arnés dejando de aplicarla a medias.
+DIMENSIONES_BUSCADAS = {"ceiling", "ceilingLocal", "rampDelta", "rampDeltaLocal",
+                        "kernelSigma", "attentionGamma",
                         "attentionTemperature", "tauLocal"}
 
 
-def test_los_trials_buscan_las_seis_dimensiones_declaradas(estudios) -> None:
-    """El techo, `RAMP_DELTA`, `KERNEL_SIGMA` y los dos hiperparámetros de la
-    Ec. (16)/(28) -- seis dimensiones, no una.
+def test_los_trials_buscan_las_ocho_dimensiones_declaradas(estudios) -> None:
+    """Los dos techos de la Ec. (39), sus dos velocidades de crecimiento,
+    `KERNEL_SIGMA` y los dos hiperparámetros de la Ec. (16)/(28) -- ocho
+    dimensiones, no una.
 
     Se mide sobre el espacio que optuna realmente exploró y no sobre la prosa:
     cada trial declara sus propias distribuciones, y ahí una dimensión de más
@@ -351,3 +359,40 @@ def test_el_comentario_del_neutro_fecha_el_1e_4_y_no_promete_un_techo_comun(
         "las dos familias corrieron en el mismo techo: la cláusula vieja era cierta"
     assert "ceiling_for" in comentario, \
         "el comentario no nombra de dónde sale el coeficiente de cada brazo"
+
+
+def test_el_rango_del_peso_local_no_es_un_alias_del_global() -> None:
+    """Dos numeros iguales hoy, una sola decision manana --- y el defecto es
+    justo eso.
+
+    `CEILING_LOCAL_RANGE` estaba escrito `= CEILING_RANGE`. Los valores
+    coinciden, asi que ninguna comparacion de valores nota la diferencia, y
+    `is` tampoco: Python reusa la misma tupla constante dentro de un modulo,
+    de modo que dos literales identicos comparan identicos. Lo unico que
+    distingue un alias de una declaracion propia es la FUENTE.
+
+    Importa porque el piso del global es el techo PUBLICADO de CREDA y puede
+    moverse por razones de CREDA. Como alias, ese movimiento arrastraba en
+    silencio al coeficiente local --- que no es de CREDA y que esta decision
+    acaba de declarar independiente.
+
+    Mutacion que tiene que hacerlo fallar: volver a escribir
+    `CEILING_LOCAL_RANGE = CEILING_RANGE`.
+    """
+    import ast
+    from pathlib import Path as _P
+
+    fuente = (_P(__file__).resolve().parents[1]
+              / "src" / "MIL_CREDA_Benchmark" / "config.py").read_text(encoding="utf-8")
+    asignados = [n for n in ast.parse(fuente).body
+                 if isinstance(n, ast.Assign)
+                 and any(getattr(t, "id", None) == "CEILING_LOCAL_RANGE"
+                         for t in n.targets)]
+    assert len(asignados) == 1, f"{len(asignados)} asignaciones de CEILING_LOCAL_RANGE"
+    valor = asignados[0].value
+    assert not isinstance(valor, ast.Name), (
+        f"CEILING_LOCAL_RANGE es un alias de `{getattr(valor, 'id', '?')}`: "
+        "mover el rango del coeficiente global, que responde a CREDA, moveria "
+        "en silencio el del local, que no es de CREDA")
+    assert isinstance(valor, ast.Tuple), (
+        "CEILING_LOCAL_RANGE deberia declarar sus dos extremos por si misma")

@@ -320,16 +320,30 @@ class Arm(nn.Module):
     # ------------------------------------------------------------------- step
 
     def training_step(self, bags: torch.Tensor, labels: torch.Tensor,
-                      ramp: float, generator: torch.Generator) -> dict:
+                      ramp: float, generator: torch.Generator,
+                      ramp_local: float | None = None) -> dict:
         """The arm's own objective, and nothing the arm does not have.
 
         The supervised term is the arm's. A bag-unit arm calls `source_loss`,
         which is Eq. (21) as the revision states it, normalized by its own
         supremum B_src; an instance-unit arm keeps CREDA's per-instance
-        cross-entropy, because prior work is used exactly as it was written. The
-        adaptation term is added with the shared coefficient — the same ramp and
-        the same constant for every arm that has one — so nothing separates the
-        arms except the term itself.
+        cross-entropy, because prior work is used exactly as it was written.
+
+        `total_objective` (Eq. (39)) always took two coefficients apart --
+        `lambda_global` and `lambda_local`, its own signature and docstring say
+        so. Until this stretch of work `ramp` alone funded both, passed twice
+        (`total_objective(..., ramp, ramp)`): one schedule, one ceiling, applied
+        to two terms the equation itself never tied together. That was the
+        harness under-applying its own equation, not a property of it.
+        `ramp_local` is the missing second coefficient, and it is OPTIONAL
+        precisely so every caller that never knew a second coefficient existed
+        keeps training exactly as before: omitted, it defaults to `ramp`, and
+        `total_objective(..., ramp, ramp)` runs unchanged --
+        `test_the_bag_unit_arms_assemble_the_objective_and_never_write_a_term_
+        inline` (`tests/test_arm_objectives.py`) pins exactly this default.
+        Only MIL-CREDA's own branch reads it; CREDA's one-term objective and the
+        floor's supervised-only one have nothing for a second coefficient to
+        multiply.
 
         The two sides' supervised terms are therefore on different numeric
         scales: MIL-CREDA's lands in [0, 1) and CREDA's does not. That asymmetry
@@ -363,7 +377,12 @@ class Arm(nn.Module):
         # is `take` or encode the images they name.
         target_indices = self._draw_target(generator)
         coefficient = ramp
+        # The default that keeps every caller unaware of the second
+        # coefficient training exactly as before -- see the docstring above.
+        coefficient_local = ramp if ramp_local is None else ramp_local
         adaptation = torch.zeros((), device=logits.device, dtype=logits.dtype)
+        contribution_global = torch.zeros((), device=logits.device, dtype=logits.dtype)
+        contribution_local = torch.zeros((), device=logits.device, dtype=logits.dtype)
         if self.spec["adaptation"] == "milcreda":
             target_bags = self.target.take(target_indices)
             global_term, local_term = self._milcreda_term(
@@ -371,14 +390,21 @@ class Arm(nn.Module):
             )
             adaptation = global_term + local_term
             total = total_objective(                                  # Eq. (39)
-                supervised, global_term, local_term, coefficient, coefficient
+                supervised, global_term, local_term, coefficient, coefficient_local
             )
+            contribution_global = coefficient * global_term
+            contribution_local = coefficient_local * local_term
         elif self.spec["adaptation"] == "creda":
             # CREDA's objective, not Eq. (39): one term, one coefficient, as its
-            # own code writes it.
+            # own code writes it. `coefficient_local` is never read here --
+            # CREDA has no local term for a second coefficient to multiply --
+            # and the whole contribution is booked under the "global" slot
+            # purely so the sum below still equals it; no declared arm reaches
+            # this branch (see `Arm.__init__`'s own note on `"creda"`).
             target_bags = self.target.take(target_indices)
             adaptation = self._creda_term(embeddings, labels, target_bags)
             total = supervised + coefficient * adaptation
+            contribution_global = coefficient * adaptation
         else:
             # The floor: no target image passes through the encoder, ever, in
             # training (Decision 2). `target_indices` is drawn above and
@@ -393,7 +419,18 @@ class Arm(nn.Module):
             # and that has to be visible rather than inferred.
             "supervised": float(supervised.detach()),
             "adaptation": float(adaptation.detach()),
-            "contribution": float((coefficient * adaptation).detach()),
+            # The two terms' contributions, each on its own coefficient, so
+            # "the global term did the work and the local did nothing" reads
+            # apart from its reverse instead of collapsing into one number.
+            "contributionGlobal": float(contribution_global.detach()),
+            "contributionLocal": float(contribution_local.detach()),
+            # Kept as the derivable SUM of the two above -- never a smaller,
+            # differently-scoped number -- because `MIL_CREDA_Benchmark/
+            # __init__.py`'s own `components`/`dimensions` declarations and
+            # `tables.py`'s renderers already read `contribution` as a bare
+            # total, and neither file is in this stretch's authorized scope to
+            # repoint at the split.
+            "contribution": float((contribution_global + contribution_local).detach()),
         }
 
 

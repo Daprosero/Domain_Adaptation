@@ -1003,6 +1003,83 @@ def test_the_bag_unit_arms_assemble_the_objective_and_never_write_a_term_inline(
     assert "total_objective" in _milcreda_calls()
 
 
+def test_training_step_applies_independent_coefficients_to_each_adaptation_term(
+        encoder) -> None:
+    """Eq. (39)'s two coefficients, finally apart. `total_objective`'s own
+    signature always took `lambda_global` and `lambda_local` separately; before
+    this stretch `training_step` funded both from the single `ramp` argument
+    (`total_objective(..., coefficient, coefficient)`, the test right above
+    this one pins that this was exactly what ran). `ramp_local` is the missing
+    second coefficient, new and optional: given, it reaches `total_objective`
+    in Eq. (39)'s own `lambda_local` position, independent of `ramp`.
+
+    Reachable red: pass a `ramp_local` that differs from `ramp` and observe
+    `step["loss"]` matching `total_objective(..., ramp, ramp)` regardless --
+    i.e. `training_step` ignoring the new argument and still funding both
+    terms from `ramp` alone. Applied below at `MUTATION 1`.
+    """
+    from MIL_CREDA.objective import source_loss, total_objective
+
+    arm = _arm("G")
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+
+    embeddings = arm.instance_embeddings(x)
+    Z, _ = arm.bag_representations(embeddings, config.KERNEL_SIGMA)
+    scores = F.softmax(arm.head(Z), dim=1)
+    supervised = source_loss(scores, F.one_hot(y, CLASSES).to(scores.dtype),
+                             config.EPSILON)
+    target = arm.target.take(arm._draw_target(torch.Generator().manual_seed(3)))
+    global_term, local_term = arm._milcreda_term(embeddings, y, target)
+
+    ramp_global, ramp_local = 0.9, 0.1
+    step = arm.training_step(x, y, ramp_global, torch.Generator().manual_seed(3),
+                             ramp_local=ramp_local)
+
+    assembled = total_objective(supervised, global_term, local_term,
+                                ramp_global, ramp_local)
+    assert float(step["loss"].detach()) == pytest.approx(
+        float(assembled.detach()), abs=1e-6)
+
+    # the SAME two coefficients funding both slots would have produced a
+    # different total -- the independence itself, not merely a number that
+    # happens to match one particular assembly
+    coupled = total_objective(supervised, global_term, local_term,
+                              ramp_global, ramp_global)
+    assert float(step["loss"].detach()) != pytest.approx(
+        float(coupled.detach()), abs=1e-6)
+
+    # and the record exposes the two contributions apart, each on its own
+    # coefficient, rather than only their sum
+    assert step["contributionGlobal"] == pytest.approx(
+        float((ramp_global * global_term).detach()), abs=1e-6)
+    assert step["contributionLocal"] == pytest.approx(
+        float((ramp_local * local_term).detach()), abs=1e-6)
+
+
+def test_the_reports_contribution_stays_the_derivable_sum_of_the_two_terms(
+        encoder) -> None:
+    """`contribution` pre-dates the split and stays in the report unmodified in
+    meaning: `MIL_CREDA_Benchmark/__init__.py`'s own `components`/`dimensions`
+    declarations and `tables.py`'s renderers already read it as a bare number,
+    and neither file is in this stretch's authorized scope to repoint. So it
+    stays the SUM `contributionGlobal + contributionLocal` -- exactly the
+    value it held back when both terms shared one coefficient -- rather than
+    becoming only one of the two halves.
+
+    Reachable red: report `contribution` as `contributionGlobal` alone (or any
+    other single half), which would still be a float and would still look
+    plausible on its own.
+    """
+    arm = _arm("G")
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+    step = arm.training_step(x, y, 0.7, torch.Generator().manual_seed(3),
+                             ramp_local=0.2)
+    assert step["contribution"] == pytest.approx(
+        step["contributionGlobal"] + step["contributionLocal"], abs=1e-6)
+
+
 def _milcreda_calls() -> set[str]:
     """Everything the MIL-CREDA arm of `training_step` calls to build its total."""
     import ast

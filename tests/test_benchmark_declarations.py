@@ -2254,7 +2254,7 @@ def test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given(monkeypatch) 
 
 def test_run_one_resolves_the_hyperparameters_of_the_transfer_it_was_given(
 ) -> None:
-    """The other five searched dimensions, reaching `wiring.build` the same
+    """The other seven searched dimensions, reaching `wiring.build` the same
     way the ceiling reaches `ramp` in the test above.
 
     Before this stretch's build, a record with non-default winners changed
@@ -2266,6 +2266,13 @@ def test_run_one_resolves_the_hyperparameters_of_the_transfer_it_was_given(
     explicitly). This is the wiring that closes it: two transfers with
     different winners in `reduction.hyperByTransfer` must reach
     `wiring.build` with two different `hyper` dicts.
+
+    `ceilingLocal`/`rampDeltaLocal` -- Eq. (39)'s SECOND coefficient's own
+    ceiling and growth rate, added to `hyper_for`'s resolved set by a later
+    stretch of work that gave `lambda_glob`/`lambda_loc` independent
+    schedules -- are covered by the identical two assertions below rather
+    than a separate test, because they resolve through the exact same
+    `hyper_for` call this test already exercises.
 
     Reachable red (the mutation this test exists to catch): revert `run_one`
     to `if hyper is None: hyper = hyper` (a no-op) instead of
@@ -2289,7 +2296,8 @@ def test_run_one_resolves_the_hyperparameters_of_the_transfer_it_was_given(
         # `ramp`, which `run_one` never reaches.
         monkeypatch.setattr(wiring, "build", _spy)
 
-        winner_sm = {"rampDelta": 55.0, "kernelSigma": 12.5,
+        winner_sm = {"rampDelta": 55.0, "rampDeltaLocal": 33.0,
+                    "ceilingLocal": 0.006, "kernelSigma": 12.5,
                     "attentionGamma": 0.4, "attentionTemperature": 3.3,
                     "tauLocal": 0.7}
         reduction = harness.Reduction(
@@ -2317,7 +2325,8 @@ def test_run_one_resolves_the_hyperparameters_of_the_transfer_it_was_given(
                             role="valid")
         assert captured[-1] != winner_sm, captured[-1]
         assert captured[-1] == {
-            "rampDelta": config.RAMP_DELTA, "kernelSigma": config.KERNEL_SIGMA,
+            "rampDelta": config.RAMP_DELTA, "rampDeltaLocal": config.RAMP_DELTA,
+            "ceilingLocal": config.RAMP_CEILING, "kernelSigma": config.KERNEL_SIGMA,
             "attentionGamma": config.ATTENTION_GAMMA,
             "attentionTemperature": config.ATTENTION_TEMPERATURE,
             "tauLocal": config.TAU_LOCAL,
