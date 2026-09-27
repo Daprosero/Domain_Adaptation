@@ -26,6 +26,7 @@
     "attentionGamma": 0.8665927080924227,
     "attentionTemperature": 0.12300535032448288,
     "tauLocal": 1.530867687382285,
+    "ceilingLocal": 1.0,
     "ceilings": {
       "milcreda": 0.010796012633645448
     },
@@ -297,6 +298,7 @@
       }
     },
     "rampDelta": 1.1459150621714134,
+    "rampDeltaLocal": 20,
     "device": "mps",
     "environment": {
       "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",

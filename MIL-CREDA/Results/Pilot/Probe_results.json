@@ -23,6 +23,7 @@
     "attentionGamma": 0.0,
     "attentionTemperature": 1.0,
     "tauLocal": 1.0,
+    "ceilingLocal": 1.0,
     "ceilings": {
       "milcreda": 0.010796012633645448
     },
@@ -294,6 +295,7 @@
       }
     },
     "rampDelta": 20,
+    "rampDeltaLocal": 20,
     "device": "mps",
     "environment": {
       "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
@@ -392,18 +394,18 @@
       "rung": "F->G",
       "reading": "qu\u00e9 compra la correspondencia local",
       "metric": "targetAccuracy",
-      "meanDifference": -0.03240740740740742,
-      "stdev": 0.07938161203464006,
+      "meanDifference": -0.004629629629629636,
+      "stdev": 0.0813024126611674,
       "transfers": 6,
-      "favouringRight": 1,
-      "favouringLeft": 5
+      "favouringRight": 2,
+      "favouringLeft": 4
     },
     {
       "rung": "F->G",
       "reading": "qu\u00e9 compra la correspondencia local",
       "metric": "sourceAccuracy",
-      "meanDifference": -0.02777777777777779,
-      "stdev": 0.09622504486493767,
+      "meanDifference": -0.023148148148148157,
+      "stdev": 0.1707071952263806,
       "transfers": 6,
       "favouringRight": 1,
       "favouringLeft": 5

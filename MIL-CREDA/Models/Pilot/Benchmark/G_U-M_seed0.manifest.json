@@ -2,7 +2,7 @@
   "arm": "G",
   "transfer": "U->M",
   "seed": 0,
-  "targetAccuracy": 0.9722222222222222,
+  "targetAccuracy": 0.75,
   "sourceAccuracy": 1.0,
   "reduction": {
     "setting": "trained",
@@ -26,6 +26,7 @@
     "attentionGamma": 0.01365767469209711,
     "attentionTemperature": 0.711723564948792,
     "tauLocal": 4.466752700001235,
+    "ceilingLocal": 1.0,
     "ceilings": {
       "milcreda": 0.010796012633645448
     },
@@ -297,6 +298,7 @@
       }
     },
     "rampDelta": 1.9071433953026697,
+    "rampDeltaLocal": 20,
     "device": "mps",
     "environment": {
       "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
