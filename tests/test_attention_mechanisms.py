@@ -14,8 +14,9 @@ import math
 
 import pytest
 import torch
+import torch.nn as nn
 
-from MIL_CREDA_Benchmark import wiring
+from MIL_CREDA_Benchmark import config, wiring
 
 torch.manual_seed(0)
 
@@ -227,3 +228,119 @@ def test_the_five_mechanisms_give_five_different_embeddings_on_the_same_bag(
 def test_mechanism_weights_refuses_an_unknown_mechanism() -> None:
     with pytest.raises(ValueError):
         wiring.mechanism_weights("not-a-mechanism", _bag(), {})
+
+
+# --------------------------------------------- the comparison itself, driven for real
+
+def test_the_comparison_runs_the_full_method_alone_across_mechanisms_domains_and_noise(
+        monkeypatch, tmp_path) -> None:
+    """AGREED.md's Ladder section: "The attention is compared on the full
+    method alone, against ABMIL as published..., ABMIL gated, max pooling and
+    mean pooling, in source and target, clean and contaminated." Unwitnessed
+    in the agreement file -- the neighbouring max-pooling line right above it
+    already has a proven witness
+    (`test_max_pooling_is_the_winning_instance_whole_and_its_one_hot`), and
+    this is the other attention-comparison agreement in the same section that
+    did not.
+
+    `tables.MECHANISM_RECORD`'s own docstring calls itself unreachable ("no
+    hay productor todavía -- ningún módulo de wiring/harness corre el método
+    completo bajo un mecanismo de atención distinto del propio"). That
+    docstring is stale: `harness.run_mechanism`/`run_mechanism_sweep` exist
+    and ARE that producer. This drives them for real -- tiny synthetic
+    material and a stubbed encoder, one epoch, one transfer, for speed, never
+    mocking `run_mechanism` itself -- and checks every clause the agreement
+    names: the model built is always `G`'s own spec, structurally, and not by
+    convention (`MechanismArm.__init__` never reads `mechanism` to choose a
+    spec, and `build_mechanism` takes no arm id to override it with); every
+    one of the five declared mechanisms runs (`wiring.MECHANISMS`: ours,
+    abmil-published, abmil-gated, max, mean); each run reports BOTH
+    `sourceAccuracy` and `targetAccuracy`; and calling the sweep once clean
+    and once contaminated leaves both `"clean"` and `"noisy"` populated on
+    the SAME record.
+
+    Reachable red, any clause: have `MechanismArm.__init__` pick its spec
+    from `mechanism` instead of hardcoding `config.ARMS_BY_ID["G"]`; drop a
+    mechanism from the sweep's own loop over `wiring.MECHANISMS`; report only
+    one of the two accuracies; or have the noisy call overwrite the clean
+    entries instead of keying by condition.
+    """
+    import ast
+    import inspect
+    from pathlib import Path as _Path
+
+    from MIL_CREDA_Benchmark import bags, harness, tables
+
+    # the structural lock: `MechanismArm.__init__` never branches its spec on
+    # `mechanism`, and `build_mechanism` cannot even be asked for another arm.
+    tree = ast.parse(_Path(wiring.__file__).read_text(encoding="utf-8"))
+    mechanism_arm = next(node for node in ast.walk(tree)
+                         if isinstance(node, ast.ClassDef) and node.name == "MechanismArm")
+    init = next(node for node in ast.walk(mechanism_arm)
+               if isinstance(node, ast.FunctionDef) and node.name == "__init__")
+    super_calls = [node for node in ast.walk(init) if isinstance(node, ast.Call)
+                   and isinstance(node.func, ast.Attribute) and node.func.attr == "__init__"]
+    assert len(super_calls) == 1
+    spec_arg = ast.unparse(super_calls[0].args[0]).replace("'", '"')
+    assert spec_arg == 'config.ARMS_BY_ID["G"]', (
+        f"MechanismArm.__init__ builds its spec from {spec_arg!r}, not the "
+        "hardcoded full method -- a per-mechanism arm has become expressible"
+    )
+    assert "arm_id" not in inspect.signature(wiring.build_mechanism).parameters
+    assert "arm" not in inspect.signature(wiring.build_mechanism).parameters
+
+    # the driver, run for real.
+    class _TinyEncoder(nn.Module):
+        def __init__(self, backbone=None, pretrained=False):
+            super().__init__()
+            self.output_dim = 4
+            self.linear = nn.Linear(3 * 4 * 4, self.output_dim)
+
+        def forward(self, x):
+            return self.linear(x.reshape(x.shape[0], -1))
+
+    def _tiny_bagset(domain: str) -> bags.BagSet:
+        classes = config.CLASSES
+        total = classes * 3  # one bag per class, for each of train/valid/eval
+        images = torch.randn(total * config.INSTANCES_PER_BAG, 3, 4, 4)
+        members = torch.arange(images.shape[0]).reshape(total, config.INSTANCES_PER_BAG)
+        labels = torch.arange(total) % classes
+        return bags.BagSet(
+            domain=domain, images=images, members=members, labels=labels,
+            train_idx=torch.arange(0, classes),
+            valid_idx=torch.arange(classes, 2 * classes),
+            eval_idx=torch.arange(2 * classes, 3 * classes),
+            manifest={})
+
+    monkeypatch.setattr(wiring, "FeatureExtractor", _TinyEncoder)
+    monkeypatch.setattr(harness.bags, "build",
+                        lambda code, cache, seed, noise=None: _tiny_bagset(code))
+    monkeypatch.setattr(config, "PRODUCT", tmp_path)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+
+    reduction = harness.Reduction(epochs=1, seeds=[0])
+    transfers = [("M", "U")]
+
+    for noise in (0.0, 0.2):
+        record = harness.run_mechanism_sweep(
+            reduction, torch.device("cpu"), transfers=transfers, noise=noise,
+            progress=lambda *a, **k: None)
+
+    assert set(record["mechanisms"]) == set(wiring.MECHANISMS)
+    assert record["clean"] and record["noisy"], (
+        "the two conditions do not both survive on the one record -- one "
+        "call overwrote the other instead of keying by condition"
+    )
+    for condition in ("clean", "noisy"):
+        runs = record[condition]
+        assert {r["mechanism"] for r in runs} == set(wiring.MECHANISMS)
+        for run in runs:
+            assert 0.0 <= run["sourceAccuracy"] <= 1.0
+            assert 0.0 <= run["targetAccuracy"] <= 1.0
+
+    record_path = (config.results_for(rate=0.0, kind="campaign", pilot=False)
+                  / _Path(tables.MECHANISM_RECORD).name)
+    assert record_path.exists(), (
+        "the sweep never wrote the record its own readers "
+        "(`tables.render_mechanisms`/`conclusion_mechanisms`) name"
+    )

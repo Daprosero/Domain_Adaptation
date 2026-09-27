@@ -39,15 +39,6 @@ def _stamped(entry: dict) -> dict:
             "attentionTemperature": config.ATTENTION_TEMPERATURE}
 
 
-def test_every_arm_declares_which_sections_it_exercises() -> None:
-    declared = set(MIL_CREDA_Benchmark.__benchmark__["arms"])
-    configured = {arm["id"] for arm in config.ARMS}
-    assert configured - declared == set(), (
-        f"arms with no section declaration: {sorted(configured - declared)}")
-    assert declared - configured == set(), (
-        f"sections declared for arms that no longer exist: {sorted(declared - configured)}")
-
-
 def test_the_declared_arms_and_rungs_are_exactly_the_operators_four_and_three() -> None:
     """Defect (11)'s guard, re-measured against the current identities.
 
@@ -76,6 +67,43 @@ def test_the_declared_arms_and_rungs_are_exactly_the_operators_four_and_three() 
 
 
 def test_the_benchmark_is_bound_to_the_same_revision_as_the_configuration() -> None:
+    """`MIL_CREDA_Benchmark.__benchmark__` declares revision r21 and which
+    sections each declared arm exercises: two clauses of one agreement,
+    witnessed here together rather than split -- the sections half used to
+    have its own, thinner witness (`test_every_arm_declares_which_sections_
+    it_exercises`) that checked only the arm ID SET matches `config.ARMS`,
+    never that a matched arm's `"sections"` entry says anything at all.
+
+    The revision half is, honestly, a literal string held against another
+    literal string: `MIL_CREDA.__implementation__["revision"]` and
+    `config.REVISION` are two independent constants, each hand-written in its
+    own file, and nothing in this repository resolves "r21" against a third,
+    authoritative source at runtime -- no `research-concept-r21.md` lives
+    under this checkout for either constant to be checked against. Asserting
+    the relation instead of the literal would need that source to exist; it
+    does not, so the honest assertion IS the literal equality, and this is
+    the one clause of the thirteen where that is the right call rather than
+    a shortcut.
+
+    Reachable red, either clause: let one revision constant drift from the
+    other (a change to one file with no companion change to the other); or
+    declare an arm with an empty (or missing) `"sections"` list -- a section
+    axis nobody named is indistinguishable from one this comparison forgot
+    to claim.
+    """
+    declared = MIL_CREDA_Benchmark.__benchmark__["arms"]
+    configured = {arm["id"] for arm in config.ARMS}
+    assert configured - set(declared) == set(), (
+        f"arms with no section declaration: {sorted(configured - set(declared))}")
+    assert set(declared) - configured == set(), (
+        f"sections declared for arms that no longer exist: "
+        f"{sorted(set(declared) - configured)}")
+    for arm_id, entry in declared.items():
+        sections = entry.get("sections")
+        assert sections, f"{arm_id} declares no sections at all"
+        assert all(isinstance(s, str) and s for s in sections), (
+            f"{arm_id}'s sections are not all non-empty strings: {sections!r}")
+
     assert MIL_CREDA.__implementation__["revision"] == config.REVISION
 
 
@@ -157,6 +185,34 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
         "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
                                   "hyperByTransfer", "labelNoise"],
     }
+
+    # Listing the two fields as poolable is not yet the guarantee the
+    # declaration's own comment (`config.py`, beside `"supervised"`) names:
+    # that the two CANNOT print alike. Two runs with the identical ratio and
+    # a different magnitude -- "commanded nothing" (small share, small
+    # magnitude) and "scaled to nothing" (the same small share, over a
+    # supervised term two orders of magnitude larger) -- are built here, and
+    # what each one leaves on the record is read back as text.
+    commanded_nothing = {"supervised": 0.02, "adaptationShare": 0.001}
+    scaled_to_nothing = {"supervised": 5.0, "adaptationShare": 0.001}
+    assert commanded_nothing["adaptationShare"] == scaled_to_nothing["adaptationShare"]
+    assert commanded_nothing["supervised"] != scaled_to_nothing["supervised"]
+
+    def _text(run: dict, fields: list[str]) -> str:
+        return json.dumps({field: run[field] for field in fields}, sort_keys=True)
+
+    # the ratio alone IS the failure the declaration's comment names: read
+    # through `adaptationShare` by itself, the two runs print identically --
+    # a reader could not tell "commanded nothing" from "scaled to nothing".
+    assert _text(commanded_nothing, ["adaptationShare"]) == _text(
+        scaled_to_nothing, ["adaptationShare"])
+
+    # both declared fields travel together on the record (`supervised` is
+    # `dist["poolable"]`, right beside `adaptationShare`), so the SAME two
+    # runs print differently once the magnitude is kept alongside the ratio.
+    kept = ["supervised", "adaptationShare"]
+    assert set(kept) <= set(dist["poolable"])
+    assert _text(commanded_nothing, kept) != _text(scaled_to_nothing, kept)
 
 
 def test_the_declared_dimensions_now_cover_every_dimension_the_harness_measures() -> None:
@@ -1700,7 +1756,25 @@ def test_two_shards_straddling_a_search_disagree_on_more_than_the_ceiling(
     and a field declared and not written compares `None` against `None` on every
     shard and agrees forever.
 
-    Reachable red: drop `hyperByTransfer` from either side.
+    Two more clauses travel with this witness rather than their own, thinner
+    ones. A ceiling-only shard -- one where only the coefficient was funded
+    by a search, never the other five dimensions -- has to show as an EMPTY
+    `hyperByTransfer` entry, never an absent key: `write_shard_stamp`'s own
+    comment calls this out explicitly ("empty here is itself the reading
+    that matters"), and nothing before this read the stamp back to check it
+    against a Reduction that never populated `hyperByTransfer` at all.
+
+    And `disagreements()` reporting a clash is not yet the refusal the
+    agreement promises ("shards straddling a search REFUSE to merge"): the
+    reporting half and the refusing half are two different functions
+    (`disagreements()` and `merge()`), and only driving `merge()` itself,
+    with two fully sealed shards, proves the second one actually fires
+    rather than merely being available for a caller who remembers to ask.
+
+    Reachable red, three ways: drop `hyperByTransfer` from either side (the
+    original guard); write `write_shard_stamp` with `hyperByTransfer` OMITTED
+    rather than defaulted to `{}` for an unfunded Reduction; or have `merge()`
+    call `disagreements()` and ignore what it returns instead of raising.
     """
     from MIL_CREDA_Benchmark import harness, shards
 
@@ -1725,6 +1799,44 @@ def test_two_shards_straddling_a_search_disagree_on_more_than_the_ceiling(
     assert "hyperByTransfer" in fields, (
         "two shards trained under bandwidths an order of magnitude apart merged "
         f"without a word -> {fields}")
+
+    # a ceiling-only shard: `ceilings`/`ceilingsByTransfer` funded, the other
+    # five dimensions never searched -- `hyperByTransfer` stays at its
+    # `Reduction` default and has to write as `{}`, present, not absent.
+    ceiling_only = harness.Reduction()
+    ceiling_only.ceilings = {"milcreda": 0.62}
+    assert ceiling_only.hyperByTransfer == {}
+    harness.write_shard_stamp("s02", ceiling_only)
+    stored = json.loads(harness.shard_paths("s02")["stamp"].read_text())
+    assert "hyperByTransfer" in stored, (
+        "a record that funded only the ceiling wrote no `hyperByTransfer` key "
+        "at all -- a silence, not the declared empty entry"
+    )
+    assert stored["hyperByTransfer"] == {}
+
+    # the actual refusal: two fully sealed shards, straddling the search, fed
+    # to `merge()` itself -- not just to `disagreements()`.
+    for name in ("s00", "s01"):
+        paths = harness.shard_paths(name)
+        paths["runs"].write_text(
+            json.dumps({"arm": "G", "transfer": "M->U", "seed": 0,
+                       "env": "e0", "targetAccuracy": 0.5, "sourceAccuracy": 0.5,
+                       "contribution": 0.1, "supervised": 0.2,
+                       "adaptationShare": 0.3, "parameters": 1}) + "\n",
+            encoding="utf-8")
+        harness.seal_shard_stamp(name)
+
+    sealed_entries = [{"shard": name,
+                       "stamp": json.loads(harness.shard_paths(name)["stamp"].read_text()),
+                       "runs": [json.loads(line) for line in
+                                harness.shard_paths(name)["runs"].read_text().splitlines()]}
+                      for name in ("s00", "s01")]
+    with pytest.raises(shards.ShardsDisagree) as raised:
+        shards.merge(sealed_entries, dimensions=config.DIMENSIONS,
+                    dist=shards.declaration())
+    assert "hyperByTransfer" in str(raised.value), (
+        f"merge() refused for a reason that does not name hyperByTransfer: {raised.value}"
+    )
 
 
 # --------------------------------------------------------------- shard evidence

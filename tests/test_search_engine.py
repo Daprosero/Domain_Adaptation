@@ -65,10 +65,46 @@ def test_busca_en_todas_las_transferencias(motor):
 
 
 def test_solo_busca_sobre_los_metodos_completos(motor):
-    """Un techo por brazo haría indistinguible el término del coeficiente."""
+    """Un techo por brazo haría indistinguible el término del coeficiente.
+
+    Two clauses travel together now: which arm `run_one` is actually driven
+    with (the original guard, over every trial the search ran), and that the
+    RECORD ITSELF could not express a per-arm ceiling even if something
+    tried -- keyed by family and then by transfer, with no arm axis
+    anywhere in between, and read back by `ceiling_for`, whose own
+    signature has no `arm` parameter to accept one.
+
+    Reachable red, either half: pass a different arm into `run_one` for some
+    transfer; or key `found[family]`'s per-transfer entries by arm instead
+    of by transfer label (or add an `arm` parameter to `ceiling_for`).
+    """
     vistos = motor
-    _correr()
+    found = _correr()
     assert {v["arm"] for v in vistos} == set(config.SEARCH_ARMS.values()) == {"G"}
+
+    # the record's own structure: family at the top, transfer underneath,
+    # and nothing keyed -- or even carried -- by arm below the family level.
+    assert set(found) == set(config.SEARCH_ARMS)
+    labels = {harness.transfer_label(t) for t in config.SEARCH_TRANSFERS}
+    for family, entry in found.items():
+        assert entry["arm"] == config.SEARCH_ARMS[family], (
+            "the family's arm is a scalar fact about its own entry, not a key"
+        )
+        assert set(entry["byTransfer"]) == labels
+        assert set(entry["perTransfer"]) == labels
+        assert all("arm" not in per for per in entry["perTransfer"].values()), (
+            "a per-transfer entry carries its own arm -- a per-arm ceiling "
+            "has become expressible"
+        )
+
+    # the one reader of this record cannot even ask for a per-arm ceiling:
+    # its own signature has no `arm` parameter to accept one.
+    import inspect
+
+    params = list(inspect.signature(harness.ceiling_for).parameters)
+    assert "arm" not in params, (
+        f"ceiling_for{tuple(params)}: a per-arm ceiling has become expressible"
+    )
 
 
 def test_una_sola_semilla_declarada_en_todos_los_trials(motor):
