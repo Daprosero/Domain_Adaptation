@@ -2340,3 +2340,70 @@ def test_the_per_transfer_ceilings_reach_the_written_report() -> None:
     report = MIL_CREDA_Benchmark.__benchmark__["report"]
     assert "tables.render_ceilings_by_transfer" in report["renderers"]
     assert "tables.conclusion_ceilings_by_transfer" in report["conclusions"]
+
+
+def test_the_record_provenance_guard_is_closed(tmp_path, monkeypatch) -> None:
+    """The witness of one agreement, which names three conditions.
+
+    `AGREED.md`'s record-provenance item is a single claim -- *nothing runs
+    until the guard is closed* -- made of three conditions, and the file
+    carries one witness slot per line. Pointing that slot at any one of the
+    three would let the protected half read as proof of the whole, which is
+    a failure this repository has already recorded under its own name. So
+    the witness asserts all three, and says which one broke when it fails.
+
+    Each condition is proved elsewhere in its own right and at its own
+    depth: the changed-ceilings refusal above, the revision refusal in
+    `tests/test_latent_binding.py`, and the retirement assertions in
+    `tests/test_steps.py` and `tests/test_report_tables.py`. This is not a
+    fourth proof of any of them. It is the one place a reader can ask
+    whether the AGREEMENT holds, rather than whether three separate
+    mechanisms each happen to.
+    """
+    from dataclasses import asdict
+
+    from MIL_CREDA_Benchmark import latent
+
+    # (1) Stale ceilings through the import-time snapshot: a value that
+    # CHANGED under a stamp that did not. Present, not absent, which is
+    # precisely what the empty-mapping and missing-picks guards cannot see.
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "milcreda": _stamped({"ceiling": 0.05, "byTransfer": {"S->M": 0.0077},
+                              "atRequiredScale": True}),
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "absent.json")
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
+
+    def run_one_must_not_be_called(*args, **kwargs):
+        pytest.fail("clause 1 of the record-provenance guard is open: "
+                    "`campaign()` began training under a ceiling the record "
+                    "no longer carries")
+
+    monkeypatch.setattr(harness, "run_one", run_one_must_not_be_called)
+
+    stale = harness.Reduction(ceilings={"milcreda": 1e-2},
+                              ceilingsByTransfer={"milcreda": {"S->M": 1e-4}})
+    with pytest.raises(SystemExit):
+        harness.campaign(stale, torch.device("cpu"))
+
+    # (2) `from_record` and the revision: `revision` is not among
+    # `latent.HYPERPARAMETER_FIELDS`, so the drift check alone never saw it.
+    rebuilt = asdict(harness.Reduction())
+    rebuilt["revision"] = "r17-fake-old-revision"
+    with pytest.raises(latent.StaleCheckpointRevision):
+        harness.Reduction.from_record(rebuilt)
+
+    # (3) The noise diagnostic: closed by retirement rather than by a check.
+    # The condition is that no declared step re-stamps a sweep, so what is
+    # asserted is the registry itself -- a step reintroduced under any of
+    # its retired names fires this, which is the only way this clause can
+    # stop being true.
+    declared = set(MIL_CREDA.__steps__)
+    retired = {"noise-diagnostic", "noise-diagnostic-report"}
+    assert not (declared & retired), (
+        "clause 3 of the record-provenance guard is open: a noise-diagnostic "
+        f"step is declared again ({sorted(declared & retired)}), so a sweep "
+        "can be re-stamped without having been checked")
