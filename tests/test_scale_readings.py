@@ -994,3 +994,248 @@ def test_el_recorrido_entero_lee_el_registro_de_su_escala_en_los_dos_modos():
             assert config.ceilings_provenance()["source"] == "pilot"
         finally:
             config.CEILINGS_RECORD, config.CEILINGS_PILOT_RECORD = anterior
+
+# ------------------------------------------------------ la escala de la ejecucion
+#
+# `is_pilot_scale()` lee un dial del ARCHIVO, y un worker remoto no puede editar
+# el archivo entre el ensayo y la corrida real sin dejar de correr el commit que
+# se le pidio -- el mismo argumento que el comentario de `REHEARSAL_ENV` ya hace
+# sobre su propia variable. `execution_is_pilot_scale()`/`execution_seed_units()`
+# son la lectura que falta: de que ejecucion se trata, no de que archivo.
+
+_CUADERNOS_CON_LA_NUEVA_LECTURA = {
+    "Benchmark_Ceiling_Search.ipynb": ("harness.run_search(", "shard=SHARD"),
+    "Benchmark_Campaign.ipynb": ("harness.run_campaign_shard(",
+                                 "shard=SHARD", "seeds=UNIDADES"),
+    "Benchmark_Noise_Sweep.ipynb": ("harness.campaign(", "shard=SHARD"),
+    "Benchmark_Attention_Mechanisms.ipynb": ("harness.run_mechanism_sweep_shard(",
+                                             "seeds=UNIDADES"),
+}
+
+
+def _codigo_de(cuaderno: str) -> str:
+    """El texto de cada celda de codigo de `cuaderno`, concatenado.
+
+    Un cuaderno no se importa -- la misma razon que `_fuentes()` ya da mas
+    arriba -- y esta lectura es mas chica porque sólo necesita CUATRO
+    cuadernos y no los siete que `_fuentes()` recorre.
+    """
+    documento = json.loads(
+        (_REPOSITORIO / "MIL-CREDA" / "Notebooks" / cuaderno)
+        .read_text(encoding="utf-8"))
+    return "\n".join(
+        "".join(celda.get("source", []))
+        for celda in documento.get("cells", [])
+        if celda.get("cell_type") == "code")
+
+
+class TestLaEjecucionYNoElArchivoDecideLaEscalaRemota:
+    """`execution_is_pilot_scale()`: la misma pregunta que `is_rehearsal()` ya
+    resuelve para su propia variable, aplicada a la escala.
+
+    Sin esto, un cuaderno corrido por un worker lee `is_pilot_scale()` --- dos
+    constantes fijas en el archivo, `EPOCHS=3`, `SEEDS=[0]` --- y esa lectura
+    es «ensayo» en CUALQUIER worker, sin que la sumision que lo mando a correr
+    pueda cambiarla sin editar el commit que se le pidio.
+    """
+
+    def test_local_se_repliega_al_dial_sin_cambiar_ni_un_bit(self, monkeypatch):
+        """`FORGE_CLONE_ROOT` ausente: el recorrido LOCAL es exactamente el de
+        siempre, en las dos direcciones del dial.
+
+        Mutacion que prueba esto: cambiar el `if not os.environ.get(...)` por
+        `if os.environ.get(...)` en `execution_is_pilot_scale()` -- corrida,
+        la lectura local deja de igualar `is_pilot_scale()` y este test se
+        pone rojo.
+        """
+        monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+        monkeypatch.delenv(config.RUN_MODE_ENV, raising=False)
+        assert config.execution_is_pilot_scale() == config.is_pilot_scale()
+
+        monkeypatch.setattr(config, "EPOCHS", config.FULL_EPOCHS)
+        monkeypatch.setattr(config, "SEEDS", list(config.FULL_SEEDS))
+        assert config.is_pilot_scale() is False
+        assert config.execution_is_pilot_scale() is False
+
+    def test_worker_sin_modo_de_ensayo_corre_a_escala_completa(self, monkeypatch):
+        """Un worker es una sumision REAL mientras nadie declare lo contrario
+        -- `FORGE_RUN_MODE` ausente, o puesto a cualquier otro valor, nunca es
+        «local» ni es «ensayo».
+
+        Mutacion que prueba esto: reemplazar el `return ... == "smoke"` por
+        `return True` -- corrida, un worker sin modo declarado lee «ensayo» y
+        este test se pone rojo.
+        """
+        monkeypatch.setenv(config.CLONE_ROOT_ENV, "/clone/del/worker")
+        monkeypatch.delenv(config.RUN_MODE_ENV, raising=False)
+        assert config.execution_is_pilot_scale() is False
+
+        monkeypatch.setenv(config.RUN_MODE_ENV, "otro-modo-nunca-declarado")
+        assert config.execution_is_pilot_scale() is False
+
+    def test_worker_con_modo_de_ensayo_corre_a_escala_de_ensayo(self, monkeypatch):
+        """La contraparte exacta de `is_rehearsal()` para la escala: un ensayo
+        remoto prueba que el cable lleva corriente, nunca si el resultado se
+        puede citar, y por eso corre a escala reducida.
+
+        Mutacion que prueba esto: reemplazar el `== "smoke"` por
+        `!= "smoke"` -- corrida, un ensayo remoto lee «completa» y este test
+        se pone rojo.
+        """
+        monkeypatch.setenv(config.CLONE_ROOT_ENV, "/clone/del/worker")
+        monkeypatch.setenv(config.RUN_MODE_ENV, "smoke")
+        assert config.execution_is_pilot_scale() is True
+
+    def test_local_gana_aunque_el_worker_declare_ensayo_sin_clon(self, monkeypatch):
+        """`FORGE_RUN_MODE` puesto sin `FORGE_CLONE_ROOT` sigue siendo LOCAL:
+        la variable que decide "es un worker" es una sola, y no la que lleva
+        el modo."""
+        monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+        monkeypatch.setenv(config.RUN_MODE_ENV, "smoke")
+        assert config.execution_is_pilot_scale() == config.is_pilot_scale()
+
+
+class TestLasUnidadesSonSemillasYNadaMas:
+    """`execution_seed_units()`: `FORGE_RUN_UNITS` en el vocabulario de este
+    repositorio. La forja misma declara `units` como identificadores opacos
+    que no interpreta (`remote_cli.py`); decidir que es una unidad es una
+    decision de este repositorio, y esta es su unica lectura.
+    """
+
+    def test_ausente_es_la_rejilla_entera(self, monkeypatch):
+        """Ninguna unidad declarada: `None`, y el llamador lo lee como «correr
+        todo», el mismo valor por omision que `run_campaign_shard(seeds=None)`
+        ya tiene.
+
+        Mutacion: hacer que la ausencia devuelva `[]` en vez de `None` --
+        corrida, este test se pone rojo porque `[]` ya no es `None`.
+        """
+        monkeypatch.delenv(config.RUN_UNITS_ENV, raising=False)
+        assert config.execution_seed_units() is None
+
+    def test_declarada_vacia_se_distingue_de_ausente(self, monkeypatch):
+        """Cero unidades DECIDIDAS es un hecho distinto de que nadie haya
+        decidido nada -- la misma distincion que `runner_invoke.py` ya
+        documenta para esta variable.
+
+        Mutacion: colapsar `"[]"` a la misma rama que la ausencia -- corrida,
+        `execution_seed_units()` con `RUN_UNITS_ENV="[]"` devuelve `None` y
+        este test se pone rojo.
+        """
+        monkeypatch.setenv(config.RUN_UNITS_ENV, "[]")
+        unidades = config.execution_seed_units()
+        assert unidades == []
+        assert unidades is not None
+
+    def test_unidades_declaradas_se_leen_como_semillas_enteras(self, monkeypatch):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps(["0", "1", "2"]))
+        assert config.execution_seed_units() == [0, 1, 2]
+
+    def test_json_invalido_se_rechaza(self, monkeypatch):
+        """Nunca se adivina: una semilla mal leida no falla, corre con la
+        semilla equivocada y el numero que produce se ve igual que el
+        correcto."""
+        monkeypatch.setenv(config.RUN_UNITS_ENV, "{esto no es json")
+        with pytest.raises(ValueError):
+            config.execution_seed_units()
+
+    def test_un_objeto_json_que_no_es_lista_se_rechaza(self, monkeypatch):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps({"0": True}))
+        with pytest.raises(ValueError):
+            config.execution_seed_units()
+
+    def test_una_unidad_no_entera_se_rechaza(self, monkeypatch):
+        monkeypatch.setenv(config.RUN_UNITS_ENV,
+                           json.dumps(["0", "no-es-una-semilla"]))
+        with pytest.raises(ValueError):
+            config.execution_seed_units()
+
+    def test_una_unidad_que_no_es_string_se_rechaza(self, monkeypatch):
+        """`runner_invoke.py` sólo serializa strings; un elemento que no lo
+        sea es una sumision que no siguio su propio contrato, y adivinar que
+        quiso decir es exactamente lo que esta lectura se niega a hacer."""
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps([0, 1]))
+        with pytest.raises(ValueError):
+            config.execution_seed_units()
+
+
+class TestLosCuatroCuadernosLlamanALaNuevaLectura:
+    """Barato y legitimo: leer el JSON del cuaderno y afirmar que la llamada
+    esta, sin correrlo -- la misma disciplina que
+    `test_ningun_cuaderno_se_escribe_su_escala_a_mano` ya aplica mas arriba.
+    """
+
+    def test_cada_cuaderno_deriva_es_ensayo_de_la_ejecucion(self):
+        """Rojo alcanzable: dejar `ES_ENSAYO = config.is_pilot_scale()` en
+        cualquiera de los cuatro cuadernos autorizados.
+
+        La asignación misma, palabra por palabra, y no un `not in` a secas
+        sobre toda la celda: un comentario que CONTRASTA la lectura nueva
+        con la vieja ("`execution_is_pilot_scale()` y no `is_pilot_scale()`
+        a secas") menciona legítimamente el nombre viejo sin volver a
+        llamarlo, y un `not in` de toda la celda marcaría eso como un
+        defecto que no es.
+        """
+        for cuaderno in _CUADERNOS_CON_LA_NUEVA_LECTURA:
+            codigo = _codigo_de(cuaderno)
+            assert "ES_ENSAYO = config.execution_is_pilot_scale()" in codigo, (
+                f"{cuaderno} no llama a la nueva lectura")
+            assert "ES_ENSAYO = config.is_pilot_scale()" not in codigo, (
+                f"{cuaderno} todavia asigna ES_ENSAYO desde el dial del archivo")
+
+    def test_cada_cuaderno_pasa_las_unidades_al_llamador_que_invoca(self):
+        """Rojo alcanzable: quitar `shard=SHARD`/`seeds=UNIDADES` de la
+        llamada que cada cuaderno ya hacia, en cualquiera de los cuatro."""
+        for cuaderno, fragmentos in _CUADERNOS_CON_LA_NUEVA_LECTURA.items():
+            codigo = _codigo_de(cuaderno)
+            for fragmento in fragmentos:
+                assert fragmento in codigo, f"{cuaderno} no tiene {fragmento!r}"
+
+    def test_los_cuatro_cuadernos_siguen_siendo_json_valido(self):
+        """Que la edicion programatica no haya dejado un cuaderno roto -- un
+        `.ipynb` que no parsea no abre en Jupyter, y nada mas en esta suite lo
+        verificaria."""
+        for cuaderno in _CUADERNOS_CON_LA_NUEVA_LECTURA:
+            documento = json.loads(
+                (_REPOSITORIO / "MIL-CREDA" / "Notebooks" / cuaderno)
+                .read_text(encoding="utf-8"))
+            assert documento.get("cells"), f"{cuaderno} no tiene celdas"
+            assert documento.get("nbformat") == 4, f"{cuaderno} perdio su nbformat"
+
+
+def test_el_barrido_de_ruido_le_pasa_la_escala_a_su_reduccion():
+    """`pilot=` elige el DESTINO, no la escala, y el barrido arma su
+    `Reduction` a mano.
+
+    Los otros tres cuadernos llaman a un `run_*_shard` que construye la
+    reduccion adentro y ahi resuelve `epochs`/`seeds` contra la escala. El
+    barrido no: llama a `harness.campaign()` con una `Reduction` que arma
+    el, y una que no nombra `epochs`/`seeds` se queda con los valores por
+    defecto del dataclass --- `config.EPOCHS`/`config.SEEDS`, o sea el dial
+    del ARCHIVO. Con `pilot=False` en un worker eso daba destino de escala
+    completa con numeros de ensayo, que es exactamente como un numero de
+    piloto termina citado como resultado.
+
+    Mutacion que tiene que hacerlo fallar: sacar `epochs=` o `seeds=` de esa
+    llamada. Nada mas en la suite lo nota --- el cuaderno sigue siendo JSON
+    valido, sigue llamando a la lectura de escala, y sigue escribiendo donde
+    corresponde.
+    """
+    import json
+    cuaderno = json.loads(
+        (Path(__file__).resolve().parents[1]
+         / "MIL-CREDA" / "Notebooks" / "Benchmark_Noise_Sweep.ipynb")
+        .read_text(encoding="utf-8"))
+    celdas = ["".join(c["source"]) for c in cuaderno["cells"]
+              if c["cell_type"] == "code" and "harness.Reduction(" in "".join(c["source"])]
+    assert len(celdas) == 1, f"{len(celdas)} celdas arman una Reduction"
+    llamada = celdas[0]
+    assert "epochs=" in llamada, (
+        "la Reduction del barrido no nombra `epochs`, asi que se queda con "
+        "el dial del archivo cualquiera sea la escala de esta ejecucion")
+    assert "seeds=" in llamada, (
+        "la Reduction del barrido no nombra `seeds`, asi que se queda con "
+        "el dial del archivo cualquiera sea la escala de esta ejecucion")
+    assert "ES_ENSAYO" in llamada, (
+        "la escala de la Reduction no se deriva de la lectura de esta "
+        "ejecucion")
