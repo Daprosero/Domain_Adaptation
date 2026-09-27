@@ -2564,7 +2564,39 @@ def run_campaign_shard(shard: str | None = None,
     demands a ceiling record, and a worker that clones only `src/` does not
     receive one. That is a property of what the job declares it clones, not
     something this function can paper over.
+
+    **`pilot=False` refuses without an authorization nothing here used to
+    ask for.** AGREED.md, "The full run": "The full grid — 30 seeds, 20
+    epochs — is not launched without an explicit authorization. Neither a
+    clean verification nor a green pilot is permission." Measured: nothing
+    enforced it. `config.is_pilot_scale()` compares two constants of its own
+    file, so it agrees with whatever `pilot=` this call already decided; and
+    a caller reaching this function directly — `tools/distribute.py`'s own
+    `run-config.json` names it by module and function — never consulted that
+    comparison at all. `config.full_scale_launch_is_authorized()` is the
+    guard that actually distinguishes the two situations a `pilot=False`
+    call can be in: on a worker `config.CLONE_ROOT_ENV` is set, the forge
+    already minted a single-use token before this job was ever submitted,
+    and refusing here would break the very remote path this project is
+    built around; with no worker environment at all, nothing outside this
+    process has looked at the call, so it refuses unless a human sets
+    `config.LOCAL_FULL_SCALE_ENV` for this one invocation — the same shape
+    `REHEARSAL_ENV` already has, and for the reason its own comment gives:
+    authorizing a campaign is a fact about ONE EXECUTION, never about the
+    repository, so it cannot be a constant a file keeps saying yes to long
+    after whoever set it stopped watching.
     """
+    if not pilot and not config.full_scale_launch_is_authorized():
+        raise SystemExit(
+            "refusing to launch the full grid (30 seeds, 20 epochs) here: "
+            f"{config.CLONE_ROOT_ENV} is not set, so nothing outside this "
+            "process authorized it, and neither a clean verification nor a "
+            "green pilot is permission (AGREED.md, 'The full run'). A "
+            "worker the forge submitted this to is authorized by its own "
+            "token before submission and needs nothing here; a local "
+            f"launch needs {config.LOCAL_FULL_SCALE_ENV}=1 set for this one "
+            "invocation, by a human who has actually decided to run it."
+        )
     device = resolve_device()
     reduction = Reduction(
         seeds=list(seeds) if seeds is not None
@@ -2603,7 +2635,26 @@ def run_mechanism_sweep_shard(seeds: list[int] | None = None,
     string, so a pilot dial alone would have written three-epoch numbers over
     the full record Section 4 is read from. That is the defect this whole
     change exists to close, wearing the opposite mask.
+
+    **Carries `run_campaign_shard`'s own authorization guard, for the same
+    reason it carries its scale dial: this is the same shape, and a
+    full-scale sweep launched here is thirty seeds of five mechanisms over
+    six transfers, not a cheaper rehearsal.** See that function's docstring
+    for the argument; `config.full_scale_launch_is_authorized()` is the same
+    call, asked here rather than duplicated in prose.
     """
+    if not pilot and not config.full_scale_launch_is_authorized():
+        raise SystemExit(
+            "refusing to launch the full attention-mechanism sweep (30 "
+            f"seeds, 20 epochs) here: {config.CLONE_ROOT_ENV} is not set, "
+            "so nothing outside this process authorized it, and neither a "
+            "clean verification nor a green pilot is permission (AGREED.md, "
+            "'The full run'). A worker the forge submitted this to is "
+            "authorized by its own token before submission and needs "
+            f"nothing here; a local launch needs "
+            f"{config.LOCAL_FULL_SCALE_ENV}=1 set for this one invocation, "
+            "by a human who has actually decided to run it."
+        )
     device = resolve_device()
     reduction = Reduction(
         seeds=list(seeds) if seeds is not None

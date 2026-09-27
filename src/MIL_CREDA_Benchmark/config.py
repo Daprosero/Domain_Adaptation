@@ -190,6 +190,46 @@ def execution_is_pilot_scale() -> bool:
     return os.environ.get(RUN_MODE_ENV) == "smoke"
 
 
+#: La autorizacion EXPLICITA para que ESTA EJECUCION lance la rejilla
+#: completa (30 semillas, 20 epocas) sin `CLONE_ROOT_ENV` -- o sea, sin que la
+#: forja ya la haya autorizado por su cuenta con su propio token de un solo
+#: uso. Una variable de entorno y no una constante de este archivo, por
+#: exactamente la razon que el comentario de `REHEARSAL_ENV` ya escribio para
+#: la suya: autorizar una campaña completa es un hecho de UNA EJECUCION,
+#: nunca del repositorio. Una constante puesta en `True` seguiria diciendo
+#: que si mucho despues de que la persona que la puso dejara de mirar la
+#: maquina -- exactamente el pin editado entre el ensayo y la corrida real
+#: que `REHEARSAL_ENV` rehusa ser. Puesta a mano, en el entorno del proceso
+#: que lanza, para esa lanzada y ninguna otra.
+LOCAL_FULL_SCALE_ENV = "MIL_CREDA_LOCAL_FULL_SCALE_AUTHORIZED"
+
+
+def full_scale_launch_is_authorized() -> bool:
+    """Si ESTA EJECUCION puede lanzar la rejilla completa (30 semillas, 20
+    epocas) -- la puerta que ninguna funcion que recibe `pilot=` tenia, y que
+    `is_pilot_scale()` no puede dar por si sola: es una comparacion contra
+    las dos constantes de ESTE archivo, `EPOCHS`/`SEEDS`, y una llamada con
+    `pilot=False` la deja de acuerdo con lo que acaba de pasar sin que nadie
+    haya tocado el archivo.
+
+    Dos casos, igual que `execution_is_pilot_scale()` distingue:
+
+    - `CLONE_ROOT_ENV` puesto: esto corre en un worker, y la forja ya emitio
+      su propio token de un solo uso ANTES de la sumision -- negar la corrida
+      aca romperia exactamente el camino remoto que este proyecto persigue.
+      Autoriza sin mirar `RUN_MODE_ENV`: un worker que efectivamente llama a
+      esta funcion con `pilot=False` no esta ensayando -- un ensayo remoto
+      prueba el cable con `run_smoke()`, nunca con la rejilla completa -- asi
+      que no hay un segundo caso de worker que distinguir aqui.
+    - `CLONE_ROOT_ENV` ausente: esto corre en el portatil de una persona, y
+      nada afuera de este proceso miro la corrida. Autoriza solo
+      `LOCAL_FULL_SCALE_ENV`, puesta a mano para esta ejecucion.
+    """
+    if os.environ.get(CLONE_ROOT_ENV):
+        return True
+    return os.environ.get(LOCAL_FULL_SCALE_ENV) == "1"
+
+
 def execution_seed_units() -> "list[int] | None":
     """Las `RUN_UNITS_ENV` de ESTA submision, en el vocabulario de este
     repositorio: una unidad ES una semilla.

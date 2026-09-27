@@ -862,6 +862,84 @@ def test_run_campaign_shard_is_callable_with_json_alone() -> None:
     assert all(p.default is not inspect.Parameter.empty for p in parameters.values())
 
 
+def test_run_campaign_shard_refuses_a_local_full_scale_launch_without_authorization(
+        monkeypatch) -> None:
+    """AGREED.md, "The full run": "The full grid — 30 seeds, 20 epochs — is
+    not launched without an explicit authorization. Neither a clean
+    verification nor a green pilot is permission." Measured, before this:
+    nothing enforced it. `config.is_pilot_scale()` compares two constants of
+    its own file and agrees with whatever `pilot=` a caller already chose,
+    and a caller reaching this function directly — the shape a
+    `run-config.json` submission takes — never consulted it at all.
+
+    No `FORGE_CLONE_ROOT`, no override: nothing outside this process looked
+    at the call, so it has to refuse before doing anything expensive.
+    `with_ceilings_in_force`/`search_ceilings`/`campaign` fail the test
+    outright if reached — a refusal that happened after any of them ran
+    would have already spent what it exists to save, or worse, reached the
+    real ceiling search from inside the unit suite.
+
+    Reachable red: delete the guard, or move it after any of those calls.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+    monkeypatch.delenv(config.LOCAL_FULL_SCALE_ENV, raising=False)
+    monkeypatch.setattr(harness, "with_ceilings_in_force", lambda *a, **k: pytest.fail(
+        "ceilings were resolved before the authorization guard refused"))
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
+        "the search ran before the authorization guard refused"))
+    monkeypatch.setattr(harness, "campaign", lambda *a, **k: pytest.fail(
+        "the campaign ran before the authorization guard refused"))
+
+    with pytest.raises(SystemExit):
+        harness.run_campaign_shard(pilot=False)
+
+
+def test_run_campaign_shard_proceeds_at_full_scale_on_a_forge_worker(
+        tmp_path, monkeypatch) -> None:
+    """The other half of the same guard, and the one whose failure mode is
+    worse: refusing this path would break the remote route this whole
+    project is built toward. `FORGE_CLONE_ROOT` is exactly the fact
+    `config.execution_is_pilot_scale()` already reads to know a worker, not a
+    laptop, is running this — the forge minted its own single-use token
+    before the job was ever submitted, so nothing here has to ask again.
+
+    No `LOCAL_FULL_SCALE_ENV` is set anywhere in this test: authorization
+    comes from the worker environment alone, which is the property being
+    proven.
+
+    Reachable red: a guard that refuses whenever no override is set,
+    regardless of `FORGE_CLONE_ROOT` — that shape blocks exactly the path
+    this test exists to keep open.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.setenv(config.CLONE_ROOT_ENV, str(tmp_path))
+    monkeypatch.delenv(config.LOCAL_FULL_SCALE_ENV, raising=False)
+
+    record = tmp_path / "ceilings.json"
+    record.write_text(json.dumps({
+        "creda": _stamped({"ceiling": 1e-4, "atRequiredScale": True}),
+        "milcreda": _stamped({"ceiling": 1.0, "atRequiredScale": True}),
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record)
+    monkeypatch.setattr(config, "CEILINGS", {})
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: pytest.fail(
+        "the unit suite reached the real ceiling search"))
+
+    seen = {}
+
+    def _spy(reduction, device, arms=None, progress=print, shard=None):
+        seen["reduction"] = reduction
+        return {}
+
+    monkeypatch.setattr(harness, "campaign", _spy)
+    harness.run_campaign_shard(shard="a", seeds=[3, 4], pilot=False)
+
+    assert seen["reduction"].epochs == config.FULL_EPOCHS
+
+
 def test_run_campaign_shard_runs_at_full_scale_never_the_pilots(
         tmp_path, monkeypatch) -> None:
     """Called with no scale, a shard is a slice of the FULL campaign.
@@ -883,8 +961,17 @@ def test_run_campaign_shard_runs_at_full_scale_never_the_pilots(
     which does not exist on disk — and the tripwire below turns any future
     unpinning of that record into a named, millisecond-long failure instead
     of a real ceiling search running inside the unit suite.
+
+    Authorized as a LOCAL full-scale launch (`LOCAL_FULL_SCALE_ENV`): this
+    test is about the scale a nameless call resolves to, not about who may
+    ask for it — that question is
+    `test_run_campaign_shard_refuses_a_local_full_scale_launch_without_
+    authorization`'s alone.
     """
     from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+    monkeypatch.setenv(config.LOCAL_FULL_SCALE_ENV, "1")
 
     record = tmp_path / "ceilings.json"
     record.write_text(json.dumps({
@@ -941,8 +1028,16 @@ def test_run_campaign_shard_at_pilot_routes_to_the_pilot_tree(
     on the `Reduction` (its previous behaviour) leaves the pilot call
     writing into `Results/Benchmark`; hardcoding `config.FULL_EPOCHS` leaves
     it training twenty epochs into the pilot tree.
+
+    Authorized as a LOCAL full-scale launch: this test is about the scale
+    each call resolves to, never about who may ask for the full one — see
+    `test_run_campaign_shard_refuses_a_local_full_scale_launch_without_
+    authorization` for that.
     """
     from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+    monkeypatch.setenv(config.LOCAL_FULL_SCALE_ENV, "1")
 
     record = tmp_path / "ceilings.json"
     payload = json.dumps({
@@ -1009,6 +1104,62 @@ def test_run_campaign_shard_at_pilot_routes_to_the_pilot_tree(
             != config.models_for(0.0, "campaign", False))
 
 
+def test_run_mechanism_sweep_shard_refuses_a_local_full_scale_launch_without_authorization(
+        monkeypatch) -> None:
+    """The same guard `run_campaign_shard` carries, and for the same reason:
+    this function takes an identical `pilot` dial for an identically
+    expensive scale (thirty seeds, five mechanisms, six transfers), so it
+    bypasses `config.is_pilot_scale()` exactly the same way if nothing checks
+    it here too — copying the dial without copying the guard would leave one
+    of `run_campaign_shard`'s two AGREED.md siblings closed and the other
+    open.
+
+    Reachable red: delete the guard from this function, or leave it only on
+    `run_campaign_shard`.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+    monkeypatch.delenv(config.LOCAL_FULL_SCALE_ENV, raising=False)
+    monkeypatch.setattr(harness, "with_ceilings_in_force", lambda *a, **k: pytest.fail(
+        "ceilings were resolved before the authorization guard refused"))
+    monkeypatch.setattr(harness, "run_mechanism_sweep", lambda *a, **k: pytest.fail(
+        "the sweep ran before the authorization guard refused"))
+
+    with pytest.raises(SystemExit):
+        harness.run_mechanism_sweep_shard(pilot=False, seeds=[0])
+
+
+def test_run_mechanism_sweep_shard_proceeds_at_full_scale_on_a_forge_worker(
+        tmp_path, monkeypatch) -> None:
+    """The worker half of the same guard: a forge submission naming this
+    function directly must not be blocked by an authorization check this
+    repository has no standing to ask a second time.
+
+    No `LOCAL_FULL_SCALE_ENV` anywhere here — `FORGE_CLONE_ROOT` alone is
+    what authorizes the call.
+    """
+    from pathlib import Path
+
+    from MIL_CREDA_Benchmark import harness, tables
+
+    monkeypatch.setenv(config.CLONE_ROOT_ENV, str(tmp_path))
+    monkeypatch.delenv(config.LOCAL_FULL_SCALE_ENV, raising=False)
+    monkeypatch.setattr(config, "PRODUCT", tmp_path)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")
+    monkeypatch.setattr(harness, "with_ceilings_in_force", lambda r, d, **k: r)
+    monkeypatch.setattr(harness, "run_mechanism", lambda *a, **k: {
+        "mechanism": "abmil", "transfer": "M->U", "targetAccuracy": 0.5})
+    monkeypatch.setattr(harness.bags, "build", lambda *a, **k: {"stub": True})
+
+    harness.run_mechanism_sweep_shard(pilot=False, seeds=[0])
+
+    completo = config.results_for(0.0, "campaign", False) / Path(
+        tables.MECHANISM_RECORD).name
+    assert completo.is_file(), "the worker call wrote nothing into the full tree"
+
+
 def test_run_mechanism_sweep_shard_at_pilot_routes_its_record_to_the_pilot_tree(
         tmp_path, monkeypatch) -> None:
     """Section 4's own half, and it is not the campaign's with a name changed.
@@ -1031,11 +1182,17 @@ def test_run_mechanism_sweep_shard_at_pilot_routes_its_record_to_the_pilot_tree(
     Reachable red, proven by mutation and restore: restoring the fixed
     `config.PRODUCT / tables.MECHANISM_RECORD` leaves the pilot call writing
     the full record.
+
+    Authorized as a LOCAL full-scale launch for its `pilot=False` half: this
+    test is about which tree each scale writes to, never about who may ask
+    for the full one.
     """
     from pathlib import Path
 
     from MIL_CREDA_Benchmark import harness, tables
 
+    monkeypatch.delenv(config.CLONE_ROOT_ENV, raising=False)
+    monkeypatch.setenv(config.LOCAL_FULL_SCALE_ENV, "1")
     monkeypatch.setattr(config, "PRODUCT", tmp_path)
     monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
     monkeypatch.setattr(config, "MODELS", tmp_path / "Models" / "Benchmark")

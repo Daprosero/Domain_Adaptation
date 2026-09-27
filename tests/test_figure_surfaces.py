@@ -735,21 +735,15 @@ def _domains() -> tuple[bags.BagSet, bags.BagSet]:
     return one("S", source_images), one("T", target_images)
 
 
-def test_the_correspondence_reads_both_domains_on_the_evaluation_role() -> None:
-    """Section 5 asks one question at three resolutions, over one material.
+def _domains_with_distinct_roles() -> tuple[bags.BagSet, bags.BagSet, torch.Tensor, torch.Tensor]:
+    """Two domains whose `train_idx` and `eval_idx` are disjoint AND of
+    different sizes, which is what makes a bag *count* decisive about which
+    role a reading used.
 
-    The ratio and the separability (5a), the latent grid (5b) and the neighbour
-    table (5d) are the same claim in numbers, in a picture and by name, so all
-    of them read `eval` on both sides. The source side used to be `train` --
-    the anchors the local term aligns to while it trains, which is a different
-    and legitimate question, and not the one this section asks.
-
-    It needs its own domains because `_domains` gives all three roles the same
-    indices, so the fixture every other test here shares cannot tell a role
-    change from no change at all: reverting the source side to `train_idx`
-    passes the whole of this file. Measured, not assumed.
-
-    Reachable red: `source.train_idx` on either reading.
+    `_domains` above hands every role the same indices, so the fixture every
+    other test in this file shares cannot tell a role change from no change at
+    all: reverting either reading's source side to the other role passes the
+    whole of the rest of this file. Measured, not assumed.
     """
     count = config.CLASSES
     per_bag = config.INSTANCES_PER_BAG
@@ -767,23 +761,70 @@ def test_the_correspondence_reads_both_domains_on_the_evaluation_role() -> None:
         return bags.BagSet(domain, images, members, labels,
                            train_idx, eval_idx, eval_idx, {})
 
-    source, target = one("S"), one("T")
+    return one("S"), one("T"), train_idx, eval_idx
+
+
+def test_the_correspondence_reads_both_domains_on_the_evaluation_role() -> None:
+    """5a asks one question at two resolutions, over one material: the ratio and
+    the separability are the same claim about alignment, in numbers, and they
+    only validate each other if both are measured over the same bags. So
+    `correspondence` reads `eval` on both sides.
+
+    This used to be asserted together with `bag_pairs`, on the premise that the
+    neighbour table (5d) shares 5a's material. It does not: AGREED.md's own
+    line on the neighbour table names the source side as the *training* bags,
+    never the evaluation ones, and `test_the_neighbour_table_ranks_against_the_
+    source_training_role` right below is that reading's witness. Bundling the
+    two here hid the second one having no witness at all.
+
+    Reachable red: `source.train_idx` in `correspondence`.
+    """
+    source, target, train_idx, eval_idx = _domains_with_distinct_roles()
     monkeypatch_free_model = wiring.build(
         "G", config.CLASSES,
-        wiring.Pool(images, members, labels), wiring.Pool(images, members, labels))
-
-    reading = latent.bag_pairs(monkeypatch_free_model, source, target,
-                               torch.device("cpu"))
-    assert reading["sourceRows"].shape[0] == len(eval_idx), (
-        "the source side is not the evaluation role; it has "
-        f"{reading['sourceRows'].shape[0]} bags and `eval_idx` has {len(eval_idx)}")
-    assert reading["kernel"].shape[0] == len(eval_idx)
+        wiring.Pool(source.images, source.members, source.labels),
+        wiring.Pool(target.images, target.members, target.labels))
 
     mass = latent.correspondence(monkeypatch_free_model, source, target,
                                  torch.device("cpu"))
     assert mass["sourceBags"] == len(eval_idx), (
         f"`correspondence` read {mass['sourceBags']} source bags, and the "
         f"evaluation role has {len(eval_idx)}")
+
+
+def test_the_neighbour_table_ranks_against_the_source_training_role() -> None:
+    """AGREED.md, Figures -- phase 2: "For every target bag of the evaluation
+    role, the five source training bags it is closest to, in order, ranked by
+    the bag kernel over all source bags..." -- unlike `correspondence` (5a),
+    `bag_pairs` (5d, the neighbour table) is asymmetric on purpose: the target
+    side is `eval`, matching the bag being explained, and the source side is
+    `train`, because a reader of this table is asking which of the bags the
+    method actually trained on a target bag resembles -- not which held-out
+    bag it resembles, which is a narrower and less useful question, and one
+    section 5 does not ask anywhere else either.
+
+    This is exactly the carved-out reading `correspondence`'s own docstring
+    anticipates: reading against the training anchors is a different and
+    legitimate question, and asking it again means saying so and building a
+    reading of its own. This table is that reading.
+
+    Reachable red: `source.eval_idx` in `bag_pairs`.
+    """
+    source, target, train_idx, eval_idx = _domains_with_distinct_roles()
+    monkeypatch_free_model = wiring.build(
+        "G", config.CLASSES,
+        wiring.Pool(source.images, source.members, source.labels),
+        wiring.Pool(target.images, target.members, target.labels))
+
+    reading = latent.bag_pairs(monkeypatch_free_model, source, target,
+                               torch.device("cpu"))
+    assert reading["sourceRows"].shape[0] == len(train_idx), (
+        "the source side is not the training role; it has "
+        f"{reading['sourceRows'].shape[0]} bags and `train_idx` has {len(train_idx)}")
+    assert reading["kernel"].shape[0] == len(train_idx)
+    assert reading["targetRows"].shape[0] == len(eval_idx), (
+        "the target side is not the evaluation role; it has "
+        f"{reading['targetRows'].shape[0]} bags and `eval_idx` has {len(eval_idx)}")
 
 
 @pytest.fixture
