@@ -438,6 +438,39 @@ def test_the_search_grid_runs_between_the_two_declared_defaults() -> None:
     assert max(config.CEILING_GRID) == MILCREDA_CEILING
 
 
+def test_el_rango_que_el_motor_vivo_muestrea_son_los_dos_defaults() -> None:
+    """La misma relacion que el test de arriba, sobre la constante que el
+    motor VIVO lee.
+
+    `SEARCH_ENGINE` es `"optuna"`, y lo que ese motor muestrea es
+    `config.CEILING_RANGE` (`harness.py`, `low, high = config.CEILING_RANGE`).
+    `CEILING_GRID` sobrevive en una sola rama de `search_sizing()` --- la del
+    motor por grilla, que no es el que corre. Asi que el test de arriba fija
+    los extremos de un arreglo que ya nadie visita, y el rango sobre el que
+    se eligen los techos de toda la campana no lo fijaba nada: `rg
+    CEILING_RANGE tests/` no devolvia una sola linea.
+
+    Importa porque los techos que esta busqueda elige gobiernan todos los
+    brazos. Un rango angostado o corrido hace que la busqueda explore otro
+    espacio, elija otros techos, y la suite entera siga verde.
+
+    La afirmacion es la RELACION y no los numeros: los extremos son los dos
+    defaults ya declarados --- el techo publicado de CREDA abajo y el neutro
+    de la Ec. (39) normalizada arriba. Fijar `(1e-4, 1.0)` a mano seria
+    afirmar una constante, que es lo que este repositorio no acepta como
+    prueba: solo podria fallar si alguien cambiara los dos lados a la vez.
+
+    Mutacion que tiene que hacerlo fallar: mover cualquiera de los dos
+    extremos de `CEILING_RANGE` sin mover el default que dice ser.
+    """
+    from CREDA.schedules import CREDA_CEILING
+    from MIL_CREDA_Benchmark.schedules import MILCREDA_CEILING
+
+    bajo, alto = config.CEILING_RANGE
+    assert bajo == CREDA_CEILING
+    assert alto == MILCREDA_CEILING
+
+
 def test_the_search_uses_the_complete_method_of_each_family() -> None:
     """Searching with an ablation would pick the ceiling of a method nobody compares."""
     for family, arm_id in config.SEARCH_ARMS.items():
