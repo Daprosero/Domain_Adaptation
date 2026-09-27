@@ -365,6 +365,20 @@ def objective(key: str, markdown: bool = True) -> str:
             "**Buscamos que la curva viva dentro de [0, 1] y tienda a cero**, y que "
             "ocupe la misma parte del intervalo en las seis transferencias. Salirse "
             "de la banda o cambiar de escala entre pares de dominios es el hallazgo.",
+        "termShares":
+            "**Buscamos que la tabla separe qué término manda, no un valor en "
+            "particular.** La Ec. (39) suma dos términos de adaptación con su "
+            "propio coeficiente cada uno -- uno global y uno local -- y hasta "
+            "hoy el arnés los sumaba antes de guardar el registro: un solo "
+            "`contribution` no distingue un término que no manda nada de uno "
+            "que manda poco, porque los dos imprimen chico. Acá van aparte, "
+            "con dos participaciones cada uno -- sobre todo lo que el modelo "
+            "optimiza, y sobre la adaptación sola -- porque contestan "
+            "preguntas distintas: cuánto pesa un término en el objetivo "
+            "completo no es cuánto pesa dentro de lo poco que adapta. Un "
+            "brazo sin adaptación y un brazo sin término local reportan "
+            "0.0% donde corresponde: no es que la medición haya dado cero, "
+            "es que no hay nada que medir.",
         "noise":
             f"**Buscamos que la caída sea chica y que el orden entre métodos no se "
             f"invierta.** Contaminado el material de entrenamiento, todos caen; lo "
@@ -1133,6 +1147,182 @@ def conclusion(runs: Iterable[dict], metric: str, reduction: dict) -> str:
                      f"por construcción, no por acuerdo. Más repeticiones lo "
                      f"refuerzan o lo cambian.")
     return " ".join(lines)
+
+
+# ------------------------------------------- los dos términos de la Ec. (39)
+#
+# Hasta hoy `harness.run_one` aplicaba un solo coeficiente de rampa a los dos
+# términos de adaptación de la Ec. (39) y los sumaba antes de que el registro
+# saliera del bucle de entrenamiento: `contribution` era lo único que
+# cualquiera de los dos dejaba atrás. Un término que no manda nada
+# (`contributionLocal == 0` en un brazo sin correspondencia local) y uno que
+# quedó escalado a casi nada imprimen el mismo número chico una vez sumados, y
+# ningún renderizador de este módulo leía `contributionGlobal` ni
+# `contributionLocal` por separado. Lo que sigue lee las dos por su nombre —
+# nunca `contribution`, que sigue existiendo como su suma derivable para quien
+# la use — así que un lector por fin puede distinguir un término que no manda
+# nada de uno que manda poco.
+
+def term_shares(runs: Iterable[dict]) -> list[dict]:
+    """Una fila por brazo: la magnitud supervisada y la de cada término de
+    adaptación de la Ec. (39) -- global y local -- por separado, con sus dos
+    participaciones cada uno.
+
+    Promedia como `table`: primero por transferencia (`cells`), después entre
+    transferencias, así que una transferencia con más semillas corridas no
+    pesa más que las demás en el promedio del brazo.
+
+    Dos participaciones por término, y las dos a propósito porque contestan
+    preguntas distintas:
+
+    * `shareWhole*` es el término sobre supervisado + global + local -- cuánto
+      pesa en TODO lo que el modelo optimiza.
+    * `shareAdapt*` es el término sobre global + local solamente -- cómo se
+      reparte la adaptación ENTRE los dos, sin la escala del supervisado
+      mezclada adentro.
+
+    Un brazo sin adaptación (el piso, `B`) tiene denominador cero en la
+    segunda cuenta: reporta 0.0, nunca una razón. Una división por cero
+    disfrazada de "no adapta nada" sería peor que la ausencia de la cifra, y
+    una excepción ahí tumbaría el informe entero por un brazo que se comporta
+    exactamente como se declaró que se comporta.
+    """
+    runs = list(runs)
+    supervised = cells(runs, "supervised")
+    glob = cells(runs, "contributionGlobal")
+    local = cells(runs, "contributionLocal")
+    labels = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS]
+
+    def _avg(grid: dict, arm: str) -> float | None:
+        present = [grid[(arm, label)]["mean"] for label in labels if (arm, label) in grid]
+        return sum(present) / len(present) if present else None
+
+    rows = []
+    for arm in config.ARM_ORDER:
+        sup = _avg(supervised, arm)
+        if sup is None:
+            continue
+        g, l = _avg(glob, arm), _avg(local, arm)
+        if g is None or l is None:
+            raise ValueError(
+                f"`{arm}` tiene `supervised` pero no los dos términos de "
+                f"adaptación: un registro que escribe uno y no el otro está "
+                f"incompleto, y no es lo mismo que un brazo sin adaptación -- "
+                f"eso se reporta con 0.0, no con ausencia.")
+        whole, adapt = sup + g + l, g + l
+        rows.append({
+            "arm": arm, "name": config.NAME_OF[arm],
+            "supervised": sup, "global": g, "local": l,
+            "shareWholeGlobal": g / whole if whole > 0 else 0.0,
+            "shareWholeLocal": l / whole if whole > 0 else 0.0,
+            "shareAdaptGlobal": g / adapt if adapt > 0 else 0.0,
+            "shareAdaptLocal": l / adapt if adapt > 0 else 0.0,
+        })
+    return rows
+
+
+def render_term_shares(runs: Iterable[dict], rate: float | None = None,
+                       markdown: bool = False) -> str:
+    """Sección nueva del informe: cuánto pesa cada término de la Ec. (39),
+    brazo por brazo, con sus dos participaciones y ambos materiales.
+
+    Sin puesto: los cuatro números son descriptivos (`config.DIMENSIONS`
+    marca `supervised`/`contribution`/`adaptationShare` como tales, y estos
+    dos términos son la misma familia) -- un reparto más grande no es un
+    mejor método, es un objetivo distinto, así que no hay ranking que calcular
+    ni que imprimir.
+
+    **Con `rate` lleva los dos materiales**, el mismo contrato que `render`:
+    primero todas las filas `sin`, después todas las `con`, con la columna
+    `Ruido` adelante y el aviso de `_level_or_note` cuando esa campaña
+    todavía no corrió.
+
+    Un término ausente -- el local en un brazo sin correspondencia local, los
+    dos en el piso -- imprime `0.0000`/`0.0%`, nunca `—`: es una medición, no
+    un hueco. La ausencia (`—`) queda reservada para una celda que de verdad
+    no tiene con qué llenarse, como en `render_readings`.
+    """
+    nota = None
+    bloques = [(NOISE_CLEAN, term_shares(runs))]
+    if rate is not None:
+        nivel, nota = _level_or_note(rate)
+        if nivel is not None:
+            bloques.append((NOISE_DIRTY, term_shares(nivel["runs"])))
+    rows = [dict(row, noise=ruido) for ruido, filas in bloques for row in filas]
+    if not rows:
+        return _with_note(["Sin corridas: no hay términos de la adaptación "
+                           "que mostrar."], nota)
+
+    def pct(value: float) -> str:
+        return f"{value * 100:.1f}%"
+
+    columns = [NOISE_COLUMN, "Método", "Supervisado", "Global", "Local",
+               "Global/Total", "Local/Total", "Global/Adapt.", "Local/Adapt."]
+    if markdown:
+        lines = ["| " + " | ".join(columns) + " |",
+                 "|" + "|".join(["---"] * len(columns)) + "|"]
+        for row in rows:
+            lines.append("| " + " | ".join([
+                row["noise"], f"`{row['name']}`",
+                f"{row['supervised']:.4f}", f"{row['global']:.4f}",
+                f"{row['local']:.4f}",
+                pct(row["shareWholeGlobal"]), pct(row["shareWholeLocal"]),
+                pct(row["shareAdaptGlobal"]), pct(row["shareAdaptLocal"])]) + " |")
+        return _with_note(lines, nota)
+
+    width = max(14, max((len(r["name"]) for r in rows), default=14) + 2)
+    lines = [f"{NOISE_COLUMN:<{_NOISE_WIDTH}}{'Método':<{width}}"
+             f"{'Superv.':>10}{'Global':>10}{'Local':>10}"
+             f"{'G/Total':>10}{'L/Total':>10}{'G/Adapt.':>10}{'L/Adapt.':>10}"]
+    for row in rows:
+        lines.append(
+            f"{row['noise']:<{_NOISE_WIDTH}}{row['name']:<{width}}"
+            f"{row['supervised']:>10.4f}{row['global']:>10.4f}{row['local']:>10.4f}"
+            f"{pct(row['shareWholeGlobal']):>10}{pct(row['shareWholeLocal']):>10}"
+            f"{pct(row['shareAdaptGlobal']):>10}{pct(row['shareAdaptLocal']):>10}")
+    return _with_note(lines, nota)
+
+
+def conclusion_term_shares(runs: Iterable[dict]) -> str:
+    """Qué término manda en cada brazo, calculado de `term_shares` y no
+    escrito a mano -- nombra el brazo que no adapta nada, el que adapta sin
+    término local, y el que tiene el local por encima del global, y ninguno
+    de los tres está escrito por su id acá: los tres se leen de las filas.
+
+    Reachable red: fijar cualquiera de las tres listas de abajo a un id de
+    brazo en vez de calcularla, y la conclusión deja de moverse cuando los
+    números que describe cambian de brazo.
+    """
+    rows = term_shares(runs)
+    if not rows:
+        return "Sin corridas: no hay términos de la adaptación que concluir."
+
+    sin_adaptacion = [r for r in rows if (r["global"] + r["local"]) <= 0]
+    con_adaptacion = [r for r in rows if (r["global"] + r["local"]) > 0]
+    sin_local = [r for r in con_adaptacion if r["local"] <= 0]
+    domina_local = [r for r in con_adaptacion
+                    if r["local"] > 0 and r["shareAdaptLocal"] > r["shareAdaptGlobal"]]
+
+    partes = []
+    if sin_adaptacion:
+        nombres = ", ".join(f"`{r['name']}`" for r in sin_adaptacion)
+        partes.append(f"{nombres} no adapta: sus cuatro participaciones son "
+                      f"0.0% por definición, no por redondeo.")
+    if sin_local:
+        nombres = ", ".join(f"`{r['name']}`" for r in sin_local)
+        partes.append(f"{nombres} adapta sólo con el término global -- el "
+                      f"local no aparece, en ninguna de las dos cuentas.")
+    if domina_local:
+        detalle = "; ".join(
+            f"`{r['name']}` ({r['shareAdaptLocal'] * 100:.1f}% de la "
+            f"adaptación frente al {r['shareAdaptGlobal'] * 100:.1f}% global)"
+            for r in domina_local)
+        partes.append(f"En {detalle} el término local manda más que el "
+                      f"global dentro de la adaptación.")
+    if not partes:
+        partes.append("En ningún brazo el local supera al global dentro de "
+                      "la adaptación, y ninguno carece por completo de ella.")
+    return " ".join(partes)
 
 
 # ------------------------------------------------- mecanismos de atención
@@ -1943,6 +2133,15 @@ def conclusions(record: dict) -> dict:
         # es lo que la declaración sí agrupa.
         for metric in ("sourceAccuracy", "targetAccuracy"):
             produced[f"niveles:{metric}"] = conclusion(runs, metric, reduction)
+        # Guardado en si el propio registro trae los dos términos apartados:
+        # un registro de antes del arreglo de hoy (o cualquiera de las
+        # corridas armadas a mano que este archivo usa para las demás
+        # conclusiones) sólo lleva `contribution` sumado, y esta conclusión
+        # no tiene con qué alimentarse -- «devuelve solo las que el registro
+        # puede alimentar», la misma regla que ya rige cada bloque de abajo.
+        if all("contributionGlobal" in run and "contributionLocal" in run
+              for run in runs):
+            produced["términos"] = conclusion_term_shares(runs)
     # El panorama sigue en el registro y ya no se concluye. Promediar cada peldaño
     # sobre las seis transferencias a la vez respondía una pregunta que las tablas
     # de peldaños de cada dominio ya contestan por separado, y la respondía peor:
