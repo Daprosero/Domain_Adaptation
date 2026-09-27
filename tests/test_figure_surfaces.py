@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 
 import numpy
 import pytest
@@ -26,6 +27,12 @@ import torch.nn as nn
 from MIL_CREDA_Benchmark import bags, config, figures, latent, tables, wiring
 
 TRANSFERS = [f"{s}->{t}" for s, t in config.VERDICT_TRANSFERS[:3]]
+
+#: Captured before any test's `stubbed` fixture overwrites `latent.original_rows`
+#: with a fake -- the real function, for the one test that needs to drive it for
+#: real rather than take its own stub's word for it.
+_REAL_ORIGINAL_ROWS = latent.original_rows
+_REAL_REPRESENT = latent.represent
 
 
 # --------------------------------------------------------------- the noise axis
@@ -196,9 +203,10 @@ def stubbed(monkeypatch):
     no claim here is about either. Everything the claims ARE about -- how many
     panels, which columns, which of them comes from a model -- runs for real.
     """
-    seen = {"loaded": [], "original": [], "pairs": [], "units": []}
+    seen = {"loaded": [], "original": [], "pairs": [], "units": [], "rates": []}
 
     def _checkpoint_for(arm, transfer, seed, rate=0.0, pilot=False):
+        seen["rates"].append(rate)
         return {"arm": arm, "transfer": transfer, "seed": seed,
                 "source": {}, "target": {}, "weights": "none"}
 
@@ -231,7 +239,7 @@ def stubbed(monkeypatch):
 
 
 def test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_method(
-        stubbed, tmp_path) -> None:
+        stubbed, tmp_path, monkeypatch) -> None:
     """`Original` is the images themselves, before any model, and it is the
     reference every trained column is read against: "aligned" cannot be seen
     without a "not aligned" beside it.
@@ -240,8 +248,24 @@ def test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_me
     is wrong: the column exists, it is first, and it is the only one no model was
     loaded for.
 
-    Reachable red: drop the original column, move it to the end, or draw it from
-    a checkpoint like the rest.
+    Two more clauses travel with the same witness rather than getting their
+    own, thinner one: the grid is built on CLEAN material only (`rate=0.0`
+    all the way down, never a caller-varied contamination -- AGREED.md's
+    whole of section 5 reads clean, and this is the figure that reads
+    checkpoints by rate at all), and the shared original column's own sample
+    is stratified by class, not a head-slice of whichever labels sort first.
+    `equalize`'s stratification is already proven on its own in isolation
+    above; what is missing is that `original_rows` actually calls it instead
+    of slicing -- checked here against a fake, unstubbed bagset with
+    deliberately imbalanced classes.
+
+    Reachable red, either clause: default `rate` away from 0.0 (or thread a
+    caller's rate into `original_rows` instead of the grid's own clean
+    default); or have `original_rows`'s `pixels()` take `rows[:budget]`
+    instead of calling `equalize`.
+
+    Reachable red for the shape half, unchanged: drop the original column,
+    move it to the end, or draw it from a checkpoint like the rest.
     """
     figure = latent.latent_grid(tmp_path / "grid.pdf", config.LATENT_PANELS,
                                 TRANSFERS, seed=3, device=torch.device("cpu"))
@@ -261,6 +285,30 @@ def test_the_latent_grid_is_the_shared_original_space_and_then_one_column_per_me
     # rows are transfers, and each row says which one it is
     assert [axes[row * columns].get_ylabel() for row in range(len(TRANSFERS))] == TRANSFERS
 
+    # clean material only: every checkpoint the grid asked for came from
+    # rate 0.0, never a contaminated tree.
+    assert stubbed["rates"] and set(stubbed["rates"]) == {0.0}
+
+    # the original column's own sample is stratified by class: fed an
+    # imbalanced label set through the real (unstubbed) `original_rows`,
+    # every class comes back up to its declared share, not the majority
+    # class alone.
+    counts = [30, 6, 2]
+    total = sum(counts)
+    images = torch.arange(total * 2, dtype=torch.float32).reshape(total, 1, 2, 1)
+    members = torch.arange(total).reshape(total, 1)
+    labels = torch.cat([torch.full((c,), class_id) for class_id, c in enumerate(counts)])
+    fake_bagset = wiring.Pool(images, members, labels)
+    fake_bagset.eval_idx = torch.arange(total)
+    monkeypatch.setattr(bags, "rebuild", lambda *a, **k: fake_bagset)
+
+    s_rows, s_labels, t_rows, t_labels = _REAL_ORIGINAL_ROWS(
+        {"source": {}, "target": {}}, budget=9, seed=7)
+    seen_counts = {int(c): int((s_labels == c).sum()) for c in s_labels.unique()}
+    assert seen_counts == {0: 3, 1: 3, 2: 2}, (
+        f"the original column's own sample is not stratified by class: {seen_counts}"
+    )
+
 
 def test_the_latent_grid_keeps_every_declared_floor_as_a_trained_column(
         stubbed, tmp_path) -> None:
@@ -276,6 +324,39 @@ def test_the_latent_grid_keeps_every_declared_floor_as_a_trained_column(
         "a declared floor is missing from the grid"
     for name in floors:
         assert name in titles
+
+
+def test_the_whole_of_section_5_reads_clean_material_by_default() -> None:
+    """AGREED.md, Figures -- phase 2: "The whole of section 5 reads clean
+    material: no contaminated grid, no contaminated correspondence figure
+    and no contaminated hit counts." Unwitnessed in the agreement file. Of
+    section 5's several unwitnessed figure agreements (the neighbouring
+    source-bag table and the bag-figure highlight rule among them), this is
+    the one whose behaviour is confirmable in code without new machinery:
+    every driver section 5 calls -- `latent.latent_grid` (the grid) and
+    `latent.correspondence_grid` (the bag figure, whose own `bag_pairs`
+    carries the hit-rate figures.py reads and prints, already witnessed by
+    `test_the_measured_correspondence_hit_rate_is_printed_with_the_figure`)
+    -- default their own `rate` to 0.0, and the notebook never passes either
+    of them anything else.
+
+    `latent_grid`'s default is already driven for real, end to end, in
+    `test_the_latent_grid_is_the_shared_original_space_and_then_one_column_
+    per_method` (its own `stubbed["rates"]` assertion). This reads BOTH
+    functions' signatures instead of running a second grid: a keyword
+    default is a fact about the function itself, not a claim that needs a
+    stubbed run to observe.
+
+    Reachable red: default either function's `rate` away from 0.0.
+    """
+    import inspect
+
+    for fn in (latent.latent_grid, latent.correspondence_grid):
+        default = inspect.signature(fn).parameters["rate"].default
+        assert default == 0.0, (
+            f"{fn.__name__}'s own `rate` default is {default!r}, not the "
+            "clean material section 5 reads by default"
+        )
 
 
 # ---------------------------------------------------------- the bag correspondence
@@ -331,7 +412,8 @@ def test_the_highlighted_subject_is_the_median_of_its_class_and_never_the_best()
 
 # ------------------------------------------------ the band, and the third panel
 
-def test_a_loss_curve_is_the_median_across_seeds_with_an_interquartile_band() -> None:
+def test_a_loss_curve_is_the_median_across_seeds_with_an_interquartile_band(
+        tmp_path) -> None:
     """The curve a reader sees is the median of the repetitions, and the shading
     around it is the interquartile range of the same repetitions at each step.
 
@@ -348,6 +430,21 @@ def test_a_loss_curve_is_the_median_across_seeds_with_an_interquartile_band() ->
 
     Reachable red: return the mean where the median belongs, or widen the band
     to the extremes.
+
+    Folds in the second half of the same agreement, which `band`'s own math
+    cannot see: that the REAL call, `figures.adaptation_curves`, draws the
+    ADAPTATION term specifically -- never `supervised` or any other key a run
+    record carries -- for every declared arm (`sorted(config.FLOOR_OF)`, the
+    arms that have a floor and so an adaptation term to plot, never a
+    hardcoded tuple written here), laid out as two rows (clean above,
+    contaminated below) over the same transfer columns. `band`'s math is
+    proven above on a bare fixture; what was missing is that
+    `adaptation_curves` actually calls it on the right key, for the right
+    arms, in that layout.
+
+    Reachable red, either half: swap `"adaptation"` for `"supervised"` (or
+    any other key) in `adaptation_curves`'s own call to `_panelled`; or drop
+    one of `sorted(config.FLOOR_OF)` from the arms it draws.
     """
     curves = [[{"supervised": 1.0}, {"supervised": 10.0}],
               [{"supervised": 2.0}, {"supervised": 20.0}],
@@ -368,6 +465,51 @@ def test_a_loss_curve_is_the_median_across_seeds_with_an_interquartile_band() ->
 
     # ordering across seeds is a reduction, not a lookup
     assert figures.band(list(reversed(curves)), "supervised") == (low, mid, high)
+
+    # ---- the real call: the right key, the right arms, the declared layout
+
+    arms = tuple(sorted(config.FLOOR_OF))
+    transfers = ["M->U", "U->M"]
+
+    def _write(path: "Path", offset: float) -> None:
+        lines = []
+        for transfer in transfers:
+            for arm in arms:
+                base = offset + ord(arm)
+                lines.append(json.dumps({
+                    "arm": arm, "transfer": transfer,
+                    "curve": [{"epoch": 0, "adaptation": base, "supervised": 1000.0 + base},
+                             {"epoch": 1, "adaptation": base * 2, "supervised": (1000.0 + base) * 2}],
+                }))
+        path.write_text("\n".join(lines), encoding="utf-8")
+
+    clean_path, noisy_path = tmp_path / "clean.jsonl", tmp_path / "noisy.jsonl"
+    _write(clean_path, offset=0.0)
+    _write(noisy_path, offset=0.5)
+
+    figure = figures.adaptation_curves(
+        tmp_path / "adaptation_curves.pdf", arms=arms,
+        runs=[("limpio", clean_path), ("contaminado", noisy_path)],
+        transfers=transfers)
+
+    axes = figure.axes
+    assert len(axes) == 2 * len(transfers), (
+        "not two rows (clean/contaminated) over the transfer columns"
+    )
+    assert [axis.get_title() for axis in axes[:len(transfers)]] == transfers
+
+    # every declared arm with an adaptation term is drawn -- one legend entry
+    # each, taken from the figure's own legend (`"[0, 1]"` is the shaded band
+    # `adaptation_curves` also legends, not an arm)
+    legend_labels = {text.get_text() for text in figure.legends[0].get_texts()}
+    assert legend_labels - {"[0, 1]"} == {config.NAME_OF[a] for a in arms}
+
+    # the ADAPTATION term is what got plotted, not `supervised`
+    first_panel = axes[0]
+    line = next(l for l in first_panel.lines if l.get_label() == config.NAME_OF["E"])
+    plotted = list(line.get_ydata())
+    assert plotted == [pytest.approx(float(ord("E"))), pytest.approx(float(ord("E") * 2))]
+    assert plotted != [pytest.approx(1000.0 + ord("E")), pytest.approx((1000.0 + ord("E")) * 2)]
 
 
 def test_a_repetition_that_stopped_early_truncates_the_band_and_never_extends_it() -> None:
@@ -453,7 +595,7 @@ def test_colour_is_the_class_and_the_marker_is_the_domain() -> None:
 
 
 def test_every_panel_of_the_grid_is_drawn_at_the_instance_level(
-        stubbed, tmp_path) -> None:
+        stubbed, tmp_path, monkeypatch) -> None:
     """One unit for every column, bag-unit arms included.
 
     Every arm encodes instances -- Eq. (13) applies identically in both families
@@ -466,8 +608,24 @@ def test_every_panel_of_the_grid_is_drawn_at_the_instance_level(
     being right while one column reads it from somewhere else is the same green
     suite.
 
-    Reachable red: pass the arm's own unit at either call site, or drop the
-    argument so `represent` falls back to its own default.
+    The second half of the same decision -- the bag-level view stays in the
+    phase-two tables, and never migrates into the grid's forced instance unit
+    -- is checked here too, in two pieces. `represent`'s own DEFAULT (no
+    override) is what a phase-two table actually reads, and every declared
+    arm trains at `unit="bag"`, so that default has to come back one row per
+    subject, driven for real against a tiny stub encoder. `analyse` is the
+    one caller phase-two's tables run through, and it is read from source
+    rather than run end to end: running it for real needs a trained
+    checkpoint on disk, and no claim here is about training one, only about
+    whether its own call to `represent` adds a `unit=` it has no business
+    adding.
+
+    Reachable red, three ways: pass the arm's own unit at either grid call
+    site, or drop the argument so `represent` falls back to its own default
+    (kills the first half); make `represent`'s bag branch return one row per
+    instance regardless of `model.spec["unit"]` (kills the second); or add
+    `unit=` to either of `analyse`'s own `represent(...)` calls (kills the
+    third).
     """
     latent.latent_grid(tmp_path / "grid.pdf", config.LATENT_PANELS,
                        TRANSFERS, seed=3, device=torch.device("cpu"))
@@ -477,6 +635,57 @@ def test_every_panel_of_the_grid_is_drawn_at_the_instance_level(
     assert len(stubbed["units"]) == 2 * len(TRANSFERS) * len(config.LATENT_PANELS)
     assert set(stubbed["units"]) == {"instance"}
     assert config.LATENT_UNIT == "instance"
+
+    # `represent`'s own default reads each arm in ITS unit: every declared
+    # arm is "bag", so the phase-two reading is one row per subject, not one
+    # per instance -- driven for real against a tiny stub encoder.
+    class _TinyEncoder(nn.Module):
+        def __init__(self, backbone=None, pretrained=False):
+            super().__init__()
+            self.output_dim = 4
+            self.linear = nn.Linear(3 * 2 * 2, self.output_dim)
+
+        def forward(self, x):
+            return self.linear(x.reshape(x.shape[0], -1))
+
+    monkeypatch.setattr(wiring, "FeatureExtractor", _TinyEncoder)
+    torch.manual_seed(0)
+    n_bags, m = 3, 5
+    images = torch.randn(n_bags * m, 3, 2, 2)
+    members = torch.arange(images.shape[0]).reshape(n_bags, m)
+    labels = torch.arange(n_bags) % config.CLASSES
+    pool = wiring.Pool(images, members, labels)
+    assert config.ARMS_BY_ID["G"]["unit"] == "bag"
+    model = wiring.build("G", config.CLASSES, pool, pool)
+
+    from types import SimpleNamespace
+    bagset = SimpleNamespace(images=images, members=members, labels=labels)
+    rows, row_labels = _REAL_REPRESENT(model, bagset, torch.arange(n_bags),
+                                       torch.device("cpu"))
+    assert rows.shape[0] == n_bags == len(row_labels), (
+        "represent's own default did not read the arm's declared bag unit "
+        f"-- got {rows.shape[0]} rows for {n_bags} bags"
+    )
+
+    # `analyse` never overrides that default: a structural read of its own
+    # source, in the same spirit `test_arm_objectives.py`'s `_unit_branch`
+    # already reads `training_step`'s.
+    import ast
+
+    tree = ast.parse(Path(latent.__file__).read_text(encoding="utf-8"))
+    analyse_fn = next(node for node in ast.walk(tree)
+                      if isinstance(node, ast.FunctionDef) and node.name == "analyse")
+    represent_calls = [node for node in ast.walk(analyse_fn)
+                       if isinstance(node, ast.Call)
+                       and getattr(node.func, "id", None) == "represent"]
+    assert represent_calls, "analyse no longer calls represent at all"
+    for call in represent_calls:
+        keywords = {kw.arg for kw in call.keywords}
+        assert "unit" not in keywords, (
+            "analyse overrides represent's own unit -- the bag-level "
+            "reading phase-two's tables need would be replaced by the "
+            "grid's forced instance one"
+        )
 
 
 # ------------------------------------------- the correspondence, measured for real
