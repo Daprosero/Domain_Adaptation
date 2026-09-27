@@ -396,3 +396,35 @@ def test_el_rango_del_peso_local_no_es_un_alias_del_global() -> None:
         "en silencio el del local, que no es de CREDA")
     assert isinstance(valor, ast.Tuple), (
         "CEILING_LOCAL_RANGE deberia declarar sus dos extremos por si misma")
+
+
+def test_los_trials_acompanan_a_las_dimensiones_que_se_buscan() -> None:
+    """Lo que nadie vigilaba, y por eso paso.
+
+    El espacio de busqueda crecio de seis dimensiones a ocho cuando los dos
+    coeficientes de adaptacion se separaron, y `SEARCH_TRIALS` se quedo en
+    treinta. La suite entera siguio verde: ningun test relacionaba las dos
+    cosas, asi que el numero de evaluaciones y el tamano del espacio podian
+    divergir sin que nada avisara. Treinta sobre ocho son menos de cuatro por
+    dimension.
+
+    El operador fijo cuarenta y explicitamente no mas --- cinco por dimension
+    sobre las ocho de hoy. Lo que se afirma aca es esa RELACION y nunca el
+    cuarenta: escribir `== 40` seria afirmar una constante, y solo podria
+    fallar si alguien cambiara los dos lados a la vez. Asi, agregar una novena
+    dimension sin subir las evaluaciones cae, que es exactamente el descuido
+    que ocurrio.
+
+    El `+ 1` es el techo global: viaja en `reduction.ceilings` y no en
+    `HYPER_DIMENSIONS`, pero el motor lo muestrea igual --- son ocho
+    distribuciones en el trial, no siete.
+
+    Mutaciones: agregar una dimension a `HYPER_DIMENSIONS`, o bajar
+    `SEARCH_TRIALS`. Cualquiera de las dos lo hace caer.
+    """
+    dimensiones = len(config.HYPER_DIMENSIONS) + 1
+    minimo = 5 * dimensiones
+    assert config.SEARCH_TRIALS >= minimo, (
+        f"{config.SEARCH_TRIALS} evaluaciones sobre {dimensiones} dimensiones "
+        f"son menos de cinco por dimension; el piso que el operador fijo es "
+        f"{minimo}")
