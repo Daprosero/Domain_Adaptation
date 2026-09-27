@@ -2053,6 +2053,53 @@ class _StopAtCeiling(Exception):
     """Raised from the `ramp` spy so nothing past the lookup ever runs."""
 
 
+def test_ninguna_medida_corre_bajo_otra_y_el_agrupado_hoy_es_inalcanzable() -> None:
+    """El testigo del acuerdo entero, que son dos mitades.
+
+    El acuerdo viejo decia "nunca agrupado" y era falso: `ceiling_for`
+    siempre tuvo dos lecturas, escritas donde vive. Lo verdadero es mas
+    chico y mas fuerte --- ninguna transferencia MEDIDA corre bajo el valor
+    de otra, y el agrupado se lee solo para una que la busqueda nunca vio.
+
+    Las dos mitades juntas y no una, porque apuntarle el testigo a una sola
+    dejaria que la mitad protegida se lea como prueba del todo: la primera
+    puede ser cierta mientras la segunda deja de serlo el dia que alguien
+    saque una transferencia de la busqueda, y ahi el respaldo se activa sin
+    que nada chille.
+
+    La segunda mitad es una propiedad de la CONFIGURACION y no del codigo,
+    y por eso no la fijaba nada: `SEARCH_TRANSFERS` cubre hoy las seis del
+    veredicto, asi que la lectura agrupada es inalcanzable. Se conserva y no
+    se borra porque el dia que una transferencia salga de la busqueda es la
+    diferencia entre un valor declarado fuera de muestra y una caida.
+
+    Mutaciones: sacar una transferencia de `SEARCH_TRANSFERS` hace caer la
+    segunda; hacer que `ceiling_for` devuelva el agrupado en una medida hace
+    caer la primera. Ninguna hace caer la otra.
+    """
+    from MIL_CREDA_Benchmark import harness
+
+    # Primera mitad: sobre una transferencia medida gana la suya, no la agrupada.
+    medida = config.VERDICT_TRANSFERS[0]
+    etiqueta = harness.transfer_label(medida)
+    AGRUPADO, PROPIO = 0.5, 0.0123
+    reduccion = harness.Reduction(
+        ceilings={"milcreda": AGRUPADO},
+        ceilingsByTransfer={"milcreda": {etiqueta: PROPIO}})
+    assert harness.ceiling_for(reduccion, "milcreda", medida) == PROPIO, (
+        "una transferencia que la busqueda midio corrio bajo el techo "
+        "agrupado en vez del suyo")
+
+    # Segunda mitad: no queda ninguna sin medir, asi que el respaldo no se
+    # alcanza. Se afirma la RELACION entre las dos declaraciones, nunca un
+    # conteo escrito a mano.
+    sin_medir = set(config.VERDICT_TRANSFERS) - set(config.SEARCH_TRANSFERS)
+    assert not sin_medir, (
+        f"la busqueda no mide {sorted(sin_medir)}, asi que esas corren bajo "
+        "el techo agrupado --- una lectura fuera de muestra que hoy el "
+        "acuerdo declara inalcanzable")
+
+
 def test_run_one_resolves_the_ceiling_of_the_transfer_it_was_given(monkeypatch) -> None:
     """The resolver reaching the training loop, not merely existing beside it.
 
