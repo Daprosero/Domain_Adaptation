@@ -329,7 +329,15 @@ __benchmark__ = {
             # exactly what they are.
             "Results/Noise",
             "Results/Noise/degradation.json",
-            "Results/Noise/diagnostic.json",
+            # `Results/Noise/diagnostic.json` was declared here and is
+            # gone: the noise diagnostic was retired (see `config.py`'s
+            # own retirement note), so nothing produces that file and
+            # naming it described an experiment this repository no
+            # longer runs. A declared record nobody writes is the
+            # mirror image of the defect `undeclaredRecords` exists to
+            # catch, and it is the quieter one: the check only ever
+            # speaks about files that are PRESENT, so a declaration
+            # pointing at nothing is invisible to it forever.
             # El piloto escribe un árbol paralelo: las mismas rutas de arriba,
             # colgadas de `Pilot/`. Se declara el directorio una sola vez y no
             # archivo por archivo, porque no es un segundo experimento sino la
