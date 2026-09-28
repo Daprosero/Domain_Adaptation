@@ -220,6 +220,83 @@ def test_a_checkpoint_stamped_under_an_earlier_revision_is_tagged_and_never_drop
     assert summary == {"count": 1, "byRevision": {"research-concept-r17.md": 1}}
 
 
+def test_the_full_on_disk_pilot_tree_reports_exactly_67_r21_stamped_records_stale():
+    """Measured, not assumed: the 67 records `revision-bound-records` names (17
+    under `Results/`, 50 `.manifest.json` under `Models/Pilot/`) are every one
+    of them still stamped `research-concept-r21.md` on disk, and
+    `config.REVISION` is r25 after Phase 1's bump -- so `stale_revisions()`
+    must report exactly 67, none of them current.
+
+    Built from the raw on-disk JSON rather than through `latent.available()`:
+    that function's own `hyperparameter_drift()` call reads
+    `config.ceilings_on_record(pilot=True)`, which -- now that
+    `ceilings.pilot.json` is itself one of the 67 r21-stamped records -- raises
+    `SystemExit` from `config._refuse_on_stamp_drift`, uncaught by
+    `_current_hyper`'s `except Exception` (`SystemExit` is a `BaseException`,
+    not an `Exception`). That is a real, pre-existing defect this bump surfaces
+    for the first time -- no existing test called `available()` against real
+    on-disk data before -- and fixing it is a behavior change outside this
+    isolated commit's scope, reported separately rather than fixed here. This
+    test exercises `stale_revisions()` itself, the function the requirement
+    names, against the real population.
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import config
+
+    models_root = config.REPOSITORY / "MIL-CREDA" / "Models" / "Pilot"
+    manifest_paths = sorted(models_root.rglob("*.manifest.json"))
+    assert len(manifest_paths) == 50, (
+        f"expected 50 Models/ manifests, found {len(manifest_paths)}")
+
+    results_root = config.REPOSITORY / "MIL-CREDA" / "Results"
+    result_relpaths = [
+        "Benchmark/ceilings.pilot.json",
+        "Pilot/Benchmark/shard.json",
+        "Pilot/Benchmark/summary.json",
+        "Pilot/Noise/curve/Probe_results.json",
+        "Pilot/Noise/curve/rho0/shard.json",
+        "Pilot/Noise/curve/rho0/summary.json",
+        "Pilot/Noise/curve/rho0p1/shard.json",
+        "Pilot/Noise/curve/rho0p1/summary.json",
+        "Pilot/Noise/curve/rho0p2/shard.json",
+        "Pilot/Noise/curve/rho0p2/summary.json",
+        "Pilot/Noise/curve/rho0p3/shard.json",
+        "Pilot/Noise/curve/rho0p3/summary.json",
+        "Pilot/Noise/curve/rho0p4/shard.json",
+        "Pilot/Noise/curve/rho0p4/summary.json",
+        "Pilot/Noise/rho0p2/shard.json",
+        "Pilot/Noise/rho0p2/summary.json",
+        "Pilot/Probe_results.json",
+    ]
+    assert len(result_relpaths) == 17
+
+    def _own_revision(record: dict) -> str | None:
+        return (record.get("revision")
+                or (record.get("reduction") or {}).get("revision")
+                or (record.get("milcreda") or {}).get("revision"))
+
+    found = []
+    for manifest_path in manifest_paths:
+        record = json.loads(manifest_path.read_text(encoding="utf-8"))
+        revision = (record.get("reduction") or {}).get("revision")
+        found.append({"currentRevision": revision == config.REVISION,
+                      "reduction": {"revision": revision}})
+    for relpath in result_relpaths:
+        record = json.loads((results_root / relpath).read_text(encoding="utf-8"))
+        revision = _own_revision(record)
+        found.append({"currentRevision": revision == config.REVISION,
+                      "reduction": {"revision": revision}})
+
+    assert len(found) == 67
+    assert all(entry["currentRevision"] is False for entry in found), (
+        "every one of the 67 records is still stamped under the retired "
+        "revision -- none may read as current under the new one")
+
+    summary = latent.stale_revisions(found)
+    assert summary == {"count": 67, "byRevision": {"research-concept-r21.md": 67}}
+
+
 def test_load_refuses_a_checkpoint_stamped_under_an_earlier_revision():
     """`load()` is where a stale-revision checkpoint would otherwise be
     measured and rendered under today's stamp without a word; this is the
