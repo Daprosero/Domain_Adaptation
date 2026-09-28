@@ -417,7 +417,38 @@ design (an assertion gets weakened instead of re-pointed).
         (`training_step`, source by context). This condition is derived (any call site, anywhere),
         not a roster, so it reddens on a **new** site the behavioral guard structurally cannot see.
         *(Spec: `per-domain-encoders` — "No embedding without a declared domain".)*
-- [ ] 3.13 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
+- [ ] 3.13 **[SEQ]** The `except Exception` at `latent.py:324` cannot catch the refusal it
+      is there to absorb, and the revision bump made that reachable. **Measured on
+      `two-encoders-a1`, not inferred**: `_current_hyper` handed a real on-disk manifest
+      (revision `research-concept-r21.md`, of which there are 50) escapes with an uncaught
+      `SystemExit` — `"refusing to read ceilings from .../ceilings.pilot.json: stamped
+      u..."` — because `config._refuse_on_stamp_drift` raises `SystemExit`, which derives
+      from `BaseException` and so passes straight through an `except Exception`.
+
+      **The reported path was wrong and the correction matters**, because it decides where
+      the fix goes: `latent.available()` does NOT raise. It returns `[]`, correctly, because
+      the availability filter at `latent.py:113` compares `== config.REVISION` and discards
+      the stale manifests before reaching this function. The reachable caller is one level
+      down — `hyperparameter_drift` (`latent.py:328`), whose whole job is to REPORT which
+      fields disagree and which therefore must not die of a disagreement.
+
+      Pre-existing, not introduced here: `except Exception` has never been able to catch
+      `SystemExit`. What the bump changed is that the refusal now fires, so a latent crash
+      became a live one. Never exercised before because no test calls these against real
+      on-disk data — every existing call site monkeypatches `config.models_for` to a
+      `tmp_path` fixture, which is why a green suite never saw it.
+
+      RED FIRST, and the red is cheap and real: a test that hands `_current_hyper` a record
+      stamped under a revision other than `config.REVISION` and asserts it returns rather
+      than raising. Observe it fail with `SystemExit` escaping, then widen the catch to
+      cover the refusal and observe green. Do NOT widen it to bare `except BaseException`,
+      which would also swallow `KeyboardInterrupt`: catch the refusal's own type.
+
+      And assert the guard is still REACHABLE afterwards — a catch that made
+      `_refuse_on_stamp_drift` unable to refuse anywhere would trade a crash for a silence,
+      which is worse. `hyperparameter_drift` must still report the drift it was written to
+      report.
+- [ ] 3.14 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
       sibling's 3 reds remain. Commit.
 
 ---
