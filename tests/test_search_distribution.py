@@ -429,10 +429,13 @@ def arbol(tmp_path, monkeypatch):
     return lleno, ensayo
 
 
-@pytest.mark.parametrize("registro_presente", [False, True],
-                         ids=["sin-registro", "con-registro"])
+@pytest.mark.parametrize(
+    "registro_presente,rebanada_presente",
+    [(False, False), (True, False), (True, True)],
+    ids=["sin-nada", "con-registro-sin-rebanada", "con-registro-con-rebanada"],
+)
 def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
-        arbol, monkeypatch, registro_presente) -> None:
+        arbol, monkeypatch, registro_presente, rebanada_presente) -> None:
     """La prueba que el test anterior NO era, y la diferencia es el método.
 
     `test_a_partial_search_refuses_to_present_its_slice_as_the_record` tapa
@@ -443,22 +446,36 @@ def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
 
     Acá se tapa SOLO `search_ceilings` ---lo único que gastaría una búsqueda
     optuna de verdad--- y corren `ceilings_in_force` y `search_record` reales,
-    contra un árbol de verdad. Las dos ramas que existen se recorren las dos:
+    contra un árbol de verdad.
 
-    * `sin-registro`: `ceilings_in_force` no ve registro y busca. La escritura
-      de un subconjunto está bloqueada aguas arriba, así que no queda nada en
-      disco. Antes de este arreglo, acá ganaba "left no record".
-    * `con-registro`: `ceilings_in_force` corta y NO busca. Antes de este
-      arreglo, el guard afirmaba que la búsqueda había corrido y había dejado un
-      registro parcial en la ruta canónica ---falso dos veces, sobre un registro
-      completo escrito por otra cosa---.
+    **Extendido para el predicado consciente de la rebanada (D12/A5)**, cruzando
+    registro y rebanada en vez de un solo eje. La versión anterior de esta
+    prueba sólo cruzaba `registro_presente`, y su caso `con-registro` afirmaba
+    `busco["llamada"] is False` --- exactamente el defecto que D12 nombra: un
+    registro canónico contestando por una rebanada que nunca corrió. Esa
+    afirmación no se debilitó, se CORRIGIÓ, porque medía el defecto en vez de
+    su arreglo; queda como `con-registro-sin-rebanada` abajo, ahora esperando
+    que SÍ busque.
 
-    En las dos gana el rechazo del subconjunto, y en ninguna el mensaje afirma
+    * `sin-nada`: ni registro ni rebanada. `ceilings_in_force` busca.
+    * `con-registro-sin-rebanada`: el registro canónico existe pero la rebanada
+      de ESTE llamado no. El predicado por rebanada tiene que ignorar el
+      registro y buscar de todos modos -- el relanzamiento de un shard muerto
+      que este cambio existe para arreglar.
+    * `con-registro-con-rebanada`: la propia rebanada ya existe (un relanzamiento
+      de verdad). El predicado no tiene que volver a buscar.
+
+    En las tres gana el rechazo del subconjunto, y en ninguna el mensaje afirma
     qué pasó aguas arriba, porque desde ese frame no se puede saber.
     """
     lleno, _ = arbol
     if registro_presente:
         _registro_en_disco(lleno)
+
+    slice_path = harness.shard_paths(None, pilot=False)["searchSlice"]
+    if rebanada_presente:
+        slice_path.parent.mkdir(parents=True, exist_ok=True)
+        slice_path.write_text("{}", encoding="utf-8")
 
     busco = {"llamada": False}
 
@@ -474,10 +491,11 @@ def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
         harness.run_search(transfers=[config.SEARCH_TRANSFERS[0]])
     mensaje = str(refusal.value)
 
-    assert busco["llamada"] == (not registro_presente), (
-        "la rama de arriba tiene que ser la real: busca cuando NO hay registro y "
-        "corta cuando hay. Si esto falla, el test no est\u00e1 recorriendo el camino "
-        f"que dice recorrer (registro={registro_presente}, busc\u00f3={busco['llamada']})"
+    assert busco["llamada"] == (not rebanada_presente), (
+        "el predicado del subconjunto tiene que preguntar por SU PROPIA "
+        "rebanada, nunca por el registro canónico -- si esto falla, sigue "
+        f"preguntando la pregunta equivocada (registro={registro_presente}, "
+        f"rebanada={rebanada_presente}, buscó={busco['llamada']})"
     )
     assert "subset" in mensaje, (
         f"tiene que ganar el rechazo del subconjunto, no otro: {mensaje!r}"
@@ -487,11 +505,149 @@ def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
         f"se pidió un subconjunto. {mensaje!r}"
     )
     assert "the search ran" not in mensaje, (
-        "el mensaje no puede afirmar que la búsqueda corrió: con un registro en "
-        f"disco `ceilings_in_force` corta y no busca. {mensaje!r}"
+        "el mensaje no puede afirmar que la búsqueda corrió: desde este frame "
+        f"no se puede saber qué pasó aguas arriba. {mensaje!r}"
     )
     assert str(len(config.SEARCH_TRANSFERS)) in mensaje, (
         f"tiene que nombrar el total contra el que el subconjunto es parcial: {mensaje!r}"
+    )
+
+
+# --------------------------------------------- A5: el predicado por rebanada
+
+def test_a_canonical_record_does_not_stop_a_relaunched_slice_from_searching(
+        _rebanada_engine) -> None:
+    """El defecto que D12 corrige: un registro canónico no contesta por una rebanada.
+
+    `ceilings_in_force` decide "¿ya contesté esto?" antes de buscar. Con un
+    registro canónico completo en disco, esa pregunta hoy se responde contra
+    el registro entero incluso cuando lo que se pidió es un subconjunto --
+    así que un shard relanzado, que necesita SU PROPIA rebanada y no la
+    respuesta de otro, se corta sin buscar nada y sin dejar su archivo. Ésta
+    es la relectura, por el camino real, de la relanzada que
+    `test_el_rechazo_del_subconjunto_llega_por_el_camino_real` no mide: esa
+    prueba fija el mensaje, ésta fija si la búsqueda del subconjunto CORRE.
+    """
+    reduccion = harness.Reduction(seeds=[config.SEARCH_SEED],
+                                  epochs=config.SEARCH_EPOCHS)
+    harness.ceilings_in_force(reduccion, "cpu", progress=lambda *_: None,
+                              shard=None, pilot=False, transfers=None)
+    assert config.ceilings_record_for(False).exists(), (
+        "el fixture tiene que dejar un registro canónico real antes de medir "
+        "el defecto, o esta prueba mediría otra cosa"
+    )
+
+    subconjunto = list(config.SEARCH_TRANSFERS[:1])
+    slice_path = harness.shard_paths(
+        "search-relaunch", noise=0.0, kind="campaign",
+        pilot=False)["searchSlice"]
+    assert not slice_path.exists(), (
+        "esta rebanada no puede existir todavía, o la prueba no mediría un "
+        "relanzamiento"
+    )
+
+    harness.ceilings_in_force(reduccion, "cpu", progress=lambda *_: None,
+                              shard="search-relaunch", pilot=False,
+                              transfers=subconjunto)
+
+    assert slice_path.exists(), (
+        "un registro canónico en disco no puede impedir que un subconjunto "
+        "relanzado busque y deje su propia rebanada -- la pregunta correcta "
+        "para un subconjunto es si SU rebanada ya existe, no si el registro "
+        f"canónico existe; {slice_path} no existe"
+    )
+
+
+def test_the_partial_refusal_names_this_slices_own_artifact_and_reports_written(
+        _rebanada_engine, monkeypatch) -> None:
+    """D12: la negativa nombra la rebanada de ESTE llamado, y dice que se escribió.
+
+    Antes de este arreglo el mensaje prometía una unión que todavía no
+    existía y no mencionaba ningún archivo por shard. Ahora la unión existe
+    (A4), y la negativa puede señalar exactamente qué archivo asamblar.
+    """
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+    subconjunto = list(config.SEARCH_TRANSFERS[:1])
+    slice_path = harness.shard_paths(
+        "search-s00", noise=0.0, kind="campaign", pilot=False)["searchSlice"]
+    assert not slice_path.exists()
+
+    with pytest.raises(SystemExit) as refusal:
+        harness.run_search(shard="search-s00", transfers=subconjunto)
+    mensaje = str(refusal.value)
+
+    assert str(slice_path) in mensaje, (
+        f"la negativa tiene que nombrar el archivo de ESTA rebanada: {mensaje!r}"
+    )
+    assert "written" in mensaje, (
+        "la búsqueda de este subconjunto corrió de verdad y dejó su "
+        f"rebanada; el mensaje tiene que decirlo: {mensaje!r}"
+    )
+    assert slice_path.exists(), (
+        "el flujo real tiene que haber dejado la rebanada en disco"
+    )
+
+
+def test_the_partial_refusal_reports_absent_when_the_slice_never_wrote(
+        _rebanada_engine, monkeypatch) -> None:
+    """La otra dirección del mismo mensaje: sin rebanada en disco, dice ABSENT.
+
+    Se tapa `search_ceilings` -- lo único que gastaría una búsqueda de
+    verdad -- para dejar que el predicado real de `ceilings_in_force`
+    decida buscar, y medir qué mensaje deja cuando esa búsqueda no escribe
+    nada.
+    """
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: {})
+    subconjunto = list(config.SEARCH_TRANSFERS[:1])
+    slice_path = harness.shard_paths(
+        "search-s00", noise=0.0, kind="campaign", pilot=False)["searchSlice"]
+
+    with pytest.raises(SystemExit) as refusal:
+        harness.run_search(shard="search-s00", transfers=subconjunto)
+    mensaje = str(refusal.value)
+
+    assert not slice_path.exists()
+    assert "ABSENT" in mensaje and "produced nothing to assemble" in mensaje, (
+        f"sin rebanada en disco el mensaje tiene que decir ABSENT: {mensaje!r}"
+    )
+
+
+def test_run_search_without_transfers_still_returns_the_whole_record_real_path(
+        _rebanada_engine, monkeypatch) -> None:
+    """La otra rama de D12 no se movió: sin `transfers`, sigue igual.
+
+    Conducida por el camino real -- motor falso, nunca `ceilings_in_force`
+    tapado -- para confirmar que reordenar el branch del subconjunto no
+    movió esta rama, que ya tenía cobertura tapada en
+    `test_a_partial_search_refuses_to_present_its_slice_as_the_record`.
+    """
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+    registro = harness.run_search(pilot=False)
+    # `search_record` agrega `currentStamp` al leer (harness.py:1358), una
+    # etiqueta calculada y no guardada en el archivo -- comparar contra el
+    # JSON crudo sin sumarla mediría un defecto que no es de este cambio.
+    canonico = json.loads(config.ceilings_record_for(False).read_text())
+    for entry in canonico.values():
+        entry["currentStamp"] = True
+    assert registro == canonico, (
+        "sin `transfers` `run_search` tiene que devolver el registro entero "
+        "leído del disco, exactamente como antes de este cambio"
+    )
+
+
+def test_run_search_never_reads_verdict_transfers_in_its_refusal() -> None:
+    """Espejo de 4.14 (`merge_search_records`), ahora sobre `run_search`.
+
+    `VERDICT_TRANSFERS` y `SEARCH_TRANSFERS` hoy tienen la misma longitud, así
+    que una prueba que sólo contara no distinguiría cuál de las dos constantes
+    construye el mensaje -- la misma clase de defecto que D11 nombra.
+    """
+    fuente = inspect.getsource(harness.run_search)
+    assert "VERDICT_TRANSFERS" not in fuente, (
+        "la negativa PARCIAL de `run_search` tiene que contar contra "
+        "`config.SEARCH_TRANSFERS` (D11), nunca contra `VERDICT_TRANSFERS` -- "
+        f"encontrado en la fuente: {fuente!r}"
     )
 
 
