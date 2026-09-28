@@ -130,7 +130,7 @@ directory under `Results/Benchmark/shards/<shard>`, `harness.py:993`) and
 - [x] T3 — The four notebooks read them: full scale unless the mode is smoke,
       and the units as this shard's seeds, with the file dial as the default so
       the local pilot walk is byte-identical. (red first, target suite)
-- [ ] T4 — Regenerate the `ceiling-search` job: notebook shape, clone paths
+- [x] T4 — Regenerate the `ceiling-search` job: notebook shape, clone paths
       covering `MIL-CREDA/Notebooks`, pinned to a pushed commit. Every job
       folder must be regenerated once the runner bytes change — the
       `runnerTemplate` sha256 is inert provenance and nothing re-verifies it
@@ -142,6 +142,69 @@ directory under `Results/Benchmark/shards/<shard>`, `harness.py:993`) and
       token, and stop. The `gate` is the operator's.
 
 Everything past T5 waits on the operator, one job at a time.
+
+## The rehearsal, measured on the card
+
+The first account was rehearsed both ways before any fan-out, and the two shapes
+turned out not to be interchangeable — which is why both exist rather than one.
+
+Account `Daprosero`, pin `9a5c272`, `mode: "smoke"`, both rehearsals concurrent
+(`KAGGLE_WORKER_CAPACITY = 2` is exactly enough):
+
+| rehearsal | wall clock | returns | verdict |
+| --- | --- | --- | --- |
+| callable (`harness.run_smoke`) | 120 s | `shard.json` + `runs.jsonl` | `smoke record` → `pass`, `missing: []`; `readiness` → `ready: True` |
+| notebook (`Benchmark_Ceiling_Search.ipynb`) | 1140 s | `ceilings.pilot.json` + its executed self | no `shard.json` at all, so it can never satisfy `requiredEvidence` |
+
+So the forge's readiness verdict comes only from the callable, and the proof that
+an account executes its notebook comes only from the notebook. Neither
+substitutes for the other, and that is measured rather than argued.
+
+The arriving hardware, from the bootstrap the worker itself wrote:
+`device {"kind": "cuda", "name": "Tesla T4"}`, `capability sm_75`,
+`torch 2.10.0+cu128`, `archList` covering `sm_75`. So `check_accelerator()`'s two
+assertions — the arriving capability appears in the installed arch list, and the
+declared `sm_75` is covered by it — both ran and passed. A rehearsal measured on
+CPU would never have reached that gate, and the number it produced would describe
+a machine the declaration forbids.
+
+The executed notebook came back with **0 cells in error** and printed its own
+scale rather than being asked: `escala: ensayo`,
+`esta corrida (ensayo): 4 trials de 3 épocas — 24 corridas`, against its declared
+`40 trials de 20 épocas por (familia, transferencia) — 240 corridas`.
+
+Six (family, transfer) pairs at 0.9 min each = 5.4 min of search inside a 19 min
+session, so clone + install + kernel startup is ~13.6 min of fixed overhead.
+
+**The projection, and its assumption.** Work taken as proportional to
+trials × epochs: per pair 4×3 = 12 run-epochs becomes 40×20 = 800, a 66.7×
+ratio. 5.4 min × 66.7 = 360 min = 6.0 h, plus the fixed 0.23 h, so **≈ 6.2 h**.
+A Kaggle GPU session caps at 12 h, so the search fits with roughly 2× headroom —
+which closes the open question of whether an unshardable 8-dimension search could
+finish at all. The linearity assumption is the part to keep visible: per-trial
+fixed cost (data load, bag build) does not scale with epochs, so the real figure
+is likely BELOW 6.2 h. It is an upper estimate, never a measured full run.
+
+A rehearsal's fetch lands in
+`MIL-CREDA/.remote-execution/rehearsal/<worker>/<job>/`, never in the science
+tree: `--dest` is *refused* under `--smoke` because the skill computes that
+destination itself.
+
+## Two forge defects this task measured, neither repaired here
+
+- **`generate-job`'s help text is wrong about `--smoke-required-evidence`.** It
+  says the flag is "refused without `--smoke-module`/`--smoke-function` set", but
+  the validation only refuses a required-evidence list with NO smoke block at all
+  (`jobfolder.py:1646-1652`); `has_smoke_block` is satisfied by
+  `smoke_notebook` alone. The generated probe folder proves it: eight evidence
+  fields recorded on a notebook-shaped smoke block.
+- **A missing module is reported as an unreachable service.** `adapters/kaggle.py`
+  runs its driver as `[sys.executable, driver, "capacity"]`. Under a bare
+  `python3.12` with no `kagglesdk`, the driver answers `{"ok": false, "error":
+  "... kagglesdk is not importable ..."}` and `distribute` folds that into
+  "live capacity evidence unavailable (service unreachable or refusing)" for all
+  nine accounts — a message about the network for a failure that was an import.
+  Run every service-touching verb as `.venv/bin/python`.
 
 ## Verification of record
 
