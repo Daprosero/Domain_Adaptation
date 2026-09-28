@@ -1333,7 +1333,8 @@ def test_run_search_runs_at_the_declared_scale_and_never_the_pilots(monkeypatch)
 
     seen = {}
 
-    def _spy(reduction, device, progress=print, shard=None, pilot=False):
+    def _spy(reduction, device, progress=print, shard=None, pilot=False,
+             transfers=None):
         seen["reduction"] = reduction
         seen["pilot"] = pilot
         return {}

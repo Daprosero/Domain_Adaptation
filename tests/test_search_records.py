@@ -162,7 +162,8 @@ def test_un_ensayo_nunca_escribe_en_el_registro_completo(registros, monkeypatch)
     lleno, ensayo = registros
     visto = {}
 
-    def _falso(reduction, device, progress=print, shard=None, pilot=False):
+    def _falso(reduction, device, progress=print, shard=None, pilot=False,
+               transfers=None):
         visto["pilot"] = pilot
         destino = config.CEILINGS_PILOT_RECORD if pilot else config.CEILINGS_RECORD
         _escribir(destino, reduction.epochs, len(reduction.seeds))
