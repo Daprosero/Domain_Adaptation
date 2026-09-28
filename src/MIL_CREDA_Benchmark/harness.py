@@ -2350,7 +2350,7 @@ def campaign(reduction: Reduction, device: torch.device,
     # vez de repetirla acá: dos implementaciones de una misma forma son dos que
     # pueden separarse, y el informe no podría decir cuál de las dos leyó.
     from MIL_CREDA_Benchmark import shards as _shards
-    _, _, per_run = _shards.partition(config.DIMENSIONS, _shards.declaration())
+    _, _, per_run = _shards.partition(config.DIMENSIONS, _shards.rules_for_axis("seed"))
     grid_per_run = _shards.per_run_grid(
         [run for cell_runs in cells.values() for run in cell_runs], per_run)
 
@@ -2542,11 +2542,14 @@ def run_campaign_shard(shard: str | None = None,
     from a job. This is that way, and it is the same three lines, placed where a
     clone can see them.
 
-    The seed list is the whole parameterisation of a SHARD, because the seed
-    axis is what the declaration says may be split
-    (`__benchmark__["distribution"]["axis"]`). `pilot` is a different
-    coordinate and not a second way to spell that one: it moves the scale AND
-    the destination together, exactly as `run_search(pilot=...)` does.
+    The seed list is the whole parameterisation of a SHARD, because a
+    campaign shard's own axis is the seed -- one of the two the declaration
+    now names (`__benchmark__["distribution"]["axes"]`, `"seed"` and
+    `"transfer"`), and the only one this function's shape reads; the search
+    splits by transfer instead, through `run_search(transfers=...)`. `pilot`
+    is a different coordinate and not a second way to spell that one: it
+    moves the scale AND the destination together, exactly as
+    `run_search(pilot=...)` does.
 
     **The scale is received, never guessed.** This function used to hardcode
     `config.FULL_SEEDS`/`config.FULL_EPOCHS` and take no dial, and the
