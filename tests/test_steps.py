@@ -498,8 +498,17 @@ class ReferenciasACuadernosTests(unittest.TestCase):
     DIRECTORIOS = ("MIL-CREDA/Notebooks", "CREDA/Notebooks")
     #: Lo que no se lee: producto, entornos y cachés. `Results/` y `Models/`
     #: quedan afuera porque son salida y no texto de este repositorio.
+    #:
+    #: `.remote-execution/` entra por esa misma razón y no por conveniencia: un
+    #: ensayo traído de un worker materializa el CLON entero bajo
+    #: `rehearsal/<cuenta>/<job>/clone/`, con los cuadernos del pin adentro y un
+    #: `executed-<nombre>.ipynb` al lado. Son bytes que un worker escribió, no
+    #: texto que este repositorio se nombre a sí mismo, y leerlos hacía que el
+    #: test reportara como referencia rota cada cuaderno de cada clon traído.
+    #: Ya está en `.gitignore`, que es la misma clasificación dicha en otro lado.
     SALTEADOS = {".git", ".venv", "__pycache__", ".pytest_cache", ".scratch",
                  ".ipynb_checkpoints", ".benchmark-data", ".implementation",
+                 ".remote-execution",
                  "Results", "Models", ".domain-adaptation-cache", ".atl"}
     LEIDOS = {".py", ".md", ".txt", ".cfg", ".toml", ".ipynb"}
 

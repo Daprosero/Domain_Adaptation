@@ -160,3 +160,41 @@ def test_the_search_still_has_no_seed_axis_to_split() -> None:
         "`run_search` no reparte por semilla y no debe empezar a hacerlo: su "
         "eje es la transferencia"
     )
+
+
+def test_a_partial_search_refuses_to_present_its_slice_as_the_record(monkeypatch) -> None:
+    """Pedir una porción es alcanzable; presentarla como el registro, no.
+
+    `run_search` reenvía `transfers` hasta el motor, así que la porción se puede
+    pedir hoy. Lo que NO se puede es devolverla: no hay unión de registros
+    parciales, y las dos salidas sin negativa son ambas incorrectas -- devolver
+    la porción entrega a la campaña techos que nunca se buscaron para las otras
+    transferencias, y un segundo worker escribiendo esa misma ruta pisa al
+    primero. Las dos producen números con la forma exacta de los correctos.
+
+    Se conduce la función real con la búsqueda falsa: se mide la negativa, nunca
+    el modelo. Y se mide en las dos direcciones, que es lo único que prueba que
+    la negativa distingue algo: con `transfers` se niega, sin `transfers`
+    devuelve el registro igual que antes.
+    """
+    registro = {"milcreda": {"ceiling": 1e-4, "currentStamp": True}}
+    monkeypatch.setattr(harness, "ceilings_in_force", lambda *a, **k: {})
+    monkeypatch.setattr(harness, "search_record", lambda pilot=False: registro)
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+
+    with pytest.raises(SystemExit) as refusal:
+        harness.run_search(transfers=[config.VERDICT_TRANSFERS[0]])
+    mensaje = str(refusal.value)
+    assert "PARTIAL" in mensaje, (
+        f"la negativa tiene que nombrar que el registro es parcial: {mensaje!r}"
+    )
+    assert str(len(config.VERDICT_TRANSFERS)) in mensaje, (
+        "tiene que nombrar cuántas transferencias son en total, para que quien "
+        f"la lea sepa qué le falta: {mensaje!r}"
+    )
+
+    # La otra dirección: sin `transfers` el comportamiento de hoy no cambia.
+    assert harness.run_search() is registro, (
+        "la búsqueda entera tiene que seguir devolviendo su registro; un guard "
+        "que se dispara siempre no es un guard, es una rotura"
+    )

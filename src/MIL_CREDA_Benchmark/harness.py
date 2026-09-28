@@ -1422,7 +1422,8 @@ def campaign_source_note(ensayo: bool | None) -> str:
 
 def ceilings_in_force(reduction: Reduction, device: torch.device,
                       progress=print, shard: str | None = None,
-                      pilot: bool = False) -> dict[str, float]:
+                      pilot: bool = False,
+                      transfers: list | None = None) -> dict[str, float]:
     """The ceilings the campaign will run at: searched once if no record exists.
 
     The campaign refuses without them, and `config.CEILINGS` is filled at import
@@ -1462,7 +1463,7 @@ def ceilings_in_force(reduction: Reduction, device: torch.device,
     if search_record(pilot=pilot) is None:
         progress("no ceiling record: searching, once, before anything is compared")
         search_ceilings(reduction, device, progress=progress, shard=shard,
-                        pilot=pilot)
+                        pilot=pilot, transfers=transfers)
     record = search_record(pilot=pilot) or {}
     drifted = sorted(family for family, entry in record.items()
                      if isinstance(entry, dict) and not entry.get("currentStamp", False))
@@ -2429,7 +2430,8 @@ def run_pilot(epochs: int = config.EPOCHS, seeds: list[int] | None = None) -> di
     return campaign(reduction, device)
 
 
-def run_search(shard: str | None = None, pilot: bool = False) -> dict:
+def run_search(shard: str | None = None, pilot: bool = False,
+               transfers: list | None = None) -> dict:
     """The ceiling search alone, headless, and nothing after it.
 
     `search_ceilings()` takes a `Reduction` and a `torch.device`, neither of
@@ -2475,7 +2477,8 @@ def run_search(shard: str | None = None, pilot: bool = False) -> dict:
         seeds=list(config.PILOT_SEARCH_SEEDS if pilot else config.SEARCH_SEEDS),
         epochs=(config.PILOT_SEARCH_EPOCHS if pilot else config.SEARCH_EPOCHS),
         device=str(device), environment=environment())
-    ceilings_in_force(reduction, device, shard=shard, pilot=pilot)
+    ceilings_in_force(reduction, device, shard=shard, pilot=pilot,
+                      transfers=transfers)
     # Read back from disk, never from what the search returned, for the reason
     # `ceilings_in_force` already gives: what the campaign will run at is what
     # the record says, and the record is the thing a later session reads.
@@ -2487,6 +2490,31 @@ def run_search(shard: str | None = None, pilot: bool = False) -> dict:
             "Nothing downstream can read a ceiling "
             "that was never written down, and a run that reports success "
             "without one would be claiming an answer it cannot show."
+        )
+    if transfers is not None:
+        # A partial search leaves a partial record, and this function's whole
+        # contract is to hand back THE record the campaign will run at. There is
+        # no assembly of partial records yet, so the two ways this could end
+        # without refusing are both wrong: returning the slice as if it were the
+        # record hands the campaign ceilings that were never searched for the
+        # other transfers, and a second worker writing the same path overwrites
+        # the first. Both produce numbers shaped exactly like the right ones.
+        #
+        # So the parameter is reachable and its result is not presentable, on
+        # purpose and only until the assembly exists. Where the refusal for an
+        # incomplete record finally lives -- here, in the assembly, or in the
+        # consumer -- is a decision this function does not get to make.
+        raise SystemExit(
+            f"the search ran for {len(transfers)} of "
+            f"{len(config.VERDICT_TRANSFERS)} transfers and left a PARTIAL "
+            f"record at {config.ceilings_record_for(pilot)}, which is not the "
+            "record the campaign runs at.\n"
+            "  Nothing assembles partial search records yet, so this slice "
+            "cannot be handed back as if it were complete, and a second worker "
+            "writing that same path would overwrite this one.\n"
+            f"  Asked for: {list(transfers)}\n"
+            "  Run the search whole (omit `transfers`) until the assembly "
+            "exists."
         )
     return record
 
