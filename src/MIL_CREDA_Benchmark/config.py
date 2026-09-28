@@ -297,7 +297,7 @@ def execution_seed_units() -> "list[int] | None":
 
 # ------------------------------------------------------------------- material
 
-REVISION = "research-concept-r21.md"
+REVISION = "research-concept-r25.md"
 
 #: Every domain supplies its own bags; a transfer names which is source and which
 #: is target. All three hold far more than the 3600 images a domain contributes.
@@ -450,7 +450,7 @@ ATTENTION_WIDTH = 128
 #: gamma of Eq. (15): the weight of the within-bag consensus term against the
 #: learned relevance R_phi. The proposal fixes it as a hyperparameter during
 #: training but gives it no value. Zero sits at the neutral where Eq. (15)
-#: reduces to R_phi with the l1-normalized v_R (r21 l.456) -- not to a bare,
+#: reduces to R_phi with the l1-normalized v_R (r25 Eq. (15)) -- not to a bare,
 #: unconstrained v_R^T tanh(...), which is what a prior revision's attention
 #: computed and which this one no longer does at any value of gamma. The
 #: l1-ball reparametrization is not gated by gamma; only the consensus term
@@ -469,14 +469,15 @@ ATTENTION_TEMPERATURE = 1.0
 #: is fixed at one and reported as fixed rather than chosen.
 TAU_LOCAL = 1.0
 
-#: sigma of Eq. (14): the one bandwidth of the one instance kernel. r21 l.715
-#: is explicit that a single sigma governs the three blocks of a class's mixed
-#: matrix "ya que los tres derivan del mismo kernel de instancia", and l.458
-#: says the attention consensus reuses that same kernel and its bandwidth
-#: rather than a second one of its own -- so one constant serves the
-#: consensus term inside the attention logit (Eq. 15), the top-k selection
-#: ranking, every bag kernel block Eq. (23) builds (K_ss, K_st, K_tt) -- the
-#: three blocks of a class's mixed matrix are defined there, not at Eqs.
+#: sigma of Eq. (14): the one bandwidth of the one instance kernel. r25
+#: Eq. (23) is explicit that a single sigma governs the three blocks of a
+#: class's mixed matrix "ya que los tres derivan del mismo kernel de
+#: instancia", and r25 Eq. (15) says the attention consensus reuses that
+#: same kernel and its bandwidth rather than a second one of its own -- so
+#: one constant serves the consensus term inside the attention logit (Eq. 15),
+#: the top-k selection ranking, every bag kernel block Eq. (23) builds
+#: (K_ss, K_st, K_tt) -- the three blocks of a class's mixed matrix are
+#: defined there, not at Eqs.
 #: (17)-(18), which define the bag kernel and its representation in general --
 #: and the local correspondence's own kernel evaluations (Eq. 28, 31). Every
 #: caller passes this explicitly, with no default anywhere in the call

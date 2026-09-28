@@ -129,9 +129,9 @@ MIN_ATTENTION_SPREAD = _min_reachable_attention_entropy(
 
 #: A partir de acá se lee la atención como pegada a la media uniforme. Es un
 #: umbral de lectura, no una medición, y cae dentro del rango alcanzable
-#: (`MIN_ATTENTION_SPREAD` a 1.000): r21 l.501 dice que un valor así es lo
+#: (`MIN_ATTENTION_SPREAD` a 1.000): r25 §3.2 dice que un valor así es lo
 #: esperado en una bolsa dispersa sin grupo dominante, y no es, por sí solo,
-#: un fallo de la atención -- ahí r21 lo empareja con una autosimilitud BAJA
+#: un fallo de la atención -- ahí r25 lo empareja con una autosimilitud BAJA
 #: de la propia bolsa, no con la masa de correspondencia. Esa autosimilitud
 #: es una lectura distinta, y este informe no la calcula ni la imprime.
 UNIFORM_ATTENTION = 0.99
@@ -491,7 +491,7 @@ def objective(key: str, markdown: bool = True) -> str:
             f"{_selecting_arms_floor_clause()} -- nunca 0.000, en "
             f"ningún caso: r21 acota el logit en 2 + gamma en el párrafo que sigue "
             f"a la Ec. (16), así que el rango alcanzable es angosto y pegado a uno. "
-            f"r21 l.501 dice además que un peso casi uniforme es lo esperado en una "
+            f"r25 §3.2 dice además que un peso casi uniforme es lo esperado en una "
             f"bolsa dispersa sin grupo dominante -- ahí empareja ese peso con una "
             f"autosimilitud BAJA de la propia bolsa, una lectura distinta de la "
             f"de arriba -- y no es, por sí solo, un fallo de la atención.",
@@ -1877,7 +1877,7 @@ def conclusion_attention(readings: Iterable[dict]) -> str:
     "falló".
 
     Descriptiva y no se disputa: no hay un lado que gane, y un valor pegado a
-    la media uniforme no es, por sí solo, un fallo de la atención -- r21 l.501
+    la media uniforme no es, por sí solo, un fallo de la atención -- r25 §3.2
     dice que es lo esperado en una bolsa dispersa sin grupo dominante. Bajo
     los hiperparámetros neutros el piso alcanzable
     (`MIN_ATTENTION_SPREAD_BY_ARM`) está lejos de cero para cada brazo, así
@@ -1914,7 +1914,7 @@ def conclusion_attention(readings: Iterable[dict]) -> str:
                     f"tau_att={config.ATTENTION_TEMPERATURE:g}, el piso que Eq. (16) "
                     f"alcanza depende de sobre cuántas instancias reparte cada brazo -- "
                     f"nunca menos que ese piso, y un valor cercano a uno es lo esperado "
-                    f"en una bolsa dispersa (r21 l.501), no un fallo por sí solo. Cómo "
+                    f"en una bolsa dispersa (r25 §3.2), no un fallo por sí solo. Cómo "
                     f"quedó cada uno dentro de su propio rango alcanzable:")
     return " ".join(_pilot_note(lines, readings))
 

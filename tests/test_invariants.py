@@ -627,7 +627,7 @@ def test_attention_logit_ratio_bounded_by_temperature(rng: Sampler) -> None:
 def test_relevance_logit_reduces_to_l1_normalized_relevance_at_neutral_hyperparameters() -> None:
     """At gamma = 0 and tau_att = 1 (`config.ATTENTION_GAMMA`,
     `config.ATTENTION_TEMPERATURE`'s declared neutral) Eqs. (15)-(16) reduce
-    to R_phi with the l1-normalized v_R (r21 l.456): a plain softmax of the
+    to R_phi with the l1-normalized v_R (r25 Eq. (15)): a plain softmax of the
     learned relevance alone, WITH the l1-ball reparametrization Eq. (15)
     always applies to v_R.
 

@@ -257,7 +257,7 @@ class Arm(nn.Module):
         # Decision 1: one constant bandwidth for the whole method -- the
         # consensus term, the top-k ranking, every kernel block below and
         # `local_distance` all read `self.sigma` (`config.KERNEL_SIGMA`, or the
-        # ceiling search's override) and nothing else. r21 l.715: "Un unico
+        # ceiling search's override) and nothing else. r25 Eq. (23): "Un unico
         # ancho de banda sigma gobierna los tres bloques, ya que los tres
         # derivan del mismo kernel de instancia."
         sigma = self.sigma

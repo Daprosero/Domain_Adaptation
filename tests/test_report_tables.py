@@ -1299,7 +1299,7 @@ def test_no_configuration_of_the_sweep_reaches_below_the_computed_floor() -> Non
 
 
 def test_attention_spread_text_names_the_computed_floor_and_the_r21_reading() -> None:
-    """The objective and the conclusion both name r21 l.501's reading rather
+    """The objective and the conclusion both name r25 §3.2's reading rather
     than calling a uniform weight a failure, and both quote the SAME computed
     number -- never a second, independently hand-typed one.
 
@@ -1312,9 +1312,9 @@ def test_attention_spread_text_names_the_computed_floor_and_the_r21_reading() ->
     assert floor_str in objective_text
     assert "dejó de elegir" not in objective_text
     assert "no es, por sí solo, un fallo" in objective_text
-    assert "l.501" in objective_text
-    # The r21 l.501 pairing is with the bag's own self-similarity, never with
-    # the correspondence mass -- that was the defect: r21 pairs a near-uniform
+    assert "§3.2" in objective_text
+    # The r25 §3.2 pairing is with the bag's own self-similarity, never with
+    # the correspondence mass -- that was the defect: r25 pairs a near-uniform
     # weight with a LOW self-similarity (a diverse bag with no dominant
     # group), which has nothing to do with how much local-correspondence mass
     # landed on the true class.
@@ -1325,7 +1325,7 @@ def test_attention_spread_text_names_the_computed_floor_and_the_r21_reading() ->
         {"arm": "G", "transfer": "M->U", "seed": 0, "attentionSpread": 0.9},
     ])
     assert floor_str in said
-    assert "l.501" in said
+    assert "§3.2" in said
     assert "que venía a mejorar" not in said
 
 
