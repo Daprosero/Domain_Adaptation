@@ -127,7 +127,7 @@ directory under `Results/Benchmark/shards/<shard>`, `harness.py:993`) and
       callable branch receives them too — `run.kwargs` is per-job, so the
       environment is the only per-submission channel either shape has.
       (red first, `tests/test_remote_execution.py`)
-- [ ] T3 — The four notebooks read them: full scale unless the mode is smoke,
+- [x] T3 — The four notebooks read them: full scale unless the mode is smoke,
       and the units as this shard's seeds, with the file dial as the default so
       the local pilot walk is byte-identical. (red first, target suite)
 - [ ] T4 — Regenerate the `ceiling-search` job: notebook shape, clone paths
@@ -185,7 +185,45 @@ conflict, and the first one helps T4 directly.
 
 ## Progress
 
-Nothing written yet. T1 is running.
+T1, T2 and T3 are done. T4 is the next unit of work and has one precondition
+this document did not previously name: **the pin must be a pushed commit.**
+
+- 2026-09-28 — T3 measured green, having been left unticked while its code was
+  already in. `config.execution_is_pilot_scale()` / `config.execution_seed_units()`
+  are read by all four remote notebooks (`Benchmark_Ceiling_Search`,
+  `Benchmark_Noise_Sweep`, `Benchmark_Campaign`,
+  `Benchmark_Attention_Mechanisms`), and `tests/test_scale_readings.py` is 39
+  passed. Ticked against that measurement and not against the intent written
+  above it.
+- 2026-09-28 — the declared pilot walk is COMPLETE, all six steps, each with its
+  own commit (`faecebf` … `c11615c`). `probe` reports
+  `pilotCompleteness.status = "complete"` and `position.status = "complete"`,
+  six of six satisfied, no disagreements. `walk` reports every step `walked` at
+  `rung: "none"` — pilot scale grants no rung, which is the point.
+- 2026-09-28 — **T4's blocker, measured.** All four job folders are pinned at
+  `bee6781` and `probe` reports every one of them `drift`, over six changed
+  `src/MIL_CREDA_Benchmark` files; `smokeReady` is `false` for all four. Seven
+  target commits are ahead of `origin/main`, so the pin a regenerated folder
+  would want does not exist on the remote yet and `pin-published` refuses an
+  unpushed commit. Pushing is therefore a precondition of T4, not a closing
+  step.
+- 2026-09-28 — **the rehearsal shapes, measured, and the target already decided
+  them.** `steps.predecesores` returns empty for `campaign` and `mechanisms`, so
+  `steps.ensayo_remoto` routes both to `harness.run_smoke()` — the wire — and
+  not to their own notebook. That is written down and reasoned, not an
+  oversight: no declared step produces the full `Results/Benchmark/ceilings.json`
+  (the full search is `__records__`' single entry, run outside the step walk),
+  so declaring it would chain nothing `predecesores` could derive, and a
+  notebook rehearsal of the campaign would be a nine-and-a-half-hour rehearsal.
+  Only `noise-sweep` has a predecessor (`search-pilot`), honours the input scale
+  (`honra_la_escala_de_entrada` is `True`), and therefore rehearses its own
+  notebook against the search's full-scale record — refusing today, correctly,
+  because `Results/Benchmark/ceilings.json` does not exist yet.
+- 2026-09-27 — a step's ledger `started` with no terminal partner does not mean
+  it was killed; the `results` step's first process was still running when this
+  session read it as dead, finished 1m43s later, and committed its own product
+  as `e1d4742`. The duplicate run committed `c11615c`. Both are in history and
+  the tree holds the second one's bytes.
 
 - 2026-09-26 — all nine stored Kaggle accounts authenticate
   (`accounts_cli.py validate`: nine `ok`). Measured, so the distribution
