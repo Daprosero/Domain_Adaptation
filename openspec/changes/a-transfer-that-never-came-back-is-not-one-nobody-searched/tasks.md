@@ -509,57 +509,118 @@ Implements D11 (message repoint) and D12 (subset-branch reorder + slice-aware pr
 Depends on A3 (`shard_paths["searchSlice"]`) and A4 (the assembly the message references).
 Completes the still-open half of the already-committed D12 guard repair (`ee11b4d`).
 
-- [ ] 5.1 RED — write **D12's relaunch-defect test**: with a canonical record already on
-      disk, calling the subset search path still runs and writes its slice rather than
-      short-circuiting (today's `ceilings_in_force` short-circuits at :1463 and never
-      searches when a canonical record exists — this test reddens against current code) —
-      `tests/test_search_distribution.py`.
-- [ ] 5.2 RED — write the subset-PARTIAL-names-the-slice test: `run_search(transfers=...)`'s
-      `SystemExit` message names the slice path and states whether it is `written` or
-      `ABSENT -- this slice produced nothing to assemble` — `tests/test_search_distribution.py`.
-      `test_a_partial_search_refuses_to_present_its_slice_as_the_record` MUST still pass
-      **unedited** alongside this new test.
-- [ ] 5.3 RED — write/confirm the whole-search regression: a `run_search` call with no
-      `transfers` still returns the assembled record unchanged (existing coverage; add if
-      missing) — `tests/test_search_distribution.py` or `tests/test_scale_readings.py`.
-- [ ] 5.4 RED — write the harness-side source-level check mirroring 4.14: `run_search`'s
-      refusal-message construction reads `config.SEARCH_TRANSFERS`'s length, not
-      `config.VERDICT_TRANSFERS`'s, at the source level —
-      `tests/test_search_distribution.py`.
-- [ ] 5.5 GREEN — reorder `run_search`'s subset branch to run **before** the `record is None`
-      check (harness.py ~2487-2518), per the D12 shape: call `ceilings_in_force(...,
-      transfers=transfers)`, then if `transfers is not None` raise the slice-aware `SystemExit`
-      naming `shard_paths(shard, pilot=pilot)["searchSlice"]` and its written/ABSENT state —
-      `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 5.6 GREEN — make `ceilings_in_force`'s "already answered" predicate slice-aware when
-      `transfers is not None`: check `shard_paths(shard, pilot=pilot)["searchSlice"].exists()`
-      instead of `search_record(pilot=pilot) is not None` — `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 5.7 GREEN — repoint `run_search`'s refusal message (harness.py:2509) from
-      `config.VERDICT_TRANSFERS` to `config.SEARCH_TRANSFERS` (D11) —
-      `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 5.8 Verify `test_a_partial_search_refuses_to_present_its_slice_as_the_record` passes
-      **unedited**: confirm `str(len(config.VERDICT_TRANSFERS))` still appears in the message
-      (both lists have length six, so the repoint keeps it green without touching the test).
-- [ ] 5.9 Regression: confirm `test_every_writer_of_that_record_is_guarded`,
-      `tests/test_distribute.py:44-52` (arm split forbidden), and
-      `test_the_search_still_has_no_seed_axis_to_split` all remain green, unchanged.
-- [ ] 5.10 Regression: confirm no `distribution` reader resolves a group to `None` or `[]` by
-      accident — specifically `tools/distribute.py:208`'s `.get("axis")` still produces a real
-      axis answer (`"seed"`) in the plan JSON (this file is unedited by design; this task is a
-      read-only confirmation, not an edit).
-- [ ] 5.11 Apply the fixture edits (if any remained after 1.7/1.16) surfaced by running the
-      full suite at this point — measure before editing, never weaken an assertion to make a
-      fixture pass.
-- [ ] 5.12 Re-run mutation check from 3.8 now that A5's message exists: delete the A3 `else`
-      branch and confirm both (a) the A3 slice-write test reddens and (b) `run_search`'s
-      PARTIAL message now correctly reports `ABSENT` for the missing slice. Revert after
-      confirming.
-- [ ] 5.13 Run the full suite: `PYTHONPATH=src .venv/bin/python -m pytest -q`. Confirm the
-      baseline `660 passed, 3 failed, 1 skipped, 129 subtests` transitions to `663+ passed,
-      0 failed, 129+ subtests` (all three named red tests now passing, nothing else newly red).
-- [ ] 5.14 Confirm success-criterion checkbox: the measured projection (whole-search 5.6-6.2h
-      vs ~1.2h/machine across six) is recorded in the change's closing notes as a projection,
-      not yet a measurement — no remote run has occurred in this change.
+- [x] 5.1 RED — wrote **D12's relaunch-defect test**
+      `test_a_canonical_record_does_not_stop_a_relaunched_slice_from_searching`: drives the
+      REAL `ceilings_in_force` (fake engine via `_rebanada_engine`, never stubbed) with a real
+      canonical record already on disk, then calls it again for a different shard with a
+      one-transfer subset and asserts that shard's own slice gets written —
+      `tests/test_search_distribution.py`. Observed RED
+      (`AssertionError: ... ceilings.slice.json no existe`) before GREEN: the unmodified
+      predicate short-circuited on the canonical record and never called `search_ceilings` for
+      the relaunched shard; observed GREEN after 5.6.
+- [x] 5.2 RED — wrote two tests, both driven through the real engine (never a stub of
+      `run_search`'s own predecessors):
+      `test_the_partial_refusal_names_this_slices_own_artifact_and_reports_written` (a real
+      subset search runs, its slice is written, and the `SystemExit` names that exact path and
+      says `written`) and `test_the_partial_refusal_reports_absent_when_the_slice_never_wrote`
+      (`search_ceilings` stubbed to a no-op so nothing is written, and the message says
+      `ABSENT -- this slice produced nothing to assemble`) — `tests/test_search_distribution.py`.
+      Observed RED for both (`AssertionError`: neither the path nor `written`/`ABSENT` appeared
+      in the stale message) before GREEN; observed GREEN after 5.5.
+      `test_a_partial_search_refuses_to_present_its_slice_as_the_record` was run before and
+      after this change, **unedited**, and stayed green both times (see 5.8).
+- [x] 5.3 RED — measured before writing: the whole-search regression already existed, tapped
+      (`test_a_partial_search_refuses_to_present_its_slice_as_the_record`'s closing
+      `assert harness.run_search() is registro`). Added a second, real-path version —
+      `test_run_search_without_transfers_still_returns_the_whole_record_real_path`, driven by
+      the fake engine, never mocking `ceilings_in_force`/`search_record` — to prove the
+      reordering in 5.5 did not move this branch. **Not RED**: this branch was untouched by the
+      whole change, so it passed on first run (invariant-pinning, not new functionality) —
+      confirmed honestly rather than claimed as red. One finding fixed while writing it: raw
+      `read_text()` off `ceilings_record_for` does not carry `currentStamp`, which
+      `search_record` adds on read (harness.py:1358) — the test compares against the raw JSON
+      plus that computed key, not against a defect.
+- [x] 5.4 RED — wrote `test_run_search_never_reads_verdict_transfers_in_its_refusal`, mirroring
+      4.14: `"VERDICT_TRANSFERS" not in inspect.getsource(harness.run_search)` —
+      `tests/test_search_distribution.py`. **Not RED**: `ee11b4d` had already repointed this
+      specific message (5.7's other half) before A5 started, so `run_search`'s source never
+      named `VERDICT_TRANSFERS`; ran first to confirm honestly rather than assumed.
+- [x] 5.5 GREEN — the reorder itself was already in place from `ee11b4d` (`transfers is not
+      None` checked before `record is None`); this task's remaining work was the message body.
+      Rewrote the `SystemExit` per D12's shape, adapted to keep the two already-green pinned
+      tests passing (see rationale in 5.9's note below): now names
+      `shard_paths(shard, noise=reduction.labelNoise, kind=reduction.kind,
+      pilot=pilot)["searchSlice"]` and its `written`/`ABSENT -- this slice produced nothing to
+      assemble` state, and points at `harness.merge_search_records(...)` instead of the stale
+      "nothing assembles partial search records yet" (A4 built it) —
+      `src/MIL_CREDA_Benchmark/harness.py`. `noise=`/`kind=` added explicitly, not left to their
+      defaults — required by 5.11's finding (see below).
+- [x] 5.6 GREEN — made `ceilings_in_force`'s "already answered" predicate slice-aware:
+      `shard_paths(shard, noise=reduction.labelNoise, kind=reduction.kind,
+      pilot=pilot)["searchSlice"].exists()` when `transfers is not None`, else the unchanged
+      `search_record(pilot=pilot) is not None` — `src/MIL_CREDA_Benchmark/harness.py`. Also
+      reworded the `progress(...)` line from "no ceiling record: searching..." (canonical-record
+      -specific) to "not yet answered: searching..." (true under both predicates); no test pins
+      the old string.
+- [x] 5.7 GREEN — already done by `ee11b4d`, before this task started: `run_search`'s refusal
+      already read `len(config.SEARCH_TRANSFERS)`, not `VERDICT_TRANSFERS` — confirmed by
+      reading the source before editing (D11's repoint was the part of D12's guard repair
+      already committed) and re-confirmed by 5.4's source-level test.
+- [x] 5.8 Verified: ran `test_a_partial_search_refuses_to_present_its_slice_as_the_record` after
+      5.5-5.7's edits — green, unedited. `str(len(config.VERDICT_TRANSFERS))` == `"6"` still
+      appears (via `len(config.SEARCH_TRANSFERS)`, also 6, embedded in the new message), so the
+      repoint stayed invisible to this test exactly as D11 predicts.
+- [x] 5.9 Regression: ran `test_every_writer_of_that_record_is_guarded`,
+      `test_the_axis_is_a_whole_repetition_so_no_comparison_is_split` (`tests/test_distribute.py`
+      — the arm-split-forbidden test; task names it by line range, the function at that range is
+      this one), and `test_the_search_still_has_no_seed_axis_to_split` — all three green,
+      unchanged. **Finding, disclosed**: `test_el_rechazo_del_subconjunto_llega_por_el_camino_
+      real`'s `con-registro` case is NOT in this "unchanged" list — its
+      `busco["llamada"] == (not registro_presente)` assertion pinned the exact defect D12 fixes
+      (a canonical record short-circuiting a subset search). Corrected, not weakened: extended
+      to a 3-way parametrization (`sin-nada` / `con-registro-sin-rebanada` /
+      `con-registro-con-rebanada`) crossing registro and rebanada presence independently, with
+      the busco assertion now keyed on `rebanada_presente` (the actually-correct predicate
+      variable per D12) instead of `registro_presente`. Every message-content assertion in that
+      test ("subset" present, "left no record"/"the search ran" absent, `len(SEARCH_TRANSFERS)`
+      present) is byte-identical to before. All 3 cases green.
+- [x] 5.10 Regression, read-only, confirmed by running: `shards.declaration().get("axis")` →
+      `"seed"`. `tools/distribute.py:208`'s `.get("axis")` reads the same unedited flat key.
+      File unedited, confirmed via `git diff --stat tools/distribute.py` showing no change.
+- [x] 5.11 Ran the full suite before any A5 mutation check and found ONE real regression, not a
+      test-fixture gap: `test_no_call_to_a_gate_leaves_a_coordinate_behind`
+      (`tests/test_label_noise.py`) reddened —
+      `{'harness.py: shard_paths(shard, pilot=pilot)': ['noise', 'kind']}`. This repository's
+      roster derives `config.DESTINOS["shard_paths"] == {"labelNoise": "noise", "kind": "kind",
+      "pilot": "pilot"}` and requires every in-package call to name all three explicitly, never
+      relying on `shard_paths`'s own defaults — both new call sites (5.5's message, 5.6's
+      predicate) violated this by passing `pilot=` alone. Fixed both to pass
+      `noise=reduction.labelNoise, kind=reduction.kind, pilot=pilot`, the same values
+      `search_ceilings_trials`'s existing else-branch already uses. This is a source fix, not a
+      fixture edit; no test assertion was weakened. Re-ran full suite after the fix: 0 failures.
+- [x] 5.12 Re-ran the mutation check: backed up `harness.py`
+      (`diff` confirmed byte-identical after restore), deleted the A3 `else` branch in
+      `search_ceilings_trials`, ran
+      `test_a_subset_search_leaves_a_readable_slice_and_the_canonical_path_untouched` and
+      `test_the_partial_refusal_names_this_slices_own_artifact_and_reports_written` —
+      **both observed reddening**: (a) `AssertionError: ... ceilings.slice.json no existe` and
+      (b) the message body changed from asserting `"written" in mensaje` to actually containing
+      `ABSENT -- this slice produced nothing to assemble` (captured in the failure's own
+      assertion text, confirming the message correctly flips), exactly as this task requires.
+      Reverted from the pre-mutation backup (`diff` confirmed byte-identical) and re-ran both —
+      both green again.
+- [x] 5.13 Ran the full suite: `PYTHONPATH=src .venv/bin/python -m pytest -q` →
+      **718 passed, 0 failed, 1 skipped, 129 subtests passed**. Baseline at A5's start was
+      `712 passed, 0 failed, 1 skipped, 129 subtests` (A4's close; the three tasks-file-baseline
+      reds were already green by then). Delta: +6 (5 new standalone A5 tests + 1 net from
+      `test_el_rechazo_del_subconjunto_llega_por_el_camino_real` growing from 2 to 3
+      parametrized cases). No other test regressed; the original task-file baseline target
+      (`660 passed, 3 failed` → `663+ passed, 0 failed, 129+ subtests`) is exceeded.
+- [x] 5.14 Confirmed: no remote Kaggle job ran during A5 (or anywhere in Work Units A1-A5). The
+      measured projection (whole-search 5.6-6.2h vs ~1.2h/machine across six) remains recorded
+      in `design.md`/`proposal.md` as a projection. This checkbox does not certify a
+      measurement; Phase 6 (gated on separate operator authorization) is the only place in this
+      change scoped to measure it, and it was not run.
 
 ## Phase 6 — Post-slice validation (requires separate operator authorization)
 
