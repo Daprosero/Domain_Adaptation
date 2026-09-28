@@ -136,8 +136,12 @@ directory under `Results/Benchmark/shards/<shard>`, `harness.py:993`) and
       `runnerTemplate` sha256 is inert provenance and nothing re-verifies it
       (`jobfolder.py:1564`), so a stale folder keeps running the old cells in
       silence.
-- [ ] T5 — Rehearse `ceiling-search` on the worker that will run it, and record
-      the verdict from the returned artifact.
+- [x] T5 — Rehearse `ceiling-search` on the worker that will run it, and record
+      the verdict from the returned artifact. Done on ALL NINE accounts, both
+      shapes, 18 submissions, every one `complete`: `smoke record` -> `pass`
+      with `missing: []` and `readiness` -> `ready: True` on each, and each
+      executed notebook back with `errors = 0`, `scale = ensayo`, 6 pairs, on a
+      `Tesla T4` at `capability sm_75`.
 - [ ] T6 — Publish the launch: `propose` the campaign, `offer` to mint the
       token, and stop. The `gate` is the operator's.
 
@@ -189,6 +193,42 @@ A rehearsal's fetch lands in
 `MIL-CREDA/.remote-execution/rehearsal/<worker>/<job>/`, never in the science
 tree: `--dest` is *refused* under `--smoke` because the skill computes that
 destination itself.
+
+## All nine accounts, measured
+
+| account | search (min) | session (s) | fixed (min) | full-scale projection (h) |
+| --- | --- | --- | --- | --- |
+| andresalvarez | 4.9 | 908 | 10.2 | 5.62 |
+| sofiaescalante | 5.1 | 624 | 5.3 | 5.75 |
+| Trayectoria51 | 5.2 | 935 | 10.4 | 5.95 |
+| sofiaescalante2401 | 5.2 | 948 | 10.6 | 5.95 |
+| Trayectoria50 | 5.2 | 1036 | 12.1 | 5.98 |
+| amalvarezme | 5.3 | 874 | 9.3 | 6.04 |
+| DaproseroM2 | 5.3 | 992 | 11.2 | 6.08 |
+| Diego9901 | 5.4 | 959 | 10.6 | 6.18 |
+| Daprosero | 5.4 | 1140 | 13.6 | 6.23 |
+
+The compute is tight -- 4.9 to 5.4 min, a 10% spread -- while the session wall
+clock ran 624 to 1140 s, nearly 2x. So the variance is clone, install and queue,
+NOT compute, and that is why the fixed overhead is carried as its own column
+instead of being folded into a per-account average that would hide it.
+
+**The search fits on every one of the nine**: 5.6 h to 6.2 h against a 12 h
+session cap, a minimum margin of 1.9x.
+
+## The fetch trap, hit for real
+
+`Trayectoria51`'s notebook fetch died mid-download and left a `.partial`. The
+next fetch REFUSES it and says `--force` will not clear it, because that
+directory may hold bytes already paid for or be a live fetch's workspace.
+
+The refusal was right and the partial was informative: it already carried
+`bootstrap.json` (Tesla T4, sm_75, the correct pin, `mode: smoke`) and a
+`log.txt` showing the worker converted and wrote the notebook at 919 s. So the
+RUN was fine and only the DOWNLOAD was incomplete. Read the partial for what it
+already proves, confirm no fetch process is live, remove it by hand, re-fetch.
+
+Never conclude a run failed from a fetch that failed.
 
 ## Two forge defects this task measured, neither repaired here
 
