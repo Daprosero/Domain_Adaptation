@@ -1077,6 +1077,14 @@ def keep_median(cell_runs: list[dict], arm_id: str, transfer: str,
 PARTIAL_SUFFIX = ".partial.json"
 
 
+#: Where a finished search slice lives -- a completed part, never a
+#: mid-measurement scratch file. `home/shard.json` is already the
+#: environment stamp beside it, so this suffix is deliberately not one
+#: character away from `PARTIAL_SUFFIX`: two files that close in the same
+#: directory is a reading error waiting to happen.
+SEARCH_SLICE_SUFFIX = ".slice.json"
+
+
 #: Where a shard's own files live, under the results the campaign already owns.
 SHARDS_DIR = "shards"
 
@@ -1107,10 +1115,12 @@ def shard_paths(shard: str | None, pilot: bool = False,
             record = root / record.name
         return {"runs": root / "runs.jsonl",
                 "partial": record.with_name(record.stem + PARTIAL_SUFFIX),
+                "searchSlice": record.with_name(record.stem + SEARCH_SLICE_SUFFIX),
                 "stamp": root / "shard.json"}
     home = root / SHARDS_DIR / shard
     return {"runs": home / "runs.jsonl",
             "partial": home / f"ceilings{PARTIAL_SUFFIX}",
+            "searchSlice": home / f"ceilings{SEARCH_SLICE_SUFFIX}",
             "stamp": home / "shard.json"}
 
 
@@ -1592,6 +1602,37 @@ def sellar_techos(found: dict, reduction: Reduction) -> dict:
     return found
 
 
+def sellar_rebanada(found: dict, reduction: Reduction, shard: str | None,
+                    transfers: list | None) -> dict:
+    """Lo que `sellar_techos` sella, más lo que hace a esto una rebanada.
+
+    `sellar_techos` se reusa sin tocar: la rebanada de verdad se midió en UNA
+    máquina, que es exactamente la afirmación que `sellar_techos` hace y su
+    propio docstring ya anticipa ("las búsquedas de las dos familias pueden
+    repartirse entre workers distintos"). Lo que `sellar_techos` no puede
+    sellar honestamente es el registro ENSAMBLADO -- seis rebanadas traen seis
+    `env` y una entrada de familia trae uno solo -- así que el ensamblado se
+    sella distinto (D9), en `merge_search_records`.
+
+    Dos campos nuevos, por entrada:
+
+    - `transfers`: las etiquetas que ESTA rebanada cubrió -- la única fuente
+      de cobertura que el ensamblado va a leer, nunca un id parseado (D5).
+    - `shard`: el id corto de esta rebanada, la misma forma que `runs.jsonl`
+      ya usa.
+
+    Nunca escribe a disco ni nombra el path canónico que la campaña lee --
+    eso es lo que la mantiene fuera del roster que `governs_the_ceilings_
+    record` ya exige; el llamador es quien decide dónde y si esto se escribe.
+    """
+    sellar_techos(found, reduction)
+    cubiertas = [transfer_label(t) for t in (transfers or config.SEARCH_TRANSFERS)]
+    for entry in found.values():
+        entry["transfers"] = cubiertas
+        entry["shard"] = shard
+    return found
+
+
 def search_ceilings_trials(reduction: Reduction, device: torch.device,
                            progress=print, shard: str | None = None,
                            pilot: bool = False, noise: float = 0.0,
@@ -1824,11 +1865,22 @@ def search_ceilings_trials(reduction: Reduction, device: torch.device,
             "inheritanceRule": "ninguna: las seis transferencias se midieron",
         }
 
+    # Una búsqueda escribe exactamente un registro, y el mismo guardián decide
+    # cuál: gobernando, el canónico que la campaña lee; si no, su propia
+    # rebanada -- nunca las dos, y nunca ninguna (D7).
     if governs_the_ceilings_record(noise, transfers):
         record = config.ceilings_record_for(pilot)
         record.parent.mkdir(parents=True, exist_ok=True)
         record.write_text(json.dumps(sellar_techos(found, reduction), indent=2),
                           encoding="utf-8")
+    else:
+        slice_path = shard_paths(shard, noise=reduction.labelNoise,
+                                 kind=reduction.kind,
+                                 pilot=reduction.pilot)["searchSlice"]
+        slice_path.parent.mkdir(parents=True, exist_ok=True)
+        slice_path.write_text(json.dumps(
+            sellar_rebanada(found, reduction, shard, transfers), indent=2),
+            encoding="utf-8")
     return found
 
 
@@ -2085,6 +2137,14 @@ def search_ceilings(reduction: Reduction, device: torch.device,
         record.parent.mkdir(parents=True, exist_ok=True)
         record.write_text(json.dumps(sellar_techos(found, reduction), indent=2),
                           encoding="utf-8")
+    else:
+        slice_path = shard_paths(shard, noise=reduction.labelNoise,
+                                 kind=reduction.kind,
+                                 pilot=reduction.pilot)["searchSlice"]
+        slice_path.parent.mkdir(parents=True, exist_ok=True)
+        slice_path.write_text(json.dumps(
+            sellar_rebanada(found, reduction, shard, transfers), indent=2),
+            encoding="utf-8")
     # The scratch file goes only once the answer exists. Leaving it would let a
     # later relaunch resume from cells that already produced a finished record.
     partial.unlink(missing_ok=True)
