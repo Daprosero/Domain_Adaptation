@@ -444,15 +444,12 @@ def pool_of(bagset: bags.BagSet, positions: torch.Tensor, device: torch.device) 
     )
 
 
-def transfer_label(transfer: tuple[str, str]) -> str:
-    """The one spelling of a transfer used as a key anywhere.
-
-    Written once because the record, the search's progress lines and the ceiling
-    lookup all have to agree on it. Two of them agreeing and the third not would
-    make a per-transfer ceiling silently fall back to the pooled one, which is
-    the failure that reads as success: the run proceeds and reports a number.
-    """
-    return f"{transfer[0]}->{transfer[1]}"
+# `transfer_label` moved to `config.py` for layering (D3): `config.py`
+# imports nothing from the package, and `harness` imports `config`, so the
+# one spelling has to be defined there. Re-exported as-is, with no wrapper
+# and no logic duplicated -- the same shape
+# `shards.disagreements = _shard_io.disagreements` already sets.
+transfer_label = config.transfer_label
 
 
 def ceiling_for(reduction: Reduction, family: str | None,

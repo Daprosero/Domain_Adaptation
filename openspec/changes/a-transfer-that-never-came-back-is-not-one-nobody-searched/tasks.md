@@ -194,48 +194,84 @@ Implements Decision A / D4 / D6. Spec: `search-distribution-axis`.
 
 Implements D1, D3. Spec: `run-unit-axis-resolution`.
 
-- [ ] 2.1 RED — write the no-default-axis test:
+- [x] 2.1 RED — write the no-default-axis test:
       `inspect.signature(config.execution_units_for).parameters["axis"].default is inspect.Parameter.empty`
-      — `tests/test_scale_readings.py`.
-- [ ] 2.2 RED — write absent-env tests for both axes: `FORGE_RUN_UNITS` unset → `None` for
-      `axis="seed"` and for `axis="transfer"` — `tests/test_scale_readings.py`.
-- [ ] 2.3 RED — write declared-empty tests for both axes: `FORGE_RUN_UNITS="[]"` → `[]`
-      (never `None`) for both axes — `tests/test_scale_readings.py`.
-- [ ] 2.4 RED — write the populated-transfer-axis test: a JSON array of valid transfer labels
+      — `tests/test_scale_readings.py`. Observed RED (`AttributeError: module
+      'MIL_CREDA_Benchmark.config' has no attribute 'execution_units_for'`) before GREEN;
+      observed GREEN after 2.8-2.11.
+- [x] 2.2 RED — write absent-env tests for both axes: `FORGE_RUN_UNITS` unset → `None` for
+      `axis="seed"` and for `axis="transfer"` — `tests/test_scale_readings.py`. Same RED/GREEN
+      as 2.1 (all 20 new tests in this unit shared one collective RED run before any GREEN
+      task, per the batch below).
+- [x] 2.3 RED — write declared-empty tests for both axes: `FORGE_RUN_UNITS="[]"` → `[]`
+      (never `None`) for both axes — `tests/test_scale_readings.py`. RED/GREEN as above.
+- [x] 2.4 RED — write the populated-transfer-axis test: a JSON array of valid transfer labels
       (`transfer_label()` output, e.g. `"M->U"`) resolves to `(str, str)` tuples against
       `config.SEARCH_TRANSFERS`; a label not in that set refuses, naming the label and the
-      available set — `tests/test_scale_readings.py`.
-- [ ] 2.5 RED — write **D1's cross-axis catch**, the test that measures the vocabulary
+      available set — `tests/test_scale_readings.py`. RED/GREEN as above.
+- [x] 2.5 RED — write **D1's cross-axis catch**, the test that measures the vocabulary
       decision itself: `execution_units_for("seed")` refuses `["M->U"]` (via the existing
       `int()` parse refusal), and `execution_units_for("transfer")` refuses `["0"]` (not in the
-      label map) — `tests/test_scale_readings.py`.
-- [ ] 2.6 RED — write the invalid-JSON / non-list / non-string-element refusal tests,
-      parametrized over both axes — `tests/test_scale_readings.py`.
-- [ ] 2.7 RED — write the seed-axis byte-identical regression test: every input
+      label map) — `tests/test_scale_readings.py`. RED/GREEN as above; also mutation-checked
+      at 2.13.
+- [x] 2.6 RED — write the invalid-JSON / non-list / non-string-element refusal tests,
+      parametrized over both axes — `tests/test_scale_readings.py`. RED/GREEN as above.
+- [x] 2.7 RED — write the seed-axis byte-identical regression test: every input
       `execution_seed_units()` handles today (absent, `"[]"`, populated valid/invalid) produces
       the identical return value or raised exception (including message content) through
-      `execution_units_for("seed")` — `tests/test_scale_readings.py`.
-- [ ] 2.8 GREEN — move `transfer_label` down to `config.py` as the one definition (layering:
+      `execution_units_for("seed")` — `tests/test_scale_readings.py`. RED/GREEN as above.
+      **Batch RED evidence for 2.1-2.7** (and D1's byte-identical class): ran
+      `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_scale_readings.py -k
+      "TestLasUnidadesSeLeenSegunElEjeQueElPasoDeclara or TestElEjeSemillaEsByteAByteIdenticoAAntes"`
+      before any GREEN task — **20 failed**, every failure `AttributeError` on
+      `config.execution_units_for` or `config.transfer_label` not yet existing. Observed
+      GREEN on the same selector after 2.8-2.11: **20 passed**.
+- [x] 2.8 GREEN — move `transfer_label` down to `config.py` as the one definition (layering:
       `config.py` imports nothing from the package) — `src/MIL_CREDA_Benchmark/config.py`.
-- [ ] 2.9 GREEN — implement `config.execution_units_for(axis)`: no default; validates `axis`
+- [x] 2.9 GREEN — implement `config.execution_units_for(axis)`: no default; validates `axis`
       against `__benchmark__["distribution"]["axes"]`; preserves the three-way
       absent/empty/populated distinction; validates each element in the named axis's
       vocabulary (seed: `int()`; transfer: `transfer_label()` closed-set map) —
-      `src/MIL_CREDA_Benchmark/config.py`.
-- [ ] 2.10 GREEN — `execution_seed_units()` becomes `return execution_units_for("seed")`;
+      `src/MIL_CREDA_Benchmark/config.py`. Seed-axis populated/invalid branches extracted
+      verbatim (byte-identical messages, Spanish, unedited) into `_seed_units_from`; the
+      transfer-axis branch (`_transfer_units_from`) is new code with new English messages
+      (config.py's own convention outside this one Spanish-authored function), since it has
+      no legacy behaviour to match.
+- [x] 2.10 GREEN — `execution_seed_units()` becomes `return execution_units_for("seed")`;
       remove its docstring's singular-axis citation (config.py:237-239) —
-      `src/MIL_CREDA_Benchmark/config.py`.
-- [ ] 2.11 GREEN — `harness.transfer_label = config.transfer_label` (re-export, no wrapper,
+      `src/MIL_CREDA_Benchmark/config.py`. Confirmed via 5.13/full-suite run:
+      `test_no_docstring_still_claims_the_axis_is_singular` is now fully green (its
+      `config.execution_seed_units.__doc__` clause was the deferred-to-A2 part named in
+      Task 1.6).
+- [x] 2.11 GREEN — `harness.transfer_label = config.transfer_label` (re-export, no wrapper,
       the `shards.disagreements = _shard_io.disagreements` precedent) —
       `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 2.12 Verify all in-repo call sites of `transfer_label` (23, per design's count) still
+- [x] 2.12 Verify all in-repo call sites of `transfer_label` (23, per design's count) still
       resolve as plain calls — run the full suite once, confirm no `AttributeError`/import
-      regression.
-- [ ] 2.13 Mutation check: remove the `int(unit)` parse from the seed reader path and confirm
-      the D1 cross-axis-catch test (2.5) reddens. Revert after confirming.
-- [ ] 2.14 Run `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_scale_readings.py
+      regression. Ran the full suite (see 5.13-equivalent summary below): **690 passed,
+      1 failed, 1 skipped, 129 subtests** — zero `AttributeError`/import failures anywhere,
+      confirming every call site resolves through the re-export.
+- [x] 2.13 Mutation check: remove the `int(unit)` parse from the seed reader path and confirm
+      the D1 cross-axis-catch test (2.5) reddens. Revert after confirming. Performed and
+      confirmed, not merely asserted: replaced `semillas.append(int(unidad))` with
+      `semillas.append(unidad)` in `_seed_units_from`, ran
+      `test_la_captura_cruzada_de_ejes_de_D1` alone — **observed it redden**
+      (`Failed: DID NOT RAISE ValueError`) — then reverted from a pre-edit backup and re-ran
+      the same test — **observed it green again**.
+- [x] 2.14 Run `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_scale_readings.py
       tests/test_search_distribution.py`. Confirm `test_a_unit_resolves_to_the_axis_the_step_declares`
-      is green.
+      is green. Result: **70 passed, 1 failed** (the one failure is
+      `test_partial_search_records_merge_instead_of_overwriting`, A4's, correctly still red).
+      `test_a_unit_resolves_to_the_axis_the_step_declares` and
+      `test_no_docstring_still_claims_the_axis_is_singular` both green.
+
+**Work Unit A2 full-suite evidence**: `PYTHONPATH=src .venv/bin/python -m pytest -q` →
+**690 passed, 1 failed, 1 skipped, 129 subtests passed** (baseline at A1's close was
+`668 passed, 3 failed, 1 skipped, 129 subtests`). Delta: +20 new tests (all green) and 2
+formerly-red tests now green (`test_no_docstring_still_claims_the_axis_is_singular`,
+`test_a_unit_resolves_to_the_axis_the_step_declares`); the one remaining failure,
+`test_partial_search_records_merge_instead_of_overwriting`, is A4's and unchanged by this
+unit's edits. No other test regressed.
 
 ## Work Unit A3 — `shard_paths["searchSlice"]`, `sellar_rebanada`, the `else` slice write (PR3)
 
