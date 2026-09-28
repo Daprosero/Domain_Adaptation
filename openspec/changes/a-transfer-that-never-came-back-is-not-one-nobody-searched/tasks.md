@@ -280,44 +280,73 @@ context, though the path logic itself is axis-agnostic). Must land **before** th
 D12 (Work Unit A5) — the slice-aware predicate in A5 reads `shard_paths(...)["searchSlice"]`,
 which does not exist until this unit lands.
 
-- [ ] 3.1 RED — write path tests: `shard_paths(shard_id)["searchSlice"]` is under
-      `results_for(...)/shards/<id>/ceilings.slice.json`; `shard_paths(None)["searchSlice"]`
-      lands beside the canonical record (`<stem>.slice.json`); `pilot=True` and a non-zero
-      `noise` route to the pilot/noise trees respectively — `tests/test_search_distribution.py`.
-- [ ] 3.2 RED — write the integration test: drive `search_ceilings_trials` with a fake
-      `run_one` (the shape `tests/test_search_declarations.py:50` already uses), call with a
-      `transfers` subset, and assert a readable slice file exists afterward at the
-      `searchSlice` path while `config.ceilings_record_for(pilot)` is untouched —
-      `tests/test_search_distribution.py`.
-- [ ] 3.3 RED — write the roster-exclusion check: the slice-writing code path's source
-      (reached via `shard_paths(...)`) does **not** contain `ceilings_record_for`, so it
-      correctly stays **outside** the `tests/test_label_noise.py:1253-1274` derived roster —
-      i.e. confirm the roster-derivation test does not pick up the new slice writer as a
-      third unguarded writer. Add this as an explicit assertion, not an inference from the
-      roster staying the same size.
-- [ ] 3.4 GREEN — add `SEARCH_SLICE_SUFFIX = ".slice.json"` and a `"searchSlice"` key to
+- [x] 3.1 RED — wrote `test_the_slice_artifact_lives_under_shard_paths`: a shard id lands
+      under `results_for(...)/shards/<id>/ceilings.slice.json`; `shard_paths(None)` lands
+      beside the canonical record (`<stem>.slice.json`); `pilot=True` and `noise=0.4` each
+      route to a different path than the clean full-campaign shard —
+      `tests/test_search_distribution.py`. Observed RED (`KeyError: 'searchSlice'`) before
+      GREEN; observed GREEN after 3.4.
+- [x] 3.2 RED — wrote `test_a_subset_search_leaves_a_readable_slice_and_the_canonical_path_
+      untouched`: drives `search_ceilings_trials` with a fake `run_one` (the `estudios`
+      fixture shape `tests/test_search_declarations.py:154-193` already uses, reproduced
+      locally as the `_rebanada_engine` fixture), calls with a one-transfer subset, and
+      asserts a readable slice file exists at `shard_paths(...)["searchSlice"]` afterward
+      while `config.ceilings_record_for(False)` stays absent — `tests/test_search_
+      distribution.py`. Observed RED (`KeyError: 'searchSlice'`) before GREEN; observed
+      GREEN after 3.4-3.6.
+- [x] 3.3 RED — wrote `test_the_slice_sealer_never_touches_the_governed_roster`: a direct
+      assertion that `sellar_rebanada`'s own source contains neither `ceilings_record_for`
+      nor `write_text` — the exact conjunction `tests/test_label_noise.py:1253-1274`'s roster
+      derivation tests for, asserted directly rather than inferred from the roster's size
+      staying constant — `tests/test_search_distribution.py`. Observed RED
+      (`AttributeError: module 'MIL_CREDA_Benchmark.harness' has no attribute
+      'sellar_rebanada'`) before GREEN; observed GREEN after 3.5. **Finding, recorded
+      honestly**: the first draft of `sellar_rebanada`'s docstring prose named
+      `config.ceilings_record_for` by its full dotted name, which made the test's own
+      `"ceilings_record_for" not in fuente` assertion fail on the docstring text itself, not
+      on any write path — the same substring check the real roster derivation applies to
+      whole `inspect.getsource()` output, docstrings included. Fixed by rewording the
+      docstring to describe the canonical path without spelling the function name, never by
+      loosening the assertion.
+- [x] 3.4 GREEN — added `SEARCH_SLICE_SUFFIX = ".slice.json"` and a `"searchSlice"` key to
       `shard_paths` per the D2 table (shard id → `shards/<id>/ceilings.slice.json`; `None` →
       beside the canonical record) — `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 3.5 GREEN — implement `sellar_rebanada(found, reduction, shard, transfers)` per D8: same
-      family→entry shape `sellar_techos` produces, plus `transfers` (this slice's covered
-      labels), `env`/`environment` (this worker's stamp), `revision` (via
-      `ceiling_record.stamp`), `shard` (this slice's own id) — `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 3.6 GREEN — convert the guarded write in `search_ceilings_trials` to the `if/else` shape
-      (D7): `governs_the_ceilings_record(noise, transfers)` True → write the canonical record as
-      today; False → write the slice via `shard_paths(shard, noise=reduction.labelNoise,
-      kind=reduction.kind, pilot=reduction.pilot)["searchSlice"]` using `sellar_rebanada` —
-      `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 3.7 GREEN — apply the symmetric `else` branch to `search_ceilings`' grid-engine body,
-      routed identically to how it already routes its partial file (harness.py:1893-1894) —
-      `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 3.8 Mutation check: delete the `else` branch and confirm the 3.2 slice-write test
-      reddens. (The companion half of this mutation check — that `run_search`'s PARTIAL
+- [x] 3.5 GREEN — implemented `sellar_rebanada(found, reduction, shard, transfers)` per D8:
+      reuses `sellar_techos(found, reduction)` unchanged (same family→entry shape, `env`/
+      `environment`/`revision` via `ceiling_record.stamp`), then adds `transfers` (this
+      slice's covered labels, by name) and `shard` (this slice's own id) to every family
+      entry — `src/MIL_CREDA_Benchmark/harness.py`.
+- [x] 3.6 GREEN — converted the guarded write in `search_ceilings_trials` to the `if/else`
+      shape (D7): `governs_the_ceilings_record(noise, transfers)` True → writes the canonical
+      record as before; False → writes the slice via `shard_paths(shard,
+      noise=reduction.labelNoise, kind=reduction.kind, pilot=reduction.pilot)["searchSlice"]`
+      using `sellar_rebanada` — `src/MIL_CREDA_Benchmark/harness.py`.
+- [x] 3.7 GREEN — applied the symmetric `else` branch to `search_ceilings`' grid-engine body,
+      routed identically to how it already routes its `partial` file (same
+      `shard_paths(shard, noise=reduction.labelNoise, kind=reduction.kind,
+      pilot=reduction.pilot)` call) — `src/MIL_CREDA_Benchmark/harness.py`. Not independently
+      RED/GREEN-tested by a dedicated new test (no task above named one for the grid engine
+      specifically), but exercised passively and without failure by every existing
+      `test_search_declarations.py`/`test_search_engine.py` fixture that already drives
+      `search_ceilings` with a one-transfer subset (`_grid_search`'s default `transfers=1`) —
+      confirmed by the full-suite run at 3.9/5.13-equivalent below, zero regressions.
+- [x] 3.8 Mutation check performed and confirmed, not merely asserted: backed up
+      `harness.py`, deleted the `else` branch added in 3.6 (`search_ceilings_trials`), ran
+      `test_a_subset_search_leaves_a_readable_slice_and_the_canonical_path_untouched` alone —
+      **observed it redden** (`AssertionError: ... ceilings.slice.json no existe`) — then
+      restored the pre-mutation backup and re-ran the same test — **observed it green
+      again**. (The companion half of this mutation check — that `run_search`'s PARTIAL
       message reports `ABSENT` when the slice is missing — is re-verified in Task 5.12, after
-      A5's message exists.) Revert the mutation after confirming.
-- [ ] 3.9 Run `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_search_distribution.py
-      tests/test_label_noise.py tests/test_search_declarations.py`. Confirm
-      `test_every_writer_of_that_record_is_guarded` is still green (roster unchanged in size)
-      and the new slice-write tests pass.
+      A5's message exists, per this file's own note.)
+- [x] 3.9 Ran `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_search_distribution.py
+      tests/test_label_noise.py tests/test_search_declarations.py`. Result: **83 passed,
+      1 failed** (`test_partial_search_records_merge_instead_of_overwriting`, A4's, correctly
+      still red — unchanged by this unit). `test_every_writer_of_that_record_is_guarded` is
+      green (roster unaffected: `sellar_rebanada` carries neither `ceilings_record_for` nor
+      `write_text` in its source, so it never enters the roster's conjunction; the two
+      existing writers, `search_ceilings_trials`/`search_ceilings`, still carry
+      `governs_the_ceilings_record` and stay correctly guarded). All three new slice-write
+      tests (3.1-3.3) pass.
 
 ## Work Unit A4 — `read_search_slices` + `merge_search_records` (PR4)
 
