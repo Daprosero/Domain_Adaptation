@@ -1468,8 +1468,17 @@ def ceilings_in_force(reduction: Reduction, device: torch.device,
     is correct.
     """
     reduction = replace(reduction, pilot=pilot)
-    if search_record(pilot=pilot) is None:
-        progress("no ceiling record: searching, once, before anything is compared")
+    # "Already answered" is asked of the SLICE when `transfers` names a
+    # subset (D12), and of the canonical record otherwise. A subset relaunch
+    # holds a canonical record that is not its own answer -- that record
+    # existing says nothing about whether THIS shard's transfers were ever
+    # searched, and asking the canonical record the wrong question is what
+    # used to short-circuit a relaunch into never searching at all.
+    already = (shard_paths(shard, noise=reduction.labelNoise, kind=reduction.kind,
+                          pilot=pilot)["searchSlice"].exists()
+              if transfers is not None else search_record(pilot=pilot) is not None)
+    if not already:
+        progress("not yet answered: searching, once, before anything is compared")
         search_ceilings(reduction, device, progress=progress, shard=shard,
                         pilot=pilot, transfers=transfers)
     record = search_record(pilot=pilot) or {}
@@ -2812,19 +2821,26 @@ def run_search(shard: str | None = None, pilot: bool = False,
     # frame's own argument, and what is missing to make it presentable. A
     # refusal whose test reached it past a stub of its own predecessor proved
     # only that the line could execute, never that its sentence was true.
+    #
+    # It names THIS SLICE'S OWN artifact, and whether it is there -- never the
+    # canonical path, which the slice-aware predicate above is what makes this
+    # frame's own shard's evidence rather than a guess about another shard's.
+    # `merge_search_records` (A4) exists now, so a reader is pointed at the
+    # assembly instead of a "nothing assembles this yet" that stopped being
+    # true.
     if transfers is not None:
+        slice_path = shard_paths(shard, noise=reduction.labelNoise,
+                                 kind=reduction.kind, pilot=pilot)["searchSlice"]
         raise SystemExit(
             f"a PARTIAL subset of {len(transfers)} of "
             f"{len(config.SEARCH_TRANSFERS)} transfers was asked for, and a "
             "subset is never the record the campaign runs at.\n"
+            f"  This slice's own artifact: {slice_path} "
+            f"({'written' if slice_path.exists() else 'ABSENT -- this slice produced nothing to assemble'})\n"
             f"  Asked for: {[transfer_label(t) for t in transfers]}\n"
-            "  Nothing assembles partial search records yet, so this slice "
-            "cannot be handed back as if it were complete -- and it was "
-            "deliberately NOT written to "
-            f"{config.ceilings_record_for(pilot)}, which either still holds "
-            "another run's answer or holds nothing at all.\n"
-            "  Run the search whole (omit `transfers`) until the assembly "
-            "exists."
+            "  Assemble every slice with `harness.merge_search_records(...)`; "
+            "it refuses until every transfer in `config.SEARCH_TRANSFERS` has "
+            "one."
         )
     # Read back from disk, never from what the search returned, for the reason
     # `ceilings_in_force` already gives: what the campaign will run at is what
