@@ -186,7 +186,10 @@ def test_a_partial_search_refuses_to_present_its_slice_as_the_record(monkeypatch
         harness.run_search(transfers=[config.VERDICT_TRANSFERS[0]])
     mensaje = str(refusal.value)
     assert "PARTIAL" in mensaje, (
-        f"la negativa tiene que nombrar que el registro es parcial: {mensaje!r}"
+        "la negativa tiene que nombrar que lo pedido es PARCIAL. Ojo con el "
+        "sujeto: parcial es el SUBCONJUNTO pedido, no el registro en disco -- "
+        "esta misma prosa afirmaba lo segundo, que es lo que el mensaje decia "
+        f"en falso y `..._por_el_camino_real` ahora no deja pasar: {mensaje!r}"
     )
     assert str(len(config.VERDICT_TRANSFERS)) in mensaje, (
         "tiene que nombrar cuántas transferencias son en total, para que quien "
@@ -197,4 +200,105 @@ def test_a_partial_search_refuses_to_present_its_slice_as_the_record(monkeypatch
     assert harness.run_search() is registro, (
         "la búsqueda entera tiene que seguir devolviendo su registro; un guard "
         "que se dispara siempre no es un guard, es una rotura"
+    )
+
+
+# --------------------------------------------- el guard, por el camino real
+
+def _registro_en_disco(path) -> None:
+    """Un registro de techos con la procedencia CURRENT, como el de
+    `test_search_records.py` y por la misma razón: sin el sello,
+    `ceilings_in_force` lo rechazaría por un motivo ajeno a lo que se mide acá.
+    """
+    import json
+    path.write_text(json.dumps({"creda": {
+        "ceiling": 0.01, "epochs": config.SEARCH_EPOCHS,
+        "seeds": list(config.SEARCH_SEEDS),
+        "atRequiredScale": True,
+        "requiredScale": {"epochs": config.FULL_SEARCH_EPOCHS,
+                          "seeds": config.FULL_SEARCH_SEEDS},
+        "byTransfer": {"M->U": 0.01},
+        "revision": config.REVISION, "kernelSigma": config.KERNEL_SIGMA,
+        "attentionGamma": config.ATTENTION_GAMMA,
+        "attentionTemperature": config.ATTENTION_TEMPERATURE}}),
+        encoding="utf-8")
+
+
+@pytest.fixture
+def arbol(tmp_path, monkeypatch):
+    """Las dos rutas de registro dentro de `tmp_path`, como el fixture que
+    `test_search_records.py` ya usa. Se redirige `RESULTS` además de las dos
+    constantes porque `ceilings_record_for` las resuelve desde ahí.
+    """
+    lleno = tmp_path / "ceilings.json"
+    ensayo = tmp_path / "ceilings.pilot.json"
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    monkeypatch.setattr(config, "CEILINGS_RECORD", lleno)
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", ensayo)
+    return lleno, ensayo
+
+
+@pytest.mark.parametrize("registro_presente", [False, True],
+                         ids=["sin-registro", "con-registro"])
+def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
+        arbol, monkeypatch, registro_presente) -> None:
+    """La prueba que el test anterior NO era, y la diferencia es el método.
+
+    `test_a_partial_search_refuses_to_present_its_slice_as_the_record` tapa
+    `ceilings_in_force` Y `search_record`, o sea los dos predecesores del guard.
+    Prueba que la línea se ejecuta; no puede ver lo que la línea AFIRMA, porque
+    el orden real de las ramas nunca corre. Y el mensaje afirmaba dos cosas
+    falsas por eso mismo.
+
+    Acá se tapa SOLO `search_ceilings` ---lo único que gastaría una búsqueda
+    optuna de verdad--- y corren `ceilings_in_force` y `search_record` reales,
+    contra un árbol de verdad. Las dos ramas que existen se recorren las dos:
+
+    * `sin-registro`: `ceilings_in_force` no ve registro y busca. La escritura
+      de un subconjunto está bloqueada aguas arriba, así que no queda nada en
+      disco. Antes de este arreglo, acá ganaba "left no record".
+    * `con-registro`: `ceilings_in_force` corta y NO busca. Antes de este
+      arreglo, el guard afirmaba que la búsqueda había corrido y había dejado un
+      registro parcial en la ruta canónica ---falso dos veces, sobre un registro
+      completo escrito por otra cosa---.
+
+    En las dos gana el rechazo del subconjunto, y en ninguna el mensaje afirma
+    qué pasó aguas arriba, porque desde ese frame no se puede saber.
+    """
+    lleno, _ = arbol
+    if registro_presente:
+        _registro_en_disco(lleno)
+
+    busco = {"llamada": False}
+
+    def _sin_buscar(*a, **k):
+        busco["llamada"] = True
+        return {}
+
+    monkeypatch.setattr(harness, "search_ceilings", _sin_buscar)
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+    monkeypatch.setattr(harness, "environment", lambda: {})
+
+    with pytest.raises(SystemExit) as refusal:
+        harness.run_search(transfers=[config.SEARCH_TRANSFERS[0]])
+    mensaje = str(refusal.value)
+
+    assert busco["llamada"] == (not registro_presente), (
+        "la rama de arriba tiene que ser la real: busca cuando NO hay registro y "
+        "corta cuando hay. Si esto falla, el test no est\u00e1 recorriendo el camino "
+        f"que dice recorrer (registro={registro_presente}, busc\u00f3={busco['llamada']})"
+    )
+    assert "subset" in mensaje, (
+        f"tiene que ganar el rechazo del subconjunto, no otro: {mensaje!r}"
+    )
+    assert "left no record" not in mensaje, (
+        "'left no record' describe un registro ausente, que no es lo que pasó: "
+        f"se pidió un subconjunto. {mensaje!r}"
+    )
+    assert "the search ran" not in mensaje, (
+        "el mensaje no puede afirmar que la búsqueda corrió: con un registro en "
+        f"disco `ceilings_in_force` corta y no busca. {mensaje!r}"
+    )
+    assert str(len(config.SEARCH_TRANSFERS)) in mensaje, (
+        f"tiene que nombrar el total contra el que el subconjunto es parcial: {mensaje!r}"
     )
