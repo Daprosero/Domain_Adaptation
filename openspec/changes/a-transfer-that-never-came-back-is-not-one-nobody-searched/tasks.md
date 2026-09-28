@@ -645,18 +645,37 @@ Order-independent relative to A2-A5; functionally needs `shards.rules_for_axis` 
 `tools/distribute.py` needs **no change** (verified in design: `.get("axis")` at :208 is its
 only declaration read, and it stays a real string via the D6 projection).
 
-- [ ] B.1 RED — write a test asserting `tools/bridge.py`'s `dist` resolution at line 166 calls
+- [x] B.1 RED — write a test asserting `tools/bridge.py`'s `dist` resolution at line 166 calls
       `shards.rules_for_axis("seed", dist)` rather than defaulting to the whole declaration
       directly — `tests/test_bridge.py`.
-- [ ] B.2 RED — confirm (do not assume) that the five flat reads below line 166 (:167-168,
+- [x] B.2 RED — confirm (do not assume) that the five flat reads below line 166 (:167-168,
       :203, :216-217) need **zero** edits, by running the existing `test_bridge.py:190-210`
       fixture against the new resolution and observing it pass unedited.
-- [ ] B.3 GREEN — change the `dist` resolution at `tools/bridge.py:166` to
+- [x] B.3 GREEN — change the `dist` resolution at `tools/bridge.py:166` to
       `shards.rules_for_axis("seed", dist)`. Leave every flat read below it untouched.
-- [ ] B.4 Run `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_bridge.py`. Confirm
+- [x] B.4 Run `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_bridge.py`. Confirm
       green, unedited elsewhere in the file.
 
 ---
+
+**Evidence (B, done inline by the orchestrator — one line, one test):**
+- B.2 confirmed by measurement, and the count was wrong in the task text: there are
+  FOUR flat reads below the resolution, not five — `tools/bridge.py:167`, `:168`,
+  `:203`, `:217`. All read the flat top-level groups.
+- B.1 RED observed, twice. The first red was the orchestrator's own error (the test
+  named `bridge.plan`, which does not exist; the function holding that line is
+  `build_summary`) — repointed, then the honest red fired on its own message.
+- A second wrong premise the test caught against its author: it first asserted
+  `rules_for_axis("seed") is declaration()`. False here. `rules_for_axis` returns
+  `dist` itself only for a FLAT declaration; ours now carries `axes`, so it returns
+  the nested sub-block — a different container sharing the same four lists. The
+  assertion now compares the LISTS, per `shards.GROUPS`, which is where D6's
+  identity actually lives.
+- B.4 GREEN: `tests/test_bridge.py` 29 passed. Full suite 719 passed, 0 failed.
+- Mutation, and the mutation itself was verified to have entered (`git diff
+  --numstat` = `2 1`) after a first attempt silently failed to patch anything and
+  produced a meaningless green: with `dict.update` replaced by a `deepcopy`, the
+  test fails naming `'poolable'`. Reverted, re-green.
 
 ## Notes for `sdd-apply`
 
