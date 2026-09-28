@@ -230,40 +230,29 @@ def full_scale_launch_is_authorized() -> bool:
     return os.environ.get(LOCAL_FULL_SCALE_ENV) == "1"
 
 
-def execution_seed_units() -> "list[int] | None":
-    """Las `RUN_UNITS_ENV` de ESTA submision, en el vocabulario de este
-    repositorio: una unidad ES una semilla.
+def transfer_label(transfer: tuple[str, str]) -> str:
+    """The one spelling of a transfer used as a key anywhere.
 
-    `__benchmark__["distribution"]["axis"]` declara `"seed"` como el unico eje
-    que una campaña puede repartir entre maquinas, y `run_campaign_shard`/
-    `run_mechanism_sweep_shard` sólo aceptan `seeds=` -- no hay un segundo eje
-    que una unidad pudiera nombrar. La forja misma no interpreta `units`: sus
-    propios comentarios en `remote_cli.py` las declaran identificadores
-    opacos que "esta funcion nunca lee", asi que decidir que es una unidad es
-    una decision de ESTE repositorio y no de la forja, y esta es su unica
-    lectura.
+    Written once because the record, the search's progress lines and the
+    ceiling lookup all have to agree on it. Two of them agreeing and the
+    third not would make a per-transfer ceiling silently fall back to the
+    pooled one, which is the failure that reads as success: the run
+    proceeds and reports a number.
 
-    Tres formas, y las tres se distinguen:
-
-    - Ausente: esta submision nunca declaro unidades, asi que no hay reparto
-      que leer. Devuelve `None`, y el llamador lo lee como "la rejilla
-      entera" -- exactamente el valor por omision que `run_campaign_shard`/
-      `run_mechanism_sweep_shard` ya le dan a `seeds=None` hoy.
-    - Declarada vacia (`"[]"`): CERO unidades fueron decididas, un hecho
-      distinto de que nadie haya decidido nada. Devuelve `[]`, una lista
-      real y nunca `None` -- tratarla igual que la ausencia correria la
-      rejilla entera bajo una asignacion que dice explicitamente que a esta
-      maquina no le toco ninguna.
-    - Declarada con contenido: cada elemento tiene que ser el string de una
-      semilla entera. Cualquier otra cosa -- JSON invalido, un valor que no
-      es una lista, un elemento que no es string, o un string que `int()`
-      rechaza -- se RECHAZA, nunca se adivina: una semilla mal leida no
-      falla, corre con la semilla equivocada y el numero que produce se ve
-      exactamente igual al correcto.
+    Moved down from `harness.py` (D3, layering): `config.py` imports
+    nothing from the package, and `harness` imports `config` -- so the one
+    spelling has to live here for `harness.transfer_label` to be a plain
+    re-export rather than a second definition.
     """
-    crudo = os.environ.get(RUN_UNITS_ENV)
-    if crudo is None:
-        return None
+    return f"{transfer[0]}->{transfer[1]}"
+
+
+def _seed_units_from(crudo: str) -> "list[int]":
+    """The seed axis's populated branch, byte for byte `execution_seed_
+    units()`'s old body -- these messages predate the `axis` parameter and
+    have to keep saying exactly what they said before it existed
+    (Requirement "The seed axis keeps its exact existing behavior",
+    `specs/run-unit-axis-resolution`)."""
     try:
         decodificado = json.loads(crudo)
     except json.JSONDecodeError as exc:
@@ -293,6 +282,111 @@ def execution_seed_units() -> "list[int] | None":
                 "semillas y ninguna otra cosa, asi que una unidad que no lo "
                 "sea no tiene una corrida que correr") from exc
     return semillas
+
+
+def _transfer_units_from(crudo: str) -> "list[tuple[str, str]]":
+    """The transfer axis's populated branch: every element has to be the
+    canonical label `transfer_label()` produces (`"M->U"`), validated
+    against `SEARCH_TRANSFERS` -- the closed set this search actually
+    covers (D1). A positional index is deliberately not a valid unit here:
+    `"0"` is a valid seed too, and the whole point of the label vocabulary
+    is that a transfer unit is self-identifying across axes -- `int("M->U")`
+    already raises, so a step that mixes up which axis it declared dies on
+    the seed branch instead of quietly running the wrong search.
+    """
+    try:
+        decodificado = json.loads(crudo)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"{RUN_UNITS_ENV}={crudo!r} is not valid JSON; a submission "
+            "declaring units has to declare them in the shape "
+            "`runner_invoke.py` serializes, or this read cannot know which "
+            "transfers it names") from exc
+    if not isinstance(decodificado, list):
+        raise ValueError(
+            f"{RUN_UNITS_ENV}={crudo!r} is not an array; `runner_invoke.py` "
+            "always serializes `units` as a list of strings")
+    by_label = {transfer_label(t): t for t in SEARCH_TRANSFERS}
+    transferencias: list[tuple[str, str]] = []
+    for unidad in decodificado:
+        if not isinstance(unidad, str):
+            raise ValueError(
+                f"the unit {unidad!r} of {RUN_UNITS_ENV} is not a string; "
+                "`runner_invoke.py` only serializes strings, and an element "
+                "that is not one is a submission that did not follow its "
+                "own contract")
+        if unidad not in by_label:
+            raise ValueError(
+                f"the unit {unidad!r} of {RUN_UNITS_ENV} is not a transfer "
+                f"this search declares; available: {sorted(by_label)}. A "
+                "unit read for the transfer axis is never coerced to the "
+                "nearest valid label -- a misread transfer does not fail, "
+                "it searches a different one and returns a number shaped "
+                "exactly like the right one.")
+        transferencias.append(by_label[unidad])
+    return transferencias
+
+
+def execution_units_for(axis: str) -> "list[int] | list[tuple[str, str]] | None":
+    """`RUN_UNITS_ENV` for THIS submission, in the vocabulary of the axis
+    the STEP declares -- received, never inferred from the content (D3).
+
+    No default for `axis`: a caller that forgets to name one gets a
+    refusal, never the seed behaviour this repository used to give
+    unconditionally. `axis` is checked against
+    `__benchmark__["distribution"]["axes"]` -- the declaration, not a local
+    tuple -- so a step naming an axis nobody declared cannot fall through
+    to seeds.
+
+    The three-way distinction `execution_seed_units()` already made is
+    preserved for every axis, not only the seed one:
+
+    - Absent: this submission never declared units, so there is nothing to
+      split. Returns `None`, read by the caller as "the whole grid" --
+      exactly the default `seeds=None`/`transfers=None` already give.
+    - Declared empty (`"[]"`): ZERO units were decided, a fact distinct
+      from nobody deciding anything. Returns `[]`, a real list and never
+      `None`.
+    - Declared with content: every element is validated against THIS
+      axis's own vocabulary -- an integer seed for `"seed"`, a canonical
+      transfer label for `"transfer"`. Anything else -- invalid JSON, a
+      non-list value, a non-string element, or a string outside the axis's
+      vocabulary -- is REFUSED, never guessed: a misread unit does not
+      fail, it runs a different experiment and returns a number shaped
+      exactly like the right one.
+    """
+    from MIL_CREDA_Benchmark import __benchmark__
+    axes = (__benchmark__.get("distribution") or {}).get("axes") or {}
+    if axis not in axes:
+        raise ValueError(
+            f"refusing to resolve axis {axis!r}: it is not one of the axes "
+            f"declared in `distribution.axes` ({sorted(axes)}); a step "
+            "cannot read units for an axis nobody declared.")
+
+    crudo = os.environ.get(RUN_UNITS_ENV)
+    if crudo is None:
+        return None
+
+    if axis == "seed":
+        return _seed_units_from(crudo)
+    if axis == "transfer":
+        return _transfer_units_from(crudo)
+    raise ValueError(
+        f"refusing to resolve axis {axis!r}: it is declared, but no unit "
+        "vocabulary is wired for it yet.")
+
+
+def execution_seed_units() -> "list[int] | None":
+    """`RUN_UNITS_ENV` for THIS submission, in the seed axis's vocabulary --
+    one unit IS a seed.
+
+    A thin delegate to `execution_units_for("seed")` (D3): the three-way
+    absent/declared-empty/populated distinction and every message it
+    raises live there now, moved without editing a character.
+    `run_campaign_shard`/`run_mechanism_sweep_shard` are the two in-repo
+    callers, and neither observes a behaviour change.
+    """
+    return execution_units_for("seed")
 
 
 # ------------------------------------------------------------------- material
