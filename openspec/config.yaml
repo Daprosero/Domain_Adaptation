@@ -1,0 +1,65 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.12 (interpreter at .venv/bin/python), packaged via
+  setuptools with src-layout (setup.cfg + pyproject.toml).
+  Architecture: src/MIL_CREDA (method), src/MIL_CREDA_Benchmark (benchmark
+  harness), src/CREDA (prior work, not edited by this project),
+  MIL-CREDA/Notebooks (notebooks), tests/, tools/.
+  Testing: pytest, run with PYTHONPATH=src; see testing capabilities below.
+  Style: ruff configured (line-length 100), no formatter/type-checker detected.
+  Note: this repository is nested inside and gitignored by the parent forge
+  "papersmith-ai" and is its own git repository. Organic tracking already
+  exists under odd/tasks/*.md; SDD is being added alongside it, not
+  replacing it.
+
+strict_tdd: true
+# Provenance: this value is INHERITED, not self-declared. It was recorded in
+# odd/tasks/notebook-submission-env.md:58, which states TDD is ON because the
+# PARENT forge's openspec/config.yaml (papersmith-ai/openspec/config.yaml,
+# outside this repository) carries strict_tdd: true. This repository has no
+# local strict_tdd marker of its own. Resolved true here because the single
+# in-scope project (repository root) is covered by one explicit workspace
+# test command (see testing.test_command below).
+
+testing:
+  projects:
+    - path: "."
+      stack: "Python (setuptools, src-layout)"
+      test_command: "PYTHONPATH=src .venv/bin/python -m pytest -q"
+      framework: "pytest"
+      interpreter: ".venv/bin/python (measured: Python 3.12.13)"
+      last_measured_result: "658 passed, 3 failed (deliberate red tests in tests/test_search_distribution.py for unfinished work), 1 skipped, 129 subtests passed"
+      coverage_command: null
+      linter: "ruff (configured via [tool.ruff] in pyproject.toml, line-length 100); exact invocation not confirmed"
+      type_checker: null
+      formatter: null
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Do not touch src/CREDA (prior work, explicitly out of scope)
+    - Note whether the change affects notebook contracts under MIL-CREDA/Notebooks
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    guidelines:
+      - Follow existing code patterns
+      - Run tests with PYTHONPATH=src .venv/bin/python -m pytest -q (a bare python3.12 cannot import the package)
+      - The 3 pre-existing failures in tests/test_search_distribution.py are deliberate red tests for unfinished work; do not "fix" them to pass unless the task explicitly implements that work
+    tdd: true
+    test_command: "PYTHONPATH=src .venv/bin/python -m pytest -q"
+  verify:
+    test_command: "PYTHONPATH=src .venv/bin/python -m pytest -q"
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
