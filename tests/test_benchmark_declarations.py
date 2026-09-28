@@ -159,6 +159,15 @@ def test_the_distribution_declares_exactly_what_was_approved() -> None:
 
     dist = dict(shards.declaration())
 
+    # `axes` joined the block once search shards could split by transfer too
+    # (see `search-distribution-axis`); it is popped here for the same
+    # reason `shardsRoot` is popped just below -- this equality is about the
+    # seed axis's four flat groups specifically, and `axes` carries both
+    # axes plus its own `perUnit` group, which is not what this assertion
+    # measures. The seed axis's own content is still pinned below, by
+    # identity via the flat keys (D6's projection).
+    dist.pop("axes")
+
     # `shardsRoot` joined the block so that a command carrying no `--shards`
     # flag of its own can measure a `@shard` witness at all. Without it the
     # witness reads unmeasured FOREVER -- not false -- so the sequence item
