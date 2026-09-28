@@ -33,7 +33,8 @@ import torch
 import torch.nn as nn
 
 from CREDA.schedules import creda_ramp
-from MIL_CREDA_Benchmark import bags, ceiling_record, config, report_digest, tables, wiring
+from MIL_CREDA_Benchmark import (bags, ceiling_record, config, report_digest,
+                                 shard_io, tables, wiring)
 from MIL_CREDA_Benchmark.schedules import milcreda_ramp
 from MIL_CREDA_Benchmark.verdict import judge, render, standard_error, tally
 
@@ -1631,6 +1632,260 @@ def sellar_rebanada(found: dict, reduction: Reduction, shard: str | None,
         entry["transfers"] = cubiertas
         entry["shard"] = shard
     return found
+
+
+def read_search_slices(pilot: bool = False, noise: float = 0.0,
+                       kind: str = "campaign",
+                       root: Path | None = None) -> list[dict]:
+    """Every finished search slice under one shard tree, read back from disk.
+
+    The I/O half `merge_search_records` needs, the same split `shard_io.
+    read_shards()` already keeps between reading and grouping: this function
+    knows only how to find and parse `*.slice.json` files under `shards/`,
+    never what a family entry means or whether the set that came back is
+    complete -- that judgment belongs to `merge_search_records` alone. A
+    shard folder that never wrote its slice (died mid-way, or never ran) is
+    absent here rather than reported empty, the identical rule `shard_io.
+    read_shards` applies to a missing `shard.json`.
+    """
+    home = (root if root is not None else
+           config.results_for(noise, kind, pilot) / SHARDS_DIR)
+    if not home.is_dir():
+        return []
+    found = []
+    for folder in sorted(p for p in home.iterdir() if p.is_dir()):
+        slice_path = folder / f"ceilings{SEARCH_SLICE_SUFFIX}"
+        if slice_path.exists():
+            found.append(json.loads(slice_path.read_text(encoding="utf-8")))
+    return found
+
+
+def merge_search_records(slices: list[dict], expected: list | None = None,
+                         pilot: bool = False,
+                         reduction: "Reduction | None" = None) -> dict:
+    """The one record six slices make, or a refusal naming what never came back.
+
+    `expected` defaults to `config.SEARCH_TRANSFERS` and nothing else (D11) --
+    never the campaign's own transfer roster, and never inferred from what
+    the slices being assembled happen to claim about their own coverage
+    (D10's "coverage judged against expected, not against what arrived").
+    Refuses,
+    in the order D10 lists them, before anything is written; a family's
+    pooled fields are RE-POOLED over the union of every slice's per-transfer
+    picks via `ceiling_record.choose` -- the identical expression the engine
+    itself uses -- never copied forward from one slice (D9). Writes the
+    canonical path only behind `governs_the_ceilings_record`, the same
+    guard every other writer of that path already consults: `True` for a
+    clean, complete assembly by construction, `False` for a deliberately
+    smaller explicit `expected` -- quarantining a diagnostic assembly from
+    the campaign's record the same way a diagnostic search is quarantined
+    from it (D7).
+    """
+    from MIL_CREDA_Benchmark import shards as _shards
+
+    # `pilot` y `reduction` reconciliados como en `search_ceilings_trials`:
+    # la coordenada explícita manda, y no puede quedar viva en dos lugares a
+    # la vez -- `reduction.environment` es lo único que este ensamblado lee
+    # de `reduction`, pero la reconciliación es la misma regla del módulo.
+    if reduction is not None:
+        reduction = replace(reduction, pilot=pilot)
+
+    pedido = list(expected) if expected is not None else list(config.SEARCH_TRANSFERS)
+    # Normalizado al orden de `SEARCH_TRANSFERS`: el orden en que `expected`
+    # llegó no puede decidir el guardián (D10's order-independence case).
+    esperado_tuplas = [t for t in config.SEARCH_TRANSFERS if t in pedido]
+    esperado = [transfer_label(t) for t in esperado_tuplas]
+
+    # Refusal 1 -- an unsealed slice: no coverage declared at all.
+    for slice_ in slices:
+        for family, entry in slice_.items():
+            if not entry.get("transfers"):
+                raise _shards.ShardIncomplete(
+                    f"refusing to assemble: shard {entry.get('shard')!r} "
+                    f"carries no `transfers` for family {family!r} -- an "
+                    "unsealed slice cannot be assembled.\n"
+                    "  Re-run the shard, or confirm it wrote its slice "
+                    "via `sellar_rebanada` before assembling."
+                )
+
+    # Refusal 2 -- provenance drift against the CURRENT config.
+    for slice_ in slices:
+        for family, entry in slice_.items():
+            drift = ceiling_record.stamp_drift(entry)
+            if drift:
+                detail = "; ".join(
+                    f"{field}: record={values['record']!r} "
+                    f"current={values['current']!r}"
+                    for field, values in sorted(drift.items()))
+                raise _shards.ShardsDisagree(
+                    f"refusing to assemble: shard {entry.get('shard')!r}'s "
+                    f"{family!r} entry was stamped under a different "
+                    f"revision than the current config: {detail}.\n"
+                    "  Re-run this shard under today's config, or delete "
+                    "the stale slice and relaunch it."
+                )
+
+    # Refusal 3 -- entries of different search kinds (grid vs trials).
+    kinds = {ceiling_record.kind_of(entry)
+            for slice_ in slices for entry in slice_.values()}
+    if len(kinds) > 1:
+        raise _shards.ShardsDisagree(
+            f"refusing to assemble: slices carry different search kinds: "
+            f"{sorted(kinds)!r}.\n"
+            "  Two engines never write the same entry; a mixed set of "
+            "slices cannot be one search."
+        )
+
+    # Refusal 8 -- the families present must agree across every slice,
+    # checked before any per-family grouping so a mismatch never masquerades
+    # as a missing- or unexpected-transfer refusal about the wrong family.
+    family_sets = {frozenset(slice_.keys()) for slice_ in slices}
+    if len(family_sets) > 1:
+        raise _shards.ShardsDisagree(
+            "refusing to assemble: slices cover different family sets: "
+            f"{sorted(sorted(s) for s in family_sets)!r}.\n"
+            "  Every slice of one search covers the same families; a "
+            "mismatch means these are not slices of the same search."
+        )
+
+    by_family: dict[str, list[dict]] = {}
+    for slice_ in slices:
+        for family, entry in slice_.items():
+            by_family.setdefault(family, []).append(entry)
+
+    identical_fields = list(
+        (_shards.rules_for_axis("transfer") or {}).get("identicalAcrossShards") or [])
+    ruido = config.SEARCH_RESOLUTION
+    hyper_dims = ("rampDelta", "rampDeltaLocal", "ceilingLocal", "kernelSigma",
+                 "attentionGamma", "attentionTemperature", "tauLocal")
+
+    assembled: dict[str, dict] = {}
+    agreed_noise: float | None = None
+
+    for family, entries in by_family.items():
+        # Refusal 4 -- two slices of this family claiming the same transfer.
+        claimed_by: dict[str, str] = {}
+        for entry in entries:
+            for label in entry.get("transfers") or []:
+                if label in claimed_by:
+                    raise _shards.ShardsDisagree(
+                        f"refusing to assemble: transfer {label!r} of "
+                        f"family {family!r} is claimed by both shard "
+                        f"{claimed_by[label]!r} and shard "
+                        f"{entry.get('shard')!r}.\n"
+                        "  Two shards claiming the same transfer is a "
+                        "relaunch collision, not a bigger slice."
+                    )
+                claimed_by[label] = entry.get("shard")
+
+        # Refusal 5 -- disagreement on a field the transfer axis declares
+        # identical across search shards.
+        stamped = [{"shard": entry.get("shard"), "stamp": entry} for entry in entries]
+        clashes = shard_io.disagreements(stamped, identical_fields)
+        if clashes:
+            detail = "; ".join(
+                f"{c['field']}: {c['values']!r}" for c in clashes)
+            raise _shards.ShardsDisagree(
+                f"refusing to assemble {family!r}: shards disagree on "
+                f"{detail}.\n"
+                "  These are declared identical across search shards, so a "
+                "difference is a different experiment rather than "
+                "different hardware, and averaging them would produce a "
+                "table nobody can attribute."
+            )
+
+        arrived = set(claimed_by)
+
+        # Refusal 6 -- an expected transfer with no covering slice, named.
+        missing = [label for label in esperado if label not in arrived]
+        if missing:
+            raise _shards.ShardIncomplete(
+                f"refusing to assemble {family!r}: no slice covers "
+                f"{missing!r} -- relaunch the shard(s) for the missing "
+                "transfer(s).\n"
+                f"  Expected: {esperado!r}. Arrived: {sorted(arrived)!r}."
+            )
+
+        # Refusal 7 -- a covered label the caller never expected.
+        unexpected = sorted(arrived - set(esperado))
+        if unexpected:
+            raise _shards.ShardsDisagree(
+                f"refusing to assemble {family!r}: {unexpected!r} is not in "
+                f"the expected set {esperado!r}.\n"
+                "  Pass an explicit `expected=` if this coverage is "
+                "deliberately different from `config.SEARCH_TRANSFERS`."
+            )
+
+        per_transfer: dict[str, dict] = {}
+        for entry in entries:
+            per_transfer.update(entry.get("perTransfer") or {})
+
+        # D9 -- re-pooled over the UNION, the identical expression the
+        # engine itself uses; never copied forward from one slice.
+        agrupado = ceiling_record.choose(
+            [{"ceiling": d["ceiling"], "value": d["best"],
+              **{dim: d[dim] for dim in hyper_dims}}
+             for d in per_transfer.values()], ruido)
+
+        base = entries[0]
+        if agreed_noise is None:
+            agreed_noise = base["labelNoise"]
+
+        entry = {
+            "arm": base["arm"],
+            "ceiling": agrupado["ceiling"],
+            "rampDelta": agrupado["rampDelta"],
+            "rampDeltaLocal": agrupado["rampDeltaLocal"],
+            "ceilingLocal": agrupado["ceilingLocal"],
+            "kernelSigma": agrupado["kernelSigma"],
+            "attentionGamma": agrupado["attentionGamma"],
+            "attentionTemperature": agrupado["attentionTemperature"],
+            "tauLocal": agrupado["tauLocal"],
+            "criterion": base["criterion"],
+            "role": base["role"],
+            "epochs": base["epochs"],
+            "trials": base["trials"],
+            "search": base["search"],
+            "decidedByFlatRule": agrupado["decidedByFlatRule"],
+            "plateau": agrupado["plateau"],
+            "noise": ruido,
+            "labelNoise": base["labelNoise"],
+            "flatRule": base["flatRule"],
+            "atRequiredScale": base["atRequiredScale"],
+            "requiredScale": base["requiredScale"],
+            # Total compute, summed across every contributing slice -- never
+            # presented as one wall clock; the per-shard readings stay in
+            # `assembly.shards[*].seconds` for a reader who wants that.
+            "seconds": sum(e.get("seconds", 0.0) for e in entries),
+            "transfers": list(esperado),
+            "neutral": base["neutral"],
+            "byTransfer": {label: d["ceiling"] for label, d in per_transfer.items()},
+            "perTransfer": per_transfer,
+            "inheritanceRule": base["inheritanceRule"],
+            "revision": base["revision"],
+            # THE presence flag (D9): six slices carry six `env` handles and
+            # a family entry carries one -- this is what lets a later reader
+            # tell an assembled record from one a single machine searched.
+            "assembly": {
+                "expected": list(esperado),
+                "shards": [
+                    {"id": e.get("shard"), "env": e.get("env"),
+                     "environment": e.get("environment"),
+                     "seconds": e.get("seconds"), "transfers": e.get("transfers")}
+                    for e in entries
+                ],
+            },
+        }
+        stamp = (reduction.environment if reduction is not None else None) or environment()
+        entry["env"] = environment_key(stamp)
+        entry["environment"] = stamp
+        assembled[family] = entry
+
+    if governs_the_ceilings_record(agreed_noise or 0.0, esperado_tuplas):
+        record = config.ceilings_record_for(pilot)
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(json.dumps(assembled, indent=2), encoding="utf-8")
+    return assembled
 
 
 def search_ceilings_trials(reduction: Reduction, device: torch.device,
