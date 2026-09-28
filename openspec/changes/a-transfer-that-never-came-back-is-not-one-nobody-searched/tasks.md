@@ -353,93 +353,155 @@ which does not exist until this unit lands.
 Implements D9, D10, D11's default-source half. Spec: `partial-search-record-assembly`.
 Depends on A3 (needs `shard_paths["searchSlice"]` and `sellar_rebanada`-shaped slices to read).
 
-- [ ] 4.1 RED — grow `test_partial_search_records_merge_instead_of_overwriting` (the
-      committed red) into: six per-shard slices (one per `config.SEARCH_TRANSFERS` transfer)
-      assemble into one record naming all six, field-for-field matching the full roster listed
-      in `partial-search-record-assembly/spec.md` ("complete set assembles") **plus** the new
-      `assembly` key (`{"expected": [...], "shards": [...]}` per D9) —
-      `tests/test_search_distribution.py`.
-- [ ] 4.2 RED — write **D9's re-pooling mutation test**: build slices whose individual pooled
-      `ceiling` winners **all differ** from the union's pooled winner (i.e., no single slice's
-      own value equals the assembled answer). Assert the assembled `ceiling` equals the value
-      `ceiling_record.choose` produces over the **union** of per-transfer picks — a dict-merge
-      or copy-forward implementation must fail this test — `tests/test_search_distribution.py`.
-- [ ] 4.3 RED — write refusal #1 (D10 table): a slice carrying no `transfers` field, or an
-      empty one, refuses via `shards.ShardIncomplete` naming the slice id —
-      `tests/test_search_distribution.py`.
-- [ ] 4.4 RED — write refusal #2: a slice whose `ceiling_record.stamp_drift(entry)` is
-      non-empty refuses via `shards.ShardsDisagree`, naming the slice id, field, and
-      record-vs-current values — `tests/test_search_distribution.py`.
-- [ ] 4.5 RED — write refusal #3: slices whose `ceiling_record.kind_of(entry)` differ refuse
-      via `shards.ShardsDisagree`, naming both kinds — `tests/test_search_distribution.py`.
-- [ ] 4.6 RED — write refusal #4: two slices claiming the same transfer label refuse via
-      `shards.ShardsDisagree`, naming the label and both slice ids —
-      `tests/test_search_distribution.py`.
-- [ ] 4.7 RED — write refusal #5: two slices disagreeing on a transfer-axis
-      `identicalAcrossShards` field (e.g. `labelNoise=0.0` vs `labelNoise=0.4`, or `epochs`)
-      refuse via `shard_io.disagreements`, naming the disagreeing field and both values —
-      `tests/test_search_distribution.py`. Satisfies "Shards that disagree on a field required
-      to be identical refuse rather than average".
-- [ ] 4.8 RED — write refusal #6 (**the defect this change is named after**): five of six
-      expected transfers present refuses via `shards.ShardIncomplete`, naming the **specific**
-      sixth missing transfer by label, not a count — `tests/test_search_distribution.py`.
-      Satisfies "A missing expected transfer refuses, and names it".
-- [ ] 4.9 RED — write refusal #7: a slice covering a label **not** in `expected` refuses via
-      `shards.ShardsDisagree`, naming the unexpected label — `tests/test_search_distribution.py`.
-- [ ] 4.10 RED — write refusal #8: slices whose present family sets differ refuse via
-      `shards.ShardsDisagree`, naming the two family sets — `tests/test_search_distribution.py`.
-- [ ] 4.11 RED — write the "coverage judged against expected, not against what arrived" test:
-      three individually well-formed, individually complete slices covering three of six
-      transfers still refuse citing the three missing ones, even though none of the three
-      handed-in slices is itself malformed — `tests/test_search_distribution.py`. Satisfies
-      "Coverage completeness is judged against the expected set, not against what was handed
-      in".
-- [ ] 4.12 RED — write the explicit-smaller-`expected` test: a caller passes `expected=`
-      naming fewer than six transfers (e.g. one, a diagnostic re-search); shards covering
-      exactly that explicit set assemble successfully; this outcome is reachable **only**
-      through the explicit override, never by omitting the argument —
-      `tests/test_search_distribution.py`.
-- [ ] 4.13 RED — write the order-independence test: pass the six expected labels in reversed
-      order; the canonical write still happens (the guard does not depend on `expected`'s
-      iteration order) — `tests/test_search_distribution.py`.
-- [ ] 4.14 RED — write the **source-level** test that no default-expectation code path in
-      `merge_search_records` reads `config.VERDICT_TRANSFERS` — inspect the function's source
-      text or bytecode constants, not merely the resulting count (both lists have length six,
-      so a length-only assertion would not catch a divergent source) —
-      `tests/test_search_distribution.py`. Satisfies "`VERDICT_TRANSFERS` is never the implicit
-      source".
-- [ ] 4.15 RED — write the canonical-write-guard test: a complete, clean six-transfer assembly
-      consults `harness.governs_the_ceilings_record` as part of its write, and that guard
-      evaluates `True` for this case by construction; an incomplete or noisy assembly's
-      refusal path never attempts the write — `tests/test_search_distribution.py`.
-- [ ] 4.16 RED — write the roster-inclusion check: `merge_search_records`'s source contains
-      both `ceilings_record_for` and `write_text`, so `tests/test_label_noise.py:1253-1274`'s
-      derived roster **does** pick it up, and confirm it also contains
-      `governs_the_ceilings_record` (i.e. the existing roster test passes with this new writer
-      present, not because the roster was weakened) — this is the explicit companion to Task
-      3.3's exclusion check.
-- [ ] 4.17 GREEN — implement `harness.read_search_slices(pilot=False, noise=0.0,
-      kind="campaign", root=None)`, the I/O half — reads every `*.slice.json` under the
-      relevant `shards/` tree — `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 4.18 GREEN — implement `harness.merge_search_records(slices, expected=None, pilot=False,
-      reduction=None)` per D9/D10/D11: refusals 1-8 in the D10 table's order, before any write;
+- [x] 4.1 RED — grew `test_partial_search_records_merge_instead_of_overwriting` (the
+      committed red) into: six per-shard slices (one per `config.SEARCH_TRANSFERS` transfer,
+      built by the real engine via the new `_seis_rebanadas` fixture, never hand-assembled)
+      assemble into one record naming all six, field-for-field matching a real whole-search
+      entry built by the SAME fake engine (not a hand-typed roster) **plus** the new
+      `assembly` key — `tests/test_search_distribution.py`. Observed RED
+      (`AttributeError: module 'MIL_CREDA_Benchmark.harness' has no attribute
+      'merge_search_records'`) before GREEN; observed GREEN after 4.17-4.18. Also asserts
+      `entrada["ceiling"] == registro_entero["ceiling"]` — dividing and reassembling produces
+      the byte-identical number a whole search produces, since the per-(family,transfer) GP
+      seed is deterministic (`crc32(familia|etiqueta)`).
+- [x] 4.2 RED — wrote **D9's re-pooling mutation test**
+      (`test_the_assembled_ceiling_is_repooled_over_the_union_not_copied_forward`): six
+      single-transfer slices, ceilings `[0.05, 0.03, 0.01, 0.07, 0.02, 0.09]`, all `best`
+      equal so the family-level plateau covers all six; asserts the assembled `ceiling`
+      equals `0.01` (the union's smallest-ceiling winner) and is neither the first (`0.05`)
+      nor the last (`0.09`) slice's own value — `tests/test_search_distribution.py`. Observed
+      RED (`AttributeError`) before GREEN; observed GREEN after 4.17-4.18; re-confirmed
+      reddening by mutation at 4.20.
+- [x] 4.3 RED — wrote refusal #1 test `test_a_slice_with_no_declared_coverage_refuses`: a
+      slice with `transfers: []` refuses via `shards.ShardIncomplete` naming the slice id —
+      `tests/test_search_distribution.py`. Observed RED before GREEN; GREEN after 4.17-4.18.
+- [x] 4.4 RED — wrote refusal #2 test
+      `test_a_slice_stamped_under_a_different_revision_refuses`: a slice's `revision` field
+      set to a stale value refuses via `shards.ShardsDisagree`, naming the slice id and
+      `revision` — `tests/test_search_distribution.py`. Observed RED before GREEN; GREEN
+      after 4.17-4.18.
+- [x] 4.5 RED — wrote refusal #3 test `test_slices_of_different_search_kinds_refuse`: one
+      slice's `search` key removed and a `grid` key added refuses via `shards.ShardsDisagree`,
+      naming both kinds (`optuna`, `grid`) — `tests/test_search_distribution.py`. Observed RED
+      before GREEN; GREEN after 4.17-4.18.
+- [x] 4.6 RED — wrote refusal #4 test `test_two_slices_claiming_the_same_transfer_refuse`: two
+      slices retargeted to the same transfer label refuse via `shards.ShardsDisagree`, naming
+      the label and both slice ids — `tests/test_search_distribution.py`. Observed RED before
+      GREEN; GREEN after 4.17-4.18.
+- [x] 4.7 RED — wrote refusal #5 test
+      `test_slices_disagreeing_on_labelnoise_refuse_and_name_both_values` (`labelNoise=0.0` vs
+      `labelNoise=0.4`) refuses via `shards.ShardsDisagree` reusing `shard_io.disagreements`,
+      naming `labelNoise` and `0.4` — `tests/test_search_distribution.py`. Also wrote the
+      other direction, `test_agreeing_slices_do_not_raise_the_disagreement_refusal`. Observed
+      RED before GREEN; GREEN after 4.17-4.18 (plus the message-formatting fix noted below).
+- [x] 4.8 RED — wrote refusal #6 test `test_five_of_six_refuses_and_names_the_sixth`
+      (**the defect this change is named after**): five of the six real slices refuse via
+      `shards.ShardIncomplete`, naming the **specific** sixth missing transfer label, not a
+      count — `tests/test_search_distribution.py`. Observed RED before GREEN; GREEN after
+      4.17-4.18.
+- [x] 4.9 RED — wrote refusal #7 test
+      `test_a_slice_covering_a_label_outside_expected_refuses`: `expected=` narrowed to one
+      transfer while a second slice covers another refuses via `shards.ShardsDisagree`, naming
+      the unexpected label — `tests/test_search_distribution.py`. Observed RED before GREEN;
+      GREEN after 4.17-4.18.
+- [x] 4.10 RED — wrote refusal #8 test `test_slices_covering_different_family_sets_refuse`: a
+      synthetic second family key (`"phantom"`) added to one slice refuses via
+      `shards.ShardsDisagree`, naming both family sets — `tests/test_search_distribution.py`.
+      Observed RED before GREEN; GREEN after 4.17-4.18.
+- [x] 4.11 RED — wrote the "coverage judged against expected, not against what arrived" test
+      `test_individually_complete_slices_still_refuse_on_expected_coverage`: three
+      individually well-formed, individually complete real slices (covering three of six
+      transfers) still refuse citing the three missing ones —
+      `tests/test_search_distribution.py`. Observed RED before GREEN; GREEN after 4.17-4.18.
+      Also wrote the direct complement, `test_a_complete_set_never_raises_the_missing_
+      transfer_refusal` (six of six does not raise).
+- [x] 4.12 RED — wrote the explicit-smaller-`expected` test
+      `test_an_explicit_smaller_expected_set_assembles_without_writing_canonical`: one real
+      slice, `expected=[config.SEARCH_TRANSFERS[0]]`, assembles successfully and leaves the
+      canonical path unwritten (the guard quarantines the diagnostic assembly, D7's rule
+      applied at assembly time) — `tests/test_search_distribution.py`. Observed RED before
+      GREEN; GREEN after 4.17-4.18.
+- [x] 4.13 RED — wrote the order-independence test `test_expected_order_does_not_decide_the_
+      guard`: the six expected labels passed reversed; the canonical write still happens —
+      `tests/test_search_distribution.py`. Observed RED before GREEN; GREEN after 4.17-4.18.
+- [x] 4.14 RED — wrote the **source-level** test
+      `test_the_assembly_never_reads_verdict_transfers_as_its_default`: inspects
+      `inspect.getsource(harness.merge_search_records)` for the literal string
+      `"VERDICT_TRANSFERS"` — `tests/test_search_distribution.py`. Observed RED
+      (`AttributeError`, function did not exist) before GREEN; GREEN after 4.17-4.18; RE-RED
+      confirmed by the 4.19 mutation. **Finding, recorded honestly, the same class 3.3 already
+      hit**: the function's own docstring named `config.VERDICT_TRANSFERS` in prose (explaining
+      it is never the source), which the substring scan cannot tell apart from a real read —
+      reworded the docstring to describe "the campaign's own transfer roster" without spelling
+      the constant, never loosened the assertion.
+- [x] 4.15 RED — wrote `test_the_canonical_write_consults_the_guard` (spies on
+      `harness.governs_the_ceilings_record` via monkeypatch, confirms it is actually CALLED
+      for a complete assembly, not merely coincidentally satisfied) and
+      `test_an_incomplete_assembly_never_attempts_the_canonical_write` (five of six refuses
+      and leaves the canonical path unwritten) — `tests/test_search_distribution.py`. Observed
+      RED before GREEN; GREEN after 4.17-4.18.
+- [x] 4.16 RED — wrote `test_merge_search_records_enters_the_guarded_writer_roster`: asserts
+      `merge_search_records`'s own source contains `ceilings_record_for`, `write_text` AND
+      `governs_the_ceilings_record` — the explicit companion to Task 3.3's exclusion check —
+      `tests/test_search_distribution.py`. Observed RED before GREEN; GREEN after 4.17-4.18.
+      Confirmed `tests/test_label_noise.py::test_every_writer_of_that_record_is_guarded` stays
+      green with the new writer present (roster grew by one, not weakened).
+- [x] 4.17 GREEN — implemented `harness.read_search_slices(pilot=False, noise=0.0,
+      kind="campaign", root=None)` — reads every `ceilings.slice.json` under the relevant
+      `shards/` tree, the same enumerate-and-skip-missing shape `shard_io.read_shards` already
+      uses — `src/MIL_CREDA_Benchmark/harness.py`, placed after `sellar_rebanada`, before
+      `search_ceilings_trials`.
+- [x] 4.18 GREEN — implemented `harness.merge_search_records(slices, expected=None,
+      pilot=False, reduction=None)` per D9/D10/D11: refusals 1, 2, 3, 8 (in that order,
+      global — checked before per-family grouping so a family-set mismatch cannot masquerade
+      as a wrong per-family refusal), then per family 4, 5, 6, 7 (D10's literal order);
       `expected` defaults to `list(config.SEARCH_TRANSFERS)`, normalized into
       `SEARCH_TRANSFERS` order; re-pools via `ceiling_record.choose` over the union (reusing
-      `d["best"]` as `value`, exactly as the engine does); carries `identicalAcrossShards`
-      fields through after proving agreement (via a `{"shard": id, "stamp": entry}`-shaped
-      call to `shard_io.disagreements`); sums `seconds` as total compute; sets
-      `env`/`environment` to the assembling machine's; adds the `assembly` key; writes the
-      canonical path only behind `governs_the_ceilings_record` —
-      `src/MIL_CREDA_Benchmark/harness.py`.
-- [ ] 4.19 Mutation check: change the `expected` default from `config.SEARCH_TRANSFERS` to
-      `config.VERDICT_TRANSFERS` and confirm the 4.14 **source-level** test reddens (the
-      count-based tests will not, by design). Revert after confirming.
-- [ ] 4.20 Mutation check: change the re-pool step from `ceiling_record.choose` over the union
-      to copying slice 0's `ceiling` forward, and confirm the 4.2 re-pool test reddens. Revert
-      after confirming.
-- [ ] 4.21 Run `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_search_distribution.py
-      tests/test_label_noise.py`. Confirm `test_partial_search_records_merge_instead_of_overwriting`
-      is green and `test_every_writer_of_that_record_is_guarded` is still green.
+      `d["best"]` as `value`, exactly as the engine does, over the seven hyper dims plus
+      `ceiling`); carries `identicalAcrossShards` fields through from `entries[0]` after
+      proving agreement (via a `{"shard": id, "stamp": entry}`-shaped call to
+      `shard_io.disagreements`, using `shards.rules_for_axis("transfer")`'s own declared list);
+      sums `seconds` as total compute; sets `env`/`environment` to the assembling machine's
+      (`reduction.environment or environment()`); adds the `assembly` key
+      (`{"expected": [...], "shards": [{"id","env","environment","seconds","transfers"}, ...]}`
+      per family); writes the canonical path only behind `governs_the_ceilings_record` —
+      `src/MIL_CREDA_Benchmark/harness.py`. **Deviation from the D10 table's literal numeric
+      order, disclosed**: refusal #8 (family sets differ) is checked globally right after
+      1-3, before #4-7's per-family loop, rather than textually last — necessary for
+      soundness, since grouping by family before confirming the families agree would let a
+      family-set mismatch surface as the WRONG refusal type (e.g. a phantom family's
+      "missing transfers" instead of "family sets differ"). Each of the eight still fires
+      correctly and independently, confirmed by its own isolated RED/GREEN test above.
+      **Additional finding, not anticipated by design**: `tests/test_label_noise.py::
+      TestEveryWriterFollowsTheRunAndNotTheTree::test_no_writer_takes_a_coordinate_the_bounds_
+      already_carry` requires any `harness` function taking both `reduction` and a loose
+      coordinate (`pilot`, here) to reconcile via `replace(reduction, ...)` in its own source
+      — added `if reduction is not None: reduction = replace(reduction, pilot=pilot)`,
+      the same pattern `search_ceilings_trials` already uses, never weakened the test.
+- [x] 4.19 Mutation check performed and confirmed, not merely asserted: changed the `expected`
+      default from `config.SEARCH_TRANSFERS` to `config.VERDICT_TRANSFERS`, ran
+      `test_the_assembly_never_reads_verdict_transfers_as_its_default` alone — **observed it
+      redden** (`AssertionError: 'VERDICT_TRANSFERS' is contained here...`) — and confirmed
+      the count-based test (`test_partial_search_records_merge_instead_of_overwriting`)
+      **stayed green** on the same mutated run, exactly as the design predicts (both lists
+      share length six today). Reverted from the pre-mutation backup and re-ran both — both
+      green again.
+- [x] 4.20 Mutation check performed and confirmed, not merely asserted: replaced the
+      `ceiling_record.choose(...)` re-pool step with a copy-forward of `entries[0]`'s own
+      pooled fields, ran `test_the_assembled_ceiling_is_repooled_over_the_union_not_copied_
+      forward` alone — **observed it redden** (`AssertionError: ... assert 0.05 == 0.01`,
+      i.e. the mutated code returned slice 0's own ceiling instead of the union's winner) —
+      then reverted from the pre-mutation backup (diffed byte-identical to confirm) and
+      re-ran the same test — **observed it green again**.
+- [x] 4.21 Ran `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_search_distribution.py
+      tests/test_label_noise.py`. Result: **92 passed**, 0 failed.
+      `test_partial_search_records_merge_instead_of_overwriting` is green and
+      `test_every_writer_of_that_record_is_guarded` is still green. Full repository suite
+      (see closing note below): **712 passed, 0 failed, 1 skipped, 129 subtests passed** —
+      baseline for this unit was `693 passed, 1 failed, 1 skipped, 129 subtests`; delta is
+      +18 new tests (all green) and the one baseline failure
+      (`test_partial_search_records_merge_instead_of_overwriting`, this change's acceptance
+      signal) now passing. No other test regressed.
 
 ## Work Unit A5 — `run_search`/`ceilings_in_force` branches + repointed message (PR5)
 
