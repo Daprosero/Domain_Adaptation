@@ -66,6 +66,135 @@ def test_the_declaration_names_the_axis_the_search_can_split_on() -> None:
         "`transfers=`, y ninguna declaración lo nombra"
     )
 
+    # La inversión que motiva la capacidad entera: los tres campos que el eje
+    # semilla exige idénticos son exactamente los que el eje transferencia
+    # permite -- necesita -- que difieran, porque cada shard de búsqueda
+    # sostiene una porción DISTINTA de exactamente esos campos.
+    seed_identical = axes["seed"]["identicalAcrossShards"]
+    transfer_identical = axes["transfer"]["identicalAcrossShards"]
+    for field in ("ceilings", "ceilingsByTransfer", "hyperByTransfer"):
+        assert field in seed_identical, (
+            f"el eje semilla tiene que seguir exigiendo `{field}` idéntico "
+            f"entre shards de campaña; hoy {seed_identical!r}"
+        )
+        assert field not in transfer_identical, (
+            f"el eje transferencia no puede exigir `{field}` idéntico entre "
+            "shards: cada shard de búsqueda sostiene una porción distinta de "
+            "ese campo a propósito, y pedirles que coincidan es pedirles que "
+            f"no hayan hecho su trabajo; hoy {transfer_identical!r}"
+        )
+
+    # Todo eje declarado tiene los cuatro grupos, nunca un hueco -- un grupo
+    # ausente leído como `[]` haría que `partition()` reportara cada
+    # dimensión `unpartitioned` y un merge la descartara en silencio.
+    for axis_name, block in axes.items():
+        for group in ("poolable", "perEnvironment", "perRun", "identicalAcrossShards"):
+            assert group in block, (
+                f"el eje `{axis_name}` no declara `{group}`; un lector "
+                "genérico no puede resolver sus reglas sin ese hueco"
+            )
+            assert isinstance(block[group], list), (
+                f"`{axis_name}`.`{group}` tiene que ser una lista, posiblemente "
+                f"vacía, pero nunca `None` ni faltante; hoy es {block[group]!r}"
+            )
+
+
+def test_the_flat_keys_are_the_seed_axis_by_identity() -> None:
+    """La proyección es por identidad, nunca por copia.
+
+    Dos estructuras que sólo sostienen listas iguales son dos copias, y una
+    igualdad que hoy se cumple es exactamente cómo dos copias empiezan a
+    discrepar. Se afirma con `is`, explícitamente nunca con `==`: una prueba
+    con `==` pasaría contra una copia construida aparte y no mediría nada de
+    lo que esta decisión afirma.
+    """
+    distribution = MIL_CREDA_Benchmark.__benchmark__["distribution"]
+    seed = distribution["axes"]["seed"]
+    for group in ("identicalAcrossShards", "poolable", "perEnvironment", "perRun"):
+        assert distribution[group] is seed[group], (
+            f"`distribution[{group!r}]` no es el MISMO objeto que "
+            f"`distribution['axes']['seed'][{group!r}]`; la proyección tiene "
+            "que ser por identidad, no una copia que hoy resulta igual"
+        )
+
+
+def test_the_forges_arm_split_refusal_remains_reachable() -> None:
+    """Nada en esta capacidad puede costarle a la forja su capacidad de negar
+    el reparto por brazo.
+
+    `implementation_engine.py:1603` lee `dist.get("axis") == "arm"`. Sobre la
+    declaración real tiene que seguir evaluando `False`; sobre una asignada a
+    mano con `axis: "arm"` tiene que seguir pudiendo evaluar `True` -- si la
+    comparación degradara a comparar contra `None` bajo la forma anidada,
+    quedaría permanentemente `False` y el rechazo nunca podría dispararse.
+    """
+    distribution = MIL_CREDA_Benchmark.__benchmark__["distribution"]
+    assert (distribution.get("axis") == "arm") is False, (
+        "sobre la declaración real, la comparación de la forja tiene que "
+        f"evaluar False; hoy `axis` es {distribution.get('axis')!r}"
+    )
+    hand_built = {"axis": "arm"}
+    assert (hand_built.get("axis") == "arm") is True, (
+        "la comparación tiene que seguir siendo capaz de evaluar True sobre "
+        "un mapeo que de verdad declara `axis: \"arm\"` -- de lo contrario "
+        "está leyendo una constante, no un campo vivo"
+    )
+
+
+def test_shards_root_survives_the_axes_nesting_unchanged() -> None:
+    """Una clave que nada en la suite de hoy notaría perder si se cayera en
+    silencio, así que se fija explícitamente en vez de confiar en que algún
+    otro test la proteja por accidente."""
+    distribution = MIL_CREDA_Benchmark.__benchmark__["distribution"]
+    assert distribution["shardsRoot"] == "MIL-CREDA/Results/Benchmark/shards"
+
+
+def test_no_docstring_still_claims_the_axis_is_singular() -> None:
+    """Ninguna prosa puede seguir jurando que no hay un segundo eje.
+
+    Tres lugares apoyaban parte de su argumento en la singularidad de
+    `axis`: el docstring de `config.execution_seed_units`, el de
+    `harness.run_campaign_shard`, y el bloque de razones que acompaña a
+    `distribution` en `__init__.py`. El campo sobrevive (`axis` sigue
+    leyendo `"seed"`); la justificación no puede, porque deja de ser cierta
+    en cuanto `axes` nombra dos valores.
+
+    `config.execution_seed_units` se corrige recién en la Unidad de Trabajo
+    A2, cuando la función misma cambia (Tasca 1.14's nota explícita); este
+    test se escribe y se observa en rojo ahora, y se espera que la parte de
+    `execution_seed_units` siga en rojo hasta que A2 aterrice -- no es una
+    regresión, es la parte todavía no hecha.
+    """
+    import inspect as _inspect
+
+    import MIL_CREDA_Benchmark as _package
+
+    markers = (
+        "no hay un segundo eje",
+        "is what the declaration says may be split",
+        "no second axis",
+        "único eje",
+        "unico eje",
+    )
+
+    module_source = _inspect.getsource(_package)
+    start = module_source.index("# `shards.declaration()` reads this block")
+    end = module_source.index('"distribution": {')
+    rationale_block = module_source[start:end]
+
+    sources = {
+        "config.execution_seed_units.__doc__": config.execution_seed_units.__doc__ or "",
+        "harness.run_campaign_shard.__doc__": harness.run_campaign_shard.__doc__ or "",
+        "the __init__.py rationale block beside `distribution`": rationale_block,
+    }
+    for label, text in sources.items():
+        lowered = text.lower()
+        hits = [marker for marker in markers if marker.lower() in lowered]
+        assert not hits, (
+            f"{label} todavía afirma que el eje es singular ({hits!r}); esa "
+            "cita es falsa en cuanto `axes` nombra `seed` y `transfer`"
+        )
+
 
 def test_run_search_forwards_the_transfers_it_is_given() -> None:
     """El lanzador expone el eje que su motor ya acepta.
