@@ -2479,6 +2479,41 @@ def run_search(shard: str | None = None, pilot: bool = False,
         device=str(device), environment=environment())
     ceilings_in_force(reduction, device, shard=shard, pilot=pilot,
                       transfers=transfers)
+    # The subset branch is asked FIRST, and that order is the fix rather than a
+    # style choice. It used to sit below the `record is None` check, and both
+    # orders were measured against the real branches instead of past stubs:
+    #
+    # * No canonical record on disk (the live state). `ceilings_in_force` sees
+    #   none, runs the subset search, and `governs_the_ceilings_record` blocks
+    #   the write -- correctly, because a subset must never land where the
+    #   campaign reads. So `search_record` is `None`, and the "left no record"
+    #   refusal below fired instead of this one, describing an absent record for
+    #   a slice that had just spent its quota.
+    # * A canonical record on disk. `ceilings_in_force` short-circuits and never
+    #   searches at all, and the old message here still claimed "the search ran
+    #   ... and left a PARTIAL record at <canonical path>" -- false in both
+    #   clauses, over a record that is complete and was written by something
+    #   else entirely.
+    #
+    # So this message no longer asserts what happened upstream, because from
+    # here that cannot be known: it names what was ASKED FOR, which is this
+    # frame's own argument, and what is missing to make it presentable. A
+    # refusal whose test reached it past a stub of its own predecessor proved
+    # only that the line could execute, never that its sentence was true.
+    if transfers is not None:
+        raise SystemExit(
+            f"a PARTIAL subset of {len(transfers)} of "
+            f"{len(config.SEARCH_TRANSFERS)} transfers was asked for, and a "
+            "subset is never the record the campaign runs at.\n"
+            f"  Asked for: {[transfer_label(t) for t in transfers]}\n"
+            "  Nothing assembles partial search records yet, so this slice "
+            "cannot be handed back as if it were complete -- and it was "
+            "deliberately NOT written to "
+            f"{config.ceilings_record_for(pilot)}, which either still holds "
+            "another run's answer or holds nothing at all.\n"
+            "  Run the search whole (omit `transfers`) until the assembly "
+            "exists."
+        )
     # Read back from disk, never from what the search returned, for the reason
     # `ceilings_in_force` already gives: what the campaign will run at is what
     # the record says, and the record is the thing a later session reads.
@@ -2490,31 +2525,6 @@ def run_search(shard: str | None = None, pilot: bool = False,
             "Nothing downstream can read a ceiling "
             "that was never written down, and a run that reports success "
             "without one would be claiming an answer it cannot show."
-        )
-    if transfers is not None:
-        # A partial search leaves a partial record, and this function's whole
-        # contract is to hand back THE record the campaign will run at. There is
-        # no assembly of partial records yet, so the two ways this could end
-        # without refusing are both wrong: returning the slice as if it were the
-        # record hands the campaign ceilings that were never searched for the
-        # other transfers, and a second worker writing the same path overwrites
-        # the first. Both produce numbers shaped exactly like the right ones.
-        #
-        # So the parameter is reachable and its result is not presentable, on
-        # purpose and only until the assembly exists. Where the refusal for an
-        # incomplete record finally lives -- here, in the assembly, or in the
-        # consumer -- is a decision this function does not get to make.
-        raise SystemExit(
-            f"the search ran for {len(transfers)} of "
-            f"{len(config.VERDICT_TRANSFERS)} transfers and left a PARTIAL "
-            f"record at {config.ceilings_record_for(pilot)}, which is not the "
-            "record the campaign runs at.\n"
-            "  Nothing assembles partial search records yet, so this slice "
-            "cannot be handed back as if it were complete, and a second worker "
-            "writing that same path would overwrite this one.\n"
-            f"  Asked for: {list(transfers)}\n"
-            "  Run the search whole (omit `transfers`) until the assembly "
-            "exists."
         )
     return record
 
