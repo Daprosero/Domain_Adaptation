@@ -161,6 +161,7 @@ already existed: they are two halves of one contract and they live in one. -->
 
 ## The record and the report
 
+- [ ] The floor and the adapted arms are not parameter-matched, and the report says so where the count is read: B carries one encoder at 11,247,434 trainable parameters and E, F and G carry two at 22,423,946. The asymmetry is not an imbalance to correct -- a target encoder exists only where an adaptation term trains it, so the floor has none by construction -- but `parameters` is a DESCRIPTIVE dimension every run records, and a reader who meets 1.99x without that sentence reads the size of the apparatus as part of what the method gained.
 - [ ] `identicalAcrossShards` names every searched dimension, not only the ceilings: two shards straddling a search would otherwise merge into one table with different bandwidths, temperatures or ramps on each half, and nothing would refuse.
 - [x] The full method runs under per-transfer values, so its row averaged over transfers mixes configurations. Within a transfer every arm still shares them, which is what keeps each rung attributable; the report says which of the two readings it is giving. `test_the_per_transfer_conclusion_can_come_out_different`
 - [ ] The record keeps the supervised term's magnitude and the ratio between terms. Without a denominator, "the term commanded nothing" and "the term was scaled to nothing" print alike. `test_the_distribution_declares_exactly_what_was_approved`
