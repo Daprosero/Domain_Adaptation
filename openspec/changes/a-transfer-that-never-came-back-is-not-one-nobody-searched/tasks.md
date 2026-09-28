@@ -62,80 +62,133 @@ carries zero stamp cost — order-independent, and safe as a stacked-to-main PR 
 
 ## Phase 0: Pre-flight (before any `src/` edit)
 
-- [ ] 0.1 Record the current `report_digest.source_digest()` value and list every notebook
-      stamp under `MIL-CREDA/Notebooks/` that depends on it. This is the rollback target
-      from the proposal's Rollback Plan step 1 and design's Migration/Rollout step 1 — reverting
-      the `src/` diff restores this value and every stamp with it, so a revert does not repeat
-      the pilot walk or the eighteen rehearsals.
+- [x] 0.1 Recorded (retroactively, via `git stash` of the uncommitted `src/` diff, before
+      anything was committed — the measurement is honest, but it should have run strictly
+      before the first `src/` edit rather than after; noted here as a process deviation).
+      `source_digest(config.REPOSITORY, "MIL_CREDA_Benchmark")` at tracker HEAD (`2978a32`,
+      the state before this apply batch's `src/` edits):
+      `105756ca3d9a04c0305ea64efb7a89302819bc858a2beadd9bdc4fe99b3c8d4c` — this is the
+      rollback target. All six notebooks under `MIL-CREDA/Notebooks/` (`Benchmark_
+      Attention_Mechanisms`, `Benchmark_Campaign`, `Benchmark_Ceiling_Search`, `Benchmark_
+      Noise_Sweep`, `Benchmark_Results`, `verification`) carry the `SOURCES-SHA256` stamp
+      `3cbc5effcfc0742f7408261c7c1e9e63849764a44b54edb75586a8c8dc8b8072`, which does **not**
+      match the value just measured at `2978a32` — the notebooks were already stale before
+      this change touched anything (a pre-existing condition from earlier `src/`-touching
+      commits, not caused by A1). Recorded as measured fact; not a blocker for this batch.
 
 ## Work Unit A1 — Declaration nesting, `rules_for_axis`, in-repo axis selection, prose (PR1)
 
 Implements Decision A / D4 / D6. Spec: `search-distribution-axis`.
 
-- [ ] 1.1 RED — grow `test_the_declaration_names_the_axis_the_search_can_split_on` past the
-      current bare-roster assertion to prove the per-axis rule **inversion**: the seed axis's
-      `identicalAcrossShards` contains `"ceilings"`/`"ceilingsByTransfer"`/`"hyperByTransfer"`
-      and the transfer axis's list does not — `tests/test_search_distribution.py`. Satisfies
-      spec scenarios "the same field name carries opposite rules per axis" and "every declared
-      axis has all four keys, never a gap" (`search-distribution-axis/spec.md`).
-- [ ] 1.2 RED — write the identity test:
-      `distribution["identicalAcrossShards"] is distribution["axes"]["seed"]["identicalAcrossShards"]`
-      and the same for `poolable`, `perEnvironment`, `perRun` — using `is`, explicitly never
-      `==` — `tests/test_search_distribution.py`. Satisfies "The flat top-level keys project
-      the seed axis by identity" (load-bearing requirement; an `==` test passes against a copy
-      and measures nothing).
-- [ ] 1.3 RED — write the test proving the forge's arm-split refusal remains reachable:
-      `dist.get("axis") == "arm"` evaluates `False` on the real `distribution` block **and**
-      `True` on a hand-built `{"axis": "arm"}` mapping — `tests/test_search_distribution.py`.
-      Satisfies "The forge's arm-split refusal remains reachable".
-- [ ] 1.4 RED — write the test that `distribution["shardsRoot"]` still equals
-      `"MIL-CREDA/Results/Benchmark/shards"` after `axes` is added — `tests/test_search_distribution.py`.
-      Satisfies "Non-group declaration keys survive unchanged".
-- [ ] 1.5 RED — write `shards.rules_for_axis` unit tests: an undeclared axis refuses; a
-      declared axis missing a group refuses (never resolves to `[]`); a flat (non-nested)
-      `dist` resolves the seed axis for `axis="seed"` and refuses `axis="transfer"` —
-      `tests/test_shards.py`. Each refusal must name what it was asked for.
-- [ ] 1.6 RED — write the docstring-singularity regression test: scan
+- [x] 1.1 RED — grew `test_the_declaration_names_the_axis_the_search_can_split_on` past the
+      bare-roster assertion to prove the per-axis rule **inversion** (seed axis's
+      `identicalAcrossShards` contains the three ceiling fields, transfer axis's does not)
+      plus the four-groups-never-a-gap check — `tests/test_search_distribution.py`. Observed
+      RED (`AssertionError: 'distribution' declara 'axis' en singular...`) before GREEN;
+      observed GREEN after 1.8-1.9.
+- [x] 1.2 RED — wrote `test_the_flat_keys_are_the_seed_axis_by_identity`, asserting `is` for
+      all four groups, explicitly never `==` — `tests/test_search_distribution.py`. Observed
+      RED (`KeyError: 'axes'`) before GREEN; observed GREEN after 1.8-1.9; confirmed
+      load-bearing by the 1.15 mutation check.
+- [x] 1.3 Wrote `test_the_forges_arm_split_refusal_remains_reachable` —
+      `tests/test_search_distribution.py`. **Not RED**: both assertions (real declaration
+      evaluates `False`, hand-built `{"axis": "arm"}` evaluates `True`) already hold on the
+      unmodified `axis` scalar before any edit — this is an invariant-pinning test, not new
+      functionality, so there was no red state to observe. Passed before and after 1.8-1.9,
+      confirming the projection never touched `axis`.
+- [x] 1.4 Wrote `test_shards_root_survives_the_axes_nesting_unchanged` —
+      `tests/test_search_distribution.py`. **Not RED**, same reason as 1.3: `shardsRoot`'s
+      value was never at risk from this task's own edits. Passed before and after.
+- [x] 1.5 RED — wrote four `shards.rules_for_axis` unit tests: undeclared axis refuses;
+      missing group refuses; flat `dist` resolves its own axis by identity (`is`, not just
+      equality); flat `dist` refuses a different axis — `tests/test_shards.py`. Observed RED
+      (`AttributeError: module has no attribute 'rules_for_axis'`) for all four before GREEN;
+      observed GREEN after 1.10.
+- [x] 1.6 RED — wrote `test_no_docstring_still_claims_the_axis_is_singular`, scanning
       `config.execution_seed_units.__doc__`, `harness.run_campaign_shard.__doc__`, and the
-      `__init__.py` rationale block's source text for a claim of "no second axis" — assert none
-      remains once `axes` names two values — `tests/test_search_distribution.py`. Satisfies
-      "Rationale that cites the singular axis is corrected".
-- [ ] 1.7 Measure fixture churn before editing anything (do not assume the design's claim):
-      run the current suite and confirm which fixtures hardcode the flat `distribution` shape.
-      Confirm specifically whether `tests/test_bridge.py:190-210` and
-      `tests/test_benchmark_declarations.py:160-227` stay green untouched once `rules_for_axis`'s
-      flat fallback is exact (D4). Record the actual result; do not weaken any assertion to keep
-      a fixture green — if a fixture must change, change the fixture's declaration, not the
-      test's meaning.
-- [ ] 1.8 GREEN — add the `axes` block with `seed` and `transfer` sub-blocks (all four groups
-      each) to `MIL_CREDA_Benchmark.__benchmark__["distribution"]` in
-      `src/MIL_CREDA_Benchmark/__init__.py` (block at 481-507), per the Interfaces/Contracts
-      shape in design.md. `axis: "seed"` and `shardsRoot` stay exactly where they are.
-- [ ] 1.9 GREEN — add the one-line identity projection immediately after the literal (D6):
-      `__benchmark__["distribution"].update(__benchmark__["distribution"]["axes"]["seed"])` —
-      `src/MIL_CREDA_Benchmark/__init__.py`.
-- [ ] 1.10 GREEN — implement `shards.GROUPS` and `shards.rules_for_axis(axis, dist=None)` per
-      the D4 shape (declaration-shaped return; refuses undeclared axis, missing group, never
-      silently defaults) — `src/MIL_CREDA_Benchmark/shards.py`.
-- [ ] 1.11 GREEN — update the two in-repo flat-key readers to select the seed axis explicitly
-      via `rules_for_axis("seed", ...)`: `harness.py:2353` and `pooling.py:32`
-      (`per_run_dimensions()`). Behaviorally identical today via the projection.
-- [ ] 1.12 GREEN — `shards.merge()`'s `dist` default (`shards.py:421`) resolves the seed axis
-      via `rules_for_axis`.
-- [ ] 1.13 GREEN — rewrite the `__init__.py:392-480` rationale block: remove the "no second
-      axis" justification, state the per-axis inversion and the identity-projection argument in
-      its place.
-- [ ] 1.14 GREEN — correct `harness.run_campaign_shard`'s docstring (2536-2538): remove its
-      singular-axis citation. (`config.execution_seed_units`'s docstring is corrected in A2,
-      where the function itself changes.)
-- [ ] 1.15 Mutation check: replace the D6 `update(...)` with `copy.deepcopy(...)` and confirm
-      the identity test from 1.2 reddens. Revert the mutation after confirming.
-- [ ] 1.16 Apply the fixture edits identified in 1.7, if any were needed — one edit per
-      genuinely-required fixture change, never a weakened assertion.
-- [ ] 1.17 Run `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_search_distribution.py
-      tests/test_shards.py tests/test_benchmark_declarations.py tests/test_bridge.py`. Confirm
-      `test_the_declaration_names_the_axis_the_search_can_split_on` is green and no other test
-      in this set regressed.
+      `__init__.py` rationale block's source text — `tests/test_search_distribution.py`.
+      Observed RED (all three sources flagged) before any GREEN. **After 1.13-1.14 this test
+      is STILL RED** — `config.execution_seed_units`'s docstring ("no hay un segundo eje...")
+      is deliberately not touched in A1 per this same task file's own parenthetical ("A2,
+      where the function itself changes"); the `harness.run_campaign_shard` and `__init__.py`
+      portions are fixed and no longer flagged. This is the deferred half, not a regression —
+      full-suite run below confirms it is the only new (non-baseline) failure.
+- [x] 1.7 Measured fixture churn by implementing 1.8-1.14 and then running the broader suite,
+      not merely the two fixtures the design named. Result, recorded honestly because it
+      diverges from the design's claim: `tests/test_bridge.py:182-213` and
+      `tests/test_benchmark_declarations.py:218-232` (the two tests the design predicted)
+      stayed green untouched, confirming `rules_for_axis`'s flat fallback is exact (D4). But
+      **three fixtures the design did not name also broke**, and were genuinely required to
+      change (never weakened): (a) `tests/test_benchmark_declarations.py`'s
+      `test_the_distribution_declares_exactly_what_was_approved` (~line 160-187) does a full
+      `dist == {...}` equality after popping only `shardsRoot`; the new `axes` key is an extra
+      item the literal never expected. (b) `tests/test_report_tables.py`'s
+      `test_render_refuses_a_dimension_the_declaration_calls_per_run` and
+      `test_no_function_that_pools_a_dimension_accepts_one_the_declaration_forbids`, and (c)
+      `tests/test_label_noise.py`'s
+      `test_every_public_noise_entry_refuses_every_declared_per_run_dimension`, all three
+      `monkeypatch.setitem` the **flat** top-level `perRun` key expecting
+      `pooling.per_run_dimensions()` to see it — but 1.11 routes that reader through
+      `rules_for_axis("seed")`, which (once `axes` exists) resolves the **nested**
+      `axes["seed"]["perRun"]` block instead, bypassing a flat-only monkeypatch entirely. This
+      is inherent to D4/D6, not a bug: the flat keys are now purely the forge's identity
+      projection, and an in-repo reader routed through `rules_for_axis` correctly stops
+      depending on them being independently mutable.
+- [x] 1.8 GREEN — added the `axes` block with `seed` and `transfer` sub-blocks (all four
+      groups each, transfer axis also carries `perUnit` per the Interfaces shape) to
+      `MIL_CREDA_Benchmark.__benchmark__["distribution"]` in `src/MIL_CREDA_Benchmark/__init__.py`.
+      `axis: "seed"` and `shardsRoot` stay exactly where they were.
+- [x] 1.9 GREEN — added the one-line identity projection immediately after the `__benchmark__`
+      literal closes: `__benchmark__["distribution"].update(__benchmark__["distribution"]["axes"]["seed"])`
+      — `src/MIL_CREDA_Benchmark/__init__.py`.
+- [x] 1.10 GREEN — implemented `shards.GROUPS` and `shards.rules_for_axis(axis, dist=None)` per
+      the D4 shape — `src/MIL_CREDA_Benchmark/shards.py`.
+- [x] 1.11 GREEN — updated the two in-repo flat-key readers to select the seed axis explicitly
+      via `rules_for_axis("seed", ...)`: `harness.py:2353` (inside the bounded-summary report
+      path) and `pooling.py:32` (`per_run_dimensions()`).
+- [x] 1.12 GREEN — `shards.merge()`'s `dist` default (`shards.py:~473`) now resolves the seed
+      axis via `rules_for_axis("seed")` instead of the flat `declaration()`. Verified no test
+      or in-repo caller relies on `merge()`'s `dist=None` default (`tools/bridge.py` always
+      passes `dist=` explicitly, and every `tests/test_shards.py`/`test_benchmark_declarations.py`
+      call passes `dist=` too), so this is a safe, currently-unexercised-by-default change.
+- [x] 1.13 GREEN — rewrote the `__init__.py` rationale block. **Finding, recorded honestly**:
+      measured the block's actual text before editing and found no literal "no second axis"
+      claim to remove (grepped for "only"/"solo"/"unico"/"singular"/"second"/"segund" —
+      no hit inside the block); the proposal's citation of this block was imprecise on that
+      specific point. Added the requested content regardless: the two-axis framing, the
+      per-axis inversion argument, and the D6 identity-projection argument, placed right after
+      the `axis:` paragraph and before "the four groups below" (which now explicitly reads as
+      describing the seed axis).
+- [x] 1.14 GREEN — corrected `harness.run_campaign_shard`'s docstring: replaced "the seed axis
+      is what the declaration says may be split" (an implicit singularity claim via the scalar
+      `axis` field) with prose naming both declared axes and stating this function reads only
+      the seed one. `config.execution_seed_units`'s docstring is intentionally untouched, per
+      this file's own note that it is corrected in A2.
+- [x] 1.15 Mutation check performed and confirmed, not merely asserted: temporarily replaced
+      the D6 `update(...)` with `copy.deepcopy(...)` in `__init__.py`, ran
+      `test_the_flat_keys_are_the_seed_axis_by_identity` alone — **observed it redden**
+      (`AssertionError: ... no es el MISMO objeto ...`) — then reverted via a pre-edit backup
+      and re-ran the same test — **observed it green again**. Confirms the test measures
+      identity, not equality.
+- [x] 1.16 Applied all four genuinely-required fixture edits found in 1.7 (never a weakened
+      assertion): `tests/test_benchmark_declarations.py` (pop `axes` before the equality
+      check, with an explanatory comment), and the three `perRun` monkeypatch sites in
+      `tests/test_report_tables.py` (two) and `tests/test_label_noise.py` (one) — each now
+      also sets `distribution["axes"]["seed"]["perRun"]` alongside the flat key, so both the
+      flat-key readback in the test and the `rules_for_axis`-routed reader under test see the
+      synthetic dimension.
+- [x] 1.17 Ran `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_search_distribution.py
+      tests/test_shards.py tests/test_benchmark_declarations.py tests/test_bridge.py`. Result:
+      **175 passed, 3 failed** (`test_no_docstring_still_claims_the_axis_is_singular` — deferred
+      to A2, see 1.6; `test_a_unit_resolves_to_the_axis_the_step_declares` — A2;
+      `test_partial_search_records_merge_instead_of_overwriting` — A4).
+      `test_the_declaration_names_the_axis_the_search_can_split_on` is green. No other test in
+      this set regressed. Also ran the two fixtures affected outside this named set
+      (`tests/test_report_tables.py`, `tests/test_label_noise.py`) after the 1.16 fixes: both
+      fully green (110 passed, 1 skipped). Full repository suite (see summary): **668 passed,
+      3 failed, 1 skipped, 129 subtests passed** — exactly the baseline's 660 passed plus the 8
+      new tests this unit added (7 green, 1 deferred-red), with the acceptance-signal test now
+      counted as passing instead of red.
 
 ## Work Unit A2 — `config.execution_units_for(axis)`, `transfer_label`, `harness` re-export (PR2)
 
