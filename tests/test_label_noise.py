@@ -1127,8 +1127,15 @@ class TestTheNoiseAxisRefusesToPoolAPerRunDimension:
         from MIL_CREDA_Benchmark import pooling
 
         monkeypatch.setattr(config, "DIMENSIONS", {**config.DIMENSIONS, "seconds": None})
+        # `pooling.per_run_dimensions()` now resolves the seed axis's own
+        # nested block (`rules_for_axis("seed")`, search-distribution-axis/
+        # D4) rather than the flat top-level key, so the synthetic dimension
+        # has to reach both.
         monkeypatch.setitem(MIL_CREDA_Benchmark.__benchmark__["distribution"],
                             "perRun", ["seconds"])
+        monkeypatch.setitem(
+            MIL_CREDA_Benchmark.__benchmark__["distribution"]["axes"]["seed"],
+            "perRun", ["seconds"])
         self._empty_tree(tmp_path, monkeypatch)
         declared = pooling.per_run_dimensions()
         assert declared, "the synthetic dimension did not reach the declaration"
