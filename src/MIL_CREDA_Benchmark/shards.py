@@ -98,6 +98,58 @@ def declaration() -> dict:
     return __benchmark__.get("distribution") or {}
 
 
+#: The four keys every axis's rule block must carry, even when a group is
+#: empty for that axis. Shared with `rules_for_axis` and `partition` so the
+#: vocabulary of "what a rule block is" lives in one place.
+GROUPS = ("poolable", "perEnvironment", "perRun", "identicalAcrossShards")
+
+
+def rules_for_axis(axis: str, dist: dict | None = None) -> dict:
+    """The declaration-shaped rule set for ONE axis, never guessed.
+
+    Callers pass the returned mapping where they used to pass the whole flat
+    declaration -- every existing flat reader (`partition()`, `merge()`, a
+    hand-built fixture) works verbatim against it, because the shape is
+    identical, only the source axis differs.
+
+    A declaration with no `axes` block is flat, and by the identity
+    projection (D6) the flat keys ARE the axis named in its own `axis`
+    field -- resolving that case returns `dist` itself, not a copy. Asking
+    for a different axis against a flat declaration refuses: there is no
+    second axis to look up. A declared axis missing one of `GROUPS` refuses
+    too, rather than silently reading the missing group as `[]` -- an empty
+    group would make `partition()` report every dimension `unpartitioned`
+    and a merge would drop them without a word.
+    """
+    dist = dist if dist is not None else declaration()
+    axes = dist.get("axes")
+    if axes is None:
+        if axis == dist.get("axis"):
+            return dist
+        raise ShardsDisagree(
+            f"refusing to resolve axis {axis!r}: this declaration is flat "
+            f"and names only {dist.get('axis')!r} in `axis`; there is no "
+            "`axes` block to look a second axis up in."
+        )
+    block = axes.get(axis)
+    if block is None:
+        raise ShardsDisagree(
+            f"refusing to resolve axis {axis!r}: it is not one of the axes "
+            f"declared in `axes` ({sorted(axes)}); a shard cannot split on "
+            "an axis nobody named."
+        )
+    missing = [group for group in GROUPS if group not in block]
+    if missing:
+        raise ShardsDisagree(
+            f"refusing to resolve axis {axis!r}: its declared block is "
+            f"missing {', '.join(missing)}. A missing group is refused "
+            "rather than read as `[]` -- an empty group would make "
+            "`partition()` report every dimension `unpartitioned` and a "
+            "merge would drop them silently."
+        )
+    return block
+
+
 # The generic half of the shard reader — `read_shards`, `disagreements` and
 # `completeness` — assumes only the `shard.json` + `runs.jsonl` contract and
 # nothing about how runs group into a result cell. That grouping is this
@@ -418,7 +470,11 @@ def merge(shards: list[dict], expected: int | None = None,
     number off the configuration.
     """
     dimensions = dimensions if dimensions is not None else config.DIMENSIONS
-    dist = dist if dist is not None else declaration()
+    # A caller-supplied `dist` is used verbatim (bridge.py's own selection is
+    # Work Unit B's job, not this function's). Left to its own default, a
+    # merge is of campaign shards, so the default resolves the seed axis
+    # explicitly rather than handing back the whole (now two-axis) declaration.
+    dist = dist if dist is not None else rules_for_axis("seed")
 
     # Refused before anything else is even read from the shard: an unsealed
     # or pre-evidence stamp is not proven finished, and a merge that pooled
