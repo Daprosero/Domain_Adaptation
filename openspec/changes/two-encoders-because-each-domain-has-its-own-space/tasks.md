@@ -63,22 +63,31 @@ every PR and for the change as a whole (Phase 5).
 
 ## Phase 0: Pre-flight (sequential, before any `src/` edit)
 
-- [ ] 0.1 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` on current `main`. Confirm
+- [x] 0.1 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` on current `main`. Confirm
       `3 failed, 660 passed, 1 skipped, 129 subtests passed` and that the 3 failures are exactly
       `tests/test_search_distribution.py`'s. Record the exact output. *(No spec — baseline evidence.)*
-- [ ] 0.2 **[SEQ]** Record the current `report_digest.source_digest` value before any `src/` byte is
+      **DONE**: measured `3 failed, 660 passed, 1 skipped, 129 subtests passed`, all 3 failures in
+      `tests/test_search_distribution.py` (`test_the_declaration_names_the_axis...`,
+      `test_a_unit_resolves_to_the_axis...`, `test_partial_search_records_merge...`).
+- [x] 0.2 **[SEQ]** Record the current `report_digest.source_digest` value before any `src/` byte is
       touched (migration precondition: reverting the `src/` diff must restore this digest and every
       notebook stamp with it). *(Spec: `revision-bound-records` — Notebook stamps requirement;
       Design — Migration/Rollout.)*
-- [ ] 0.3 **[P]** Confirm on disk: 71 files carry `research-concept-r21` (252 occurrences); 67 are
+      **DONE**: pre-Phase-1 `source_digest` =
+      `105756ca3d9a04c0305ea64efb7a89302819bc858a2beadd9bdc4fe99b3c8d4c`.
+- [x] 0.3 **[P]** Confirm on disk: 71 files carry `research-concept-r21` (252 occurrences); 67 are
       records (17 `Results/`, 50 `Models/` manifests, all under `.../Pilot/` except
       `Results/Benchmark/ceilings.pilot.json`); 4 are non-record (`AGREED.md` ×2,
       `.implementation/position.jsonl` ×11, `Notebooks/verification.ipynb` ×10,
       `Notebooks/Benchmark_Results.ipynb` ×1). *(Spec: `revision-bound-records` — disposition
       requirements; baseline for Phase 1's count assertions.)*
-- [ ] 0.4 **[P]** Confirm `MIL-CREDA/AGREED.md` already carries both required entries: the
+      **DONE**: measured exactly 71 files / 252 occurrences with this exact split; confirmed 50
+      Models manifests (24 Benchmark + 1 curve/rho0 + 1 curve/rho0p2 + 24 Noise/rho0p2) and 17
+      Results files, matching the design's count precisely.
+- [x] 0.4 **[P]** Confirm `MIL-CREDA/AGREED.md` already carries both required entries: the
       `## Reversed` paragraph dated 2026-09-28 (`8ed79de`) and `:164` (`c55526a`). Read-only —
       `MIL-CREDA/AGREED.md` **(read-only for this change; carried, not re-decided)**.
+      **DONE**: both entries present and attributed to the named commits; file left untouched.
 
 ---
 
@@ -90,58 +99,98 @@ mismatch instead of an honest revision refusal. No behavior change may ride in t
 the revision string and its citations (spec `revision-bound-records` — "The revision bump is its
 own commit").
 
-- [ ] 1.1 **[SEQ]** Bump `src/MIL_CREDA_Benchmark/config.py:300` `REVISION` from
+- [x] 1.1 **[SEQ]** Bump `src/MIL_CREDA_Benchmark/config.py:300` `REVISION` from
       `"research-concept-r21.md"` to `"research-concept-r25.md"`.
       *(Spec: `revision-bound-records` — "The revision bump is its own commit".)*
-- [ ] 1.2 **[P]** Bump `src/MIL_CREDA/__init__.py:62` `__implementation__["revision"]` to
+      **DONE**.
+- [x] 1.2 **[P]** Bump `src/MIL_CREDA/__init__.py:62` `__implementation__["revision"]` to
       `"research-concept-r25.md"` (enforced `== config.REVISION` by
       `tests/test_benchmark_declarations.py:107`, unchanged).
       *(Spec: `revision-bound-records` — same requirement.)*
-- [ ] 1.3 **[P]** Bump the nine `__provenance__["revision"]` entries to `"research-concept-r25.md"`,
+      **DONE**; `test_benchmark_declarations.py:107` stayed green throughout (both sides moved
+      together).
+- [x] 1.3 **[P]** Bump the nine `__provenance__["revision"]` entries to `"research-concept-r25.md"`,
       string only, no `__provenance__["equations"]` change (verified against r25: 7, 8, 9, 10, 11,
       12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 28, 29, 37, 38, 39 all carry identical `\tag{}`):
       `src/MIL_CREDA/attention.py:29`, `confidence.py:19`, `conditional.py:18`, `global_term.py:22`,
       `local_term.py:19`, `renyi.py:20`, `kernels.py:17`, `objective.py:21`, `bag_kernel.py:22`.
       *(Spec: `revision-bound-records` — same requirement.)*
-- [ ] 1.4 **[SEQ]** Update `tests/test_smoke.py:38`'s hardcoded
+      **DONE**; RED observed at `tests/test_smoke.py::test_every_module_declares_provenance`
+      (`AssertionError: 'research-concept-r25.md' == 'research-concept-r21.md'`) immediately after
+      1.1–1.3, before 1.4 — this IS the declared red-first for the bump.
+- [x] 1.4 **[SEQ]** Update `tests/test_smoke.py:38`'s hardcoded
       `assert provenance["revision"] == "research-concept-r21.md"` to `"research-concept-r25.md"`.
       The suite refuses without this line — it is the twelfth line the proposal's "one line" missed.
       *(Spec: `revision-bound-records` — same requirement.)*
-- [ ] 1.5 Correct the eleven `r21 l.NNN` citations to a stable anchor (equation number or named
+      **DONE**; GREEN observed afterward (full suite: only the sibling's 3 reds remained).
+- [x] 1.5 Correct the eleven `r21 l.NNN` citations to a stable anchor (equation number or named
       quantity) with the revision moved `r21 → r25`, **not** re-pointed to r25's own 471/516/732 line
       numbers (design Decision 12 rejects that as re-arming the identical trap for r26):
-  - [ ] 1.5.1 **[P]** `src/MIL_CREDA_Benchmark/tables.py:494` and `:1917` — report prose inside
+  - [x] 1.5.1 **[P]** `src/MIL_CREDA_Benchmark/tables.py:494` and `:1917` — report prose inside
         f-strings, reaches the rendered report. Reword to cite the named anchor (§3.2 /
         `effective_bag_size`/`uniform_self_similarity`).
-  - [ ] 1.5.2 **[P]** `src/MIL_CREDA_Benchmark/tables.py:132` and `:1880` — comment-only, same anchor.
-  - [ ] 1.5.3 **[P]** `src/MIL_CREDA_Benchmark/config.py:453` and `:472` — comment-only, anchor Eq. (23)
+        **DONE**; anchor adopted: `r25 §3.2`.
+  - [x] 1.5.2 **[P]** `src/MIL_CREDA_Benchmark/tables.py:132` and `:1880` — comment-only, same anchor.
+        **DONE**; also corrected the same-comment bare `r21` echo at `tables.py:134` for consistency
+        (continuing description of the same `l.501` citation just corrected two lines above).
+  - [x] 1.5.3 **[P]** `src/MIL_CREDA_Benchmark/config.py:453` and `:472` — comment-only, anchor Eq. (23)
         / Eq. (15).
-  - [ ] 1.5.4 **[P]** `src/MIL_CREDA_Benchmark/config.py:474` — the **bare** `l.458` with no `r21`
+        **DONE**; `:453` → `r25 Eq. (15)`, `:472` → `r25 Eq. (23)` (comment reflowed to keep line
+        width consistent).
+  - [x] 1.5.4 **[P]** `src/MIL_CREDA_Benchmark/config.py:474` — the **bare** `l.458` with no `r21`
         prefix (a `r21 l\.` search misses this one; scope the pass by the derived condition "any
         `l.NNN` in prose", not by the observed list). Anchor: Eq. (15).
-  - [ ] 1.5.5 **[P]** `src/MIL_CREDA_Benchmark/wiring.py:260` — comment-only, anchor Eq. (23).
-  - [ ] 1.5.6 **[P]** `tests/test_invariants.py:630` — docstring only, anchor Eq. (15).
-  - [ ] 1.5.7 **[SEQ, depends on 1.5.1]** `tests/test_report_tables.py:1315` and `:1328` — these pin
+        **DONE**; → `r25 Eq. (15)`. Verified with `rg 'l\.[0-9]{3}'` that no bare `l.NNN` remains in
+        any touched file.
+  - [x] 1.5.5 **[P]** `src/MIL_CREDA_Benchmark/wiring.py:260` — comment-only, anchor Eq. (23).
+        **DONE**; → `r25 Eq. (23)`.
+  - [x] 1.5.6 **[P]** `tests/test_invariants.py:630` — docstring only, anchor Eq. (15).
+        **DONE**; → `r25 Eq. (15)`.
+  - [x] 1.5.7 **[SEQ, depends on 1.5.1]** `tests/test_report_tables.py:1315` and `:1328` — these pin
         the literal substring the rendered report must contain. Update the pinned string to name
         whatever anchor 1.5.1 adopts (this pair and `tables.py:494`/`:1917` are **one atom**: prose
         without the updated assert reds the suite silently-wrong, assert without the prose reds it
         honestly).
-  - [ ] 1.5.8 **[P]** `tests/test_report_tables.py:1302` and `:1316` — docstring/comment prose only,
+        **DONE**; both asserts changed `"l.501" in ...` → `"§3.2" in ...`, landed with the prose in
+        the same commit.
+  - [x] 1.5.8 **[P]** `tests/test_report_tables.py:1302` and `:1316` — docstring/comment prose only,
         same anchor as 1.5.1.
+        **DONE**; also corrected the same-comment bare `r21` echo at `:1317` for consistency (same
+        citation, same paragraph).
       *(Spec: `revision-bound-records` — carried by "the revision bump is its own commit"; not a
       separate requirement, but the design places all eleven inside this commit because
       `report_digest.source_digest` cost is paid once regardless.)*
-- [ ] 1.6 **[SEQ]** Add or verify a regression test that `latent.stale_revisions()` reports exactly
+- [x] 1.6 **[SEQ]** Add or verify a regression test that `latent.stale_revisions()` reports exactly
       67 records tagged `"research-concept-r21.md"` (17 `Results/`, 50 `Models/`) and reports no
       `"research-concept-r25.md"`-tagged record as stale, once `config.REVISION` is bumped.
       *(Spec: `revision-bound-records` — "`latent.stale_revisions` reports exactly the invalidated
       set".)*
-- [ ] 1.7 **[SEQ]** Verify no on-disk record's bytes changed (`git status`/`git diff --stat` on
+      **DONE with a documented deviation.** Added
+      `tests/test_latent_binding.py::test_the_full_on_disk_pilot_tree_reports_exactly_67_r21_stamped_records_stale`,
+      built from raw on-disk JSON (50 real `.manifest.json` via `rglob`, 17 real `Results/` files by
+      exact path) rather than through `latent.available()`. **Discovered defect**: calling
+      `latent.available(0.0, True)` against the REAL Pilot tree now raises an uncaught `SystemExit`
+      — `latent._current_hyper`'s `except Exception:` does not catch `SystemExit` (a `BaseException`),
+      and `config._refuse_on_stamp_drift` raises `SystemExit` reading `ceilings.pilot.json` (itself
+      one of the 67 r21-stamped records) once `config.REVISION` no longer matches it. This is
+      pre-existing and newly surfaced by this exact bump — no existing test calls `available()`
+      against real on-disk data (all use `monkeypatch`ed `tmp_path`). Fixing it is an unauthorized
+      behavior change for this isolated commit; reported as a risk, not fixed. GREEN observed for the
+      new test; RED observed and reverted under the mutation "revert `config.REVISION` to r21".
+- [x] 1.7 **[SEQ]** Verify no on-disk record's bytes changed (`git status`/`git diff --stat` on
       `MIL-CREDA/Results/` and `MIL-CREDA/Models/` shows nothing) and that the three existing guards
       (`harness.py:393-403` `StaleCheckpointRevision`, `latent.py:393-397` `available()`,
       `latent.py:113` `currentRevision: False`) fire unmodified on the 67 records.
       *(Spec: `revision-bound-records` — "disposed of by refusal, never by mutation".)*
-- [ ] 1.8 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only
+      **DONE, with one guard's finding qualified.** `git diff --stat` empty for both paths — no byte
+      changed. Guard 1 (`StaleCheckpointRevision`) fires correctly against a real Results/ record.
+      Guard 3 (`latent.py:113`'s `currentRevision` expression) evaluates `False` correctly against a
+      real r21 manifest. **Guard 2 (`available()`) does NOT fire gracefully against real data** — see
+      1.6's discovered defect: it crashes with `SystemExit` before it can tag any entry, rather than
+      completing and reporting `currentRevision: False` for the 67. The tagging expression itself
+      (guard 3) is correct; `available()`'s own execution against real Pilot data is blocked by the
+      unrelated ceilings-drift crash.
+- [x] 1.8 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only
       the sibling's 3 pre-existing reds remain red, and every test touched by 1.1–1.7 is green.
       Commit as an isolated commit containing only 1.1–1.5 (source + prose) and its accompanying test
       updates (1.4, 1.6, 1.5.7, 1.5.8) — **no other behavior change**.
@@ -149,6 +198,11 @@ own commit").
       re-owing a walk, never as destroying a result" — write the commit message so it states no
       quotable result is lost, per `AGREED.md:187`/`:208`/`:217`, and that it re-owes the pilot walk
       and notebook re-execution rather than presenting the bump as discarding a finished result.)*
+      **DONE**; full suite: `3 failed, 661 passed, 1 skipped, 129 subtests passed` (the 3 failures
+      are exactly the sibling's `tests/test_search_distribution.py` reds, unchanged; +1 passed vs
+      baseline is the new 1.6 test). Committed as `b25da2f`
+      `build(revision): bump the managed revision from r21 to r25, isolated first` — 17 files
+      (13 `src/`, 4 `tests/`), 111 insertions / 33 deletions, exactly 1.1–1.5 + 1.4/1.6/1.5.7/1.5.8.
 
 ---
 
