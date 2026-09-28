@@ -37,6 +37,7 @@ piloto completo y a repetir los dieciocho ensayos.
 from __future__ import annotations
 
 import inspect
+import json
 
 import pytest
 
@@ -430,4 +431,126 @@ def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
     )
     assert str(len(config.SEARCH_TRANSFERS)) in mensaje, (
         f"tiene que nombrar el total contra el que el subconjunto es parcial: {mensaje!r}"
+    )
+
+
+# --------------------------------------------- A3: el artefacto por shard
+
+def test_the_slice_artifact_lives_under_shard_paths() -> None:
+    """`shard_paths(...)["searchSlice"]` es la cuarta clave, no un lugar nuevo.
+
+    Un shard con id va bajo su propia carpeta, exactamente donde ya viven
+    `runs.jsonl` y `shard.json`; `shard=None` cae al lado del registro
+    canónico, nunca adentro de él. `pilot` y `noise` la mueven porque mueven
+    `results_for(...)` entero -- la ruta de la rebanada no puede quedarse
+    atrás de la del registro que rebana.
+    """
+    con_id = harness.shard_paths("s03")
+    esperado = (config.results_for(0.0, "campaign", False) / "shards" / "s03"
+                / "ceilings.slice.json")
+    assert con_id["searchSlice"] == esperado, (
+        "la rebanada de un shard con id tiene que vivir bajo su carpeta, "
+        f"exactamente donde `runs`/`stamp` ya viven; hoy "
+        f"{con_id['searchSlice']} y se esperaba {esperado}"
+    )
+
+    sin_id = harness.shard_paths(None)
+    registro = config.ceilings_record_for(False)
+    assert sin_id["searchSlice"] == registro.with_name(
+        registro.stem + ".slice.json"
+    ), (
+        "sin id la rebanada tiene que caer al lado del registro canónico, "
+        f"nunca adentro de él; hoy {sin_id['searchSlice']}"
+    )
+
+    pilot_id = harness.shard_paths("s03", pilot=True)["searchSlice"]
+    assert pilot_id != con_id["searchSlice"], (
+        "un shard de ensayo no puede compartir ruta con el shard de la "
+        f"campaña completa; hoy los dos son {pilot_id}"
+    )
+
+    ruidoso = harness.shard_paths("s03", noise=0.4)["searchSlice"]
+    assert ruidoso != con_id["searchSlice"], (
+        "un shard contaminado no puede compartir ruta con el limpio; hoy "
+        f"los dos son {ruidoso}"
+    )
+
+
+@pytest.fixture
+def _rebanada_engine(tmp_path, monkeypatch):
+    """El motor por trials con `run_one` falso, la misma forma que
+    `tests/test_search_declarations.py:estudios` -- se mide el escritor de
+    la rebanada, nunca el modelo."""
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "ceilings.pilot.json")
+    monkeypatch.setattr(config, "SEARCH_ENGINE", "optuna")
+    monkeypatch.setattr(config, "PILOT_SEARCH_TRIALS", 3)
+    monkeypatch.setattr(config, "SEARCH_TRIALS", 3)
+
+    class _Bags:
+        pass
+
+    def _build(code, cache, seed, noise=0.0):
+        return _Bags()
+
+    def _run_one(arm, transfer, seed, reduction, device, material, *, ceiling,
+                role, hyper=None):
+        return {config.SEARCH_CRITERION: 1.0 - abs(ceiling - 0.01)}
+
+    monkeypatch.setattr(harness.bags, "build", _build)
+    monkeypatch.setattr(harness, "run_one", _run_one)
+
+
+def test_a_subset_search_leaves_a_readable_slice_and_the_canonical_path_untouched(
+        _rebanada_engine) -> None:
+    """La integración que D7 promete: un subconjunto deja una rebanada legible
+    y el registro canónico queda intacto.
+
+    Conducida con `run_one` falso, la forma que `tests/test_search_declarations
+    .py`'s `estudios` fixture ya usa: se mide el escritor, nunca el modelo.
+    """
+    subconjunto = list(config.SEARCH_TRANSFERS[:1])
+    encontrado = harness.search_ceilings_trials(
+        harness.Reduction(seeds=[config.SEARCH_SEED], epochs=config.SEARCH_EPOCHS),
+        "cpu", progress=lambda *_: None, shard="search-s00",
+        transfers=subconjunto)
+
+    slice_path = harness.shard_paths(
+        "search-s00", noise=0.0, kind="campaign", pilot=False)["searchSlice"]
+    assert slice_path.exists(), (
+        "un subconjunto tiene que dejar una rebanada legible donde antes no "
+        f"dejaba nada; {slice_path} no existe"
+    )
+    sellado = json.loads(slice_path.read_text())
+    assert set(sellado) == set(encontrado), (
+        "la rebanada en disco tiene que sostener las mismas familias que "
+        f"`found` devolvió: {set(sellado)!r} vs {set(encontrado)!r}"
+    )
+    assert not config.ceilings_record_for(False).exists(), (
+        "un subconjunto no gobierna el registro canónico (D7) y no puede "
+        "dejar nada ahí"
+    )
+
+
+def test_the_slice_sealer_never_touches_the_governed_roster() -> None:
+    """`sellar_rebanada` no escribe nada ni nombra el path canónico.
+
+    La derivación del roster (`tests/test_label_noise.py:1253-1274`) marca
+    cualquier función de `harness` cuyo código nombre `ceilings_record_for`
+    Y `write_text` como escritora del registro gobernado. Afirmado acá de
+    forma directa -- no observando que el roster no creció, que un tamaño
+    constante sería igual de consistente con `sellar_rebanada` quedando mal
+    excluida.
+    """
+    fuente = inspect.getsource(harness.sellar_rebanada)
+    assert "ceilings_record_for" not in fuente, (
+        "sellar_rebanada solo sella una entrada; si nombrara el path "
+        f"canónico, la derivación del roster lo confundiría con un tercer "
+        f"escritor: {fuente!r}"
+    )
+    assert "write_text" not in fuente, (
+        "sellar_rebanada no escribe nada -- el llamador escribe con el path "
+        "que devuelve -- así que tampoco puede entrar al roster por "
+        f"`write_text`: {fuente!r}"
     )
