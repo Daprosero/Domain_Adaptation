@@ -926,3 +926,15 @@ precondition for 6.1–6.3, not a step inside them.
 - Do not pin a constant belonging to a retired path (`SEARCH_ENGINE` is `optuna`; `CEILING_GRID` and
   `SEARCH_SEEDS` belong to the retired grid engine) anywhere in new test code.
 - Run the **full** suite before reporting at every phase boundary, never a filtered subset.
+
+## Retired after the pilot ran
+
+`tests/test_latent_binding.py::test_the_full_on_disk_pilot_tree_reports_exactly_67_r21_stamped_records_stale`
+was removed on 2026-09-29. It walked the live product tree and asserted all 67
+records were stamped `research-concept-r21.md`, which made it pass only while the
+pilot had not been re-run under r25. Walking the flow re-stamped every one of the
+67 and inverted it. Both things it bought survive without the disk: the unit test
+above it covers `stale_revisions()` over constructed records, and the SystemExit
+defect it surfaced has its own
+`test_hyperparameter_drift_survives_a_ceiling_record_stamped_under_a_different_revision`.
+Retired by the operator's decision, not replaced.
