@@ -493,19 +493,31 @@ def test_a_floor_never_calls_take_on_the_target_pool(encoder, monkeypatch) -> No
 
 
 @pytest.mark.parametrize("arm_id", ["E", "F", "G"])
-def test_an_adapted_arms_target_forward_carries_gradient_to_the_encoder(
+def test_an_adapted_arms_target_forward_carries_gradient_to_both_encoders(
         encoder, arm_id) -> None:
-    """The adaptation term trains the shared encoder through the TARGET
-    forward pass, not only through the source one the supervised term
-    already drives -- Eq. (39)'s whole point is one encoder both domains'
-    inputs update. Isolated from the supervised term by capturing
-    `_milcreda_term`'s own tensors before `training_step` detaches them into
-    its report dict, and calling `.backward()` on their sum alone.
+    """The adaptation term trains BOTH encoders through one backward pass --
+    the source encoder through the source evidence it also draws its
+    prototype from, and the target encoder through the target forward that
+    is now its own object entirely. Under Eq. (13)'s split, one combined
+    assertion over a single encoder cannot see a break on either side alone,
+    so gradient is asserted separately, once per encoder:
+    `global_term.py:59-60` ("Both marginals carry the same sign and the same
+    coefficient, so neither is privileged"), `local_term.py:85-101` (the
+    target bag is measured against the SOURCE prototype, so the source
+    encoder's gradient does not depend on the target forward existing), and
+    r25:1087 (read-only, parent forge): "La discrepancia local (Ec. 31) no
+    cede por concentrarse: mu_j^s se construye con representaciones fuente."
 
-    Reachable red: wrap the target forward inside `_milcreda_term` (or the
-    `target_bags = self.target.take(...)` -> `self.instance_embeddings` path
-    that feeds it) in `torch.no_grad()`, or `.detach()` the target
-    embeddings before they enter `_milcreda_term`.
+    Isolated from the supervised term by capturing `_milcreda_term`'s own
+    tensors before `training_step` detaches them into its report dict, and
+    calling `.backward()` on their sum alone.
+
+    Reachable red, two ways: wrap the target forward inside
+    `_milcreda_term` (or the `target_bags = self.target.take(...)` ->
+    `self.target_embeddings` path that feeds it) in `torch.no_grad()` --
+    reds the TARGET assertion alone, which the old combined test could not
+    see; or `.detach()` `H_s` before it enters `_milcreda_term` -- reds the
+    SOURCE assertion alone.
     """
     arm = _arm(arm_id)
     x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
@@ -525,18 +537,29 @@ def test_an_adapted_arms_target_forward_carries_gradient_to_the_encoder(
 
     assert "global_term" in captured, "training_step never reached _milcreda_term"
     for p in arm.encoder.parameters():
-        assert p.grad is None, "encoder already carried a gradient before backward"
+        assert p.grad is None, "source encoder already carried a gradient before backward"
+    for p in arm.target_encoder.parameters():
+        assert p.grad is None, "target encoder already carried a gradient before backward"
 
     adaptation = captured["global_term"] + captured["local_term"]
     adaptation.backward()
 
-    grads = [p.grad for p in arm.encoder.parameters() if p.grad is not None]
-    assert grads, (
+    source_grads = [p.grad for p in arm.encoder.parameters() if p.grad is not None]
+    assert source_grads, (
         f"arm {arm_id}: the adaptation term alone produced no gradient at all "
-        "on the encoder"
+        "on the source encoder"
     )
-    assert any(torch.any(g != 0) for g in grads), (
-        f"arm {arm_id}: the adaptation term's gradient on the encoder is all zero"
+    assert any(torch.any(g != 0) for g in source_grads), (
+        f"arm {arm_id}: the adaptation term's gradient on the source encoder is all zero"
+    )
+
+    target_grads = [p.grad for p in arm.target_encoder.parameters() if p.grad is not None]
+    assert target_grads, (
+        f"arm {arm_id}: the adaptation term alone produced no gradient at all "
+        "on the target encoder"
+    )
+    assert any(torch.any(g != 0) for g in target_grads), (
+        f"arm {arm_id}: the adaptation term's gradient on the target encoder is all zero"
     )
 
 
@@ -572,16 +595,27 @@ def test_an_adapted_arms_target_forward_updates_running_statistics(
     attached to, so it could not tell a shared extractor from a second one
     quietly built and called instead.
 
-    Reachable red, two ways: wrap `_target_embeddings`'s call in `eval()`
+    Reachable red, two ways: wrap `target_embeddings`'s call in `eval()`
     (kills the running-statistics half), or have it build and forward
-    through a fresh `FeatureExtractor(...)` instead of `self.encoder` (kills
-    the identity half without touching the first).
+    through a fresh `FeatureExtractor(...)` instead of `self.target_encoder`
+    (kills the identity half without touching the first).
+
+    Under two encoders (Eq. 13), the source and target forwards no longer
+    share one extractor -- they must NOT. `seen` is asserted as a partition:
+    every forward runs through one of the arm's two encoder objects, every
+    source forward is `arm.encoder`, every target forward is
+    `arm.target_encoder`, and the two are different objects. The
+    running-statistics snapshot moves to `arm.target_encoder.bn`, because it
+    is the target encoder whose statistics the target forward now moves.
     """
     arm = _arm(arm_id)
-    bn = arm.encoder.bn
+    assert arm.encoder is not arm.target_encoder, (
+        f"arm {arm_id}: source and target encoders must be independent objects"
+    )
+    bn = arm.target_encoder.bn
 
-    arm.encoder.train()
-    arm.encoder(torch.randn(20, 3, 8, 8))  # give the stats something of their own
+    arm.target_encoder.train()
+    arm.target_encoder(torch.randn(20, 3, 8, 8))  # give the stats something of their own
     before_mean, before_var = bn.running_mean.clone(), bn.running_var.clone()
 
     seen: list[nn.Module] = []
@@ -601,10 +635,15 @@ def test_an_adapted_arms_target_forward_updates_running_statistics(
         f"arm {arm_id}: expected at least a source forward and a target "
         f"forward through the encoder, saw {len(seen)}"
     )
-    assert all(module is arm.encoder for module in seen), (
-        f"arm {arm_id}: at least one forward ran through an encoder object "
-        "other than the arm's own -- source and target are not sharing one extractor"
+    assert set(seen) == {arm.encoder, arm.target_encoder}, (
+        f"arm {arm_id}: forwards ran through an encoder object other than "
+        "the arm's own two -- source and target must reach exactly one "
+        "encoder each, and no third object"
     )
+    source_forwards = [module for module in seen if module is arm.encoder]
+    target_forwards = [module for module in seen if module is arm.target_encoder]
+    assert source_forwards, f"arm {arm_id}: no forward ran through the source encoder"
+    assert target_forwards, f"arm {arm_id}: no forward ran through the target encoder"
     assert not torch.equal(bn.running_mean, before_mean), (
         f"arm {arm_id}: running_mean never moved -- the target forward looks frozen"
     )
@@ -616,34 +655,47 @@ def test_an_adapted_arms_target_forward_updates_running_statistics(
 @pytest.mark.parametrize("arm_id", ["E", "F", "G"])
 def test_every_adapted_arms_full_training_step_updates_running_statistics_a_source_only_twin_does_not(
         bn_encoder, arm_id) -> None:
-    """The guard above covers `G` alone, and only at `_target_embeddings`
+    """The guard above covers `G` alone, and only at `target_embeddings`
     directly. This drives every adapted arm through a full `training_step` and
-    compares its encoder's running statistics against a `B` twin built from
-    identical initial weights (`_arm` resets the seed before building each one,
-    over the same deterministic pools) and fed the identical batch and
-    generator. `B` never lets a target image reach the encoder (Decision 2), so
-    its running statistics move only from the source forward; if the adapted
-    arm's landed in the same place, its own target forward would have to have
-    been skipped or frozen somewhere between `training_step` and
-    `_target_embeddings`.
+    compares its TWO encoders' running statistics against a `B` twin built
+    from identical initial weights (`_arm` resets the seed before building
+    each one, over the same deterministic pools, and Decision 3 constructs
+    the target encoder LAST so the twins' source encoders and heads draw
+    identical generator state) and fed the identical batch and generator.
+
+    Under two encoders this test INVERTS and becomes strictly stronger than
+    the single-encoder claim it replaces. `B` never lets a target image reach
+    any encoder (Decision 2); its one encoder's running statistics move only
+    from the source forward. The adapted arm's SOURCE encoder is likewise
+    touched only by source forwards under an identical draw, so it MUST now
+    MATCH the floor's -- that is new, and it is what proves the target
+    forward does not leak into the source encoder. The adapted arm's TARGET
+    encoder is a separate object the floor does not have at all, and IT is
+    what must move, distinguished from its own arm's source encoder rather
+    than merely proven to differ from the floor's single encoder.
 
     Every adapted arm now, with no exception carved out of the list: `GN` was
     the one arm excluded here -- its running statistics were expected to MATCH
     its source-only twin's, because `normalization: "sourceBatch"` kept its
     target forward off them entirely -- and it is retired.
 
-    Reachable red, two ways: freeze the target forward for `arm_id` (wrap it
-    in `eval()`) anywhere from `training_step` down to `_target_embeddings`
-    for every arm but `G`, or freeze it specifically inside
-    `_milcreda_term` around the `_target_embeddings` call it makes.
+    Reachable red, three ways: freeze the target forward for `arm_id` (wrap it
+    in `eval()`) anywhere from `training_step` down to `target_embeddings`
+    for every arm but `G` (kills the "target moved" half); freeze it
+    specifically inside `_milcreda_term` around the `target_embeddings` call
+    it makes; or route the target forward back through `self.encoder` instead
+    of `self.target_encoder` (kills the "source matches floor" half, because
+    a source-and-target-mixed encoder would no longer match `B`'s
+    source-only one).
     """
     floor = _arm("B")
     adapted = _arm(arm_id)
 
     floor.encoder.train()
     adapted.encoder.train()
+    adapted.target_encoder.train()
     assert torch.equal(floor.encoder.bn.running_mean, adapted.encoder.bn.running_mean), (
-        "the twins did not start with identical running statistics"
+        "the twins did not start with identical source-encoder running statistics"
     )
 
     x = floor.source.take(torch.arange(config.BAGS_PER_STEP))
@@ -654,13 +706,33 @@ def test_every_adapted_arms_full_training_step_updates_running_statistics_a_sour
     floor.training_step(x, y, 0.5, gen_floor)
     adapted.training_step(x, y, 0.5, gen_adapted)
 
-    assert not torch.equal(floor.encoder.bn.running_mean,
-                           adapted.encoder.bn.running_mean), (
-        f"{arm_id}'s running statistics matched its source-only twin's "
-        "after a full training_step: its target forward never touched them"
+    # (a) INVERTED from the single-encoder claim: the adapted arm's SOURCE
+    # encoder now matches its floor twin's, because both are updated only by
+    # source forwards under an identical draw -- the target forward does not
+    # touch it.
+    assert torch.equal(floor.encoder.bn.running_mean,
+                       adapted.encoder.bn.running_mean), (
+        f"{arm_id}'s source encoder's running_mean diverged from its floor "
+        "twin's after a full training_step: something besides the source "
+        "forward touched it"
     )
-    assert not torch.equal(floor.encoder.bn.running_var,
-                           adapted.encoder.bn.running_var)
+    assert torch.equal(floor.encoder.bn.running_var,
+                       adapted.encoder.bn.running_var), (
+        f"{arm_id}'s source encoder's running_var diverged from its floor "
+        "twin's after a full training_step"
+    )
+
+    # (b) NEW: the arm's two encoders moved apart, so the target forward
+    # happened and went somewhere else -- kept beside (a) rather than
+    # replacing it, since deleting the twin comparison would lose the only
+    # assertion distinguishing the two encoders inside a full training_step.
+    assert not torch.equal(adapted.encoder.bn.running_mean,
+                           adapted.target_encoder.bn.running_mean), (
+        f"{arm_id}'s source and target encoders' running_mean matched after "
+        "a full training_step: the target forward never reached its own encoder"
+    )
+    assert not torch.equal(adapted.encoder.bn.running_var,
+                           adapted.target_encoder.bn.running_var)
 
 
 # `test_gns_full_training_step_matches_a_source_only_twins_running_statistics`,
@@ -680,6 +752,224 @@ def test_every_adapted_arms_full_training_step_updates_running_statistics_a_sour
 # remains is the test directly above -- every adapted arm's running statistics
 # MUST move away from its source-only twin's -- which `GN` was the one
 # exception carved out of.
+
+
+# --------------------------------------------- Eq. (13): two independent encoders
+
+@pytest.mark.parametrize("arm_id", ["E", "F", "G"])
+def test_every_adapted_arm_holds_two_independently_parameterized_encoders(
+        encoder, arm_id) -> None:
+    """Spec `per-domain-encoders`, "Two independent encoders for every adapted
+    arm": E, F and G each hold two `FeatureExtractor` instances after
+    construction, sharing no parameter object -- proven by identity (`is`)
+    over `named_parameters()`, never by equal shapes or equal values, because
+    two encoders of the same shape and even the same values are still two
+    objects, and Eq. (13) is a claim about the objects, not the numbers.
+
+    Reachable red: `target_encoder` absent, `target_encoder is arm.encoder`
+    (a single object under two names), or any parameter object appearing in
+    both `named_parameters()` iterables.
+    """
+    arm = _arm(arm_id)
+    assert arm.target_encoder is not None
+    assert arm.encoder is not arm.target_encoder
+
+    source_params = {id(p) for _, p in arm.encoder.named_parameters()}
+    target_params = {id(p) for _, p in arm.target_encoder.named_parameters()}
+    assert source_params, "the source encoder declared no parameters at all"
+    assert target_params, "the target encoder declared no parameters at all"
+    assert source_params.isdisjoint(target_params), (
+        f"arm {arm_id}: a parameter object is shared between the source and "
+        "target encoders"
+    )
+
+
+def test_the_floor_holds_exactly_one_encoder(encoder) -> None:
+    """Spec `per-domain-encoders`, "The floor carries exactly one encoder":
+    `B` declares no adaptation term, so it must never construct a second
+    `FeatureExtractor` -- `target_encoder` must be `None` on it.
+
+    Reachable red: `target_encoder` constructed unconditionally, or set to
+    anything other than `None` on the floor.
+    """
+    floor = _arm("B")
+    assert floor.target_encoder is None
+
+
+@pytest.mark.parametrize("arm_id", ["E", "F", "G"])
+def test_an_adapted_arms_two_encoders_share_the_same_codomain(
+        encoder, arm_id) -> None:
+    """Spec `per-domain-encoders`, "Both encoders share the same codomain":
+    Eq. (13) declares the codomain R^d shared, not the map -- `output_dim`
+    must agree between the two.
+
+    Reachable red: constructing the target encoder with a different
+    `backbone`/width than the source encoder's.
+    """
+    arm = _arm(arm_id)
+    assert arm.target_encoder.output_dim == arm.encoder.output_dim
+
+
+def test_the_target_encoder_is_constructed_after_the_head_so_the_floor_and_an_adapted_arms_heads_agree(
+        encoder) -> None:
+    """Design Decision 3: constructing the target encoder consumes the global
+    generator, so it must be built LAST in `Arm.__init__` -- after the head
+    and the attention parameters -- or the floor's and an adapted arm's heads
+    would draw from different generator state and the `B->E` rung would carry
+    a second difference (`config.py:944-946`'s attributability rule: "A
+    comparison is only attributable when its two arms differ in one thing").
+
+    `_arm()` resets the seed to the same value before building each arm, over
+    identical pools, so under correct construction order `B`'s and `G`'s head
+    weights must be bit-for-bit identical.
+
+    Not reachable as a red under today's single-encoder code -- there is
+    nothing yet to construct out of order, so this observes GREEN before
+    Decision 3/4 land as well as after. Proven by mutation instead, recorded
+    in apply-progress: temporarily constructing `target_encoder` immediately
+    after `self.encoder` (before the head) reds this test; constructing it
+    last (the shipped order) is green.
+    """
+    floor = _arm("B")
+    adapted = _arm("G")
+    assert torch.equal(floor.head.weight, adapted.head.weight), (
+        "the floor's and an adapted arm's head weights diverge -- something "
+        "between their two constructions consumed a different amount of the "
+        "generator"
+    )
+    assert torch.equal(floor.head.bias, adapted.head.bias)
+
+
+def test_patching_the_module_level_feature_extractor_stubs_both_encoders(
+        monkeypatch) -> None:
+    """Spec `per-domain-encoders`, "The target encoder is constructed through
+    the module-level `FeatureExtractor` name": `wiring.py`'s module global is
+    resolved at call time, so a test that patches it before construction must
+    see BOTH encoders become the stub, whether one or two are built.
+
+    Reachable red: `target_encoder` built through a local alias, a second
+    import, or `copy.deepcopy`, any of which would leave it an instance of
+    the REAL `FeatureExtractor` after this patch.
+    """
+    monkeypatch.setattr(wiring, "FeatureExtractor", _Encoder)
+    arm = _arm("G")
+    assert isinstance(arm.encoder, _Encoder)
+    assert isinstance(arm.target_encoder, _Encoder)
+
+
+def test_parameters_reads_the_declared_counts_for_the_floor_and_an_adapted_arm() -> None:
+    """Spec `per-domain-encoders`, "The parameter asymmetry is reported where
+    the count is read": measured from `harness.py`'s own
+    `sum(p.numel() for p in model.parameters())` expression, over the REAL
+    (pretrained, un-stubbed) `FeatureExtractor` -- never asserted from a
+    document.
+
+    Reachable red: a floor or adapted arm whose parameter count drifts from
+    the declared value -- for example, a second encoder built on the floor,
+    or none built on an adapted arm.
+    """
+    floor = _arm("B")
+    adapted = _arm("G")
+    assert sum(p.numel() for p in floor.parameters()) == 11_247_434
+    assert sum(p.numel() for p in adapted.parameters()) == 22_423_946
+
+
+def test_one_optimizer_trains_both_encoders(encoder) -> None:
+    """Spec `per-domain-encoders`, "One optimizer trains both encoders":
+    `torch.optim.Adam(model.parameters(), ...)` picks up a second registered
+    `nn.Module` automatically -- there is no second optimizer and no
+    per-encoder learning rate anywhere in this design.
+
+    Reachable red: `target_encoder` excluded from `model.parameters()` (for
+    example, held in a plain list/dict instead of as a registered submodule),
+    which would silently leave it untrained.
+    """
+    arm = _arm("G")
+    optimizer = torch.optim.Adam(arm.parameters(), lr=config.LR)
+    optimizer_param_ids = {id(p) for group in optimizer.param_groups
+                           for p in group["params"]}
+    target_param_ids = {id(p) for p in arm.target_encoder.parameters()}
+    source_param_ids = {id(p) for p in arm.encoder.parameters()}
+    assert target_param_ids, "the target encoder declared no parameters"
+    assert target_param_ids <= optimizer_param_ids, (
+        "not every target encoder parameter is registered in the optimizer"
+    )
+    assert source_param_ids <= optimizer_param_ids
+    assert len(optimizer.param_groups) == 1, (
+        "more than one parameter group -- a per-encoder learning rate would "
+        "show up here"
+    )
+
+
+def test_perturbing_one_encoders_parameters_moves_only_its_own_accuracy_entry_point(
+        encoder) -> None:
+    """Spec `per-domain-encoders`, "A mixed-up domain is detectable, not
+    silent": perturbing theta_t must move `target_accuracy` (routed through
+    `target_encoder`) and leave `accuracy` (routed through `encoder`)
+    untouched; perturbing theta_s must show the mirror.
+
+    Reachable red: `target_accuracy` computed through the wrong encoder
+    (`self.encoder` instead of `self.target_encoder`), or `accuracy`/
+    `forward` computed through `self.target_encoder`.
+    """
+    arm = _arm("G")
+    dataset = _FakeDataset(arm.target, config.BAGS_PER_STEP)
+    device = torch.device("cpu")
+
+    baseline_accuracy = harness.accuracy(arm, dataset, device)
+    baseline_target_accuracy = harness.target_accuracy(arm, dataset, device)
+
+    with torch.no_grad():
+        for p in arm.target_encoder.parameters():
+            p.mul_(-3.0)
+    assert harness.accuracy(arm, dataset, device) == baseline_accuracy, (
+        "perturbing the target encoder moved sourceAccuracy"
+    )
+    assert harness.target_accuracy(arm, dataset, device) != baseline_target_accuracy, (
+        "perturbing the target encoder left targetAccuracy unmoved"
+    )
+    with torch.no_grad():
+        for p in arm.target_encoder.parameters():
+            p.mul_(-1.0 / 3.0)  # restore
+
+    with torch.no_grad():
+        for p in arm.encoder.parameters():
+            p.mul_(-3.0)
+    assert harness.accuracy(arm, dataset, device) != baseline_accuracy, (
+        "perturbing the source encoder left sourceAccuracy unmoved"
+    )
+    assert harness.target_accuracy(arm, dataset, device) == baseline_target_accuracy, (
+        "perturbing the source encoder moved targetAccuracy"
+    )
+
+
+def test_the_floors_two_accuracy_entry_points_agree_and_an_adapted_arms_disagree(
+        encoder) -> None:
+    """Spec `per-domain-encoders`, "Source accuracy is measured through the
+    source encoder, target accuracy through the target encoder": on the
+    floor `B` (one encoder, `target_encoder is None`, `target_embeddings`
+    falls back to `self.encoder`) the two entry points read the exact same
+    number. On an adapted arm they read through two independently
+    initialized encoder objects (Decision 4's stub caveat: two stub
+    instances are NOT identical at construction, each draws its own
+    `nn.Linear`), so the two numbers disagree.
+
+    Reachable red: `target_accuracy` computed through `self.encoder` on an
+    adapted arm (would agree with `accuracy` when it must not), or through
+    anything but `self.encoder` on the floor (would disagree when it must
+    not).
+    """
+    floor = _arm("B")
+    adapted = _arm("G")
+    device = torch.device("cpu")
+
+    floor_dataset = _FakeDataset(floor.target, config.BAGS_PER_STEP)
+    assert harness.accuracy(floor, floor_dataset, device) == \
+        harness.target_accuracy(floor, floor_dataset, device)
+
+    adapted_dataset = _FakeDataset(adapted.target, config.BAGS_PER_STEP)
+    assert harness.accuracy(adapted, adapted_dataset, device) != \
+        harness.target_accuracy(adapted, adapted_dataset, device)
 
 
 # ------------------------------------------------- the supervised term of a bag

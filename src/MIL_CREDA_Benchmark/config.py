@@ -885,12 +885,14 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 # attention   how a bag becomes a representation, for bag-unit arms
 #
 # Normalization is part of the architecture and not a per-arm choice: every
-# adapted arm's target forward runs through the encoder exactly as the source
-# forward does, normalization layers in training mode included, so it learns
-# from both domains like the rest of the model. There is no separate
-# "frozen"/"live" knob here -- the only normalization fact any arm declares is
-# the floor's own (Decision 2): it never encodes a target image during
-# training at all, so it never reaches a normalization layer with one either.
+# adapted arm's target forward runs through its OWN target encoder's
+# normalization layers, in training mode, exactly as the source forward runs
+# through the source encoder's -- each domain trains its own encoder's
+# statistics (Eq. 13 splits the encoder; it does not split the treatment of
+# normalization within one). There is no separate "frozen"/"live" knob here --
+# the only normalization fact any arm declares is the floor's own (Decision
+# 2): it never encodes a target image during training at all, so it never
+# reaches a normalization layer with one either.
 
 #: selection   which instances of a bag the arm is allowed to look at: None for
 #:             all of them, or a rule that keeps `SELECT_K` of the `INSTANCES_PER_BAG`
@@ -901,9 +903,11 @@ IMAGES_PER_STEP = BAGS_PER_STEP * INSTANCES_PER_BAG       # 300
 #: the local term, and an unmarked name is the complete method.
 
 #: `normalization` is `"shared"` for every declared arm: the target forward
-#: passes through the encoder's normalization layers exactly as the source
-#: forward does, in training mode, learning from both domains like the rest of
-#: the model (the `_target_embeddings` doctrine above `wiring.Arm` states this).
+#: passes through the target encoder's own normalization layers, in training
+#: mode, exactly as the source forward passes through the source encoder's --
+#: each domain trains its own encoder's statistics, never a frozen or
+#: per-domain-switched copy (the `target_embeddings` seam above `wiring.Arm`
+#: states this; Eq. (13) is what splits the encoder itself into two).
 #:
 #: `GN` is retired, and the whole `"sourceBatch"` axis goes with it. It was the
 #: one arm that declared it -- its target forward normalized with the CURRENT
