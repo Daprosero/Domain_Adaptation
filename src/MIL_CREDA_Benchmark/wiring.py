@@ -99,6 +99,24 @@ def _target_bag_entropy(K_tt: torch.Tensor) -> float:
         return float("nan")
 
 
+def _off_diagonal_mean(K: torch.Tensor) -> float:
+    """Decision 10's instrument -- the mean of every entry off the main
+    diagonal, applied identically to `K_ss`, `K_st` and `K_tt` rather than
+    written three times (the file's own rule against two copies where one
+    differs from the other only in which matrix it reads). A bag's kernel
+    with itself sits on the diagonal of `K_ss`/`K_tt` and is always close to
+    the kernel's own ceiling regardless of how the cloud is spread, which
+    would bias the mean toward "healthy" independently of the reading this
+    exists to make visible.
+    """
+    n, m = K.shape[0], K.shape[1]
+    K = K.detach()
+    if n <= 1 or m <= 1:
+        return float(K.mean()) if K.numel() else float("nan")
+    off_diagonal = ~torch.eye(n, m, dtype=torch.bool, device=K.device)
+    return float(K[off_diagonal].mean())
+
+
 @dataclass
 class Pool:
     """One domain's training bags, already on the device the run uses."""
@@ -390,6 +408,37 @@ class Arm(nn.Module):
             lower, upper = conservative_bounds(int(s_idx.numel()), int(t_idx.numel()))
             losses.append(class_global_loss(score, lower, upper))
 
+        # Spec `target-degeneracy-diagnostic`: six readings and one count, all
+        # free -- read off matrices this method already builds, with no new
+        # mathematics. Stashed on `self` rather than widening this method's
+        # return (a 2-tuple four call sites in `tests/test_arm_objectives.py`
+        # already unpack) -- `training_step` reads it back immediately after
+        # calling this method, on the one path that reaches here.
+        self._diagnostics = {
+            # r25:1087's prescribed instrument, over the UNCONDITIONAL target
+            # Gram -- before any per-class conditioning narrows it, so a
+            # collapse uniform across classes (Requirement: "The per-class
+            # weighted H_target...MUST NOT substitute") is still visible even
+            # once the loop above has at most one active class left to read.
+            "targetBagEntropy": _target_bag_entropy(K_tt),
+            # Eq. (24)'s magnitude -- neither half of r25's mechanism is
+            # diagnostic alone (Decision 9): a collapsed cloud can produce
+            # either a vanished mean weight or a maximal one (a confidently
+            # wrong single class), and `targetConfidenceMin` catches the
+            # onset a mean over ten bags would hide.
+            "targetConfidenceMean": float(w_t.mean().detach()),
+            "targetConfidenceMin": float(w_t.min().detach()),
+            # |C_act| (Eq. 37) -- r25's third named observable, already
+            # computed as the length of this loop's own accumulator.
+            "activeClasses": len(losses),
+            # Decision 10: whether one sigma still describes both clouds,
+            # read as the off-diagonal means of the three kernels this method
+            # already built above.
+            "sourceKernelMean": _off_diagonal_mean(K_ss),
+            "crossKernelMean": _off_diagonal_mean(K_st),
+            "targetKernelMean": _off_diagonal_mean(K_tt),
+        }
+
         global_term = global_loss(losses)
         local_term = torch.zeros_like(global_term)
 
@@ -481,11 +530,27 @@ class Arm(nn.Module):
         adaptation = torch.zeros((), device=logits.device, dtype=logits.dtype)
         contribution_global = torch.zeros((), device=logits.device, dtype=logits.dtype)
         contribution_local = torch.zeros((), device=logits.device, dtype=logits.dtype)
+        # Spec `target-degeneracy-diagnostic` / design Decision 8: every one of
+        # these reports `float("nan")`, NEVER `0.0`, wherever the reading is
+        # structurally unavailable -- `0.0` is exactly the collapsed value the
+        # diagnostic exists to report, so a floor (or CREDA's own one-term
+        # objective, which no declared arm reaches) defaulting to `0.0` would
+        # read as maximally degenerate on every run forever.
+        diagnostics = {
+            "targetBagEntropy": float("nan"),
+            "targetConfidenceMean": float("nan"),
+            "targetConfidenceMin": float("nan"),
+            "activeClasses": float("nan"),
+            "sourceKernelMean": float("nan"),
+            "crossKernelMean": float("nan"),
+            "targetKernelMean": float("nan"),
+        }
         if self.spec["adaptation"] == "milcreda":
             target_bags = self.target.take(target_indices)
             global_term, local_term = self._milcreda_term(
                 embeddings, labels, target_bags
             )
+            diagnostics = self._diagnostics
             adaptation = global_term + local_term
             total = total_objective(                                  # Eq. (39)
                 supervised, global_term, local_term, coefficient, coefficient_local
@@ -499,6 +564,9 @@ class Arm(nn.Module):
             # and the whole contribution is booked under the "global" slot
             # purely so the sum below still equals it; no declared arm reaches
             # this branch (see `Arm.__init__`'s own note on `"creda"`).
+            # `_creda_term` builds no bag Gram at all (CREDA is instance-unit,
+            # not bag-unit) -- there is nothing here for the diagnostic to
+            # read, so it stays at the nan default declared above.
             target_bags = self.target.take(target_indices)
             adaptation = self._creda_term(embeddings, labels, target_bags)
             total = supervised + coefficient * adaptation
@@ -506,7 +574,10 @@ class Arm(nn.Module):
         else:
             # The floor: no target image passes through the encoder, ever, in
             # training (Decision 2). `target_indices` is drawn above and
-            # deliberately unused past this point.
+            # deliberately unused past this point. Decision 8: the floor
+            # structurally cannot build `K_tt` -- doing so would mean encoding
+            # a target image, which Decision 2 forbids -- so it stays at the
+            # nan default declared above.
             total = supervised
 
         return {
@@ -529,6 +600,15 @@ class Arm(nn.Module):
             # total, and neither file is in this stretch's authorized scope to
             # repoint at the split.
             "contribution": float((contribution_global + contribution_local).detach()),
+            # Spec `target-degeneracy-diagnostic`: readable during training,
+            # not only after -- see `harness.run_one`'s per-epoch aggregation.
+            "targetBagEntropy": diagnostics["targetBagEntropy"],
+            "targetConfidenceMean": diagnostics["targetConfidenceMean"],
+            "targetConfidenceMin": diagnostics["targetConfidenceMin"],
+            "activeClasses": diagnostics["activeClasses"],
+            "sourceKernelMean": diagnostics["sourceKernelMean"],
+            "crossKernelMean": diagnostics["crossKernelMean"],
+            "targetKernelMean": diagnostics["targetKernelMean"],
         }
 
 

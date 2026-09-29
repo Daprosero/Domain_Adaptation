@@ -27,13 +27,14 @@ import math
 
 import pytest
 import torch
+import torch.nn as nn
 
 from MIL_CREDA import DTYPE
 from MIL_CREDA.attention import effective_bag_size, uniform_self_similarity
 from MIL_CREDA.bag_kernel import bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix
 from MIL_CREDA.global_term import dependency_score, is_active
-from MIL_CREDA_Benchmark import wiring
+from MIL_CREDA_Benchmark import config, wiring
 
 SIGMA = 1.5
 
@@ -253,3 +254,104 @@ def test_the_excluded_intra_bag_instruments_do_not_detect_a_collapsed_target_clo
         "the required diagnostic must read the collapse the excluded "
         "instruments above could not"
     )
+
+
+# --------------------------------------------------------------------------
+# Fixtures for the wired `training_step` tests below -- a local stub, not an
+# import from `tests/test_arm_objectives.py` (Phase 3's own precedent,
+# `tests/test_domain_mixup_guard.py`, defines its own rather than
+# cross-importing a sibling test module's private helpers).
+# --------------------------------------------------------------------------
+
+
+class _Encoder(nn.Module):
+    """Something with an `output_dim` that maps an instance to a row."""
+
+    def __init__(self, backbone=None, pretrained=False):
+        super().__init__()
+        self.output_dim = 6
+        self.linear = nn.Linear(3 * 8 * 8, self.output_dim)
+
+    def forward(self, x):
+        return self.linear(x.reshape(x.shape[0], -1))
+
+
+def _pool(seed: int) -> wiring.Pool:
+    generator = torch.Generator().manual_seed(seed)
+    bags_count = config.BAGS_PER_STEP + 2
+    images = torch.randn(bags_count * config.INSTANCES_PER_BAG, 3, 8, 8,
+                         generator=generator)
+    members = torch.arange(images.shape[0]).reshape(bags_count, config.INSTANCES_PER_BAG)
+    labels = torch.arange(bags_count) % config.CLASSES
+    return wiring.Pool(images, members, labels)
+
+
+def _arm(monkeypatch, arm_id: str):
+    monkeypatch.setattr(wiring, "FeatureExtractor", _Encoder)
+    torch.manual_seed(11)
+    return wiring.build(arm_id, config.CLASSES, _pool(1), _pool(2))
+
+
+def _step(arm: wiring.Arm, generator: torch.Generator) -> dict:
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+    return arm.training_step(x, y, 0.5, generator)
+
+
+_DIAGNOSTIC_FIELDS = (
+    "targetBagEntropy", "targetConfidenceMean", "targetConfidenceMin",
+    "activeClasses", "sourceKernelMean", "crossKernelMean", "targetKernelMean",
+)
+
+
+# --------------------------------------------------------------------------
+# 4.3 -- the wired readings, on a real adapted arm's real `training_step`
+# --------------------------------------------------------------------------
+
+
+def test_an_adapted_arms_training_step_reports_all_seven_readings(monkeypatch) -> None:
+    """Task 4.3: `training_step` reports `targetBagEntropy` (4.2) alongside
+    `targetConfidenceMean`/`targetConfidenceMin`/`activeClasses`/
+    `sourceKernelMean`/`crossKernelMean`/`targetKernelMean`, read off the
+    real matrices an adapted arm's own `_milcreda_term` builds -- not a
+    fabricated or hand-assembled dict.
+    """
+    arm = _arm(monkeypatch, "G")
+    step = _step(arm, torch.Generator().manual_seed(3))
+
+    assert not math.isnan(step["targetBagEntropy"])
+    assert 0.0 <= step["targetConfidenceMean"] <= 1.0
+    assert 0.0 <= step["targetConfidenceMin"] <= 1.0
+    assert step["targetConfidenceMin"] <= step["targetConfidenceMean"]
+    assert 1 <= step["activeClasses"] <= config.CLASSES
+    for name in ("sourceKernelMean", "crossKernelMean", "targetKernelMean"):
+        assert not math.isnan(step[name])
+
+
+# --------------------------------------------------------------------------
+# 4.4 -- the floor reports NaN, never 0.0, and the guard can fail
+# --------------------------------------------------------------------------
+
+
+def test_the_floor_reports_nan_for_every_degeneracy_reading_never_zero(monkeypatch) -> None:
+    """Design Decision 8: `0.0` is exactly the collapsed value `targetBagEntropy`
+    reports at its minimum, so a floor defaulting to `0.0` would read as
+    maximally degenerate on every run forever. The floor never lets a target
+    image reach an encoder (Decision 2), so it structurally cannot build
+    `K_tt` at all -- every one of these seven fields must be `nan`.
+
+    Mutation-verified reachable: this assertion was observed to RED under the
+    mutation "report 0.0 instead of nan on the floor" (`wiring.py`'s
+    `diagnostics` nan-default dict, temporarily replaced with `0.0` for every
+    field), then reverted, then re-observed GREEN -- `git diff --numstat`
+    confirmed the mutation actually landed and was actually reverted, per
+    this repository's own discipline against a mutation that silently
+    patches nothing.
+    """
+    floor = _arm(monkeypatch, "B")
+    step = _step(floor, torch.Generator().manual_seed(3))
+
+    for name in _DIAGNOSTIC_FIELDS:
+        assert math.isnan(step[name]), (
+            f"{name}: the floor must read nan, never a fabricated number"
+        )
