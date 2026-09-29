@@ -680,37 +680,63 @@ to be one commit.
 The diagnostic must be able to **fall** — a reading that cannot move measures nothing — and it has
 **two** raise sites at the degenerate boundary, not one.
 
-- [ ] 4.1 Write RED tests first for the diagnostic's math and boundary, before wiring any of it into
+- [x] 4.1 Write RED tests first for the diagnostic's math and boundary, before wiring any of it into
       `training_step`:
-  - [ ] 4.1.1 **[P]** A rank-one, trace-normalized target bag Gram reads the diagnostic's minimum
+  - [x] 4.1.1 **[P]** A rank-one, trace-normalized target bag Gram reads the diagnostic's minimum
         (`‖A‖²_F = 1` ⇒ `H₂ = 0`), exactly, not approximately.
         *(Spec: `target-degeneracy-diagnostic` — "The reading decays toward its minimum..." scenario
         "A rank-one target Gram reads the diagnostic's minimum".)*
-  - [ ] 4.1.2 **[P]** A sequence of target batches with decreasing effective rank of `K_tt` produces
+        **DONE**; RED observed (`AttributeError: module 'MIL_CREDA_Benchmark.wiring' has no attribute
+        '_target_bag_entropy'`) before 4.2, GREEN immediately after.
+  - [x] 4.1.2 **[P]** A sequence of target batches with decreasing effective rank of `K_tt` produces
         a non-increasing sequence of readings.
         *(Spec: `target-degeneracy-diagnostic` — same requirement, scenario "falls monotonically".)*
-  - [ ] 4.1.3 **[P]** A synthetic all-zero `K_tt` (non-positive trace, `renyi.trace_normalize`'s
+        **DONE**; measured, not assumed — the six-point interpolation `(1-α)I + α·ones` was checked
+        numerically before being pinned (readings strictly non-increasing, `ln 6 → 0`). Same RED/GREEN
+        as 4.1.1.
+  - [x] 4.1.3 **[P]** A synthetic all-zero `K_tt` (non-positive trace, `renyi.trace_normalize`'s
         `ValueError`) is **reported** (a value or an explicit "unavailable"/NaN), never propagates a
         `ValueError` out of the diagnostic's call site.
         *(Spec: `target-degeneracy-diagnostic` — "The diagnostic reports rather than raises at the
         fully degenerate boundary", scenario "non-positive-trace...is reported, not raised".)*
-  - [ ] 4.1.4 **[P]** A synthetic `trace_normalize(K_tt)` with zero Frobenius norm
+        **DONE**; same RED/GREEN as 4.1.1.
+  - [x] 4.1.4 **[P]** A synthetic `trace_normalize(K_tt)` with zero Frobenius norm
         (`renyi.quadratic_entropy`'s `ValueError`) is likewise **reported**, never propagated.
         *(Spec: `target-degeneracy-diagnostic` — same requirement, scenario "zero-Frobenius-norm...
         is reported, not raised". Both boundaries MUST be tested — the two are distinct raise sites.)*
-  - [ ] 4.1.5 **[P]** A target batch constructed so every bag's hard pseudo-label collapses to the
+        **DONE, with a named, measured finding.** If `trace_normalize` succeeds its output has trace
+        exactly 1 by construction (`K / trace(K)`), and a matrix of trace 1 cannot have zero Frobenius
+        norm (`sum(A_ii) = 1` forces a nonzero diagonal entry, so `‖A‖²_F ≥ 1/n > 0`) — so this second
+        raise site is mathematically unreachable through the diagnostic's own composition, the same
+        shape of finding this repository already named for an unreachable branch at 3.13. Exercised by
+        injection instead of a fabricated natural trigger: `monkeypatch.setattr(wiring,
+        "trace_normalize", ...)` at the module level (Decision 4's own mechanism), handing back a
+        degenerate result `trace_normalize` could never actually produce, so `quadratic_entropy`'s own
+        `except` clause is genuinely exercised. RED observed the same way as 4.1.1 (before the function
+        existed at all), GREEN after.
+  - [x] 4.1.5 **[P]** A target batch constructed so every bag's hard pseudo-label collapses to the
         same class (driving `C_act` toward one class) while the unconditional target cloud is also
         collapsing: the required diagnostic falls toward its minimum while the per-class weighted
         `H_target` inside `global_term.dependency_score` fails to characterize the collapse (at most
         one active class left).
         *(Spec: `target-degeneracy-diagnostic` — "The per-class weighted `H_target`...MUST NOT
         substitute for the diagnostic".)*
-  - [ ] 4.1.6 **[P]** A target batch with a collapsing bag cloud but non-uniform intra-bag attention
+        **DONE**, at the math level (`conditional_blocks`/`mixed_matrix`/`is_active`/`dependency_score`
+        called directly, mirroring `_milcreda_term`'s own loop, no `Arm` needed): every target bag is
+        the identical bag (`K_tt` exactly rank-one by construction, diagnostic ≈ 0, measured), and its
+        pseudo-label collapses with it to one class, leaving exactly one active class in the per-class
+        loop (`len(losses) == 1`, measured against three declared classes). RED observed against
+        `wiring._target_bag_entropy` before 4.2, GREEN after.
+  - [x] 4.1.6 **[P]** A target batch with a collapsing bag cloud but non-uniform intra-bag attention
         weights: `uniform_self_similarity`/`effective_bag_size` report no collapse on it — they must
         stay **unwired**, not presented as equivalent or substitute.
         *(Spec: `target-degeneracy-diagnostic` — "The excluded intra-bag instruments MUST NOT be
         used".)*
-- [ ] 4.2 **[SEQ]** Implement `_target_bag_entropy(K_tt)` beside the existing `K_ss, K_st, K_tt =
+        **DONE**; every target bag is the identical bag (five distinct, non-trivially weighted
+        instances — genuine intra-bag diversity, `m_eff ≈ 4.44` of 5, `uniform_self_similarity ≈ 0.27`,
+        both measured as reading "dispersed" not "collapsed"), while the required diagnostic on the
+        same batch reads its exact minimum (`K_tt` rank-one by construction). Same RED/GREEN as 4.1.5.
+- [x] 4.2 **[SEQ]** Implement `_target_bag_entropy(K_tt)` beside the existing `K_ss, K_st, K_tt =
       bag_kernel_matrix(...)` build in `wiring.py`'s `_milcreda_term` (`:267-269`):
       `quadratic_entropy(trace_normalize(K_tt))` over the **unconditional** target bag Gram, catching
       both `ValueError`s from `renyi.trace_normalize` (non-positive trace) and
@@ -718,39 +744,100 @@ The diagnostic must be able to **fall** — a reading that cannot move measures 
       instead of propagating. Run tests 4.1.1–4.1.4. **Observe GREEN**.
       *(Spec: `target-degeneracy-diagnostic` — "The diagnostic is quadratic entropy over the
       trace-normalized unconditional target bag Gram".)*
-- [ ] 4.3 **[SEQ]** Add the remaining four readings and one count beside `w_t = confidences(G_t)`
+      **DONE**; implemented as a module-level function (not a method — called from a test file with no
+      `Arm` needed, matching 4.1.1–4.1.6's own math-level tests) at `wiring.py`, beside `SIDES`, ahead
+      of `class Arm`. `.detach()` before leaving `torch` (this reading is never a term of Eq. (39));
+      caught a `UserWarning` about converting a `requires_grad` tensor to a scalar during 4.3's own
+      test run and fixed it here and at every other new float-conversion site in the same pass. GREEN
+      observed for 4.1.1–4.1.6 immediately after landing.
+- [x] 4.3 **[SEQ]** Add the remaining four readings and one count beside `w_t = confidences(G_t)`
       (`:273`) and the `losses` loop (`:278-293`): `targetConfidenceMean = w_t.mean()`,
       `targetConfidenceMin = w_t.min()` (the onset — a mean over ten bags hides one vanished
       weight), `activeClasses = len(losses)`, `sourceKernelMean`/`crossKernelMean`/`targetKernelMean`
       = the off-diagonal means of `K_ss`/`K_st`/`K_tt`. Run test 4.1.5. **Observe GREEN**.
       *(Spec: `target-degeneracy-diagnostic` — "The confidence weights' magnitude is recorded".)*
-- [ ] 4.4 **[SEQ]** Have `training_step` return these six readings beside the existing
+      **DONE**, at current lines `:387-419` (shifted by Phases 1–3). Added `_off_diagonal_mean(K)` as
+      a second module-level helper (Decision 10's instrument, written once and applied to all three
+      kernels rather than three near-identical copies — the file's own rule). Stashed the seven-field
+      dict on `self._diagnostics` at the end of `_milcreda_term`, rather than widening that method's
+      own 2-tuple return: four call sites in `tests/test_arm_objectives.py` already unpack exactly two
+      values, and widening the return would force an unrelated, unauthorized edit to that
+      Phase-2-protected file for no requirement that names it. `training_step` reads `self._diagnostics`
+      back immediately after the one call site that reaches it. New integration test
+      (`test_an_adapted_arms_training_step_reports_all_seven_readings`) confirms all seven read off a
+      real adapted arm's real `training_step`, not a fabricated dict. GREEN observed.
+- [x] 4.4 **[SEQ]** Have `training_step` return these six readings beside the existing
       `supervised`/`adaptation`/`contribution*` floats. On the floor `B`, all six report
       `float("nan")`, **never `0.0`** (0.0 is the collapsed value itself). Add a mutation-guard test:
       a `0.0` mutation on the floor's readings must **red**.
       *(Spec: `target-degeneracy-diagnostic` — boundary/reporting requirements, applied to the
       floor's structural absence of the reading.)*
-- [ ] 4.5 **[SEQ]** Aggregate the six readings per epoch into `epochs_record` beside
+      **DONE, with one measured correction to this task's own count.** Decision 9's own table names
+      **seven** fields (`targetBagEntropy` + the six from 4.3), not six — "six readings" here is
+      corrected rather than trusted, the same discipline 3.13 already applied to its own text. All
+      seven default to `float("nan")` in `training_step`, overwritten only on the `"milcreda"` branch;
+      the `"creda"` branch (no declared arm reaches it) and the floor both keep the nan default.
+      **Mutation-verified reachable**: the nan-default dict was temporarily mutated to `float("0.0")`
+      for every field — **observed RED** (`AssertionError: targetBagEntropy: the floor must read nan,
+      never a fabricated number`) — reverted, **re-observed GREEN**, `git diff` confirmed no residual
+      `0.0"` string before proceeding.
+- [x] 4.5 **[SEQ]** Aggregate the six readings per epoch into `epochs_record` beside
       `sourceAccuracy`/`targetAccuracy` (means over the epoch's 7 steps; `min` where the minimum is
       informative, per the existing `curve` → `mean_supervised` pattern). Add
       `run["targetBagEntropyMin"]` (the minimum over epochs) as the one per-run field — **not** a
       new `config.DIMENSIONS` entry and **not** added to `__benchmark__["report"]["dimensions"]`.
       *(Spec: `target-degeneracy-diagnostic` — "The diagnostic is readable during training, not only
       after".)*
-- [ ] 4.6 **[P]** Write a structural test confirming `targetBagEntropy`/`targetBagEntropyMin` and the
+      **DONE**, in `harness.run_one`. `targetBagEntropy` and `targetConfidenceMin` aggregate per epoch
+      by **min** over that epoch's own steps (a mean would wash out a one-step collapse — this is the
+      "min where the minimum is informative" half of the task text); the other five aggregate by mean.
+      The per-run `targetBagEntropyMin` is the min over the epoch trace's own per-epoch minima, which
+      is exactly the global minimum over every step of the run. Verified end to end through a real
+      (stub-encoder) two-epoch `harness.run_one` call, not a hand-assembled dict — every epoch record
+      carries all seven fields non-nan for an adapted arm, and `targetBagEntropyMin` matches
+      `min(epoch minima)` exactly.
+- [x] 4.6 **[P]** Write a structural test confirming `targetBagEntropy`/`targetBagEntropyMin` and the
       other five readings are **absent** from `config.DIMENSIONS` and from
       `__benchmark__["report"]["dimensions"]` (design Decision 8's rejection, mirrored as a guard so
       a later PR does not silently re-add it as a declared dimension).
       *(No direct spec scenario — design-level guard for Decision 8.)*
-- [ ] 4.7 **[P]** Write a trace test: reading the diagnostic at ≥2 distinct points over a multi-epoch
+      **DONE**; both declared-dimension sets checked disjoint against all eight field names (seven
+      per-step + the one per-run field). GREEN on first run (no prior state to have broken).
+- [x] 4.7 **[P]** Write a trace test: reading the diagnostic at ≥2 distinct points over a multi-epoch
       training run yields distinct values (trajectory, not only a final number).
       *(Spec: `target-degeneracy-diagnostic` — "The diagnostic is available at more than one point
       across a training run".)*
-- [ ] 4.8 **[P]** Write a round-trip test: the run dict (with `NaN` present on the floor) survives
+      **DONE**; three successive `training_step` calls sharing one generator (so each draws a
+      genuinely different target batch, exactly as `run_one`'s own epoch loop does) yield at least two
+      distinct `targetBagEntropy` values. GREEN on first run.
+- [x] 4.8 **[P]** Write a round-trip test: the run dict (with `NaN` present on the floor) survives
       `json.dumps`/`runs.jsonl` writing, precedent `latent.geometry`/`harness.accuracy`.
       *(No direct spec scenario — regression precedent named in design Testing Strategy.)*
-- [ ] 4.9 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
+      **DONE**; a dict of all eight field names set to `float("nan")` round-trips through
+      `json.dumps`/`json.loads` with every value still reading `nan` after. GREEN on first run.
+- [x] 4.9 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
       sibling's 3 reds remain. Commit.
+      **DONE**; full suite: `3 failed, 692 passed, 1 skipped, 129 subtests passed` (was `3 failed, 680
+      passed, 1 skipped, 129 subtests passed` after Phase 3 — `+12` matches the twelve new tests in
+      `tests/test_target_degeneracy_diagnostic.py`). The 3 failures are exactly the sibling's
+      `tests/test_search_distribution.py` reds by name, unchanged. `src/CREDA/**` confirmed
+      byte-identical (`git diff --stat src/CREDA/` empty).
+
+      **Review-budget note.** Estimated at ~180–220 lines; measured (`git diff --numstat`) at **651
+      authored changed lines** across `wiring.py`, `harness.py`, and the new
+      `tests/test_target_degeneracy_diagnostic.py` — over the 400-line guideline, same as Phases 2–3.
+      Unlike those two, **nothing was committed yet when this was measured**, so the atom was actually
+      split rather than defaulting to another exception: three dependency-ordered commits, each
+      independently green and each under budget — (1) the instrument itself, math-level tests only,
+      288 lines (`d14d1af`); (2) wiring it into `training_step`'s return, with the floor's
+      mutation-verified nan guard, 184 lines (`1eae0ee`); (3) the per-epoch/per-run aggregation in
+      `harness.run_one`, closing with the full-suite gate, 179 lines (`f4e0501`). Each commit's own
+      task dependency (`4.2` before `4.3` before `4.4` before `4.5`) made the boundary a genuine one,
+      not a line-count-only cut: commit 1 is a complete, correct, independently-testable claim about
+      the mathematics; commit 2 adds the wiring only once the instrument it wires is proven; commit 3
+      adds the record-level aggregation only once the field it aggregates exists. Recorded here as the
+      genuine-split case this session's earlier `size:exception` records themselves called for
+      ("split it where the atom genuinely allows"), not as a fourth exception.
 
 ---
 
