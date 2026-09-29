@@ -1159,6 +1159,161 @@ class TestLasUnidadesSonSemillasYNadaMas:
             config.execution_seed_units()
 
 
+class TestLasUnidadesSeLeenSegunElEjeQueElPasoDeclara:
+    """`execution_units_for(axis)`: la misma distincion de tres formas que
+    `execution_seed_units()` ya hacia, pero recibiendo el eje en vez de
+    asumir que una unidad siempre es una semilla (D3). El eje se valida
+    contra la declaracion (`distribution.axes`) y nunca se adivina del
+    contenido -- `"0"` es una semilla valida y tambien podria leerse como
+    un indice de transferencia, asi que la lectura tiene que saber de
+    antemano cual de las dos esta preguntando (D1).
+    """
+
+    def test_no_hay_eje_por_omision(self):
+        """La firma no puede dejar `axis` opcional: un llamador que se
+        olvida de nombrar el eje tiene que recibir un rechazo, nunca el
+        comportamiento de semillas por omision que existia antes de que
+        este parametro existiera.
+
+        Mutacion: darle a `axis` un valor por omision -- corrida, este
+        test se pone rojo porque el parametro deja de estar vacio.
+        """
+        firma = inspect.signature(config.execution_units_for)
+        assert firma.parameters["axis"].default is inspect.Parameter.empty
+
+    def test_ausente_es_la_rejilla_entera_en_los_dos_ejes(self, monkeypatch):
+        monkeypatch.delenv(config.RUN_UNITS_ENV, raising=False)
+        assert config.execution_units_for("seed") is None
+        assert config.execution_units_for("transfer") is None
+
+    def test_declarada_vacia_se_distingue_de_ausente_en_los_dos_ejes(
+        self, monkeypatch
+    ):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, "[]")
+        for axis in ("seed", "transfer"):
+            unidades = config.execution_units_for(axis)
+            assert unidades == []
+            assert unidades is not None
+
+    def test_transferencias_declaradas_se_leen_en_su_propio_vocabulario(
+        self, monkeypatch
+    ):
+        etiquetas = [config.transfer_label(t) for t in config.SEARCH_TRANSFERS]
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps(etiquetas))
+        assert config.execution_units_for("transfer") == list(config.SEARCH_TRANSFERS)
+
+    def test_una_etiqueta_fuera_del_conjunto_se_rechaza_y_nombra_lo_disponible(
+        self, monkeypatch
+    ):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps(["N->X"]))
+        with pytest.raises(ValueError) as excinfo:
+            config.execution_units_for("transfer")
+        mensaje = str(excinfo.value)
+        assert "N->X" in mensaje
+        for transfer in config.SEARCH_TRANSFERS:
+            assert config.transfer_label(transfer) in mensaje
+
+    def test_la_captura_cruzada_de_ejes_de_D1(self, monkeypatch):
+        """La prueba que mide la decision del vocabulario y no solo la
+        restablece: una semilla nunca es una transferencia valida y una
+        transferencia nunca es una semilla valida, para que un paso que
+        confunde el eje muera aca en vez de correr silenciosamente bajo
+        la lectura equivocada (el hazard que la Notebook de busqueda de
+        techos corre hoy, sin `transfers=`).
+        """
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps(["M->U"]))
+        with pytest.raises(ValueError):
+            config.execution_units_for("seed")
+
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps(["0"]))
+        with pytest.raises(ValueError):
+            config.execution_units_for("transfer")
+
+    @pytest.mark.parametrize("axis", ["seed", "transfer"])
+    def test_json_invalido_se_rechaza_en_cualquier_eje(self, monkeypatch, axis):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, "{esto no es json")
+        with pytest.raises(ValueError):
+            config.execution_units_for(axis)
+
+    @pytest.mark.parametrize("axis", ["seed", "transfer"])
+    def test_un_valor_que_no_es_lista_se_rechaza_en_cualquier_eje(
+        self, monkeypatch, axis
+    ):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps({"0": True}))
+        with pytest.raises(ValueError):
+            config.execution_units_for(axis)
+
+    @pytest.mark.parametrize("axis", ["seed", "transfer"])
+    def test_un_elemento_que_no_es_string_se_rechaza_en_cualquier_eje(
+        self, monkeypatch, axis
+    ):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps([0, 1]))
+        with pytest.raises(ValueError):
+            config.execution_units_for(axis)
+
+    def test_un_eje_no_declarado_se_rechaza(self, monkeypatch):
+        monkeypatch.delenv(config.RUN_UNITS_ENV, raising=False)
+        with pytest.raises(ValueError):
+            config.execution_units_for("arm")
+
+
+class TestElEjeSemillaEsByteAByteIdenticoAAntes:
+    """`execution_units_for("seed")` tiene que producir exactamente lo que
+    `execution_seed_units()` producia antes de que este parametro
+    existiera -- mismo valor de retorno, o misma excepcion con el mismo
+    mensaje (Requirement "The seed axis keeps its exact existing
+    behavior", `specs/run-unit-axis-resolution`). Cada caso de
+    `TestLasUnidadesSonSemillasYNadaMas` se repite aca contra el nuevo
+    punto de entrada.
+    """
+
+    def _comparar(self, monkeypatch):
+        try:
+            viejo = config.execution_seed_units()
+        except ValueError as exc:
+            viejo = exc
+        try:
+            nuevo = config.execution_units_for("seed")
+        except ValueError as exc:
+            nuevo = exc
+        if isinstance(viejo, Exception):
+            assert isinstance(nuevo, Exception)
+            assert type(viejo) is type(nuevo)
+            assert str(viejo) == str(nuevo)
+        else:
+            assert viejo == nuevo
+
+    def test_ausente(self, monkeypatch):
+        monkeypatch.delenv(config.RUN_UNITS_ENV, raising=False)
+        self._comparar(monkeypatch)
+
+    def test_declarada_vacia(self, monkeypatch):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, "[]")
+        self._comparar(monkeypatch)
+
+    def test_poblada_valida(self, monkeypatch):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps(["0", "1", "2"]))
+        self._comparar(monkeypatch)
+
+    def test_json_invalido(self, monkeypatch):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, "{esto no es json")
+        self._comparar(monkeypatch)
+
+    def test_no_es_lista(self, monkeypatch):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps({"0": True}))
+        self._comparar(monkeypatch)
+
+    def test_elemento_no_entero(self, monkeypatch):
+        monkeypatch.setenv(
+            config.RUN_UNITS_ENV, json.dumps(["0", "no-es-una-semilla"])
+        )
+        self._comparar(monkeypatch)
+
+    def test_elemento_no_string(self, monkeypatch):
+        monkeypatch.setenv(config.RUN_UNITS_ENV, json.dumps([0, 1]))
+        self._comparar(monkeypatch)
+
+
 class TestLosCuatroCuadernosLlamanALaNuevaLectura:
     """Barato y legitimo: leer el JSON del cuaderno y afirmar que la llamada
     esta, sin correrlo -- la misma disciplina que

@@ -163,7 +163,15 @@ def build_summary(found: list[dict], dist: dict | None = None,
     before `merge()` ever sees it, and `merge()` receives and pools only
     what was actually sealed.
     """
-    dist = dist if dist is not None else shards.declaration()
+    # The SEED axis by name, not the whole declaration. The four reads below
+    # (:167-168, :203, :217) take the flat top-level groups, which ARE the
+    # seed axis's lists by the identity projection -- so this changes nothing
+    # this function computes today, and that is the point: what was true by
+    # structural accident is now true because it was said. A summary that
+    # pools a seed-sharded campaign must never silently read another axis's
+    # rules, and every group exists under every axis with the right shape, so
+    # nothing would have complained.
+    dist = dist if dist is not None else shards.rules_for_axis("seed")
     classified = (list(dist.get("poolable") or []) + list(dist.get("perEnvironment") or [])
                   + list(dist.get("perRun") or []))
 

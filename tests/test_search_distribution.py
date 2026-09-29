@@ -36,12 +36,14 @@ piloto completo y a repetir los dieciocho ensayos.
 
 from __future__ import annotations
 
+import copy
 import inspect
+import json
 
 import pytest
 
 import MIL_CREDA_Benchmark
-from MIL_CREDA_Benchmark import config, harness
+from MIL_CREDA_Benchmark import config, harness, shards
 
 
 def test_the_declaration_names_the_axis_the_search_can_split_on() -> None:
@@ -65,6 +67,135 @@ def test_the_declaration_names_the_axis_the_search_can_split_on() -> None:
         "la búsqueda reparte por transferencia -- `search_ceilings` ya acepta "
         "`transfers=`, y ninguna declaración lo nombra"
     )
+
+    # La inversión que motiva la capacidad entera: los tres campos que el eje
+    # semilla exige idénticos son exactamente los que el eje transferencia
+    # permite -- necesita -- que difieran, porque cada shard de búsqueda
+    # sostiene una porción DISTINTA de exactamente esos campos.
+    seed_identical = axes["seed"]["identicalAcrossShards"]
+    transfer_identical = axes["transfer"]["identicalAcrossShards"]
+    for field in ("ceilings", "ceilingsByTransfer", "hyperByTransfer"):
+        assert field in seed_identical, (
+            f"el eje semilla tiene que seguir exigiendo `{field}` idéntico "
+            f"entre shards de campaña; hoy {seed_identical!r}"
+        )
+        assert field not in transfer_identical, (
+            f"el eje transferencia no puede exigir `{field}` idéntico entre "
+            "shards: cada shard de búsqueda sostiene una porción distinta de "
+            "ese campo a propósito, y pedirles que coincidan es pedirles que "
+            f"no hayan hecho su trabajo; hoy {transfer_identical!r}"
+        )
+
+    # Todo eje declarado tiene los cuatro grupos, nunca un hueco -- un grupo
+    # ausente leído como `[]` haría que `partition()` reportara cada
+    # dimensión `unpartitioned` y un merge la descartara en silencio.
+    for axis_name, block in axes.items():
+        for group in ("poolable", "perEnvironment", "perRun", "identicalAcrossShards"):
+            assert group in block, (
+                f"el eje `{axis_name}` no declara `{group}`; un lector "
+                "genérico no puede resolver sus reglas sin ese hueco"
+            )
+            assert isinstance(block[group], list), (
+                f"`{axis_name}`.`{group}` tiene que ser una lista, posiblemente "
+                f"vacía, pero nunca `None` ni faltante; hoy es {block[group]!r}"
+            )
+
+
+def test_the_flat_keys_are_the_seed_axis_by_identity() -> None:
+    """La proyección es por identidad, nunca por copia.
+
+    Dos estructuras que sólo sostienen listas iguales son dos copias, y una
+    igualdad que hoy se cumple es exactamente cómo dos copias empiezan a
+    discrepar. Se afirma con `is`, explícitamente nunca con `==`: una prueba
+    con `==` pasaría contra una copia construida aparte y no mediría nada de
+    lo que esta decisión afirma.
+    """
+    distribution = MIL_CREDA_Benchmark.__benchmark__["distribution"]
+    seed = distribution["axes"]["seed"]
+    for group in ("identicalAcrossShards", "poolable", "perEnvironment", "perRun"):
+        assert distribution[group] is seed[group], (
+            f"`distribution[{group!r}]` no es el MISMO objeto que "
+            f"`distribution['axes']['seed'][{group!r}]`; la proyección tiene "
+            "que ser por identidad, no una copia que hoy resulta igual"
+        )
+
+
+def test_the_forges_arm_split_refusal_remains_reachable() -> None:
+    """Nada en esta capacidad puede costarle a la forja su capacidad de negar
+    el reparto por brazo.
+
+    `implementation_engine.py:1603` lee `dist.get("axis") == "arm"`. Sobre la
+    declaración real tiene que seguir evaluando `False`; sobre una asignada a
+    mano con `axis: "arm"` tiene que seguir pudiendo evaluar `True` -- si la
+    comparación degradara a comparar contra `None` bajo la forma anidada,
+    quedaría permanentemente `False` y el rechazo nunca podría dispararse.
+    """
+    distribution = MIL_CREDA_Benchmark.__benchmark__["distribution"]
+    assert (distribution.get("axis") == "arm") is False, (
+        "sobre la declaración real, la comparación de la forja tiene que "
+        f"evaluar False; hoy `axis` es {distribution.get('axis')!r}"
+    )
+    hand_built = {"axis": "arm"}
+    assert (hand_built.get("axis") == "arm") is True, (
+        "la comparación tiene que seguir siendo capaz de evaluar True sobre "
+        "un mapeo que de verdad declara `axis: \"arm\"` -- de lo contrario "
+        "está leyendo una constante, no un campo vivo"
+    )
+
+
+def test_shards_root_survives_the_axes_nesting_unchanged() -> None:
+    """Una clave que nada en la suite de hoy notaría perder si se cayera en
+    silencio, así que se fija explícitamente en vez de confiar en que algún
+    otro test la proteja por accidente."""
+    distribution = MIL_CREDA_Benchmark.__benchmark__["distribution"]
+    assert distribution["shardsRoot"] == "MIL-CREDA/Results/Benchmark/shards"
+
+
+def test_no_docstring_still_claims_the_axis_is_singular() -> None:
+    """Ninguna prosa puede seguir jurando que no hay un segundo eje.
+
+    Tres lugares apoyaban parte de su argumento en la singularidad de
+    `axis`: el docstring de `config.execution_seed_units`, el de
+    `harness.run_campaign_shard`, y el bloque de razones que acompaña a
+    `distribution` en `__init__.py`. El campo sobrevive (`axis` sigue
+    leyendo `"seed"`); la justificación no puede, porque deja de ser cierta
+    en cuanto `axes` nombra dos valores.
+
+    `config.execution_seed_units` se corrige recién en la Unidad de Trabajo
+    A2, cuando la función misma cambia (Tasca 1.14's nota explícita); este
+    test se escribe y se observa en rojo ahora, y se espera que la parte de
+    `execution_seed_units` siga en rojo hasta que A2 aterrice -- no es una
+    regresión, es la parte todavía no hecha.
+    """
+    import inspect as _inspect
+
+    import MIL_CREDA_Benchmark as _package
+
+    markers = (
+        "no hay un segundo eje",
+        "is what the declaration says may be split",
+        "no second axis",
+        "único eje",
+        "unico eje",
+    )
+
+    module_source = _inspect.getsource(_package)
+    start = module_source.index("# `shards.declaration()` reads this block")
+    end = module_source.index('"distribution": {')
+    rationale_block = module_source[start:end]
+
+    sources = {
+        "config.execution_seed_units.__doc__": config.execution_seed_units.__doc__ or "",
+        "harness.run_campaign_shard.__doc__": harness.run_campaign_shard.__doc__ or "",
+        "the __init__.py rationale block beside `distribution`": rationale_block,
+    }
+    for label, text in sources.items():
+        lowered = text.lower()
+        hits = [marker for marker in markers if marker.lower() in lowered]
+        assert not hits, (
+            f"{label} todavía afirma que el eje es singular ({hits!r}); esa "
+            "cita es falsa en cuanto `axes` nombra `seed` y `transfer`"
+        )
 
 
 def test_run_search_forwards_the_transfers_it_is_given() -> None:
@@ -109,7 +240,7 @@ def test_a_unit_resolves_to_the_axis_the_step_declares() -> None:
     )
 
 
-def test_partial_search_records_merge_instead_of_overwriting() -> None:
+def test_partial_search_records_merge_instead_of_overwriting(_seis_rebanadas) -> None:
     """Seis máquinas, seis transferencias, UN registro que las contiene.
 
     La pieza que no existe en ninguna forma, y la única cuyo modo de falla es
@@ -123,6 +254,13 @@ def test_partial_search_records_merge_instead_of_overwriting() -> None:
     transferencia declarada no puede pasar por completo, porque un techo ausente
     leído como neutro es precisamente el reemplazo que el repositorio ya prohíbe
     en otros lados.
+
+    Crecido más allá de la firma (D9/D10/D11): seis rebanadas reales, escritas
+    por el motor de verdad, tienen que ensamblar en UN registro que trae cada
+    campo de un registro entero -- comparado contra un registro entero de
+    verdad, construido por el MISMO motor falso, no contra un roster tipeado a
+    mano -- más la nueva clave `assembly`, y el registro canónico tiene que
+    quedar escrito porque las seis llegaron.
     """
     unir = getattr(harness, "merge_search_records", None)
     assert unir is not None, (
@@ -135,6 +273,59 @@ def test_partial_search_records_merge_instead_of_overwriting() -> None:
         "la unión tiene que saber qué transferencias ESPERABA para poder "
         "negarse cuando falta una; contar lo que llegó no distingue 'llegaron "
         f"todas' de 'llegaron las que se mandaron'; hoy recibe {list(firma.parameters)}"
+    )
+
+    rebanadas = _seis_rebanadas
+    reduccion_entera = harness.Reduction(seeds=[config.SEARCH_SEED],
+                                         epochs=config.SEARCH_EPOCHS)
+    harness.search_ceilings_trials(reduccion_entera, "cpu",
+                                   progress=lambda *_: None, shard=None,
+                                   transfers=None)
+    registro_entero = json.loads(
+        config.ceilings_record_for(False).read_text())["milcreda"]
+    # El registro que la búsqueda entera acaba de escribir se borra: lo que se
+    # mide es que `merge_search_records` sea quien lo vuelva a escribir a
+    # partir de las seis rebanadas, no que lo encuentre ya ahí.
+    config.ceilings_record_for(False).unlink()
+
+    ensamblado = harness.merge_search_records(rebanadas)
+    assert set(ensamblado) == {"milcreda"}
+    entrada = ensamblado["milcreda"]
+
+    faltan = set(registro_entero) - set(entrada)
+    assert not faltan, (
+        f"al ensamblado le faltan campos que un registro entero SÍ trae: {faltan}")
+    sobran = set(entrada) - set(registro_entero) - {"assembly"}
+    assert not sobran, (
+        "el ensamblado trae campos que ni un registro entero ni `assembly` "
+        f"explican: {sobran}")
+
+    etiquetas = [config.transfer_label(t) for t in config.SEARCH_TRANSFERS]
+    assert entrada["transfers"] == etiquetas
+    assert set(entrada["perTransfer"]) == set(etiquetas)
+    assert entrada["assembly"]["expected"] == etiquetas, (
+        "assembly.expected tiene que nombrar el mismo conjunto esperado que "
+        "decidió la completitud"
+    )
+    assert {s["id"] for s in entrada["assembly"]["shards"]} == {
+        r["milcreda"]["shard"] for r in rebanadas}, (
+        "assembly.shards tiene que nombrar cada rebanada que contribuyó, por "
+        "su propio id -- nunca uno solo hablando por las seis"
+    )
+
+    # El re-agrupado (D9) produce el MISMO número que una búsqueda entera sin
+    # partir: las seis semillas de estudio son deterministas por (familia,
+    # etiqueta), así que dividir y reensamblar no puede mover el resultado.
+    assert entrada["ceiling"] == registro_entero["ceiling"], (
+        "el techo ensamblado tiene que coincidir con el de una búsqueda "
+        f"entera sobre el mismo material: {entrada['ceiling']} vs "
+        f"{registro_entero['ceiling']}"
+    )
+    assert entrada["byTransfer"] == registro_entero["byTransfer"]
+
+    assert config.ceilings_record_for(False).exists(), (
+        "un ensamblado completo y limpio (D7/D9) tiene que escribir el "
+        "registro canónico"
     )
 
 
@@ -238,10 +429,13 @@ def arbol(tmp_path, monkeypatch):
     return lleno, ensayo
 
 
-@pytest.mark.parametrize("registro_presente", [False, True],
-                         ids=["sin-registro", "con-registro"])
+@pytest.mark.parametrize(
+    "registro_presente,rebanada_presente",
+    [(False, False), (True, False), (True, True)],
+    ids=["sin-nada", "con-registro-sin-rebanada", "con-registro-con-rebanada"],
+)
 def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
-        arbol, monkeypatch, registro_presente) -> None:
+        arbol, monkeypatch, registro_presente, rebanada_presente) -> None:
     """La prueba que el test anterior NO era, y la diferencia es el método.
 
     `test_a_partial_search_refuses_to_present_its_slice_as_the_record` tapa
@@ -252,22 +446,36 @@ def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
 
     Acá se tapa SOLO `search_ceilings` ---lo único que gastaría una búsqueda
     optuna de verdad--- y corren `ceilings_in_force` y `search_record` reales,
-    contra un árbol de verdad. Las dos ramas que existen se recorren las dos:
+    contra un árbol de verdad.
 
-    * `sin-registro`: `ceilings_in_force` no ve registro y busca. La escritura
-      de un subconjunto está bloqueada aguas arriba, así que no queda nada en
-      disco. Antes de este arreglo, acá ganaba "left no record".
-    * `con-registro`: `ceilings_in_force` corta y NO busca. Antes de este
-      arreglo, el guard afirmaba que la búsqueda había corrido y había dejado un
-      registro parcial en la ruta canónica ---falso dos veces, sobre un registro
-      completo escrito por otra cosa---.
+    **Extendido para el predicado consciente de la rebanada (D12/A5)**, cruzando
+    registro y rebanada en vez de un solo eje. La versión anterior de esta
+    prueba sólo cruzaba `registro_presente`, y su caso `con-registro` afirmaba
+    `busco["llamada"] is False` --- exactamente el defecto que D12 nombra: un
+    registro canónico contestando por una rebanada que nunca corrió. Esa
+    afirmación no se debilitó, se CORRIGIÓ, porque medía el defecto en vez de
+    su arreglo; queda como `con-registro-sin-rebanada` abajo, ahora esperando
+    que SÍ busque.
 
-    En las dos gana el rechazo del subconjunto, y en ninguna el mensaje afirma
+    * `sin-nada`: ni registro ni rebanada. `ceilings_in_force` busca.
+    * `con-registro-sin-rebanada`: el registro canónico existe pero la rebanada
+      de ESTE llamado no. El predicado por rebanada tiene que ignorar el
+      registro y buscar de todos modos -- el relanzamiento de un shard muerto
+      que este cambio existe para arreglar.
+    * `con-registro-con-rebanada`: la propia rebanada ya existe (un relanzamiento
+      de verdad). El predicado no tiene que volver a buscar.
+
+    En las tres gana el rechazo del subconjunto, y en ninguna el mensaje afirma
     qué pasó aguas arriba, porque desde ese frame no se puede saber.
     """
     lleno, _ = arbol
     if registro_presente:
         _registro_en_disco(lleno)
+
+    slice_path = harness.shard_paths(None, pilot=False)["searchSlice"]
+    if rebanada_presente:
+        slice_path.parent.mkdir(parents=True, exist_ok=True)
+        slice_path.write_text("{}", encoding="utf-8")
 
     busco = {"llamada": False}
 
@@ -283,10 +491,11 @@ def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
         harness.run_search(transfers=[config.SEARCH_TRANSFERS[0]])
     mensaje = str(refusal.value)
 
-    assert busco["llamada"] == (not registro_presente), (
-        "la rama de arriba tiene que ser la real: busca cuando NO hay registro y "
-        "corta cuando hay. Si esto falla, el test no est\u00e1 recorriendo el camino "
-        f"que dice recorrer (registro={registro_presente}, busc\u00f3={busco['llamada']})"
+    assert busco["llamada"] == (not rebanada_presente), (
+        "el predicado del subconjunto tiene que preguntar por SU PROPIA "
+        "rebanada, nunca por el registro canónico -- si esto falla, sigue "
+        f"preguntando la pregunta equivocada (registro={registro_presente}, "
+        f"rebanada={rebanada_presente}, buscó={busco['llamada']})"
     )
     assert "subset" in mensaje, (
         f"tiene que ganar el rechazo del subconjunto, no otro: {mensaje!r}"
@@ -296,9 +505,539 @@ def test_el_rechazo_del_subconjunto_llega_por_el_camino_real(
         f"se pidió un subconjunto. {mensaje!r}"
     )
     assert "the search ran" not in mensaje, (
-        "el mensaje no puede afirmar que la búsqueda corrió: con un registro en "
-        f"disco `ceilings_in_force` corta y no busca. {mensaje!r}"
+        "el mensaje no puede afirmar que la búsqueda corrió: desde este frame "
+        f"no se puede saber qué pasó aguas arriba. {mensaje!r}"
     )
     assert str(len(config.SEARCH_TRANSFERS)) in mensaje, (
         f"tiene que nombrar el total contra el que el subconjunto es parcial: {mensaje!r}"
     )
+
+
+# --------------------------------------------- A5: el predicado por rebanada
+
+def test_a_canonical_record_does_not_stop_a_relaunched_slice_from_searching(
+        _rebanada_engine) -> None:
+    """El defecto que D12 corrige: un registro canónico no contesta por una rebanada.
+
+    `ceilings_in_force` decide "¿ya contesté esto?" antes de buscar. Con un
+    registro canónico completo en disco, esa pregunta hoy se responde contra
+    el registro entero incluso cuando lo que se pidió es un subconjunto --
+    así que un shard relanzado, que necesita SU PROPIA rebanada y no la
+    respuesta de otro, se corta sin buscar nada y sin dejar su archivo. Ésta
+    es la relectura, por el camino real, de la relanzada que
+    `test_el_rechazo_del_subconjunto_llega_por_el_camino_real` no mide: esa
+    prueba fija el mensaje, ésta fija si la búsqueda del subconjunto CORRE.
+    """
+    reduccion = harness.Reduction(seeds=[config.SEARCH_SEED],
+                                  epochs=config.SEARCH_EPOCHS)
+    harness.ceilings_in_force(reduccion, "cpu", progress=lambda *_: None,
+                              shard=None, pilot=False, transfers=None)
+    assert config.ceilings_record_for(False).exists(), (
+        "el fixture tiene que dejar un registro canónico real antes de medir "
+        "el defecto, o esta prueba mediría otra cosa"
+    )
+
+    subconjunto = list(config.SEARCH_TRANSFERS[:1])
+    slice_path = harness.shard_paths(
+        "search-relaunch", noise=0.0, kind="campaign",
+        pilot=False)["searchSlice"]
+    assert not slice_path.exists(), (
+        "esta rebanada no puede existir todavía, o la prueba no mediría un "
+        "relanzamiento"
+    )
+
+    harness.ceilings_in_force(reduccion, "cpu", progress=lambda *_: None,
+                              shard="search-relaunch", pilot=False,
+                              transfers=subconjunto)
+
+    assert slice_path.exists(), (
+        "un registro canónico en disco no puede impedir que un subconjunto "
+        "relanzado busque y deje su propia rebanada -- la pregunta correcta "
+        "para un subconjunto es si SU rebanada ya existe, no si el registro "
+        f"canónico existe; {slice_path} no existe"
+    )
+
+
+def test_the_partial_refusal_names_this_slices_own_artifact_and_reports_written(
+        _rebanada_engine, monkeypatch) -> None:
+    """D12: la negativa nombra la rebanada de ESTE llamado, y dice que se escribió.
+
+    Antes de este arreglo el mensaje prometía una unión que todavía no
+    existía y no mencionaba ningún archivo por shard. Ahora la unión existe
+    (A4), y la negativa puede señalar exactamente qué archivo asamblar.
+    """
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+    subconjunto = list(config.SEARCH_TRANSFERS[:1])
+    slice_path = harness.shard_paths(
+        "search-s00", noise=0.0, kind="campaign", pilot=False)["searchSlice"]
+    assert not slice_path.exists()
+
+    with pytest.raises(SystemExit) as refusal:
+        harness.run_search(shard="search-s00", transfers=subconjunto)
+    mensaje = str(refusal.value)
+
+    assert str(slice_path) in mensaje, (
+        f"la negativa tiene que nombrar el archivo de ESTA rebanada: {mensaje!r}"
+    )
+    assert "written" in mensaje, (
+        "la búsqueda de este subconjunto corrió de verdad y dejó su "
+        f"rebanada; el mensaje tiene que decirlo: {mensaje!r}"
+    )
+    assert slice_path.exists(), (
+        "el flujo real tiene que haber dejado la rebanada en disco"
+    )
+
+
+def test_the_partial_refusal_reports_absent_when_the_slice_never_wrote(
+        _rebanada_engine, monkeypatch) -> None:
+    """La otra dirección del mismo mensaje: sin rebanada en disco, dice ABSENT.
+
+    Se tapa `search_ceilings` -- lo único que gastaría una búsqueda de
+    verdad -- para dejar que el predicado real de `ceilings_in_force`
+    decida buscar, y medir qué mensaje deja cuando esa búsqueda no escribe
+    nada.
+    """
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+    monkeypatch.setattr(harness, "search_ceilings", lambda *a, **k: {})
+    subconjunto = list(config.SEARCH_TRANSFERS[:1])
+    slice_path = harness.shard_paths(
+        "search-s00", noise=0.0, kind="campaign", pilot=False)["searchSlice"]
+
+    with pytest.raises(SystemExit) as refusal:
+        harness.run_search(shard="search-s00", transfers=subconjunto)
+    mensaje = str(refusal.value)
+
+    assert not slice_path.exists()
+    assert "ABSENT" in mensaje and "produced nothing to assemble" in mensaje, (
+        f"sin rebanada en disco el mensaje tiene que decir ABSENT: {mensaje!r}"
+    )
+
+
+def test_run_search_without_transfers_still_returns_the_whole_record_real_path(
+        _rebanada_engine, monkeypatch) -> None:
+    """La otra rama de D12 no se movió: sin `transfers`, sigue igual.
+
+    Conducida por el camino real -- motor falso, nunca `ceilings_in_force`
+    tapado -- para confirmar que reordenar el branch del subconjunto no
+    movió esta rama, que ya tenía cobertura tapada en
+    `test_a_partial_search_refuses_to_present_its_slice_as_the_record`.
+    """
+    monkeypatch.setattr(harness, "resolve_device", lambda: "cpu")
+    registro = harness.run_search(pilot=False)
+    # `search_record` agrega `currentStamp` al leer (harness.py:1358), una
+    # etiqueta calculada y no guardada en el archivo -- comparar contra el
+    # JSON crudo sin sumarla mediría un defecto que no es de este cambio.
+    canonico = json.loads(config.ceilings_record_for(False).read_text())
+    for entry in canonico.values():
+        entry["currentStamp"] = True
+    assert registro == canonico, (
+        "sin `transfers` `run_search` tiene que devolver el registro entero "
+        "leído del disco, exactamente como antes de este cambio"
+    )
+
+
+def test_run_search_never_reads_verdict_transfers_in_its_refusal() -> None:
+    """Espejo de 4.14 (`merge_search_records`), ahora sobre `run_search`.
+
+    `VERDICT_TRANSFERS` y `SEARCH_TRANSFERS` hoy tienen la misma longitud, así
+    que una prueba que sólo contara no distinguiría cuál de las dos constantes
+    construye el mensaje -- la misma clase de defecto que D11 nombra.
+    """
+    fuente = inspect.getsource(harness.run_search)
+    assert "VERDICT_TRANSFERS" not in fuente, (
+        "la negativa PARCIAL de `run_search` tiene que contar contra "
+        "`config.SEARCH_TRANSFERS` (D11), nunca contra `VERDICT_TRANSFERS` -- "
+        f"encontrado en la fuente: {fuente!r}"
+    )
+
+
+# --------------------------------------------- A3: el artefacto por shard
+
+def test_the_slice_artifact_lives_under_shard_paths() -> None:
+    """`shard_paths(...)["searchSlice"]` es la cuarta clave, no un lugar nuevo.
+
+    Un shard con id va bajo su propia carpeta, exactamente donde ya viven
+    `runs.jsonl` y `shard.json`; `shard=None` cae al lado del registro
+    canónico, nunca adentro de él. `pilot` y `noise` la mueven porque mueven
+    `results_for(...)` entero -- la ruta de la rebanada no puede quedarse
+    atrás de la del registro que rebana.
+    """
+    con_id = harness.shard_paths("s03")
+    esperado = (config.results_for(0.0, "campaign", False) / "shards" / "s03"
+                / "ceilings.slice.json")
+    assert con_id["searchSlice"] == esperado, (
+        "la rebanada de un shard con id tiene que vivir bajo su carpeta, "
+        f"exactamente donde `runs`/`stamp` ya viven; hoy "
+        f"{con_id['searchSlice']} y se esperaba {esperado}"
+    )
+
+    sin_id = harness.shard_paths(None)
+    registro = config.ceilings_record_for(False)
+    assert sin_id["searchSlice"] == registro.with_name(
+        registro.stem + ".slice.json"
+    ), (
+        "sin id la rebanada tiene que caer al lado del registro canónico, "
+        f"nunca adentro de él; hoy {sin_id['searchSlice']}"
+    )
+
+    pilot_id = harness.shard_paths("s03", pilot=True)["searchSlice"]
+    assert pilot_id != con_id["searchSlice"], (
+        "un shard de ensayo no puede compartir ruta con el shard de la "
+        f"campaña completa; hoy los dos son {pilot_id}"
+    )
+
+    ruidoso = harness.shard_paths("s03", noise=0.4)["searchSlice"]
+    assert ruidoso != con_id["searchSlice"], (
+        "un shard contaminado no puede compartir ruta con el limpio; hoy "
+        f"los dos son {ruidoso}"
+    )
+
+
+@pytest.fixture
+def _rebanada_engine(tmp_path, monkeypatch):
+    """El motor por trials con `run_one` falso, la misma forma que
+    `tests/test_search_declarations.py:estudios` -- se mide el escritor de
+    la rebanada, nunca el modelo."""
+    monkeypatch.setattr(config, "RESULTS", tmp_path)
+    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
+    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "ceilings.pilot.json")
+    monkeypatch.setattr(config, "SEARCH_ENGINE", "optuna")
+    monkeypatch.setattr(config, "PILOT_SEARCH_TRIALS", 3)
+    monkeypatch.setattr(config, "SEARCH_TRIALS", 3)
+
+    class _Bags:
+        pass
+
+    def _build(code, cache, seed, noise=0.0):
+        return _Bags()
+
+    def _run_one(arm, transfer, seed, reduction, device, material, *, ceiling,
+                role, hyper=None):
+        return {config.SEARCH_CRITERION: 1.0 - abs(ceiling - 0.01)}
+
+    monkeypatch.setattr(harness.bags, "build", _build)
+    monkeypatch.setattr(harness, "run_one", _run_one)
+
+
+def test_a_subset_search_leaves_a_readable_slice_and_the_canonical_path_untouched(
+        _rebanada_engine) -> None:
+    """La integración que D7 promete: un subconjunto deja una rebanada legible
+    y el registro canónico queda intacto.
+
+    Conducida con `run_one` falso, la forma que `tests/test_search_declarations
+    .py`'s `estudios` fixture ya usa: se mide el escritor, nunca el modelo.
+    """
+    subconjunto = list(config.SEARCH_TRANSFERS[:1])
+    encontrado = harness.search_ceilings_trials(
+        harness.Reduction(seeds=[config.SEARCH_SEED], epochs=config.SEARCH_EPOCHS),
+        "cpu", progress=lambda *_: None, shard="search-s00",
+        transfers=subconjunto)
+
+    slice_path = harness.shard_paths(
+        "search-s00", noise=0.0, kind="campaign", pilot=False)["searchSlice"]
+    assert slice_path.exists(), (
+        "un subconjunto tiene que dejar una rebanada legible donde antes no "
+        f"dejaba nada; {slice_path} no existe"
+    )
+    sellado = json.loads(slice_path.read_text())
+    assert set(sellado) == set(encontrado), (
+        "la rebanada en disco tiene que sostener las mismas familias que "
+        f"`found` devolvió: {set(sellado)!r} vs {set(encontrado)!r}"
+    )
+    assert not config.ceilings_record_for(False).exists(), (
+        "un subconjunto no gobierna el registro canónico (D7) y no puede "
+        "dejar nada ahí"
+    )
+
+
+def test_the_slice_sealer_never_touches_the_governed_roster() -> None:
+    """`sellar_rebanada` no escribe nada ni nombra el path canónico.
+
+    La derivación del roster (`tests/test_label_noise.py:1253-1274`) marca
+    cualquier función de `harness` cuyo código nombre `ceilings_record_for`
+    Y `write_text` como escritora del registro gobernado. Afirmado acá de
+    forma directa -- no observando que el roster no creció, que un tamaño
+    constante sería igual de consistente con `sellar_rebanada` quedando mal
+    excluida.
+    """
+    fuente = inspect.getsource(harness.sellar_rebanada)
+    assert "ceilings_record_for" not in fuente, (
+        "sellar_rebanada solo sella una entrada; si nombrara el path "
+        f"canónico, la derivación del roster lo confundiría con un tercer "
+        f"escritor: {fuente!r}"
+    )
+    assert "write_text" not in fuente, (
+        "sellar_rebanada no escribe nada -- el llamador escribe con el path "
+        "que devuelve -- así que tampoco puede entrar al roster por "
+        f"`write_text`: {fuente!r}"
+    )
+
+
+# --------------------------------------------- A4: la unión de rebanadas
+
+def _buscar_una_rebanada(transfer, shard, epochs=None) -> dict:
+    """Corre el motor real sobre UNA sola transferencia y devuelve la
+    rebanada que `sellar_rebanada` selló, leída de vuelta del disco -- nunca
+    armada a mano, para que cada campo que un lector real espera esté
+    presente con su forma real.
+    """
+    reduccion = harness.Reduction(
+        seeds=[config.SEARCH_SEED],
+        epochs=epochs if epochs is not None else config.SEARCH_EPOCHS)
+    harness.search_ceilings_trials(
+        reduccion, "cpu", progress=lambda *_: None, shard=shard,
+        transfers=[transfer])
+    slice_path = harness.shard_paths(shard)["searchSlice"]
+    return json.loads(slice_path.read_text())
+
+
+@pytest.fixture
+def _par_rebanadas(_rebanada_engine) -> list[dict]:
+    """Dos rebanadas reales, una por cada una de las dos primeras
+    transferencias declaradas -- la base compartida para cada prueba de
+    negativa de D10 que necesita un único defecto aislado."""
+    return [
+        _buscar_una_rebanada(config.SEARCH_TRANSFERS[0], "search-s00"),
+        _buscar_una_rebanada(config.SEARCH_TRANSFERS[1], "search-s01"),
+    ]
+
+
+@pytest.fixture
+def _seis_rebanadas(_rebanada_engine) -> list[dict]:
+    """Las seis rebanadas reales, una por transferencia de
+    `config.SEARCH_TRANSFERS` -- la base compartida para las pruebas de
+    cobertura completa, incompleta y de orden."""
+    return [
+        _buscar_una_rebanada(t, f"search-s{i:02d}")
+        for i, t in enumerate(config.SEARCH_TRANSFERS)
+    ]
+
+
+def test_the_assembled_ceiling_is_repooled_over_the_union_not_copied_forward(
+        _seis_rebanadas) -> None:
+    """D9's re-pool mutation test: six single-transfer slices, each with its
+    OWN distinct ceiling, and none of them equal to the union's winner --
+    which is exactly what distinguishes a re-pool from a dict-merge that
+    copies one slice's pooled field forward.
+    """
+    rebanadas = copy.deepcopy(_seis_rebanadas)
+    techos = [0.05, 0.03, 0.01, 0.07, 0.02, 0.09]
+    for rebanada, techo in zip(rebanadas, techos):
+        entrada = rebanada["milcreda"]
+        etiqueta = entrada["transfers"][0]
+        pick = entrada["perTransfer"][etiqueta]
+        pick["ceiling"] = techo
+        # El mismo `best` en las seis: la meseta a nivel de familia las cubre
+        # a todas, y el desempate lo decide únicamente el techo más chico.
+        pick["best"] = 1.0
+        entrada["ceiling"] = techo
+        entrada["byTransfer"][etiqueta] = techo
+
+    ensamblado = harness.merge_search_records(rebanadas)
+    ganador = min(techos)
+    assert ensamblado["milcreda"]["ceiling"] == ganador, (
+        "el techo ensamblado tiene que ser el que gana la meseta sobre la "
+        f"UNIÓN de las seis rebanadas ({ganador}), no el de ninguna rebanada "
+        f"copiado hacia adelante: {ensamblado['milcreda']['ceiling']}"
+    )
+    assert ensamblado["milcreda"]["ceiling"] not in (
+        rebanadas[0]["milcreda"]["ceiling"], rebanadas[-1]["milcreda"]["ceiling"]
+    ), (
+        "un dict-merge que copie la primera o la última rebanada hacia "
+        "adelante tendría que fallar esta prueba: el ganador real no es ni "
+        "el primero ni el último de la lista tal como se entregó"
+    )
+
+
+def test_a_slice_with_no_declared_coverage_refuses(_par_rebanadas) -> None:
+    par = copy.deepcopy(_par_rebanadas)
+    par[0]["milcreda"]["transfers"] = []
+    with pytest.raises(shards.ShardIncomplete) as rechazo:
+        harness.merge_search_records(par)
+    mensaje = str(rechazo.value)
+    assert par[0]["milcreda"]["shard"] in mensaje, (
+        f"la negativa tiene que nombrar el id de la rebanada sin cobertura: {mensaje!r}")
+
+
+def test_a_slice_stamped_under_a_different_revision_refuses(_par_rebanadas) -> None:
+    par = copy.deepcopy(_par_rebanadas)
+    par[1]["milcreda"]["revision"] = "una-revision-vieja"
+    with pytest.raises(shards.ShardsDisagree) as rechazo:
+        harness.merge_search_records(par)
+    mensaje = str(rechazo.value)
+    assert par[1]["milcreda"]["shard"] in mensaje, (
+        f"la negativa tiene que nombrar el id de la rebanada corrida: {mensaje!r}")
+    assert "revision" in mensaje
+
+
+def test_slices_of_different_search_kinds_refuse(_par_rebanadas) -> None:
+    par = copy.deepcopy(_par_rebanadas)
+    del par[1]["milcreda"]["search"]
+    par[1]["milcreda"]["grid"] = {}
+    with pytest.raises(shards.ShardsDisagree) as rechazo:
+        harness.merge_search_records(par)
+    mensaje = str(rechazo.value)
+    assert "optuna" in mensaje and "grid" in mensaje, (
+        f"la negativa tiene que nombrar las dos formas en conflicto: {mensaje!r}")
+
+
+def test_two_slices_claiming_the_same_transfer_refuse(_par_rebanadas) -> None:
+    par = copy.deepcopy(_par_rebanadas)
+    etiqueta = par[0]["milcreda"]["transfers"][0]
+    entrada = par[1]["milcreda"]
+    otra = entrada["transfers"][0]
+    entrada["transfers"] = [etiqueta]
+    entrada["byTransfer"] = {etiqueta: entrada["byTransfer"].pop(otra)}
+    entrada["perTransfer"] = {etiqueta: entrada["perTransfer"].pop(otra)}
+    with pytest.raises(shards.ShardsDisagree) as rechazo:
+        harness.merge_search_records(par)
+    mensaje = str(rechazo.value)
+    assert etiqueta in mensaje
+    assert par[0]["milcreda"]["shard"] in mensaje
+    assert par[1]["milcreda"]["shard"] in mensaje
+
+
+def test_slices_disagreeing_on_labelnoise_refuse_and_name_both_values(
+        _par_rebanadas) -> None:
+    par = copy.deepcopy(_par_rebanadas)
+    par[0]["milcreda"]["labelNoise"] = 0.0
+    par[1]["milcreda"]["labelNoise"] = 0.4
+    with pytest.raises(shards.ShardsDisagree) as rechazo:
+        harness.merge_search_records(par)
+    mensaje = str(rechazo.value)
+    assert "labelNoise" in mensaje
+    assert "0.4" in mensaje
+
+
+def test_agreeing_slices_do_not_raise_the_disagreement_refusal(
+        _par_rebanadas) -> None:
+    """La otra dirección de D10#5: acordando en todo lo declarado idéntico,
+    dos rebanadas no disparan esta negativa."""
+    harness.merge_search_records(_par_rebanadas,
+                                 expected=list(config.SEARCH_TRANSFERS[:2]))
+
+
+def test_a_slice_covering_a_label_outside_expected_refuses(_par_rebanadas) -> None:
+    par = copy.deepcopy(_par_rebanadas)
+    solo_la_primera = [config.SEARCH_TRANSFERS[0]]
+    segunda_etiqueta = par[1]["milcreda"]["transfers"][0]
+    with pytest.raises(shards.ShardsDisagree) as rechazo:
+        harness.merge_search_records(par, expected=solo_la_primera)
+    mensaje = str(rechazo.value)
+    assert segunda_etiqueta in mensaje, (
+        f"la negativa tiene que nombrar la etiqueta inesperada: {mensaje!r}")
+
+
+def test_slices_covering_different_family_sets_refuse(_par_rebanadas) -> None:
+    par = copy.deepcopy(_par_rebanadas)
+    par[0]["phantom"] = copy.deepcopy(par[0]["milcreda"])
+    with pytest.raises(shards.ShardsDisagree) as rechazo:
+        harness.merge_search_records(par)
+    mensaje = str(rechazo.value)
+    assert "milcreda" in mensaje and "phantom" in mensaje, (
+        f"la negativa tiene que nombrar los dos conjuntos de familias: {mensaje!r}")
+
+
+def test_five_of_six_refuses_and_names_the_sixth(_seis_rebanadas) -> None:
+    faltante = _seis_rebanadas[-1]["milcreda"]["transfers"][0]
+    cinco = _seis_rebanadas[:-1]
+    with pytest.raises(shards.ShardIncomplete) as rechazo:
+        harness.merge_search_records(cinco)
+    mensaje = str(rechazo.value)
+    assert faltante in mensaje, (
+        "la negativa tiene que nombrar la transferencia ausente ESPECÍFICA, "
+        f"no solo un conteo: {mensaje!r}")
+
+
+def test_a_complete_set_never_raises_the_missing_transfer_refusal(
+        _seis_rebanadas) -> None:
+    """La otra dirección de D10#6: seis de seis no dispara esta negativa."""
+    harness.merge_search_records(_seis_rebanadas)
+
+
+def test_individually_complete_slices_still_refuse_on_expected_coverage(
+        _seis_rebanadas) -> None:
+    """Coverage completeness is judged against the expected set, not against
+    what was handed in: tres rebanadas, cada una individualmente sellada y
+    completa, igual se niegan citando las tres que faltan."""
+    tres = _seis_rebanadas[:3]
+    faltantes = {r["milcreda"]["transfers"][0] for r in _seis_rebanadas[3:]}
+    with pytest.raises(shards.ShardIncomplete) as rechazo:
+        harness.merge_search_records(tres)
+    mensaje = str(rechazo.value)
+    for etiqueta in faltantes:
+        assert etiqueta in mensaje, (
+            f"la negativa tiene que nombrar las tres transferencias ausentes: {mensaje!r}")
+
+
+def test_an_explicit_smaller_expected_set_assembles_without_writing_canonical(
+        _seis_rebanadas) -> None:
+    una = _seis_rebanadas[:1]
+    solicitada = [config.SEARCH_TRANSFERS[0]]
+    ensamblado = harness.merge_search_records(una, expected=solicitada)
+    assert set(ensamblado) == {"milcreda"}
+    assert ensamblado["milcreda"]["transfers"] == [
+        config.transfer_label(config.SEARCH_TRANSFERS[0])]
+    assert not config.ceilings_record_for(False).exists(), (
+        "un `expected` explícito más chico tiene que ensamblar y NO tocar el "
+        "registro canónico -- eso es lo que lo distingue de omitir el "
+        "argumento, que jamás se alcanza así"
+    )
+
+
+def test_expected_order_does_not_decide_the_guard(_seis_rebanadas) -> None:
+    al_reves = list(reversed(config.SEARCH_TRANSFERS))
+    harness.merge_search_records(_seis_rebanadas, expected=al_reves)
+    assert config.ceilings_record_for(False).exists(), (
+        "el orden de `expected` no puede decidir el guardián: las seis "
+        "llegan igual, en cualquier orden que se pidan"
+    )
+
+
+def test_the_assembly_never_reads_verdict_transfers_as_its_default() -> None:
+    """La lectura a nivel de FUENTE, no solo de conteo: las dos listas
+    comparten longitud hoy, así que una prueba que solo contara no
+    distinguiría una fuente divergente."""
+    fuente = inspect.getsource(harness.merge_search_records)
+    assert "VERDICT_TRANSFERS" not in fuente, (
+        "la unión tiene que derivar su expectativa por defecto de "
+        f"`SEARCH_TRANSFERS` únicamente, nunca de `VERDICT_TRANSFERS`: {fuente!r}")
+
+
+def test_the_canonical_write_consults_the_guard(_seis_rebanadas, monkeypatch) -> None:
+    llamadas = []
+    original = harness.governs_the_ceilings_record
+
+    def _observado(*a, **k):
+        llamadas.append((a, k))
+        return original(*a, **k)
+
+    monkeypatch.setattr(harness, "governs_the_ceilings_record", _observado)
+    harness.merge_search_records(_seis_rebanadas)
+    assert llamadas, (
+        "un ensamblado completo y limpio tiene que CONSULTAR el guardián, no "
+        "solo pasar por casualidad"
+    )
+
+
+def test_an_incomplete_assembly_never_attempts_the_canonical_write(
+        _seis_rebanadas) -> None:
+    cinco = _seis_rebanadas[:-1]
+    with pytest.raises(shards.ShardIncomplete):
+        harness.merge_search_records(cinco)
+    assert not config.ceilings_record_for(False).exists(), (
+        "un rechazo por cobertura incompleta no puede dejar nada escrito en "
+        "el registro canónico"
+    )
+
+
+def test_merge_search_records_enters_the_guarded_writer_roster() -> None:
+    """El compañero explícito de `test_the_slice_sealer_never_touches_the_
+    governed_roster`: `merge_search_records` SÍ tiene que entrar al roster
+    que deriva `tests/test_label_noise.py:1253-1274`, y consultar el
+    guardián -- no porque el roster no haya crecido, sino porque su propia
+    fuente nombra las tres piezas."""
+    fuente = inspect.getsource(harness.merge_search_records)
+    assert "ceilings_record_for" in fuente
+    assert "write_text" in fuente
+    assert "governs_the_ceilings_record" in fuente

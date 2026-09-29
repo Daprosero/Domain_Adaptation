@@ -143,6 +143,41 @@ PER_RUN_DIST = {
 }
 
 
+def test_rules_for_axis_refuses_an_undeclared_axis():
+    """Un eje que nadie declaró no puede resolverse -- ni siquiera a `[]`."""
+    nested = {"axis": "seed", "axes": {
+        "seed": {"poolable": [], "perEnvironment": [], "perRun": [],
+                 "identicalAcrossShards": []}}}
+    with pytest.raises(shards.ShardsDisagree) as raised:
+        shards.rules_for_axis("transfer", nested)
+    assert "transfer" in str(raised.value)
+
+
+def test_rules_for_axis_refuses_a_declared_axis_missing_a_group():
+    """Un grupo faltante se niega -- nunca se lee como `[]` en silencio."""
+    nested = {"axis": "seed", "axes": {
+        "seed": {"poolable": [], "perEnvironment": [], "perRun": []}}}
+    with pytest.raises(shards.ShardsDisagree) as raised:
+        shards.rules_for_axis("seed", nested)
+    assert "identicalAcrossShards" in str(raised.value)
+
+
+def test_rules_for_axis_resolves_a_flat_declaration_for_its_own_axis():
+    """Sin `axes`, las claves planas SON las reglas de su propio eje --
+    identidad, no una lectura tolerante."""
+    flat = dict(DIST)
+    resolved = shards.rules_for_axis("seed", flat)
+    assert resolved is flat
+
+
+def test_rules_for_axis_refuses_a_flat_declaration_for_a_different_axis():
+    """Una declaración plana no tiene un segundo eje que resolver."""
+    flat = dict(DIST)
+    with pytest.raises(shards.ShardsDisagree) as raised:
+        shards.rules_for_axis("transfer", flat)
+    assert "transfer" in str(raised.value)
+
+
 def test_partition_returns_the_three_groups_the_declaration_actually_holds():
     poolable, per_environment, per_run = shards.partition(config.DIMENSIONS, PER_RUN_DIST)
     assert set(poolable) == set(PER_RUN_DIST["poolable"])

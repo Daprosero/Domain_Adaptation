@@ -631,8 +631,16 @@ def test_render_refuses_a_dimension_the_declaration_calls_per_run(monkeypatch) -
     ± and all.
     """
     monkeypatch.setattr(config, "DIMENSIONS", {**config.DIMENSIONS, "seconds": None})
+    # `pooling.per_run_dimensions()` now resolves the seed axis's own nested
+    # block (`rules_for_axis("seed")`, search-distribution-axis/D4) rather
+    # than the flat top-level key directly, so the synthetic dimension has
+    # to reach both: the flat key (what this test reads back as `declared`)
+    # and the nested axis block (what the reader under test actually sees).
     monkeypatch.setitem(MIL_CREDA_Benchmark.__benchmark__["distribution"],
                         "perRun", ["seconds"])
+    monkeypatch.setitem(
+        MIL_CREDA_Benchmark.__benchmark__["distribution"]["axes"]["seed"],
+        "perRun", ["seconds"])
     declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["perRun"]
     assert tables.per_run_dimensions() == list(declared), \
         "the renderer's idea of what does not pool is not the declaration's"
@@ -706,8 +714,14 @@ def test_no_function_that_pools_a_dimension_accepts_one_the_declaration_forbids(
     monkeypatch = pytest.MonkeyPatch()
     try:
         monkeypatch.setattr(config, "DIMENSIONS", {**config.DIMENSIONS, "seconds": None})
+        # Same reason as the sibling test above: the synthetic dimension has
+        # to reach both the flat key and the nested seed-axis block, since
+        # `pooling.per_run_dimensions()` now resolves the latter.
         monkeypatch.setitem(MIL_CREDA_Benchmark.__benchmark__["distribution"],
                             "perRun", ["seconds"])
+        monkeypatch.setitem(
+            MIL_CREDA_Benchmark.__benchmark__["distribution"]["axes"]["seed"],
+            "perRun", ["seconds"])
         declared = MIL_CREDA_Benchmark.__benchmark__["distribution"]["perRun"]
 
         for metric in declared:

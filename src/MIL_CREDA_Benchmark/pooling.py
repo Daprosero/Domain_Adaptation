@@ -29,7 +29,7 @@ def per_run_dimensions() -> list[str]:
     segunda fuente de verdad que envejece en silencio.
     """
     from MIL_CREDA_Benchmark import shards
-    return list(shards.declaration().get("perRun") or [])
+    return list(shards.rules_for_axis("seed").get("perRun") or [])
 
 
 def refuse(metric: str) -> None:

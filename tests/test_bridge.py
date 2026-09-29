@@ -497,3 +497,54 @@ def test_the_bridge_end_to_end_uses_the_real_declaration(tmp_path) -> None:
     summary = json.loads(written["summary"].read_text())
     assert summary["reduction"] == {"epochs": 2, "seeds": [0, 1]}
     assert set(summary["grid"]["M->U"]["G"]) == set(REAL_DIST["poolable"])
+
+
+def test_the_bridge_resolves_the_seed_axis_by_name_not_the_flat_declaration() -> None:
+    """`build_summary()` reads the SEED axis's rules, and says so.
+
+    Hoy funciona por casualidad estructural, no por haberlo dicho: la
+    proyección de identidad (D6) hace que las cuatro claves planas SEAN las
+    listas del eje de semilla, así que `declaration()` y
+    `rules_for_axis("seed")` devuelven el mismo objeto y cualquiera de los dos
+    da el mismo resultado.
+
+    Eso vale mientras el eje de semilla siga siendo el proyectado. El día que
+    la proyección apunte a otro eje ---o que un lector nuevo llegue acá
+    esperando el suyo--- una lectura plana empieza a devolver las reglas de
+    otra cuadrilla sin una palabra, porque las cuatro claves existen igual y
+    tienen la forma correcta. Nombrar el eje convierte eso en imposible en vez
+    de improbable.
+
+    Se mide por identidad y no por igualdad: `rules_for_axis` devuelve el
+    `dist` mismo cuando el eje pedido es el proyectado, así que `is` distingue
+    "resolvió el eje" de "armó un diccionario que casualmente coincide".
+    """
+    import inspect
+
+    from MIL_CREDA_Benchmark import shards
+
+    fuente = inspect.getsource(bridge.build_summary)
+    assert "rules_for_axis" in fuente, (
+        "`build_summary()` resuelve `dist` con `shards.declaration()` pelado, la "
+        "declaración entera y no el eje que este puente resume. Las cuatro "
+        "lecturas de abajo (:167, :168, :203, :217) leen las claves planas, "
+        "que son las del eje de semilla por proyección y no por declaración"
+    )
+    # La premisa de que este cambio es inocuo, y se mide en las LISTAS y no en
+    # los contenedores. `rules_for_axis` devuelve el `dist` mismo sólo cuando la
+    # declaración es PLANA; la nuestra ya tiene bloque `axes`, así que devuelve
+    # el sub-bloque de la semilla ---otro contenedor--- que comparte las cuatro
+    # listas con las claves planas por la proyección de identidad de D6.
+    #
+    # Esa distinción es justo lo que este test existe para no dejar suelta: si
+    # alguien reemplazara la proyección por una copia, los contenedores
+    # seguirían teniendo la forma correcta y estas cuatro comparaciones serían
+    # lo único que se daría cuenta.
+    plano = shards.declaration()
+    por_eje = shards.rules_for_axis("seed")
+    for grupo in shards.GROUPS:
+        assert plano[grupo] is por_eje[grupo], (
+            f"{grupo!r} no es la misma lista por los dos caminos, así que "
+            "nombrar el eje SÍ cambiaría lo que `build_summary()` calcula y "
+            "este cambio dejó de ser una aclaración"
+        )
