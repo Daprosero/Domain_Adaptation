@@ -570,12 +570,20 @@ design (an assertion gets weakened instead of re-pointed).
       u..."` — because `config._refuse_on_stamp_drift` raises `SystemExit`, which derives
       from `BaseException` and so passes straight through an `except Exception`.
 
-      **The reported path was wrong and the correction matters**, because it decides where
-      the fix goes: `latent.available()` does NOT raise. It returns `[]`, correctly, because
-      the availability filter at `latent.py:113` compares `== config.REVISION` and discards
-      the stale manifests before reaching this function. The reachable caller is one level
-      down — `hyperparameter_drift` (`latent.py:328`), whose whole job is to REPORT which
-      fields disagree and which therefore must not die of a disagreement.
+      **CORRECTED 2026-09-28, and the correction is the orchestrator's own error.** This task
+      originally claimed `latent.available()` does NOT raise, and that the availability filter
+      at `latent.py:113` discards the stale manifests first. That is false, and it came from
+      measuring the wrong invocation: `available(rate=0.0, pilot=False)` is the signature's
+      default, so a bare `available()` reads the FULL-scale tree, which is empty, returns `[]`
+      and never reaches the refusal. `available(0.0, True)` — the pilot tree, where all 50
+      stale manifests actually live — raises the `SystemExit` outright, because `available`
+      calls `hyperparameter_drift()` unconditionally with no such filter. The apply agent
+      re-measured rather than trusting this text, which is why it was caught.
+
+      The fix LOCATION was unaffected, and for a better reason than the one first given:
+      `_current_hyper`'s own docstring already promises the graceful fallback its code did not
+      keep. The site was the one its own documentation named, never the caller that happened
+      to surface it.
 
       Pre-existing, not introduced here: `except Exception` has never been able to catch
       `SystemExit`. What the bump changed is that the refusal now fires, so a latent crash
@@ -646,6 +654,23 @@ design (an assertion gets weakened instead of re-pointed).
       Phase 2's own precedent (`82b26f3`) already named as the wrong place to split. Committed to
       `two-encoders-a3` as instructed by this task; the exception candidate itself awaits the
       operator's decision before any PR/merge, exactly as Phase 2's own `size:exception` was
+
+**Phase 3 carries a second maintainer-approved `size:exception`** — 463 authored changed
+lines — and the record distinguishes it from Phase 2's rather than reusing that approval,
+because an "approved" with no reason teaches a later reader nothing about when to grant the
+next one.
+
+**Phase 2's atom was strong**: three re-pointed assertions that could not be separated from
+the production they assert, since a re-pointed test without its production fails and
+production without its re-pointed test is green-first.
+
+**Phase 3's atom is weaker and the operator approved it anyway, knowing that.** Its three
+parts are genuinely separable: the six `latent.py` domain sites, the two-layer domain-mixup
+guard (244 lines, its own new file), and the `SystemExit` catch, which is independent of both
+and could have shipped alone. Approved on cost — the commit already existed and splitting it
+would have meant rewriting local history a third time this session — not on the atom being
+indivisible. A future slice must not cite this as precedent for an atom that merely happens
+to be one commit.
       recorded in a separate follow-up commit after `82b26f3` had already landed.
 
 ---
