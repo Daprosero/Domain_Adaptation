@@ -365,6 +365,17 @@ def objective(key: str, markdown: bool = True) -> str:
             "**Buscamos que la curva viva dentro de [0, 1] y tienda a cero**, y que "
             "ocupe la misma parte del intervalo en las seis transferencias. Salirse "
             "de la banda o cambiar de escala entre pares de dominios es el hallazgo.",
+        "parameters":
+            "**No buscamos un valor: buscamos que nadie lea este número como parte "
+            "de la ganancia.** El piso lleva UN codificador y los brazos adaptados "
+            "llevan dos, uno por dominio, porque la Ec. (13) define un codificador "
+            "por espacio de entrada y un codificador objetivo existe sólo donde un "
+            "término de adaptación lo entrena -- el piso no tiene ninguno que lo "
+            "haga. La asimetría es entonces una consecuencia de la formulación y no "
+            "un desbalance a corregir; lo que sí sería un error es leer el doble de "
+            f"parámetros como algo que el método logró. Son {len(config.VERDICT_TRANSFERS)} "
+            "transferencias medidas con esa misma asimetría en todas, y la dimensión "
+            "es descriptiva: ningún veredicto se decide con ella.",
         "termShares":
             "**Buscamos que la tabla separe qué término manda, no un valor en "
             "particular.** La Ec. (39) suma dos términos de adaptación con su "
