@@ -843,24 +843,54 @@ The diagnostic must be able to **fall** — a reading that cannot move measures 
 
 ## Phase 5 — Full regression and success-criteria audit (sequential, closes the change)
 
-- [ ] 5.1 **[SEQ]** Run the **full, unfiltered** suite:
+- [x] 5.1 **[SEQ]** Run the **full, unfiltered** suite:
       `PYTHONPATH=src .venv/bin/python -m pytest -q`. Record the real numbers. Confirm the sibling
       change's 3 `tests/test_search_distribution.py` reds are still red and are reported as its work,
       not as regressions introduced here.
-- [ ] 5.2 **[SEQ]** Walk `proposal.md`'s Success Criteria checklist item by item against the landed
+- [x] 5.2 **[SEQ]** Walk `proposal.md`'s Success Criteria checklist item by item against the landed
       state; mark none as satisfied without having run the measurement it names (parameter counts,
       gradient-both-sides, `:557`/`:617` re-pointed assertions, `KERNEL_SIGMA` unchanged,
       `hyperparameter_drift` silent, diagnostic behavior, `latent.stale_revisions` count, full suite).
-- [ ] 5.3 **[P]** Confirm `src/CREDA/**` is byte-identical (`git diff --stat` empty for that path) and
+- [x] 5.3 **[P]** Confirm `src/CREDA/**` is byte-identical (`git diff --stat` empty for that path) and
       that no file outside `implementations/Domain_Adaptation` was modified.
-- [ ] 5.4 **[P]** Confirm the report states the parameter asymmetry wherever `parameters` is printed
+- [x] 5.4 **[P]** Confirm the report states the parameter asymmetry wherever `parameters` is printed
       (carries `MIL-CREDA/AGREED.md:164`, already written — verify the sentence survives in
       `tables.py` after the Phase 1 citation edits, rather than being dropped by an unrelated diff).
       *(Spec: `per-domain-encoders` — "The parameter asymmetry is reported where the count is read".)*
-- [ ] 5.5 **[P]** Re-confirm `MIL-CREDA/AGREED.md` **(read-only)** still carries both required entries
+- [x] 5.5 **[P]** Re-confirm `MIL-CREDA/AGREED.md` **(read-only)** still carries both required entries
       unchanged (this change never edits it).
 
 ---
+
+**Evidence (Phase 5, run by the orchestrator, measured against the running code):**
+
+- 5.1 Full unfiltered suite: **693 passed, 3 failed, 1 skipped, 129 subtests passed**. The three
+  are the sibling change's own reds in `tests/test_search_distribution.py`, by name, unchanged.
+- 5.2 Measured by instantiating every arm rather than by reading the code:
+  `config.REVISION == "research-concept-r25.md"`; `KERNEL_SIGMA` unchanged at
+  `36.135014304860874`; `B` = **11,247,434** trainable with `target_encoder is None`; `E`, `F`
+  and `G` = **22,423,946** each with `target_encoder is not encoder` — the Eq. (13) claim
+  asserted live, not inferred; both encoders' `output_dim` equal on every arm; one optimizer,
+  still `model.parameters()`.
+- 5.3 `src/CREDA/**` byte-identical to `main` (`git diff --stat` empty for that path).
+- 5.4 **FOUND AN OPEN AGREEMENT, and it was not green.** `AGREED.md:164` requires the report to
+  state the parameter asymmetry where the count is read, and nothing did — `tables.py:50` maps
+  `"parameters"` to a column label and no sentence existed anywhere. The agreement already had
+  a home nobody had filled: `tables.objective`, the report's declared `objectiveEntry`, covered
+  five dimensions and not this one, and its own fallback printed
+  `'(sin objetivo declarado para parameters)'`. Closed in commit `3d756fb`, red-first, with a
+  test that asserts the ASYMMETRY and deliberately not the two counts — those come from the
+  model, and pinning them by hand would age the report with the first backbone change.
+- 5.5 `MIL-CREDA/AGREED.md` (read-only) still carries both required entries: the `## Reversed`
+  shared-extractor paragraph dated 2026-09-28, and the not-parameter-matched item.
+
+**A method note worth keeping, because it is the trap this repository keeps catching.** 5.4's
+first mutation proved nothing and looked like it had: it replaced ONE occurrence of
+`codificador` while the word remained twice more in the same sentence, and the `git diff
+--numstat` was taken against `HEAD`, where the new sentence was still uncommitted — so the
+numbers described the addition, never the mutation. Redone by replacing every occurrence
+(3 -> 0) and verifying against a saved copy rather than against `HEAD`: red observed quoting
+the mutated sentence, reverted, green re-observed.
 
 ## Phase 6 — Gated: pilot walk and nine-account rehearsal (NOT ordinary apply scope)
 
