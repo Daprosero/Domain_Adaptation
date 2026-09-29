@@ -217,7 +217,7 @@ def stubbed(monkeypatch):
         seen["loaded"].append((record["arm"], record["transfer"]))
         return object(), _Bagset(), _Bagset()
 
-    def _represent(model, bagset, positions, device, unit=None):
+    def _represent(model, bagset, positions, device, domain, unit=None):
         seen["units"].append(unit)
         return torch.arange(40.0).reshape(20, 2), torch.arange(20) % config.CLASSES
 
@@ -661,7 +661,7 @@ def test_every_panel_of_the_grid_is_drawn_at_the_instance_level(
     from types import SimpleNamespace
     bagset = SimpleNamespace(images=images, members=members, labels=labels)
     rows, row_labels = _REAL_REPRESENT(model, bagset, torch.arange(n_bags),
-                                       torch.device("cpu"))
+                                       torch.device("cpu"), "source")
     assert rows.shape[0] == n_bags == len(row_labels), (
         "represent's own default did not read the arm's declared bag unit "
         f"-- got {rows.shape[0]} rows for {n_bags} bags"
@@ -894,7 +894,7 @@ def test_the_nearest_source_bag_is_found_with_the_bag_kernel_in_the_representati
     # the same kernel, rebuilt from the published pieces rather than from the
     # function under test
     H_s = model.instance_embeddings(source.images[source.members[source.eval_idx]])
-    H_t = model.instance_embeddings(target.images[target.members[target.eval_idx]])
+    H_t = model.target_embeddings(target.images[target.members[target.eval_idx]])
     sigma = config.KERNEL_SIGMA
     pairs_s, pairs_t = model.bags_of(H_s, sigma), model.bags_of(H_t, sigma)
     K_st = bag_kernel_matrix(pairs_s, pairs_t, sigma)
@@ -976,13 +976,29 @@ def test_the_bag_figure_keeps_the_projection_and_never_becomes_a_bipartite_diagr
     columns in one figure already makes the panels large enough to read, so the
     projection stays; if it is still a knot, the bipartite is next.
 
-    Asserted where it can fail: both domains go through ONE embedding call, and
-    what each panel scatters is exactly the coordinates that call returned --
-    never a layout the drawing invented.
+    Asserted where it can fail: one projection call over one shared codomain
+    `R^d`, and what each panel scatters is exactly the coordinates that call
+    returned -- never a layout the drawing invented.
+
+    Resolved, not assumed (spec `per-domain-encoders`, "The bag-figure
+    projection test's premise survives, resolved"): under two encoders,
+    `bag_pairs`' source and target rows now come from two DIFFERENT encoder
+    calls (`instance_embeddings`/`target_embeddings`), but they still land in
+    the one shared codomain both encoders share, and `_embed` -- the UMAP
+    projection this test is actually about, distinct from either domain
+    encoder -- is still called exactly once per panel on their concatenation.
+    The premise below is about that ONE projection call, not about how many
+    encoder calls produced the rows it projects.
 
     Reachable red: project the two domains separately, or place them at two
     fixed abscissae and keep only the edges.
     """
+    assert trained["model"].encoder is not trained["model"].target_encoder, (
+        "the two rows this panel projects together now come from two "
+        "different encoder objects -- the premise above is about the ONE "
+        "projection call, not about a shared encoder"
+    )
+
     produced = latent.correspondence_grid(
         tmp_path / "bolsas.pdf", config.BAG_PANELS, TRANSFERS[:1], seed=3,
         device=torch.device("cpu"))

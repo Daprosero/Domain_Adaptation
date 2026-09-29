@@ -20,6 +20,7 @@ whatever the source module currently holds.
 
 from __future__ import annotations
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -107,10 +108,12 @@ def test_geometry_correspondence_represent_attention_spread_and_bag_pairs_use_th
     model, source, target = _model(monkeypatch, "G")
     device = torch.device("cpu")
 
-    source_rows, source_labels = latent.represent(model, source, source.eval_idx, device)
-    target_rows, target_labels = latent.represent(model, target, target.eval_idx, device)
+    source_rows, source_labels = latent.represent(
+        model, source, source.eval_idx, device, "source")
+    target_rows, target_labels = latent.represent(
+        model, target, target.eval_idx, device, "target")
     latent.geometry(source_rows, source_labels, target_rows, target_labels)
-    latent.attention_spread(model, target, target.eval_idx, device)
+    latent.attention_spread(model, target, target.eval_idx, device, "target")
     latent.correspondence(model, source, target, device)
     latent.bag_pairs(model, source, target, device)
 
@@ -125,3 +128,42 @@ def test_geometry_correspondence_represent_attention_spread_and_bag_pairs_use_th
             f"{name} was called from latent.py with sigma={sigma!r}, not the "
             f"declared constant {config.KERNEL_SIGMA!r}"
         )
+
+
+def test_represent_and_attention_spread_refuse_a_call_with_no_domain(monkeypatch) -> None:
+    """Spec `per-domain-encoders` -- "No embedding without a declared domain":
+    a caller that cannot state which domain it holds MUST be refused rather
+    than defaulted to either encoder. `domain` carries no default anywhere in
+    either signature, so omitting it is a `TypeError` from Python itself,
+    exactly the shape `config.KERNEL_SIGMA`'s own declared rule already uses
+    for the same kind of quantity ("every caller passes this explicitly, with
+    no default anywhere in the call chain").
+
+    Reachable red: give either parameter a default of `"source"` -- both
+    calls below would then silently succeed.
+    """
+    model, source, target = _model(monkeypatch, "G")
+    device = torch.device("cpu")
+
+    with pytest.raises(TypeError):
+        latent.represent(model, source, source.eval_idx, device)
+    with pytest.raises(TypeError):
+        latent.attention_spread(model, target, target.eval_idx, device)
+
+
+def test_represent_and_attention_spread_refuse_an_unknown_domain(monkeypatch) -> None:
+    """The other half of the same requirement: a `domain` that is neither
+    `"source"` nor `"target"` is refused by name, in `mechanism_weights`'s own
+    idiom (`wiring.py`), naming `wiring.SIDES` so a caller sees exactly what
+    was expected.
+
+    Reachable red: compare `domain` against a hardcoded pair of strings
+    instead of `wiring.SIDES`, or swallow the mismatch instead of raising.
+    """
+    model, source, target = _model(monkeypatch, "G")
+    device = torch.device("cpu")
+
+    with pytest.raises(ValueError, match="unknown domain"):
+        latent.represent(model, source, source.eval_idx, device, "both")
+    with pytest.raises(ValueError, match="unknown domain"):
+        latent.attention_spread(model, target, target.eval_idx, device, "both")
