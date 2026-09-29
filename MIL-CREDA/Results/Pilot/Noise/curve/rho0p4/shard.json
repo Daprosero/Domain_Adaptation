@@ -1,6 +1,6 @@
 {
   "shard": null,
-  "env": "7c284fdfafc7",
+  "env": "4bef9265ee57",
   "environment": {
     "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
     "python": "3.12.13",
@@ -8,8 +8,8 @@
     "torch": "2.13.0",
     "selfHosted": true,
     "power": {
-      "source": "mains",
-      "charge": 100
+      "source": "battery",
+      "charge": 52
     },
     "device": {
       "name": "mps",
@@ -23,25 +23,25 @@
   "labelNoise": 0.4,
   "pilot": true,
   "kind": "curve",
-  "revision": "research-concept-r21.md",
+  "revision": "research-concept-r25.md",
   "ceilings": {
-    "milcreda": 0.010796012633645448
+    "milcreda": 0.0439127047526845
   },
   "ceilingsByTransfer": {
     "milcreda": {
-      "M->U": 0.7117782412223816,
-      "U->M": 0.010796012633645448,
-      "M->S": 0.0005247933940780908,
-      "S->M": 0.0008875530880758854,
-      "U->S": 0.008911638421286783,
-      "S->U": 0.10294579502332135
+      "M->U": 0.0001524973580209063,
+      "U->M": 0.0005821960846533309,
+      "M->S": 0.0015850219372762475,
+      "S->M": 0.0439127047526845,
+      "U->S": 0.0014733700952415908,
+      "S->U": 0.04771159563918036
     }
   },
   "hyperByTransfer": {},
   "evidence": {
-    "codeDigest": "3cbc5effcfc0742f7408261c7c1e9e63849764a44b54edb75586a8c8dc8b8072",
+    "codeDigest": "d6a112302ea9aadfa653a2df5eb25856227b14d4d3bcbb06ef955af1a594a30a",
     "importsFrom": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark",
-    "commit": "aa42a4e2df618781787b1007086240474aa188fe",
+    "commit": "96062bae17a41534f5a2e4b42aafdf7a3937f2ba",
     "outputs": [
       "runs.jsonl",
       "shard.json",
