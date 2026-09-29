@@ -398,7 +398,34 @@ __benchmark__ = {
     # `axis`: the seed. `tools/distribute.py`'s own `shard_seeds()` splits the
     # seed list and nothing else — every arm of every transfer within one seed
     # runs on one machine, so no rung's subtraction ever crosses a hardware
-    # boundary.
+    # boundary. `axis` stays exactly this scalar, unmoved and unpluralized:
+    # it is the one field the forge's own reader checks
+    # (`implementation_engine.py:1603`, `dist.get("axis") == "arm"`), and
+    # nothing here may cost that refusal its ability to fire.
+    #
+    # `axes` (below, plural) is a second thing: this benchmark's shards now
+    # split two ways, not one. A campaign or mechanism-sweep shard still
+    # splits by seed, which is everything the four groups just below
+    # describe. A search shard splits by TRANSFER instead, and its own rule
+    # block inverts the searched-ceiling fields on purpose: `ceilings`,
+    # `ceilingsByTransfer` and `hyperByTransfer` must be identical across
+    # campaign shards (a seed split leaves every transfer's ceiling
+    # untouched) and must legitimately DIFFER across search shards (each one
+    # holds only the slice of those fields it searched) — telling two search
+    # shards to agree on them would be asking them not to have done their
+    # job. Which fields are which per axis lives in `axes` itself, not
+    # repeated here as a second copy that could drift from it.
+    #
+    # The four flat top-level keys below (`poolable`, `perEnvironment`,
+    # `perRun`, `identicalAcrossShards`) are what the forge's declaration
+    # reader still requires, and they are the seed axis's own four groups,
+    # projected by IDENTITY rather than copied — the `dict.update` call right
+    # after this literal closes binds them to the same list objects as
+    # `axes["seed"]`'s. Two structures that merely held equal lists would be
+    # two copies, and equality that happened to hold today is exactly how two
+    # copies begin to disagree; identity makes drift unrepresentable rather
+    # than merely unlikely. A reader of the flat keys and a reader of
+    # `axes["seed"]` are reading one list, seen from two sides.
     #
     # The four groups below are not a guess: a replication (`A` on one
     # machine, `B` on a second, `C` back on the first as a same-machine
@@ -485,21 +512,62 @@ __benchmark__ = {
     # this asymmetry costs the pooling nothing.
     "distribution": {
         "axis": "seed",
-        "poolable": ["sourceAccuracy", "targetAccuracy", "contribution",
-                     "supervised", "adaptationShare", "parameters"],
-        "perEnvironment": [],
-        # `seconds`/`peakMiB` are gone, not merely reclassified: time and memory
-        # were removed from `config.DIMENSIONS` entirely ("drop timing"), so
-        # there is no longer a dimension for a `perRun` group to hold. Every
-        # dimension the harness still measures pools, and this group stays
-        # declared and empty -- a measured fact, not an unfilled block.
-        "perRun": [],
-        # `labelNoise` refuses the merge that no averaging could repair: two shards
-    # contaminated at different rates are two experiments, and one table drawn
-    # over both is a table nobody can attribute. It is a flat top-level field of
-    # every stamp, which is what `disagreements()` needs to be able to see it.
-    "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
-                              "hyperByTransfer", "labelNoise"],
+        "axes": {
+            # The seed axis: a campaign or mechanism-sweep shard splits the
+            # seed list and nothing else. The four groups here are exactly
+            # what the flat keys below project (D6) -- this sub-block is the
+            # single source, the flat keys are the same data seen from the
+            # forge's side.
+            "seed": {
+                "poolable": ["sourceAccuracy", "targetAccuracy", "contribution",
+                             "supervised", "adaptationShare", "parameters"],
+                "perEnvironment": [],
+                # `seconds`/`peakMiB` are gone, not merely reclassified: time
+                # and memory were removed from `config.DIMENSIONS` entirely
+                # ("drop timing"), so there is no longer a dimension for a
+                # `perRun` group to hold. Every dimension the harness still
+                # measures pools, and this group stays declared and empty --
+                # a measured fact, not an unfilled block.
+                "perRun": [],
+                # `labelNoise` refuses the merge that no averaging could
+                # repair: two shards contaminated at different rates are two
+                # experiments, and one table drawn over both is a table
+                # nobody can attribute. It is a flat top-level field of every
+                # stamp, which is what `disagreements()` needs to see it.
+                "identicalAcrossShards": ["epochs", "ceilings", "ceilingsByTransfer",
+                                          "hyperByTransfer", "labelNoise"],
+            },
+            # The transfer axis: a search shard splits the transfer list
+            # instead. THE INVERSION that motivates this whole capability:
+            # `ceilings`/`ceilingsByTransfer`/`hyperByTransfer` are absent
+            # from `identicalAcrossShards` here on purpose. Each search shard
+            # holds a DIFFERENT slice of exactly those fields -- telling them
+            # to agree would be asking them not to have done their job. What
+            # must still agree is the backdrop the search ran under.
+            "transfer": {
+                "poolable": ["ceiling", "rampDelta", "rampDeltaLocal", "ceilingLocal",
+                             "kernelSigma", "attentionGamma", "attentionTemperature",
+                             "tauLocal"],
+                # Declared and empty, the same convention and the same reason
+                # the seed axis carries it: no measurement has shown any part
+                # of a search's answer to be a property of the machine that
+                # computed it.
+                "perEnvironment": [],
+                # One shard's own execution cost. Kept per slice under the
+                # assembly's own `shards` list and summed as total compute at
+                # the family level -- never presented as one wall clock.
+                "perRun": ["seconds"],
+                "identicalAcrossShards": ["epochs", "labelNoise", "revision",
+                                          "criterion", "role", "trials", "neutral",
+                                          "requiredScale", "search", "arm",
+                                          "flatRule", "atRequiredScale"],
+                # Keyed by this axis's own unit, so the assembly takes the
+                # UNION and refuses a duplicate. A fifth group: the four the
+                # forge requires are the four above, and this one is invisible
+                # to it.
+                "perUnit": ["transfers", "byTransfer", "perTransfer"],
+            },
+        },
         # Donde aterriza un shard que volvio. No es una eleccion nueva: es el
         # mismo lugar que `shards.read_shards()` ya usa cuando quien la llama no
         # dice otro --- la campana completa, limpia y de forma campania. Lo que
@@ -519,3 +587,17 @@ __benchmark__ = {
         "function": "run_pilot",
     },
 }
+
+# The flat top-level keys the forge's declaration reader requires
+# (`implementation_engine.py:1326-1400`), bound to the SAME list objects as
+# the seed axis's groups -- a projection, never a copy. `dict.update` inserts
+# the same list objects, so e.g.
+# `__benchmark__["distribution"]["poolable"] is
+# __benchmark__["distribution"]["axes"]["seed"]["poolable"]` holds; two
+# structures that merely held equal lists would be two copies, and equality
+# that happened to hold today is exactly how two copies begin to disagree.
+# Self-maintaining: a fifth group added to the seed axis projects
+# automatically, with nothing to keep in sync by hand. Appended after `axis`,
+# `axes` and `shardsRoot` in iteration order -- nothing in-repo reads
+# declaration key order.
+__benchmark__["distribution"].update(__benchmark__["distribution"]["axes"]["seed"])
