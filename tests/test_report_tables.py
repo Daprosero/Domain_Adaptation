@@ -1637,3 +1637,42 @@ def test_the_term_shares_table_is_shown_once_right_after_the_noise_figures() -> 
         "the term-shares table is not after Section 1's noise figures"
     assert index < shown.index("render"), \
         "the term-shares table is not before the accuracy tables"
+
+
+def test_el_objetivo_de_parameters_declara_la_asimetria_de_codificadores() -> None:
+    """El acuerdo de `AGREED.md` pide que el informe LO DIGA donde se lee el conteo.
+
+    `parameters` es una dimensión DESCRIPTIVE: no se contesta un ganador con ella,
+    así que nada la compara y nada se pone rojo si su número duplica. Y con dos
+    codificadores duplica: el piso `B` lleva uno y los brazos adaptados llevan dos,
+    porque un codificador objetivo existe sólo donde un término de adaptación lo
+    entrena. Quien lea la tabla sin esa frase lee el tamaño del aparato como parte
+    de lo que el método ganó.
+
+    Por eso el acuerdo no se satisface con que el número esté bien: se satisface con
+    que la frase exista donde el número se lee, y `objectiveEntry` ---declarado en
+    `__benchmark__["report"]`--- es ese lugar. `objective()` cubría cinco
+    dimensiones y `parameters` no era una de ellas.
+
+    Se afirma la ASIMETRÍA, no los dos números: los conteos salen del modelo y un
+    test que los fijara a mano envejecería con el primer cambio de columna del
+    respaldo. Lo que no puede envejecer es que el piso lleve menos que los brazos
+    adaptados, que es lo que la frase tiene que explicar.
+    """
+    frase = tables.objective("parameters")
+    assert frase.strip(), (
+        "`objective('parameters')` no dice nada, así que el informe imprime el "
+        "conteo sin la frase que `AGREED.md` pide junto a él"
+    )
+    bajo = frase.lower()
+    assert "codificador" in bajo, (
+        f"la frase tiene que nombrar el codificador, que es la razón de la "
+        f"asimetría y no un detalle de implementación: {frase!r}"
+    )
+    assert "piso" in bajo or " b " in bajo, (
+        f"tiene que nombrar el piso, que es el lado que lleva menos: {frase!r}"
+    )
+    assert not any(str(n) in frase for n in (11247434, 22423946)), (
+        "la frase no fija los conteos: salen del modelo, y clavarlos acá haría "
+        f"envejecer el informe con el primer cambio de respaldo. {frase!r}"
+    )
