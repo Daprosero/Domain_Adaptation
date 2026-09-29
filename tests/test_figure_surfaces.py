@@ -915,6 +915,11 @@ def test_the_nearest_source_bag_is_found_with_the_bag_kernel_in_the_representati
     # the representation space and not the projection: the kernel ran over the
     # instance embeddings the model produced, in their full width
     assert H_s.shape[-1] == model.encoder.output_dim > 2
+    # Eq. (13)'s codomain claim, asserted at the one place the two widths
+    # meet: the source and target encoders are different objects (Decision 4)
+    # but agree on `output_dim` (spec `per-domain-encoders`, "Both encoders
+    # share the same codomain").
+    assert model.target_encoder.output_dim == model.encoder.output_dim
 
 
 def test_the_measured_correspondence_hit_rate_is_printed_with_the_figure(

@@ -476,8 +476,13 @@ __benchmark__ = {
     # without the same forge change `commit`/`codeDigest` would need.
     # `poolable` is the only place left that can actually hold it, and it
     # costs nothing to be there: the replication measured `parameters`
-    # bit-identical across every run, so averaging it returns exactly the
-    # constant it already was.
+    # bit-identical across every run of the SAME arm, so averaging it WITHIN
+    # an arm's own seeds returns exactly the constant it already was. It is
+    # NOT bit-identical ACROSS arms since Eq. (13) split the encoder: the
+    # floor (`B`) holds one `FeatureExtractor` and reads 11,247,434, every
+    # adapted arm (`E`, `F`, `G`) holds two and reads 22,423,946
+    # (`MIL-CREDA/AGREED.md:164`) -- `poolable` never averages across arms, so
+    # this asymmetry costs the pooling nothing.
     "distribution": {
         "axis": "seed",
         "poolable": ["sourceAccuracy", "targetAccuracy", "contribution",

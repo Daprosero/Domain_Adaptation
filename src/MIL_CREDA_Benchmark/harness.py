@@ -421,7 +421,10 @@ class Reduction:
 
 @torch.no_grad()
 def accuracy(model: nn.Module, dataset, device: torch.device) -> float:
-    """Bag accuracy: the unit both families decide in."""
+    """Bag accuracy through the SOURCE encoder (`theta_s`): the unit both
+    families decide in. Signature and behavior unchanged since Eq. (13) split
+    the encoder -- `model(x)` is `Arm.forward`, which stays the source path.
+    """
     model.eval()
     correct = total = 0
     for start in range(0, len(dataset), config.BAGS_PER_STEP):
@@ -430,6 +433,31 @@ def accuracy(model: nn.Module, dataset, device: torch.device) -> float:
         x = torch.stack([item[0] for item in items]).to(device)
         y = torch.tensor([item[1] for item in items], device=device)
         correct += int((model(x).argmax(dim=1) == y).sum())
+        total += int(y.numel())
+    model.train()
+    return correct / total if total else float("nan")
+
+
+@torch.no_grad()
+def target_accuracy(model: nn.Module, dataset, device: torch.device) -> float:
+    """Bag accuracy through the TARGET encoder (`theta_t`) -- `accuracy`'s
+    mirror, calling `model.score_target(x)` in place of `model(x)`.
+
+    On the floor (`B`), `Arm.score_target` falls back to the same source
+    encoder `forward` uses, so this reads identically to `accuracy` there;
+    doing nothing here (scoring target material through `theta_s`, as
+    `accuracy` alone would) is the mixed-up-domain failure this method exists
+    to remove -- it would make the 1.99x parameter count buy nothing at
+    inference and make a degenerate target encoder invisible.
+    """
+    model.eval()
+    correct = total = 0
+    for start in range(0, len(dataset), config.BAGS_PER_STEP):
+        items = [dataset[i] for i in range(start, min(start + config.BAGS_PER_STEP,
+                                                     len(dataset)))]
+        x = torch.stack([item[0] for item in items]).to(device)
+        y = torch.tensor([item[1] for item in items], device=device)
+        correct += int((model.score_target(x).argmax(dim=1) == y).sum())
         total += int(y.numel())
     model.train()
     return correct / total if total else float("nan")
@@ -688,7 +716,7 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         epochs_record.append({
             "epoch": epoch,
             "sourceAccuracy": accuracy(model, judged_source, device),
-            "targetAccuracy": accuracy(model, judged_target, device),
+            "targetAccuracy": target_accuracy(model, judged_target, device),
         })
 
     # The supervised magnitude has to leave this function or it is gone: the curve
@@ -846,7 +874,7 @@ def run_mechanism(mechanism: str, transfer: tuple[str, str], seed: int,
         "transfer": transfer_label(transfer),
         "seed": seed,
         "sourceAccuracy": accuracy(model, judged_source, device),
-        "targetAccuracy": accuracy(model, judged_target, device),
+        "targetAccuracy": target_accuracy(model, judged_target, device),
     }
 
 

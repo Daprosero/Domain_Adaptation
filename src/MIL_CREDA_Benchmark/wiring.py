@@ -1,12 +1,16 @@
 """The arms declared in `config.ARMS`: what each one computes, and nothing
 about how it is trained.
 
-Every arm shares the same encoder, the same linear head, the same data, the same
-schedules and the same optimizer. What separates them is written in `config.ARMS`
-and read here: which statistical unit the arm trains on, which adaptation term it
-carries, whether the target blocks are weighted by confidence, whether the local
-correspondence is on, how a bag becomes a representation, and which of a bag's
-instances the arm is allowed to look at.
+Every arm shares the same linear head, the same data, the same schedules and
+the same optimizer. The encoder is where Eq. (13) splits: the floor (`B`)
+holds exactly one, and every arm that declares an adaptation term (`E`, `F`,
+`G`) holds two -- a source encoder and a target encoder, sharing no
+parameter and sharing only the codomain `R^d`. What separates the arms
+otherwise is written in `config.ARMS` and read here: which statistical unit
+the arm trains on, which adaptation term it carries, whether the target
+blocks are weighted by confidence, whether the local correspondence is on,
+how a bag becomes a representation, and which of a bag's instances the arm
+is allowed to look at.
 
 `FeatureExtractor` and `CREDALoss` are used exactly as they are; the only thing
 this file decides is which tensors go in.
@@ -122,6 +126,27 @@ class Arm(nn.Module):
             self.creda = CREDALoss(sigma="auto", lambda_creda=1.0,
                                    use_entropy_weighting=spec["weighting"])
 
+        # Eq. (13)'s second encoder, theta_t -- constructed LAST, through the
+        # same module-level `FeatureExtractor` name `self.encoder` used above
+        # (never a local alias, a second import, or `copy.deepcopy`: six test
+        # files patch this exact name and both constructions must see the
+        # patch). Only where an adaptation term exists to train it: the floor
+        # (`B`) carries no adaptation term and gets `None` rather than an
+        # untrained, frozen-at-initialization module.
+        #
+        # LAST matters (design Decision 3): constructing a `FeatureExtractor`
+        # consumes the global generator, so building this one before the head
+        # or the attention parameters above would shift their draw and put a
+        # SECOND difference on the `B->E` rung (`config.py:944-946`'s
+        # attributability rule) beside the encoder count itself. Constructing
+        # it last means every parameter `B` and an adapted arm share is drawn
+        # from identical generator state, and only the module `B` does not
+        # have consumes state afterwards.
+        self.target_encoder = (
+            FeatureExtractor(backbone=config.BACKBONE, pretrained=config.PRETRAINED)
+            if spec["adaptation"] is not None else None
+        )
+
     # ------------------------------------------------------------ representation
 
     def instance_embeddings(self, bags: torch.Tensor) -> torch.Tensor:
@@ -192,8 +217,11 @@ class Arm(nn.Module):
         Z = torch.stack([bag_embedding(H, w) for H, w in pairs])
         return Z, [w for _, w in pairs]
 
-    def forward(self, bags: torch.Tensor) -> torch.Tensor:
-        """Bag-level scores, whatever unit the arm trains on.
+    def _scores(self, embeddings: torch.Tensor) -> torch.Tensor:
+        """Bag-level scores from already-encoded instances, whatever unit the
+        arm trains on -- the bag/instance branch `forward` and `score_target`
+        share, so Eq. (19) and the instance-averaging rule live in exactly one
+        place regardless of which domain's encoder produced `embeddings`.
 
         The comparison happens at the bag because it is the only unit where both
         families decide without inventing a rule. An instance-unit arm reaches it
@@ -201,12 +229,35 @@ class Arm(nn.Module):
         that average is returned so cross-entropy over it is exactly the negative
         log-likelihood of the averaged decision.
         """
-        embeddings = self.instance_embeddings(bags)
         if self.spec["unit"] == "bag":
             Z, _ = self.bag_representations(embeddings, self.sigma)
             return self.head(Z)
         probabilities = F.softmax(self.head(embeddings), dim=-1).mean(dim=1)
         return torch.log(probabilities + config.EPSILON)
+
+    def forward(self, bags: torch.Tensor) -> torch.Tensor:
+        """Bag-level scores through the SOURCE encoder (`theta_s`) --
+        `harness.accuracy`'s path, and every `nn.Module.__call__` caller's.
+
+        Signature unchanged from before Eq. (13) split the encoder: a domain
+        argument here would either default (reintroducing the exact failure
+        this change removes) or make `model(x)` a `TypeError`, breaking `Arm`
+        as a plain `nn.Module` and editing the floor guard at
+        `tests/test_arm_objectives.py:429`/`:443`. Evaluation through the
+        target encoder gets its own entry point instead: `score_target`.
+        """
+        return self._scores(self.instance_embeddings(bags))
+
+    def score_target(self, bags: torch.Tensor) -> torch.Tensor:
+        """Bag-level scores through the TARGET encoder (`theta_t`) --
+        `harness.target_accuracy`'s path.
+
+        On the floor (`B`), `target_embeddings` falls back to `self.encoder`,
+        so this reads exactly what `forward` reads: the floor's guarantee
+        (Decision 2) is unchanged, and it predicts on target through the same
+        source-trained encoder it always did.
+        """
+        return self._scores(self.target_embeddings(bags))
 
     # ------------------------------------------------------------- adaptation
 
@@ -218,26 +269,33 @@ class Arm(nn.Module):
         # device is; the indices move to wherever the bags actually live.
         return order[: config.BAGS_PER_STEP].to(self.target.members.device)
 
-    def _target_embeddings(self, target_bags: torch.Tensor) -> torch.Tensor:
-        """Encode a target batch during training.
+    def target_embeddings(self, bags: torch.Tensor) -> torch.Tensor:
+        """Encode a batch through the TARGET encoder: (B, m, ...) -> (B, m, d).
 
-        Every adapted arm passes the target batch through the encoder exactly
-        as it passes the source batch: normalization layers stay in training
-        mode and learn from this forward like the rest of the model does. That
-        is the whole of it, and this method exists as a named place rather than
-        as a branch -- it is where a freeze would have to be reintroduced, and
-        `tests/test_arm_objectives.py` points its guard at this exact name.
+        Promoted from the private training-time seam `_target_embeddings`
+        (design Decision 2): it is now the place the encoder CHOICE lives, not
+        merely a named place to reintroduce a freeze at. Routes through
+        `self.target_encoder`, falling back to `self.encoder` on the floor
+        (`B`), where `target_encoder is None` -- the floor's settled
+        behaviour: it holds one encoder, and both its entry points reach it.
 
-        `GN` is retired, and with it the one branch that used to stand here
-        and the three helpers that served only it (`_source_embeddings`,
+        Every adapted arm passes the target batch through its own target
+        encoder exactly as `instance_embeddings` passes the source batch
+        through the source one: normalization layers stay in training mode
+        and learn from this forward like the rest of the model does. `GN` is
+        retired, and with it the one branch that used to stand here and the
+        three helpers that served only it (`_source_embeddings`,
         `_encode_with_frozen_stats`, `_batchnorm_modules`). The
         `spec["normalization"]` key went with them: nothing read it once the
         branch was gone, and a declared field nobody reads is a field the next
         reader has to work out and discard. No declared arm normalizes its
-        target forward with anything but the encoder's own training-mode
+        target forward with anything but its own encoder's training-mode
         statistics.
         """
-        return self.instance_embeddings(target_bags)
+        encoder = self.target_encoder if self.target_encoder is not None else self.encoder
+        B, m = bags.shape[0], bags.shape[1]
+        flat = encoder(bags.reshape(B * m, *bags.shape[2:]))
+        return flat.reshape(B, m, -1)
 
     def _milcreda_term(self, H_s, source_labels, target_bags):
         """Eqs. (14), (16)-(20), (22)-(38): the global score, and the local
@@ -252,7 +310,7 @@ class Arm(nn.Module):
         them. Summing here would fold both into one number and leave this file
         deciding a weight the formulation states.
         """
-        H_t = self._target_embeddings(target_bags)
+        H_t = self.target_embeddings(target_bags)
 
         # Decision 1: one constant bandwidth for the whole method -- the
         # consensus term, the top-k ranking, every kernel block below and
@@ -312,7 +370,7 @@ class Arm(nn.Module):
     def _creda_term(self, H_s, source_labels, target_bags):
         """CREDA's own loss, over instances, exactly as it was written."""
         instances = H_s.reshape(-1, self.encoder.output_dim)
-        H_t = self._target_embeddings(target_bags).reshape(-1, self.encoder.output_dim)
+        H_t = self.target_embeddings(target_bags).reshape(-1, self.encoder.output_dim)
         y_s = source_labels.repeat_interleave(H_s.shape[1])
         g_t = F.softmax(self.head(H_t), dim=1)
         return self.creda(instances, H_t, y_s, g_t)
