@@ -9,7 +9,7 @@
     "selfHosted": true,
     "power": {
       "source": "battery",
-      "charge": 52
+      "charge": 95
     },
     "device": {
       "name": "mps",
@@ -98,7 +98,7 @@
   "evidence": {
     "codeDigest": "d6a112302ea9aadfa653a2df5eb25856227b14d4d3bcbb06ef955af1a594a30a",
     "importsFrom": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark",
-    "commit": "6576fb777d11351d52824bb7b97fa4b262f6f3ea",
+    "commit": "3440aab040e4dc4aa6767a9fc04af9e495f07566",
     "outputs": [
       "attention_mechanisms.json",
       "runs.jsonl",
