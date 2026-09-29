@@ -58,6 +58,13 @@ from MIL_CREDA.local_term import local_distance, local_loss, total_correspondenc
 from MIL_CREDA.objective import source_loss, total_objective
 from MIL_CREDA_Benchmark import config
 
+#: The two domains Eq. (13) names, and the only two values any caller may
+#: state at an embedding boundary (spec `per-domain-encoders`, "No embedding
+#: without a declared domain"). Not named `DOMAINS` -- `config.DOMAINS`
+#: already means the three datasets M/U/S (`harness.py:873`), and a second
+#: `DOMAINS` here would be a collision a reader has to work out.
+SIDES = ("source", "target")
+
 
 @dataclass
 class Pool:

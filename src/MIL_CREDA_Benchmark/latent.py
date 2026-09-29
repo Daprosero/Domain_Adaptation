@@ -321,7 +321,18 @@ def _current_hyper(record: dict) -> dict:
         resolver = _harness.Reduction(
             hyperByTransfer=config.hyper_by_transfer_on_record(pilot=pilot))
         return _harness.hyper_for(resolver, family, tuple(transfer.split("->")))
-    except Exception:
+    except (Exception, SystemExit):
+        # `config._refuse_on_stamp_drift` raises a bare `SystemExit`, which
+        # derives from `BaseException` and passes straight through a plain
+        # `except Exception` -- this docstring already promised the fallback
+        # below for exactly this case ("a ceiling record that itself refuses
+        # to be read"); only this widened clause makes the promise true.
+        # Not widened to `except BaseException`, which would also swallow
+        # `KeyboardInterrupt`: this catches the refusal's own type, and
+        # `_refuse_on_stamp_drift` itself stays fully reachable everywhere
+        # else it is called directly (`config.hyper_by_transfer_on_record`,
+        # `harness.ceilings_in_force`, etc.) -- only this fallback boundary
+        # absorbs it.
         return {}
 
 
@@ -428,7 +439,8 @@ def load(record: dict, device: torch.device):
 
 @torch.no_grad()
 def represent(model, bagset: bags.BagSet, positions: torch.Tensor,
-              device: torch.device, unit: str | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+              device: torch.device, domain: str,
+              unit: str | None = None) -> tuple[torch.Tensor, torch.Tensor]:
     """The rows this arm actually aligns, and the class of each.
 
     A bag-unit arm aligns bag representations, one row per subject. An
@@ -440,12 +452,24 @@ def represent(model, bagset: bags.BagSet, positions: torch.Tensor,
     forcing the instance unit gives a space every arm has and every panel of a
     grid the same number of points; forcing it for a measurement would put two
     families in one number, which is what the default exists to prevent.
+
+    `domain` states which encoder embeds `bagset` -- `"source"` for
+    `model.instance_embeddings` (theta_s), `"target"` for
+    `model.target_embeddings` (theta_t). Required, with no default anywhere in
+    the call chain (spec `per-domain-encoders` -- "No embedding without a
+    declared domain"): a caller that cannot state which domain it holds is
+    refused rather than defaulted to either encoder, because a silent default
+    would return a plausible number instead of an error.
     """
+    if domain not in wiring.SIDES:
+        raise ValueError(f"unknown domain {domain!r}; known: {wiring.SIDES}")
+    embed = model.instance_embeddings if domain == "source" else model.target_embeddings
+
     rows, labels = [], []
     for start in range(0, len(positions), config.BAGS_PER_STEP):
         chunk = positions[start:start + config.BAGS_PER_STEP]
         instances = bagset.images[bagset.members[chunk]].to(device)
-        embeddings = model.instance_embeddings(instances)
+        embeddings = embed(instances)
         classes = bagset.labels[chunk].to(device)
         if (unit or model.spec["unit"]) == "bag":
             Z, _ = model.bag_representations(embeddings, config.KERNEL_SIGMA)
@@ -599,7 +623,7 @@ def correspondence(model, source: bags.BagSet, target: bags.BagSet,
     source_positions = source.eval_idx
     target_positions = target.eval_idx
     H_s = model.instance_embeddings(source.images[source.members[source_positions]].to(device))
-    H_t = model.instance_embeddings(target.images[target.members[target_positions]].to(device))
+    H_t = model.target_embeddings(target.images[target.members[target_positions]].to(device))
 
     # Through the arm's own selection, so a selecting arm is scored on the
     # instances it actually looks at. Reading the full bags here would measure a
@@ -635,18 +659,26 @@ def correspondence(model, source: bags.BagSet, target: bags.BagSet,
 
 @torch.no_grad()
 def attention_spread(model, bagset: bags.BagSet, positions: torch.Tensor,
-                     device: torch.device) -> float:
+                     device: torch.device, domain: str) -> float:
     """The entropy of the in-bag weights, normalized to [0, 1].
 
     One means the arm is weighting every instance alike, which is the uniform
     mean it was supposed to improve on; near zero means it is resting the whole
     subject on a few instances.
+
+    `domain` states which encoder embeds `bagset`, same contract as
+    `represent`'s: required, no default, refused when it is not one of
+    `wiring.SIDES`.
     """
+    if domain not in wiring.SIDES:
+        raise ValueError(f"unknown domain {domain!r}; known: {wiring.SIDES}")
+    embed = model.instance_embeddings if domain == "source" else model.target_embeddings
+
     entropies = []
     for start in range(0, len(positions), config.BAGS_PER_STEP):
         chunk = positions[start:start + config.BAGS_PER_STEP]
         instances = bagset.images[bagset.members[chunk]].to(device)
-        for _, beta in model.bags_of(model.instance_embeddings(instances), config.KERNEL_SIGMA):
+        for _, beta in model.bags_of(embed(instances), config.KERNEL_SIGMA):
             entropy = -(beta * torch.log(beta + config.EPSILON)).sum()
             entropies.append(float(entropy / torch.log(torch.tensor(float(len(beta))))))
     return sum(entropies) / len(entropies)
@@ -655,8 +687,8 @@ def attention_spread(model, bagset: bags.BagSet, positions: torch.Tensor,
 def analyse(record: dict, device: torch.device) -> dict:
     """One checkpoint, measured."""
     model, source, target = load(record, device)
-    source_rows, source_labels = represent(model, source, source.eval_idx, device)
-    target_rows, target_labels = represent(model, target, target.eval_idx, device)
+    source_rows, source_labels = represent(model, source, source.eval_idx, device, "source")
+    target_rows, target_labels = represent(model, target, target.eval_idx, device, "target")
 
     reading = {
         "arm": record["arm"],
@@ -668,7 +700,8 @@ def analyse(record: dict, device: torch.device) -> dict:
         "domainSeparability": separability(source_rows, target_rows, record["seed"]),
     }
     if model.spec["attention"] is not None:
-        reading["attentionSpread"] = attention_spread(model, target, target.eval_idx, device)
+        reading["attentionSpread"] = attention_spread(
+            model, target, target.eval_idx, device, "target")
     if model.spec["local"]:
         reading["correspondence"] = correspondence(model, source, target, device)
     return reading
@@ -866,9 +899,9 @@ def latent_grid(path: Path, arms: list[str], transfers: list[str], seed: int,
                 continue
             model, source, target = load(record, device)
             s_rows, s_labels = represent(model, source, source.eval_idx, device,
-                                         unit=config.LATENT_UNIT)
+                                         "source", unit=config.LATENT_UNIT)
             t_rows, t_labels = represent(model, target, target.eval_idx, device,
-                                         unit=config.LATENT_UNIT)
+                                         "target", unit=config.LATENT_UNIT)
             del model
             # Every panel the same size, so no column looks denser than another.
             s_rows, s_labels = equalize(s_rows, s_labels, config.LATENT_POINTS, seed)
@@ -918,7 +951,7 @@ def bag_pairs(model, source: bags.BagSet, target: bags.BagSet, device: torch.dev
     # side is what the model actually trained on (`train`).
     s_pos, t_pos = source.train_idx, target.eval_idx
     H_s = model.instance_embeddings(source.images[source.members[s_pos]].to(device))
-    H_t = model.instance_embeddings(target.images[target.members[t_pos]].to(device))
+    H_t = model.target_embeddings(target.images[target.members[t_pos]].to(device))
     sigma = config.KERNEL_SIGMA
     pairs_s, pairs_t = model.bags_of(H_s, sigma), model.bags_of(H_t, sigma)
     K_st = bag_kernel_matrix(pairs_s, pairs_t, sigma)

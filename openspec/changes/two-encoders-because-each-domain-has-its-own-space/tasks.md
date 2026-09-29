@@ -449,69 +449,120 @@ design (an assertion gets weakened instead of re-pointed).
 
 ## Phase 3 — Slice (c): `latent.py` names its domain (depends on Phase 2 landed)
 
-- [ ] 3.1 **[SEQ]** Add `wiring.SIDES = ("source", "target")` (not `DOMAINS` — `config.DOMAINS`
+- [x] 3.1 **[SEQ]** Add `wiring.SIDES = ("source", "target")` (not `DOMAINS` — `config.DOMAINS`
       already means the three datasets M/U/S). Add the refusal idiom `raise ValueError(f"unknown
       domain {domain!r}; known: {SIDES}")`, matching `mechanism_weights`'s existing idiom.
       *(Spec: `per-domain-encoders` — "No embedding without a declared domain".)*
-- [ ] 3.2 **[SEQ]** Write RED tests first for the domain-required contract: omitting `domain` on
+      **DONE**: `wiring.SIDES = ("source", "target")` added beside the imports, with the
+      `config.DOMAINS`-collision comment carried verbatim.
+- [x] 3.2 **[SEQ]** Write RED tests first for the domain-required contract: omitting `domain` on
       `represent`/`attention_spread` raises `TypeError` (no default anywhere in the signature); an
       unknown string raises `ValueError` naming `SIDES`. **Observe RED** (current signatures still
       lack the required parameter).
       *(Spec: `per-domain-encoders` — "A caller that cannot state a domain is refused".)*
-- [ ] 3.3 **[SEQ]** Change `latent.represent(model, bagset, positions, device, domain, unit=None)` —
+      **DONE**: two tests added to `tests/test_latent_sigma_readers.py`
+      (`test_represent_and_attention_spread_refuse_a_call_with_no_domain`,
+      `test_represent_and_attention_spread_refuse_an_unknown_domain`). **Observed RED**:
+      `Failed: DID NOT RAISE TypeError` / `... DID NOT RAISE ValueError`, both before 3.3/3.4.
+- [x] 3.3 **[SEQ]** Change `latent.represent(model, bagset, positions, device, domain, unit=None)` —
       `domain` required, no default, refuses on anything but `wiring.SIDES`.
-- [ ] 3.4 **[SEQ]** Change `latent.attention_spread(model, bagset, positions, device, domain)` — same
+      **DONE**.
+- [x] 3.4 **[SEQ]** Change `latent.attention_spread(model, bagset, positions, device, domain)` — same
       contract.
-- [ ] 3.5 **[SEQ]** Update `correspondence` (`latent.py:601`/`:602`) — the two adjacent lines name
+      **DONE**. 3.2's two RED tests **observed GREEN** immediately after 3.3+3.4 (before 3.5-3.7).
+- [x] 3.5 **[SEQ]** Update `correspondence` (`latent.py:601`/`:602`) — the two adjacent lines name
       `instance_embeddings`/`target_embeddings` explicitly (not a string argument — this is the
       copy-paste-adjacent-pair shape design Decision 1 flags).
-- [ ] 3.6 **[SEQ]** Update `bag_pairs` (`latent.py:920`/`:921`) — same two-method-name treatment.
+      **DONE** — current lines `latent.py:612`/`:613` (line numbers shifted by Phase 1/2 edits).
+- [x] 3.6 **[SEQ]** Update `bag_pairs` (`latent.py:920`/`:921`) — same two-method-name treatment.
       This is what makes `tests/test_figure_surfaces.py:896-897`'s rebuild agree again once
       re-pointed (task 3.9).
-- [ ] 3.7 **[SEQ]** Update `analyse` (`latent.py:658`/`:659`, `:671`), `latent_grid` (`:868`,
+      **DONE** — current lines `latent.py:931`/`:932`.
+- [x] 3.7 **[SEQ]** Update `analyse` (`latent.py:658`/`:659`, `:671`), `latent_grid` (`:868`,
       `:870-871`), and `correspondence_grid` to pass the domain explicitly at each call.
       Run the suite. **Observe GREEN** for 3.2's new tests.
       *(3.3–3.7 spec: `per-domain-encoders` — "No embedding without a declared domain"; "Every
       post-hoc reader in `latent.py` names its domain explicitly".)*
-- [ ] 3.8 **[SEQ]** Confirm `tools/measure_kernel_sigma.py` is **not edited** — it calls
+      **DONE** for `analyse` and `latent_grid`. **`correspondence_grid` needed no edit**: measured,
+      not assumed — it has no direct embedding call of its own, only `bag_pairs(...)` (fixed by
+      3.6), so it inherits the correct routing with nothing to change here.
+- [x] 3.8 **[SEQ]** Confirm `tools/measure_kernel_sigma.py` is **not edited** — it calls
       `instance_embeddings` on a freshly constructed model where both encoders are the same
       pretrained resnet18, reproducing `config.KERNEL_SIGMA = 36.135014304860874` byte-for-byte.
       Read-only verification task. *(No spec — explicitly out of scope, design Decision 7.)*
-- [ ] 3.9 **[SEQ]** Re-point `tests/test_figure_surfaces.py:896-897`
+      **DONE** — confirmed untouched (`git status --porcelain` empty for this path) and confirmed
+      it still runs end to end (`PYTHONPATH=src .venv/bin/python tools/measure_kernel_sigma.py`);
+      it prints a measured value ~7e-7 off the declared constant, a pre-existing float32/float64
+      artifact unrelated to and unmoved by this phase.
+- [x] 3.9 **[SEQ]** Re-point `tests/test_figure_surfaces.py:896-897`
       (`test_the_nearest_source_bag_is_found_...`) at `:897` from `model.instance_embeddings` to
       `model.target_embeddings` for the target side. Before 3.5/3.6 land, confirm it is still
       **green** (domain-blind `bag_pairs` still agrees with the domain-blind rebuild). After 3.5/3.6
       land, **observe it red** if left unedited, then re-point and **observe GREEN**.
       *(Spec: `per-domain-encoders` — "Every post-hoc reader in `latent.py` names its domain
       explicitly"; Design Decision 6e.)*
-- [ ] 3.10 **[SEQ]** `tests/test_figure_surfaces.py:963` — reword the docstring premise from "both
+      **DONE** — measured exactly as described (current lines `:896`/`:897`, unshifted): full-suite
+      run right after 3.5-3.7 landed showed this one test **RED** (`assert False`,
+      `model.target_encoder.output_dim == model.encoder.output_dim` line unaffected, the failure
+      was the `nearest`-kernel comparison using the stale source-only rebuild). Re-pointed `:897`,
+      **observed GREEN** immediately after.
+- [x] 3.10 **[SEQ]** `tests/test_figure_surfaces.py:963` — reword the docstring premise from "both
       domains go through ONE embedding call" to "one projection call over one shared codomain
       `R^d`". **Add** the assertion `model.encoder is not model.target_encoder` so the new claim is
       measurable. Leave the existing assertions (`count == config.CLASSES * 2`, one `_embed` call
       per panel) **unedited** — they pass without modification (design Decision 6d, spec scenario
       "The bag-figure projection test's premise survives, resolved").
       *(Spec: `per-domain-encoders` — same scenario.)*
-- [ ] 3.11 **[SEQ]** **Observe, do not assume**: run `tests/test_figure_surfaces.py:1002`'s
+      **DONE** — current line `:968` (shifted). Docstring reworded, new assertion added, the three
+      named existing assertions (`count == config.CLASSES * 2`, `projection.shape[1] == 2`, one
+      `_embed` call per panel via `len(embedded) == len(config.BAG_PANELS)`) left byte-for-byte
+      unedited. **Observed GREEN** with no other change needed.
+- [x] 3.11 **[SEQ]** **Observe, do not assume**: run `tests/test_figure_surfaces.py:1002`'s
       abscissa-overlap assertion under two independently-initialized stub encoders. If it fails,
       replace the overlap heuristic with the structural claim already asserted at `:986`/`:992` (one
       `_embed` call carrying both domains) — **do not reseed the fixture** until it passes, which
       would make the assertion a description of a seed rather than a property.
       *(No spec — named as an observation obligation in design Testing Strategy and Open Questions.)*
-- [ ] 3.12 Add the two-layer domain-mixup guard:
-  - [ ] 3.12.1 **[SEQ]** Behavioral, one assertion per consumer: perturb `θ_t`'s parameters on a
+      **DONE** — measured: `test_the_bag_figure_keeps_the_projection_and_never_becomes_a_bipartite_
+      diagram` (current line `:968`, containing the abscissa-overlap assertion at current `:1007`)
+      **passes** under the two now-independently-initialized stub encoders (`trained` fixture,
+      `torch.manual_seed(11)` then `wiring.build("G", ...)`, encoder built before target_encoder per
+      Decision 3). No replacement needed; observation recorded rather than assumed.
+- [x] 3.12 Add the two-layer domain-mixup guard: **DONE** — new file `tests/test_domain_mixup_guard.py`.
+  - [x] 3.12.1 **[SEQ]** Behavioral, one assertion per consumer: perturb `θ_t`'s parameters on a
         loaded adapted arm; assert every target-side reading (`represent`, `attention_spread`,
         `correspondence`, `bag_pairs`) **moves** and every source-side reading does **not**; then
         perturb `θ_s` and assert the mirror. Never infer one consumer's guard from a sibling's.
         *(Spec: `per-domain-encoders` — "A caller that names its domain is served by the matching
         encoder is served"; "A mixed-up domain is detectable, not silent".)*
-  - [ ] 3.12.2 **[SEQ]** Structural, derived rather than listed: an AST walk asserting no module
+        **DONE**, with one named, cited deviation from a literal reading: `correspondence` returns
+        one combined scalar over both domains (`massOnTrueClass`), not separate source/target rows,
+        so it cannot be split into a clean moves/does-not-move pair the way the other three can —
+        both perturbations move it, and that (in both directions) is exactly the useful signal (see
+        the two tests' own docstrings for why). **Mutation-verified reachable**: temporarily
+        reverted `bag_pairs`' `H_t` to `instance_embeddings` — the target-perturbation test
+        **failed** exactly on `"bag_pairs' targetRows did not move when theta_t moved"`; reverted,
+        **re-observed GREEN**.
+  - [x] 3.12.2 **[SEQ]** Structural, derived rather than listed: an AST walk asserting no module
         under `src/MIL_CREDA_Benchmark/` **other than `wiring.py`** calls `instance_embeddings` —
         precedent `tests/test_figure_surfaces.py:673-688`. The only expected `src/` call sites after
         this change are `wiring.py:204` (`forward`, source by construction) and `wiring.py:354`
         (`training_step`, source by context). This condition is derived (any call site, anywhere),
         not a roster, so it reddens on a **new** site the behavioral guard structurally cannot see.
         *(Spec: `per-domain-encoders` — "No embedding without a declared domain".)*
-- [ ] 3.13 **[SEQ]** The `except Exception` at `latent.py:324` cannot catch the refusal it
+        **DONE, with a named correction to this task's own text**: read literally, "no module other
+        than `wiring.py`" would also forbid `latent.py`'s own source-side calls to
+        `instance_embeddings` — which Decision 7's own choice table *requires*
+        (`correspondence`/`bag_pairs` name it directly for the source side; `represent`/
+        `attention_spread` route through it for `domain="source"`), and which already existed
+        before this phase. A single-file exemption cannot be what was intended, since it would
+        redden on the design's own chosen implementation. Implemented exempting both `wiring.py`
+        and `latent.py` — the two files actually named as legitimate call sites once Decision 7's
+        table and prose are read together. **Mutation-verified reachable**: temporarily appended a
+        throwaway `model.instance_embeddings(x)` call to `tables.py` — the guard **failed**
+        (`instance_embeddings called outside wiring.py/latent.py: ['tables.py:2357']`); reverted
+        (`git checkout -- tables.py`), **re-observed GREEN**.
+- [x] 3.13 **[SEQ]** The `except Exception` at `latent.py:324` cannot catch the refusal it
       is there to absorb, and the revision bump made that reachable. **Measured on
       `two-encoders-a1`, not inferred**: `_current_hyper` handed a real on-disk manifest
       (revision `research-concept-r21.md`, of which there are 50) escapes with an uncaught
@@ -542,8 +593,60 @@ design (an assertion gets weakened instead of re-pointed).
       `_refuse_on_stamp_drift` unable to refuse anywhere would trade a crash for a silence,
       which is worse. `hyperparameter_drift` must still report the drift it was written to
       report.
-- [ ] 3.14 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
+
+      **DONE, with one measured correction to this task's own text.** Re-measured on this branch
+      (`two-encoders-a3`), not inferred from the earlier report: `latent.available(0.0, True)`
+      (the real pilot tree, 50 manifests) **does** raise the described `SystemExit` today —
+      `refusing to read ceilings from .../ceilings.pilot.json: stamped under a revision or
+      hyperparameters the current config no longer carries: milcreda.` — because `available()`
+      calls `hyperparameter_drift(record)` unconditionally for every found manifest (`latent.py`,
+      inside its own loop), not only for current-revision ones; there is no filter that "discards
+      the stale manifests before reaching this function". `latent.available()` (default args,
+      `rate=0.0, pilot=False`) *does* return `[]` without raising, but only because that particular
+      directory (`MIL-CREDA/Models/Benchmark`) is empty on disk today — an unrelated reason. This
+      does not change where the fix belongs: `_current_hyper`'s own docstring (`latent.py:303-310`)
+      already promises exactly this fallback ("a ceiling record that itself refuses to be read...");
+      the code just did not keep that promise. Fixed at the one site the docstring already names.
+
+      RED FIRST: added `test_hyperparameter_drift_survives_a_ceiling_record_stamped_under_a_
+      different_revision` (`tests/test_latent_binding.py`) — a `tmp_path` ceilings record stamped
+      `research-concept-r21.md`, monkeypatched onto `config.CEILINGS_RECORD`. **Observed RED**:
+      `SystemExit: refusing to read ceilings from .../ceilings.json: stamped under a revision or
+      hyperparameters the current config no longer carries: milcreda.` (uncaught, escaping
+      `latent.hyperparameter_drift`). Widened `_current_hyper`'s `except Exception:` to
+      `except (Exception, SystemExit):` — not `except BaseException`, so `KeyboardInterrupt` still
+      propagates. **Observed GREEN** immediately after. **Reachability re-confirmed in the same
+      test**: `config.hyper_by_transfer_on_record(pilot=False)` against the identical stale record
+      still raises `SystemExit` directly — the refusal itself was not neutered, only
+      `_current_hyper`'s own fallback boundary now absorbs it. Also corrected the now-stale
+      docstring of the pre-existing `test_the_full_on_disk_pilot_tree_reports_exactly_67_r21_
+      stamped_records_stale`, which described this as an open, unfixed defect — it names the fix
+      and the test that proves it, in the same phase that found it.
+- [x] 3.14 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
       sibling's 3 reds remain. Commit.
+      **DONE**. Full suite: `3 failed, 680 passed, 1 skipped, 129 subtests passed` (was `3 failed,
+      674 passed, 1 skipped, 129 subtests passed` after Phase 2 — `+6` matches the six new Phase 3
+      tests: 2 domain-required-contract + 3 domain-mixup-guard + 1 `SystemExit`-survives). The 3
+      failures are exactly the sibling's `tests/test_search_distribution.py` reds by name
+      (`test_the_declaration_names_the_axis_the_search_can_split_on`,
+      `test_a_unit_resolves_to_the_axis_the_step_declares`,
+      `test_partial_search_records_merge_instead_of_overwriting`), unchanged. `src/CREDA/**`
+      confirmed byte-identical (`git diff --stat src/CREDA/` empty).
+
+      **Review-budget note, recorded rather than assumed approved**: `git diff --numstat` +
+      `tests/test_domain_mixup_guard.py` (new file) totals **463 authored changed lines**
+      (`latent.py` 45+12, `wiring.py` 7+0, `test_figure_surfaces.py` 22+6, `test_latent_binding.py`
+      67+12, `test_latent_sigma_readers.py` 45+3, `test_domain_mixup_guard.py` +244) — over the
+      400-line guideline, same as Phase 2's approved exception. Recorded here as a `size:exception`
+      **CANDIDATE** with its reason rather than split further, and **not assumed approved**: Phase 3
+      was assigned as one indivisible slice (six domain-blind call sites, the domain-required
+      contract they all depend on, the two-layer mixup guard proving the boundary holds, and the
+      one `SystemExit` fix the same revision bump reached) — splitting it would separate an
+      encoder-routing change from the tests that are the only thing proving it correct, which
+      Phase 2's own precedent (`82b26f3`) already named as the wrong place to split. Committed to
+      `two-encoders-a3` as instructed by this task; the exception candidate itself awaits the
+      operator's decision before any PR/merge, exactly as Phase 2's own `size:exception` was
+      recorded in a separate follow-up commit after `82b26f3` had already landed.
 
 ---
 

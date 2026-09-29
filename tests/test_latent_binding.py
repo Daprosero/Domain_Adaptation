@@ -227,18 +227,20 @@ def test_the_full_on_disk_pilot_tree_reports_exactly_67_r21_stamped_records_stal
     `config.REVISION` is r25 after Phase 1's bump -- so `stale_revisions()`
     must report exactly 67, none of them current.
 
-    Built from the raw on-disk JSON rather than through `latent.available()`:
-    that function's own `hyperparameter_drift()` call reads
-    `config.ceilings_on_record(pilot=True)`, which -- now that
-    `ceilings.pilot.json` is itself one of the 67 r21-stamped records -- raises
-    `SystemExit` from `config._refuse_on_stamp_drift`, uncaught by
-    `_current_hyper`'s `except Exception` (`SystemExit` is a `BaseException`,
-    not an `Exception`). That is a real, pre-existing defect this bump surfaces
-    for the first time -- no existing test called `available()` against real
-    on-disk data before -- and fixing it is a behavior change outside this
-    isolated commit's scope, reported separately rather than fixed here. This
-    test exercises `stale_revisions()` itself, the function the requirement
-    names, against the real population.
+    Built from the raw on-disk JSON rather than through `latent.available()`,
+    to isolate `stale_revisions()` itself -- the function the requirement
+    names -- from `available()`'s own I/O and tagging. This population is
+    also what surfaced a real, pre-existing defect: `available()`'s own
+    `hyperparameter_drift()` call reads a per-transfer hyperparameter record
+    which -- now that `ceilings.pilot.json` is itself one of the 67
+    r21-stamped records -- used to raise an uncaught `SystemExit` from
+    `config._refuse_on_stamp_drift` (a `BaseException`, not caught by
+    `_current_hyper`'s `except Exception`). Fixed in the same phase that
+    found it (`_current_hyper`'s catch now covers this refusal's own type;
+    see `tests/test_latent_binding.py`'s
+    `test_hyperparameter_drift_survives_a_ceiling_record_stamped_under_a_different_revision`),
+    so `latent.available(0.0, True)` against this same real tree no longer
+    raises.
     """
     import json
 
@@ -786,6 +788,59 @@ def test_a_checkpoint_stamped_with_a_different_per_transfer_winner_is_refused(
         "config default -- the checkpoint's OWN sigma is not config's "
         f"default either, {config.KERNEL_SIGMA!r}, so a comparison against "
         "that would report a different drift")
+
+
+def test_hyperparameter_drift_survives_a_ceiling_record_stamped_under_a_different_revision(
+        tmp_path, monkeypatch):
+    """`_current_hyper`'s own docstring already promises this fallback: `{}`
+    whenever there is "a ceiling record that itself refuses to be read
+    (deleted, or stamped under a revision `_refuse_on_stamp_drift` no longer
+    recognises)". The code did not keep that promise: `_refuse_on_stamp_drift`
+    raises a bare `SystemExit`, which derives from `BaseException` and passes
+    straight through `_current_hyper`'s `except Exception` uncaught.
+
+    Measured on `two-encoders-a1`, not inferred: a real on-disk manifest
+    whose `transfer` names a real ceiling record stamped under an earlier
+    revision made `_current_hyper` escape exactly this way -- pre-existing,
+    not introduced here (`except Exception` has never been able to catch
+    `SystemExit`); what the revision bump changed is that the refusal now
+    actually fires, so a latent crash became a live one. `hyperparameter_drift`
+    is the reachable caller a checkpoint manifest carrying a `transfer` field
+    goes through, and its whole job is to REPORT which fields disagree -- it
+    must not die of a disagreement in a file it never asked about.
+    """
+    import json
+
+    from MIL_CREDA_Benchmark import config
+
+    record_path = tmp_path / "ceilings.json"
+    record_path.write_text(json.dumps({
+        "milcreda": {"ceiling": 1e-2, "revision": "research-concept-r21.md",
+                    "byTransfer": {}, "perTransfer": {}},
+    }), encoding="utf-8")
+    monkeypatch.setattr(config, "CEILINGS_RECORD", record_path)
+
+    vigente = next(a for a, spec in config.ARMS_BY_ID.items()
+                  if spec["adaptation"] == "milcreda")
+    record = {"arm": vigente, "transfer": "S->M", "seed": 0,
+             "reduction": {"epochs": 20, "pilot": False,
+                           "kernelSigma": config.KERNEL_SIGMA,
+                           "attentionGamma": config.ATTENTION_GAMMA,
+                           "attentionTemperature": config.ATTENTION_TEMPERATURE}}
+
+    drift = latent.hyperparameter_drift(record)
+
+    assert drift == {}, (
+        "a ceiling record stamped under an earlier revision must fall back "
+        "to the bare config default -- exactly what _current_hyper's own "
+        "docstring already promises -- not escape as an uncaught SystemExit; "
+        f"got {drift!r}")
+
+    # The guard must still be REACHABLE everywhere else: this fallback is
+    # scoped to `_current_hyper`'s own boundary, not a neutering of
+    # `_refuse_on_stamp_drift` itself.
+    with pytest.raises(SystemExit):
+        config.hyper_by_transfer_on_record(pilot=False)
 
 
 # `test_a_floor_the_bench_no_longer_declares_is_an_undefined_question` removed:
