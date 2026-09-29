@@ -25,12 +25,20 @@
 | Chained PRs recommended | Yes |
 | Suggested split | PR 1 (Phase 1 / slice a) → PR 2 (Phase 2 / slice b) → PR 3 (Phase 3 / slice c) → PR 4 (Phase 4 / slice d) |
 | Delivery strategy | ask-on-risk |
-| Chain strategy | pending — **decision owed to the orchestrator before `sdd-apply` starts, not decided here** |
+| Chain strategy | **`feature-branch-chain`** — settled by the operator this session and cached; the tracker is `two-encoders`, slices are `two-encoders-a1` … `two-encoders-a4`, and nothing enters `main` until every slice lands |
 
 ```text
 Decision needed before apply: Yes
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: `feature-branch-chain` (operator, this session)
+
+**Phase 2 carries a maintainer-approved `size:exception`.** Its single commit is 562 authored
+changed lines (476+/86-) against the 400-line guideline. Approved by the operator rather than
+split, on the ground that the atom is real and not merely large: the three re-pointed
+assertions in `tests/test_arm_objectives.py` and the second encoder in `wiring.py` must land
+together, because a re-pointed test without its production fails and production without its
+re-pointed test is green-first. Splitting it would have cut the commit by its line count rather
+than by its meaning, and left the suite red in between.
 400-line budget risk: High
 ```
 
@@ -434,7 +442,7 @@ design (an assertion gets weakened instead of re-pointed).
       byte-identical (`git diff --stat src/CREDA/` empty). Committed as one atomic commit,
       `82b26f3` `feat(wiring): add the target encoder, Eq. (13)'s second FeatureExtractor` — 6 files
       (4 `src/`, 2 `tests/`), 476 insertions / 86 deletions (562 changed lines — over the 400-line
-      review-budget guideline; flagged in apply-progress as a `size:exception` candidate rather than
+      review-budget guideline; **APPROVED by the operator as a `size:exception`** rather than
       split, since Phase 2 was assigned as one indivisible slice — see Risks).
 
 ---
