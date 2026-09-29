@@ -585,6 +585,32 @@ def hyper_for(reduction: Reduction, family: str | None,
     return {**pooled, **(winner or {})}
 
 
+#: Spec `target-degeneracy-diagnostic` / design Decision 9: the seven
+#: per-step readings `wiring.Arm.training_step` now returns, aggregated per
+#: epoch below. `targetBagEntropy` and `targetConfidenceMin` take the MIN
+#: over an epoch's own steps -- a mean would wash out a collapse that
+#: happened on only one of them, exactly the failure mode the diagnostic
+#: exists to catch; the rest are meant, the same aggregation `curve` already
+#: gets for `mean_supervised`.
+_DEGENERACY_FIELDS = (
+    "targetBagEntropy", "targetConfidenceMean", "targetConfidenceMin",
+    "activeClasses", "sourceKernelMean", "crossKernelMean", "targetKernelMean",
+)
+_DEGENERACY_FIELDS_MIN = frozenset({"targetBagEntropy", "targetConfidenceMin"})
+
+
+def _epoch_degeneracy_summary(steps: list[dict]) -> dict:
+    """One epoch's own aggregate over its `BAGS_PER_STEP`-sized steps."""
+    summary = {}
+    for name in _DEGENERACY_FIELDS:
+        values = [step[name] for step in steps]
+        if name in _DEGENERACY_FIELDS_MIN:
+            summary[name] = min(values) if values else float("nan")
+        else:
+            summary[name] = sum(values) / len(values) if values else float("nan")
+    return summary
+
+
 def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
             reduction: Reduction, device: torch.device,
             material: dict, ceiling: float | None = None,
@@ -696,6 +722,7 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         for group in optimizer.param_groups:
             group["lr"] = learning_rate(epoch, reduction.epochs)
 
+        epoch_diagnostics: list[dict] = []
         for batch in balanced_batches(source_train.targets, steps, generator):
             items = [source_train[i] for i in batch]
             x = torch.stack([item[0] for item in items]).to(device)
@@ -712,11 +739,13 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
                           "contributionGlobal": step["contributionGlobal"],
                           "contributionLocal": step["contributionLocal"],
                           "contribution": step["contribution"]})
+            epoch_diagnostics.append({name: step[name] for name in _DEGENERACY_FIELDS})
 
         epochs_record.append({
             "epoch": epoch,
             "sourceAccuracy": accuracy(model, judged_source, device),
             "targetAccuracy": target_accuracy(model, judged_target, device),
+            **_epoch_degeneracy_summary(epoch_diagnostics),
         })
 
     # The supervised magnitude has to leave this function or it is gone: the curve
@@ -750,6 +779,15 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     # The last epoch's evaluation is the final one; measuring it again would cost
     # two more passes over both evaluation sets in every one of the runs.
     final = epochs_record[-1]
+    # Spec `target-degeneracy-diagnostic`: the ONE per-run summary field
+    # (design Decision 8) -- the minimum over the epoch trace's own minima,
+    # which is exactly the global minimum over every step of the run. Chosen
+    # over `final`'s own reading because "did the representation ever
+    # degenerate during this run" is what r25's question asks, and the last
+    # epoch alone cannot answer it.
+    target_bag_entropy_min = min(
+        point["targetBagEntropy"] for point in epochs_record
+    )
     return {
         "arm": arm_id,
         "transfer": f"{transfer[0]}->{transfer[1]}",
@@ -778,6 +816,7 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
         ),
         "curve": curve,
         "epochs": epochs_record,
+        "targetBagEntropyMin": target_bag_entropy_min,
         "state": model.state_dict() if arm_id in config.CHECKPOINTS else None,
     }
 
