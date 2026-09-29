@@ -56,6 +56,7 @@ from MIL_CREDA.global_term import (
 )
 from MIL_CREDA.local_term import local_distance, local_loss, total_correspondence
 from MIL_CREDA.objective import source_loss, total_objective
+from MIL_CREDA.renyi import quadratic_entropy, trace_normalize
 from MIL_CREDA_Benchmark import config
 
 #: The two domains Eq. (13) names, and the only two values any caller may
@@ -64,6 +65,38 @@ from MIL_CREDA_Benchmark import config
 #: already means the three datasets M/U/S (`harness.py:873`), and a second
 #: `DOMAINS` here would be a collision a reader has to work out.
 SIDES = ("source", "target")
+
+
+def _target_bag_entropy(K_tt: torch.Tensor) -> float:
+    """r25:1087's prescribed target-degeneracy diagnostic (spec
+    `target-degeneracy-diagnostic`): `quadratic_entropy(trace_normalize(K_tt))`
+    over the UNCONDITIONAL target bag Gram, with no new mathematics -- Eq. (9)
+    and Eq. (10) as `MIL_CREDA.renyi` already implements them, read off the
+    matrix `_milcreda_term` already builds.
+
+    Reports rather than raises at both of the boundaries the composition can
+    reach: `trace_normalize`'s `ValueError` on a non-positive trace, and
+    `quadratic_entropy`'s own `ValueError` on a zero Frobenius norm. A
+    diagnostic that crashes exactly when the failure mode it exists to catch
+    is at its most severe is the opposite of what a diagnostic is for.
+    `float("nan")` is this repository's established absent-reading sentinel
+    (`harness.accuracy`, `latent.geometry`), not `0.0` -- `0.0` is exactly the
+    collapsed value this diagnostic reports, so it cannot also mean "no
+    reading available" without becoming indistinguishable from the failure it
+    exists to flag.
+
+    Read-only: `.detach()` before leaving `torch`, exactly as every other
+    reported (never optimized) float in `training_step`'s own return dict
+    already does -- this reading is never a term of Eq. (39).
+    """
+    try:
+        A = trace_normalize(K_tt)
+    except ValueError:
+        return float("nan")
+    try:
+        return float(quadratic_entropy(A).detach())
+    except ValueError:
+        return float("nan")
 
 
 @dataclass
