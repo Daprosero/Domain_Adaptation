@@ -2,11 +2,11 @@
   "arm": "F",
   "transfer": "U->M",
   "seed": 0,
-  "targetAccuracy": 0.8888888888888888,
+  "targetAccuracy": 0.1111111111111111,
   "sourceAccuracy": 1.0,
   "reduction": {
     "setting": "trained",
-    "revision": "research-concept-r21.md",
+    "revision": "research-concept-r25.md",
     "backbone": "resnet18",
     "instancesPerBag": 30,
     "bagsPerDomain": 120,
@@ -22,79 +22,93 @@
     "pilot": true,
     "kind": "campaign",
     "rampCeiling": 1.0,
-    "kernelSigma": 60.7729889121759,
-    "attentionGamma": 0.01365767469209711,
-    "attentionTemperature": 0.711723564948792,
-    "tauLocal": 4.466752700001235,
-    "ceilingLocal": 1.0,
+    "kernelSigma": 71.88714606469675,
+    "attentionGamma": 0.2818175410235265,
+    "attentionTemperature": 1.0390386245778092,
+    "tauLocal": 0.19071433953026704,
+    "ceilingLocal": 0.12384855780587649,
     "ceilings": {
-      "milcreda": 0.010796012633645448
+      "milcreda": 0.0439127047526845
     },
     "ceilingsByTransfer": {
       "milcreda": {
-        "M->U": 0.7117782412223816,
-        "U->M": 0.010796012633645448,
-        "M->S": 0.0005247933940780908,
-        "S->M": 0.0008875530880758854,
-        "U->S": 0.008911638421286783,
-        "S->U": 0.10294579502332135
+        "M->U": 0.0001524973580209063,
+        "U->M": 0.0005821960846533309,
+        "M->S": 0.0015850219372762475,
+        "S->M": 0.0439127047526845,
+        "U->S": 0.0014733700952415908,
+        "S->U": 0.04771159563918036
       }
     },
     "hyperByTransfer": {
       "milcreda": {
         "M->U": {
-          "rampDelta": 1.1459150621714134,
-          "kernelSigma": 30.931736326763957,
-          "attentionGamma": 0.8665927080924227,
-          "attentionTemperature": 0.12300535032448288,
-          "tauLocal": 1.530867687382285
+          "rampDelta": 6.401581991815601,
+          "rampDeltaLocal": 6.04875655308298,
+          "ceilingLocal": 0.00029835994628167514,
+          "kernelSigma": 304.8600979355246,
+          "attentionGamma": 0.029576213965188836,
+          "attentionTemperature": 0.8560045407980659,
+          "tauLocal": 5.40985240016914
         },
         "U->M": {
-          "rampDelta": 1.9071433953026697,
-          "kernelSigma": 60.7729889121759,
-          "attentionGamma": 0.01365767469209711,
-          "attentionTemperature": 0.711723564948792,
-          "tauLocal": 4.466752700001235
+          "rampDelta": 47.714989087910766,
+          "rampDeltaLocal": 45.088544531480125,
+          "ceilingLocal": 0.12384855780587649,
+          "kernelSigma": 71.88714606469675,
+          "attentionGamma": 0.2818175410235265,
+          "attentionTemperature": 1.0390386245778092,
+          "tauLocal": 0.19071433953026704
         },
         "M->S": {
-          "rampDelta": 96.29576984475433,
-          "kernelSigma": 133.9727025616371,
-          "attentionGamma": 0.49959661167655944,
-          "attentionTemperature": 0.39812333984284914,
-          "tauLocal": 0.9814803531488547
+          "rampDelta": 9.814803531488545,
+          "rampDeltaLocal": 1.4476370486738008,
+          "ceilingLocal": 0.8762759516141873,
+          "kernelSigma": 12.921926802635273,
+          "attentionGamma": 0.6014066849073454,
+          "attentionTemperature": 1.0252553438033913,
+          "tauLocal": 3.461020107679805
         },
         "S->M": {
-          "rampDelta": 9.734793243960574,
-          "kernelSigma": 262.9202599732451,
-          "attentionGamma": 0.18683122468306068,
-          "attentionTemperature": 3.0795556078209914,
-          "tauLocal": 0.10432511547211254
+          "rampDelta": 2.9938060531611432,
+          "rampDeltaLocal": 30.9597645606701,
+          "ceilingLocal": 0.06577191244463536,
+          "kernelSigma": 13.267019971299472,
+          "attentionGamma": 0.6178920674016364,
+          "attentionTemperature": 0.19523029838426512,
+          "tauLocal": 0.7106151655669635
         },
         "U->S": {
-          "rampDelta": 1.1687734964272058,
-          "kernelSigma": 41.60352607028823,
-          "attentionGamma": 0.6774089868066343,
-          "attentionTemperature": 7.208405598508218,
-          "tauLocal": 1.303496723980585
+          "rampDelta": 8.021293693266443,
+          "rampDeltaLocal": 18.80162521167111,
+          "ceilingLocal": 0.013059710290919251,
+          "kernelSigma": 10.5754989968479,
+          "attentionGamma": 0.034362741500415184,
+          "attentionTemperature": 7.433493546482691,
+          "tauLocal": 1.0452605970362692
         },
         "S->U": {
-          "rampDelta": 1.7563489345356125,
-          "kernelSigma": 167.54575081713534,
-          "attentionGamma": 0.9117472918680046,
-          "attentionTemperature": 2.2536076353685393,
-          "tauLocal": 4.229037310968515
+          "rampDelta": 11.45562527920199,
+          "rampDeltaLocal": 74.26095374866418,
+          "ceilingLocal": 0.0017179703353255558,
+          "kernelSigma": 237.94130636640762,
+          "attentionGamma": 0.3774768698074742,
+          "attentionTemperature": 8.230552641738583,
+          "tauLocal": 0.5552908316103149
         }
       }
     },
     "ceilingSearch": {
       "milcreda": {
         "arm": "G",
-        "ceiling": 0.010796012633645448,
-        "rampDelta": 1.9071433953026697,
-        "kernelSigma": 60.7729889121759,
-        "attentionGamma": 0.01365767469209711,
-        "attentionTemperature": 0.711723564948792,
-        "tauLocal": 4.466752700001235,
+        "ceiling": 0.0439127047526845,
+        "rampDelta": 2.9938060531611432,
+        "rampDeltaLocal": 30.9597645606701,
+        "ceilingLocal": 0.06577191244463536,
+        "kernelSigma": 13.267019971299472,
+        "attentionGamma": 0.6178920674016364,
+        "attentionTemperature": 0.19523029838426512,
+        "tauLocal": 0.7106151655669635,
         "criterion": "targetAccuracy",
         "role": "valid",
         "epochs": 3,
@@ -114,6 +128,16 @@
             "rampDelta": {
               "low": 1.0,
               "high": 100.0,
+              "log": true
+            },
+            "rampDeltaLocal": {
+              "low": 1.0,
+              "high": 100.0,
+              "log": true
+            },
+            "ceilingLocal": {
+              "low": 0.0001,
+              "high": 1.0,
               "log": true
             },
             "kernelSigma": {
@@ -139,9 +163,10 @@
           },
           "resolution": 0.05
         },
-        "decidedByFlatRule": false,
+        "decidedByFlatRule": true,
         "plateau": [
-          0.010796012633645448
+          0.0439127047526845,
+          0.04771159563918036
         ],
         "noise": 0.05,
         "labelNoise": 0.0,
@@ -149,9 +174,9 @@
         "atRequiredScale": false,
         "requiredScale": {
           "epochs": 20,
-          "trials": 30
+          "trials": 40
         },
-        "seconds": 441.23747774999356,
+        "seconds": 249.86764233297436,
         "transfers": [
           "M->U",
           "U->M",
@@ -162,118 +187,136 @@
         ],
         "neutral": 1.0,
         "byTransfer": {
-          "M->U": 0.7117782412223816,
-          "U->M": 0.010796012633645448,
-          "M->S": 0.0005247933940780908,
-          "S->M": 0.0008875530880758854,
-          "U->S": 0.008911638421286783,
-          "S->U": 0.10294579502332135
+          "M->U": 0.0001524973580209063,
+          "U->M": 0.0005821960846533309,
+          "M->S": 0.0015850219372762475,
+          "S->M": 0.0439127047526845,
+          "U->S": 0.0014733700952415908,
+          "S->U": 0.04771159563918036
         },
         "perTransfer": {
           "M->U": {
-            "ceiling": 0.7117782412223816,
-            "rampDelta": 1.1459150621714134,
-            "kernelSigma": 30.931736326763957,
-            "attentionGamma": 0.8665927080924227,
-            "attentionTemperature": 0.12300535032448288,
-            "tauLocal": 1.530867687382285,
-            "value": 0.8,
-            "best": 0.8,
+            "ceiling": 0.0001524973580209063,
+            "rampDelta": 6.401581991815601,
+            "rampDeltaLocal": 6.04875655308298,
+            "ceilingLocal": 0.00029835994628167514,
+            "kernelSigma": 304.8600979355246,
+            "attentionGamma": 0.029576213965188836,
+            "attentionTemperature": 0.8560045407980659,
+            "tauLocal": 5.40985240016914,
+            "value": 0.1,
+            "best": 0.1,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.7117782412223816
+              0.0001524973580209063,
+              0.007842580169721976,
+              0.028253370073357105
             ],
-            "decidedByFlatRule": false,
-            "minutes": 2.834407465267577
+            "decidedByFlatRule": true,
+            "minutes": 0.698870707633129
           },
           "U->M": {
-            "ceiling": 0.010796012633645448,
-            "rampDelta": 1.9071433953026697,
-            "kernelSigma": 60.7729889121759,
-            "attentionGamma": 0.01365767469209711,
-            "attentionTemperature": 0.711723564948792,
-            "tauLocal": 4.466752700001235,
-            "value": 0.95,
-            "best": 1.0,
+            "ceiling": 0.0005821960846533309,
+            "rampDelta": 47.714989087910766,
+            "rampDeltaLocal": 45.088544531480125,
+            "ceilingLocal": 0.12384855780587649,
+            "kernelSigma": 71.88714606469675,
+            "attentionGamma": 0.2818175410235265,
+            "attentionTemperature": 1.0390386245778092,
+            "tauLocal": 0.19071433953026704,
+            "value": 0.05,
+            "best": 0.1,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.010796012633645448,
-              0.011660437435785431
+              0.0005821960846533309,
+              0.009271232533178183,
+              0.02828555667904453
             ],
             "decidedByFlatRule": true,
-            "minutes": 0.998606179866086
+            "minutes": 0.6941730458337891
           },
           "M->S": {
-            "ceiling": 0.0005247933940780908,
-            "rampDelta": 96.29576984475433,
-            "kernelSigma": 133.9727025616371,
-            "attentionGamma": 0.49959661167655944,
-            "attentionTemperature": 0.39812333984284914,
-            "tauLocal": 0.9814803531488547,
-            "value": 0.3,
-            "best": 0.3,
+            "ceiling": 0.0015850219372762475,
+            "rampDelta": 9.814803531488545,
+            "rampDeltaLocal": 1.4476370486738008,
+            "ceilingLocal": 0.8762759516141873,
+            "kernelSigma": 12.921926802635273,
+            "attentionGamma": 0.6014066849073454,
+            "attentionTemperature": 1.0252553438033913,
+            "tauLocal": 3.461020107679805,
+            "value": 0.1,
+            "best": 0.15,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.0005247933940780908,
-              0.0030676860676691303
+              0.0015850219372762475,
+              0.009158175514569348,
+              0.2731867988479746
             ],
             "decidedByFlatRule": true,
-            "minutes": 0.9148926083338059
+            "minutes": 0.6864366819499992
           },
           "S->M": {
-            "ceiling": 0.0008875530880758854,
-            "rampDelta": 9.734793243960574,
-            "kernelSigma": 262.9202599732451,
-            "attentionGamma": 0.18683122468306068,
-            "attentionTemperature": 3.0795556078209914,
-            "tauLocal": 0.10432511547211254,
-            "value": 0.65,
-            "best": 0.7,
+            "ceiling": 0.0439127047526845,
+            "rampDelta": 2.9938060531611432,
+            "rampDeltaLocal": 30.9597645606701,
+            "ceilingLocal": 0.06577191244463536,
+            "kernelSigma": 13.267019971299472,
+            "attentionGamma": 0.6178920674016364,
+            "attentionTemperature": 0.19523029838426512,
+            "tauLocal": 0.7106151655669635,
+            "value": 0.2,
+            "best": 0.2,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.0008875530880758854,
-              0.0013264142426544668
+              0.0439127047526845
             ],
-            "decidedByFlatRule": true,
-            "minutes": 0.9062773298666191
+            "decidedByFlatRule": false,
+            "minutes": 0.6755708145831402
           },
           "U->S": {
-            "ceiling": 0.008911638421286783,
-            "rampDelta": 1.1687734964272058,
-            "kernelSigma": 41.60352607028823,
-            "attentionGamma": 0.6774089868066343,
-            "attentionTemperature": 7.208405598508218,
-            "tauLocal": 1.303496723980585,
-            "value": 0.3,
-            "best": 0.3,
+            "ceiling": 0.0014733700952415908,
+            "rampDelta": 8.021293693266443,
+            "rampDeltaLocal": 18.80162521167111,
+            "ceilingLocal": 0.013059710290919251,
+            "kernelSigma": 10.5754989968479,
+            "attentionGamma": 0.034362741500415184,
+            "attentionTemperature": 7.433493546482691,
+            "tauLocal": 1.0452605970362692,
+            "value": 0.1,
+            "best": 0.1,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.008911638421286783
+              0.0014733700952415908,
+              0.007518848024453337,
+              0.01325573516917361,
+              0.16601141264131222
             ],
-            "decidedByFlatRule": false,
-            "minutes": 0.8930542972171679
+            "decidedByFlatRule": true,
+            "minutes": 0.6732198624997788
           },
           "S->U": {
-            "ceiling": 0.10294579502332135,
-            "rampDelta": 1.7563489345356125,
-            "kernelSigma": 167.54575081713534,
-            "attentionGamma": 0.9117472918680046,
-            "attentionTemperature": 2.2536076353685393,
-            "tauLocal": 4.229037310968515,
-            "value": 0.8,
-            "best": 0.8,
+            "ceiling": 0.04771159563918036,
+            "rampDelta": 11.45562527920199,
+            "rampDeltaLocal": 74.26095374866418,
+            "ceilingLocal": 0.0017179703353255558,
+            "kernelSigma": 237.94130636640762,
+            "attentionGamma": 0.3774768698074742,
+            "attentionTemperature": 8.230552641738583,
+            "tauLocal": 0.5552908316103149,
+            "value": 0.25,
+            "best": 0.25,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.10294579502332135
+              0.04771159563918036
             ],
             "decidedByFlatRule": false,
-            "minutes": 0.7597395354163988
+            "minutes": 0.6876950548661019
           }
         },
         "inheritanceRule": "ninguna: las seis transferencias se midieron",
@@ -286,19 +329,19 @@
           "selfHosted": true,
           "power": {
             "source": "battery",
-            "charge": 1
+            "charge": 57
           },
           "device": {
             "name": "mps",
             "kind": "mps"
           }
         },
-        "revision": "research-concept-r21.md",
+        "revision": "research-concept-r25.md",
         "currentStamp": true
       }
     },
-    "rampDelta": 1.9071433953026697,
-    "rampDeltaLocal": 20,
+    "rampDelta": 47.714989087910766,
+    "rampDeltaLocal": 45.088544531480125,
     "device": "mps",
     "environment": {
       "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
@@ -307,8 +350,8 @@
       "torch": "2.13.0",
       "selfHosted": true,
       "power": {
-        "source": "mains",
-        "charge": 100
+        "source": "battery",
+        "charge": 52
       },
       "device": {
         "name": "mps",
@@ -7106,7 +7149,7 @@
         }
       ]
     },
-    "revision": "research-concept-r21.md"
+    "revision": "research-concept-r25.md"
   },
   "target": {
     "domain": "M",
@@ -13898,6 +13941,6 @@
         }
       ]
     },
-    "revision": "research-concept-r21.md"
+    "revision": "research-concept-r25.md"
   }
 }
