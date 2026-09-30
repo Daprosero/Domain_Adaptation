@@ -691,6 +691,10 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
+    # Pasos del optimizador acumulados en TODA la corrida, no por epoca: el
+    # intervalo de transmision es global, y reiniciarlo en cada epoca lo haria
+    # depender de cuantos pasos tiene una epoca.
+    transferencias = 0
     steps = -(-config.TRAIN_BAGS // config.BAGS_PER_STEP)
     # `hyper` is never `None` past the resolution above -- `hyper_for` always
     # returns all seven keys, `config`'s/`reduction`'s own defaults where
@@ -730,6 +734,16 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
                                        ramp_local=coefficient_local)
             step["loss"].backward()
             optimizer.step()
+            # `theta_s` -> `theta_t` en el intervalo declarado. Aca y no en
+            # `training_step` porque el intervalo cuenta pasos del OPTIMIZADOR:
+            # transmitir antes de la actualizacion re-anclaria `theta_t` y el
+            # mismo paso lo volveria a mover, lo que mide el intervalo corrido
+            # un paso de lo que nombra. El brazo decide si hay algo adonde
+            # transmitir; un piso vuelve sin tocar un tensor. Procedimiento, no
+            # matematica: ver `AGREED.md` y `config.SOURCE_TO_TARGET_SYNC_STEPS`.
+            transferencias += 1
+            if transferencias % config.SOURCE_TO_TARGET_SYNC_STEPS == 0:
+                model.sync_target_from_source()
             curve.append({"epoch": epoch, "ramp": coefficient,
                           "rampLocal": coefficient_local,
                           "supervised": step["supervised"],
@@ -881,6 +895,10 @@ def run_mechanism(mechanism: str, transfer: tuple[str, str], seed: int,
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
+    # Pasos del optimizador acumulados en TODA la corrida, no por epoca: el
+    # intervalo de transmision es global, y reiniciarlo en cada epoca lo haria
+    # depender de cuantos pasos tiene una epoca.
+    transferencias = 0
     steps = -(-config.TRAIN_BAGS // config.BAGS_PER_STEP)
     ramp_delta = hyper.get("rampDelta", config.RAMP_DELTA)
     ramp_delta_local = hyper.get("rampDeltaLocal", config.RAMP_DELTA)
@@ -905,6 +923,16 @@ def run_mechanism(mechanism: str, transfer: tuple[str, str], seed: int,
                                        ramp_local=coefficient_local)
             step["loss"].backward()
             optimizer.step()
+            # `theta_s` -> `theta_t` en el intervalo declarado. Aca y no en
+            # `training_step` porque el intervalo cuenta pasos del OPTIMIZADOR:
+            # transmitir antes de la actualizacion re-anclaria `theta_t` y el
+            # mismo paso lo volveria a mover, lo que mide el intervalo corrido
+            # un paso de lo que nombra. El brazo decide si hay algo adonde
+            # transmitir; un piso vuelve sin tocar un tensor. Procedimiento, no
+            # matematica: ver `AGREED.md` y `config.SOURCE_TO_TARGET_SYNC_STEPS`.
+            transferencias += 1
+            if transferencias % config.SOURCE_TO_TARGET_SYNC_STEPS == 0:
+                model.sync_target_from_source()
 
     return {
         "mechanism": mechanism,
