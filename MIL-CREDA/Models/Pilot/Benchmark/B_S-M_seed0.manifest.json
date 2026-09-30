@@ -2,8 +2,8 @@
   "arm": "B",
   "transfer": "S->M",
   "seed": 0,
-  "targetAccuracy": 0.19444444444444445,
-  "sourceAccuracy": 0.5,
+  "targetAccuracy": 0.2777777777777778,
+  "sourceAccuracy": 0.7777777777777778,
   "reduction": {
     "setting": "trained",
     "revision": "research-concept-r25.md",
@@ -22,93 +22,93 @@
     "pilot": true,
     "kind": "campaign",
     "rampCeiling": 1.0,
-    "kernelSigma": 13.267019971299472,
-    "attentionGamma": 0.6178920674016364,
-    "attentionTemperature": 0.19523029838426512,
-    "tauLocal": 0.7106151655669635,
-    "ceilingLocal": 0.06577191244463536,
+    "kernelSigma": 121.54605886954542,
+    "attentionGamma": 0.3120272137269251,
+    "attentionTemperature": 0.25918803509948624,
+    "tauLocal": 1.028783528273319,
+    "ceilingLocal": 0.0011904505338958945,
     "ceilings": {
-      "milcreda": 0.0439127047526845
+      "milcreda": 0.009271232533178183
     },
     "ceilingsByTransfer": {
       "milcreda": {
-        "M->U": 0.0001524973580209063,
-        "U->M": 0.0005821960846533309,
-        "M->S": 0.0015850219372762475,
-        "S->M": 0.0439127047526845,
-        "U->S": 0.0014733700952415908,
-        "S->U": 0.04771159563918036
+        "M->U": 0.028253370073357105,
+        "U->M": 0.009271232533178183,
+        "M->S": 0.009158175514569348,
+        "S->M": 0.021244395495831053,
+        "U->S": 0.007518848024453337,
+        "S->U": 0.0001240223367652111
       }
     },
     "hyperByTransfer": {
       "milcreda": {
         "M->U": {
-          "rampDelta": 6.401581991815601,
-          "rampDeltaLocal": 6.04875655308298,
-          "ceilingLocal": 0.00029835994628167514,
-          "kernelSigma": 304.8600979355246,
-          "attentionGamma": 0.029576213965188836,
-          "attentionTemperature": 0.8560045407980659,
-          "tauLocal": 5.40985240016914
+          "rampDelta": 34.364851431210546,
+          "rampDeltaLocal": 7.179431961078019,
+          "ceilingLocal": 0.0008510275775540988,
+          "kernelSigma": 13.651908824275464,
+          "attentionGamma": 0.6093661573392609,
+          "attentionTemperature": 2.719905209148167,
+          "tauLocal": 0.36767827948753806
         },
         "U->M": {
-          "rampDelta": 47.714989087910766,
-          "rampDeltaLocal": 45.088544531480125,
-          "ceilingLocal": 0.12384855780587649,
-          "kernelSigma": 71.88714606469675,
-          "attentionGamma": 0.2818175410235265,
-          "attentionTemperature": 1.0390386245778092,
-          "tauLocal": 0.19071433953026704
+          "rampDelta": 2.9842567839980108,
+          "rampDeltaLocal": 43.976410064643666,
+          "ceilingLocal": 0.0003153305526120093,
+          "kernelSigma": 6.788617621342145,
+          "attentionGamma": 0.01504362575688023,
+          "attentionTemperature": 2.3545971943162995,
+          "tauLocal": 2.036315365660656
         },
         "M->S": {
-          "rampDelta": 9.814803531488545,
-          "rampDeltaLocal": 1.4476370486738008,
-          "ceilingLocal": 0.8762759516141873,
-          "kernelSigma": 12.921926802635273,
-          "attentionGamma": 0.6014066849073454,
-          "attentionTemperature": 1.0252553438033913,
-          "tauLocal": 3.461020107679805
+          "rampDelta": 47.77335412591634,
+          "rampDeltaLocal": 3.4466351847069525,
+          "ceilingLocal": 0.022319861687601604,
+          "kernelSigma": 102.43030842612761,
+          "attentionGamma": 0.9437238832283067,
+          "attentionTemperature": 3.89007899631678,
+          "tauLocal": 0.4457907086163718
         },
         "S->M": {
-          "rampDelta": 2.9938060531611432,
-          "rampDeltaLocal": 30.9597645606701,
-          "ceilingLocal": 0.06577191244463536,
-          "kernelSigma": 13.267019971299472,
-          "attentionGamma": 0.6178920674016364,
-          "attentionTemperature": 0.19523029838426512,
-          "tauLocal": 0.7106151655669635
+          "rampDelta": 11.175672042398395,
+          "rampDeltaLocal": 11.78454655007214,
+          "ceilingLocal": 0.0011904505338958945,
+          "kernelSigma": 121.54605886954542,
+          "attentionGamma": 0.3120272137269251,
+          "attentionTemperature": 0.25918803509948624,
+          "tauLocal": 1.028783528273319
         },
         "U->S": {
-          "rampDelta": 8.021293693266443,
-          "rampDeltaLocal": 18.80162521167111,
-          "ceilingLocal": 0.013059710290919251,
-          "kernelSigma": 10.5754989968479,
-          "attentionGamma": 0.034362741500415184,
-          "attentionTemperature": 7.433493546482691,
-          "tauLocal": 1.0452605970362692
+          "rampDelta": 10.705588946485726,
+          "rampDeltaLocal": 2.9054361265094952,
+          "ceilingLocal": 0.005393268398362589,
+          "kernelSigma": 23.62486690591585,
+          "attentionGamma": 0.3924373316706723,
+          "attentionTemperature": 0.8990252540344252,
+          "tauLocal": 0.3928065122600725
         },
         "S->U": {
-          "rampDelta": 11.45562527920199,
-          "rampDeltaLocal": 74.26095374866418,
-          "ceilingLocal": 0.0017179703353255558,
-          "kernelSigma": 237.94130636640762,
-          "attentionGamma": 0.3774768698074742,
-          "attentionTemperature": 8.230552641738583,
-          "tauLocal": 0.5552908316103149
+          "rampDelta": 5.0047855407372355,
+          "rampDeltaLocal": 7.5678955546278655,
+          "ceilingLocal": 0.004466116041202483,
+          "kernelSigma": 36.0671260556447,
+          "attentionGamma": 0.7346016455474236,
+          "attentionTemperature": 0.7012628642847837,
+          "tauLocal": 3.297572258265211
         }
       }
     },
     "ceilingSearch": {
       "milcreda": {
         "arm": "G",
-        "ceiling": 0.0439127047526845,
-        "rampDelta": 2.9938060531611432,
-        "rampDeltaLocal": 30.9597645606701,
-        "ceilingLocal": 0.06577191244463536,
-        "kernelSigma": 13.267019971299472,
-        "attentionGamma": 0.6178920674016364,
-        "attentionTemperature": 0.19523029838426512,
-        "tauLocal": 0.7106151655669635,
+        "ceiling": 0.009271232533178183,
+        "rampDelta": 2.9842567839980108,
+        "rampDeltaLocal": 43.976410064643666,
+        "ceilingLocal": 0.0003153305526120093,
+        "kernelSigma": 6.788617621342145,
+        "attentionGamma": 0.01504362575688023,
+        "attentionTemperature": 2.3545971943162995,
+        "tauLocal": 2.036315365660656,
         "criterion": "targetAccuracy",
         "role": "valid",
         "epochs": 3,
@@ -165,8 +165,8 @@
         },
         "decidedByFlatRule": true,
         "plateau": [
-          0.0439127047526845,
-          0.04771159563918036
+          0.009271232533178183,
+          0.028253370073357105
         ],
         "noise": 0.05,
         "labelNoise": 0.0,
@@ -176,7 +176,7 @@
           "epochs": 20,
           "trials": 40
         },
-        "seconds": 249.86764233297436,
+        "seconds": 435.1771398750134,
         "transfers": [
           "M->U",
           "U->M",
@@ -187,136 +187,127 @@
         ],
         "neutral": 1.0,
         "byTransfer": {
-          "M->U": 0.0001524973580209063,
-          "U->M": 0.0005821960846533309,
-          "M->S": 0.0015850219372762475,
-          "S->M": 0.0439127047526845,
-          "U->S": 0.0014733700952415908,
-          "S->U": 0.04771159563918036
+          "M->U": 0.028253370073357105,
+          "U->M": 0.009271232533178183,
+          "M->S": 0.009158175514569348,
+          "S->M": 0.021244395495831053,
+          "U->S": 0.007518848024453337,
+          "S->U": 0.0001240223367652111
         },
         "perTransfer": {
           "M->U": {
-            "ceiling": 0.0001524973580209063,
-            "rampDelta": 6.401581991815601,
-            "rampDeltaLocal": 6.04875655308298,
-            "ceilingLocal": 0.00029835994628167514,
-            "kernelSigma": 304.8600979355246,
-            "attentionGamma": 0.029576213965188836,
-            "attentionTemperature": 0.8560045407980659,
-            "tauLocal": 5.40985240016914,
-            "value": 0.1,
-            "best": 0.1,
+            "ceiling": 0.028253370073357105,
+            "rampDelta": 34.364851431210546,
+            "rampDeltaLocal": 7.179431961078019,
+            "ceilingLocal": 0.0008510275775540988,
+            "kernelSigma": 13.651908824275464,
+            "attentionGamma": 0.6093661573392609,
+            "attentionTemperature": 2.719905209148167,
+            "tauLocal": 0.36767827948753806,
+            "value": 0.9,
+            "best": 0.9,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.0001524973580209063,
-              0.007842580169721976,
               0.028253370073357105
             ],
-            "decidedByFlatRule": true,
-            "minutes": 0.698870707633129
+            "decidedByFlatRule": false,
+            "minutes": 1.1145506847164748
           },
           "U->M": {
-            "ceiling": 0.0005821960846533309,
-            "rampDelta": 47.714989087910766,
-            "rampDeltaLocal": 45.088544531480125,
-            "ceilingLocal": 0.12384855780587649,
-            "kernelSigma": 71.88714606469675,
-            "attentionGamma": 0.2818175410235265,
-            "attentionTemperature": 1.0390386245778092,
-            "tauLocal": 0.19071433953026704,
-            "value": 0.05,
-            "best": 0.1,
+            "ceiling": 0.009271232533178183,
+            "rampDelta": 2.9842567839980108,
+            "rampDeltaLocal": 43.976410064643666,
+            "ceilingLocal": 0.0003153305526120093,
+            "kernelSigma": 6.788617621342145,
+            "attentionGamma": 0.01504362575688023,
+            "attentionTemperature": 2.3545971943162995,
+            "tauLocal": 2.036315365660656,
+            "value": 0.9,
+            "best": 0.9,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.0005821960846533309,
-              0.009271232533178183,
-              0.02828555667904453
+              0.009271232533178183
             ],
-            "decidedByFlatRule": true,
-            "minutes": 0.6941730458337891
+            "decidedByFlatRule": false,
+            "minutes": 1.3167552597335694
           },
           "M->S": {
-            "ceiling": 0.0015850219372762475,
-            "rampDelta": 9.814803531488545,
-            "rampDeltaLocal": 1.4476370486738008,
-            "ceilingLocal": 0.8762759516141873,
-            "kernelSigma": 12.921926802635273,
-            "attentionGamma": 0.6014066849073454,
-            "attentionTemperature": 1.0252553438033913,
-            "tauLocal": 3.461020107679805,
-            "value": 0.1,
-            "best": 0.15,
+            "ceiling": 0.009158175514569348,
+            "rampDelta": 47.77335412591634,
+            "rampDeltaLocal": 3.4466351847069525,
+            "ceilingLocal": 0.022319861687601604,
+            "kernelSigma": 102.43030842612761,
+            "attentionGamma": 0.9437238832283067,
+            "attentionTemperature": 3.89007899631678,
+            "tauLocal": 0.4457907086163718,
+            "value": 0.45,
+            "best": 0.45,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.0015850219372762475,
-              0.009158175514569348,
-              0.2731867988479746
+              0.009158175514569348
             ],
-            "decidedByFlatRule": true,
-            "minutes": 0.6864366819499992
+            "decidedByFlatRule": false,
+            "minutes": 1.1772185367997736
           },
           "S->M": {
-            "ceiling": 0.0439127047526845,
-            "rampDelta": 2.9938060531611432,
-            "rampDeltaLocal": 30.9597645606701,
-            "ceilingLocal": 0.06577191244463536,
-            "kernelSigma": 13.267019971299472,
-            "attentionGamma": 0.6178920674016364,
-            "attentionTemperature": 0.19523029838426512,
-            "tauLocal": 0.7106151655669635,
-            "value": 0.2,
-            "best": 0.2,
+            "ceiling": 0.021244395495831053,
+            "rampDelta": 11.175672042398395,
+            "rampDeltaLocal": 11.78454655007214,
+            "ceilingLocal": 0.0011904505338958945,
+            "kernelSigma": 121.54605886954542,
+            "attentionGamma": 0.3120272137269251,
+            "attentionTemperature": 0.25918803509948624,
+            "tauLocal": 1.028783528273319,
+            "value": 0.4,
+            "best": 0.4,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.0439127047526845
+              0.021244395495831053
             ],
             "decidedByFlatRule": false,
-            "minutes": 0.6755708145831402
+            "minutes": 1.17293428403403
           },
           "U->S": {
-            "ceiling": 0.0014733700952415908,
-            "rampDelta": 8.021293693266443,
-            "rampDeltaLocal": 18.80162521167111,
-            "ceilingLocal": 0.013059710290919251,
-            "kernelSigma": 10.5754989968479,
-            "attentionGamma": 0.034362741500415184,
-            "attentionTemperature": 7.433493546482691,
-            "tauLocal": 1.0452605970362692,
-            "value": 0.1,
-            "best": 0.1,
+            "ceiling": 0.007518848024453337,
+            "rampDelta": 10.705588946485726,
+            "rampDeltaLocal": 2.9054361265094952,
+            "ceilingLocal": 0.005393268398362589,
+            "kernelSigma": 23.62486690591585,
+            "attentionGamma": 0.3924373316706723,
+            "attentionTemperature": 0.8990252540344252,
+            "tauLocal": 0.3928065122600725,
+            "value": 0.65,
+            "best": 0.65,
             "trials": 4,
             "noise": 0.05,
             "plateau": [
-              0.0014733700952415908,
-              0.007518848024453337,
-              0.01325573516917361,
-              0.16601141264131222
-            ],
-            "decidedByFlatRule": true,
-            "minutes": 0.6732198624997788
-          },
-          "S->U": {
-            "ceiling": 0.04771159563918036,
-            "rampDelta": 11.45562527920199,
-            "rampDeltaLocal": 74.26095374866418,
-            "ceilingLocal": 0.0017179703353255558,
-            "kernelSigma": 237.94130636640762,
-            "attentionGamma": 0.3774768698074742,
-            "attentionTemperature": 8.230552641738583,
-            "tauLocal": 0.5552908316103149,
-            "value": 0.25,
-            "best": 0.25,
-            "trials": 4,
-            "noise": 0.05,
-            "plateau": [
-              0.04771159563918036
+              0.007518848024453337
             ],
             "decidedByFlatRule": false,
-            "minutes": 0.6876950548661019
+            "minutes": 1.235436681950038
+          },
+          "S->U": {
+            "ceiling": 0.0001240223367652111,
+            "rampDelta": 5.0047855407372355,
+            "rampDeltaLocal": 7.5678955546278655,
+            "ceilingLocal": 0.004466116041202483,
+            "kernelSigma": 36.0671260556447,
+            "attentionGamma": 0.7346016455474236,
+            "attentionTemperature": 0.7012628642847837,
+            "tauLocal": 3.297572258265211,
+            "value": 0.65,
+            "best": 0.65,
+            "trials": 4,
+            "noise": 0.05,
+            "plateau": [
+              0.0001240223367652111
+            ],
+            "decidedByFlatRule": false,
+            "minutes": 1.1882431895831056
           }
         },
         "inheritanceRule": "ninguna: las seis transferencias se midieron",
@@ -329,7 +320,7 @@
           "selfHosted": true,
           "power": {
             "source": "battery",
-            "charge": 57
+            "charge": 3
           },
           "device": {
             "name": "mps",
@@ -340,8 +331,8 @@
         "currentStamp": true
       }
     },
-    "rampDelta": 2.9938060531611432,
-    "rampDeltaLocal": 30.9597645606701,
+    "rampDelta": 11.175672042398395,
+    "rampDeltaLocal": 11.78454655007214,
     "device": "mps",
     "environment": {
       "interpreter": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.venv",
@@ -351,7 +342,7 @@
       "selfHosted": true,
       "power": {
         "source": "battery",
-        "charge": 95
+        "charge": 1
       },
       "device": {
         "name": "mps",
