@@ -542,14 +542,34 @@ PRETRAINED = True          # ImageNet weights, identical on both sides
 #: cada transmision vuelven a divergir. La decision y sus mediciones estan en
 #: `AGREED.md`; esto es solo el intervalo.
 #:
-#: **Declarado fijo en vez de buscado, y la razon es medida.** Con U->M a 20
-#: epocas la precision de objetivo fue la misma con intervalo 1, 7, 35 y 70
-#: pasos: 1.0000 en los cuatro, contra 0.2500 sin transmitir. El unico grado de
-#: libertad real del mecanismo es que el re-anclaje exista, asi que una busqueda
-#: gastaria su presupuesto en una dimension que no mueve el resultado.
+#: **Declarado fijo en vez de buscado, y la razon es medida** --- pero lo que se
+#: midio es el NUMERO DE TRANSMISIONES, no el intervalo, y la diferencia importa:
+#: un intervalo cuenta pasos, y cuantos pasos tiene una corrida depende de su
+#: escala. A 20 epocas hay 140 pasos y a 3 hay 21, con
+#: `TRAIN_BAGS`/`BAGS_PER_STEP` de hoy.
+#:
+#: A 20 epocas los intervalos 1, 7, 35 y 70 midieron 1.0000 los cuatro (2 a 140
+#: transmisiones) contra 0.2500 sin transmitir. A 3 epocas, barrido sobre los
+#: cuatro intervalos que ALCANZAN a disparar:
+#:
+#:     transmisiones    U->M      M->S
+#:               21    0.9444    0.5278
+#:                7    0.9167    0.4722
+#:                3    0.8889    0.5000
+#:                1    0.2500    0.0833   <- una sola, y en el ultimo paso
+#:                0    0.1111    0.0833   <- control
+#:
+#: De 3 a 21 transmisiones el resultado es plano y ni siquiera monotono (en M->S
+#: tres le gana a siete), asi que el intervalo exacto no es lo que decide. Lo que
+#: decide es que haya MAS DE UNA y que ocurran DURANTE el entrenamiento: una sola
+#: en el ultimo paso no compra nada en M->S y casi nada en U->M. El umbral esta
+#: entre 1 y 3 transmisiones.
 #:
 #: Siete es un paso por epoca con `TRAIN_BAGS`/`BAGS_PER_STEP` de hoy, elegido
-#: por ser el mas legible de los cuatro que midieron igual, nunca por ser mejor.
+#: por ser el mas legible de la region plana, nunca por ser mejor. **Y es el
+#: borde de esa region a escala de piloto**: tres transmisiones. Bajar `EPOCHS`
+#: por debajo de 3 dejaria menos, y un intervalo mayor a los pasos totales no
+#: transmite NUNCA sin que nada avise.
 #:
 #: La condicion que el mecanismo necesita es que los dos codificadores tengan la
 #: MISMA ARQUITECTURA, no que reciban la misma entrada: medido sobre `resnet18`,
