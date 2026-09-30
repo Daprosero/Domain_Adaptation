@@ -9,7 +9,7 @@
     "selfHosted": true,
     "power": {
       "source": "battery",
-      "charge": 95
+      "charge": 1
     },
     "device": {
       "name": "mps",
@@ -25,23 +25,23 @@
   "kind": "curve",
   "revision": "research-concept-r25.md",
   "ceilings": {
-    "milcreda": 0.0439127047526845
+    "milcreda": 0.009271232533178183
   },
   "ceilingsByTransfer": {
     "milcreda": {
-      "M->U": 0.0001524973580209063,
-      "U->M": 0.0005821960846533309,
-      "M->S": 0.0015850219372762475,
-      "S->M": 0.0439127047526845,
-      "U->S": 0.0014733700952415908,
-      "S->U": 0.04771159563918036
+      "M->U": 0.028253370073357105,
+      "U->M": 0.009271232533178183,
+      "M->S": 0.009158175514569348,
+      "S->M": 0.021244395495831053,
+      "U->S": 0.007518848024453337,
+      "S->U": 0.0001240223367652111
     }
   },
   "hyperByTransfer": {},
   "evidence": {
-    "codeDigest": "d6a112302ea9aadfa653a2df5eb25856227b14d4d3bcbb06ef955af1a594a30a",
+    "codeDigest": "54eee587689da635b6c2358bc2da6e838a25d0e361d72c77ff86e7e4d86a2eaa",
     "importsFrom": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark",
-    "commit": "5fa271cfa5ccd30b48f52e289444a9cd8a9d9121",
+    "commit": "d5790d26231e37d4adaf962e61d67abef396facb",
     "outputs": [
       "runs.jsonl",
       "shard.json",
