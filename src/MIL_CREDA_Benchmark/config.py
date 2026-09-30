@@ -535,6 +535,28 @@ NOISE_TRANSFER = ("M", "U")
 
 BACKBONE = "resnet18"
 PRETRAINED = True          # ImageNet weights, identical on both sides
+
+#: Cada cuantos pasos del optimizador los parametros de `theta_s` se transmiten
+#: a `theta_t`. Procedimiento de ENTRENAMIENTO, no matematica: la Ec. (13) sigue
+#: declarando dos codificadores que no comparten ningun tensor, y despues de
+#: cada transmision vuelven a divergir. La decision y sus mediciones estan en
+#: `AGREED.md`; esto es solo el intervalo.
+#:
+#: **Declarado fijo en vez de buscado, y la razon es medida.** Con U->M a 20
+#: epocas la precision de objetivo fue la misma con intervalo 1, 7, 35 y 70
+#: pasos: 1.0000 en los cuatro, contra 0.2500 sin transmitir. El unico grado de
+#: libertad real del mecanismo es que el re-anclaje exista, asi que una busqueda
+#: gastaria su presupuesto en una dimension que no mueve el resultado.
+#:
+#: Siete es un paso por epoca con `TRAIN_BAGS`/`BAGS_PER_STEP` de hoy, elegido
+#: por ser el mas legible de los cuatro que midieron igual, nunca por ser mejor.
+#:
+#: La condicion que el mecanismo necesita es que los dos codificadores tengan la
+#: MISMA ARQUITECTURA, no que reciban la misma entrada: medido sobre `resnet18`,
+#: las sesenta formas de parametros son identicas con entradas de 32, 64 y 96
+#: pixeles, porque la red cierra con `AdaptiveAvgPool2d`. Un `vit_tiny` cambiaria
+#: un solo tensor, `pos_embed`, que depende de la cantidad de parches.
+SOURCE_TO_TARGET_SYNC_STEPS = 7
 FEATURE_DIM = 512          # resnet18's pooled width, the head's input
 
 #: Hidden width of the relevance selector's R_phi of Eq. (15). It has no

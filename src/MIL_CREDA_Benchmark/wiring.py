@@ -327,6 +327,35 @@ class Arm(nn.Module):
         # device is; the indices move to wherever the bags actually live.
         return order[: config.BAGS_PER_STEP].to(self.target.members.device)
 
+    def sync_target_from_source(self) -> None:
+        """Transmit `theta_s`'s parameters into `theta_t`. A no-op on the floor.
+
+        **Procedure, never a term.** Under `no_grad` and in place: the copy
+        builds no graph, so the adaptation term's gradient never reaches
+        `theta_s` through `theta_t`, and the optimizer keeps its own state
+        because the tensors are the same objects it was built over. Eq. (13)
+        is untouched -- the two encoders remain distinct tensors sharing none,
+        and they diverge again from the next step on.
+
+        **Only parameters. The buffers stay the target's own.** Measured: at
+        the shortest interval, carrying the normalization statistics over as
+        well was WORSE (0.7222 against 1.0000). Running statistics are a
+        reading of the material each domain actually saw, not a parameter of
+        the map -- `named_parameters()` is what this walks, and that is the
+        whole distinction.
+
+        Lives on the `Arm` rather than in `harness.run_one` because whether
+        there is anything to transmit into is the arm's own shape: a floor
+        declares no adaptation and therefore no `target_encoder`, and a loop
+        that had to ask would be carrying a fact the model already holds.
+        """
+        if self.target_encoder is None:
+            return
+        source = dict(self.encoder.named_parameters())
+        with torch.no_grad():
+            for name, parameter in self.target_encoder.named_parameters():
+                parameter.copy_(source[name])
+
     def target_embeddings(self, bags: torch.Tensor) -> torch.Tensor:
         """Encode a batch through the TARGET encoder: (B, m, ...) -> (B, m, d).
 
