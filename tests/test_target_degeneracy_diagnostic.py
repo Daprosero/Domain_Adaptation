@@ -31,7 +31,7 @@ import torch
 import torch.nn as nn
 
 from MIL_CREDA import DTYPE
-from MIL_CREDA.attention import effective_bag_size, uniform_self_similarity
+from MIL_CREDA.attention import effective_bag_size, mean_consensus
 from MIL_CREDA.bag_kernel import bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix
 from MIL_CREDA.global_term import balanced_dependency_score, is_active
@@ -223,14 +223,23 @@ def test_the_excluded_intra_bag_instruments_do_not_detect_a_collapsed_target_clo
     """Spec `target-degeneracy-diagnostic`, "The excluded intra-bag
     instruments MUST NOT be used", scenario "A collapsed target bag cloud is
     invisible to the excluded instruments": `MIL_CREDA.attention.
-    effective_bag_size` and `uniform_self_similarity` read WITHIN one bag;
+    effective_bag_size` and `mean_consensus` read WITHIN one bag;
     they say nothing about whether the CLOUD of bags has collapsed.
 
     Every target bag here is the identical bag -- five distinct instances
     (real intra-bag diversity) under a deliberately non-uniform weighting.
     Both excluded instruments read that single bag as unremarkable (`m_eff`
-    close to its instance count, `uniform_self_similarity` well below its
-    ceiling of 1 -- r25:516's own "expected behaviour in a dispersed bag").
+    close to its instance count, `mean_consensus` near ZERO -- r34's own
+    "bolsa dispersa sin grupo dominante, en la que pesos casi uniformes son el
+    comportamiento esperado").
+
+    **The threshold moved with r34 and the two numbers are worth keeping.** On
+    this exact fixture at `SIGMA = 1.5`, r33's uniform self-similarity read
+    0.2749 against a floor of `1/m = 0.2` -- 0.075 above the bottom of its own
+    range, which is why the assertion it carried was the very loose `< 0.9`.
+    r34's mean consensus reads 0.0936 against a floor of zero, so "dispersed"
+    is now a statement about a fixed scale rather than about a floor that moves
+    with the instance count, and the assertion can be tight.
     Meanwhile the required diagnostic, read on the SAME batch, is at its
     exact minimum: every bag is literally the same bag, so `K_tt` is
     rank-one by construction. Measured numerically before being pinned.
@@ -248,9 +257,12 @@ def test_the_excluded_intra_bag_instruments_do_not_detect_a_collapsed_target_clo
     weights = torch.tensor([0.30, 0.25, 0.20, 0.15, 0.10], dtype=DTYPE)
 
     m_eff = effective_bag_size(weights)
-    self_similarity = uniform_self_similarity(H, SIGMA)
+    consensus = mean_consensus(H, SIGMA)
     assert float(m_eff) > H.shape[0] * 0.6, "m_eff read as collapsed, not dispersed"
-    assert float(self_similarity) < 0.9, "self-similarity read as collapsed, not dispersed"
+    assert float(consensus) < 0.15, (
+        "the mean consensus read as collapsed, not dispersed: measured 0.0936 "
+        "on this fixture at SIGMA = 1.5"
+    )
 
     bags_t = [(H, weights)] * 6
     K_tt = bag_kernel_matrix(bags_t, bags_t, SIGMA)

@@ -29,7 +29,11 @@ same test treatment: they are `MIL_CREDA.__init__`'s plumbing, and importing
 plumbing would re-establish exactly the dependency this module exists to
 avoid.
 
-**One revision lives here, and `__provenance__` names it: r33.** It named r25
+**One revision lives here, and `__provenance__` names it: r34.** r34 moved
+Eq. 15's consensus term to a leave-one-out average, which is MIL-CREDA's
+attention over the instances of a bag; this module holds Eqs. 21, 35 and 36,
+all three byte-identical in r33 and r34, so the rebind moved no arithmetic and
+every claim below about r33 holds at r34 unchanged. It named r25
 until 2026-10-18, because `conservative_bounds` and `class_global_loss` sat
 beside the two functions below and implemented Eq. (35)/(36) as r25 wrote them:
 ends from cardinality alone, `L_c = -ln(n_s + n_t)` and
@@ -111,7 +115,7 @@ ENTROPY_COSH_LOWER = -math.log(2.0)
 GLOBAL_LOSS_SPAN = math.log(2.0)
 
 __provenance__ = {
-    "revision": "research-concept-r33.md",
+    "revision": "research-concept-r34.md",
     "sections": ["3", "5"],
     "equations": ["21", "35", "36"],
     "invariants": [
@@ -142,7 +146,7 @@ def as_matrix(value: object) -> torch.Tensor:
     return tensor.reshape(1, -1) if tensor.dim() < 2 else tensor
 
 
-# -------------------------------------------------------- Eq. (35), revision 33
+# ------------------------------- Eq. (35), byte-identical from revision 33 on
 def entropy_cosh_bounds(
     h_source: torch.Tensor, h_target: torch.Tensor
 ) -> tuple[float, torch.Tensor]:
@@ -198,7 +202,7 @@ def entropy_cosh_bounds(
     return ENTROPY_COSH_LOWER, upper
 
 
-# -------------------------------------------------------- Eq. (36), revision 33
+# ------------------------------- Eq. (36), byte-identical from revision 33 on
 
 
 def class_global_loss_cosh(

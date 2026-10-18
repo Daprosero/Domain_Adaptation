@@ -15,7 +15,9 @@ that changing the backend did not change the mathematics.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 from conftest import Sampler, allclose, close, make_bag, make_bags, one_hot, simplex_rows
@@ -31,7 +33,7 @@ from MIL_CREDA.attention import (
     project_onto_l1_ball,
     relevance_component,
     relevance_logits,
-    uniform_self_similarity,
+    mean_consensus,
 )
 from MIL_CREDA.bag_kernel import bag_gram, bag_kernel, bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix, weighted_blocks
@@ -309,12 +311,15 @@ def _attention_configurations(count: int = SWEEP_SIZE):
 
 
 def _independent_consensus(H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
-    """(1/m) sum_{a'} kappa_sigma^I(h_a, h_a'), Eq. (14)'s kernel evaluated
-    directly with `torch.cdist` and `torch.exp` -- never through
+    """(1/(m-1)) sum_{a' != a} kappa_sigma^I(h_a, h_a'), Eq. (14)'s kernel
+    evaluated directly with `torch.cdist` and `torch.exp` -- never through
     `MIL_CREDA.kernels.gaussian_kernel` or `attention.consensus_component` --
-    including the self term (a'=a, where kappa^I(h, h) = 1 exactly, since
-    r21's un-numbered consensus definition sums over ALL m instances of the
-    bag, itself included).
+    EXCLUDING the self term, which is r34's own definition: the self
+    evaluation kappa^I(h, h) = 1 added 1/m to every consensus of the bag and
+    shrank their differences by (m-1)/m, so gamma's effective weight depended
+    on the instance count. A single-instance bag has no other instance to
+    average over, so the term is omitted and this returns zero, matching the
+    module's own omission.
 
     Defect (b): comparing the module's own output to a second call of the
     module's own `consensus_component` is a self-comparison, and a mutant
@@ -325,9 +330,13 @@ def _independent_consensus(H: torch.Tensor, sigma: float | torch.Tensor) -> torc
     equation.
     """
     H = torch.as_tensor(H, dtype=torch.float64)
+    m = H.shape[0]
     squared = torch.cdist(H, H) ** 2
     K = torch.exp(-squared / (2.0 * float(sigma) ** 2))
-    return K.sum(dim=1) / H.shape[0]
+    if m == 1:
+        return torch.zeros(1, dtype=K.dtype)
+    K = K * (1.0 - torch.eye(m, dtype=K.dtype))
+    return K.sum(dim=1) / (m - 1)
 
 
 def test_bag_weights_on_simplex(rng: Sampler) -> None:
@@ -383,6 +392,7 @@ def test_relevance_logit_matches_eq15_definition(rng: Sampler) -> None:
     Eq. (14)'s kernel from `torch.cdist`/`torch.exp` directly and never calls
     `consensus_component` or `MIL_CREDA.kernels.gaussian_kernel` at all.
     """
+    gamma_positive = visible = invisible = 0
     for cfg in _attention_configurations():
         logits = relevance_logits(
             cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
@@ -392,11 +402,32 @@ def test_relevance_logit_matches_eq15_definition(rng: Sampler) -> None:
             + cfg["gamma"] * _independent_consensus(cfg["H"], cfg["sigma"])
         )
         assert allclose(logits, expected, atol=1e-9)
-        if cfg["gamma"] > 0.01:
-            component = relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
-            assert not allclose(logits, component, atol=1e-9), (
-                "the consensus term made no difference at gamma > 0"
-            )
+        if cfg["gamma"] <= 0.01:
+            continue
+        gamma_positive += 1
+        component = relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
+        # The precondition, measured on the REFERENCE rather than assumed: at
+        # a small bandwidth r34's consensus is strictly positive and can still
+        # be far below the logits' own magnitude -- the sweep's smallest is
+        # 2.27e-100 -- so `gamma * consensus` moves no float64 bit and the
+        # logit genuinely EQUALS the relevance. r33's form could not land
+        # there, being floored at 1/m. Asserting a difference on those
+        # configurations would assert something false; measured over this
+        # sweep, 32 of the 199 with gamma > 0.01 are of that kind.
+        if allclose(expected, component, atol=1e-9):
+            invisible += 1
+            continue
+        visible += 1
+        assert not allclose(logits, component, atol=1e-9), (
+            "the consensus term made no difference at gamma > 0 where the "
+            "independent reference says it makes one"
+        )
+
+    assert gamma_positive == visible + invisible
+    assert visible > 0, (
+        "no configuration with gamma > 0 had a numerically visible consensus "
+        "term, so this sweep cannot catch a mutant that dropped it"
+    )
 
 
 def test_consensus_component_reads_the_declared_bandwidth_not_a_scaled_one(
@@ -444,7 +475,7 @@ def test_consensus_component_reads_the_declared_bandwidth_not_a_scaled_one(
     distinguishable_3sigma = distinguishable_sqrt2sigma = 0
     for cfg in _attention_configurations():
         if cfg["m"] < 2:
-            continue  # a singleton bag's consensus is 1 regardless of sigma
+            continue  # r34 omits the term there, so it is 0 regardless of sigma
         produced = consensus_component(cfg["H"], cfg["sigma"])
         at_sigma = _independent_consensus(cfg["H"], cfg["sigma"])
         assert allclose(produced, at_sigma, atol=1e-9)
@@ -622,21 +653,73 @@ def test_attention_logits_depend_only_on_own_bag(rng: Sampler) -> None:
 
 
 def test_consensus_component_in_unit_interval(rng: Sampler) -> None:
-    """r21 Sec. 3 (consensus term preceding Eq. 15): consensus in (0, 1].
+    """r34 Sec. 3 (consensus term preceding Eq. 15): consensus in (0, 1].
 
-    kappa^I is strictly positive and at most one everywhere (Eq. 14), and the
-    self-term kappa^I(h, h) = 1 keeps the within-bag average from reaching
-    zero.
+    kappa^I is strictly positive and at most one everywhere (Eq. 14), so an
+    average of its off-diagonal entries cannot reach zero and cannot exceed
+    one. **The bound no longer rests on the self term**, which is exactly what
+    r34 bought: under r33 the floor was 1/m and the self evaluation was what
+    held it up, so the interval the logit's two components were declared
+    comparable on depended on the bag's instance count. Here it does not --
+    which is why a single-instance bag, whose term is OMITTED and therefore
+    zero, is the one configuration this interval does not describe and is
+    skipped.
+
+    **The strict lower end is what found a defect, so it is asserted strictly.**
+    r33's form was floored at 1/m by its own self term, so nothing about the
+    bottom of this range was ever exercised; r34's floor is zero, and the first
+    implementation of it computed `K.sum(dim=1) - K.diagonal()`. That is the
+    same number in real arithmetic and a different one in float64: the row sum
+    is at least the diagonal's 1.0, so an off-diagonal entry below the machine
+    epsilon relative to 1.0 leaves the sum unchanged and the subtraction
+    returns exactly 0.0. Measured over this sweep's own 183 configurations with
+    two or more instances, that form read a spurious zero on 14 of them -- one
+    with a largest off-diagonal entry of 3.46e-18, positive and lost. Masking
+    the diagonal before the sum leaves 0 of 183, and the smallest consensus the
+    sweep produces is 2.27e-100: strictly positive, as Eq. (14) says, and far
+    from the kernel's own float64 underflow floor at `d^2/(2 sigma^2) > 744.44`.
+
+    The cancellation is asserted here as well as the interval, because a sweep
+    that only checked `0 <= c <= 1` passed the defective form.
     """
+    checked = cancelled = 0
     for cfg in _attention_configurations():
+        if cfg["m"] < 2:
+            continue  # the term is omitted there; see the docstring
         consensus = consensus_component(cfg["H"], cfg["sigma"])
-        assert bool((consensus > 0.0).all())
+        assert bool((consensus > 0.0).all()), (
+            f"a consensus reached exactly zero at m={cfg['m']}, "
+            f"sigma={float(cfg['sigma']):.4f}: kappa^I is strictly positive, "
+            f"so either the kernel underflowed or the diagonal was subtracted "
+            f"after the sum instead of masked before it"
+        )
         assert bool((consensus <= 1.0 + TOL).all())
+
+        # The regression: the form this replaced, on the same input.
+        K = gaussian_kernel(cfg["H"], cfg["H"], cfg["sigma"])
+        subtracted = (K.sum(dim=1) - K.diagonal()) / (cfg["m"] - 1)
+        if bool((subtracted == 0.0).any()):
+            cancelled += 1
+        checked += 1
+
+    assert checked > 0, "the sweep drew no bag with two or more instances"
+    assert cancelled > 0, (
+        "the subtract-after-sum form produced no spurious zero on this sweep, "
+        "so this configuration set no longer exercises the cancellation the "
+        "masked implementation exists to avoid"
+    )
 
 
 def test_consensus_component_bandwidth_limits(rng: Sampler) -> None:
-    """r21 Sec. 3: 'si sigma -> 0, ... los consensos de la bolsa tienden a
-    1/m; si sigma -> infinito, ... los consensos tambien [tienden a uno].'
+    """r34 Sec. 3: 'si sigma -> 0, el kernel se anula entre embeddings
+    distintos y los consensos de la bolsa tienden a cero; si sigma ->
+    infinito, el kernel tiende a uno y los consensos tambien.'
+
+    **The lower limit is r34's change and not a restatement.** r33 read 1/m
+    here, because at sigma -> 0 only the self terms survived and there were m
+    of them over m; with the self term gone nothing survives, so the limit is
+    zero for every bag size. A test still asserting 1/m would pass on a
+    1-instance bag and on nothing else.
 
     `1e-4`, not an even smaller bandwidth: `gaussian_kernel`'s own squared
     distance is `sum(x^2) - 2 x.y + sum(y^2)`, exact in real arithmetic but a
@@ -651,9 +734,69 @@ def test_consensus_component_bandwidth_limits(rng: Sampler) -> None:
         d = int(rng.integers(2, 6))
         H = rng.normal(size=(m, d))
         tiny = consensus_component(H, 1e-4)
-        assert allclose(tiny, torch.full((m,), 1.0 / m, dtype=DTYPE), atol=1e-6)
+        assert allclose(tiny, torch.zeros(m, dtype=DTYPE), atol=1e-6)
         huge = consensus_component(H, 1e6)
         assert allclose(huge, torch.ones(m, dtype=DTYPE), atol=1e-6)
+
+
+def test_consensus_component_excludes_the_instance_itself(rng: Sampler) -> None:
+    """r34 Sec. 3, Eq. (15): the average runs over a' != a, divided by (m-1).
+
+    Asserted as a VALUE against an independently built pair, not as a property
+    that both forms happen to share: the leave-one-out average must equal
+    `_independent_consensus` and must DIFFER from `_with_self_term_consensus`,
+    which is r33's form. Without the second half a module that never changed
+    would pass -- the two forms are related by
+    `c_r33 = (1 + (m-1) c_r34) / m`, so they agree only where that fixed point
+    sits, at c = 1.
+    """
+    differed = 0
+    for _ in range(SWEEP_SIZE):
+        m = int(rng.integers(2, 10))
+        d = int(rng.integers(2, 6))
+        H = rng.normal(size=(m, d))
+        sigma = float(rng.uniform(0.3, 2.0))
+
+        produced = consensus_component(H, sigma)
+        assert allclose(produced, _independent_consensus(H, sigma), atol=1e-9)
+
+        # The identity that ties the two revisions' forms together, checked
+        # rather than asserted in prose.
+        r33_form = _with_self_term_consensus(H, sigma)
+        assert allclose(r33_form, (1.0 + (m - 1) * produced) / m, atol=1e-9)
+
+        if not allclose(produced, r33_form, atol=1e-6):
+            differed += 1
+
+    assert differed == SWEEP_SIZE, (
+        f"the two forms agreed on {SWEEP_SIZE - differed} of {SWEEP_SIZE} "
+        f"configurations, where they coincide only at consensus 1: this sweep "
+        f"cannot tell r34's definition from r33's"
+    )
+
+
+def test_consensus_component_omits_the_term_for_a_singleton_bag() -> None:
+    """r34 Sec. 3: 'en una bolsa con una sola instancia el termino se omite, lo
+    que no altera nada, porque esa bolsa recibe peso uno (Ec. 16).'
+
+    Both halves are asserted, because the first alone would let the omission
+    be any constant: the term is zero, AND the weight Eq. (16) gives that
+    instance is one whatever gamma and sigma are. A division by (m-1) = 0
+    would surface here as a nan rather than as a wrong number.
+    """
+    H = torch.tensor([[0.3, -1.2, 0.7]], dtype=DTYPE)
+    for sigma in (0.05, 1.0, 50.0):
+        omitted = consensus_component(H, sigma)
+        assert omitted.shape == (1,)
+        assert bool(torch.isfinite(omitted).all()), "a (m-1) = 0 division leaked"
+        assert close(omitted[0], 0.0, atol=TOL)
+
+    V_R = torch.full((2, 3), 0.4, dtype=DTYPE)
+    b_R = torch.zeros(2, dtype=DTYPE)
+    v_R = torch.tensor([0.5, 0.5], dtype=DTYPE)
+    for gamma in (0.0, 0.7, 5.0):
+        logits = relevance_logits(H, V_R, b_R, v_R, gamma, SIGMA)
+        assert close(bag_weights(logits, 1.0)[0], 1.0, atol=TOL)
 
 
 def test_relevance_logit_reduces_to_relevance_at_gamma_zero(rng: Sampler) -> None:
@@ -789,38 +932,71 @@ def test_effective_bag_size_in_range(rng: Sampler) -> None:
     assert close(effective_bag_size(concentrated), 1.0, atol=TOL)
 
 
-def test_uniform_self_similarity_in_range(rng: Sampler) -> None:
-    """r21 Sec. 3 (diagnostic pair preceding Eq. 17): the uniform self-
-    similarity ||Psi_bar(B)||^2 is in [1/m, 1], equal to 1 only when every
-    embedding of the bag coincides.
+def test_mean_consensus_in_range(rng: Sampler) -> None:
+    """r34 Sec. 3 (diagnostic pair following Eq. 16): the mean consensus
+    c_bar(B) is in (0, 1], equal to 1 only when every embedding of the bag
+    coincides, and tending to zero as they disperse.
+
+    **The floor is the reading r34 fixed.** r33's quantity here was the uniform
+    self-similarity, bounded below by 1/m, so "dispersed" was judged against a
+    threshold that moved with the instance count and two bags of different
+    sizes could not be compared on it. This one has floor zero for every size.
     """
+    checked = 0
     for cfg in _attention_configurations():
-        sim = float(uniform_self_similarity(cfg["H"], cfg["sigma"]))
-        assert 1.0 / cfg["m"] - 1e-8 <= sim <= 1.0 + 1e-8
+        if cfg["m"] < 2:
+            continue  # undefined there, and the function refuses -- see below
+        value = float(mean_consensus(cfg["H"], cfg["sigma"]))
+        # Closed at zero, and for the same reason the consensus itself is: the
+        # Gaussian kernel underflows in float64. See
+        # `test_consensus_component_in_unit_interval`.
+        assert 0.0 <= value <= 1.0 + 1e-8
+        checked += 1
+    assert checked > 0, "the sweep drew no bag with two or more instances"
 
     identical = torch.ones((5, 3), dtype=DTYPE)
-    assert close(uniform_self_similarity(identical, SIGMA), 1.0, atol=TOL)
+    assert close(mean_consensus(identical, SIGMA), 1.0, atol=TOL)
+
+    # Dispersed: a tiny bandwidth against well-separated embeddings drives it
+    # to the floor r33's form could not reach. The r33 quantity on the SAME
+    # input is asserted alongside, because "reaches the floor" is a claim about
+    # the difference between the two and not about this number alone.
+    spread = torch.eye(4, dtype=DTYPE) * 50.0
+    assert float(mean_consensus(spread, 0.5)) < 1e-6
+    r33_form = float(_with_self_term_consensus(spread, 0.5).mean())
+    assert close(r33_form, 1.0 / 4.0, atol=1e-6), (
+        f"r33's form read {r33_form} on a maximally dispersed bag, where its "
+        f"own floor 1/m = 0.25 is what it cannot go below"
+    )
+
+    try:
+        mean_consensus(torch.ones((1, 3), dtype=DTYPE), SIGMA)
+    except ValueError as refusal:
+        assert "at least two instances" in str(refusal)
+    else:
+        raise AssertionError(
+            "a single-instance bag has no consensus to average and the mean "
+            "consensus must refuse rather than invent one")
 
 
-def _no_self_term_consensus(H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
-    """The same average, but over a' != a -- the sum r21's own definition does
-    NOT take.
+def _with_self_term_consensus(H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
+    """The same average, but over ALL m instances -- the sum r34's definition
+    does NOT take, and the one r33's did.
 
-    r21 Sec. 3, right before Eq. (15): the consensus is "el promedio de sus
-    evaluaciones del kernel de instancia con TODAS las instancias de su misma
-    bolsa", and kappa^I(h, h) = 1 exactly, so the self term is included on
-    purpose. This drops it, dividing by (m - 1) rather than m, and exists only
-    so `test_separation_condition_implies_majority_consensus` can show it
-    predicts something different from the real consensus -- which is what
-    makes "forgot the self term" a mutation that sweep can actually catch,
-    rather than one that happens to agree by coincidence.
+    **This helper changed poles at r34 and the inversion is the point.** Until
+    r33 it was the correct sum and the leave-one-out form was the mutant; r34
+    swapped them, so what is kept is the SAME pair of formulas with the labels
+    exchanged, rather than a mutant quietly dropped. It exists so
+    `test_separation_condition_implies_majority_consensus` can show it predicts
+    something different from the real consensus -- which is what makes
+    "included the self term" a mutation that sweep can actually catch, rather
+    than one that happens to agree by coincidence.
     """
     H = torch.as_tensor(H, dtype=torch.float64)
     m = H.shape[0]
     squared = torch.cdist(H, H) ** 2
     K = torch.exp(-squared / (2.0 * float(sigma) ** 2))
-    K = K * (1.0 - torch.eye(m, dtype=K.dtype))
-    return K.sum(dim=1) / max(m - 1, 1)
+    return K.sum(dim=1) / m
 
 
 def test_separation_condition_implies_majority_consensus() -> None:
@@ -828,7 +1004,8 @@ def test_separation_condition_implies_majority_consensus() -> None:
     consensus to exceed the minority group's, over disjoint index sets
     I1, I2 covering the bag:
 
-        |I1| k_1_lower + |I2| k_12_lower > |I2| k_2_upper + |I1| k_12_upper
+        (|I1|-1) k_1_lower + |I2| k_12_lower
+            > (|I2|-1) k_2_upper + |I1| k_12_upper
         =>  min consensus over I1  >  max consensus over I2
 
     Constructed rather than merely sampled, so the premise is genuinely
@@ -841,17 +1018,21 @@ def test_separation_condition_implies_majority_consensus() -> None:
     `torch.cdist`/`torch.exp` directly, never through
     `MIL_CREDA.attention.consensus_component` -- so this claim is checked
     against the mathematics rather than against whatever the module under
-    test happens to compute. A second, WRONG consensus that omits the self
-    term (`_no_self_term_consensus`) is computed for every premise-holding
+    test happens to compute. A second, WRONG consensus that INCLUDES the self
+    term (`_with_self_term_consensus`) is computed for every premise-holding
     configuration too, and `consensus_component`'s own real output is
     checked against BOTH: it has to agree with the correct one and disagree
     with the wrong one, so the module under test is what this exercises,
-    never only the two hand-built formulas comparing themselves. Measured
-    separately and reported rather than asserted: on every configuration
-    this sweep's seed holds the premise for, dropping the self term widens
-    the ordering's margin instead of narrowing it, so the theorem itself
-    happens not to be the property that would catch a dropped self term
-    here -- the value comparison below is.
+    never only the two hand-built formulas comparing themselves.
+
+    **The two poles swapped at r34 and the coefficients moved with them.** The
+    bounds are taken over OFF-DIAGONAL pairs of each block, which is the other
+    half of the same change: r33's text admitted the self evaluations into the
+    bounds, "pues kappa^I(h, h) = 1", and r34 deletes that sentence because the
+    sums no longer contain them. A `k_2_upper` left at 1.0 by a 1x1 diagonal
+    would still be sound -- it only makes the premise harder -- but it would
+    make this sweep hold the premise far less often, which is how a test goes
+    quietly vacuous.
     """
     dimension = 4
     checked = held = disagreed = 0
@@ -875,10 +1056,18 @@ def test_separation_condition_implies_majority_consensus() -> None:
         m = n1 + n2
         idx1, idx2 = torch.arange(n1), torch.arange(n1, m)
         K11, K22, K12 = K[idx1][:, idx1], K[idx2][:, idx2], K[idx1][:, idx2]
-        k1_lower, k2_upper = float(K11.min()), float(K22.max())
+        # Off-diagonal only: the consensus of r34 never evaluates an instance
+        # against itself, so a self evaluation has no business bounding it.
+        # A singleton group has no within-group pair at all, and its bound is
+        # multiplied by (|I| - 1) = 0 below, so the value is immaterial.
+        off11 = K11[~torch.eye(n1, dtype=torch.bool)]
+        off22 = K22[~torch.eye(n2, dtype=torch.bool)]
+        k1_lower = float(off11.min()) if off11.numel() else 1.0
+        k2_upper = float(off22.max()) if off22.numel() else 0.0
         k12_lower, k12_upper = float(K12.min()), float(K12.max())
 
-        premise = n1 * k1_lower + n2 * k12_lower > n2 * k2_upper + n1 * k12_upper
+        premise = ((n1 - 1) * k1_lower + n2 * k12_lower
+                   > (n2 - 1) * k2_upper + n1 * k12_upper)
         checked += 1
         if not premise:
             continue
@@ -896,7 +1085,7 @@ def test_separation_condition_implies_majority_consensus() -> None:
         # checked against `consensus_component` itself, not only against the
         # two hand-built reference formulas.
         produced = consensus_component(H, sigma)
-        wrong = _no_self_term_consensus(H, sigma)
+        wrong = _with_self_term_consensus(H, sigma)
         assert allclose(produced, consensus, atol=1e-9)
         if not allclose(produced, wrong, atol=1e-6):
             disagreed += 1
@@ -904,9 +1093,9 @@ def test_separation_condition_implies_majority_consensus() -> None:
     assert checked == SWEEP_SIZE
     assert held >= 1, "the sweep never constructed a configuration meeting the premise"
     assert disagreed == held, (
-        f"the no-self-term consensus matched the module under test on "
-        f"{held - disagreed} of {held} premise-holding configurations: a "
-        f"dropped self term would go undetected there"
+        f"the with-self-term consensus matched the module under test on "
+        f"{held - disagreed} of {held} premise-holding configurations: an "
+        f"included self term would go undetected there"
     )
 
 
@@ -1474,6 +1663,128 @@ def test_local_loss_in_unit_interval(rng: Sampler) -> None:
     # argument to pass it through. The claim that replaces "no reliable
     # pseudo-label, no penalty" is that the confidences cannot enter at all.
     assert 'target_weights' not in local_loss.__code__.co_varnames
+
+
+def test_local_loss_is_the_uniform_mean_and_ignores_confidence(
+    rng: Sampler,
+) -> None:
+    """r33 Eq. (38): `L_loc = (1/N_t) sum_j l_loc,j`, every subject weighted
+    alike.
+
+    **The revision's own reason for dropping the weights is why "ignores" is
+    half of this claim.** Until r31 the aggregate was
+    `sum_j w_j^t l_loc,j / (sum_j w_j^t + eps_loc)`, and `w_j^t` is a
+    DIFFERENTIABLE function of the classifier's outputs (Eq. 24): a weight the
+    model computes can be lowered on the worst-aligned subjects instead of
+    aligning them, which lowers `L_loc` without moving the geometry. A uniform
+    mean has no such channel.
+
+    Both halves are asserted and neither alone is enough. The positive half --
+    equality with `np.mean` of the per-subject losses -- would pass on a
+    weighted mean whose weights happened to be uniform on the fixture. The
+    negative half -- that no spelling of a confidence vector reaches the
+    result -- is checked by CALLING, not by reading the signature, because
+    `local_loss` could still read a module-level default: the same distances
+    under three deliberately lopsided weightings must give the identical
+    value, bit for bit.
+
+    The pseudo-label's uncertainty did not leave the term, it moved inside it:
+    Eq. (29) keeps the whole `g_j^t`, so an uncertain subject is compared
+    against a reference that mixes the classes in proportion to it. What this
+    pins is that aggregation is where it no longer acts.
+    """
+    d2 = rng.uniform(0.0, 2.0, size=9)
+    por_sujeto = normalized_local_distance(d2)
+
+    # The uniform mean, against an independent computation rather than a second
+    # call of the function under test.
+    esperado = float(np.asarray(por_sujeto, dtype=float).mean())
+    assert float(local_loss(d2)) == pytest.approx(esperado, abs=1e-12)
+    # And it is the MEAN and not the sum, which a one-subject bag cannot tell
+    # apart: with nine subjects the two differ by a factor of nine.
+    assert float(local_loss(d2)) != pytest.approx(
+        float(np.asarray(por_sujeto, dtype=float).sum()), rel=1e-6)
+
+    # The confidences cannot enter. Three lopsided weightings, one of them
+    # concentrating almost everything on the best-aligned subject and another
+    # on the worst -- the exact move the weighted form rewarded.
+    orden = np.argsort(np.asarray(d2, dtype=float))
+    for destino in (orden[0], orden[-1]):
+        w = np.full(len(d2), 1e-6)
+        w[destino] = 1.0
+        # Passed the only way a weighting could still reach it: positionally,
+        # and by keyword under every name the retired form used.
+        with pytest.raises(TypeError):
+            local_loss(d2, w)
+        for nombre in ('target_weights', 'weights', 'w_t'):
+            with pytest.raises(TypeError):
+                local_loss(d2, **{nombre: w})
+    # Unchanged after all of that: the refusals left no state behind and the
+    # value is the same one measured above.
+    assert float(local_loss(d2)) == pytest.approx(esperado, abs=1e-12)
+
+    # `eps_loc` went with the denominator it stabilized, so no stabilizer can
+    # pull the aggregate toward zero any more: an all-zero confidence used to
+    # drive this term to 0 and now it reads the geometry it was handed.
+    assert float(local_loss(d2)) > 0.0, (
+        "the fixture's distances are positive, so a zero aggregate would mean "
+        "a stabilizer is still in the denominator")
+
+
+def test_every_declared_invariant_of_the_bag_packages_has_a_test() -> None:
+    """The pairing `tests/test_creda_provenance.py` holds for `src/CREDA`, held
+    here for the two bag packages it does not reach.
+
+    **This exists because the hole was found by hand, which is the thing it
+    replaces.** `tests/test_creda_provenance.py::test_every_declared_invariant_
+    has_a_test_somewhere_under_tests` scans `PACKAGE = src/CREDA` and nothing
+    else, so `local_loss_is_the_uniform_mean_and_ignores_confidence` --
+    declared in `src/MIL_CREDA/local_term.py` when r33 landed -- sat unbacked
+    and every suite ran green over it. A declared invariant with no test and a
+    tested property with no declaration look identical to a green run, and
+    that is as true on this side of the repository as on the other.
+
+    Read from the source without importing, so a module that fails to import
+    is a different failure with a different message.
+    """
+    import ast
+
+    repositorio = Path(__file__).resolve().parents[1]
+    nombres = set()
+    for archivo in sorted((repositorio / "tests").glob("test_*.py")):
+        arbol = ast.parse(archivo.read_text(encoding="utf-8"))
+        nombres |= {n.name for n in ast.walk(arbol)
+                    if isinstance(n, ast.FunctionDef)
+                    and n.name.startswith("test_")}
+
+    paquetes = [repositorio / "src" / "MIL_CREDA",
+                repositorio / "src" / "MIL_CREDA_Benchmark"]
+    assert all(p.is_dir() for p in paquetes), paquetes
+
+    declaradas, sin_test = 0, []
+    for paquete in paquetes:
+        for modulo in sorted(paquete.rglob("*.py")):
+            arbol = ast.parse(modulo.read_text(encoding="utf-8"),
+                              filename=str(modulo))
+            for nodo in arbol.body:
+                objetivos = (nodo.targets if isinstance(nodo, ast.Assign)
+                             else [nodo.target]
+                             if isinstance(nodo, ast.AnnAssign) else [])
+                if not any(isinstance(t, ast.Name)
+                           and t.id == "__provenance__" for t in objetivos):
+                    continue
+                declarado = ast.literal_eval(nodo.value)
+                for invariante in declarado.get("invariants", ()):
+                    declaradas += 1
+                    if f"test_{invariante}" not in nombres:
+                        sin_test.append(
+                            f"{modulo.relative_to(repositorio)}::{invariante}")
+
+    # The sweep found something, so an empty result is a result and not a
+    # reader that walked past every declaration.
+    assert declaradas > 0, "no __provenance__ was read in either bag package"
+    assert sorted(sin_test) == [], (
+        f"declared invariants with no test: {sorted(sin_test)}")
 
 
 # --------------------------------------------------------------------------

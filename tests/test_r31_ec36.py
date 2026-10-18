@@ -416,7 +416,7 @@ def _block(source: str, start: str, end: str) -> str:
 
 
 def test_models_declares_the_revision_its_own_equations_are_bound_to() -> None:
-    """`src/CREDA/models.py` is bound to r31, not to r28.
+    """`src/CREDA/models.py` is bound to r34, not to r28.
 
     Not a rebind for its own sake. Every equation this module IMPLEMENTS --
     10, 22-27, 32, 33 -- is byte-identical in r28 and r31; the one that moved
@@ -424,8 +424,14 @@ def test_models_declares_the_revision_its_own_equations_are_bound_to() -> None:
     `B_c` to `Q_c`, a symbol this module never writes. So `r28` had stopped
     naming a binding and was naming the date of the last edit instead, which
     is exactly the drift a declaration exists to make visible.
+
+    **The r33 -> r34 step is the same kind of rebind and the r31 -> r33 one was
+    not.** r33 rewrote Eq. 37 and rescoped Eq. 26's weighting, both of which
+    moved arithmetic here. r34 moved Eq. 15 -- MIL-CREDA's attention over the
+    instances of a bag -- and this module is the SAMPLE-level method, with no
+    bags and no attention, so it implements no equation r34 touched.
     """
-    assert creda_models.__provenance__['revision'] == 'research-concept-r33.md'
+    assert creda_models.__provenance__['revision'] == 'research-concept-r34.md'
 
 
 def test_models_says_which_of_its_equations_it_only_applies() -> None:
@@ -444,7 +450,7 @@ def test_models_says_which_of_its_equations_it_only_applies() -> None:
     artefact needs.
     """
     doc = creda_models.__doc__
-    assert 'research-concept-r33.md' in doc
+    assert 'research-concept-r34.md' in doc
     assert 'r25' in doc, "what happened to r25's pair has to be named"
     declared = creda_models.__provenance__['equations']
     assert '35' in declared and '36' in declared
@@ -725,13 +731,24 @@ def test_the_bounds_banners_name_the_revision_each_function_implements() -> None
     """A section banner is prose and ages exactly like a docstring.
 
     Two of them said `revision 28` above functions that implement r31.
+
+    **They name an ORIGIN now rather than the current binding, and that is the
+    repair rather than a third rewrite.** A banner reading `revision 33` above
+    a function bound to r34 is the same defect in a new coat, and bumping the
+    number every time the stamp moves guarantees the next revision inherits it.
+    Eq. (21)'s banner already said `byte-identical from revision 25 on`; the
+    other two now say the same thing about r33, which is the fact that does not
+    go stale.
     """
     source = SOURCES['bounds']
     assert 'revision 28' not in source
     assert 'revision 31' not in source, (
-        "a banner still names r31 above a function bound to r33")
-    assert '# ' + '-' * 56 + ' Eq. (35), revision 33' in source
-    assert '# ' + '-' * 56 + ' Eq. (36), revision 33' in source
+        "a banner still names r31 above a function bound to r34")
+    assert ', revision 33' not in source, (
+        "a banner names r33 as a binding rather than as the origin of a form "
+        "that is byte-identical from there on")
+    assert 'Eq. (35), byte-identical from revision 33 on' in source
+    assert 'Eq. (36), byte-identical from revision 33 on' in source
     # Eq. (21) carries no revision because it has not changed since r25, and
     # its banner says that rather than naming the current one.
     assert 'Eq. (21), byte-identical from revision 25 on' in source
@@ -866,8 +883,9 @@ def test_every_r28_mention_left_in_creda_is_history_and_not_a_live_rule() -> Non
         assert "is r28's own rule" not in source, name
         assert "revision 28" not in source, name
     # The one live binding in CREDA that still reads r25 does so on purpose.
-    # **Both read r33 since 2026-10-18.** `CREDA.bounds` declared r25 while it
+    # **Both read r34 since 2026-10-18.** `CREDA.bounds` declared r25 while it
     # held `conservative_bounds`/`class_global_loss`; those were removed, so
-    # every equation it holds is r33's and the stamp could finally move.
-    assert creda_bounds_module.__provenance__['revision'] == 'research-concept-r33.md'
-    assert creda_models.__provenance__['revision'] == 'research-concept-r33.md'
+    # every equation it holds is r33's and the stamp could finally move -- and
+    # r34 moved only Eq. 15, which neither module implements.
+    assert creda_bounds_module.__provenance__['revision'] == 'research-concept-r34.md'
+    assert creda_models.__provenance__['revision'] == 'research-concept-r34.md'

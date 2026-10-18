@@ -75,7 +75,7 @@ ENTROPY_COSH_LOWER = -math.log(2.0)
 GLOBAL_LOSS_SPAN = math.log(2.0)
 
 __provenance__ = {
-    "revision": "research-concept-r33.md",
+    "revision": "research-concept-r34.md",
     "sections": ["5"],
     "equations": ["32", "33", "34", "35", "36", "37"],
     "invariants": [
