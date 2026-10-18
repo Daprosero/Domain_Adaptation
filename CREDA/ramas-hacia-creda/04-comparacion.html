@@ -1,0 +1,139 @@
+<div id="panel-comparacion" role="tabpanel" aria-labelledby="tab-comparacion" hidden style="display:flex;flex-direction:column;gap:20px">
+
+<p class="note">Los métodos que llegaron a la tabla final del embudo, más CREDA como base, escritos a nivel de instancia con los símbolos de la r29. Cada reescritura es una lectura derivada; no es la notación de sus autores.</p>
+
+<section class="math-sec">
+  <span class="eyebrow">Definiciones generales</span>
+  <h2>Lo que hace falta para leer lo de abajo</h2>
+  <dl class="defs">
+    <dt>\(\mathbf x^s_i,\ \mathbf x^t_j\)</dt><dd>Una muestra de la fuente (\(i=1,\dots,N_s\), con etiqueta \(y^s_i\)) y una del objetivo (\(j=1,\dots,N_t\), sin etiqueta).</dd>
+    <dt>\(\mathbf h=\mathcal F_\theta(\mathbf x)\in\mathbb R^d\)</dt><dd>El embedding: lo que produce el codificador de parámetros \(\theta\) (Ec. 13).</dd>
+    <dt>\(\mathbf g=\mathcal G_\psi(\mathbf h)\in\Delta^{C-1}\)</dt><dd>La salida del clasificador: un vector de probabilidades sobre las \(C\) clases, con \(\sum_cg_c=1\) (Ec. 20). \(g_{j,c}\) es la probabilidad de que la muestra objetivo \(j\) sea de la clase \(c\).</dd>
+    <dt>\(\kappa^I_\sigma(\mathbf h,\mathbf h')\)</dt><dd>El kernel gaussiano de ancho \(\sigma\): \(\exp(-\lVert\mathbf h-\mathbf h'\rVert^2/2\sigma^2)\). Mide la similitud entre dos embeddings (Ec. 14).</dd>
+    <dt>\(\Phi_\sigma(\mathbf h)\in\mathcal H_I\)</dt><dd>La imagen del embedding en el RKHS del kernel: \(\langle\Phi_\sigma(\mathbf h),\Phi_\sigma(\mathbf h')\rangle=\kappa^I_\sigma(\mathbf h,\mathbf h')\).</dd>
+    <dt>\(\mathbf K^s,\ \mathbf K^t,\ \mathbf K^{st}\)</dt><dd>Matrices de Gram: el kernel evaluado entre todos los pares fuente–fuente, objetivo–objetivo y fuente–objetivo.</dd>
+    <dt>\(\widetilde y^t_j=\mathfrak a(\mathbf g^t_j)\)</dt><dd>La pseudo-etiqueta: la clase más probable según el clasificador (Ec. 22).</dd>
+    <dt>\(S_c,\ T_c,\ n^s_c,\ n^t_c\)</dt><dd>Las muestras de la clase \(c\) en la fuente (por etiqueta) y en el objetivo (por pseudo-etiqueta), y cuántas hay en cada una. \(\mathbf K^s_c,\mathbf K^t_c,\mathbf K^{st}_c\) son las Gram restringidas a esas muestras.</dd>
+    <dt>\(\hat H_1(\mathbf g),\ \widehat H_2(\mathbf g)\)</dt><dd>Entropía de Shannon, \(-\sum_cg_c\ln g_c\), y de Rényi de orden 2, \(-\ln\sum_cg_c^2\), de una predicción. Valen 0 en un one-hot y \(\ln C\) en la uniforme.</dd>
+    <dt>\(\mathcal L_{\mathrm{src}}\)</dt><dd>La entropía cruzada sobre la fuente etiquetada (Ec. 21). Todos los métodos la incluyen.</dd>
+    <dt>\(\lambda\)</dt><dd>El peso del término de adaptación frente a \(\mathcal L_{\mathrm{src}}\).</dd>
+    <dt>\(\mathrm{sg}[\cdot]\)</dt><dd>Detener el gradiente: el valor entra en la cuenta pero no se derivan los parámetros a través de él.</dd>
+  </dl>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">El paralelo que importa</span>
+  <h2>Qué orden miran y cómo combinan</h2>
+  <div class="tablewrap"><table style="min-width:620px">
+    <thead><tr><th></th><th>Primer orden: medias en \(\mathcal H_I\)</th><th>Segundo orden: covarianzas en \(\mathcal H_I\)</th></tr></thead>
+    <tbody>
+      <tr><td><b>Restando potenciales (MMD)</b></td><td>DSAN / LMMD</td><td>—</td></tr>
+      <tr><td><b>Logaritmo de cocientes (información)</b></td><td>CS-DA</td><td class="ours">CREDA, por clase y con peso de confianza</td></tr>
+    </tbody>
+  </table></div>
+  <p class="hint">CDAN+E compara con un crítico y PFAN con prototipos; SHOT mira solo la salida; JUMBOT, el costo de transporte. <span class="tag">[derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Piso</span>
+  <h2>Solo fuente</h2>
+  <div class="disp">$$\mathcal L_{\mathrm{src}}=-\frac1{N_s}\sum_{i=1}^{N_s}\sum_{c}y^s_{i,c}\ln g^s_{i,c}$$</div>
+  <dl class="defs"><dt>\(y^s_{i,c}\)</dt><dd>1 si la muestra \(i\) es de la clase \(c\), 0 si no.</dd><dt>\(g^s_{i,c}\)</dt><dd>La probabilidad que el clasificador le da a esa clase.</dd></dl>
+  <p class="hint">La r29 usa una versión acotada con \(\varepsilon_{\mathrm{src}}\) (Ec. 21). Entrena con la fuente y no adapta: es el piso que todo método tiene que superar.</p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Crítico aprendido · por clase</span>
+  <h2>CDAN+E</h2>
+  <div class="disp">$$\max_D\min_{\theta}\ \mathcal L_{\mathrm{src}}-\lambda\Big[\textstyle\sum_i\tilde v^s_i\log D\big(\mathbf h^s_i\otimes\mathbf e_{y_i^s}\big)+\sum_j\tilde v^t_j\log\big(1-D(\mathbf h^t_j\otimes\mathbf g_j^t)\big)\Big]$$</div>
+  <div class="disp">$$v_j^t=1+e^{-\hat H_1(\mathbf g_j^t)}\in\big[1+\tfrac1C,\,2\big],\qquad \tilde v^t_j=\frac{v^t_j}{\sum_{j'}v^t_{j'}}$$</div>
+  <dl class="defs"><dt>\(\mathbf h\otimes\mathbf g\)</dt><dd>El producto exterior del embedding por la predicción: un vector de dimensión \(d\cdot C\) que lleva la información de clase al discriminador.</dd><dt>\(\mathbf e_{y_i^s}\)</dt><dd>El one-hot de la etiqueta de la fuente.</dd><dt>\(v^t_j\)</dt><dd>El peso por confianza: 2 si la predicción es segura, \(1+1/C\) si es uniforme. Es un énfasis suave, no una compuerta.</dd><dt>\(\tilde v^t_j\)</dt><dd>El peso normalizado dentro de cada dominio.</dd></dl>
+  <p class="hint">En el código oficial el gradiente también pasa por la entropía. <span class="tag">[code / derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Kernel · distancia · por clase</span>
+  <h2>DSAN / LMMD</h2>
+  <div class="disp">$$\hat d=\frac1{|\mathcal C_{both}|}\sum_{c\in\mathcal C_{both}}\Big\lVert\tfrac1{n^s_c}\textstyle\sum_{i\in S_c}\Phi_\sigma(\mathbf h_i^s)-\sum_{j}a_{jc}\,\Phi_\sigma(\mathbf h^t_j)\Big\rVert^2_{\mathcal H_I},\qquad a_{jc}=\frac{\mathrm{sg}[g^t_{j,c}]}{\sum_{j'}\mathrm{sg}[g^t_{j',c}]}$$</div>
+  <div class="disp">$$\hat d_c=\frac{\mathbf 1^\top\mathbf K_c^s\mathbf 1}{(n_c^s)^2}+\mathbf a_c^\top\mathbf K^t\mathbf a_c-\frac{2}{n_c^s}\mathbf 1^\top\mathbf K^{st}_{c,\cdot}\,\mathbf a_c$$</div>
+  <dl class="defs"><dt>\(\mathcal C_{both}\)</dt><dd>Las clases presentes a la vez en las etiquetas de la fuente y en las pseudo-etiquetas del objetivo.</dd><dt>\(a_{jc}\)</dt><dd>Cuánto aporta la muestra objetivo \(j\) a la clase \(c\): su probabilidad para esa clase, normalizada. Cada muestra aporta a todas las clases.</dd><dt>\(\mathbf K^{st}_{c,\cdot}\)</dt><dd>Las filas de la Gram cruzada de las muestras fuente de la clase \(c\), contra todas las objetivo.</dd></dl>
+  <p>Es la MMD de primer orden por clase: los tres términos de \(\hat d_c\) son potenciales de información, y la MMD los resta. Usa la Gram objetivo completa. <span class="tag">[paper + code / derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Kernel · información</span>
+  <h2>CS-DA</h2>
+  <div class="disp">$$\hat D_{CS}=\ln\frac{\mathbf 1^\top\mathbf K^s\mathbf 1}{N_s^2}+\ln\frac{\mathbf 1^\top\mathbf K^t\mathbf 1}{N_t^2}-2\ln\frac{\mathbf 1^\top\mathbf K^{st}\mathbf 1}{N_sN_t}=-2\ln\cos_{\mathcal H_I}\!\Big(\tfrac1{N_s}\textstyle\sum_i\Phi_\sigma(\mathbf h_i^s),\ \tfrac1{N_t}\sum_j\Phi_\sigma(\mathbf h_j^t)\Big)$$</div>
+  <dl class="defs"><dt>\(\tfrac{1}{N^2}\mathbf 1^\top\mathbf K\mathbf 1\)</dt><dd>El potencial de información de un dominio: el promedio de similitudes entre todos sus pares.</dd><dt>\(\tfrac{1}{N_sN_t}\mathbf 1^\top\mathbf K^{st}\mathbf 1\)</dt><dd>El potencial cruzado: cuánto se parecen, en promedio, fuente y objetivo.</dd><dt>\(\cos_{\mathcal H_I}\)</dt><dd>El coseno entre los embeddings de media de cada dominio en el RKHS.</dd></dl>
+  <p>Los mismos tres potenciales que la MMD, combinados como logaritmo de un coseno. Agrega un término condicional \(D_{CCS}\) con una Gram de predicciones \(L_{jj'}=\kappa(\mathbf g_j^t,\mathbf g_{j'}^t)\), que condiciona a \(p(\hat y\mid\mathbf h)\). <span class="tag">[paper / derivado]</span></p>
+  <p><b>CS-DA en términos del embebimiento.</b> CS-DA (Yin et al., 2024) usa la divergencia de Cauchy–Schwarz en su forma estándar, \(D_{CS}(p,q)=-\ln\big((\int pq)^2/(\int p^2\int q^2)\big)\), aplicada dos veces: una a las marginales y otra a las condicionales.</p>
+  <p><b>Término marginal.</b> Con los tres potenciales del Paso 10, sobre las representaciones \(z\) de cada dominio:</p>
+  <div class="disp">$$\hat D_{CS}=\ln\hat V_{ss}+\ln\hat V_{tt}-2\ln\hat V_{st}=-2\ln\cos\theta$$</div>
+  <p>Es el \(-\ln\cos\theta\) del Paso 11 multiplicado por 2. La constante de Parzen se cancela en el cociente, y vale todo lo dicho frente a la MMD.</p>
+  <p><b>Término condicional.</b> La misma divergencia, aplicada a la etiqueta dada la representación, \(p(y\mid z)=p(z,y)/p(z)\):</p>
+  <p>Por Bayes, la condicional es la conjunta dividida por la marginal:</p>
+  <div class="disp">$$p(y\mid x,d)=\frac{p(x,y\mid d)}{p(x\mid d)}$$</div>
+  <p>Sus tres potenciales, escritos como esperanzas bajo la conjunta de cada dominio:</p>
+  <div class="disp">$$\begin{aligned}
+  V^{y|x}_{ss}&=\iint p(y\mid x,d{=}s)^2\,dx\,dy=\mathbb E_{(x,y)\sim p(\cdot\mid d=s)}\Big[\frac{p(x,y\mid d{=}s)}{p(x\mid d{=}s)^2}\Big]\\
+  V^{y|x}_{tt}&=\iint p(y\mid x,d{=}t)^2\,dx\,dy=\mathbb E_{(x,y)\sim p(\cdot\mid d=t)}\Big[\frac{p(x,y\mid d{=}t)}{p(x\mid d{=}t)^2}\Big]\\
+  V^{y|x}_{st}&=\iint p(y\mid x,d{=}s)\,p(y\mid x,d{=}t)\,dx\,dy=\mathbb E_{(x,y)\sim p(\cdot\mid d=s)}\Big[\frac{p(x,y\mid d{=}t)}{p(x\mid d{=}s)\,p(x\mid d{=}t)}\Big]
+  \end{aligned}$$</div>
+  <div class="disp">$$D_{CCS}=\ln V^{y|x}_{ss}+\ln V^{y|x}_{tt}-2\ln V^{y|x}_{st}$$</div>
+  <p><b>Versión matricial.</b> Con Parzen, la conjunta usa el kernel del par, \(K\odot L_Y\) (Paso 8), y la marginal usa la suma de filas de \(K\) (Paso 10). La esperanza es el promedio sobre las muestras:</p>
+  <div class="disp">$$\begin{aligned}
+  \hat V^{y|x}_{ss}&\propto\sum_{n\in s}\frac{\big[(K^s\odot L_Y^s)\,\mathbf 1\big]_n}{\big[K^s\mathbf 1\big]_n^2}\\
+  \hat V^{y|x}_{tt}&\propto\sum_{n\in t}\frac{\big[(K^t\odot L_Y^t)\,\mathbf 1\big]_n}{\big[K^t\mathbf 1\big]_n^2}\\
+  \hat V^{y|x}_{st}&\propto\sum_{n\in s}\frac{\big[(K^{st}\odot L_Y^{st})\,\mathbf 1\big]_n}{\big[K^s\mathbf 1\big]_n\,\big[K^{st}\mathbf 1\big]_n}
+  \end{aligned}$$</div>
+  <p class="hint">\(L_Y\) es el kernel gaussiano sobre las probabilidades predichas. El paper estima el cruzado dos veces, promediando sobre \(s\) y sobre \(t\); por eso su Ec. 13 tiene \(-\ln(st)-\ln(ts)\) en lugar de \(-2\ln(st)\). Las esperanzas son una reconstrucción propia: el paper no deriva el paso de la Ec. 3 a la Ec. 13.</p>
+  <p>En el objetivo, \(y\) es la predicción del clasificador, \(\hat y=g(z)\).</p>
+  <p><b>Qué condicional alinea.</b> CS-DA alinea \(p(y\mid z)\): que la misma representación lleve a la misma clase en los dos dominios. La condición del Paso 8 es la contraria, \(p(z\mid y)\): que la misma clase caiga en el mismo lugar de la representación. La medida es la misma (Cauchy–Schwarz); lo que cambia es qué se supone que se desplaza.</p>
+  <p class="hint">Objetivo de entrenamiento: \(\lambda\,\hat D_{CS}+\beta\,\hat D_{CCS}\) (Ec. 15). <span class="tag">[paper: arXiv 2405.19978, Ec. 2, 3, 11, 13 y 15]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Salida · prototipos</span>
+  <h2>PFAN</h2>
+  <div class="disp">$$\widetilde y_j^t=\arg\max_c\cos\big(\mathbf h^t_j,\bar{\mathbf h}^s_c\big),\qquad w^{\mathrm{PFAN}}_j=\mathbb 1\big[\cos\ge\tau(m)\big],\qquad \mathcal L_{apa}=\textstyle\sum_c d\big(\bar{\mathbf h}_c^s,\bar{\mathbf h}_c^{t,\mathrm{EMA}}\big)$$</div>
+  <dl class="defs"><dt>\(\bar{\mathbf h}^s_c\)</dt><dd>El prototipo de la clase \(c\) en la fuente: la media de sus embeddings.</dd><dt>\(\tau(m)\)</dt><dd>El umbral de aceptación, que cambia con la época \(m\) según un calendario.</dd><dt>\(w^{\mathrm{PFAN}}_j\)</dt><dd>1 si la muestra objetivo está lo bastante cerca de su prototipo, 0 si no: una compuerta dura.</dd><dt>\(\bar{\mathbf h}^{t,\mathrm{EMA}}_c\)</dt><dd>El prototipo objetivo, actualizado con una media móvil exponencial.</dd><dt>\(d\)</dt><dd>La distancia euclídea entre prototipos.</dd></dl>
+  <p>Alinea primer orden: medias de clase. <span class="tag">[paper / derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Salida · sin fuente</span>
+  <h2>SHOT</h2>
+  <div class="disp">$$\mathcal L=\mathbb E_j\big[\hat H_1(\mathbf g^t_j)\big]-\hat H_1(\bar{\mathbf g}^t)+\beta\,\mathrm{CE}\big(\mathbf g^t_j,\widetilde y^{\,\mathrm{cent}}_j\big),\qquad \bar{\mathbf g}^t=\mathbb E_j\,\mathbf g^t_j$$</div>
+  <dl class="defs"><dt>\(\mathbb E_j[\hat H_1(\mathbf g^t_j)]\)</dt><dd>La entropía media de las predicciones: al bajarla, cada predicción se vuelve más segura.</dd><dt>\(\hat H_1(\bar{\mathbf g}^t)\)</dt><dd>La entropía de la predicción promedio: al subirla, las clases quedan equilibradas.</dd><dt>\(\widetilde y^{\,\mathrm{cent}}_j\)</dt><dd>La pseudo-etiqueta por el centroide de clase más cercano en el embedding.</dd><dt>\(\beta\)</dt><dd>El peso de esas pseudo-etiquetas.</dd></dl>
+  <p>Congela el clasificador de la fuente, entrena un codificador objetivo propio y no vuelve a ver datos de la fuente. <span class="tag">[code / derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Transporte desbalanceado</span>
+  <h2>JUMBOT</h2>
+  <div class="disp">$$\min_{\gamma\ge0}\ \langle\gamma,\mathbf C\rangle+\tau\,\mathrm{KL}(\gamma\mathbf 1\,\Vert\,\mathbf a)+\tau\,\mathrm{KL}(\gamma^\top\mathbf 1\,\Vert\,\mathbf b),\qquad C_{ij}=\alpha\lVert\mathbf h_i^s-\mathbf h_j^t\rVert^2+\beta\,\mathrm{CE}\big(\mathbf y_i^s,\mathbf g_j^t\big)$$</div>
+  <dl class="defs"><dt>\(\gamma_{ij}\)</dt><dd>Cuánta masa se mueve de la muestra fuente \(i\) a la objetivo \(j\).</dd><dt>\(C_{ij}\)</dt><dd>El costo de ese par: distancia entre embeddings más el desacuerdo entre la etiqueta fuente y la predicción objetivo.</dd><dt>\(\mathbf a,\ \mathbf b\)</dt><dd>Las masas de cada dominio en el minilote, normalmente uniformes.</dd><dt>\(\tau\)</dt><dd>Cuánto se permite que \(\gamma\) se aparte de \(\mathbf a\) y \(\mathbf b\): la masa que no encaja puede quedar sin mover.</dd><dt>\(\alpha,\ \beta\)</dt><dd>Los pesos del rasgo y de la etiqueta en el costo.</dd></dl>
+  <p class="hint"><span class="tag">[no abierto: Fatras et al., ICML 2021]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Kernel · información · por clase · la base</span>
+  <h2>CREDA</h2>
+  <div class="disp">$$w^t_j=1-\frac{\widehat H_2(\mathbf g^t_j)}{\ln C},\qquad \mathbf D^t_c=\operatorname{diag}(w^t_j)_{j\in T_c},\qquad \widetilde{\mathbf K}^t_c=\mathbf D^t_c\mathbf K^t_c\mathbf D^t_c$$</div>
+  <div class="disp">$$\mathbf K_c^{\mathrm{mix}}=\begin{bmatrix}\mathbf K_c^s&\mathbf K_c^{st}\\(\mathbf K_c^{st})^\top&\widetilde{\mathbf K}_c^t\end{bmatrix},\qquad \breve{\mathbf A}=\frac{\mathbf A}{\operatorname{tr}\mathbf A},\qquad H_2(\mathbf A)=-\ln\lVert\mathbf A\rVert_F^2$$</div>
+  <div class="disp">$$J_c=\tfrac12\Big[H_2(\breve{\mathbf K}_c^{s})+H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})\Big]-H_2\big(\breve{\mathbf K}_c^{\mathrm{mix}}\big),\qquad \mathcal L_{\mathrm{CREDA}}=\mathcal L_{\mathrm{src}}-\lambda\sum_{c:\,n_c^sn_c^t\gt0}J_c$$</div>
+  <dl class="defs">
+    <dt>\(w^t_j\)</dt><dd>La confianza de la muestra objetivo: 1 si su predicción es un one-hot, 0 si es uniforme.</dd>
+    <dt>\(\mathbf D^t_c\)</dt><dd>La matriz diagonal con las confianzas de las muestras objetivo de la clase \(c\).</dd>
+    <dt>\(\widetilde{\mathbf K}^t_c\)</dt><dd>La Gram objetivo de la clase ponderada por confianza: cada par pesa \(w_jw_{j'}\).</dd>
+    <dt>\(\mathbf K^{\mathrm{mix}}_c\)</dt><dd>La Gram de la mezcla de fuente y objetivo de la clase. En CREDA el bloque cruzado no lleva los pesos.</dd>
+    <dt>\(\breve{\mathbf A}\)</dt><dd>Una Gram normalizada por su traza: sus autovalores suman 1, como un operador de densidad.</dd>
+    <dt>\(H_2(\breve{\mathbf A})\)</dt><dd>La entropía de Rényi matricial de orden 2: baja si las muestras se parecen entre sí (clase pura) y sube si están dispersas.</dd>
+    <dt>\(J_c\)</dt><dd>Compara la pureza de cada dominio con la de su mezcla: si fuente y objetivo de la clase coinciden, mezclarlos no agrega dispersión.</dd>
+  </dl>
+  <p>Las muestras objetivo se enrutan por \(\widetilde y^t_j\) (enrutamiento duro) y se ponderan por \(w^t_j\). Con \(\alpha=2\) todo se calcula con normas de Frobenius. Como no lleva \(\mathbf D^t_c\) en el bloque cruzado, la mezcla puede no ser semidefinida positiva; y como diferencia de entropías, \(J_c\) no tiene el signo garantizado. <span class="tag">[paper / derivado]</span></p>
+</section>
+</div>
+
+</div>
+

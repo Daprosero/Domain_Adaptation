@@ -1,0 +1,1111 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ramas hacia CREDA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an expandable left-to-right tree (problem → where → compares → measures → family → method) on a scrolling canvas, with an inspector beside it that explains whatever is selected; a second tab carries the mathematics. Sibling of the MIL-CREDA funnel, so it shares its tokens. */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#18212e; --muted:#5b6676; --rule:#d9dee6;
+  --ours:#0f7a6c; --ours-soft:#d8efeb; --side:#9a6a00; --side-soft:#f6ecd2;
+  --next:#5a4fb3; --next-soft:#e6e3f7; --edge:#b3bcc8; --out:#c0392b; --cmp:#2e8b3e; --kept:#d9781a;
+  --display:"Literata",Georgia,"Times New Roman",serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161e; --panel:#18202b; --ink:#e4e9f0; --muted:#9aa6b6; --rule:#2c3747;
+  --ours:#4fc2b0; --ours-soft:#16352f; --side:#e2b04a; --side-soft:#352a12;
+  --next:#a49bf0; --next-soft:#262247; --edge:#4a5568; --out:#ef7a6a; --cmp:#5fcf6e; --kept:#f2a14a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161e; --panel:#18202b; --ink:#e4e9f0; --muted:#9aa6b6; --rule:#2c3747;
+  --ours:#4fc2b0; --ours-soft:#16352f; --side:#e2b04a; --side-soft:#352a12;
+  --next:#a49bf0; --next-soft:#262247; --edge:#4a5568; --out:#ef7a6a; --cmp:#5fcf6e; --kept:#f2a14a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:1400px;margin:0 auto;padding-inline:20px;padding-block:28px 64px;display:flex;flex-direction:column;gap:24px}
+h1,h2,h3{font-family:var(--display);font-weight:650;text-wrap:balance;margin:0}
+h1{font-size:2rem;line-height:1.15}
+h2{font-size:1.35rem}
+h3{font-size:1.05rem}
+p{margin:0;max-width:74ch}
+.lede{color:var(--muted);font-size:1.02rem}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:16px;min-width:0}
+header{display:flex;flex-direction:column;gap:10px}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.tab{font:500 .95rem var(--body);color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;padding:8px 14px;cursor:pointer;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ours)}
+.tab:focus-visible,.btn:focus-visible{outline:2px solid var(--ours);outline-offset:2px}
+
+/* toolbar + legend */
+.bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.84rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw{display:inline-block;width:24px;height:0;border-top:3px solid var(--edge)}
+.sw.ours{border-top-color:var(--ours)}
+.sw.side{border-top:2px dashed var(--side)}
+.sw.next{border-top:2px dashed var(--next)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--cmp)}
+.dot.kept{background:var(--kept)}
+.dot.out{background:var(--out)}
+.dot.na{background:none;border:1.5px solid var(--muted)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:500 .84rem var(--body);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:5px 12px;cursor:pointer}
+.btn:hover{border-color:var(--ours)}
+
+/* explorer */
+.explorer{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+@media (max-width:980px){.explorer{grid-template-columns:minmax(0,1fr)}}
+.canvas{background:var(--panel);border:1px solid var(--rule);border-radius:10px;overflow:auto;max-height:78vh;min-width:0}
+.canvas > svg{display:block}
+.canvas text{font-family:var(--body);fill:var(--ink);font-size:12.5px;pointer-events:none}
+.canvas .col{font-family:var(--mono);font-size:10px;fill:var(--muted);letter-spacing:.07em}
+.nd{cursor:pointer;outline:none}
+.nd rect.box{fill:var(--panel);stroke:var(--rule);stroke-width:1.2}
+.nd:hover rect.box,.nd:focus-visible rect.box{stroke:var(--ink)}
+.nd.ours rect.box{stroke:var(--ours);stroke-width:1.8;fill:var(--ours-soft)}
+.nd.side rect.box{stroke:var(--side);stroke-dasharray:4 3;fill:var(--side-soft)}
+.nd.next rect.box{stroke:var(--next);stroke-dasharray:5 4;fill:var(--next-soft)}
+.nd.conv rect.box{stroke:var(--ours);stroke-width:2.6;fill:var(--ours-soft)}
+.nd.leaf rect.box{fill:var(--bg)}
+.nd.sel rect.box{stroke:var(--ink);stroke-width:2.4}
+.nd .badge{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+.nd circle.st{fill:var(--cmp)}
+.nd circle.st.kept{fill:var(--kept)}
+.nd circle.st.out{fill:var(--out)}
+.nd circle.st.na{fill:none;stroke:var(--muted);stroke-width:1.3}
+.e{fill:none;stroke:var(--edge);stroke-width:1.3}
+.e.ours{stroke:var(--ours);stroke-width:2.6}
+.e.side{stroke:var(--side);stroke-width:1.5;stroke-dasharray:5 4}
+.e.next{stroke:var(--next);stroke-width:1.8;stroke-dasharray:6 5}
+.e.conv{stroke:var(--ours);stroke-width:2.2;stroke-dasharray:2 0}
+@media (prefers-reduced-motion: no-preference){.nd{transition:opacity .25s}.nd.enter{opacity:0}}
+
+/* inspector */
+.inspector{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:78vh;overflow:auto;min-width:0}
+.crumbs{font-family:var(--mono);font-size:.7rem;color:var(--muted);letter-spacing:.03em}
+.pill{align-self:flex-start;font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--ours-soft);color:var(--ours)}
+.pill.side{background:var(--side-soft);color:var(--side)}
+.pill.next{background:var(--next-soft);color:var(--next)}
+.pill.plain{background:var(--bg);color:var(--muted)}
+.pill.out{background:var(--bg);color:var(--out)}
+.pill.cmp{background:var(--bg);color:var(--cmp);border:1px solid var(--cmp)}
+.pill.kept{background:var(--bg);color:var(--kept);border:1px solid var(--kept)}
+.dislike{border-left:3px solid var(--out);padding:4px 10px;font-size:.92rem;background:var(--bg);border-radius:0 6px 6px 0}
+.dislike b{color:var(--out)}
+.assume{border-left:3px solid var(--muted);padding:4px 10px;font-size:.92rem;background:var(--bg);border-radius:0 6px 6px 0}
+.core{background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:4px 10px;overflow-x:auto;font-size:.92rem}
+.kv{display:flex;flex-direction:column;gap:4px}
+.kv b{font-size:.74rem;font-family:var(--mono);letter-spacing:.04em;text-transform:uppercase}
+.kv.keep b{color:var(--ours)}
+.kv.leave b{color:var(--muted)}
+.kv ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:.92rem}
+.hint{font-size:.86rem;color:var(--muted)}
+.tag{font-family:var(--mono);font-size:.7rem;color:var(--muted);white-space:nowrap}
+.kids{display:flex;flex-wrap:wrap;gap:6px}
+.kid{font:500 .78rem var(--mono);border:1px solid var(--rule);border-radius:4px;padding:2px 7px;background:var(--bg);color:var(--ink);cursor:pointer}
+.kid:hover{border-color:var(--ours)}
+
+/* math tab */
+.math-sec{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.math-sec .disp{overflow-x:auto;padding-block:4px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}.cols > div{min-width:0;display:flex;flex-direction:column;gap:10px}.cols h3{margin:0;font-size:1rem}
+.cols3{grid-template-columns:1fr 1fr 1fr}
+@media (max-width:760px){.cols,.cols3{grid-template-columns:1fr}}
+.claim{border-left:3px solid var(--ours);padding:6px 12px;background:var(--ours-soft);border-radius:0 6px 6px 0;max-width:80ch}
+.claim.warn{border-left-color:var(--side);background:var(--side-soft)}
+.claim.next{border-left-color:var(--next);background:var(--next-soft)}
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:.88rem;background:var(--panel)}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--rule)}
+th{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+tr.ours td,td.ours{background:var(--ours-soft)}
+.note{font-size:.86rem;color:var(--muted)}
+.cfig{margin:0;display:flex;flex-direction:column;gap:8px;overflow-x:auto}
+.cfig > svg{min-width:620px;width:100%;height:auto;display:block}
+.cfig .lbl{font-family:var(--body);font-size:12.5px;fill:var(--ink)}
+.cfig .lbl.s{font-size:11.5px;fill:var(--muted)}
+.cfig .ax{stroke:var(--muted);stroke-width:1.2}
+.cfig .c1{fill:var(--ours-soft);stroke:var(--ours);stroke-width:1.4}
+.cfig .c1i{fill:none;stroke:var(--ours);stroke-width:1;stroke-dasharray:3 3}
+.cfig .c2{fill:var(--next-soft);stroke:var(--next);stroke-width:1.4}
+.cfig .c2i{fill:none;stroke:var(--next);stroke-width:1;stroke-dasharray:3 3}
+.cfig .arr{fill:none;stroke:var(--side);stroke-width:1.6}
+.cfig .rk{fill:none;stroke:var(--ink);stroke-width:1.4}
+.cfig .pt1{fill:var(--ours)}.cfig .pt1h{fill:none;stroke:var(--ours);stroke-width:2}
+.cfig .pt2{fill:var(--next)}.cfig .pt2h{fill:none;stroke:var(--next);stroke-width:2}
+.cfig .gap{stroke:var(--out);stroke-width:1.6;stroke-dasharray:3 2}
+.cfig .c1t{fill:none;stroke:var(--ours);stroke-width:1.6;stroke-dasharray:5 3}
+.cfig .c2t{fill:none;stroke:var(--next);stroke-width:1.6;stroke-dasharray:5 3}
+.cfig .arrh{fill:var(--side)}
+.cfig .frame{fill:none;stroke:var(--rule);stroke-width:1}
+.cfig .sw1{fill:var(--ours-soft);stroke:var(--ours)}
+.cfig .sw2{fill:var(--next-soft);stroke:var(--next)}
+.cfig .swf{fill:none;stroke:var(--ink);stroke-width:1.4}
+.cfig .swt{fill:none;stroke:var(--ink);stroke-width:1.4;stroke-dasharray:4 2}
+.cfig .dom{fill:none;stroke:var(--ink);stroke-width:1.6}
+.cfig .domt{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:6 4}
+.cfig .mix1{fill:var(--ours-soft);stroke:none;opacity:.85}
+.cfig .mix2{fill:var(--next-soft);stroke:none;opacity:.85}
+.cfig .ptd{fill:var(--ink)}
+.cfig .ptdt{fill:var(--bg);stroke:var(--ink);stroke-width:2}
+.cfig .lphi{fill:none;stroke:var(--out);stroke-width:.9;opacity:.5}.cfig .lphir{fill:none;stroke:var(--out);stroke-width:1.6}
+.cfig .lpsi{fill:none;stroke:var(--cmp);stroke-width:1.6}
+.cfig .lop{fill:none;stroke:var(--next);stroke-width:2;stroke-dasharray:6 4}.cfig .arrop{fill:var(--next)}.cfig .lpsy{fill:none;stroke:var(--kept);stroke-width:1.6}.cfig .arrpsy{fill:var(--kept)}.cfig .tpsy{fill:var(--kept)}.cfig .arrphi{fill:var(--out)}.cfig .arrpsi{fill:var(--cmp)}
+.cfig .tphi{fill:var(--out)}.cfig .tpsi{fill:var(--cmp)}.cfig .top{fill:var(--next)}
+.cfig figcaption{font-size:.88rem;color:var(--muted)}
+
+.defs{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,1fr);gap:6px 16px;margin:0;font-size:.92rem}
+.defs dt{overflow-x:auto}
+.defs dd{margin:0;color:var(--ink)}
+@media (max-width:560px){.defs{grid-template-columns:minmax(0,1fr)}.defs dd{margin-bottom:6px}}
+</style>
+
+<script>
+window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},svg:{fontCache:'global'},startup:{typeset:true}};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js"></script>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">Tesis · fundamentos teóricos · etapa CREDA</span>
+  <h1>Ramas hacia CREDA</h1>
+  <p class="lede">Un recorrido por las formas de alinear dominios sin etiquetas en el objetivo, en tres preguntas: <b>dónde</b> se alinea, <b>qué compara</b> y <b>qué mide</b>. Cada nodo se abre en sus familias y cada familia en sus métodos, con el veredicto que les dio el embudo: si llegaron a la comparación final, si se descartaron después de pasar los criterios o por qué no los pasaron. Ninguna rama se descarta: cada una deja algo que nos llevamos y un límite que explica por qué seguimos, hasta la información estimada con kernels sobre el embedding, base de CREDA.</p>
+</header>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" id="tab-arbol" aria-controls="panel-arbol" aria-selected="true">Árbol</button>
+  <button class="tab" role="tab" id="tab-embebimiento" aria-controls="panel-embebimiento" aria-selected="false">Del embebimiento a CREDA</button>
+  <button class="tab" role="tab" id="tab-matematica" aria-controls="panel-matematica" aria-selected="false">Matemática</button>
+  <button class="tab" role="tab" id="tab-comparacion" aria-controls="panel-comparacion" aria-selected="false">Comparación final</button>
+</div>
+
+<div id="panel-arbol" role="tabpanel" aria-labelledby="tab-arbol" style="display:flex;flex-direction:column;gap:14px">
+  <div class="bar">
+    <div class="legend">
+      <span><i class="sw ours"></i>nuestro camino</span>
+      <span><i class="sw"></i>otras ramas, vigentes</span>
+      <span><i class="sw side"></i>rama lateral</span>
+      <span><i class="sw next"></i>siguiente etapa</span>
+      <span><i class="dot"></i>llegó a la comparación final</span>
+      <span><i class="dot kept"></i>pasa los tres criterios, descartado después</span>
+      <span><i class="dot out"></i>no pasa algún criterio (F1, F2 o F3: transversal a la arquitectura)</span>
+    </div>
+    <div class="btns">
+      <button class="btn" id="btn-ours">Abrir nuestro camino</button>
+      <button class="btn" id="btn-fam">Abrir familias</button>
+      <button class="btn" id="btn-all">Abrir todo</button>
+      <button class="btn" id="btn-reset">Contraer</button>
+    </div>
+  </div>
+  <div class="explorer">
+    <div class="canvas" id="canvas"><svg id="tree" role="tree" aria-label="Árbol de ramas hacia CREDA"></svg></div>
+    <aside class="inspector" id="inspector" aria-live="polite"></aside>
+  </div>
+  <p class="note">Clic en un nodo: lo explica a la derecha y, si tiene hijos, los abre o cierra (el número indica cuántos). Teclado: Tab para moverse, Enter para abrir. Quedan fuera del árbol tres familias del embudo: transformadores y CLIP, porque son una arquitectura y no una medida; y ponderación de la fuente y MIL, que son antecedentes de la siguiente etapa. Las fórmulas de los métodos están reescritas en la notación de la r29: son una lectura derivada, no la notación de sus autores. * evidencia débil · † en el límite. F3 exige que el método sea una pérdida sobre los rasgos y logits de un único extractor y una única cabeza, iguales para todos; «F3 en frontera» marca los casos que dependen de una decisión nuestra. Quién representa a cada familia es el último filtro.</p>
+</div>
+
+<div id="panel-embebimiento" role="tabpanel" aria-labelledby="tab-embebimiento" hidden style="display:flex;flex-direction:column;gap:20px">
+
+<section class="math-sec">
+  <span class="eyebrow">La idea en un dibujo</span>
+  <h2>Dos nubes y tres espacios</h2>
+  <figure class="cfig">
+    <svg viewBox="0 0 780 570" role="img" aria-label="Dos nubes de puntos, una por dominio. Phi lleva cada dato a F, psi lleva cada dominio a un punto de G, y cada par se forma en F por G con un punto de F y uno de G; C_XD es el promedio de los pares. C_X|D lleva cada psi(d), a través de la fila de pares de su dominio, a la media de ese dominio en F">
+      <defs><marker id="ahop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrop" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ahphi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrphi" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ahpsi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrpsi" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+      <text class="lbl s" x="24" y="132">espacio de los datos</text>
+      <line class="ax" x1="30" y1="450" x2="300" y2="450"/><line class="ax" x1="30" y1="450" x2="30" y2="146"/>
+      <line class="lphir" x1="70" y1="272" x2="465" y2="102" marker-end="url(#ahphi)"/><line class="lphir" x1="195" y1="292" x2="601" y2="48" marker-end="url(#ahphi)"/>
+      <path class="lpsi" d="M95 324 Q 60 520 530 474" marker-end="url(#ahpsi)"/><line class="lpsi" x1="262" y1="370" x2="635" y2="468" marker-end="url(#ahpsi)"/>
+      <line class="lphir" x1="470" y1="100" x2="470" y2="302" marker-end="url(#ahphi)"/><line class="lpsi" x1="536" y1="464" x2="472" y2="312" marker-end="url(#ahpsi)"/>
+      <line class="lphir" x1="605" y1="45" x2="644" y2="225" marker-end="url(#ahphi)"/><line class="lpsi" x1="646" y1="464" x2="645" y2="235" marker-end="url(#ahpsi)"/>
+      <ellipse class="dom" cx="99" cy="252" rx="50" ry="72"/>
+      <ellipse class="domt" cx="218" cy="343" rx="48" ry="69"/>
+      <circle class="ptd" cx="78" cy="200" r="3.5"/><circle class="ptd" cx="108" cy="212" r="3.5"/><circle class="ptd" cx="92" cy="240" r="3.5"/><circle class="ptd" cx="122" cy="250" r="3.5"/><circle class="ptd" cx="70" cy="272" r="3.5"/><circle class="ptd" cx="110" cy="285" r="3.5"/><circle class="ptd" cx="128" cy="228" r="3.5"/><circle class="ptd" cx="95" cy="305" r="3.5"/><circle class="ptdt" cx="195" cy="292" r="3.5"/><circle class="ptdt" cx="228" cy="305" r="3.5"/><circle class="ptdt" cx="208" cy="330" r="3.5"/><circle class="ptdt" cx="240" cy="348" r="3.5"/><circle class="ptdt" cx="188" cy="362" r="3.5"/><circle class="ptdt" cx="222" cy="378" r="3.5"/><circle class="ptdt" cx="248" cy="318" r="3.5"/><circle class="ptdt" cx="205" cy="395" r="3.5"/>
+      <text class="lbl" x="56" y="168">P(X | d = s)</text>
+      <text class="lbl" x="180" y="436">P(X | d = t)</text>
+      <ellipse class="rk" cx="590" cy="92" rx="162" ry="70"/>
+      <text class="lbl s" x="750" y="32">𝓕</text>
+      <circle class="ptd" cx="478" cy="50" r="2.5"/><circle class="ptd" cx="508" cy="58" r="2.5"/><circle class="ptd" cx="492" cy="78" r="2.5"/><circle class="ptd" cx="522" cy="85" r="2.5"/><circle class="ptd" cx="470" cy="100" r="2.5"/><circle class="ptd" cx="510" cy="110" r="2.5"/><circle class="ptd" cx="528" cy="70" r="2.5"/><circle class="ptd" cx="495" cy="124" r="2.5"/><circle class="ptdt" cx="605" cy="45" r="2.5"/><circle class="ptdt" cx="638" cy="54" r="2.5"/><circle class="ptdt" cx="618" cy="72" r="2.5"/><circle class="ptdt" cx="650" cy="84" r="2.5"/><circle class="ptdt" cx="598" cy="94" r="2.5"/><circle class="ptdt" cx="632" cy="105" r="2.5"/><circle class="ptdt" cx="658" cy="63" r="2.5"/><circle class="ptdt" cx="615" cy="117" r="2.5"/>
+      <circle class="ptd" cx="500" cy="84" r="7"/><circle class="ptdt" cx="627" cy="79" r="7"/>
+      <text class="lbl top" x="516" y="130">μ<tspan baseline-shift="sub" font-size="10">X|d=s</tspan></text><text class="lbl top" x="516" y="144" font-size="10.5">= C<tspan baseline-shift="sub" font-size="8.5">X|D</tspan> ψ(s)</text>
+      <text class="lbl top" x="635" y="124">μ<tspan baseline-shift="sub" font-size="10">X|d=t</tspan></text><text class="lbl top" x="635" y="138" font-size="10.5">= C<tspan baseline-shift="sub" font-size="8.5">X|D</tspan> ψ(t)</text>
+      <ellipse class="rk" cx="590" cy="282" rx="162" ry="68"/>
+      <text class="lbl s" x="744" y="220">𝓕⊗𝒢</text>
+      <circle class="ptd" cx="478" cy="285" r="2.5"/><circle class="ptd" cx="508" cy="288" r="2.5"/><circle class="ptd" cx="492" cy="297" r="2.5"/><circle class="ptd" cx="522" cy="300" r="2.5"/><circle class="ptd" cx="470" cy="307" r="2.5"/><circle class="ptd" cx="510" cy="312" r="2.5"/><circle class="ptd" cx="528" cy="294" r="2.5"/><circle class="ptd" cx="495" cy="318" r="2.5"/><circle class="ptdt" cx="645" cy="230" r="2.5"/><circle class="ptdt" cx="678" cy="234" r="2.5"/><circle class="ptdt" cx="658" cy="242" r="2.5"/><circle class="ptdt" cx="690" cy="247" r="2.5"/><circle class="ptdt" cx="638" cy="252" r="2.5"/><circle class="ptdt" cx="672" cy="257" r="2.5"/><circle class="ptdt" cx="698" cy="238" r="2.5"/><circle class="ptdt" cx="655" cy="262" r="2.5"/>
+      <circle class="ptd" cx="584" cy="273" r="7"/>
+      <text class="lbl" x="596" y="278">C<tspan baseline-shift="sub" font-size="10">XD</tspan></text>
+      <ellipse class="rk" cx="590" cy="472" rx="162" ry="46"/>
+      <text class="lbl s" x="752" y="432">𝒢</text>
+      <circle class="ptd" cx="540" cy="472" r="7"/><circle class="ptdt" cx="650" cy="472" r="7"/>
+      <text class="lbl" x="494" y="494">ψ(s)</text><text class="lbl" x="666" y="477">ψ(t)</text>
+      <path class="lop" d="M540 463 L545 338 L500 93" marker-end="url(#ahop)"/>
+      <path class="lop" d="M650 463 L545 338 L627 88" marker-end="url(#ahop)"/>
+      <circle class="ptdt" cx="545" cy="338" r="7" style="stroke:var(--next);fill:var(--next)"/>
+      <text class="lbl top" x="556" y="332">C<tspan baseline-shift="sub" font-size="10">X|D</tspan></text>
+      <text class="lbl tphi" x="300" y="150">φ</text>
+      <text class="lbl tpsi" x="320" y="500">ψ</text>
+      <line class="lphir" x1="30" y1="536" x2="54" y2="536"/><text class="lbl s" x="60" y="540">φ: cada dato a 𝓕, y de ahí a su par</text>
+      <line class="lpsi" x1="290" y1="536" x2="314" y2="536"/><text class="lbl s" x="320" y="540">ψ: cada dominio a 𝒢, y de ahí a sus pares</text>
+      <line class="lop" x1="30" y1="558" x2="54" y2="558"/><text class="lbl s" x="60" y="562">C<tspan baseline-shift="sub" font-size="9">X|D</tspan>: un solo operador en 𝓕⊗𝒢; cada ψ(d) entra y sale como μ<tspan baseline-shift="sub" font-size="9">X|d</tspan> = C<tspan baseline-shift="sub" font-size="9">X|D</tspan> ψ(d)</text>
+      <circle class="ptd" cx="560" cy="536" r="3.5"/><text class="lbl s" x="570" y="540">fuente</text>
+      <circle class="ptdt" cx="626" cy="536" r="3.5"/><text class="lbl s" x="636" y="540">objetivo</text>
+      <circle class="ptd" cx="560" cy="557" r="6"/><text class="lbl s" x="572" y="562">promedio</text>
+    </svg>
+    <figcaption>Cada dominio es una nube de puntos. En rojo, \(\varphi\) lleva cada dato a \(\mathcal F\) (se dibuja una flecha por dominio), donde el promedio de cada nube es \(\mu_{X|d}\). En verde, \(\psi\) lleva cada dominio a un solo punto de \(\mathcal G\), \(\psi(s)\) o \(\psi(t)\). Cada par \(\varphi(x_n)\otimes\psi(d_n)\) se forma en \(\mathcal F\otimes\mathcal G\) con un punto de \(\mathcal F\) y uno de \(\mathcal G\) (las líneas se dibujan para un par de cada dominio), y \(C_{XD}\) es el promedio de todos los pares: no es el producto de un punto de \(\mathcal F\) por uno de \(\mathcal G\), salvo que \(X\) no dependa de \(D\). En violeta, \(C_{X|D}\) es un solo punto de \(\mathcal F\otimes\mathcal G\): con \(\psi\) one-hot vale \(\mu_{X|d=s}\otimes\psi(s)+\mu_{X|d=t}\otimes\psi(t)\), la suma de los centros de fila sin los pesos \(N_d/N\) que tiene \(C_{XD}\). Cada \(\psi(d)\) entra al mismo operador y sale distinto: \(\psi(d)\) elige su término y queda \(\mu_{X|d}=C_{X|D}\,\psi(d)\) (Pasos 3 y 6).</figcaption>
+  </figure>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 0 · Datos y espacios</span>
+  <h2>Qué se embebe y qué condiciona</h2>
+  <ul>
+    <li><b>Datos:</b> pares \(\{x_n,d_n\}_{n=1}^N\), i.i.d. de \(P(X,D)\). \(x_n\) es el dato de entrada tal como está y \(d_n\) la variable que condiciona: el dominio del que viene la muestra.</li>
+    <li>\(\varphi:\mathcal X\to\mathcal F\), con \(k(x,x')=\langle\varphi(x),\varphi(x')\rangle_{\mathcal F}\): lleva el dato a su espacio de Hilbert.</li>
+    <li>\(\psi:\mathcal D\to\mathcal G\), con \(\ell(d,d')=\langle\psi(d),\psi(d')\rangle_{\mathcal G}\): lleva la variable que condiciona al suyo. Aquí \(\ell\) es un kernel cualquiera; no se elige ninguno en particular.</li>
+    <li><b>Todo punto de \(\mathcal F\) o de \(\mathcal G\) es una función.</b> Se evalúa con un producto interno contra el mapa del dato (propiedad reproductiva): \(f(x)=\langle f,\varphi(x)\rangle_{\mathcal F}\) para \(f\in\mathcal F\), y \(g(d)=\langle g,\psi(d)\rangle_{\mathcal G}\) para \(g\in\mathcal G\).</li>
+    <li>Las funciones se nombran por su espacio: \(f\in\mathcal F\) es una función de \(x\) y \(g\in\mathcal G\) es una función de \(d\).</li>
+    <li>\(K\) y \(L\) son las versiones matriciales: las matrices de Gram de \(k\) y \(\ell\), con \(K_{nm}=k(x_n,x_m)\) y \(L_{nm}=\ell(d_n,d_m)\).</li>
+  </ul>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 1 · Una distribución es un punto</span>
+  <h2>El embebimiento de la media</h2>
+  <div class="disp">$$\mu_X=\mathbb E_X\{\varphi(X)\},\qquad \hat\mu_X=\frac1N\sum_{n=1}^N\varphi(x_n)$$</div>
+  <p>Con un kernel característico, \(\mu_X\) identifica a \(P(X)\): distribuciones distintas dan puntos distintos. Es el objeto base de todo lo que sigue.</p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 2 · Covarianzas</span>
+  <h2>Cómo varía \(x\) con \(d\), y cómo varía \(d\) consigo mismo</h2>
+  <div class="disp">$$C_{XD}=\mathbb E_{X,D}\{\varphi(X)\otimes\psi(D)\},\qquad C_{DD}=\mathbb E_D\{\psi(D)\otimes\psi(D)\}$$</div>
+  <div class="disp">$$\hat C_{XD}=\frac1N\sum_n\varphi(x_n)\otimes\psi(d_n)=\frac1N\Phi\Psi^\top,\qquad \hat C_{DD}=\frac1N\Psi\Psi^\top,\qquad \Phi=[\varphi(x_1)\cdots\varphi(x_N)],\quad \Psi=[\psi(d_1)\cdots\psi(d_N)]$$</div>
+  <ul>
+    <li>\(C_{XD}\) es el embebimiento de la conjunta \(P(X,D)\): guarda cómo cambian los datos según la condición.</li>
+    <li>\(C_{DD}\) es el embebimiento de la conjunta de \(D\) consigo misma, \(P(D,D)\), que contiene exactamente \(P(D)\) si \(\ell^2\) es característico. Es el que va a hacer el papel de "dividir por la marginal".</li>
+  </ul>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 3 · Lo que se busca</span>
+  <h2>Un punto por cada valor de la condición</h2>
+  <div class="disp">$$\mu_{X|d}=\mathbb E_{X|D}\{\varphi(X)\mid d\},\qquad \mathbb E_{X|D}\{f(X)\mid d\}=\langle f,\mu_{X|d}\rangle_{\mathcal F}\quad\forall f\in\mathcal F$$</div>
+  <p>Para cada valor \(d\), la distribución \(P(X\mid d)\) queda como un punto de \(\mathcal F\). La segunda igualdad dice por qué sirve: cualquier esperanza condicional de una función de \(x\) se obtiene con un producto interno, sin escribir la densidad condicional.</p>
+  <p>Se busca un operador \(C_{X|D}:\mathcal G\to\mathcal F\) que haga ese mapa: \(\mu_{X|d}=C_{X|D}\,\psi(d)\).</p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 4 · De dónde sale la inversa</span>
+  <h2>Condicionar es dividir por la marginal</h2>
+  <p>Se parte de promediar en dos etapas (regla del producto, \(P(x,d)=P(x\mid d)P(d)\)) y se resuelven los dos lados a la vez, con \(f(X)=\langle\varphi(X),f\rangle\), \(\mathbb E_{X|D}\{f(X)\mid D\}\in\mathcal G\) y \((a\otimes b)\,v=a\,\langle b,v\rangle\):</p>
+  <div class="disp">$$\begin{aligned}
+  \mathbb E_{X,D}\{\psi(D)\,f(X)\}&=\mathbb E_D\big\{\psi(D)\,\mathbb E_{X|D}\{f(X)\mid D\}\big\}\\
+  \mathbb E_{X,D}\{\psi(D)\,\langle\varphi(X),f\rangle\}&=\mathbb E_D\big\{\psi(D)\,\langle\psi(D),\mathbb E_{X|D}\{f(X)\mid D\}\rangle\big\}\\
+  \mathbb E_{X,D}\{\psi(D)\otimes\varphi(X)\}\,f&=\mathbb E_D\{\psi(D)\otimes\psi(D)\}\,\mathbb E_{X|D}\{f(X)\mid D\}\\
+  C_{DX}\,f&=C_{DD}\,\mathbb E_{X|D}\{f(X)\mid D\}\\
+  \mathbb E_{X|D}\{f(X)\mid D\}&=C_{DD}^{-1}\,C_{DX}\,f
+  \end{aligned}$$</div>
+  <p>Ese resultado es una función de \(d\), un punto de \(\mathcal G\), y se evalúa en un dominio con \(\psi(d)\). Para llegar al punto de ese dominio se pasa el operador \(A=C_{DD}^{-1}C_{DX}\) al otro lado del producto interno, transponiéndolo: \(\langle Af,v\rangle_{\mathcal G}=\langle f,A^\top v\rangle_{\mathcal F}\). Esto vale para todo operador lineal y acotado, y \(f\) solo tiene que estar en \(\mathcal F\); la condición real es que \(C_{DD}\) sea invertible.</p>
+  <div class="disp">$$\begin{aligned}
+  \mathbb E_{X|D}\{f(X)\mid d\}&=\big\langle \mathbb E_{X|D}\{f(X)\mid D\},\ \psi(d)\big\rangle_{\mathcal G}=\big\langle C_{DD}^{-1}C_{DX}\,f,\ \psi(d)\big\rangle_{\mathcal G}\\
+  &=\big\langle f,\ C_{XD}\,C_{DD}^{-1}\,\psi(d)\big\rangle_{\mathcal F}\\
+  &=\langle f,\mu_{X|d}\rangle_{\mathcal F}\quad\forall f\in\mathcal F\qquad\Longrightarrow\qquad \mu_{X|d}=C_{XD}\,C_{DD}^{-1}\,\psi(d)\\
+  \mu_{X|d}=C_{X|D}\,\psi(d)\qquad&\Longrightarrow\qquad C_{X|D}=C_{XD}\,C_{DD}^{-1}
+  \end{aligned}$$</div>
+  <p class="hint">\(C_{X|D}\) es el transpuesto del operador que da el Paso 4: uno lleva \(f\) a su promedio por dominio, el otro lleva el dominio \(d\) a su nube \(\mu_{X|d}\), el promedio de \(\varphi(x)\) solo sobre los datos de \(d\).</p>
+  <p>Es la regla de Bayes, \(P(X\mid d)=P(X,d)/P(d)\): la conjunta es \(C_{XD}\) y dividir por la marginal \(P(d)\) se vuelve multiplicar por \(C_{DD}^{-1}\). La analogía da la intuición; la demostración garantiza que vale para toda \(f\in\mathcal F\) y dice que se divide por el operador \(C_{DD}\), no por el punto \(\mu_D\). <span class="tag">[verificado: apuntes, págs. 6–7 y 11, con \(d\) como variable que condiciona]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 5 · Estimador con datos</span>
+  <h2>El punto condicional como combinación de las muestras</h2>
+  <p>Se parte del resultado del Paso 4, \(C_{X|D}=C_{XD}\,C_{DD}^{-1}\), con los estimadores del Paso 2 en lugar de las esperanzas verdaderas:</p>
+  <div class="disp">$$\hat C_{X|D}=\hat C_{XD}\big(\hat C_{DD}+\lambda I\big)^{-1}=\frac1N\,\Phi\Psi^\top\Big(\frac1N\,\Psi\Psi^\top+\lambda I\Big)^{-1}$$</div>
+  <p class="hint">\(\lambda\gt0\) se agrega por estabilidad: \(\Psi\Psi^\top\) está armado con solo \(N\) vectores \(\psi(d_n)\), tiene rango a lo sumo \(N\) y, si \(\mathcal G\) tiene más dimensiones, no se puede invertir.</p>
+  <p>De ahí se llega, paso a paso, a una inversa \(N\times N\), con \(L=\Psi^\top\Psi\) la matriz de Gram de \(\ell\):</p>
+  <div class="disp">$$\begin{aligned}
+  \hat C_{X|D}&=\Phi\Psi^\top\big(\Psi\Psi^\top+N\lambda I\big)^{-1}&&\text{se saca }\tfrac1N\text{ de la inversa y se cancela}\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\big(L+N\lambda I\big)\,\Psi^\top\big(\Psi\Psi^\top+N\lambda I\big)^{-1}&&\text{se inserta la identidad}\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\big(\Psi^\top\Psi\Psi^\top+N\lambda\,\Psi^\top\big)\big(\Psi\Psi^\top+N\lambda I\big)^{-1}&&\text{se distribuye, con }L=\Psi^\top\Psi\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\Psi^\top\big(\Psi\Psi^\top+N\lambda I\big)\big(\Psi\Psi^\top+N\lambda I\big)^{-1}&&\text{se saca }\Psi^\top\text{ a la izquierda}\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\Psi^\top&&\text{el operador por su inversa da }I
+  \end{aligned}$$</div>
+  <p class="hint">Se pasa de invertir un operador en \(\mathcal G\) a invertir una matriz \(N\times N\) que solo usa el kernel \(\ell\). Los apuntes absorben \(N\) en \(\lambda\).</p>
+
+  <p><b>Evaluar en un dominio \(d\).</b> \(\Phi(L+N\lambda I)^{-1}\Psi^\top\) no es una función: es el operador \(\hat C_{X|D}:\mathcal G\to\mathcal F\). Recibe un punto de \(\mathcal G\) y devuelve un punto de \(\mathcal F\). Se le da \(\psi(d)\), como pide el Paso 3, y se resuelve de derecha a izquierda:</p>
+  <div class="disp">$$\begin{aligned}
+  \hat\mu_{X|d}&=\hat C_{X|D}\,\psi(d)=\Phi\,\big(L+N\lambda I\big)^{-1}\Psi^\top\psi(d)&&\text{definición del Paso 3}\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\big[\langle\psi(d_n),\psi(d)\rangle_{\mathcal G}\big]_{n=1}^N&&\Psi^\top\text{ tiene por filas los }\psi(d_n)\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\boldsymbol\ell(d)&&\text{truco del kernel: }\langle\psi(d_n),\psi(d)\rangle_{\mathcal G}=\ell(d_n,d)\\
+  &=\Phi\,\boldsymbol\beta(d)&&\boldsymbol\beta(d)=\big(L+N\lambda I\big)^{-1}\boldsymbol\ell(d)\in\mathbb R^N\\
+  &=\sum_{n=1}^N\beta_n(d)\,\varphi(x_n)&&\Phi\text{ tiene por columnas los }\varphi(x_n)
+  \end{aligned}$$</div>
+  <p>El resultado sí es una función, porque es un punto de \(\mathcal F\). Se evalúa en \(x\) con la propiedad reproductiva:</p>
+  <div class="disp">$$\hat\mu_{X|d}(x)=\big\langle\hat\mu_{X|d},\varphi(x)\big\rangle_{\mathcal F}=\sum_{n=1}^N\beta_n(d)\,k(x_n,x)$$</div>
+  <ul>
+    <li>El punto condicional es una <b>combinación de las muestras</b>, con pesos \(\beta_n(d)\) que dicen cuánto aporta cada muestra cuando se condiciona en \(d\).</li>
+    <li>Solo se invierte una matriz \(N\times N\) que usa el kernel \(\ell\). Ninguna densidad se estima.</li>
+  </ul>
+  <p class="hint"><span class="tag">[verificado: apuntes, págs. 8–9; la identidad de matrices es álgebra estándar]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 6 · Caso particular: dominios discretos</span>
+  <h2>Con dos dominios, el operador se reduce a filtrar</h2>
+  <p>Hasta aquí \(\ell\) era un kernel cualquiera. Ahora la condición toma dos valores, \(d\in\{s,t\}\), y se usa el kernel delta, que corresponde a un \(\psi\) one-hot:</p>
+  <div class="disp">$$\ell(d,d')=\begin{cases}1 & d=d'\\ 0 & d\neq d'\end{cases},\qquad N_d=\#\{n: d_n=d\}$$</div>
+  <p>Se parte de los pesos del Paso 5 y se resuelve paso a paso, con \(\mathbf 1_d\) el vector que vale 1 en las muestras del dominio \(d\) y 0 en las demás:</p>
+  <div class="disp">$$\begin{aligned}
+  \boldsymbol\beta(d)&=\big(L+N\lambda I\big)^{-1}\boldsymbol\ell(d)&&\text{pesos del Paso 5}\\
+  &=\big(L+N\lambda I\big)^{-1}\mathbf 1_d&&\ell(d_n,d)=1\text{ solo si }d_n=d
+  \end{aligned}$$</div>
+  <p>Sobre el vector de unos, la matriz actúa como un número:</p>
+  <div class="disp">$$\begin{aligned}
+  \big(L+N\lambda I\big)\mathbf 1_d&=\big(N_d+N\lambda\big)\mathbf 1_d&&\text{cada fila de }d\text{ suma }N_d\text{ unos; las demás, }0\\
+  \boldsymbol\beta(d)=\big(L+N\lambda I\big)^{-1}\mathbf 1_d&=\big(N_d+N\lambda\big)^{-1}\mathbf 1_d\ \xrightarrow{\ \lambda\to0\ }\ \frac{\mathbf 1_d}{N_d}&&\text{la inversa actúa como el inverso del número}
+  \end{aligned}$$</div>
+  <p class="hint">La igualdad vale sobre \(\mathbf 1_d\), no para la matriz entera: \(L+N\lambda I\) no es el número \(N_d+N\lambda\). Sobre \(\mathbf 1_t\) actúa como \(N_t+N\lambda\), que es otro número.</p>
+  <p>Llevado al punto condicional del Paso 5:</p>
+  <div class="disp">$$\hat\mu_{X|d}=\sum_{n=1}^N\beta_n(d)\,\varphi(x_n)=\frac1{N_d}\sum_{n:\,d_n=d}\varphi(x_n)$$</div>
+  <ul>
+    <li>Es el embebimiento de la media del Paso 1 calculado solo con las muestras del dominio \(d\): <b>filtrar da lo mismo que el operador</b>.</li>
+    <li>El operador hace falta cuando la condición es continua o cuando el valor de \(d\) no aparece en los datos; ahí no hay qué filtrar.</li>
+  </ul>
+  <p class="hint">Ejemplo con 3 muestras de fuente y 2 de objetivo: \(\boldsymbol\beta(d{=}s)=[\tfrac13,\tfrac13,\tfrac13,0,0]\) y \(\boldsymbol\beta(d{=}t)=[0,0,0,\tfrac12,\tfrac12]\). <span class="tag">[verificado numéricamente con \(\lambda=10^{-6}\)]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 7 · Comparar los dos puntos</span>
+  <h2>La MMD marginal</h2>
+  <p>Condicionar en el dominio da las marginales de cada dominio: \(P(X\mid d=s)\) es \(P_s(X)\) y \(P(X\mid d=t)\) es \(P_t(X)\). Cada una ya es un punto de \(\mathcal F\) (Paso 5), así que compararlas es medir la distancia entre dos puntos:</p>
+  <div class="disp">$$\begin{aligned}
+  \widehat{\mathrm{MMD}}^2&=\big\|\hat\mu_{X|d=s}-\hat\mu_{X|d=t}\big\|_{\mathcal F}^2&&\text{distancia entre los dos puntos}\\
+  &=\big\|\Phi\,\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)\big\|_{\mathcal F}^2&&\text{Paso 5: }\hat\mu_{X|d}=\Phi\,\boldsymbol\beta(d)\\
+  &=\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)^\top\Phi^\top\Phi\,\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)&&\text{la norma es el producto interno consigo mismo}\\
+  &=\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)^\top K\,\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)&&\text{truco del kernel: }\Phi^\top\Phi=K
+  \end{aligned}$$</div>
+  <p>Con dominios discretos, \(\boldsymbol\beta(d)=\mathbf 1_d/N_d\) (Paso 6), y la forma cuadrática se abre en tres sumas:</p>
+  <div class="disp">$$\begin{aligned}
+  \widehat{\mathrm{MMD}}^2&=\Big(\frac{\mathbf 1_s}{N_s}-\frac{\mathbf 1_t}{N_t}\Big)^\top K\,\Big(\frac{\mathbf 1_s}{N_s}-\frac{\mathbf 1_t}{N_t}\Big)&&\text{Paso 6}\\
+  &=\frac{\mathbf 1_s^\top K\,\mathbf 1_s}{N_s^2}+\frac{\mathbf 1_t^\top K\,\mathbf 1_t}{N_t^2}-\frac{2\,\mathbf 1_s^\top K\,\mathbf 1_t}{N_sN_t}&&\text{se distribuye; }K\text{ es simétrica}\\
+  &=\frac1{N_s^2}\sum_{d_n=s}\sum_{d_m=s}k(x_n,x_m)+\frac1{N_t^2}\sum_{d_n=t}\sum_{d_m=t}k(x_n,x_m)-\frac2{N_sN_t}\sum_{d_n=s}\sum_{d_m=t}k(x_n,x_m)&&\mathbf 1_d\text{ elige las filas y columnas de }d
+  \end{aligned}$$</div>
+  <ul>
+    <li>Es la MMD clásica entre fuente y objetivo: parecido dentro de la fuente, más parecido dentro del objetivo, menos el parecido cruzado.</li>
+    <li>Con un kernel característico, vale cero solo si \(P_s(X)=P_t(X)\) (Paso 1).</li>
+  </ul>
+  <p class="hint">Ejemplo numérico con 3 muestras de fuente, 2 de objetivo y kernel gaussiano: la forma con \(\boldsymbol\beta\) y la de tres sumas dan lo mismo (0.94195). <span class="tag">[verificado numéricamente con \(\lambda=10^{-9}\)]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 8 · Condicionar por clase</span>
+  <h2>Dos dominios, dos clases, tres espacios</h2>
+  <figure class="cfig">
+    <svg viewBox="0 0 780 680" role="img" aria-label="Dos dominios con dos clases cada uno. Phi lleva los datos a F, psi_D lleva el dominio a G_D y psi_Y la clase a G_Y; la condición vive en G_Y por G_D, con cuatro puntos. El operador C_X|YD, en F por G, lleva cada uno de esos puntos a la media de su clase y dominio en F">
+      <defs><marker id="c8op" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrop" d="M0 0 L10 5 L0 10 z"/></marker><marker id="c8phi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrphi" d="M0 0 L10 5 L0 10 z"/></marker><marker id="c8psi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrpsi" d="M0 0 L10 5 L0 10 z"/></marker><marker id="c8psy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrpsy" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+      <text class="lbl s" x="24" y="132">espacio de los datos</text>
+      <line class="ax" x1="30" y1="470" x2="300" y2="470"/><line class="ax" x1="30" y1="470" x2="30" y2="146"/>
+      <line class="lphir" x1="108" y1="206" x2="531" y2="55" marker-end="url(#c8phi)"/>
+      <line class="lphir" x1="236" y1="335" x2="662" y2="66" marker-end="url(#c8phi)"/>
+      <line class="lpsi" x1="96" y1="330" x2="95" y2="551" marker-end="url(#c8psi)"/>
+      <line class="lpsi" x1="214" y1="447" x2="178" y2="551" marker-end="url(#c8psi)"/>
+      <path class="lpsy" d="M236 335 Q 300 420 276 601" marker-end="url(#c8psy)"/>
+      <path class="lpsy" d="M222 413 Q 330 470 343 601" marker-end="url(#c8psy)"/>
+      <path class="lpsy" d="M114 220 Q 400 330 278 601" marker-end="url(#c8psy)"/>
+      <path class="lpsy" d="M122 295 Q 430 200 346 601" marker-end="url(#c8psy)"/>
+      <ellipse class="dom" cx="104" cy="252" rx="56" ry="78"/><ellipse class="domt" cx="226" cy="368" rx="56" ry="80"/>
+      <circle class="pt1" cx="88" cy="209" r="3.5"/><circle class="pt1" cx="108" cy="206" r="3.5"/><circle class="pt1" cx="114" cy="220" r="3.5"/><circle class="pt1" cx="94" cy="223" r="3.5"/>
+      <circle class="ptd" cx="96" cy="284" r="3.5"/><circle class="ptd" cx="116" cy="281" r="3.5"/><circle class="ptd" cx="122" cy="295" r="3.5"/><circle class="ptd" cx="102" cy="298" r="3.5"/>
+      <circle class="pt1h" cx="210" cy="324" r="3.5"/><circle class="pt1h" cx="230" cy="321" r="3.5"/><circle class="pt1h" cx="236" cy="335" r="3.5"/><circle class="pt1h" cx="216" cy="338" r="3.5"/>
+      <circle class="ptdt" cx="216" cy="399" r="3.5"/><circle class="ptdt" cx="236" cy="396" r="3.5"/><circle class="ptdt" cx="242" cy="410" r="3.5"/><circle class="ptdt" cx="222" cy="413" r="3.5"/>
+      <text class="lbl" x="58" y="166">P(X | d = s)</text><text class="lbl" x="118" y="462">P(X | d = t)</text>
+      <ellipse class="rk" cx="590" cy="92" rx="162" ry="70"/><text class="lbl s" x="750" y="32">𝓕</text>
+      <circle class="pt1" cx="516" cy="56" r="2.5"/><circle class="pt1" cx="536" cy="53" r="2.5"/><circle class="pt1" cx="542" cy="67" r="2.5"/><circle class="pt1" cx="522" cy="70" r="2.5"/><circle class="pt1" cx="529" cy="62" r="6.5"/>
+      <circle class="ptd" cx="522" cy="112" r="2.5"/><circle class="ptd" cx="542" cy="109" r="2.5"/><circle class="ptd" cx="548" cy="123" r="2.5"/><circle class="ptd" cx="528" cy="126" r="2.5"/><circle class="ptd" cx="535" cy="118" r="6.5"/>
+      <circle class="pt1h" cx="640" cy="52" r="2.5"/><circle class="pt1h" cx="660" cy="49" r="2.5"/><circle class="pt1h" cx="666" cy="63" r="2.5"/><circle class="pt1h" cx="646" cy="66" r="2.5"/><circle class="pt1h" cx="653" cy="58" r="6.5"/>
+      <circle class="ptdt" cx="646" cy="108" r="2.5"/><circle class="ptdt" cx="666" cy="105" r="2.5"/><circle class="ptdt" cx="672" cy="119" r="2.5"/><circle class="ptdt" cx="652" cy="122" r="2.5"/><circle class="ptdt" cx="659" cy="114" r="6.5"/>
+      <text class="lbl top" x="548" y="50" font-size="10.5">μ<tspan baseline-shift="sub" font-size="8.5">X|y=1,d=s</tspan></text>
+      <text class="lbl top" x="454" y="128" font-size="10.5">μ<tspan baseline-shift="sub" font-size="8.5">X|y=2,d=s</tspan></text>
+      <text class="lbl top" x="674" y="82" font-size="10.5">μ<tspan baseline-shift="sub" font-size="8.5">X|y=1,d=t</tspan></text>
+      <text class="lbl top" x="672" y="122" font-size="10.5">μ<tspan baseline-shift="sub" font-size="8.5">X|y=2,d=t</tspan></text>
+      <ellipse class="rk" cx="590" cy="284" rx="162" ry="66"/><text class="lbl s" x="730" y="212">𝓕⊗𝒢</text>
+      <circle class="pt1" cx="510" cy="256" r="2.5"/><circle class="pt1" cx="530" cy="253" r="2.5"/><circle class="pt1" cx="536" cy="267" r="2.5"/><circle class="pt1" cx="516" cy="270" r="2.5"/>
+      <circle class="ptd" cx="514" cy="300" r="2.5"/><circle class="ptd" cx="534" cy="297" r="2.5"/><circle class="ptd" cx="540" cy="311" r="2.5"/><circle class="ptd" cx="520" cy="314" r="2.5"/>
+      <circle class="pt1h" cx="642" cy="256" r="2.5"/><circle class="pt1h" cx="662" cy="253" r="2.5"/><circle class="pt1h" cx="668" cy="267" r="2.5"/><circle class="pt1h" cx="648" cy="270" r="2.5"/>
+      <circle class="ptdt" cx="646" cy="300" r="2.5"/><circle class="ptdt" cx="666" cy="297" r="2.5"/><circle class="ptdt" cx="672" cy="311" r="2.5"/><circle class="ptdt" cx="652" cy="314" r="2.5"/>
+      <circle class="ptd" cx="561" cy="284" r="6"/><text class="lbl" x="517" y="288" font-size="11">C<tspan baseline-shift="sub" font-size="9">XYD</tspan></text>
+      <ellipse class="rk" cx="590" cy="474" rx="162" ry="46"/><text class="lbl s" x="440" y="424">𝒢 = 𝒢<tspan baseline-shift="sub" font-size="9">Y</tspan>⊗𝒢<tspan baseline-shift="sub" font-size="9">D</tspan></text>
+      <circle class="pt1" cx="530" cy="455" r="6"/>
+      <circle class="ptd" cx="530" cy="492" r="6"/>
+      <circle class="pt1h" cx="650" cy="455" r="6"/>
+      <circle class="ptdt" cx="650" cy="492" r="6"/>
+      <text class="lbl s" x="450" y="459" font-size="10.5">ψ(y=1, d=s)</text>
+      <text class="lbl s" x="450" y="496" font-size="10.5">ψ(y=2, d=s)</text>
+      <text class="lbl s" x="664" y="459" font-size="10.5">ψ(y=1, d=t)</text>
+      <text class="lbl s" x="664" y="496" font-size="10.5">ψ(y=2, d=t)</text>
+      <ellipse class="rk" cx="135" cy="560" rx="70" ry="26"/><text class="lbl s" x="40" y="548">𝒢<tspan baseline-shift="sub" font-size="9">D</tspan></text>
+      <circle class="ptd" cx="95" cy="560" r="5"/><circle class="ptdt" cx="175" cy="560" r="5"/>
+      <ellipse class="rk" cx="310" cy="610" rx="62" ry="26"/><text class="lbl s" x="378" y="634">𝒢<tspan baseline-shift="sub" font-size="9">Y</tspan></text>
+      <circle class="pt1" cx="275" cy="610" r="5"/><circle class="ptd" cx="345" cy="610" r="5"/>
+      <text class="lbl s" x="80" y="580" font-size="10">d=s</text><text class="lbl s" x="162" y="580" font-size="10">d=t</text><text class="lbl s" x="262" y="630" font-size="10">y=1</text><text class="lbl s" x="333" y="630" font-size="10">y=2</text>
+      <path class="arr" d="M206 556 L432 488" stroke-dasharray="2 3"/><path class="arr" d="M372 606 L470 508" stroke-dasharray="2 3"/><text class="lbl s" x="372" y="540">⊗</text>
+      <path class="lop" d="M530 448 L590 334 L529 70" marker-end="url(#c8op)"/>
+      <path class="lop" d="M530 485 L590 334 L535 126" marker-end="url(#c8op)"/>
+      <path class="lop" d="M650 448 L590 334 L653 66" marker-end="url(#c8op)"/>
+      <path class="lop" d="M650 485 L590 334 L659 122" marker-end="url(#c8op)"/>
+      <circle class="ptdt" cx="590" cy="334" r="7" style="stroke:var(--next);fill:var(--next)"/><text class="lbl top" x="604" y="336">C<tspan baseline-shift="sub" font-size="10">X|YD</tspan></text>
+      <text class="lbl tphi" x="300" y="150">φ</text><text class="lbl tpsi" x="44" y="440">ψ<tspan baseline-shift="sub" font-size="9">D</tspan></text><text class="lbl tpsy" x="372" y="470">ψ<tspan baseline-shift="sub" font-size="9">Y</tspan></text>
+      <circle class="pt1" cx="34" cy="666" r="4"/><text class="lbl s" x="44" y="670">clase 1</text><circle class="ptd" cx="104" cy="666" r="4"/><text class="lbl s" x="114" y="670">clase 2</text><text class="lbl s" x="168" y="670">lleno: fuente · hueco: objetivo</text>
+      <line class="lphir" x1="350" y1="666" x2="372" y2="666"/><text class="lbl s" x="377" y="670">φ</text><line class="lpsi" x1="398" y1="666" x2="420" y2="666"/><text class="lbl s" x="425" y="670">ψ<tspan baseline-shift="sub" font-size="8">D</tspan></text><line class="lpsy" x1="452" y1="666" x2="474" y2="666"/><text class="lbl s" x="479" y="670">ψ<tspan baseline-shift="sub" font-size="8">Y</tspan></text><line class="lop" x1="506" y1="666" x2="528" y2="666"/><text class="lbl s" x="533" y="670">μ<tspan baseline-shift="sub" font-size="8">X|y,d</tspan> = C<tspan baseline-shift="sub" font-size="8">X|YD</tspan> ψ(y,d)</text>
+    </svg>
+    <figcaption>Siguen estando los dos dominios, y ahora cada uno tiene dos clases. La condición es el par \((y,d)\) y se arma con dos espacios: \(\psi_D\) lleva el dominio a \(\mathcal G_D\) y \(\psi_Y\) lleva la clase a \(\mathcal G_Y\). Su producto, \(\mathcal G=\mathcal G_Y\otimes\mathcal G_D\), tiene un punto por cada combinación: \(\psi(y,d)=\psi_Y(y)\otimes\psi_D(d)\). Todo lo demás es el primer dibujo con \(D\) reemplazado por \((Y,D)\): \(C_{XYD}\) es el promedio de los datos en \(\mathcal F\otimes\mathcal G\), y el operador \(C_{X|YD}\) lleva cada \(\psi(y,d)\) a la media de su nube, \(\mu_{X|y,d}\). Lo que se alinea son las medias de la misma clase en dominios distintos.</figcaption>
+  </figure>
+  <div class="cols">
+    <div>
+      <h3>El espacio de la condición</h3>
+      <p>La condición es el par \((y,d)\). Se arma con un mapa por variable y su producto tensorial, igual que \(\theta(x,d)=\varphi(x)\otimes\psi(d)\) en \(\mathcal F\otimes\mathcal G\):</p>
+      <div class="disp">$$\psi(y,d)=\psi_Y(y)\otimes\psi_D(d)\ \in\ \mathcal G_Y\otimes\mathcal G_D$$</div>
+      <p>Su kernel sale del producto interno en \(\mathcal G_Y\otimes\mathcal G_D\):</p>
+      <div class="disp">$$\begin{aligned}
+      \ell\big((y,d),(y',d')\big)&=\big\langle\psi(y,d),\psi(y',d')\big\rangle_{\mathcal G_Y\otimes\mathcal G_D}\\
+      &=\big\langle\psi_Y(y)\otimes\psi_D(d),\ \psi_Y(y')\otimes\psi_D(d')\big\rangle_{\mathcal G_Y\otimes\mathcal G_D}\\
+      &=\big\langle\psi_Y(y),\psi_Y(y')\big\rangle_{\mathcal G_Y}\,\big\langle\psi_D(d),\psi_D(d')\big\rangle_{\mathcal G_D}\\
+      &=\ell_Y(y,y')\,\ell_D(d,d')
+      \end{aligned}$$</div>
+      <ol>
+        <li>Definición de kernel: producto interno de los mapas en su espacio.</li>
+        <li>Mapa del par.</li>
+        <li>Producto interno en un producto tensorial. Así se define \(\mathcal G_Y\otimes\mathcal G_D\): \(\langle a\otimes b,a'\otimes b'\rangle_{\mathcal G_Y\otimes\mathcal G_D}:=\langle a,a'\rangle_{\mathcal G_Y}\langle b,b'\rangle_{\mathcal G_D}\), extendido por linealidad. Cada factor es un número y el producto entre ellos es el usual.</li>
+        <li>Truco del kernel en cada espacio.</li>
+      </ol>
+      <p>Su versión matricial, como \(K\) y \(L\) en el Paso 0, evalúa ese kernel en cada par de muestras:</p>
+      <div class="disp">$$L_{nm}=\ell\big((y_n,d_n),(y_m,d_m)\big)=\ell_Y(y_n,y_m)\,\ell_D(d_n,d_m)\quad\Longrightarrow\quad L=L_Y\odot L_D$$</div>
+      <p class="hint">\(\odot\) es el producto elemento a elemento (Hadamard): cada casilla de \(L\) es el producto de las casillas en la misma posición de \(L_Y\) y \(L_D\). Es la matriz que usa el estimador.</p>
+      <p class="hint">Es la misma regla que da \(k\,\ell\) como kernel de \(\theta(x,d)\). Cada vez que se juntan variables, el mapa es el producto tensorial de los mapas y el kernel es el producto de los kernels.</p>
+    </div>
+    <div>
+      <h3>La transición</h3>
+      <p>Es lo ya demostrado con \(d\), cambiando \(d\) por \((y,d)\). Cada renglón cita su paso.</p>
+      <p><b>1. Las dos covarianzas (Paso 2).</b> La primera representa \(P(X,Y,D)\); la segunda contiene \(P(Y,D)\) y es la que se invierte:</p>
+      <div class="disp">$$C_{X(YD)}=\mathbb E_{X,Y,D}\{\varphi(X)\otimes\psi(Y,D)\},\qquad C_{(YD)(YD)}=\mathbb E_{Y,D}\{\psi(Y,D)\otimes\psi(Y,D)\}$$</div>
+      <p><b>2. El operador (Paso 4).</b> La misma regla de Bayes, \(P(X\mid y,d)=P(X,y,d)/P(y,d)\):</p>
+      <div class="disp">$$C_{X|YD}=C_{X(YD)}\,C_{(YD)(YD)}^{-1}:\ \mathcal G_Y\otimes\mathcal G_D\to\mathcal F,\qquad \mu_{X|y,d}=C_{X|YD}\,\psi(y,d)$$</div>
+      <p><b>3. El estimador (Paso 5).</b> Con \(\Phi=[\varphi(x_1)\cdots\varphi(x_N)]\) y \(\Psi=[\psi(y_1,d_1)\cdots\psi(y_N,d_N)]\), una muestra por columna; una suma \(\sum_n a_n\otimes b_n\) se escribe \(AB^\top\).</p>
+      <p><i>A. Las covarianzas, pasadas a muestras.</i></p>
+      <div class="disp">$$\begin{aligned}
+      \hat C_{X(YD)}&=\frac1N\sum_{n=1}^N\varphi(x_n)\otimes\psi(y_n,d_n)=\frac1N\,\Phi\Psi^\top\\
+      \hat C_{(YD)(YD)}&=\frac1N\sum_{n=1}^N\psi(y_n,d_n)\otimes\psi(y_n,d_n)=\frac1N\,\Psi\Psi^\top
+      \end{aligned}$$</div>
+      <p class="hint">Cada muestra pesa \(1/N\); la suma de productos tensoriales se escribe como producto de matrices.</p>
+      <p><i>B. Se reemplazan en el operador.</i></p>
+      <div class="disp">$$\begin{aligned}
+      \hat C_{X|YD}&=\hat C_{X(YD)}\big(\hat C_{(YD)(YD)}+\lambda I\big)^{-1}\\
+      &=\frac1N\,\Phi\Psi^\top\Big(\frac1N\,\Psi\Psi^\top+\lambda I\Big)^{-1}\\
+      &=\Phi\Psi^\top\big(\Psi\Psi^\top+N\lambda I\big)^{-1}\\
+      &=\Phi\,\big(\Psi^\top\Psi+N\lambda I\big)^{-1}\Psi^\top\\
+      &=\Phi\,\big(L_Y\odot L_D+N\lambda I\big)^{-1}\Psi^\top
+      \end{aligned}$$</div>
+      <ol>
+        <li>El operador del renglón 2 con estimadores; \(\lambda\gt0\) por estabilidad.</li>
+        <li>Se reemplaza A.</li>
+        <li>Se saca \(\tfrac1N\) de la inversa y se cancela.</li>
+        <li>Push-through (Paso 5).</li>
+        <li>\(\Psi^\top\Psi=L_Y\odot L_D\) (columna izquierda).</li>
+      </ol>
+      <p><i>C. Se evalúa en una condición \((y,d)\).</i></p>
+      <div class="disp">$$\begin{aligned}
+      \hat\mu_{X|y,d}&=\hat C_{X|YD}\,\psi(y,d)\\
+      &=\Phi\,\big(L_Y\odot L_D+N\lambda I\big)^{-1}\Psi^\top\psi(y,d)\\
+      &=\Phi\,\big(L_Y\odot L_D+N\lambda I\big)^{-1}\big[\ell_Y(y_n,y)\,\ell_D(d_n,d)\big]_{n=1}^N\\
+      &=\Phi\,\big(L_Y\odot L_D+N\lambda I\big)^{-1}\big(\boldsymbol\ell_Y(y)\odot\boldsymbol\ell_D(d)\big)\\
+      &=\Phi\,\boldsymbol\beta(y,d)=\sum_{n=1}^N\beta_n(y,d)\,\varphi(x_n)
+      \end{aligned}$$</div>
+      <ol>
+        <li>Definición del renglón 2.</li>
+        <li>Se reemplaza B.</li>
+        <li>Las filas de \(\Psi^\top\) son los \(\psi(y_n,d_n)\); cada producto interno con \(\psi(y,d)\) es el kernel de la columna izquierda.</li>
+        <li>Ese vector, escrito como producto elemento a elemento.</li>
+        <li>Se nombra \(\boldsymbol\beta(y,d)=\big(L_Y\odot L_D+N\lambda I\big)^{-1}\big(\boldsymbol\ell_Y(y)\odot\boldsymbol\ell_D(d)\big)\) y se abre \(\Phi\) por columnas.</li>
+      </ol>
+      <p class="hint">La columna izquierda entra en dos lugares: en el último renglón de B, como \(\Psi^\top\Psi\), y en el tercero de C, como \(\Psi^\top\psi(y,d)\). Lo demás es el Paso 5.</p>
+      <p><b>4. El caso discreto (Paso 6).</b> Con \(\ell_Y\) y \(\ell_D\) delta, y \(N_{y,d}\) la cantidad de muestras de la clase \(y\) en el dominio \(d\). Primero el vector de la condición:</p>
+      <div class="disp">$$\boldsymbol\ell_Y(y)\odot\boldsymbol\ell_D(d)=\mathbf 1_y\odot\mathbf 1_d=\mathbf 1_{y,d}$$</div>
+      <p class="hint">\(\mathbf 1_y\) vale 1 en las muestras de la clase \(y\), \(\mathbf 1_d\) en las del dominio \(d\); su producto vale 1 solo donde se cumplen las dos.</p>
+      <p>Sobre ese vector de unos, la matriz actúa como un número:</p>
+      <div class="disp">$$\begin{aligned}
+      \big(L_Y\odot L_D+N\lambda I\big)\mathbf 1_{y,d}&=\big(N_{y,d}+N\lambda\big)\mathbf 1_{y,d}\\
+      \boldsymbol\beta(y,d)=\big(L_Y\odot L_D+N\lambda I\big)^{-1}\mathbf 1_{y,d}&=\big(N_{y,d}+N\lambda\big)^{-1}\mathbf 1_{y,d}\ \xrightarrow{\ \lambda\to0\ }\ \frac{\mathbf 1_{y,d}}{N_{y,d}}
+      \end{aligned}$$</div>
+      <ol>
+        <li>La casilla \((n,m)\) de \(L_Y\odot L_D\) vale 1 solo si \(y_n=y_m\) y \(d_n=d_m\): cada fila de \((y,d)\) suma \(N_{y,d}\) unos y las demás, 0.</li>
+        <li>La inversa actúa como el inverso del número.</li>
+      </ol>
+      <div class="disp">$$\hat\mu_{X|y,d}=\Phi\,\boldsymbol\beta(y,d)=\frac1{N_{y,d}}\sum_{y_n=y,\ d_n=d}\varphi(x_n)$$</div>
+      <p class="hint">Es el promedio de cada una de las cuatro nubes del dibujo.</p>
+    </div>
+  </div>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 9 · Comparar por clase</span>
+  <h2>La MMD condicional</h2>
+  <p>En el Paso 7 se comparaban dos puntos, uno por dominio. Ahora hay dos puntos por cada clase, \(\hat\mu_{X|y,d=s}\) y \(\hat\mu_{X|y,d=t}\), y se comparan los de la misma clase, como en las líneas rojas del dibujo del Paso 8. Para cada \(y\), la misma cadena del Paso 7:</p>
+  <div class="disp">$$\begin{aligned}
+  \widehat{\mathrm{MMD}}_y^2&=\big\|\hat\mu_{X|y,d=s}-\hat\mu_{X|y,d=t}\big\|_{\mathcal F}^2&&\text{distancia entre los dos puntos de la clase }y\\
+  &=\big\|\Phi\,\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)\big\|_{\mathcal F}^2&&\text{Paso 8: }\hat\mu_{X|y,d}=\Phi\,\boldsymbol\beta(y,d)\\
+  &=\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)^\top\Phi^\top\Phi\,\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)&&\text{la norma es el producto interno consigo mismo}\\
+  &=\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)^\top K\,\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)&&\text{truco del kernel: }\Phi^\top\Phi=K
+  \end{aligned}$$</div>
+  <p>Con kernels delta, \(\boldsymbol\beta(y,d)=\mathbf 1_{y,d}/N_{y,d}\) (Paso 8, renglón 4), y la forma cuadrática se abre en tres sumas, ahora restringidas a la clase \(y\):</p>
+  <div class="disp">$$\begin{aligned}
+  \widehat{\mathrm{MMD}}_y^2&=\Big(\frac{\mathbf 1_{y,s}}{N_{y,s}}-\frac{\mathbf 1_{y,t}}{N_{y,t}}\Big)^\top K\,\Big(\frac{\mathbf 1_{y,s}}{N_{y,s}}-\frac{\mathbf 1_{y,t}}{N_{y,t}}\Big)\\
+  &=\frac{\mathbf 1_{y,s}^\top K\,\mathbf 1_{y,s}}{N_{y,s}^2}+\frac{\mathbf 1_{y,t}^\top K\,\mathbf 1_{y,t}}{N_{y,t}^2}-\frac{2\,\mathbf 1_{y,s}^\top K\,\mathbf 1_{y,t}}{N_{y,s}N_{y,t}}\\
+  &=\frac1{N_{y,s}^2}\!\!\sum_{\substack{y_n=y\\d_n=s}}\sum_{\substack{y_m=y\\d_m=s}}\!\!k(x_n,x_m)+\frac1{N_{y,t}^2}\!\!\sum_{\substack{y_n=y\\d_n=t}}\sum_{\substack{y_m=y\\d_m=t}}\!\!k(x_n,x_m)-\frac2{N_{y,s}N_{y,t}}\!\!\sum_{\substack{y_n=y\\d_n=s}}\sum_{\substack{y_m=y\\d_m=t}}\!\!k(x_n,x_m)
+  \end{aligned}$$</div>
+  <ol>
+    <li>Paso 8, renglón 4.</li>
+    <li>Se distribuye; \(K\) es simétrica.</li>
+    <li>\(\mathbf 1_{y,d}\) elige las filas y columnas de la clase \(y\) en el dominio \(d\).</li>
+  </ol>
+  <p>Se junta una por clase:</p>
+  <div class="disp">$$\widehat{\mathrm{MMD}}_{\text{cond}}^2=\sum_y\widehat{\mathrm{MMD}}_y^2$$</div>
+  <ul>
+    <li>Es la MMD del Paso 7 aplicada dentro de cada clase: parecido dentro de la fuente, más parecido dentro del objetivo, menos el parecido cruzado, todo solo con las muestras de la clase \(y\).</li>
+    <li>Vale cero solo si, para cada clase, \(P(X\mid y,d{=}s)=P(X\mid y,d{=}t)\). La del Paso 7 podía valer cero con las clases cruzadas; esta no.</li>
+  </ul>
+  <p class="hint">La suma pesa todas las clases igual; pesarlas por su proporción es otra elección posible. Ejemplo numérico con 12 muestras y kernel gaussiano: la forma con \(\boldsymbol\beta\) y la de tres sumas dan lo mismo en las dos clases (0.650192 y 0.190603). <span class="tag">[verificado numéricamente]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 10 · Los potenciales de información</span>
+  <h2>De las densidades a los kernels</h2>
+  <p>Para una sola distribución, con datos \(x_1,\dots,x_N\). La entropía de Rényi de orden \(\alpha\) se escribe con el <b>potencial de información</b> \(V_\alpha\):</p>
+  <div class="disp">$$H_\alpha(X)=\frac1{1-\alpha}\ln\int p(x)^\alpha\,dx=\frac1{1-\alpha}\ln V_\alpha(X),\qquad \alpha\gt0,\ \alpha\neq1$$</div>
+  <p>Con \(\alpha=2\) el potencial es cuadrático, \(V_2(X)=\int p(x)^2\,dx=\mathbb E_X\{p(X)\}\), y queda \(H_2(X)=-\ln V_2(X)\). Estimar \(H_2\) es estimar \(V_2\).</p>
+  <p>\(\int p(x)^2\,dx\) mide la probabilidad de que dos muestras independientes de \(p\) caigan en el mismo lugar: es alta si \(p\) está concentrada y baja si está desparramada.</p>
+  <p>No se asume que \(p\) sea gaussiana: \(p\) es desconocida. Se <b>aproxima</b> con Parzen, poniendo una gaussiana centrada en cada dato y promediando:</p>
+  <div class="disp">$$\hat p(x)=\frac1N\sum_{n=1}^N G_\sigma(x-x_n),\qquad G_\sigma(u)=\frac1{(2\pi\sigma^2)^{d/2}}\exp\!\Big(-\frac{\|u\|^2}{2\sigma^2}\Big)$$</div>
+  <p class="hint">\(\hat p\) es una mezcla de \(N\) gaussianas, no una gaussiana: puede tener cualquier forma. La gaussiana es solo la ventana; con más datos y \(\sigma\) más chico, \(\hat p\) se acerca a \(p\). \(d\) es la dimensión de \(x\).</p>
+  <p>Para una distribución con \(N\) muestras:</p>
+  <div class="disp">$$\begin{aligned}
+  \hat V_2&=\int\hat p(x)^2\,dx\\
+  &=\frac1{N^2}\sum_{n=1}^N\sum_{m=1}^N\int G_\sigma(x-x_n)\,G_\sigma(x-x_m)\,dx\\
+  &=\frac1{N^2}\sum_{n=1}^N\sum_{m=1}^N G_{\sigma\sqrt2}(x_n-x_m)\\
+  &=\frac{c_\sigma}{N^2}\sum_{n=1}^N\sum_{m=1}^N k(x_n,x_m)&&c_\sigma=(4\pi\sigma^2)^{-d/2},\ k(x,x')=\exp\!\big(-\|x-x'\|^2/4\sigma^2\big)\\
+  &=c_\sigma\,\frac1{N^2}\sum_{n=1}^N\sum_{m=1}^N k_m(x_n,x_m)^2&&k_m=\sqrt k:\ k_m(x,x')=\exp\!\big(-\|x-x'\|^2/8\sigma^2\big)\\
+  &=c_\sigma\sum_{n=1}^N\sum_{m=1}^N\Big(\frac{k_m(x_n,x_m)}{N}\Big)^2\\
+  &=c_\sigma\sum_{n=1}^N\sum_{m=1}^N A_{nm}^2&&A=K_m/N=K_m/\mathrm{tr}(K_m)\\
+  &=c_\sigma\,\mathrm{tr}\big(A^\top A\big)&&A\text{ simétrica, con }\mathrm{tr}(A)=1
+  \end{aligned}$$</div>
+  <p class="hint">Como \(k_m(x,x)=1\), \(\mathrm{tr}(A)=\frac1N\sum_n k_m(x_n,x_n)=1\); por lo tanto \(K_m/N=K_m/\mathrm{tr}(K_m)\).</p>
+  <p><b>El potencial matricial.</b> \(c_\sigma\) depende solo de \(\sigma\) y \(d\), no de las muestras ni de los parámetros. Se trabaja con la matriz sola:</p>
+  <div class="disp">$$\mathcal V_2(A)=\mathrm{tr}\big(A^\top A\big)=\frac{\hat V_2}{c_\sigma},\qquad S_2(A)=-\ln\mathcal V_2(A)=\hat H_2(X)+\ln c_\sigma$$</div>
+  <p class="hint">\(\ln c_\sigma\) es la misma constante en todos los términos y su derivada es cero: se cancela al restar entropías, en un cociente de potenciales y en el gradiente. Por eso se usa \(S_2\). Solo haría falta para el valor absoluto de \(H_2\) o al comparar con \(\sigma\) distintos. Si el kernel de la matriz trae otra constante, la normalización \(A=K_m/\mathrm{tr}(K_m)\) también la elimina. \(k_m\) es el gaussiano de ancho \(2\sigma\); como \(\sigma\mapsto2\sigma\) es biyectiva, es la misma familia de estimadores con otra etiqueta.</p>
+  <p><b>Qué mide la resta.</b> Con dos distribuciones, \(p_s\) y \(p_t\), aparecen tres potenciales:</p>
+  <div class="disp">$$\int\big(p_s(x)-p_t(x)\big)^2dx=V_{ss}+V_{tt}-2V_{st},\qquad V_{st}=\int p_s(x)\,p_t(x)\,dx=\mathbb E_{X\sim p_s}\{p_t(X)\}$$</div>
+  <p>\(\int\big(p_s(x)-p_t(x)\big)^2dx\) mide cuánto difieren las dos densidades punto a punto: vale 0 si y solo si son iguales y crece a medida que se separan.</p>
+  <p><b>Los tres potenciales.</b> Es la misma cadena; solo cambia qué muestras van de cada lado y el denominador de \(A\):</p>
+  <div class="cols cols3">
+    <div>
+      <h3>\(V_{ss}\)</h3>
+      <div class="disp">$$\begin{aligned}\hat V_{ss}&=\int\hat p_s(x)^2\,dx\\&=\frac{c_\sigma}{N_s^2}\sum_{n,m}k(x_n^s,x_m^s)\\&=c_\sigma\,\mathrm{tr}\big(A_s^\top A_s\big)\end{aligned}$$</div>
+      <p class="hint">\(A_s=K_m^s/\mathrm{tr}(K_m^s)\)</p>
+    </div>
+    <div>
+      <h3>\(V_{tt}\)</h3>
+      <div class="disp">$$\begin{aligned}\hat V_{tt}&=\int\hat p_t(x)^2\,dx\\&=\frac{c_\sigma}{N_t^2}\sum_{n,m}k(x_n^t,x_m^t)\\&=c_\sigma\,\mathrm{tr}\big(A_t^\top A_t\big)\end{aligned}$$</div>
+      <p class="hint">\(A_t=K_m^t/\mathrm{tr}(K_m^t)\)</p>
+    </div>
+    <div>
+      <h3>\(V_{st}\)</h3>
+      <div class="disp">$$\begin{aligned}\hat V_{st}&=\int\hat p_s(x)\,\hat p_t(x)\,dx\\&=\frac{c_\sigma}{N_sN_t}\sum_{n,m}k(x_n^s,x_m^t)\\&=c_\sigma\,\mathrm{tr}\big(A_{st}^\top A_{st}\big)\end{aligned}$$</div>
+      <p class="hint">\(A_{st}=K_m^{st}/\sqrt{\mathrm{tr}(K_m^s)\,\mathrm{tr}(K_m^t)}\)</p>
+    </div>
+  </div>
+  <p class="hint">\(K_m^{st}\) es la matriz \(N_s\times N_t\) de \(k_m\) entre las muestras de los dos dominios. El denominador \(\sqrt{\mathrm{tr}(K_m^s)\,\mathrm{tr}(K_m^t)}=\sqrt{N_sN_t}\) sale de la cadena, del \(1/(N_sN_t)\) de los dos promedios de Parzen.</p>
+  <p><b>Relación con la MMD.</b> Los tres potenciales son los tres términos de la MMD del Paso 7:</p>
+  <div class="disp">$$\int\big(\hat p_s(x)-\hat p_t(x)\big)^2dx=\hat V_{ss}+\hat V_{tt}-2\hat V_{st}=c_\sigma\,\widehat{\mathrm{MMD}}_k^2$$</div>
+  <p>Con \(\alpha=2\), las dos lecturas coinciden. La MMD mide la distancia entre las medias embebidas \(\mu_{X|d=s}\) y \(\mu_{X|d=t}\), y el potencial de información mide cuánto difieren las dos densidades punto a punto. Como \(p_s\) y \(p_t\) son desconocidas, Parzen las estima suavizadas con la ventana \(\sigma\), y la diferencia resulta igual a la MMD con el kernel \(k\), salvo el factor \(c_\sigma\), que no cambia ni las comparaciones ni el mínimo.</p>
+  <p><b>Por clase y dominio.</b> Con la condición \((y,d)\) del Paso 8, la misma cuenta se aplica a las distribuciones condicionadas. Para cada clase \(y\), se reemplaza</p>
+  <div class="disp">$$p_s(x)\ \to\ p(x\mid y,d{=}s),\qquad p_t(x)\ \to\ p(x\mid y,d{=}t)$$</div>
+  <p>Parzen se arma solo con las muestras de esa clase en ese dominio: con la condición discreta, condicionar es filtrar, y \(\boldsymbol\beta(y,d)=\mathbf 1_{y,d}/N_{y,d}\) (Paso 8). Los tres potenciales de la clase \(y\), \(\hat V_{ss}^{\,y}\), \(\hat V_{tt}^{\,y}\) y \(\hat V_{st}^{\,y}\), son las mismas cadenas con \(N_{y,s}\) y \(N_{y,t}\), y la relación con la MMD es la del Paso 9:</p>
+  <div class="disp">$$\int\big(\hat p(x\mid y,d{=}s)-\hat p(x\mid y,d{=}t)\big)^2dx=c_\sigma\,\widehat{\mathrm{MMD}}_y^2$$</div>
+  <p class="hint">La lectura como densidad necesita que los pesos de las muestras sean no negativos y sumen 1, para que \(\hat p=\sum_n\beta_n\,G_\sigma(x-x_n)\) sea una densidad. Con kernels delta se cumple. Con un kernel \(\ell\) general, los \(\beta\) de la inversa regularizada del Paso 5 pueden ser negativos o no sumar 1: la igualdad con la MMD sigue valiendo en \(\mathcal F\), pero deja de leerse como densidad de Parzen.</p>
+  <p class="hint">Ejemplos numéricos: con 6 datos, la integral en una grilla, la doble suma y \(c_\sigma\,\mathrm{tr}(A^\top A)\) dan 0.355630, con \(\mathrm{tr}(A)=1\); con 5 muestras de fuente y 7 de objetivo, \(\hat V_{st}\) por integral y por doble suma da 0.236867, y \(\int(\hat p_s-\hat p_t)^2\) y \(c_\sigma\widehat{\mathrm{MMD}}_k^2\) dan 0.208712. <span class="tag">[verificado numéricamente]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 11 · De la distancia al ángulo</span>
+  <h2>Cauchy–Schwarz</h2>
+  <p><b>1. De la MMD al ángulo.</b> Con el kernel \(k\) de la cadena del Paso 10, los tres potenciales son productos internos de las medias embebidas: \(\hat V_{ss}=c_\sigma\|\hat\mu_s\|_{\mathcal F}^2\), \(\hat V_{tt}=c_\sigma\|\hat\mu_t\|_{\mathcal F}^2\) y \(\hat V_{st}=c_\sigma\langle\hat\mu_s,\hat\mu_t\rangle_{\mathcal F}\). La MMD se abre en normas y ángulo:</p>
+  <div class="disp">$$\widehat{\mathrm{MMD}}^2=\big\|\hat\mu_s-\hat\mu_t\big\|_{\mathcal F}^2=\|\hat\mu_s\|^2+\|\hat\mu_t\|^2-2\,\|\hat\mu_s\|\,\|\hat\mu_t\|\cos\theta,\qquad \cos\theta=\frac{\langle\hat\mu_s,\hat\mu_t\rangle}{\|\hat\mu_s\|\,\|\hat\mu_t\|}=\frac{\hat V_{st}}{\sqrt{\hat V_{ss}\,\hat V_{tt}}}$$</div>
+  <p>Cada potencial cumple \(\hat V=c_\sigma\,\mathcal V\) con su matriz (las tres columnas del Paso 10), así que en el cociente \(c_\sigma\) se cancela exactamente:</p>
+  <div class="disp">$$\cos\theta=\frac{c_\sigma\,\mathcal V_{st}}{\sqrt{c_\sigma\,\mathcal V_{ss}\cdot c_\sigma\,\mathcal V_{tt}}}=\frac{\mathcal V_{st}}{\sqrt{\mathcal V_{ss}\,\mathcal V_{tt}}},\qquad \mathcal V_{ss}=\mathrm{tr}\big(A_s^\top A_s\big),\ \ \mathcal V_{tt}=\mathrm{tr}\big(A_t^\top A_t\big),\ \ \mathcal V_{st}=\mathrm{tr}\big(A_{st}^\top A_{st}\big)$$</div>
+  <p class="hint">El ángulo es el mismo con los potenciales de Parzen o con los matriciales. Por eso, de aquí en adelante, se usan los potenciales matriciales \(\mathcal V\).</p>
+  <p><b>3. Con el logaritmo.</b> Con las matrices de las tres columnas del Paso 10, \(H_2(A):=-\ln\|A\|_F^2=-\ln\mathrm{tr}(A^\top A)\): \(H_2(A_s)=-\ln\mathcal V_{ss}\), \(H_2(A_t)=-\ln\mathcal V_{tt}\) y la cruzada \(H_2(A_{st})=-\ln\mathcal V_{st}\). Estiman \(H_2(p_s)\), \(H_2(p_t)\) y la cruzada \(H_2(p_s,p_t)\) salvo la constante \(-\ln c_\sigma\), que aquí se cancela:</p>
+  <div class="disp">$$-\ln\cos\theta=-\ln\frac{\mathcal V_{st}}{\sqrt{\mathcal V_{ss}\,\mathcal V_{tt}}}=H_2(A_{st})-\tfrac12\big[H_2(A_s)+H_2(A_t)\big]$$</div>
+  <p>Mide, en nats, cuánto supera la entropía cruzada al promedio de las entropías propias. Por la desigualdad de Cauchy–Schwarz, \(\mathcal V_{st}\le\sqrt{\mathcal V_{ss}\mathcal V_{tt}}\), nunca es negativa.</p>
+  <p><b>\(-\ln\cos\theta\) frente a la MMD.</b> Las dos comparan la coincidencia cruzada con la propia:</p>
+  <div class="disp">$$\widehat{\mathrm{MMD}}^2=2\Big[\frac{\mathcal V_{ss}+\mathcal V_{tt}}2-\mathcal V_{st}\Big],\qquad -\ln\cos\theta=\ln\sqrt{\mathcal V_{ss}\,\mathcal V_{tt}}-\ln\mathcal V_{st}$$</div>
+  <p>La MMD resta la cruzada de la <b>media aritmética</b> de las propias, en escala <b>lineal</b>. \(-\ln\cos\theta\) resta el logaritmo de la cruzada del logaritmo de la <b>media geométrica</b> de las propias, en escala <b>logarítmica</b>.</p>
+  <p>En los extremos del kernel:</p>
+  <ul>
+    <li><b>Disperso</b> (\(K\to I\)): \(\mathcal V_{ss}\to1/N_s\), \(\mathcal V_{tt}\to1/N_t\), \(\mathcal V_{st}\to0\), entonces \(\widehat{\mathrm{MMD}}^2\to1/N_s+1/N_t\) y \(-\ln\cos\theta\to+\infty\).</li>
+    <li><b>Colapso con traslape</b> (\(K\to\) todos unos): \(\mathcal V_{ss}=\mathcal V_{tt}=\mathcal V_{st}=1\), entonces \(\widehat{\mathrm{MMD}}^2=0\) y \(-\ln\cos\theta=0\).</li>
+  </ul>
+  <p><b>En resumen:</b> miden la misma relación, una en escala lineal y la otra en escala logarítmica. \(-\ln\cos\theta\) cierra la salida de la dispersión que la MMD deja abierta, y las dos comparten la salida del colapso.</p>
+  <p><b>4. Extensión a \(\alpha\).</b> Gracias a \(\mathcal V\), las entropías propias pasan a cualquier orden:</p>
+  <div class="disp">$$H_\alpha(X)=\frac1{1-\alpha}\ln V_\alpha(X)\quad\longrightarrow\quad S_\alpha(A)=\frac1{1-\alpha}\ln\mathrm{tr}\big(A^\alpha\big)=\frac1{1-\alpha}\ln\sum_i\lambda_i(A)^\alpha,\qquad\alpha\gt0,\ \alpha\neq1$$</div>
+  <p>La información mutua entre la representación y el dominio, en la forma \(H(X)-H(X\mid D)\) con entropías de Rényi de orden \(\alpha\) (divergencia de Jensen–Rényi), se estima con:</p>
+  <div class="disp">$$I_\alpha(X;D)=H_\alpha\big(A_{\mathrm{mix}}\big)-\tfrac12\big[H_\alpha(A_s)+H_\alpha(A_t)\big]$$</div>
+</section>
+</div>
+
+<div id="panel-matematica" role="tabpanel" aria-labelledby="tab-matematica" hidden style="display:flex;flex-direction:column;gap:20px">
+
+<p class="note">Notación de la revisión r29; los números de ecuación remiten a ella. <b>[verificado]</b> la fuente se leyó; <b>[derivado]</b> álgebra propia, comprobada numéricamente con kernel gaussiano; <b>[no abierto]</b> referencia estándar citada de memoria.</p>
+
+<section class="math-sec">
+  <span class="eyebrow">Apartado A · Justificación frente a la MMD</span>
+  <h2>No nos alejamos en lo que se mira, sino en cómo se combina</h2>
+
+  <h3>A.1 Los tres potenciales de información de cada clase</h3>
+  <p>Para cada clase \(c\), la r29 normaliza por traza la Gram de la fuente, la Gram ponderada del objetivo y el bloque cruzado (Ec. 32). Sus normas de Frobenius al cuadrado son tres potenciales de información:</p>
+  <div class="disp">$$\rho^s_c=\big\lVert\breve{\mathbf K}^s_c\big\rVert_F^2,\qquad \rho^t_c=\big\lVert\breve{\widetilde{\mathbf K}}{}^t_c\big\rVert_F^2,\qquad \rho^\times_c=\big\lVert\breve{\widetilde{\mathbf K}}{}^{st}_c\big\rVert_F^2=\frac{\lVert\mathbf K^{st}_c\mathbf D^t_c\rVert_F^2}{\operatorname{tr}\mathbf K^s_c\,\operatorname{tr}\widetilde{\mathbf K}^t_c}$$</div>
+  <p>\(\rho^s_c\) y \(\rho^t_c\) son las <b>purezas</b>: valen 1 si todas las bolsas de la clase coinciden y bajan cuanto más dispersa está la clase. \(\rho^\times_c\) es el <b>solapamiento</b> entre dominios. Son el análogo matricial de \(\hat V_2\propto\mathbf 1^\top\mathbf K\mathbf 1\) de la Ec. 8. En términos de operadores, con \(\Sigma^s_c\) y \(\Sigma^t_c\) las covarianzas no centradas de traza 1 de cada clase sobre \(\mathcal H_I\):</p>
+  <div class="disp">$$\rho^s_c=\lVert\Sigma^s_c\rVert_{HS}^2,\qquad \rho^t_c=\lVert\Sigma^t_c\rVert_{HS}^2,\qquad \rho^\times_c=\langle\Sigma^s_c,\Sigma^t_c\rangle_{HS},\qquad e^{-D_{CS,c}}=\frac{\rho^\times_c}{\sqrt{\rho^s_c\rho^t_c}}$$</div>
+  <p class="hint">La bolsa objetivo \(j\) entra en \(\Sigma^t_c\) con peso \((w^t_j)^2\). <span class="tag">[derivado]</span></p>
+
+  <h3>A.2 La MMD los combina de forma lineal</h3>
+  <p>Como \(\Psi\otimes\Psi\) es el mapa de rasgos de \((\kappa^B_\sigma)^2\), la MMD entre los mismos operadores es</p>
+  <div class="disp">$$\mathrm{MMD}^2_c=\lVert\Sigma^s_c-\Sigma^t_c\rVert_{HS}^2=\rho^s_c+\rho^t_c-2\rho^\times_c=\rho^s_c+\rho^t_c-2\sqrt{\rho^s_c\rho^t_c}\;e^{-D_{CS,c}}$$</div>
+
+  <h3>A.3 El estimador de información los combina como logaritmo de cocientes</h3>
+  <p>Con \(H_2(\mathbf A)=-\ln\lVert\mathbf A\rVert_F^2\) (Ec. 10), la mezcla equilibrada de la Ec. 32 tiene \(\lVert\breve{\widetilde{\mathbf K}}{}^{\mathrm{mix}}_c\rVert_F^2=\tfrac14(\rho^s_c+\rho^t_c+2\rho^\times_c)\), y la Ec. 33 queda</p>
+  <div class="disp">$$J_c=\tfrac12\big[-\ln\rho^s_c-\ln\rho^t_c\big]+\ln\tfrac14\big(\rho^s_c+\rho^t_c+2\rho^\times_c\big)=\ln\!\Big(\tfrac12r_c+\tfrac12e^{-D_{CS,c}}\Big),\qquad r_c=\frac{\rho^s_c+\rho^t_c}{2\sqrt{\rho^s_c\rho^t_c}}\ge1$$</div>
+  <p class="hint">\(r_c=\cosh\big(\tfrac12[H_2(\breve{\widetilde{\mathbf K}}{}^t_c)-H_2(\breve{\mathbf K}^s_c)]\big)\) mide el <b>desajuste de purezas</b>; \(D_{CS,c}\) mide el <b>solapamiento</b>. <span class="tag">[derivado; comprobado numéricamente]</span></p>
+
+  <h3>A.4 Lo que gana separar dispersión y solapamiento</h3>
+  <p>La MMD mezcla en un solo número cuán dispersa está la clase y cuánto se solapan los dominios. Con el mismo solapamiento (\(D_{CS}=0{,}4\)) y purezas iguales \(\rho^s=\rho^t=\rho\), la MMD vale \(2\rho(1-e^{-D_{CS}})\):</p>
+  <div class="tablewrap"><table style="min-width:420px">
+    <thead><tr><th>Pureza ρ</th><th>MMD²</th><th>\(\ell_{\mathrm{glob},c}\) (Ec. 36)</th></tr></thead>
+    <tbody><tr><td>0,9</td><td>0,593</td><td>0,260</td></tr><tr><td>0,3</td><td>0,198</td><td>0,260</td></tr><tr><td>0,05</td><td>0,033</td><td>0,260</td></tr></tbody>
+  </table></div>
+  <ul>
+    <li><b>La MMD premia dispersar la clase.</b> Baja casi veinte veces sin que nada se haya alineado. Nuestra medida responde solo al solapamiento. <span class="tag">[derivado]</span></li>
+    <li><b>Invariancia a la amplitud del kernel.</b> La MMD usual, sin normalizar por traza, escala con la amplitud: \(\kappa\to c\,\kappa\) la multiplica por \(c^2\) bajo \((\kappa^B)^2\). En \(J_c\) los tres potenciales ya están normalizados por traza (Ec. 32) y entran como cocientes, así que la amplitud se cancela. Ojo: la MMD de A.2 entre operadores de traza 1 también es invariante; la ventaja es frente a la MMD tal como se usa. <span class="tag">[derivado]</span></li>
+    <li><b>Costo con α = 2.</b> \(H_2\) es una norma de Frobenius: \(O(n^2)\), sin descomposición espectral. <span class="tag">[verificado]</span></li>
+  </ul>
+
+  <h3>A.5 Lo que no gana</h3>
+  <ul>
+    <li><b>No hay información extra.</b> \(J_c\) es función de los mismos tres números que la MMD bajo \((\kappa^B)^2\). La diferencia está en cómo se combinan, no en qué se mira. <span class="tag">[derivado]</span></li>
+    <li><b>Tiene su propio atajo.</b> Mientras la clase no está alineada, la pérdida baja si aumenta el desajuste de purezas (apartado B.4). <span class="tag">[derivado]</span></li>
+    <li><b>Sin prueba de dos muestras y con sesgo.</b> La MMD tiene estimador insesgado y prueba con nivel garantizado; aquí no se encontró ninguna, y el logaritmo sesga el estimador. Tampoco hay una demostración de que \(\alpha=2\) sea el orden óptimo. <span class="tag">[verificado]</span></li>
+  </ul>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Apartado B · La formulación de la r29</span>
+  <h2>De dónde salen los tres potenciales</h2>
+
+  <h3>B.1 Enrutamiento y peso desde la salida del clasificador</h3>
+  <div class="disp">$$\widetilde y_j^t=\mathfrak a(\mathbf g_j^t)\ (22),\qquad T_c=\{j:\widetilde y_j^t=c\},\qquad w_j^t=1-\frac{\widehat H_2(\mathbf g_j^t)}{\ln C},\quad \widehat H_2(\mathbf g)=-\ln\textstyle\sum_cg_c^2\ (24)$$</div>
+  <p>\(\mathbf g_j^t=\mathcal G_\psi(\mathbf z_j^t)\) (Ec. 20) no es un embedding: es la salida del clasificador sobre el embedding de bolsa. Decide a qué clase va cada bolsa objetivo y cuánto pesa.</p>
+
+  <h3>B.2 Gram por clase y mezcla por congruencia</h3>
+  <div class="disp">$$[\mathbf K_c^s]_{ii'}=\kappa^B_\sigma(B_i^s,B_{i'}^s),\quad [\mathbf K_c^t]_{jj'}=\kappa^B_\sigma(B_j^t,B_{j'}^t),\quad [\mathbf K_c^{st}]_{ij}=\kappa^B_\sigma(B_i^s,B_j^t)\ (23)$$</div>
+  <div class="disp">$$\mathbf D_c^t=\operatorname{diag}(w_j^t)_{j\in T_c}\ (25),\qquad \widetilde{\mathbf K}_c^t=\mathbf D_c^t\mathbf K_c^t\mathbf D_c^t,\quad \widetilde{\mathbf K}_c^{st}=\mathbf K_c^{st}\mathbf D_c^t\ (26)$$</div>
+  <div class="disp">$$\widetilde{\mathbf K}_c^{\mathrm{mix}}=\operatorname{diag}(\mathbf I,\mathbf D_c^t)\,\mathbf K_c\,\operatorname{diag}(\mathbf I,\mathbf D_c^t)\ (27),\qquad \breve{\widetilde{\mathbf K}}{}_c^{\mathrm{mix}}=\tfrac12\,\mathbf Q_c\widetilde{\mathbf K}_c^{\mathrm{mix}}\mathbf Q_c\ (32)$$</div>
+  <p class="claim"><b>La mezcla es semidefinida positiva por construcción.</b> Es una congruencia de la Gram \(\mathbf K_c\), y \(\mathbf Q_c\) es otra. En CREDA el bloque cruzado no lleva \(\mathbf D^t_c\), y eso puede romperla: con una bolsa por dominio, \(\kappa^B=0{,}5\) y \(w=0{,}3\), \(\begin{bmatrix}1&0{,}5\\0{,}5&0{,}09\end{bmatrix}\) tiene determinante \(0{,}09-0{,}25\lt0\). <b>La r29 resuelve este límite de CREDA</b>, y la congruencia es justamente lo que vuelve exacta la identidad de A.3, con masa \(\tfrac12\) por dominio. <span class="tag">[derivado]</span></p>
+
+  <h3>B.3 La puntuación y su normalización</h3>
+  <div class="disp">$$J_c=\tfrac12\big[H_2(\breve{\mathbf K}_c^{s})+H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})\big]-H_2(\breve{\widetilde{\mathbf K}}{}_c^{\mathrm{mix}})\ (33),\qquad -\ln2\le J_c\le U_c\ (34)$$</div>
+  <div class="disp">$$L_c=-\ln2,\quad U_c=2\ln\cosh\!\Big(\frac{H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})-H_2(\breve{\mathbf K}_c^{s})}{4}\Big)=\ln\frac{1+r_c}{2}\ (35),\qquad \ell_{\mathrm{glob},c}=\frac{U_c-J_c}{U_c-L_c}\ (36)$$</div>
+  <div class="disp">$$U_c-J_c=\ln\frac{1+r_c}{r_c+e^{-D_{CS,c}}}\ \ge0,\qquad \ell_{\mathrm{glob},c}=0\iff D_{CS,c}=0$$</div>
+  <p class="claim"><b>Resuelve el signo de la forma sin normalizar.</b> Como diferencia de entropías, \(J\) con \(\alpha=2\) no tiene el signo garantizado: con \(p=(1,0,0)\) y \(q=(\tfrac34,\tfrac18,\tfrac18)\), \(\mathrm{JR}_2=\ln\tfrac{256}{198}-\tfrac12\ln\tfrac{64}{38}\approx-0{,}0037\) nats. Con \(\ell_{\mathrm{glob},c}\), cero significa operadores de clase iguales. <span class="tag">[derivado; comprobado numéricamente]</span></p>
+
+  <h3>B.4 El atajo que queda abierto</h3>
+  <div class="disp">$$\frac{\partial}{\partial r_c}\ln\frac{1+r_c}{r_c+e^{-D_{CS,c}}}=\frac{1}{1+r_c}-\frac{1}{r_c+e^{-D_{CS,c}}}\le0$$</div>
+  <p>Mientras la clase no está alineada, el gradiente premia desajustar las purezas: el codificador objetivo puede colapsar o dispersar la clase. El atajo es finito, porque \(r_c\) está acotado por el tamaño del lote. <span class="tag">[derivado]</span></p>
+
+  <h3>B.5 El término global</h3>
+  <div class="disp">$$\mathcal L_{\mathrm{glob}}=\sum_{c\in\mathcal C_{\mathrm{act}}}\omega_c\,\ell_{\mathrm{glob},c}\ (37)$$</div>
+  <p class="claim next"><b>Siguiente etapa.</b> Lo que MIL-CREDA agrega encima, la bolsa como unidad, la referencia local \(\boldsymbol\mu^s_j\) y la pérdida completa (Ec. 39), se desarrolla aparte.</p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Notas · por organizar</span>
+  <h2>Notas pendientes</h2>
+  <ol>
+    <li><b>MMD, Cauchy–Schwarz y KL no son lo mismo; las tres son divergencias.</b> Con un kernel acotado (\(k\le1\)): \(\mathrm{MMD}(p,q)\le2\,\mathrm{TV}(p,q)\le\sqrt{2\,\mathrm{KL}(p\Vert q)}\). Si la KL es chica, la MMD también; no al revés. <span class="tag">[citada de memoria]</span></li>
+    <li><b>Regla de la cadena de la KL</b> (demostrada): \(\mathrm{KL}\big(p_s(x,y)\Vert p_t(x,y)\big)=\mathrm{KL}\big(p_s(y)\Vert p_t(y)\big)+\sum_y p_s(y)\,\mathrm{KL}\big(p_s(x\mid y)\Vert p_t(x\mid y)\big)\). Con \(p_s(y)=p_t(y)=\pi_y\): \(\mathrm{KL}_{\text{conjunta}}=\sum_y\pi_y\,\mathrm{KL}_y\). La condicional es el promedio de las divergencias por clase, pesado por \(\pi_y\).</li>
+    <li><b>El Paso 9 no lleva \(\pi_y\).</b> \(\widehat{\mathrm{MMD}}^2_{\text{cond}}=\sum_y\widehat{\mathrm{MMD}}^2_y=C\cdot\mathbb E_{y\sim\text{Uniforme}}\big[\widehat{\mathrm{MMD}}^2_y\big]\): es la condicional solo con clases equiprobables. Tiene el mismo óptimo (vale 0 si y solo si cada clase está alineada, si todo \(\pi_y\gt0\)) y distinta ponderación fuera de él. Pendiente: escribir \(\pi_y\) o declarar el supuesto.</li>
+    <li><b>MMD de la conjunta con kernel delta en la clase:</b> \(\mathrm{MMD}^2_{\text{conj}}=\sum_y\big\Vert p_s(y)\,\mu_{X|y,s}-p_t(y)\,\mu_{X|y,t}\big\Vert^2\); con proporciones iguales, \(\sum_y\pi_y^2\,\mathrm{MMD}^2_y\) (pesos \(\pi_y^2\), no \(\pi_y\)).</li>
+    <li><b>CREDA sí pesa las clases.</b> r29, Ec. 37: \(\mathcal L_{\mathrm{glob}}=\sum_c\omega_c\,\ell_{\mathrm{glob},c}\), con \(\omega_c=q_c/\sum_{c'}n^t_{c'}\) y \(q_c=\sum_{j\in T_c}w^t_j\): una estimación de \(p_t(c)\) multiplicada por la confianza media de la clase.</li>
+    <li><b>Cauchy–Schwarz y KL tienen la misma plantilla, "cruzada menos propia".</b> \(\mathrm{KL}(p\Vert q)=H_\times(p,q)-H(p)\) (Shannon, asimétrica); \(-\ln\cos\theta=H_2(p,q)-\tfrac12\big[H_2(p)+H_2(q)\big]\) (Rényi de orden 2, simétrica, se estima con tres sumas de kernels).</li>
+  </ol>
+</section>
+</div>
+
+<div id="panel-comparacion" role="tabpanel" aria-labelledby="tab-comparacion" hidden style="display:flex;flex-direction:column;gap:20px">
+
+<p class="note">Los métodos que llegaron a la tabla final del embudo, más CREDA como base, escritos a nivel de instancia con los símbolos de la r29. Cada reescritura es una lectura derivada; no es la notación de sus autores.</p>
+
+<section class="math-sec">
+  <span class="eyebrow">Definiciones generales</span>
+  <h2>Lo que hace falta para leer lo de abajo</h2>
+  <dl class="defs">
+    <dt>\(\mathbf x^s_i,\ \mathbf x^t_j\)</dt><dd>Una muestra de la fuente (\(i=1,\dots,N_s\), con etiqueta \(y^s_i\)) y una del objetivo (\(j=1,\dots,N_t\), sin etiqueta).</dd>
+    <dt>\(\mathbf h=\mathcal F_\theta(\mathbf x)\in\mathbb R^d\)</dt><dd>El embedding: lo que produce el codificador de parámetros \(\theta\) (Ec. 13).</dd>
+    <dt>\(\mathbf g=\mathcal G_\psi(\mathbf h)\in\Delta^{C-1}\)</dt><dd>La salida del clasificador: un vector de probabilidades sobre las \(C\) clases, con \(\sum_cg_c=1\) (Ec. 20). \(g_{j,c}\) es la probabilidad de que la muestra objetivo \(j\) sea de la clase \(c\).</dd>
+    <dt>\(\kappa^I_\sigma(\mathbf h,\mathbf h')\)</dt><dd>El kernel gaussiano de ancho \(\sigma\): \(\exp(-\lVert\mathbf h-\mathbf h'\rVert^2/2\sigma^2)\). Mide la similitud entre dos embeddings (Ec. 14).</dd>
+    <dt>\(\Phi_\sigma(\mathbf h)\in\mathcal H_I\)</dt><dd>La imagen del embedding en el RKHS del kernel: \(\langle\Phi_\sigma(\mathbf h),\Phi_\sigma(\mathbf h')\rangle=\kappa^I_\sigma(\mathbf h,\mathbf h')\).</dd>
+    <dt>\(\mathbf K^s,\ \mathbf K^t,\ \mathbf K^{st}\)</dt><dd>Matrices de Gram: el kernel evaluado entre todos los pares fuente–fuente, objetivo–objetivo y fuente–objetivo.</dd>
+    <dt>\(\widetilde y^t_j=\mathfrak a(\mathbf g^t_j)\)</dt><dd>La pseudo-etiqueta: la clase más probable según el clasificador (Ec. 22).</dd>
+    <dt>\(S_c,\ T_c,\ n^s_c,\ n^t_c\)</dt><dd>Las muestras de la clase \(c\) en la fuente (por etiqueta) y en el objetivo (por pseudo-etiqueta), y cuántas hay en cada una. \(\mathbf K^s_c,\mathbf K^t_c,\mathbf K^{st}_c\) son las Gram restringidas a esas muestras.</dd>
+    <dt>\(\hat H_1(\mathbf g),\ \widehat H_2(\mathbf g)\)</dt><dd>Entropía de Shannon, \(-\sum_cg_c\ln g_c\), y de Rényi de orden 2, \(-\ln\sum_cg_c^2\), de una predicción. Valen 0 en un one-hot y \(\ln C\) en la uniforme.</dd>
+    <dt>\(\mathcal L_{\mathrm{src}}\)</dt><dd>La entropía cruzada sobre la fuente etiquetada (Ec. 21). Todos los métodos la incluyen.</dd>
+    <dt>\(\lambda\)</dt><dd>El peso del término de adaptación frente a \(\mathcal L_{\mathrm{src}}\).</dd>
+    <dt>\(\mathrm{sg}[\cdot]\)</dt><dd>Detener el gradiente: el valor entra en la cuenta pero no se derivan los parámetros a través de él.</dd>
+  </dl>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">El paralelo que importa</span>
+  <h2>Qué orden miran y cómo combinan</h2>
+  <div class="tablewrap"><table style="min-width:620px">
+    <thead><tr><th></th><th>Primer orden: medias en \(\mathcal H_I\)</th><th>Segundo orden: covarianzas en \(\mathcal H_I\)</th></tr></thead>
+    <tbody>
+      <tr><td><b>Restando potenciales (MMD)</b></td><td>DSAN / LMMD</td><td>—</td></tr>
+      <tr><td><b>Logaritmo de cocientes (información)</b></td><td>CS-DA</td><td class="ours">CREDA, por clase y con peso de confianza</td></tr>
+    </tbody>
+  </table></div>
+  <p class="hint">CDAN+E compara con un crítico y PFAN con prototipos; SHOT mira solo la salida; JUMBOT, el costo de transporte. <span class="tag">[derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Piso</span>
+  <h2>Solo fuente</h2>
+  <div class="disp">$$\mathcal L_{\mathrm{src}}=-\frac1{N_s}\sum_{i=1}^{N_s}\sum_{c}y^s_{i,c}\ln g^s_{i,c}$$</div>
+  <dl class="defs"><dt>\(y^s_{i,c}\)</dt><dd>1 si la muestra \(i\) es de la clase \(c\), 0 si no.</dd><dt>\(g^s_{i,c}\)</dt><dd>La probabilidad que el clasificador le da a esa clase.</dd></dl>
+  <p class="hint">La r29 usa una versión acotada con \(\varepsilon_{\mathrm{src}}\) (Ec. 21). Entrena con la fuente y no adapta: es el piso que todo método tiene que superar.</p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Crítico aprendido · por clase</span>
+  <h2>CDAN+E</h2>
+  <div class="disp">$$\max_D\min_{\theta}\ \mathcal L_{\mathrm{src}}-\lambda\Big[\textstyle\sum_i\tilde v^s_i\log D\big(\mathbf h^s_i\otimes\mathbf e_{y_i^s}\big)+\sum_j\tilde v^t_j\log\big(1-D(\mathbf h^t_j\otimes\mathbf g_j^t)\big)\Big]$$</div>
+  <div class="disp">$$v_j^t=1+e^{-\hat H_1(\mathbf g_j^t)}\in\big[1+\tfrac1C,\,2\big],\qquad \tilde v^t_j=\frac{v^t_j}{\sum_{j'}v^t_{j'}}$$</div>
+  <dl class="defs"><dt>\(\mathbf h\otimes\mathbf g\)</dt><dd>El producto exterior del embedding por la predicción: un vector de dimensión \(d\cdot C\) que lleva la información de clase al discriminador.</dd><dt>\(\mathbf e_{y_i^s}\)</dt><dd>El one-hot de la etiqueta de la fuente.</dd><dt>\(v^t_j\)</dt><dd>El peso por confianza: 2 si la predicción es segura, \(1+1/C\) si es uniforme. Es un énfasis suave, no una compuerta.</dd><dt>\(\tilde v^t_j\)</dt><dd>El peso normalizado dentro de cada dominio.</dd></dl>
+  <p class="hint">En el código oficial el gradiente también pasa por la entropía. <span class="tag">[code / derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Kernel · distancia · por clase</span>
+  <h2>DSAN / LMMD</h2>
+  <div class="disp">$$\hat d=\frac1{|\mathcal C_{both}|}\sum_{c\in\mathcal C_{both}}\Big\lVert\tfrac1{n^s_c}\textstyle\sum_{i\in S_c}\Phi_\sigma(\mathbf h_i^s)-\sum_{j}a_{jc}\,\Phi_\sigma(\mathbf h^t_j)\Big\rVert^2_{\mathcal H_I},\qquad a_{jc}=\frac{\mathrm{sg}[g^t_{j,c}]}{\sum_{j'}\mathrm{sg}[g^t_{j',c}]}$$</div>
+  <div class="disp">$$\hat d_c=\frac{\mathbf 1^\top\mathbf K_c^s\mathbf 1}{(n_c^s)^2}+\mathbf a_c^\top\mathbf K^t\mathbf a_c-\frac{2}{n_c^s}\mathbf 1^\top\mathbf K^{st}_{c,\cdot}\,\mathbf a_c$$</div>
+  <dl class="defs"><dt>\(\mathcal C_{both}\)</dt><dd>Las clases presentes a la vez en las etiquetas de la fuente y en las pseudo-etiquetas del objetivo.</dd><dt>\(a_{jc}\)</dt><dd>Cuánto aporta la muestra objetivo \(j\) a la clase \(c\): su probabilidad para esa clase, normalizada. Cada muestra aporta a todas las clases.</dd><dt>\(\mathbf K^{st}_{c,\cdot}\)</dt><dd>Las filas de la Gram cruzada de las muestras fuente de la clase \(c\), contra todas las objetivo.</dd></dl>
+  <p>Es la MMD de primer orden por clase: los tres términos de \(\hat d_c\) son potenciales de información, y la MMD los resta. Usa la Gram objetivo completa. <span class="tag">[paper + code / derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Kernel · información</span>
+  <h2>CS-DA</h2>
+  <div class="disp">$$\hat D_{CS}=\ln\frac{\mathbf 1^\top\mathbf K^s\mathbf 1}{N_s^2}+\ln\frac{\mathbf 1^\top\mathbf K^t\mathbf 1}{N_t^2}-2\ln\frac{\mathbf 1^\top\mathbf K^{st}\mathbf 1}{N_sN_t}=-2\ln\cos_{\mathcal H_I}\!\Big(\tfrac1{N_s}\textstyle\sum_i\Phi_\sigma(\mathbf h_i^s),\ \tfrac1{N_t}\sum_j\Phi_\sigma(\mathbf h_j^t)\Big)$$</div>
+  <dl class="defs"><dt>\(\tfrac{1}{N^2}\mathbf 1^\top\mathbf K\mathbf 1\)</dt><dd>El potencial de información de un dominio: el promedio de similitudes entre todos sus pares.</dd><dt>\(\tfrac{1}{N_sN_t}\mathbf 1^\top\mathbf K^{st}\mathbf 1\)</dt><dd>El potencial cruzado: cuánto se parecen, en promedio, fuente y objetivo.</dd><dt>\(\cos_{\mathcal H_I}\)</dt><dd>El coseno entre los embeddings de media de cada dominio en el RKHS.</dd></dl>
+  <p>Los mismos tres potenciales que la MMD, combinados como logaritmo de un coseno. Agrega un término condicional \(D_{CCS}\) con una Gram de predicciones \(L_{jj'}=\kappa(\mathbf g_j^t,\mathbf g_{j'}^t)\), que condiciona a \(p(\hat y\mid\mathbf h)\). <span class="tag">[paper / derivado]</span></p>
+  <p><b>CS-DA en términos del embebimiento.</b> CS-DA (Yin et al., 2024) usa la divergencia de Cauchy–Schwarz en su forma estándar, \(D_{CS}(p,q)=-\ln\big((\int pq)^2/(\int p^2\int q^2)\big)\), aplicada dos veces: una a las marginales y otra a las condicionales.</p>
+  <p><b>Término marginal.</b> Con los tres potenciales del Paso 10, sobre las representaciones \(z\) de cada dominio:</p>
+  <div class="disp">$$\hat D_{CS}=\ln\hat V_{ss}+\ln\hat V_{tt}-2\ln\hat V_{st}=-2\ln\cos\theta$$</div>
+  <p>Es el \(-\ln\cos\theta\) del Paso 11 multiplicado por 2. La constante de Parzen se cancela en el cociente, y vale todo lo dicho frente a la MMD.</p>
+  <p><b>Término condicional.</b> La misma divergencia, aplicada a la etiqueta dada la representación, \(p(y\mid z)=p(z,y)/p(z)\):</p>
+  <p>Por Bayes, la condicional es la conjunta dividida por la marginal:</p>
+  <div class="disp">$$p(y\mid x,d)=\frac{p(x,y\mid d)}{p(x\mid d)}$$</div>
+  <p>Sus tres potenciales, escritos como esperanzas bajo la conjunta de cada dominio:</p>
+  <div class="disp">$$\begin{aligned}
+  V^{y|x}_{ss}&=\iint p(y\mid x,d{=}s)^2\,dx\,dy=\mathbb E_{(x,y)\sim p(\cdot\mid d=s)}\Big[\frac{p(x,y\mid d{=}s)}{p(x\mid d{=}s)^2}\Big]\\
+  V^{y|x}_{tt}&=\iint p(y\mid x,d{=}t)^2\,dx\,dy=\mathbb E_{(x,y)\sim p(\cdot\mid d=t)}\Big[\frac{p(x,y\mid d{=}t)}{p(x\mid d{=}t)^2}\Big]\\
+  V^{y|x}_{st}&=\iint p(y\mid x,d{=}s)\,p(y\mid x,d{=}t)\,dx\,dy=\mathbb E_{(x,y)\sim p(\cdot\mid d=s)}\Big[\frac{p(x,y\mid d{=}t)}{p(x\mid d{=}s)\,p(x\mid d{=}t)}\Big]
+  \end{aligned}$$</div>
+  <div class="disp">$$D_{CCS}=\ln V^{y|x}_{ss}+\ln V^{y|x}_{tt}-2\ln V^{y|x}_{st}$$</div>
+  <p><b>Versión matricial.</b> Con Parzen, la conjunta usa el kernel del par, \(K\odot L_Y\) (Paso 8), y la marginal usa la suma de filas de \(K\) (Paso 10). La esperanza es el promedio sobre las muestras:</p>
+  <div class="disp">$$\begin{aligned}
+  \hat V^{y|x}_{ss}&\propto\sum_{n\in s}\frac{\big[(K^s\odot L_Y^s)\,\mathbf 1\big]_n}{\big[K^s\mathbf 1\big]_n^2}\\
+  \hat V^{y|x}_{tt}&\propto\sum_{n\in t}\frac{\big[(K^t\odot L_Y^t)\,\mathbf 1\big]_n}{\big[K^t\mathbf 1\big]_n^2}\\
+  \hat V^{y|x}_{st}&\propto\sum_{n\in s}\frac{\big[(K^{st}\odot L_Y^{st})\,\mathbf 1\big]_n}{\big[K^s\mathbf 1\big]_n\,\big[K^{st}\mathbf 1\big]_n}
+  \end{aligned}$$</div>
+  <p class="hint">\(L_Y\) es el kernel gaussiano sobre las probabilidades predichas. El paper estima el cruzado dos veces, promediando sobre \(s\) y sobre \(t\); por eso su Ec. 13 tiene \(-\ln(st)-\ln(ts)\) en lugar de \(-2\ln(st)\). Las esperanzas son una reconstrucción propia: el paper no deriva el paso de la Ec. 3 a la Ec. 13.</p>
+  <p>En el objetivo, \(y\) es la predicción del clasificador, \(\hat y=g(z)\).</p>
+  <p><b>Qué condicional alinea.</b> CS-DA alinea \(p(y\mid z)\): que la misma representación lleve a la misma clase en los dos dominios. La condición del Paso 8 es la contraria, \(p(z\mid y)\): que la misma clase caiga en el mismo lugar de la representación. La medida es la misma (Cauchy–Schwarz); lo que cambia es qué se supone que se desplaza.</p>
+  <p class="hint">Objetivo de entrenamiento: \(\lambda\,\hat D_{CS}+\beta\,\hat D_{CCS}\) (Ec. 15). <span class="tag">[paper: arXiv 2405.19978, Ec. 2, 3, 11, 13 y 15]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Salida · prototipos</span>
+  <h2>PFAN</h2>
+  <div class="disp">$$\widetilde y_j^t=\arg\max_c\cos\big(\mathbf h^t_j,\bar{\mathbf h}^s_c\big),\qquad w^{\mathrm{PFAN}}_j=\mathbb 1\big[\cos\ge\tau(m)\big],\qquad \mathcal L_{apa}=\textstyle\sum_c d\big(\bar{\mathbf h}_c^s,\bar{\mathbf h}_c^{t,\mathrm{EMA}}\big)$$</div>
+  <dl class="defs"><dt>\(\bar{\mathbf h}^s_c\)</dt><dd>El prototipo de la clase \(c\) en la fuente: la media de sus embeddings.</dd><dt>\(\tau(m)\)</dt><dd>El umbral de aceptación, que cambia con la época \(m\) según un calendario.</dd><dt>\(w^{\mathrm{PFAN}}_j\)</dt><dd>1 si la muestra objetivo está lo bastante cerca de su prototipo, 0 si no: una compuerta dura.</dd><dt>\(\bar{\mathbf h}^{t,\mathrm{EMA}}_c\)</dt><dd>El prototipo objetivo, actualizado con una media móvil exponencial.</dd><dt>\(d\)</dt><dd>La distancia euclídea entre prototipos.</dd></dl>
+  <p>Alinea primer orden: medias de clase. <span class="tag">[paper / derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Salida · sin fuente</span>
+  <h2>SHOT</h2>
+  <div class="disp">$$\mathcal L=\mathbb E_j\big[\hat H_1(\mathbf g^t_j)\big]-\hat H_1(\bar{\mathbf g}^t)+\beta\,\mathrm{CE}\big(\mathbf g^t_j,\widetilde y^{\,\mathrm{cent}}_j\big),\qquad \bar{\mathbf g}^t=\mathbb E_j\,\mathbf g^t_j$$</div>
+  <dl class="defs"><dt>\(\mathbb E_j[\hat H_1(\mathbf g^t_j)]\)</dt><dd>La entropía media de las predicciones: al bajarla, cada predicción se vuelve más segura.</dd><dt>\(\hat H_1(\bar{\mathbf g}^t)\)</dt><dd>La entropía de la predicción promedio: al subirla, las clases quedan equilibradas.</dd><dt>\(\widetilde y^{\,\mathrm{cent}}_j\)</dt><dd>La pseudo-etiqueta por el centroide de clase más cercano en el embedding.</dd><dt>\(\beta\)</dt><dd>El peso de esas pseudo-etiquetas.</dd></dl>
+  <p>Congela el clasificador de la fuente, entrena un codificador objetivo propio y no vuelve a ver datos de la fuente. <span class="tag">[code / derivado]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Transporte desbalanceado</span>
+  <h2>JUMBOT</h2>
+  <div class="disp">$$\min_{\gamma\ge0}\ \langle\gamma,\mathbf C\rangle+\tau\,\mathrm{KL}(\gamma\mathbf 1\,\Vert\,\mathbf a)+\tau\,\mathrm{KL}(\gamma^\top\mathbf 1\,\Vert\,\mathbf b),\qquad C_{ij}=\alpha\lVert\mathbf h_i^s-\mathbf h_j^t\rVert^2+\beta\,\mathrm{CE}\big(\mathbf y_i^s,\mathbf g_j^t\big)$$</div>
+  <dl class="defs"><dt>\(\gamma_{ij}\)</dt><dd>Cuánta masa se mueve de la muestra fuente \(i\) a la objetivo \(j\).</dd><dt>\(C_{ij}\)</dt><dd>El costo de ese par: distancia entre embeddings más el desacuerdo entre la etiqueta fuente y la predicción objetivo.</dd><dt>\(\mathbf a,\ \mathbf b\)</dt><dd>Las masas de cada dominio en el minilote, normalmente uniformes.</dd><dt>\(\tau\)</dt><dd>Cuánto se permite que \(\gamma\) se aparte de \(\mathbf a\) y \(\mathbf b\): la masa que no encaja puede quedar sin mover.</dd><dt>\(\alpha,\ \beta\)</dt><dd>Los pesos del rasgo y de la etiqueta en el costo.</dd></dl>
+  <p class="hint"><span class="tag">[no abierto: Fatras et al., ICML 2021]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Kernel · información · por clase · la base</span>
+  <h2>CREDA</h2>
+  <div class="disp">$$w^t_j=1-\frac{\widehat H_2(\mathbf g^t_j)}{\ln C},\qquad \mathbf D^t_c=\operatorname{diag}(w^t_j)_{j\in T_c},\qquad \widetilde{\mathbf K}^t_c=\mathbf D^t_c\mathbf K^t_c\mathbf D^t_c$$</div>
+  <div class="disp">$$\mathbf K_c^{\mathrm{mix}}=\begin{bmatrix}\mathbf K_c^s&\mathbf K_c^{st}\\(\mathbf K_c^{st})^\top&\widetilde{\mathbf K}_c^t\end{bmatrix},\qquad \breve{\mathbf A}=\frac{\mathbf A}{\operatorname{tr}\mathbf A},\qquad H_2(\mathbf A)=-\ln\lVert\mathbf A\rVert_F^2$$</div>
+  <div class="disp">$$J_c=\tfrac12\Big[H_2(\breve{\mathbf K}_c^{s})+H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})\Big]-H_2\big(\breve{\mathbf K}_c^{\mathrm{mix}}\big),\qquad \mathcal L_{\mathrm{CREDA}}=\mathcal L_{\mathrm{src}}-\lambda\sum_{c:\,n_c^sn_c^t\gt0}J_c$$</div>
+  <dl class="defs">
+    <dt>\(w^t_j\)</dt><dd>La confianza de la muestra objetivo: 1 si su predicción es un one-hot, 0 si es uniforme.</dd>
+    <dt>\(\mathbf D^t_c\)</dt><dd>La matriz diagonal con las confianzas de las muestras objetivo de la clase \(c\).</dd>
+    <dt>\(\widetilde{\mathbf K}^t_c\)</dt><dd>La Gram objetivo de la clase ponderada por confianza: cada par pesa \(w_jw_{j'}\).</dd>
+    <dt>\(\mathbf K^{\mathrm{mix}}_c\)</dt><dd>La Gram de la mezcla de fuente y objetivo de la clase. En CREDA el bloque cruzado no lleva los pesos.</dd>
+    <dt>\(\breve{\mathbf A}\)</dt><dd>Una Gram normalizada por su traza: sus autovalores suman 1, como un operador de densidad.</dd>
+    <dt>\(H_2(\breve{\mathbf A})\)</dt><dd>La entropía de Rényi matricial de orden 2: baja si las muestras se parecen entre sí (clase pura) y sube si están dispersas.</dd>
+    <dt>\(J_c\)</dt><dd>Compara la pureza de cada dominio con la de su mezcla: si fuente y objetivo de la clase coinciden, mezclarlos no agrega dispersión.</dd>
+  </dl>
+  <p>Las muestras objetivo se enrutan por \(\widetilde y^t_j\) (enrutamiento duro) y se ponderan por \(w^t_j\). Con \(\alpha=2\) todo se calcula con normas de Frobenius. Como no lleva \(\mathbf D^t_c\) en el bloque cruzado, la mezcla puede no ser semidefinida positiva; y como diferencia de entropías, \(J_c\) no tiene el signo garantizado. <span class="tag">[paper / derivado]</span></p>
+</section>
+</div>
+
+</div>
+
+<script>
+(function(){
+const R=String.raw;
+/* ---------- builders ---------- */
+const CMP='cmp',KEPT='kept',OUT='out';
+function M(label,st,why,o){return Object.assign({label,st,why:why||''},o||{});}
+function F(id,label,desc,dislike,kids,o){o=o||{};return Object.assign({id,label,desc,dislike,fam:true,kids:kids.map((k,i)=>Object.assign({id:id+'-'+i,leaf:true},k))},o);}
+function core(tex){return '<div class="core">$$'+tex+'$$</div>';}
+function nope(t){return '<div class="dislike"><b>No nos gusta</b> '+t+'</div>';}
+function block(assume,good,bad,dislike){
+  return '<div class="assume"><b>Supone</b> '+assume+'</div>'+
+  '<div class="kv keep"><b>Lo bueno de suponerlo · nos llevamos</b><ul>'+good.map(x=>'<li>'+x+'</li>').join('')+'</ul></div>'+
+  '<div class="kv leave"><b>Lo malo de suponerlo · por qué seguimos</b><ul>'+bad.map(x=>'<li>'+x+'</li>').join('')+'</ul></div>'+nope(dislike);}
+
+/* reasons a method that aligns by class without target labels was still set aside */
+const R2ENC='no se lleva a dos codificadores';
+const RFIX='trabaja sobre rasgos fijos: no se lleva a dos codificadores';
+const RADV='la familia la representa CDAN+E, condicional y con peso por entropía';
+const RDSN='la familia la representa DSAN/LMMD, la MMD condicional más cercana';
+const RPFN='la familia la representa PFAN, que alinea prototipos de clase';
+const RSHT='el subconjunto sin fuente lo representa SHOT';
+const RTTA='la familia sale de la comparación: no se lleva a dos codificadores';
+
+/* ---------- formulas of the methods that reached the comparison (instance-level r29 notation) ---------- */
+const FX={
+ dann:R`<p>Un codificador y un discriminador \(D\) sobre el embedding:</p>`+core(R`\min_{\theta,\psi}\max_D\ \mathcal L_{\mathrm{src}}-\lambda\Big[\tfrac1{N_s}\textstyle\sum_{i}\log D(\mathbf h_i^s)+\tfrac1{N_t}\sum_{j}\log\big(1-D(\mathbf h_j^t)\big)\Big]`)+R`<p class="hint">Entra a la comparación como piso adversario marginal aunque no alinea por clase. Detalle de cada variable en la pestaña Comparación final. <span class="tag">[derivado]</span></p>`,
+ cdane:core(R`\max_D\min_{\theta}\ \mathcal L_{\mathrm{src}}-\lambda\Big[\textstyle\sum_i\tilde v^s_i\log D\big(\mathbf h^s_i\otimes\mathbf e_{y_i^s}\big)+\sum_j\tilde v^t_j\log\big(1-D(\mathbf h^t_j\otimes \mathbf g_j^t)\big)\Big],\quad v_j^t=1+e^{-\hat H_1(\mathbf g_j^t)}`)+R`<p class="hint">El discriminador ve el producto del embedding por la predicción; \(v\) pondera por entropía. <span class="tag">[code / derivado]</span></p>`,
+ dsan:core(R`\hat d=\frac1{|\mathcal C_{both}|}\sum_{c}\Big\|\tfrac1{n^s_c}\textstyle\sum_{i\in S_c}\Phi_\sigma(\mathbf h_i^s)-\sum_{j}a_{jc}\Phi_\sigma(\mathbf h^t_j)\Big\|^2_{\mathcal H_I},\quad a_{jc}=\frac{\mathrm{sg}[g^t_{j,c}]}{\sum_{j'}\mathrm{sg}[g^t_{j',c}]}`)+R`<p class="hint">MMD por clase con enrutamiento blando. <span class="tag">[paper + code / derivado]</span></p>`,
+ csda:core(R`\hat D_{CS}=\ln\tfrac{\mathbf 1^\top\mathbf K^s\mathbf 1}{N_s^2}+\ln\tfrac{\mathbf 1^\top\mathbf K^t\mathbf 1}{N_t^2}-2\ln\tfrac{\mathbf 1^\top\mathbf K^{st}\mathbf 1}{N_sN_t}`)+R`<p class="hint">Logaritmo del coseno entre los embeddings de media de cada dominio. <span class="tag">[paper / derivado]</span></p>`,
+ pfan:core(R`\widetilde y_j^t=\arg\max_c\cos(\mathbf h^t_j,\bar{\mathbf h}^s_c),\quad w^{\mathrm{PFAN}}_j=\mathbb 1\big[\cos\ge\tau(m)\big],\quad \mathcal L_{apa}=\textstyle\sum_c d\big(\bar{\mathbf h}_c^s,\bar{\mathbf h}_c^{t,\mathrm{EMA}}\big)`)+R`<p class="hint">Pseudo-etiqueta por prototipo con umbral que cambia con el calendario. <span class="tag">[paper / derivado]</span></p>`,
+ shot:core(R`\mathcal L=\mathbb E_j\big[\hat H_1(\mathbf g^t_j)\big]-\hat H_1(\bar{\mathbf g}^t)+\beta\,\mathrm{CE}\big(\mathbf g^t_j,\widetilde y^{\,\mathrm{cent}}_j\big)`)+R`<p class="hint">Sin datos de la fuente al adaptar; información de la salida más pseudo-etiquetas por centroides. <span class="tag">[code / derivado]</span></p>`,
+ creda:R`<p>La referencia: información estimada con kernels, por clase, con peso de confianza.</p>`+core(R`J_c=\tfrac12\Big[H_2(\breve{\mathbf K}_c^{s})+H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})\Big]-H_2\big(\breve{\mathbf K}_c^{\mathrm{mix}}\big),\qquad \mathcal L_{\mathrm{CREDA}}=\mathcal L_{\mathrm{src}}-\lambda\sum_{c}J_c`)+R`<p class="hint">Cada variable está explicada en la pestaña Comparación final. <span class="tag">[paper / derivado]</span></p>`,
+ jumbot:core(R`\min_{\gamma\ge0}\ \langle\gamma,\mathbf C\rangle+\tau\,\mathrm{KL}(\gamma\mathbf 1\Vert\mathbf a)+\tau\,\mathrm{KL}(\gamma^\top\mathbf 1\Vert\mathbf b),\quad C_{ij}=\alpha\lVert\mathbf h_i^s-\mathbf h_j^t\rVert^2+\beta\,\mathrm{CE}(\mathbf y_i^s,\mathbf g_j^t)`)+R`<p class="hint">Transporte desbalanceado: la masa de la fuente que no encaja queda sin transportar. <span class="tag">[no abierto: Fatras et al., ICML 2021]</span></p>`
+};
+
+/* ---------- families (level 4) ---------- */
+const fam={
+ oMom:F('o-mom-f','Momentos marginales',R`Igualan media y covarianza de rasgos fijos con una transformación cerrada.`,'mira solo dos momentos y nunca la clase.',[M('CORAL',OUT,'alinea covarianzas marginales: no alinea por clase')]),
+ oSub:F('o-sub','Subespacios',R`Alinean las bases de los subespacios principales de cada dominio.`,'una base lineal común no garantiza que las clases coincidan.',[M('SA',OUT,'subespacios PCA por dominio, sin clase'),M('GFK',OUT,'kernel geodésico entre subespacios, sin clase')]),
+ oJda:F('a2-jda','MMD superficial (familia JDA)',R`Buscan una proyección \(A\) que minimiza la MMD marginal y, desde JDA, también la condicional por clase con pseudo-etiquetas que se refinan. Se resuelve como un problema de autovalores.`,'la proyección es lineal y los rasgos no se aprenden.',[M('TCA',OUT,'solo marginal: su versión por clase es JDA'),M('MIDA (Yan)',OUT,'busca independencia del dominio, no alinea por clase'),M('JDA',KEPT,RFIX),M('BDA',KEPT,RFIX),M('VDA',KEPT,RFIX),M('DICD',KEPT,RFIX),M('JGSA',OUT,'no pasa F3, transversal a la arquitectura: dos proyecciones por dominio; el objetivo se clasifica con otra'),M('ARTL',KEPT,RFIX),M('MEDA',KEPT,'F3 en frontera (GFK es una transformación propia al inferir); '+RFIX),M('DJP-MMD',KEPT,RFIX)]),
+ oIw:F('a2-iw','Ponderación por importancia',R`Repesan las muestras de la fuente para que se parezcan al objetivo: KMM iguala medias en el RKHS; KLIEP ajusta el cociente de densidades con una base de kernels.`,'corrige el desplazamiento de las entradas, no el de las clases.',[M('KMM',OUT,'corrige covariate shift: no alinea por clase'),M('KLIEP',OUT,'no alinea por clase')]),
+ oItl:F('a3-tools','Herramientas ITL',R`Rényi cuadrática por Parzen, divergencia de Cauchy–Schwarz e información mutua cuadrática (Ecs. 5–8 de la r29). Son estimadores, no métodos de adaptación: el embudo no encontró métodos de adaptación sobre rasgos fijos en esta casilla.`,'sobre rasgos fijos no hay nada que el estimador pueda mover.',[]),
+ oJdot:F('a1-ot','Transporte sobre rasgos fijos',R`Transporte óptimo con un costo que suma la distancia entre rasgos y la pérdida entre etiquetas.`,'el costo se mide en un espacio que no se aprende.',[M('JDOT',KEPT,RFIX)]),
+ eMom:F('b1-mom','Momentos profundos',R`Igualan momentos de los rasgos aprendidos: covarianzas (Deep CORAL), momentos centrales (CMD) o de orden alto (HoMM). COT los condiciona por clase.`,'un número finito de momentos no caracteriza la distribución.',[M('Deep CORAL',OUT,'covarianzas marginales: no alinea por clase'),M('CMD',OUT,'momentos marginales: no alinea por clase'),M('HoMM',OUT,'marginal: su versión por clase es COT'),M('COT',KEPT,RDSN)]),
+ eMmdM:F('b2-marg','MMD profundo marginal',R`MMD de una o varias capas del embedding, sin distinguir clases.`,'alinear marginales puede mezclar clases.',[M('DAN',OUT,'solo marginal: su versión por clase es DSAN'),M('RTN',OUT,'MMD marginal tensorial: no alinea por clase')]),
+ eMmdC:F('b2-cond','MMD conjunta y condicional',R`MMD entre distribuciones conjuntas de capas (JAN) o por clase con pesos objetivo (LMMD, CDD, CMMD). CDD resta además un término de repulsión entre clases.`,'resta potenciales en lugar de compararlos: premia dispersar la clase y depende de la amplitud del kernel.',[M('DSAN / LMMD',CMP,'',{fx:'dsan'}),M('JAN',KEPT,RDSN),M('WMMD',KEPT,RDSN),M('CAN / CDD',KEPT,'F3 en frontera (BN por dominio en el método publicado); '+RDSN),M('DCAN / CMMD',KEPT,RDSN),M('TPN',OUT,'no pasa F3, transversal a la arquitectura: infiere por distancia a prototipos, no con la cabeza compartida'),M('CPDA',KEPT,'F3 en frontera (necesita un extractor temporal); '+RDSN)],{kind:'ours'}),
+ eRenyi:F('b3-renyi','Rényi matricial',R`Entropía de Rényi de orden \(\alpha\) sobre la Gram normalizada por traza (Ecs. 9–12 de la r29), sin estimar densidades. CREDA compara la pureza de las Gram de fuente y objetivo con la de su mezcla, clase por clase.`,'en CREDA la mezcla puede no ser semidefinida positiva y la puntuación puede tener el signo equivocado.',[M('CREDA',CMP,'',{fx:'creda'}),M('DARES *',KEPT,'F3 en frontera (muestreo espacial; exige un extractor denso por píxel); la familia la representa CS-DA, con revisión por pares')],{kind:'ours'}),
+ eCs:F('b3-cs','Cauchy–Schwarz y Jensen',R`Divergencias estimadas con sumas de kernel: Cauchy–Schwarz (CS-DA, también condicional) y Jensen–Shannon entre operadores de covarianza (RJSD).`,'CS-DA mira medias, no covarianzas por clase; RJSD cuesta \\(O(n^3)\\).',[M('CS-DA',CMP,'',{fx:'csda'}),M('RJSD',OUT,'su uso en adaptación es una conjunta de capas, sin clase')],{kind:'ours'}),
+ eMi:F('b3-mi','Información mutua',R`Maximizan dependencia o independencia condicional entre rasgo y clase. El estimador no se pudo verificar desde los resúmenes; se ubica aquí de forma provisoria.`,'no sabemos con qué estiman la información.',[M('Independencia condicional (arXiv 2203.03212)',KEPT,R2ENC),M('SIDA',KEPT,R2ENC)]),
+ eOt:F('b1-ot','Transporte óptimo profundo',R`Minimizan un plan de transporte entre rasgos aprendidos, con costos que incluyen la etiqueta o la clase.`,'el plan exacto es caro y no tiene lectura informacional.',[M('DeepJDOT',KEPT,RDSN),M('ETD',KEPT,RDSN),M('RWOT',KEPT,RDSN),M('PCT',KEPT,'F3 en frontera (sus prototipos son los pesos de la cabeza; exige cabeza lineal); '+RDSN),M('MARS',KEPT,RDSN)]),
+ eUot:F('b1-uot','Transporte desbalanceado',R`Permiten que parte de la masa de la fuente no se transporte, lo que pondera implícitamente las muestras de la fuente.`,'pondera por par de muestras, sin estructura de clase.',[M('JUMBOT',CMP,'',{fx:'jumbot'}),M('m-POT',KEPT,'la familia la representa JUMBOT')]),
+ cMarg:F('b3-adv-marg','Adversaria marginal y de píxel',R`Un discriminador de dominio juega contra el extractor; con discriminador óptimo el juego minimiza una divergencia de Jensen–Shannon entre marginales.`,'el discriminador no ve la clase.',[M('DANN',OUT,'discriminador sin clase: no alinea por clase'),M('ADDA',OUT,'discriminador sin clase'),M('CoGAN',OUT,'conjunta de imágenes, sin clase'),M('PixelDA',OUT,'discriminador sin clase'),M('CyCADA',OUT,'preserva la etiqueta pero no alinea por clase')]),
+ cWrap:F('b3-adv-wrap','Envoltorios adversarios',R`Modifican el entrenamiento adversario (espectro, optimizador, suavizado, gradientes) sin cambiar qué se alinea.`,'mejoran el juego, no lo que se alinea.',[M('BSP',OUT,'envoltorio: no alinea por clase'),M('GVB',OUT,'base marginal tipo DANN'),M('SDAT',OUT,'optimizador: no alinea por clase'),M('ELS',OUT,'envoltorio: no alinea por clase'),M('GH / GH++',OUT,'envoltorio: no alinea por clase'),M('AFN',OUT,'norma de rasgos, no adversaria ni por clase')]),
+ cDom:F('b3-adv-dom','Confianza sobre el dominio',R`Ponderan por la entropía del discriminador de dominio, no por la de la clase.`,'la confianza que miden es la del dominio, no la de la clase.',[M('RADA',OUT,'pondera por el dominio, no por la clase'),M('TADA',OUT,'atención por entropía del dominio, no por la clase')]),
+ cCls:F('b3-adv-cls','Adversaria condicionada por la clase',R`El discriminador ve la clase: varios discriminadores por clase, o el producto del embedding por la predicción.`,'el estadístico alineado es el que el discriminador logre detectar: implícito e inestable.',[M('CDAN+E',CMP,'',{fx:'cdane'}),M('CDAN',KEPT,'su versión con peso por entropía, CDAN+E, la reemplaza'),M('MADA',KEPT,RADV),M('DAAN',KEPT,RADV),M('SRADA',KEPT,RADV),M('ToAlign',KEPT,RADV),M('CAT †',KEPT,RADV),M('BACG * (retirado)',KEPT,'F3 en frontera (cabeza Dirichlet, no verificable); '+RADV),M('NOUN / PRONOUN',KEPT,R2ENC),M('DADA',OUT,'no pasa F3, transversal a la arquitectura: cabeza con K+1 salidas, una neurona de dominio'),M('SymNets',OUT,'no pasa F3, transversal a la arquitectura: tres clasificadores; infiere con el del objetivo'),M('InAIt †',OUT,'no pasa F3, transversal a la arquitectura: cabeza c+1 y reponderación del posterior en prueba')]),
+ cHyp:F('b3-hyp','Discrepancia de hipótesis',R`El crítico es un par de clasificadores: miden cuánto discrepan sus predicciones en el objetivo (MCD, SWD) o una divergencia entre hipótesis (MDD, f-DAL).`,'mide el desacuerdo de clasificadores, no la forma de las distribuciones.',[M('f-DAL',KEPT,RADV),M('DALN',KEPT,RADV),M('MCD',OUT,'no pasa F3, transversal a la arquitectura: dos clasificadores; su desacuerdo es el método'),M('SWD',OUT,'no pasa F3, transversal a la arquitectura: par de clasificadores de MCD'),M('MDD',KEPT,R2ENC),M('CGDM †',OUT,'no pasa F3, transversal a la arquitectura: dos clasificadores; predice promediándolos')]),
+ sOut:F('b3-out','Estructura de la predicción',R`Miden propiedades de la matriz de predicciones \(\mathbf g\) del objetivo, como la confusión entre clases o su norma nuclear, sin comparar dominios.`,'no compara dominios.',[M('MCC',OUT,'confusión entre clases, sin alinear dominios'),M('BNM',OUT,'norma nuclear marginal: no alinea por clase')]),
+ sPl:F('s-pl','Pseudo-etiquetado',R`Entrenan con pseudo-etiquetas del objetivo, seleccionadas o regularizadas; los que alinean por clase lo hacen con prototipos.`,'confirma sus propios errores si nada lo ancla.',[M('PFAN',CMP,'',{fx:'pfan'}),M('MSTN',KEPT,RPFN),M('ProDA',KEPT,RPFN),M('ATDOC-NC',KEPT,RPFN),M('ATDOC-NA',KEPT,RPFN),M('PCL',KEPT,RPFN),M('CBST',OUT,'selección equilibrada por clase, sin alineación'),M('CRST',OUT,'selección equilibrada por clase, sin alineación'),M('AdaMatch',OUT,'alineación marginal'),M('CST',OUT,'consistencia cíclica, sin alineación')]),
+ sSf:F('s-sfda','Sin fuente (SFDA)',R`Adaptan sin ver datos de la fuente: parten del modelo fuente y se guían por la información de la salida y por vecinos o centroides.`,'renuncia a la fuente justo cuando podría anclar el objetivo.',[M('SHOT',CMP,'',{fx:'shot'}),M('SHOT++',KEPT,RSHT),M('NRC',KEPT,RSHT),M('AaD',KEPT,RSHT),M('G-SFDA',OUT,'no pasa F3, transversal a la arquitectura: máscara de atención por dominio sobre el extractor al inferir'),M('CoWA-JMDS',KEPT,RSHT),M('SF(DA)²',KEPT,RSHT),M('DaC',KEPT,RSHT),M('A2Net',OUT,'no pasa F3, transversal a la arquitectura: dos clasificadores, fuente y objetivo'),M('PLUE',KEPT,RSHT),M('U-SFAN',OUT,'solo entropía e información mutua, sin clase'),M('C-SFDA',OUT,'fiabilidad sin clase'),M('DIFO',OUT,'no alinea por clase')]),
+ sKd:F('s-kd','Maestro–alumno y destilación',R`Un maestro produce las etiquetas blandas que el alumno imita.`,'imita al maestro, errores incluidos.',[M('DDSR †',KEPT,'F3 en frontera (maestro CLIP y subred que recorta capas del extractor); '+RSHT),M('Self-ensembling',OUT,'consistencia y balance marginal'),M('DINE',OUT,'destilación sin clase'),M('KD-DA',OUT,'confianza por dominio, sin clase'),M('MT-MTDA',OUT,'destilación multimaestro, sin clase'),M('DTBS',OUT,'no alinea por clase')]),
+ sTta:F('s-tta','Adaptación en prueba (TTA)',R`Ajustan el modelo durante la inferencia, casi siempre minimizando la entropía de la salida.`,'minimizar entropía sin anclas lleva a colapsar a una clase.',[M('T3A',OUT,'no pasa F3, transversal a la arquitectura: reemplaza la cabeza por prototipos en prueba'),M('TAST †',OUT,'no pasa F3, transversal a la arquitectura: ensamble de módulos que predicen en prueba'),M('Tent',OUT,'minimiza entropía, sin clase'),M('EATA',OUT,'selección sin alineación'),M('SAR',OUT,'filtro de entropía, sin clase'),M('CoTTA',OUT,'maestro promediado, sin clase'),M('RoTTA',OUT,'memoria balanceada, sin alineación'),M('DeYO',OUT,'selección sin alineación')])
+};
+
+/* ---------- criterion nodes (level 3) ---------- */
+function C(id,label,html,kids,o){return Object.assign({id,label,html,kids},o||{});}
+const DIST=(where,what,good,bad,dislike)=>R`<h3>Distancia</h3><p>`+what+R`</p>`+block('que basta con medir cuán lejos están las dos distribuciones '+where+'.',good,bad,dislike);
+const INFO=(where,what,good,bad,dislike)=>R`<h3>Medida de información</h3><p>`+what+R`</p>`+block('que la discrepancia se lee mejor como información (incertidumbre, solapamiento, divergencia) '+where+'.',good,bad,dislike);
+
+/* ---------- tree ---------- */
+const tree={id:'root',label:'Desplazamiento sin etiquetas',open:true,
+ html:R`<h3>El problema</h3><p>La fuente trae etiquetas y el objetivo no, y \(P_s(X,Y)\neq P_t(X,Y)\). Toda la familia se apoya en la misma cota: el error en el objetivo queda acotado por el error en la fuente, una discrepancia entre dominios y el error de la mejor hipótesis conjunta.</p>`+core(R`\varepsilon_t(h)\le\varepsilon_s(h)+\tfrac12\,d_{\mathcal H\Delta\mathcal H}(\mathcal D_s,\mathcal D_t)+\lambda^\ast`)+R`<p class="hint">El árbol se abre en tres preguntas: <b>dónde</b> se alinea, <b>qué compara</b> y <b>qué mide</b>. Los métodos se clasifican con tres criterios: <b>alineación por clase</b> (alinea \(P(Z\mid Y=c)\), no solo la marginal), <b>sin etiquetas del objetivo</b> y <b>transversal a la arquitectura</b> (una pérdida sobre los rasgos y logits de un único extractor y una única cabeza, iguales para todos; en inferencia el modelo es exactamente esa cabeza sobre ese extractor). Verde: llegó a la comparación final. Naranja: pasa los tres criterios y se descartó después, porque no se lleva al escenario de CREDA con doble codificador o porque la familia la representa otro método. Rojo: no pasa alguno. <span class="tag">[no abierto: Ben-David et al., 2010]</span></p>`+nope('ninguna cota dice cómo bajar la discrepancia sin mezclar clases; esa decisión es de cada rama.'),
+ kids:[
+ {id:'orig',label:'Espacio original',open:true,
+  html:R`<h3>Espacio original</h3><p>Se alinea directamente sobre la señal cruda o sobre rasgos dados, a lo sumo con una transformación cerrada.</p>`+block('que los dominios se pueden alinear directamente sobre la señal cruda o sobre rasgos fijos, sin aprender una representación.',['Soluciones cerradas o convexas, con garantías limpias.','La alineación no puede destruir información discriminante.'],[R`Si en ese espacio ninguna hipótesis sirve para ambos dominios, \(\lambda^\ast\) queda fijo y ninguna alineación lo corrige.`,'La señal cruda mezcla lo que discrimina con lo que cambia entre dominios.'],'no puede aprender un espacio donde las clases de ambos dominios coincidan.'),
+  kids:[
+  C('o-mom','Momentos y geometría',R`<h3>Original · compara momentos y geometría</h3><p>Compara estadísticos de bajo orden de la señal o de rasgos fijos.</p>`+core(R`A^\ast=C_s^{-1/2}C_t^{1/2}\ (\text{CORAL})`)+block('que la diferencia entre dominios vive en la media y la covarianza.',['Forma cerrada e interpretable.','Las covarianzas tienen su propia geometría (matrices SPD) y se puede aprovechar.'],[R`Momentos de orden \(\le 2\) no caracterizan una distribución.`,'Es marginal: recentrar sin clase falla ante desplazamiento de proporciones.'],'dos distribuciones con igual media y covarianza pueden ser muy distintas.'),
+   [C('o-mom-d','Distancia',DIST('sobre rasgos fijos','Distancia de Frobenius entre covarianzas o recentrado a una referencia común.',['Cálculo directo.'],['Marginal y de bajo orden.'],'una distancia entre covarianzas marginales no ve la clase.'),[fam.oMom,fam.oSub])]),
+  C('o-ker','Kernel (RKHS)',R`<h3>Original · compara con kernels</h3><p>Compara distribuciones completas a través de un kernel, sobre rasgos fijos o una proyección.</p>`+core(R`\mathrm{MMD}^2(P,Q)=\mathbb E\,k(x,x')+\mathbb E\,k(y,y')-2\,\mathbb E\,k(x,y)`)+block('que la diferencia se ve comparando distribuciones completas en un RKHS sobre los rasgos dados.',[R`Con kernel característico se comparan todos los momentos a la vez.`,'No estima densidades.','JDA ya condiciona por clase: la estructura condicional nace acá.'],['La representación es fija o una proyección lineal.',R`Depende del ancho \(\sigma\).`],'el kernel no puede compensar rasgos que no separan las clases.'),
+   [C('o-ker-d','Distancia',DIST('en el RKHS, sobre rasgos fijos','La MMD: diferencia de embeddings de media.',[R`Identificable: \(\mathrm{MMD}=0\iff P=Q\) con kernel característico.`,'Estimador insesgado y prueba de dos muestras.'],['Escala con la amplitud del kernel.'],'resta potenciales: confunde dispersión con desalineación.'),[fam.oJda,fam.oIw]),
+    C('o-ker-i','Información',INFO('sobre rasgos fijos','Entropías y divergencias estimadas con ventanas de Parzen: el aprendizaje teórico-informacional de Príncipe.',['Lectura informacional con sumas de kernel, en \\(O(n^2)\\).','Cauchy–Schwarz es un cociente: invariante a la escala del kernel.'],['Una entropía no es una divergencia por sí sola.','Depende del ancho de banda.'],'sobre rasgos fijos no hay nada que el estimador pueda mover.'),[fam.oItl])]),
+  C('o-ot','Transporte',R`<h3>Original · compara por transporte</h3><p>Compara distribuciones por el costo de mover la masa de una a otra.</p>`+core(R`W_c(P,Q)=\min_{\gamma\in\Pi(P,Q)}\textstyle\int c\,d\gamma`)+block('que la discrepancia es el costo de mover la fuente hasta el objetivo con una métrica fija.',['Respeta la geometría del espacio.','JDOT acopla rasgo y etiqueta en el costo.'],[R`Cuesta \(O(n^3\log n)\).`,'La métrica es la del espacio fijo.'],'la métrica del espacio original no es la que separa las clases.'),
+   [C('o-ot-d','Distancia',DIST('con un costo de transporte','Distancia de Wasserstein con costo conjunto.',['Gradiente útil aun con soportes disjuntos.'],['Caro y sin lectura informacional.'],'el transporte se paga en un espacio que no se aprende.'),[fam.oJdot])])
+  ]},
+ {id:'emb',label:'Embedding aprendido',kind:'ours',open:true,
+  html:R`<h3>Embedding aprendido</h3><p>El extractor se entrena para bajar a la vez el error en la fuente y la discrepancia. En la r29: instancias \(\mathbf h=\mathcal F_\theta(\mathbf x)\) (Ec. 13), su imagen \(\Phi_\sigma(\mathbf h)\) en \(\mathcal H_I\) (Ec. 14) y la salida del clasificador \(\mathbf g=\mathcal G_\psi(\cdot)\) (Ec. 20).</p>`+block('que existe una representación aprendible donde ambos dominios coinciden y las clases siguen separadas.',[R`\(f_\theta\) puede volver chico \(\lambda^\ast\).`,'La discrepancia se vuelve una pérdida diferenciable más.'],[R`\(\lambda^\ast\) ahora depende de \(f_\theta\) y puede crecer.`,'Alinear solo las marginales puede mezclar clases. <span class="tag">[no abierto: Zhao et al., 2019]</span>',R`Una \(f_\theta\) constante anula cualquier discrepancia.`],'sin condicionar por clase, aprender el espacio también permite aprender a hacer trampa.'),
+  kids:[
+  C('e-mom','Momentos y geometría',R`<h3>Embedding · compara momentos</h3><p>Igualar momentos de los rasgos aprendidos.</p>`+core(R`\ell_{\text{CORAL}}=\tfrac1{4d^2}\lVert C_s-C_t\rVert_F^2`)+block('que igualar algunos momentos del embedding basta para alinear.',['Barato y diferenciable.'],['Un número finito de momentos no caracteriza la distribución.'],'iguala resúmenes, no distribuciones.'),
+   [C('e-mom-d','Distancia',DIST('en los momentos del embedding','Distancias entre momentos de orden fijo.',['Simple de calcular.'],['Casi siempre marginal.'],'lo que no está en los momentos elegidos, no se alinea.'),[fam.eMom])]),
+  C('e-ker','Kernel (RKHS)',R`<h3>Embedding · compara con kernels</h3><p>Compara distribuciones completas del embedding en \(\mathcal H_I\), con el kernel de instancia \(\kappa^I_\sigma\) (Ec. 14) y sus matrices de Gram.</p>`+core(R`[\mathbf K^s]_{ii'}=\kappa^I_\sigma(\mathbf h_i^s,\mathbf h_{i'}^s),\qquad [\mathbf K^{st}]_{ij}=\kappa^I_\sigma(\mathbf h_i^s,\mathbf h_j^t)`)+block('que la discrepancia se ve comparando distribuciones completas del embedding a través de un kernel.',['Comparador sin densidades, característico, identificable.','Todo se calcula con matrices de Gram.'],[R`Depende del ancho \(\sigma\).`,'El costo crece como \\(O(n^2)\\) por lote.'],'el kernel solo no decide qué hacer con los tres potenciales: eso lo decide el criterio.',),
+   [C('e-ker-d','Distancia',DIST('en el RKHS del embedding','La MMD, marginal o por clase: resta los tres potenciales.',['Estimador insesgado y prueba de dos muestras.','La alineación condicional por clase con pesos, que adopta CREDA.'],['Escala con la amplitud del kernel.','Premia dispersar la clase: baja sin alinear.'],'resta los potenciales y confunde dispersión con desalineación.'),[fam.eMmdM,fam.eMmdC]),
+    C('e-ker-i','Información',INFO('en el RKHS del embedding','Entropía de Rényi matricial y divergencias de Cauchy–Schwarz sobre las mismas matrices de Gram: combina los tres potenciales como logaritmo de cocientes.',['Separa la dispersión de la clase del solapamiento entre dominios.','Invariante a la amplitud del kernel.','Con \\(\\alpha=2\\) cuesta \\(O(n^2)\\).'],['No mira información extra: los mismos tres potenciales que la MMD bajo \\(\\kappa^2\\).','Sin prueba de dos muestras y con sesgo.'],'sin normalizar, la puntuación puede tener el signo equivocado y premiar desajustar purezas.'),[fam.eRenyi,fam.eCs,fam.eMi],{kind:'ours'})],{kind:'ours'}),
+  C('e-ot','Transporte',R`<h3>Embedding · compara por transporte</h3><p>Planes de transporte entre rasgos aprendidos.</p>`+core(R`W_c(P,Q)=\min_{\gamma\in\Pi(P,Q)}\textstyle\int c\,d\gamma`)+block('que la discrepancia es el costo de mover la masa en el embedding.',['Respeta la geometría del costo.','El transporte desbalanceado pondera la fuente.'],[R`Exacto cuesta \(O(n^3\log n)\); la regularización entrópica lo sesga.`],'es una distancia sin lectura informacional, y cara.'),
+   [C('e-ot-d','Distancia',DIST('con un costo de transporte en el embedding','Wasserstein, balanceado o desbalanceado.',['Gradiente útil con soportes disjuntos.'],['Marginal salvo que el costo incluya la clase.'],'el plan de transporte no dice cuánta incertidumbre queda.'),[fam.eOt,fam.eUot])]),
+  C('e-crit','Crítico aprendido',R`<h3>Embedding · compara con un crítico aprendido</h3><p>Un discriminador o un par de clasificadores aprende a distinguir los dominios, y el extractor aprende a engañarlo.</p>`+core(R`\min_{\theta}\max_D\ \mathbb E_s\log D(\mathbf h)+\mathbb E_t\log\big(1-D(\mathbf h)\big)`)+block('que una red puede aprender el estadístico que mejor separa los dominios.',['No hay que elegir el estadístico: lo aprende el crítico.','Con la clase en la entrada, condiciona naturalmente.'],['Juego minimax inestable.','El estadístico alineado queda implícito.'],'no sabemos qué estadístico se está alineando.'),
+   [C('e-crit-i','Información',INFO('a través del crítico','Con discriminador óptimo, el juego minimiza una divergencia de Jensen–Shannon.',['Divergencia genuina entre dominios.'],['Jensen–Shannon se satura con soportes disjuntos. <span class="tag">[no abierto: Goodfellow et al., 2014]</span>'],'la divergencia es implícita: depende de que el crítico esté bien entrenado.'),[fam.cMarg,fam.cWrap,fam.cDom,fam.cCls]),
+    C('e-crit-d','Distancia',DIST('entre hipótesis','Discrepancia entre las predicciones de dos clasificadores.',['Se conecta con la cota de Ben-David.'],['Mide desacuerdo, no forma de las distribuciones.'],'el desacuerdo entre clasificadores no describe la distribución de la clase.'),[fam.cHyp])]),
+  C('side','Salida g (lateral)',R`<h3>Rama lateral: la salida del clasificador</h3><p>No compara dominios: mira \(\mathbf g=\mathcal G_\psi(\cdot)\in\Delta^{C-1}\), la salida del clasificador sobre el embedding. Entra en el recorrido porque aporta el enrutamiento por clase (Ec. 22) y el peso de confianza (Ec. 24).</p>`+core(R`\widetilde y_j^{t}=\mathfrak a(\mathbf g_j^{t}),\qquad w_j^{t}=1-\frac{\widehat H_2(\mathbf g_j^{t})}{\ln C}`)+block('que las predicciones del modelo sobre el objetivo son lo bastante buenas para entrenarse con ellas.',['La pseudo-etiqueta como enrutador de clase.','El peso por certeza: 1 en un one-hot, 0 en la uniforme.'],['No compara dominios.','Confirma sus propios errores si nada lo ancla.'],'sin una medida entre dominios, se entrena con sus propios errores.'),
+   [C('side-i','Información de la salida',INFO('de la salida','Entropía, información mutua y estructura de las predicciones del objetivo.',['Barato: \\(O(n)\\).','Da el peso de confianza.'],['Ciego a la geometría del embedding.','Puede colapsar a una clase.'],'mira la predicción, no los datos.'),[fam.sOut,fam.sPl,fam.sSf,fam.sKd,fam.sTta])],{kind:'side'})
+  ]}
+ ]};
+
+const conv={id:'conv',label:'Información con kernels · CREDA',kind:'conv',
+ html:R`<h3>Convergencia: información estimada con kernels sobre el embedding</h3><p class="hint">Embedding → kernel → información, con el enrutamiento y el peso de la rama lateral. Así lo formula CREDA y lo hereda la r29 (Ecs. 26–33):</p>`+core(R`J_c=\tfrac12\big[H_2(\breve{\mathbf K}_c^{s})+H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})\big]-H_2(\breve{\widetilde{\mathbf K}}{}_c^{\mathrm{mix}}),\qquad H_2(\mathbf A)=-\ln\lVert\mathbf A\rVert_F^2`)+block('que la información estimada con kernels, clase por clase sobre el embedding, captura la discrepancia condicional.',['Separa la dispersión de la clase del solapamiento entre dominios; la MMD los mezcla. <span class="tag">[derivado]</span>','Invariante a la amplitud del kernel. <span class="tag">[verificado]</span>','Axiomas tipo Rényi sobre matrices PSD. <span class="tag">[verificado]</span>',R`Con \(\alpha=2\) cuesta \(O(n^2)\). <span class="tag">[verificado]</span>`],[R`En CREDA la mezcla puede no ser semidefinida positiva; <b>la r29 lo resuelve</b> por congruencia. <span class="tag">[derivado]</span>`,R`Sin normalizar, \(J_c\) puede tener el signo equivocado; <b>la r29 lo resuelve</b> con \(\ell_{\mathrm{glob},c}\). <span class="tag">[derivado]</span>`,R`Mira los mismos tres potenciales que la MMD bajo \(\kappa^2\); sin prueba de dos muestras y con sesgo. <span class="tag">[derivado / verificado]</span>`],R`el gradiente de \(\ell_{\mathrm{glob},c}\) sigue premiando desajustar las purezas \(r_c\).`)+'<p class="hint">Las demostraciones están en la pestaña Matemática.</p>'};
+const next={id:'next',label:'MIL-CREDA',kind:'next',
+ html:R`<h3>Siguiente etapa: MIL-CREDA</h3><p>La unidad pasa a ser la bolsa, aparece la referencia local entre bolsas y la normalización \(\ell_{\mathrm{glob},c}\) vuelve la pérdida monótona en \(D_{CS,c}\). Se desarrolla en esa etapa.</p>`};
+const CONV_SOURCES=['b2-cond','b3-renyi','b3-cs','side'];
+
+/* ---------- index ---------- */
+const byId={};
+(function idx(n,p,depth){n.parent=p;n.depth=depth;byId[n.id]=n;(n.kids||[]).forEach(k=>idx(k,n,depth+1));})(tree,null,0);
+byId.conv=conv;byId.next=next;
+
+function detail(n){
+  if(n.html)return n.html;
+  if(n.leaf){
+    const p=n.parent;
+    if(n.st===CMP)return '<h3>'+n.label+'</h3><span class="pill cmp">llegó a la comparación final</span>'+FX[n.fx];
+    if(n.st===KEPT&&n.why.startsWith('F3 en frontera'))return '<h3>'+n.label+'</h3><span class="pill kept">F3 en frontera, descartado después</span><p>Alinea por clase y no usa etiquetas del objetivo; si es transversal a la arquitectura depende de una decisión nuestra, y no llegó a la comparación: '+n.why.replace(/^F3 en frontera /,'')+'.</p><p class="hint"><b>'+p.label+'.</b> '+p.desc+'</p>';
+    if(n.st===KEPT)return '<h3>'+n.label+'</h3><span class="pill kept">pasa los criterios, descartado después</span><p>Alinea por clase, no usa etiquetas del objetivo y es una pérdida sobre un extractor y una cabeza compartidos, pero no llegó a la comparación: '+n.why+'.</p><p class="hint"><b>'+p.label+'.</b> '+p.desc+'</p>';
+    return '<h3>'+n.label+'</h3><span class="pill out">no pasa algún criterio</span><p>Por qué se va: '+n.why+'.</p><p class="hint"><b>'+p.label+'.</b> '+p.desc+'</p>';
+  }
+  const c=s=>n.kids.filter(k=>k.st===s).length;
+  const parts=[];if(c(CMP))parts.push(c(CMP)+' en la comparación final');if(c(KEPT))parts.push(c(KEPT)+' pasan los criterios y se descartan después');if(c(OUT))parts.push(c(OUT)+' no pasan los criterios');
+  return '<h3>'+n.label+'</h3><p>'+n.desc+'</p>'+nope(n.dislike)+(n.kids.length?'<p class="hint">'+n.kids.length+' métodos · '+parts.join(' · ')+'</p>':'<p class="hint">Sin métodos de adaptación en esta casilla.</p>');
+}
+
+/* ---------- layout + render ---------- */
+const SVGNS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('tree'), insp=document.getElementById('inspector'), canvas=document.getElementById('canvas');
+const COLW=[140,150,165,150,220,215], GAP=40;
+const colX=[];{let x=16;for(let d=0;d<6;d++){colX.push(x);x+=COLW[d]+GAP;}}
+let selected='root', focusId=null;
+const seen=new Set();
+
+function visible(n,out){out.push(n);if(n.open&&n.kids)n.kids.forEach(k=>visible(k,out));return out;}
+function layout(){
+  let cur=40;
+  (function place(n){
+    const h=n.leaf?24:30; n.h=h; n.w=COLW[n.depth]; n.x=colX[n.depth];
+    if(n.open&&n.kids&&n.kids.length){n.kids.forEach(place);n.y=(n.kids[0].y+n.kids[n.kids.length-1].y)/2;}
+    else{n.y=cur+h/2;cur+=n.leaf?30:42;}
+  })(tree);
+  const vis=visible(tree,[]); const maxD=Math.max(...vis.map(n=>n.depth));
+  const srcs=CONV_SOURCES.map(id=>{let n=byId[id];while(n&&!vis.includes(n))n=n.parent;return n;}).filter((v,i,a)=>v&&a.indexOf(v)===i);
+  conv.w=200;conv.h=44;conv.x=colX[maxD]+COLW[maxD]+GAP+20;conv.y=srcs.reduce((s,n)=>s+n.y,0)/srcs.length;
+  next.w=130;next.h=34;next.x=conv.x+conv.w+GAP;next.y=conv.y;
+  return {vis,srcs,maxD,W:next.x+next.w+20,H:cur+20};
+}
+function el(tag,attrs,parent){const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function curve(a,b){const x1=a.x+a.w,y1=a.y,x2=b.x,y2=b.y,m=(x1+x2)/2;return 'M'+x1+' '+y1+' C'+m+' '+y1+' '+m+' '+y2+' '+x2+' '+y2;}
+function edgeClass(n){if(n.kind==='ours')return 'e ours';if(n.kind==='side')return 'e side';return 'e';}
+function fit(label,w){const max=Math.floor(w/6.7);return label.length>max?label.slice(0,max-1)+'…':label;}
+
+function render(){
+  const L=layout();
+  svg.setAttribute('width',L.W);svg.setAttribute('height',L.H);svg.setAttribute('viewBox','0 0 '+L.W+' '+L.H);
+  svg.textContent='';
+  const heads=['PROBLEMA','¿DÓNDE?','¿QUÉ COMPARA?','¿QUÉ MIDE?','FAMILIA','MÉTODO'];
+  for(let d=0;d<=L.maxD;d++){el('text',{x:colX[d],y:18,class:'col'},svg).textContent=heads[d];}
+  el('text',{x:conv.x,y:18,class:'col'},svg).textContent='CONVERGENCIA';
+  el('text',{x:next.x,y:18,class:'col'},svg).textContent='SIGUIENTE';
+  const ge=el('g',{},svg), gn=el('g',{},svg);
+  L.vis.forEach(n=>{if(n.parent)el('path',{d:curve(n.parent,n),class:edgeClass(n)},ge);});
+  L.srcs.forEach(s=>{el('path',{d:curve(s,conv),class:s.kind==='side'?'e side':'e conv'},ge);});
+  el('path',{d:curve(conv,next),class:'e next'},ge);
+  [...L.vis,conv,next].forEach(n=>drawNode(n,gn));
+  if(focusId){const f=svg.querySelector('[data-id="'+CSS.escape(focusId)+'"]');if(f)f.focus({preventScroll:true});}
+}
+function drawNode(n,g){
+  const cls=['nd'];if(n.kind)cls.push(n.kind);if(n.leaf)cls.push('leaf');if(n.id===selected)cls.push('sel');
+  if(!seen.has(n.id)){cls.push('enter');seen.add(n.id);}
+  const hasKids=n.kids&&n.kids.length;
+  const gg=el('g',{class:cls.join(' '),transform:'translate('+n.x+','+(n.y-n.h/2)+')',tabindex:0,role:'treeitem','data-id':n.id,'aria-label':n.label+(hasKids?(n.open?', abierto':', cerrado, '+n.kids.length+' hijos'):'')},g);
+  if(hasKids)gg.setAttribute('aria-expanded',n.open?'true':'false');
+  el('title',{},gg).textContent=n.label;
+  el('rect',{class:'box',width:n.w,height:n.h,rx:6},gg);
+  let tx=10;
+  if(n.leaf){el('circle',{class:'st'+(n.st===CMP?'':' '+n.st),cx:11,cy:n.h/2,r:4},gg);tx=21;}
+  const room=n.w-tx-(hasKids?30:8);
+  const t=el('text',{x:tx,y:n.h/2+4.2},gg);
+  if(n.id==='conv'){t.textContent='Información con kernels';t.setAttribute('y',n.h/2-3);el('text',{x:tx,y:n.h/2+12},gg).textContent='sobre el embedding · CREDA';}
+  else t.textContent=fit(n.label,room);
+  if(hasKids){const b=el('text',{x:n.w-8,y:n.h/2+4,'text-anchor':'end',class:'badge'},gg);b.textContent=n.open?'−':'+'+n.kids.length;}
+  requestAnimationFrame(()=>gg.classList.remove('enter'));
+  const act=()=>{selected=n.id;focusId=n.id;if(hasKids)n.open=!n.open;render();show(n);};
+  gg.addEventListener('click',act);
+  gg.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();act();}});
+}
+function crumbs(n){if(n.id==='conv')return 'convergencia';if(n.id==='next')return 'siguiente etapa';const p=[];let c=n;while(c){p.unshift(c.label);c=c.parent;}return p.join(' › ');}
+function show(n){
+  let pill='';
+  if(n.kind==='ours'||n.kind==='conv')pill='<span class="pill">nuestro camino</span>';
+  else if(n.kind==='side')pill='<span class="pill side">rama lateral</span>';
+  else if(n.kind==='next')pill='<span class="pill next">se desarrolla aparte</span>';
+  let kids='';
+  if(n.kids&&n.kids.length&&!n.kids[0].leaf)kids='<div class="kv"><b>'+(['Dónde','Qué compara','Qué mide','Familias'][n.depth]||'Hijos')+'</b><div class="kids">'+n.kids.map(k=>'<button class="kid" data-go="'+k.id+'">'+k.label+'</button>').join('')+'</div></div>';
+  insp.innerHTML='<div class="crumbs">'+crumbs(n)+'</div>'+pill+detail(n)+kids;
+  insp.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{const k=byId[b.dataset.go];let p=k.parent;while(p){p.open=true;p=p.parent;}selected=k.id;focusId=null;if(k.kids)k.open=true;render();show(k);}));
+  if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([insp]).catch(()=>{});
+  insp.scrollTop=0;
+}
+function setOpen(fn){(function w(n){if(n.kids){n.open=fn(n);n.kids.forEach(w);}})(tree);}
+const OURS=new Set(['root','emb','e-ker','e-ker-d','e-ker-i','side','side-i']);
+document.getElementById('btn-ours').addEventListener('click',()=>{setOpen(n=>OURS.has(n.id));selected='conv';focusId=null;render();show(conv);});
+document.getElementById('btn-fam').addEventListener('click',()=>{setOpen(n=>n.depth<=3);focusId=null;render();});
+document.getElementById('btn-all').addEventListener('click',()=>{setOpen(()=>true);focusId=null;render();});
+document.getElementById('btn-reset').addEventListener('click',()=>{setOpen(n=>n.depth<=1);selected='root';focusId=null;render();show(tree);canvas.scrollTo(0,0);});
+
+render();show(tree);
+
+/* ---------- tabs ---------- */
+const tabs={},panels={};
+['arbol','embebimiento','matematica','comparacion'].forEach(k=>{tabs[k]=document.getElementById('tab-'+k);panels[k]=document.getElementById('panel-'+k);});
+function tab(name){for(const k in tabs){const on=k===name;tabs[k].setAttribute('aria-selected',on);panels[k].hidden=!on;}
+  if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([panels[name]]).catch(()=>{});}
+for(const k in tabs)tabs[k].addEventListener('click',()=>tab(k));
+if(tabs[location.hash.slice(1)])tab(location.hash.slice(1));
+})();
+</script>

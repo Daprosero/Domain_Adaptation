@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "09e0b781-dd3b-4de9-8064-e312ef4ceff3",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/CREDA/.archify/architecture-creda-alineacion-20261008-110000/candidate.json",
+  "output": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/CREDA/.archify/architecture-creda-alineacion-20261008-110000/creda-alineacion.html",
+  "specification": {
+    "sha256": "1998302a83c8e426ae2330e8f963c402077f505b6d45bc0299313e2c5e0f397f",
+    "bytes": 7169
+  },
+  "artifact": {
+    "sha256": "7035aa00c4ef2f95937e9caef6a98ea70ee4ebe5b7b8a6ee40a0499f7f741828",
+    "bytes": 767902
+  }
+}

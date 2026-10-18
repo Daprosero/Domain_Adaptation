@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "f784cdd6-c8a5-4981-b317-79c178dde207",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/candidate.json",
+  "output": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/embudo-mil-creda.html",
+  "specification": {
+    "sha256": "d7904b7169736002b04540e99836b88f9be07ac2f08d2fc8688579151c019517",
+    "bytes": 39459
+  },
+  "artifact": {
+    "sha256": "580fa6d454e3ef48559409940c8b50ed776d6600ddd93812c0265e22a373e1d3",
+    "bytes": 782182
+  }
+}

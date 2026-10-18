@@ -1,0 +1,457 @@
+<div id="panel-embebimiento" role="tabpanel" aria-labelledby="tab-embebimiento" hidden style="display:flex;flex-direction:column;gap:20px">
+
+<section class="math-sec">
+  <span class="eyebrow">La idea en un dibujo</span>
+  <h2>Dos nubes y tres espacios</h2>
+  <figure class="cfig">
+    <svg viewBox="0 0 780 570" role="img" aria-label="Dos nubes de puntos, una por dominio. Phi lleva cada dato a F, psi lleva cada dominio a un punto de G, y cada par se forma en F por G con un punto de F y uno de G; C_XD es el promedio de los pares. C_X|D lleva cada psi(d), a través de la fila de pares de su dominio, a la media de ese dominio en F">
+      <defs><marker id="ahop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrop" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ahphi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrphi" d="M0 0 L10 5 L0 10 z"/></marker><marker id="ahpsi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrpsi" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+      <text class="lbl s" x="24" y="132">espacio de los datos</text>
+      <line class="ax" x1="30" y1="450" x2="300" y2="450"/><line class="ax" x1="30" y1="450" x2="30" y2="146"/>
+      <line class="lphir" x1="70" y1="272" x2="465" y2="102" marker-end="url(#ahphi)"/><line class="lphir" x1="195" y1="292" x2="601" y2="48" marker-end="url(#ahphi)"/>
+      <path class="lpsi" d="M95 324 Q 60 520 530 474" marker-end="url(#ahpsi)"/><line class="lpsi" x1="262" y1="370" x2="635" y2="468" marker-end="url(#ahpsi)"/>
+      <line class="lphir" x1="470" y1="100" x2="470" y2="302" marker-end="url(#ahphi)"/><line class="lpsi" x1="536" y1="464" x2="472" y2="312" marker-end="url(#ahpsi)"/>
+      <line class="lphir" x1="605" y1="45" x2="644" y2="225" marker-end="url(#ahphi)"/><line class="lpsi" x1="646" y1="464" x2="645" y2="235" marker-end="url(#ahpsi)"/>
+      <ellipse class="dom" cx="99" cy="252" rx="50" ry="72"/>
+      <ellipse class="domt" cx="218" cy="343" rx="48" ry="69"/>
+      <circle class="ptd" cx="78" cy="200" r="3.5"/><circle class="ptd" cx="108" cy="212" r="3.5"/><circle class="ptd" cx="92" cy="240" r="3.5"/><circle class="ptd" cx="122" cy="250" r="3.5"/><circle class="ptd" cx="70" cy="272" r="3.5"/><circle class="ptd" cx="110" cy="285" r="3.5"/><circle class="ptd" cx="128" cy="228" r="3.5"/><circle class="ptd" cx="95" cy="305" r="3.5"/><circle class="ptdt" cx="195" cy="292" r="3.5"/><circle class="ptdt" cx="228" cy="305" r="3.5"/><circle class="ptdt" cx="208" cy="330" r="3.5"/><circle class="ptdt" cx="240" cy="348" r="3.5"/><circle class="ptdt" cx="188" cy="362" r="3.5"/><circle class="ptdt" cx="222" cy="378" r="3.5"/><circle class="ptdt" cx="248" cy="318" r="3.5"/><circle class="ptdt" cx="205" cy="395" r="3.5"/>
+      <text class="lbl" x="56" y="168">P(X | d = s)</text>
+      <text class="lbl" x="180" y="436">P(X | d = t)</text>
+      <ellipse class="rk" cx="590" cy="92" rx="162" ry="70"/>
+      <text class="lbl s" x="750" y="32">𝓕</text>
+      <circle class="ptd" cx="478" cy="50" r="2.5"/><circle class="ptd" cx="508" cy="58" r="2.5"/><circle class="ptd" cx="492" cy="78" r="2.5"/><circle class="ptd" cx="522" cy="85" r="2.5"/><circle class="ptd" cx="470" cy="100" r="2.5"/><circle class="ptd" cx="510" cy="110" r="2.5"/><circle class="ptd" cx="528" cy="70" r="2.5"/><circle class="ptd" cx="495" cy="124" r="2.5"/><circle class="ptdt" cx="605" cy="45" r="2.5"/><circle class="ptdt" cx="638" cy="54" r="2.5"/><circle class="ptdt" cx="618" cy="72" r="2.5"/><circle class="ptdt" cx="650" cy="84" r="2.5"/><circle class="ptdt" cx="598" cy="94" r="2.5"/><circle class="ptdt" cx="632" cy="105" r="2.5"/><circle class="ptdt" cx="658" cy="63" r="2.5"/><circle class="ptdt" cx="615" cy="117" r="2.5"/>
+      <circle class="ptd" cx="500" cy="84" r="7"/><circle class="ptdt" cx="627" cy="79" r="7"/>
+      <text class="lbl top" x="516" y="130">μ<tspan baseline-shift="sub" font-size="10">X|d=s</tspan></text><text class="lbl top" x="516" y="144" font-size="10.5">= C<tspan baseline-shift="sub" font-size="8.5">X|D</tspan> ψ(s)</text>
+      <text class="lbl top" x="635" y="124">μ<tspan baseline-shift="sub" font-size="10">X|d=t</tspan></text><text class="lbl top" x="635" y="138" font-size="10.5">= C<tspan baseline-shift="sub" font-size="8.5">X|D</tspan> ψ(t)</text>
+      <ellipse class="rk" cx="590" cy="282" rx="162" ry="68"/>
+      <text class="lbl s" x="744" y="220">𝓕⊗𝒢</text>
+      <circle class="ptd" cx="478" cy="285" r="2.5"/><circle class="ptd" cx="508" cy="288" r="2.5"/><circle class="ptd" cx="492" cy="297" r="2.5"/><circle class="ptd" cx="522" cy="300" r="2.5"/><circle class="ptd" cx="470" cy="307" r="2.5"/><circle class="ptd" cx="510" cy="312" r="2.5"/><circle class="ptd" cx="528" cy="294" r="2.5"/><circle class="ptd" cx="495" cy="318" r="2.5"/><circle class="ptdt" cx="645" cy="230" r="2.5"/><circle class="ptdt" cx="678" cy="234" r="2.5"/><circle class="ptdt" cx="658" cy="242" r="2.5"/><circle class="ptdt" cx="690" cy="247" r="2.5"/><circle class="ptdt" cx="638" cy="252" r="2.5"/><circle class="ptdt" cx="672" cy="257" r="2.5"/><circle class="ptdt" cx="698" cy="238" r="2.5"/><circle class="ptdt" cx="655" cy="262" r="2.5"/>
+      <circle class="ptd" cx="584" cy="273" r="7"/>
+      <text class="lbl" x="596" y="278">C<tspan baseline-shift="sub" font-size="10">XD</tspan></text>
+      <ellipse class="rk" cx="590" cy="472" rx="162" ry="46"/>
+      <text class="lbl s" x="752" y="432">𝒢</text>
+      <circle class="ptd" cx="540" cy="472" r="7"/><circle class="ptdt" cx="650" cy="472" r="7"/>
+      <text class="lbl" x="494" y="494">ψ(s)</text><text class="lbl" x="666" y="477">ψ(t)</text>
+      <path class="lop" d="M540 463 L545 338 L500 93" marker-end="url(#ahop)"/>
+      <path class="lop" d="M650 463 L545 338 L627 88" marker-end="url(#ahop)"/>
+      <circle class="ptdt" cx="545" cy="338" r="7" style="stroke:var(--next);fill:var(--next)"/>
+      <text class="lbl top" x="556" y="332">C<tspan baseline-shift="sub" font-size="10">X|D</tspan></text>
+      <text class="lbl tphi" x="300" y="150">φ</text>
+      <text class="lbl tpsi" x="320" y="500">ψ</text>
+      <line class="lphir" x1="30" y1="536" x2="54" y2="536"/><text class="lbl s" x="60" y="540">φ: cada dato a 𝓕, y de ahí a su par</text>
+      <line class="lpsi" x1="290" y1="536" x2="314" y2="536"/><text class="lbl s" x="320" y="540">ψ: cada dominio a 𝒢, y de ahí a sus pares</text>
+      <line class="lop" x1="30" y1="558" x2="54" y2="558"/><text class="lbl s" x="60" y="562">C<tspan baseline-shift="sub" font-size="9">X|D</tspan>: un solo operador en 𝓕⊗𝒢; cada ψ(d) entra y sale como μ<tspan baseline-shift="sub" font-size="9">X|d</tspan> = C<tspan baseline-shift="sub" font-size="9">X|D</tspan> ψ(d)</text>
+      <circle class="ptd" cx="560" cy="536" r="3.5"/><text class="lbl s" x="570" y="540">fuente</text>
+      <circle class="ptdt" cx="626" cy="536" r="3.5"/><text class="lbl s" x="636" y="540">objetivo</text>
+      <circle class="ptd" cx="560" cy="557" r="6"/><text class="lbl s" x="572" y="562">promedio</text>
+    </svg>
+    <figcaption>Cada dominio es una nube de puntos. En rojo, \(\varphi\) lleva cada dato a \(\mathcal F\) (se dibuja una flecha por dominio), donde el promedio de cada nube es \(\mu_{X|d}\). En verde, \(\psi\) lleva cada dominio a un solo punto de \(\mathcal G\), \(\psi(s)\) o \(\psi(t)\). Cada par \(\varphi(x_n)\otimes\psi(d_n)\) se forma en \(\mathcal F\otimes\mathcal G\) con un punto de \(\mathcal F\) y uno de \(\mathcal G\) (las líneas se dibujan para un par de cada dominio), y \(C_{XD}\) es el promedio de todos los pares: no es el producto de un punto de \(\mathcal F\) por uno de \(\mathcal G\), salvo que \(X\) no dependa de \(D\). En violeta, \(C_{X|D}\) es un solo punto de \(\mathcal F\otimes\mathcal G\): con \(\psi\) one-hot vale \(\mu_{X|d=s}\otimes\psi(s)+\mu_{X|d=t}\otimes\psi(t)\), la suma de los centros de fila sin los pesos \(N_d/N\) que tiene \(C_{XD}\). Cada \(\psi(d)\) entra al mismo operador y sale distinto: \(\psi(d)\) elige su término y queda \(\mu_{X|d}=C_{X|D}\,\psi(d)\) (Pasos 3 y 6).</figcaption>
+  </figure>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 0 · Datos y espacios</span>
+  <h2>Qué se embebe y qué condiciona</h2>
+  <ul>
+    <li><b>Datos:</b> pares \(\{x_n,d_n\}_{n=1}^N\), i.i.d. de \(P(X,D)\). \(x_n\) es el dato de entrada tal como está y \(d_n\) la variable que condiciona: el dominio del que viene la muestra.</li>
+    <li>\(\varphi:\mathcal X\to\mathcal F\), con \(k(x,x')=\langle\varphi(x),\varphi(x')\rangle_{\mathcal F}\): lleva el dato a su espacio de Hilbert.</li>
+    <li>\(\psi:\mathcal D\to\mathcal G\), con \(\ell(d,d')=\langle\psi(d),\psi(d')\rangle_{\mathcal G}\): lleva la variable que condiciona al suyo. Aquí \(\ell\) es un kernel cualquiera; no se elige ninguno en particular.</li>
+    <li><b>Todo punto de \(\mathcal F\) o de \(\mathcal G\) es una función.</b> Se evalúa con un producto interno contra el mapa del dato (propiedad reproductiva): \(f(x)=\langle f,\varphi(x)\rangle_{\mathcal F}\) para \(f\in\mathcal F\), y \(g(d)=\langle g,\psi(d)\rangle_{\mathcal G}\) para \(g\in\mathcal G\).</li>
+    <li>Las funciones se nombran por su espacio: \(f\in\mathcal F\) es una función de \(x\) y \(g\in\mathcal G\) es una función de \(d\).</li>
+    <li>\(K\) y \(L\) son las versiones matriciales: las matrices de Gram de \(k\) y \(\ell\), con \(K_{nm}=k(x_n,x_m)\) y \(L_{nm}=\ell(d_n,d_m)\).</li>
+  </ul>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 1 · Una distribución es un punto</span>
+  <h2>El embebimiento de la media</h2>
+  <div class="disp">$$\mu_X=\mathbb E_X\{\varphi(X)\},\qquad \hat\mu_X=\frac1N\sum_{n=1}^N\varphi(x_n)$$</div>
+  <p>Con un kernel característico, \(\mu_X\) identifica a \(P(X)\): distribuciones distintas dan puntos distintos. Es el objeto base de todo lo que sigue.</p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 2 · Covarianzas</span>
+  <h2>Cómo varía \(x\) con \(d\), y cómo varía \(d\) consigo mismo</h2>
+  <div class="disp">$$C_{XD}=\mathbb E_{X,D}\{\varphi(X)\otimes\psi(D)\},\qquad C_{DD}=\mathbb E_D\{\psi(D)\otimes\psi(D)\}$$</div>
+  <div class="disp">$$\hat C_{XD}=\frac1N\sum_n\varphi(x_n)\otimes\psi(d_n)=\frac1N\Phi\Psi^\top,\qquad \hat C_{DD}=\frac1N\Psi\Psi^\top,\qquad \Phi=[\varphi(x_1)\cdots\varphi(x_N)],\quad \Psi=[\psi(d_1)\cdots\psi(d_N)]$$</div>
+  <ul>
+    <li>\(C_{XD}\) es el embebimiento de la conjunta \(P(X,D)\): guarda cómo cambian los datos según la condición.</li>
+    <li>\(C_{DD}\) es el embebimiento de la conjunta de \(D\) consigo misma, \(P(D,D)\), que contiene exactamente \(P(D)\) si \(\ell^2\) es característico. Es el que va a hacer el papel de "dividir por la marginal".</li>
+  </ul>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 3 · Lo que se busca</span>
+  <h2>Un punto por cada valor de la condición</h2>
+  <div class="disp">$$\mu_{X|d}=\mathbb E_{X|D}\{\varphi(X)\mid d\},\qquad \mathbb E_{X|D}\{f(X)\mid d\}=\langle f,\mu_{X|d}\rangle_{\mathcal F}\quad\forall f\in\mathcal F$$</div>
+  <p>Para cada valor \(d\), la distribución \(P(X\mid d)\) queda como un punto de \(\mathcal F\). La segunda igualdad dice por qué sirve: cualquier esperanza condicional de una función de \(x\) se obtiene con un producto interno, sin escribir la densidad condicional.</p>
+  <p>Se busca un operador \(C_{X|D}:\mathcal G\to\mathcal F\) que haga ese mapa: \(\mu_{X|d}=C_{X|D}\,\psi(d)\).</p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 4 · De dónde sale la inversa</span>
+  <h2>Condicionar es dividir por la marginal</h2>
+  <p>Se parte de promediar en dos etapas (regla del producto, \(P(x,d)=P(x\mid d)P(d)\)) y se resuelven los dos lados a la vez, con \(f(X)=\langle\varphi(X),f\rangle\), \(\mathbb E_{X|D}\{f(X)\mid D\}\in\mathcal G\) y \((a\otimes b)\,v=a\,\langle b,v\rangle\):</p>
+  <div class="disp">$$\begin{aligned}
+  \mathbb E_{X,D}\{\psi(D)\,f(X)\}&=\mathbb E_D\big\{\psi(D)\,\mathbb E_{X|D}\{f(X)\mid D\}\big\}\\
+  \mathbb E_{X,D}\{\psi(D)\,\langle\varphi(X),f\rangle\}&=\mathbb E_D\big\{\psi(D)\,\langle\psi(D),\mathbb E_{X|D}\{f(X)\mid D\}\rangle\big\}\\
+  \mathbb E_{X,D}\{\psi(D)\otimes\varphi(X)\}\,f&=\mathbb E_D\{\psi(D)\otimes\psi(D)\}\,\mathbb E_{X|D}\{f(X)\mid D\}\\
+  C_{DX}\,f&=C_{DD}\,\mathbb E_{X|D}\{f(X)\mid D\}\\
+  \mathbb E_{X|D}\{f(X)\mid D\}&=C_{DD}^{-1}\,C_{DX}\,f
+  \end{aligned}$$</div>
+  <p>Ese resultado es una función de \(d\), un punto de \(\mathcal G\), y se evalúa en un dominio con \(\psi(d)\). Para llegar al punto de ese dominio se pasa el operador \(A=C_{DD}^{-1}C_{DX}\) al otro lado del producto interno, transponiéndolo: \(\langle Af,v\rangle_{\mathcal G}=\langle f,A^\top v\rangle_{\mathcal F}\). Esto vale para todo operador lineal y acotado, y \(f\) solo tiene que estar en \(\mathcal F\); la condición real es que \(C_{DD}\) sea invertible.</p>
+  <div class="disp">$$\begin{aligned}
+  \mathbb E_{X|D}\{f(X)\mid d\}&=\big\langle \mathbb E_{X|D}\{f(X)\mid D\},\ \psi(d)\big\rangle_{\mathcal G}=\big\langle C_{DD}^{-1}C_{DX}\,f,\ \psi(d)\big\rangle_{\mathcal G}\\
+  &=\big\langle f,\ C_{XD}\,C_{DD}^{-1}\,\psi(d)\big\rangle_{\mathcal F}\\
+  &=\langle f,\mu_{X|d}\rangle_{\mathcal F}\quad\forall f\in\mathcal F\qquad\Longrightarrow\qquad \mu_{X|d}=C_{XD}\,C_{DD}^{-1}\,\psi(d)\\
+  \mu_{X|d}=C_{X|D}\,\psi(d)\qquad&\Longrightarrow\qquad C_{X|D}=C_{XD}\,C_{DD}^{-1}
+  \end{aligned}$$</div>
+  <p class="hint">\(C_{X|D}\) es el transpuesto del operador que da el Paso 4: uno lleva \(f\) a su promedio por dominio, el otro lleva el dominio \(d\) a su nube \(\mu_{X|d}\), el promedio de \(\varphi(x)\) solo sobre los datos de \(d\).</p>
+  <p>Es la regla de Bayes, \(P(X\mid d)=P(X,d)/P(d)\): la conjunta es \(C_{XD}\) y dividir por la marginal \(P(d)\) se vuelve multiplicar por \(C_{DD}^{-1}\). La analogía da la intuición; la demostración garantiza que vale para toda \(f\in\mathcal F\) y dice que se divide por el operador \(C_{DD}\), no por el punto \(\mu_D\). <span class="tag">[verificado: apuntes, págs. 6–7 y 11, con \(d\) como variable que condiciona]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 5 · Estimador con datos</span>
+  <h2>El punto condicional como combinación de las muestras</h2>
+  <p>Se parte del resultado del Paso 4, \(C_{X|D}=C_{XD}\,C_{DD}^{-1}\), con los estimadores del Paso 2 en lugar de las esperanzas verdaderas:</p>
+  <div class="disp">$$\hat C_{X|D}=\hat C_{XD}\big(\hat C_{DD}+\lambda I\big)^{-1}=\frac1N\,\Phi\Psi^\top\Big(\frac1N\,\Psi\Psi^\top+\lambda I\Big)^{-1}$$</div>
+  <p class="hint">\(\lambda\gt0\) se agrega por estabilidad: \(\Psi\Psi^\top\) está armado con solo \(N\) vectores \(\psi(d_n)\), tiene rango a lo sumo \(N\) y, si \(\mathcal G\) tiene más dimensiones, no se puede invertir.</p>
+  <p>De ahí se llega, paso a paso, a una inversa \(N\times N\), con \(L=\Psi^\top\Psi\) la matriz de Gram de \(\ell\):</p>
+  <div class="disp">$$\begin{aligned}
+  \hat C_{X|D}&=\Phi\Psi^\top\big(\Psi\Psi^\top+N\lambda I\big)^{-1}&&\text{se saca }\tfrac1N\text{ de la inversa y se cancela}\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\big(L+N\lambda I\big)\,\Psi^\top\big(\Psi\Psi^\top+N\lambda I\big)^{-1}&&\text{se inserta la identidad}\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\big(\Psi^\top\Psi\Psi^\top+N\lambda\,\Psi^\top\big)\big(\Psi\Psi^\top+N\lambda I\big)^{-1}&&\text{se distribuye, con }L=\Psi^\top\Psi\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\Psi^\top\big(\Psi\Psi^\top+N\lambda I\big)\big(\Psi\Psi^\top+N\lambda I\big)^{-1}&&\text{se saca }\Psi^\top\text{ a la izquierda}\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\Psi^\top&&\text{el operador por su inversa da }I
+  \end{aligned}$$</div>
+  <p class="hint">Se pasa de invertir un operador en \(\mathcal G\) a invertir una matriz \(N\times N\) que solo usa el kernel \(\ell\). Los apuntes absorben \(N\) en \(\lambda\).</p>
+
+  <p><b>Evaluar en un dominio \(d\).</b> \(\Phi(L+N\lambda I)^{-1}\Psi^\top\) no es una función: es el operador \(\hat C_{X|D}:\mathcal G\to\mathcal F\). Recibe un punto de \(\mathcal G\) y devuelve un punto de \(\mathcal F\). Se le da \(\psi(d)\), como pide el Paso 3, y se resuelve de derecha a izquierda:</p>
+  <div class="disp">$$\begin{aligned}
+  \hat\mu_{X|d}&=\hat C_{X|D}\,\psi(d)=\Phi\,\big(L+N\lambda I\big)^{-1}\Psi^\top\psi(d)&&\text{definición del Paso 3}\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\big[\langle\psi(d_n),\psi(d)\rangle_{\mathcal G}\big]_{n=1}^N&&\Psi^\top\text{ tiene por filas los }\psi(d_n)\\
+  &=\Phi\,\big(L+N\lambda I\big)^{-1}\boldsymbol\ell(d)&&\text{truco del kernel: }\langle\psi(d_n),\psi(d)\rangle_{\mathcal G}=\ell(d_n,d)\\
+  &=\Phi\,\boldsymbol\beta(d)&&\boldsymbol\beta(d)=\big(L+N\lambda I\big)^{-1}\boldsymbol\ell(d)\in\mathbb R^N\\
+  &=\sum_{n=1}^N\beta_n(d)\,\varphi(x_n)&&\Phi\text{ tiene por columnas los }\varphi(x_n)
+  \end{aligned}$$</div>
+  <p>El resultado sí es una función, porque es un punto de \(\mathcal F\). Se evalúa en \(x\) con la propiedad reproductiva:</p>
+  <div class="disp">$$\hat\mu_{X|d}(x)=\big\langle\hat\mu_{X|d},\varphi(x)\big\rangle_{\mathcal F}=\sum_{n=1}^N\beta_n(d)\,k(x_n,x)$$</div>
+  <ul>
+    <li>El punto condicional es una <b>combinación de las muestras</b>, con pesos \(\beta_n(d)\) que dicen cuánto aporta cada muestra cuando se condiciona en \(d\).</li>
+    <li>Solo se invierte una matriz \(N\times N\) que usa el kernel \(\ell\). Ninguna densidad se estima.</li>
+  </ul>
+  <p class="hint"><span class="tag">[verificado: apuntes, págs. 8–9; la identidad de matrices es álgebra estándar]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 6 · Caso particular: dominios discretos</span>
+  <h2>Con dos dominios, el operador se reduce a filtrar</h2>
+  <p>Hasta aquí \(\ell\) era un kernel cualquiera. Ahora la condición toma dos valores, \(d\in\{s,t\}\), y se usa el kernel delta, que corresponde a un \(\psi\) one-hot:</p>
+  <div class="disp">$$\ell(d,d')=\begin{cases}1 & d=d'\\ 0 & d\neq d'\end{cases},\qquad N_d=\#\{n: d_n=d\}$$</div>
+  <p>Se parte de los pesos del Paso 5 y se resuelve paso a paso, con \(\mathbf 1_d\) el vector que vale 1 en las muestras del dominio \(d\) y 0 en las demás:</p>
+  <div class="disp">$$\begin{aligned}
+  \boldsymbol\beta(d)&=\big(L+N\lambda I\big)^{-1}\boldsymbol\ell(d)&&\text{pesos del Paso 5}\\
+  &=\big(L+N\lambda I\big)^{-1}\mathbf 1_d&&\ell(d_n,d)=1\text{ solo si }d_n=d
+  \end{aligned}$$</div>
+  <p>Sobre el vector de unos, la matriz actúa como un número:</p>
+  <div class="disp">$$\begin{aligned}
+  \big(L+N\lambda I\big)\mathbf 1_d&=\big(N_d+N\lambda\big)\mathbf 1_d&&\text{cada fila de }d\text{ suma }N_d\text{ unos; las demás, }0\\
+  \boldsymbol\beta(d)=\big(L+N\lambda I\big)^{-1}\mathbf 1_d&=\big(N_d+N\lambda\big)^{-1}\mathbf 1_d\ \xrightarrow{\ \lambda\to0\ }\ \frac{\mathbf 1_d}{N_d}&&\text{la inversa actúa como el inverso del número}
+  \end{aligned}$$</div>
+  <p class="hint">La igualdad vale sobre \(\mathbf 1_d\), no para la matriz entera: \(L+N\lambda I\) no es el número \(N_d+N\lambda\). Sobre \(\mathbf 1_t\) actúa como \(N_t+N\lambda\), que es otro número.</p>
+  <p>Llevado al punto condicional del Paso 5:</p>
+  <div class="disp">$$\hat\mu_{X|d}=\sum_{n=1}^N\beta_n(d)\,\varphi(x_n)=\frac1{N_d}\sum_{n:\,d_n=d}\varphi(x_n)$$</div>
+  <ul>
+    <li>Es el embebimiento de la media del Paso 1 calculado solo con las muestras del dominio \(d\): <b>filtrar da lo mismo que el operador</b>.</li>
+    <li>El operador hace falta cuando la condición es continua o cuando el valor de \(d\) no aparece en los datos; ahí no hay qué filtrar.</li>
+  </ul>
+  <p class="hint">Ejemplo con 3 muestras de fuente y 2 de objetivo: \(\boldsymbol\beta(d{=}s)=[\tfrac13,\tfrac13,\tfrac13,0,0]\) y \(\boldsymbol\beta(d{=}t)=[0,0,0,\tfrac12,\tfrac12]\). <span class="tag">[verificado numéricamente con \(\lambda=10^{-6}\)]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 7 · Comparar los dos puntos</span>
+  <h2>La MMD marginal</h2>
+  <p>Condicionar en el dominio da las marginales de cada dominio: \(P(X\mid d=s)\) es \(P_s(X)\) y \(P(X\mid d=t)\) es \(P_t(X)\). Cada una ya es un punto de \(\mathcal F\) (Paso 5), así que compararlas es medir la distancia entre dos puntos:</p>
+  <div class="disp">$$\begin{aligned}
+  \widehat{\mathrm{MMD}}^2&=\big\|\hat\mu_{X|d=s}-\hat\mu_{X|d=t}\big\|_{\mathcal F}^2&&\text{distancia entre los dos puntos}\\
+  &=\big\|\Phi\,\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)\big\|_{\mathcal F}^2&&\text{Paso 5: }\hat\mu_{X|d}=\Phi\,\boldsymbol\beta(d)\\
+  &=\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)^\top\Phi^\top\Phi\,\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)&&\text{la norma es el producto interno consigo mismo}\\
+  &=\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)^\top K\,\big(\boldsymbol\beta(d{=}s)-\boldsymbol\beta(d{=}t)\big)&&\text{truco del kernel: }\Phi^\top\Phi=K
+  \end{aligned}$$</div>
+  <p>Con dominios discretos, \(\boldsymbol\beta(d)=\mathbf 1_d/N_d\) (Paso 6), y la forma cuadrática se abre en tres sumas:</p>
+  <div class="disp">$$\begin{aligned}
+  \widehat{\mathrm{MMD}}^2&=\Big(\frac{\mathbf 1_s}{N_s}-\frac{\mathbf 1_t}{N_t}\Big)^\top K\,\Big(\frac{\mathbf 1_s}{N_s}-\frac{\mathbf 1_t}{N_t}\Big)&&\text{Paso 6}\\
+  &=\frac{\mathbf 1_s^\top K\,\mathbf 1_s}{N_s^2}+\frac{\mathbf 1_t^\top K\,\mathbf 1_t}{N_t^2}-\frac{2\,\mathbf 1_s^\top K\,\mathbf 1_t}{N_sN_t}&&\text{se distribuye; }K\text{ es simétrica}\\
+  &=\frac1{N_s^2}\sum_{d_n=s}\sum_{d_m=s}k(x_n,x_m)+\frac1{N_t^2}\sum_{d_n=t}\sum_{d_m=t}k(x_n,x_m)-\frac2{N_sN_t}\sum_{d_n=s}\sum_{d_m=t}k(x_n,x_m)&&\mathbf 1_d\text{ elige las filas y columnas de }d
+  \end{aligned}$$</div>
+  <ul>
+    <li>Es la MMD clásica entre fuente y objetivo: parecido dentro de la fuente, más parecido dentro del objetivo, menos el parecido cruzado.</li>
+    <li>Con un kernel característico, vale cero solo si \(P_s(X)=P_t(X)\) (Paso 1).</li>
+  </ul>
+  <p class="hint">Ejemplo numérico con 3 muestras de fuente, 2 de objetivo y kernel gaussiano: la forma con \(\boldsymbol\beta\) y la de tres sumas dan lo mismo (0.94195). <span class="tag">[verificado numéricamente con \(\lambda=10^{-9}\)]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 8 · Condicionar por clase</span>
+  <h2>Dos dominios, dos clases, tres espacios</h2>
+  <figure class="cfig">
+    <svg viewBox="0 0 780 680" role="img" aria-label="Dos dominios con dos clases cada uno. Phi lleva los datos a F, psi_D lleva el dominio a G_D y psi_Y la clase a G_Y; la condición vive en G_Y por G_D, con cuatro puntos. El operador C_X|YD, en F por G, lleva cada uno de esos puntos a la media de su clase y dominio en F">
+      <defs><marker id="c8op" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrop" d="M0 0 L10 5 L0 10 z"/></marker><marker id="c8phi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrphi" d="M0 0 L10 5 L0 10 z"/></marker><marker id="c8psi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrpsi" d="M0 0 L10 5 L0 10 z"/></marker><marker id="c8psy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrpsy" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+      <text class="lbl s" x="24" y="132">espacio de los datos</text>
+      <line class="ax" x1="30" y1="470" x2="300" y2="470"/><line class="ax" x1="30" y1="470" x2="30" y2="146"/>
+      <line class="lphir" x1="108" y1="206" x2="531" y2="55" marker-end="url(#c8phi)"/>
+      <line class="lphir" x1="236" y1="335" x2="662" y2="66" marker-end="url(#c8phi)"/>
+      <line class="lpsi" x1="96" y1="330" x2="95" y2="551" marker-end="url(#c8psi)"/>
+      <line class="lpsi" x1="214" y1="447" x2="178" y2="551" marker-end="url(#c8psi)"/>
+      <path class="lpsy" d="M236 335 Q 300 420 276 601" marker-end="url(#c8psy)"/>
+      <path class="lpsy" d="M222 413 Q 330 470 343 601" marker-end="url(#c8psy)"/>
+      <path class="lpsy" d="M114 220 Q 400 330 278 601" marker-end="url(#c8psy)"/>
+      <path class="lpsy" d="M122 295 Q 430 200 346 601" marker-end="url(#c8psy)"/>
+      <ellipse class="dom" cx="104" cy="252" rx="56" ry="78"/><ellipse class="domt" cx="226" cy="368" rx="56" ry="80"/>
+      <circle class="pt1" cx="88" cy="209" r="3.5"/><circle class="pt1" cx="108" cy="206" r="3.5"/><circle class="pt1" cx="114" cy="220" r="3.5"/><circle class="pt1" cx="94" cy="223" r="3.5"/>
+      <circle class="ptd" cx="96" cy="284" r="3.5"/><circle class="ptd" cx="116" cy="281" r="3.5"/><circle class="ptd" cx="122" cy="295" r="3.5"/><circle class="ptd" cx="102" cy="298" r="3.5"/>
+      <circle class="pt1h" cx="210" cy="324" r="3.5"/><circle class="pt1h" cx="230" cy="321" r="3.5"/><circle class="pt1h" cx="236" cy="335" r="3.5"/><circle class="pt1h" cx="216" cy="338" r="3.5"/>
+      <circle class="ptdt" cx="216" cy="399" r="3.5"/><circle class="ptdt" cx="236" cy="396" r="3.5"/><circle class="ptdt" cx="242" cy="410" r="3.5"/><circle class="ptdt" cx="222" cy="413" r="3.5"/>
+      <text class="lbl" x="58" y="166">P(X | d = s)</text><text class="lbl" x="118" y="462">P(X | d = t)</text>
+      <ellipse class="rk" cx="590" cy="92" rx="162" ry="70"/><text class="lbl s" x="750" y="32">𝓕</text>
+      <circle class="pt1" cx="516" cy="56" r="2.5"/><circle class="pt1" cx="536" cy="53" r="2.5"/><circle class="pt1" cx="542" cy="67" r="2.5"/><circle class="pt1" cx="522" cy="70" r="2.5"/><circle class="pt1" cx="529" cy="62" r="6.5"/>
+      <circle class="ptd" cx="522" cy="112" r="2.5"/><circle class="ptd" cx="542" cy="109" r="2.5"/><circle class="ptd" cx="548" cy="123" r="2.5"/><circle class="ptd" cx="528" cy="126" r="2.5"/><circle class="ptd" cx="535" cy="118" r="6.5"/>
+      <circle class="pt1h" cx="640" cy="52" r="2.5"/><circle class="pt1h" cx="660" cy="49" r="2.5"/><circle class="pt1h" cx="666" cy="63" r="2.5"/><circle class="pt1h" cx="646" cy="66" r="2.5"/><circle class="pt1h" cx="653" cy="58" r="6.5"/>
+      <circle class="ptdt" cx="646" cy="108" r="2.5"/><circle class="ptdt" cx="666" cy="105" r="2.5"/><circle class="ptdt" cx="672" cy="119" r="2.5"/><circle class="ptdt" cx="652" cy="122" r="2.5"/><circle class="ptdt" cx="659" cy="114" r="6.5"/>
+      <text class="lbl top" x="548" y="50" font-size="10.5">μ<tspan baseline-shift="sub" font-size="8.5">X|y=1,d=s</tspan></text>
+      <text class="lbl top" x="454" y="128" font-size="10.5">μ<tspan baseline-shift="sub" font-size="8.5">X|y=2,d=s</tspan></text>
+      <text class="lbl top" x="674" y="82" font-size="10.5">μ<tspan baseline-shift="sub" font-size="8.5">X|y=1,d=t</tspan></text>
+      <text class="lbl top" x="672" y="122" font-size="10.5">μ<tspan baseline-shift="sub" font-size="8.5">X|y=2,d=t</tspan></text>
+      <ellipse class="rk" cx="590" cy="284" rx="162" ry="66"/><text class="lbl s" x="730" y="212">𝓕⊗𝒢</text>
+      <circle class="pt1" cx="510" cy="256" r="2.5"/><circle class="pt1" cx="530" cy="253" r="2.5"/><circle class="pt1" cx="536" cy="267" r="2.5"/><circle class="pt1" cx="516" cy="270" r="2.5"/>
+      <circle class="ptd" cx="514" cy="300" r="2.5"/><circle class="ptd" cx="534" cy="297" r="2.5"/><circle class="ptd" cx="540" cy="311" r="2.5"/><circle class="ptd" cx="520" cy="314" r="2.5"/>
+      <circle class="pt1h" cx="642" cy="256" r="2.5"/><circle class="pt1h" cx="662" cy="253" r="2.5"/><circle class="pt1h" cx="668" cy="267" r="2.5"/><circle class="pt1h" cx="648" cy="270" r="2.5"/>
+      <circle class="ptdt" cx="646" cy="300" r="2.5"/><circle class="ptdt" cx="666" cy="297" r="2.5"/><circle class="ptdt" cx="672" cy="311" r="2.5"/><circle class="ptdt" cx="652" cy="314" r="2.5"/>
+      <circle class="ptd" cx="561" cy="284" r="6"/><text class="lbl" x="517" y="288" font-size="11">C<tspan baseline-shift="sub" font-size="9">XYD</tspan></text>
+      <ellipse class="rk" cx="590" cy="474" rx="162" ry="46"/><text class="lbl s" x="440" y="424">𝒢 = 𝒢<tspan baseline-shift="sub" font-size="9">Y</tspan>⊗𝒢<tspan baseline-shift="sub" font-size="9">D</tspan></text>
+      <circle class="pt1" cx="530" cy="455" r="6"/>
+      <circle class="ptd" cx="530" cy="492" r="6"/>
+      <circle class="pt1h" cx="650" cy="455" r="6"/>
+      <circle class="ptdt" cx="650" cy="492" r="6"/>
+      <text class="lbl s" x="450" y="459" font-size="10.5">ψ(y=1, d=s)</text>
+      <text class="lbl s" x="450" y="496" font-size="10.5">ψ(y=2, d=s)</text>
+      <text class="lbl s" x="664" y="459" font-size="10.5">ψ(y=1, d=t)</text>
+      <text class="lbl s" x="664" y="496" font-size="10.5">ψ(y=2, d=t)</text>
+      <ellipse class="rk" cx="135" cy="560" rx="70" ry="26"/><text class="lbl s" x="40" y="548">𝒢<tspan baseline-shift="sub" font-size="9">D</tspan></text>
+      <circle class="ptd" cx="95" cy="560" r="5"/><circle class="ptdt" cx="175" cy="560" r="5"/>
+      <ellipse class="rk" cx="310" cy="610" rx="62" ry="26"/><text class="lbl s" x="378" y="634">𝒢<tspan baseline-shift="sub" font-size="9">Y</tspan></text>
+      <circle class="pt1" cx="275" cy="610" r="5"/><circle class="ptd" cx="345" cy="610" r="5"/>
+      <text class="lbl s" x="80" y="580" font-size="10">d=s</text><text class="lbl s" x="162" y="580" font-size="10">d=t</text><text class="lbl s" x="262" y="630" font-size="10">y=1</text><text class="lbl s" x="333" y="630" font-size="10">y=2</text>
+      <path class="arr" d="M206 556 L432 488" stroke-dasharray="2 3"/><path class="arr" d="M372 606 L470 508" stroke-dasharray="2 3"/><text class="lbl s" x="372" y="540">⊗</text>
+      <path class="lop" d="M530 448 L590 334 L529 70" marker-end="url(#c8op)"/>
+      <path class="lop" d="M530 485 L590 334 L535 126" marker-end="url(#c8op)"/>
+      <path class="lop" d="M650 448 L590 334 L653 66" marker-end="url(#c8op)"/>
+      <path class="lop" d="M650 485 L590 334 L659 122" marker-end="url(#c8op)"/>
+      <circle class="ptdt" cx="590" cy="334" r="7" style="stroke:var(--next);fill:var(--next)"/><text class="lbl top" x="604" y="336">C<tspan baseline-shift="sub" font-size="10">X|YD</tspan></text>
+      <text class="lbl tphi" x="300" y="150">φ</text><text class="lbl tpsi" x="44" y="440">ψ<tspan baseline-shift="sub" font-size="9">D</tspan></text><text class="lbl tpsy" x="372" y="470">ψ<tspan baseline-shift="sub" font-size="9">Y</tspan></text>
+      <circle class="pt1" cx="34" cy="666" r="4"/><text class="lbl s" x="44" y="670">clase 1</text><circle class="ptd" cx="104" cy="666" r="4"/><text class="lbl s" x="114" y="670">clase 2</text><text class="lbl s" x="168" y="670">lleno: fuente · hueco: objetivo</text>
+      <line class="lphir" x1="350" y1="666" x2="372" y2="666"/><text class="lbl s" x="377" y="670">φ</text><line class="lpsi" x1="398" y1="666" x2="420" y2="666"/><text class="lbl s" x="425" y="670">ψ<tspan baseline-shift="sub" font-size="8">D</tspan></text><line class="lpsy" x1="452" y1="666" x2="474" y2="666"/><text class="lbl s" x="479" y="670">ψ<tspan baseline-shift="sub" font-size="8">Y</tspan></text><line class="lop" x1="506" y1="666" x2="528" y2="666"/><text class="lbl s" x="533" y="670">μ<tspan baseline-shift="sub" font-size="8">X|y,d</tspan> = C<tspan baseline-shift="sub" font-size="8">X|YD</tspan> ψ(y,d)</text>
+    </svg>
+    <figcaption>Siguen estando los dos dominios, y ahora cada uno tiene dos clases. La condición es el par \((y,d)\) y se arma con dos espacios: \(\psi_D\) lleva el dominio a \(\mathcal G_D\) y \(\psi_Y\) lleva la clase a \(\mathcal G_Y\). Su producto, \(\mathcal G=\mathcal G_Y\otimes\mathcal G_D\), tiene un punto por cada combinación: \(\psi(y,d)=\psi_Y(y)\otimes\psi_D(d)\). Todo lo demás es el primer dibujo con \(D\) reemplazado por \((Y,D)\): \(C_{XYD}\) es el promedio de los datos en \(\mathcal F\otimes\mathcal G\), y el operador \(C_{X|YD}\) lleva cada \(\psi(y,d)\) a la media de su nube, \(\mu_{X|y,d}\). Lo que se alinea son las medias de la misma clase en dominios distintos.</figcaption>
+  </figure>
+  <div class="cols">
+    <div>
+      <h3>El espacio de la condición</h3>
+      <p>La condición es el par \((y,d)\). Se arma con un mapa por variable y su producto tensorial, igual que \(\theta(x,d)=\varphi(x)\otimes\psi(d)\) en \(\mathcal F\otimes\mathcal G\):</p>
+      <div class="disp">$$\psi(y,d)=\psi_Y(y)\otimes\psi_D(d)\ \in\ \mathcal G_Y\otimes\mathcal G_D$$</div>
+      <p>Su kernel sale del producto interno en \(\mathcal G_Y\otimes\mathcal G_D\):</p>
+      <div class="disp">$$\begin{aligned}
+      \ell\big((y,d),(y',d')\big)&=\big\langle\psi(y,d),\psi(y',d')\big\rangle_{\mathcal G_Y\otimes\mathcal G_D}\\
+      &=\big\langle\psi_Y(y)\otimes\psi_D(d),\ \psi_Y(y')\otimes\psi_D(d')\big\rangle_{\mathcal G_Y\otimes\mathcal G_D}\\
+      &=\big\langle\psi_Y(y),\psi_Y(y')\big\rangle_{\mathcal G_Y}\,\big\langle\psi_D(d),\psi_D(d')\big\rangle_{\mathcal G_D}\\
+      &=\ell_Y(y,y')\,\ell_D(d,d')
+      \end{aligned}$$</div>
+      <ol>
+        <li>Definición de kernel: producto interno de los mapas en su espacio.</li>
+        <li>Mapa del par.</li>
+        <li>Producto interno en un producto tensorial. Así se define \(\mathcal G_Y\otimes\mathcal G_D\): \(\langle a\otimes b,a'\otimes b'\rangle_{\mathcal G_Y\otimes\mathcal G_D}:=\langle a,a'\rangle_{\mathcal G_Y}\langle b,b'\rangle_{\mathcal G_D}\), extendido por linealidad. Cada factor es un número y el producto entre ellos es el usual.</li>
+        <li>Truco del kernel en cada espacio.</li>
+      </ol>
+      <p>Su versión matricial, como \(K\) y \(L\) en el Paso 0, evalúa ese kernel en cada par de muestras:</p>
+      <div class="disp">$$L_{nm}=\ell\big((y_n,d_n),(y_m,d_m)\big)=\ell_Y(y_n,y_m)\,\ell_D(d_n,d_m)\quad\Longrightarrow\quad L=L_Y\odot L_D$$</div>
+      <p class="hint">\(\odot\) es el producto elemento a elemento (Hadamard): cada casilla de \(L\) es el producto de las casillas en la misma posición de \(L_Y\) y \(L_D\). Es la matriz que usa el estimador.</p>
+      <p class="hint">Es la misma regla que da \(k\,\ell\) como kernel de \(\theta(x,d)\). Cada vez que se juntan variables, el mapa es el producto tensorial de los mapas y el kernel es el producto de los kernels.</p>
+    </div>
+    <div>
+      <h3>La transición</h3>
+      <p>Es lo ya demostrado con \(d\), cambiando \(d\) por \((y,d)\). Cada renglón cita su paso.</p>
+      <p><b>1. Las dos covarianzas (Paso 2).</b> La primera representa \(P(X,Y,D)\); la segunda contiene \(P(Y,D)\) y es la que se invierte:</p>
+      <div class="disp">$$C_{X(YD)}=\mathbb E_{X,Y,D}\{\varphi(X)\otimes\psi(Y,D)\},\qquad C_{(YD)(YD)}=\mathbb E_{Y,D}\{\psi(Y,D)\otimes\psi(Y,D)\}$$</div>
+      <p><b>2. El operador (Paso 4).</b> La misma regla de Bayes, \(P(X\mid y,d)=P(X,y,d)/P(y,d)\):</p>
+      <div class="disp">$$C_{X|YD}=C_{X(YD)}\,C_{(YD)(YD)}^{-1}:\ \mathcal G_Y\otimes\mathcal G_D\to\mathcal F,\qquad \mu_{X|y,d}=C_{X|YD}\,\psi(y,d)$$</div>
+      <p><b>3. El estimador (Paso 5).</b> Con \(\Phi=[\varphi(x_1)\cdots\varphi(x_N)]\) y \(\Psi=[\psi(y_1,d_1)\cdots\psi(y_N,d_N)]\), una muestra por columna; una suma \(\sum_n a_n\otimes b_n\) se escribe \(AB^\top\).</p>
+      <p><i>A. Las covarianzas, pasadas a muestras.</i></p>
+      <div class="disp">$$\begin{aligned}
+      \hat C_{X(YD)}&=\frac1N\sum_{n=1}^N\varphi(x_n)\otimes\psi(y_n,d_n)=\frac1N\,\Phi\Psi^\top\\
+      \hat C_{(YD)(YD)}&=\frac1N\sum_{n=1}^N\psi(y_n,d_n)\otimes\psi(y_n,d_n)=\frac1N\,\Psi\Psi^\top
+      \end{aligned}$$</div>
+      <p class="hint">Cada muestra pesa \(1/N\); la suma de productos tensoriales se escribe como producto de matrices.</p>
+      <p><i>B. Se reemplazan en el operador.</i></p>
+      <div class="disp">$$\begin{aligned}
+      \hat C_{X|YD}&=\hat C_{X(YD)}\big(\hat C_{(YD)(YD)}+\lambda I\big)^{-1}\\
+      &=\frac1N\,\Phi\Psi^\top\Big(\frac1N\,\Psi\Psi^\top+\lambda I\Big)^{-1}\\
+      &=\Phi\Psi^\top\big(\Psi\Psi^\top+N\lambda I\big)^{-1}\\
+      &=\Phi\,\big(\Psi^\top\Psi+N\lambda I\big)^{-1}\Psi^\top\\
+      &=\Phi\,\big(L_Y\odot L_D+N\lambda I\big)^{-1}\Psi^\top
+      \end{aligned}$$</div>
+      <ol>
+        <li>El operador del renglón 2 con estimadores; \(\lambda\gt0\) por estabilidad.</li>
+        <li>Se reemplaza A.</li>
+        <li>Se saca \(\tfrac1N\) de la inversa y se cancela.</li>
+        <li>Push-through (Paso 5).</li>
+        <li>\(\Psi^\top\Psi=L_Y\odot L_D\) (columna izquierda).</li>
+      </ol>
+      <p><i>C. Se evalúa en una condición \((y,d)\).</i></p>
+      <div class="disp">$$\begin{aligned}
+      \hat\mu_{X|y,d}&=\hat C_{X|YD}\,\psi(y,d)\\
+      &=\Phi\,\big(L_Y\odot L_D+N\lambda I\big)^{-1}\Psi^\top\psi(y,d)\\
+      &=\Phi\,\big(L_Y\odot L_D+N\lambda I\big)^{-1}\big[\ell_Y(y_n,y)\,\ell_D(d_n,d)\big]_{n=1}^N\\
+      &=\Phi\,\big(L_Y\odot L_D+N\lambda I\big)^{-1}\big(\boldsymbol\ell_Y(y)\odot\boldsymbol\ell_D(d)\big)\\
+      &=\Phi\,\boldsymbol\beta(y,d)=\sum_{n=1}^N\beta_n(y,d)\,\varphi(x_n)
+      \end{aligned}$$</div>
+      <ol>
+        <li>Definición del renglón 2.</li>
+        <li>Se reemplaza B.</li>
+        <li>Las filas de \(\Psi^\top\) son los \(\psi(y_n,d_n)\); cada producto interno con \(\psi(y,d)\) es el kernel de la columna izquierda.</li>
+        <li>Ese vector, escrito como producto elemento a elemento.</li>
+        <li>Se nombra \(\boldsymbol\beta(y,d)=\big(L_Y\odot L_D+N\lambda I\big)^{-1}\big(\boldsymbol\ell_Y(y)\odot\boldsymbol\ell_D(d)\big)\) y se abre \(\Phi\) por columnas.</li>
+      </ol>
+      <p class="hint">La columna izquierda entra en dos lugares: en el último renglón de B, como \(\Psi^\top\Psi\), y en el tercero de C, como \(\Psi^\top\psi(y,d)\). Lo demás es el Paso 5.</p>
+      <p><b>4. El caso discreto (Paso 6).</b> Con \(\ell_Y\) y \(\ell_D\) delta, y \(N_{y,d}\) la cantidad de muestras de la clase \(y\) en el dominio \(d\). Primero el vector de la condición:</p>
+      <div class="disp">$$\boldsymbol\ell_Y(y)\odot\boldsymbol\ell_D(d)=\mathbf 1_y\odot\mathbf 1_d=\mathbf 1_{y,d}$$</div>
+      <p class="hint">\(\mathbf 1_y\) vale 1 en las muestras de la clase \(y\), \(\mathbf 1_d\) en las del dominio \(d\); su producto vale 1 solo donde se cumplen las dos.</p>
+      <p>Sobre ese vector de unos, la matriz actúa como un número:</p>
+      <div class="disp">$$\begin{aligned}
+      \big(L_Y\odot L_D+N\lambda I\big)\mathbf 1_{y,d}&=\big(N_{y,d}+N\lambda\big)\mathbf 1_{y,d}\\
+      \boldsymbol\beta(y,d)=\big(L_Y\odot L_D+N\lambda I\big)^{-1}\mathbf 1_{y,d}&=\big(N_{y,d}+N\lambda\big)^{-1}\mathbf 1_{y,d}\ \xrightarrow{\ \lambda\to0\ }\ \frac{\mathbf 1_{y,d}}{N_{y,d}}
+      \end{aligned}$$</div>
+      <ol>
+        <li>La casilla \((n,m)\) de \(L_Y\odot L_D\) vale 1 solo si \(y_n=y_m\) y \(d_n=d_m\): cada fila de \((y,d)\) suma \(N_{y,d}\) unos y las demás, 0.</li>
+        <li>La inversa actúa como el inverso del número.</li>
+      </ol>
+      <div class="disp">$$\hat\mu_{X|y,d}=\Phi\,\boldsymbol\beta(y,d)=\frac1{N_{y,d}}\sum_{y_n=y,\ d_n=d}\varphi(x_n)$$</div>
+      <p class="hint">Es el promedio de cada una de las cuatro nubes del dibujo.</p>
+    </div>
+  </div>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 9 · Comparar por clase</span>
+  <h2>La MMD condicional</h2>
+  <p>En el Paso 7 se comparaban dos puntos, uno por dominio. Ahora hay dos puntos por cada clase, \(\hat\mu_{X|y,d=s}\) y \(\hat\mu_{X|y,d=t}\), y se comparan los de la misma clase, como en las líneas rojas del dibujo del Paso 8. Para cada \(y\), la misma cadena del Paso 7:</p>
+  <div class="disp">$$\begin{aligned}
+  \widehat{\mathrm{MMD}}_y^2&=\big\|\hat\mu_{X|y,d=s}-\hat\mu_{X|y,d=t}\big\|_{\mathcal F}^2&&\text{distancia entre los dos puntos de la clase }y\\
+  &=\big\|\Phi\,\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)\big\|_{\mathcal F}^2&&\text{Paso 8: }\hat\mu_{X|y,d}=\Phi\,\boldsymbol\beta(y,d)\\
+  &=\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)^\top\Phi^\top\Phi\,\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)&&\text{la norma es el producto interno consigo mismo}\\
+  &=\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)^\top K\,\big(\boldsymbol\beta(y,d{=}s)-\boldsymbol\beta(y,d{=}t)\big)&&\text{truco del kernel: }\Phi^\top\Phi=K
+  \end{aligned}$$</div>
+  <p>Con kernels delta, \(\boldsymbol\beta(y,d)=\mathbf 1_{y,d}/N_{y,d}\) (Paso 8, renglón 4), y la forma cuadrática se abre en tres sumas, ahora restringidas a la clase \(y\):</p>
+  <div class="disp">$$\begin{aligned}
+  \widehat{\mathrm{MMD}}_y^2&=\Big(\frac{\mathbf 1_{y,s}}{N_{y,s}}-\frac{\mathbf 1_{y,t}}{N_{y,t}}\Big)^\top K\,\Big(\frac{\mathbf 1_{y,s}}{N_{y,s}}-\frac{\mathbf 1_{y,t}}{N_{y,t}}\Big)\\
+  &=\frac{\mathbf 1_{y,s}^\top K\,\mathbf 1_{y,s}}{N_{y,s}^2}+\frac{\mathbf 1_{y,t}^\top K\,\mathbf 1_{y,t}}{N_{y,t}^2}-\frac{2\,\mathbf 1_{y,s}^\top K\,\mathbf 1_{y,t}}{N_{y,s}N_{y,t}}\\
+  &=\frac1{N_{y,s}^2}\!\!\sum_{\substack{y_n=y\\d_n=s}}\sum_{\substack{y_m=y\\d_m=s}}\!\!k(x_n,x_m)+\frac1{N_{y,t}^2}\!\!\sum_{\substack{y_n=y\\d_n=t}}\sum_{\substack{y_m=y\\d_m=t}}\!\!k(x_n,x_m)-\frac2{N_{y,s}N_{y,t}}\!\!\sum_{\substack{y_n=y\\d_n=s}}\sum_{\substack{y_m=y\\d_m=t}}\!\!k(x_n,x_m)
+  \end{aligned}$$</div>
+  <ol>
+    <li>Paso 8, renglón 4.</li>
+    <li>Se distribuye; \(K\) es simétrica.</li>
+    <li>\(\mathbf 1_{y,d}\) elige las filas y columnas de la clase \(y\) en el dominio \(d\).</li>
+  </ol>
+  <p>Se junta una por clase:</p>
+  <div class="disp">$$\widehat{\mathrm{MMD}}_{\text{cond}}^2=\sum_y\widehat{\mathrm{MMD}}_y^2$$</div>
+  <ul>
+    <li>Es la MMD del Paso 7 aplicada dentro de cada clase: parecido dentro de la fuente, más parecido dentro del objetivo, menos el parecido cruzado, todo solo con las muestras de la clase \(y\).</li>
+    <li>Vale cero solo si, para cada clase, \(P(X\mid y,d{=}s)=P(X\mid y,d{=}t)\). La del Paso 7 podía valer cero con las clases cruzadas; esta no.</li>
+  </ul>
+  <p class="hint">La suma pesa todas las clases igual; pesarlas por su proporción es otra elección posible. Ejemplo numérico con 12 muestras y kernel gaussiano: la forma con \(\boldsymbol\beta\) y la de tres sumas dan lo mismo en las dos clases (0.650192 y 0.190603). <span class="tag">[verificado numéricamente]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 10 · Los potenciales de información</span>
+  <h2>De las densidades a los kernels</h2>
+  <p>Para una sola distribución, con datos \(x_1,\dots,x_N\). La entropía de Rényi de orden \(\alpha\) se escribe con el <b>potencial de información</b> \(V_\alpha\):</p>
+  <div class="disp">$$H_\alpha(X)=\frac1{1-\alpha}\ln\int p(x)^\alpha\,dx=\frac1{1-\alpha}\ln V_\alpha(X),\qquad \alpha\gt0,\ \alpha\neq1$$</div>
+  <p>Con \(\alpha=2\) el potencial es cuadrático, \(V_2(X)=\int p(x)^2\,dx=\mathbb E_X\{p(X)\}\), y queda \(H_2(X)=-\ln V_2(X)\). Estimar \(H_2\) es estimar \(V_2\).</p>
+  <p>\(\int p(x)^2\,dx\) mide la probabilidad de que dos muestras independientes de \(p\) caigan en el mismo lugar: es alta si \(p\) está concentrada y baja si está desparramada.</p>
+  <p>No se asume que \(p\) sea gaussiana: \(p\) es desconocida. Se <b>aproxima</b> con Parzen, poniendo una gaussiana centrada en cada dato y promediando:</p>
+  <div class="disp">$$\hat p(x)=\frac1N\sum_{n=1}^N G_\sigma(x-x_n),\qquad G_\sigma(u)=\frac1{(2\pi\sigma^2)^{d/2}}\exp\!\Big(-\frac{\|u\|^2}{2\sigma^2}\Big)$$</div>
+  <p class="hint">\(\hat p\) es una mezcla de \(N\) gaussianas, no una gaussiana: puede tener cualquier forma. La gaussiana es solo la ventana; con más datos y \(\sigma\) más chico, \(\hat p\) se acerca a \(p\). \(d\) es la dimensión de \(x\).</p>
+  <p>Para una distribución con \(N\) muestras:</p>
+  <div class="disp">$$\begin{aligned}
+  \hat V_2&=\int\hat p(x)^2\,dx\\
+  &=\frac1{N^2}\sum_{n=1}^N\sum_{m=1}^N\int G_\sigma(x-x_n)\,G_\sigma(x-x_m)\,dx\\
+  &=\frac1{N^2}\sum_{n=1}^N\sum_{m=1}^N G_{\sigma\sqrt2}(x_n-x_m)\\
+  &=\frac{c_\sigma}{N^2}\sum_{n=1}^N\sum_{m=1}^N k(x_n,x_m)&&c_\sigma=(4\pi\sigma^2)^{-d/2},\ k(x,x')=\exp\!\big(-\|x-x'\|^2/4\sigma^2\big)\\
+  &=c_\sigma\,\frac1{N^2}\sum_{n=1}^N\sum_{m=1}^N k_m(x_n,x_m)^2&&k_m=\sqrt k:\ k_m(x,x')=\exp\!\big(-\|x-x'\|^2/8\sigma^2\big)\\
+  &=c_\sigma\sum_{n=1}^N\sum_{m=1}^N\Big(\frac{k_m(x_n,x_m)}{N}\Big)^2\\
+  &=c_\sigma\sum_{n=1}^N\sum_{m=1}^N A_{nm}^2&&A=K_m/N=K_m/\mathrm{tr}(K_m)\\
+  &=c_\sigma\,\mathrm{tr}\big(A^\top A\big)&&A\text{ simétrica, con }\mathrm{tr}(A)=1
+  \end{aligned}$$</div>
+  <p class="hint">Como \(k_m(x,x)=1\), \(\mathrm{tr}(A)=\frac1N\sum_n k_m(x_n,x_n)=1\); por lo tanto \(K_m/N=K_m/\mathrm{tr}(K_m)\).</p>
+  <p><b>El potencial matricial.</b> \(c_\sigma\) depende solo de \(\sigma\) y \(d\), no de las muestras ni de los parámetros. Se trabaja con la matriz sola:</p>
+  <div class="disp">$$\mathcal V_2(A)=\mathrm{tr}\big(A^\top A\big)=\frac{\hat V_2}{c_\sigma},\qquad S_2(A)=-\ln\mathcal V_2(A)=\hat H_2(X)+\ln c_\sigma$$</div>
+  <p class="hint">\(\ln c_\sigma\) es la misma constante en todos los términos y su derivada es cero: se cancela al restar entropías, en un cociente de potenciales y en el gradiente. Por eso se usa \(S_2\). Solo haría falta para el valor absoluto de \(H_2\) o al comparar con \(\sigma\) distintos. Si el kernel de la matriz trae otra constante, la normalización \(A=K_m/\mathrm{tr}(K_m)\) también la elimina. \(k_m\) es el gaussiano de ancho \(2\sigma\); como \(\sigma\mapsto2\sigma\) es biyectiva, es la misma familia de estimadores con otra etiqueta.</p>
+  <p><b>Qué mide la resta.</b> Con dos distribuciones, \(p_s\) y \(p_t\), aparecen tres potenciales:</p>
+  <div class="disp">$$\int\big(p_s(x)-p_t(x)\big)^2dx=V_{ss}+V_{tt}-2V_{st},\qquad V_{st}=\int p_s(x)\,p_t(x)\,dx=\mathbb E_{X\sim p_s}\{p_t(X)\}$$</div>
+  <p>\(\int\big(p_s(x)-p_t(x)\big)^2dx\) mide cuánto difieren las dos densidades punto a punto: vale 0 si y solo si son iguales y crece a medida que se separan.</p>
+  <p><b>Los tres potenciales.</b> Es la misma cadena; solo cambia qué muestras van de cada lado y el denominador de \(A\):</p>
+  <div class="cols cols3">
+    <div>
+      <h3>\(V_{ss}\)</h3>
+      <div class="disp">$$\begin{aligned}\hat V_{ss}&=\int\hat p_s(x)^2\,dx\\&=\frac{c_\sigma}{N_s^2}\sum_{n,m}k(x_n^s,x_m^s)\\&=c_\sigma\,\mathrm{tr}\big(A_s^\top A_s\big)\end{aligned}$$</div>
+      <p class="hint">\(A_s=K_m^s/\mathrm{tr}(K_m^s)\)</p>
+    </div>
+    <div>
+      <h3>\(V_{tt}\)</h3>
+      <div class="disp">$$\begin{aligned}\hat V_{tt}&=\int\hat p_t(x)^2\,dx\\&=\frac{c_\sigma}{N_t^2}\sum_{n,m}k(x_n^t,x_m^t)\\&=c_\sigma\,\mathrm{tr}\big(A_t^\top A_t\big)\end{aligned}$$</div>
+      <p class="hint">\(A_t=K_m^t/\mathrm{tr}(K_m^t)\)</p>
+    </div>
+    <div>
+      <h3>\(V_{st}\)</h3>
+      <div class="disp">$$\begin{aligned}\hat V_{st}&=\int\hat p_s(x)\,\hat p_t(x)\,dx\\&=\frac{c_\sigma}{N_sN_t}\sum_{n,m}k(x_n^s,x_m^t)\\&=c_\sigma\,\mathrm{tr}\big(A_{st}^\top A_{st}\big)\end{aligned}$$</div>
+      <p class="hint">\(A_{st}=K_m^{st}/\sqrt{\mathrm{tr}(K_m^s)\,\mathrm{tr}(K_m^t)}\)</p>
+    </div>
+  </div>
+  <p class="hint">\(K_m^{st}\) es la matriz \(N_s\times N_t\) de \(k_m\) entre las muestras de los dos dominios. El denominador \(\sqrt{\mathrm{tr}(K_m^s)\,\mathrm{tr}(K_m^t)}=\sqrt{N_sN_t}\) sale de la cadena, del \(1/(N_sN_t)\) de los dos promedios de Parzen.</p>
+  <p><b>Relación con la MMD.</b> Los tres potenciales son los tres términos de la MMD del Paso 7:</p>
+  <div class="disp">$$\int\big(\hat p_s(x)-\hat p_t(x)\big)^2dx=\hat V_{ss}+\hat V_{tt}-2\hat V_{st}=c_\sigma\,\widehat{\mathrm{MMD}}_k^2$$</div>
+  <p>Con \(\alpha=2\), las dos lecturas coinciden. La MMD mide la distancia entre las medias embebidas \(\mu_{X|d=s}\) y \(\mu_{X|d=t}\), y el potencial de información mide cuánto difieren las dos densidades punto a punto. Como \(p_s\) y \(p_t\) son desconocidas, Parzen las estima suavizadas con la ventana \(\sigma\), y la diferencia resulta igual a la MMD con el kernel \(k\), salvo el factor \(c_\sigma\), que no cambia ni las comparaciones ni el mínimo.</p>
+  <p><b>Por clase y dominio.</b> Con la condición \((y,d)\) del Paso 8, la misma cuenta se aplica a las distribuciones condicionadas. Para cada clase \(y\), se reemplaza</p>
+  <div class="disp">$$p_s(x)\ \to\ p(x\mid y,d{=}s),\qquad p_t(x)\ \to\ p(x\mid y,d{=}t)$$</div>
+  <p>Parzen se arma solo con las muestras de esa clase en ese dominio: con la condición discreta, condicionar es filtrar, y \(\boldsymbol\beta(y,d)=\mathbf 1_{y,d}/N_{y,d}\) (Paso 8). Los tres potenciales de la clase \(y\), \(\hat V_{ss}^{\,y}\), \(\hat V_{tt}^{\,y}\) y \(\hat V_{st}^{\,y}\), son las mismas cadenas con \(N_{y,s}\) y \(N_{y,t}\), y la relación con la MMD es la del Paso 9:</p>
+  <div class="disp">$$\int\big(\hat p(x\mid y,d{=}s)-\hat p(x\mid y,d{=}t)\big)^2dx=c_\sigma\,\widehat{\mathrm{MMD}}_y^2$$</div>
+  <p class="hint">La lectura como densidad necesita que los pesos de las muestras sean no negativos y sumen 1, para que \(\hat p=\sum_n\beta_n\,G_\sigma(x-x_n)\) sea una densidad. Con kernels delta se cumple. Con un kernel \(\ell\) general, los \(\beta\) de la inversa regularizada del Paso 5 pueden ser negativos o no sumar 1: la igualdad con la MMD sigue valiendo en \(\mathcal F\), pero deja de leerse como densidad de Parzen.</p>
+  <p class="hint">Ejemplos numéricos: con 6 datos, la integral en una grilla, la doble suma y \(c_\sigma\,\mathrm{tr}(A^\top A)\) dan 0.355630, con \(\mathrm{tr}(A)=1\); con 5 muestras de fuente y 7 de objetivo, \(\hat V_{st}\) por integral y por doble suma da 0.236867, y \(\int(\hat p_s-\hat p_t)^2\) y \(c_\sigma\widehat{\mathrm{MMD}}_k^2\) dan 0.208712. <span class="tag">[verificado numéricamente]</span></p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Paso 11 · De la distancia al ángulo</span>
+  <h2>Cauchy–Schwarz</h2>
+  <p><b>1. De la MMD al ángulo.</b> Con el kernel \(k\) de la cadena del Paso 10, los tres potenciales son productos internos de las medias embebidas: \(\hat V_{ss}=c_\sigma\|\hat\mu_s\|_{\mathcal F}^2\), \(\hat V_{tt}=c_\sigma\|\hat\mu_t\|_{\mathcal F}^2\) y \(\hat V_{st}=c_\sigma\langle\hat\mu_s,\hat\mu_t\rangle_{\mathcal F}\). La MMD se abre en normas y ángulo:</p>
+  <div class="disp">$$\widehat{\mathrm{MMD}}^2=\big\|\hat\mu_s-\hat\mu_t\big\|_{\mathcal F}^2=\|\hat\mu_s\|^2+\|\hat\mu_t\|^2-2\,\|\hat\mu_s\|\,\|\hat\mu_t\|\cos\theta,\qquad \cos\theta=\frac{\langle\hat\mu_s,\hat\mu_t\rangle}{\|\hat\mu_s\|\,\|\hat\mu_t\|}=\frac{\hat V_{st}}{\sqrt{\hat V_{ss}\,\hat V_{tt}}}$$</div>
+  <p>Cada potencial cumple \(\hat V=c_\sigma\,\mathcal V\) con su matriz (las tres columnas del Paso 10), así que en el cociente \(c_\sigma\) se cancela exactamente:</p>
+  <div class="disp">$$\cos\theta=\frac{c_\sigma\,\mathcal V_{st}}{\sqrt{c_\sigma\,\mathcal V_{ss}\cdot c_\sigma\,\mathcal V_{tt}}}=\frac{\mathcal V_{st}}{\sqrt{\mathcal V_{ss}\,\mathcal V_{tt}}},\qquad \mathcal V_{ss}=\mathrm{tr}\big(A_s^\top A_s\big),\ \ \mathcal V_{tt}=\mathrm{tr}\big(A_t^\top A_t\big),\ \ \mathcal V_{st}=\mathrm{tr}\big(A_{st}^\top A_{st}\big)$$</div>
+  <p class="hint">El ángulo es el mismo con los potenciales de Parzen o con los matriciales. Por eso, de aquí en adelante, se usan los potenciales matriciales \(\mathcal V\).</p>
+  <p><b>3. Con el logaritmo.</b> Con las matrices de las tres columnas del Paso 10, \(H_2(A):=-\ln\|A\|_F^2=-\ln\mathrm{tr}(A^\top A)\): \(H_2(A_s)=-\ln\mathcal V_{ss}\), \(H_2(A_t)=-\ln\mathcal V_{tt}\) y la cruzada \(H_2(A_{st})=-\ln\mathcal V_{st}\). Estiman \(H_2(p_s)\), \(H_2(p_t)\) y la cruzada \(H_2(p_s,p_t)\) salvo la constante \(-\ln c_\sigma\), que aquí se cancela:</p>
+  <div class="disp">$$-\ln\cos\theta=-\ln\frac{\mathcal V_{st}}{\sqrt{\mathcal V_{ss}\,\mathcal V_{tt}}}=H_2(A_{st})-\tfrac12\big[H_2(A_s)+H_2(A_t)\big]$$</div>
+  <p>Mide, en nats, cuánto supera la entropía cruzada al promedio de las entropías propias. Por la desigualdad de Cauchy–Schwarz, \(\mathcal V_{st}\le\sqrt{\mathcal V_{ss}\mathcal V_{tt}}\), nunca es negativa.</p>
+  <p><b>\(-\ln\cos\theta\) frente a la MMD.</b> Las dos comparan la coincidencia cruzada con la propia:</p>
+  <div class="disp">$$\widehat{\mathrm{MMD}}^2=2\Big[\frac{\mathcal V_{ss}+\mathcal V_{tt}}2-\mathcal V_{st}\Big],\qquad -\ln\cos\theta=\ln\sqrt{\mathcal V_{ss}\,\mathcal V_{tt}}-\ln\mathcal V_{st}$$</div>
+  <p>La MMD resta la cruzada de la <b>media aritmética</b> de las propias, en escala <b>lineal</b>. \(-\ln\cos\theta\) resta el logaritmo de la cruzada del logaritmo de la <b>media geométrica</b> de las propias, en escala <b>logarítmica</b>.</p>
+  <p>En los extremos del kernel:</p>
+  <ul>
+    <li><b>Disperso</b> (\(K\to I\)): \(\mathcal V_{ss}\to1/N_s\), \(\mathcal V_{tt}\to1/N_t\), \(\mathcal V_{st}\to0\), entonces \(\widehat{\mathrm{MMD}}^2\to1/N_s+1/N_t\) y \(-\ln\cos\theta\to+\infty\).</li>
+    <li><b>Colapso con traslape</b> (\(K\to\) todos unos): \(\mathcal V_{ss}=\mathcal V_{tt}=\mathcal V_{st}=1\), entonces \(\widehat{\mathrm{MMD}}^2=0\) y \(-\ln\cos\theta=0\).</li>
+  </ul>
+  <p><b>En resumen:</b> miden la misma relación, una en escala lineal y la otra en escala logarítmica. \(-\ln\cos\theta\) cierra la salida de la dispersión que la MMD deja abierta, y las dos comparten la salida del colapso.</p>
+  <p><b>4. Extensión a \(\alpha\).</b> Gracias a \(\mathcal V\), las entropías propias pasan a cualquier orden:</p>
+  <div class="disp">$$H_\alpha(X)=\frac1{1-\alpha}\ln V_\alpha(X)\quad\longrightarrow\quad S_\alpha(A)=\frac1{1-\alpha}\ln\mathrm{tr}\big(A^\alpha\big)=\frac1{1-\alpha}\ln\sum_i\lambda_i(A)^\alpha,\qquad\alpha\gt0,\ \alpha\neq1$$</div>
+  <p>La información mutua entre la representación y el dominio, en la forma \(H(X)-H(X\mid D)\) con entropías de Rényi de orden \(\alpha\) (divergencia de Jensen–Rényi), se estima con:</p>
+  <div class="disp">$$I_\alpha(X;D)=H_\alpha\big(A_{\mathrm{mix}}\big)-\tfrac12\big[H_\alpha(A_s)+H_\alpha(A_t)\big]$$</div>
+</section>
+</div>
+

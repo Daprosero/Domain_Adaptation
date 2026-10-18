@@ -1,0 +1,206 @@
+<title>Ramas hacia CREDA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: an expandable left-to-right tree (problem → where → compares → measures → family → method) on a scrolling canvas, with an inspector beside it that explains whatever is selected; a second tab carries the mathematics. Sibling of the MIL-CREDA funnel, so it shares its tokens. */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#18212e; --muted:#5b6676; --rule:#d9dee6;
+  --ours:#0f7a6c; --ours-soft:#d8efeb; --side:#9a6a00; --side-soft:#f6ecd2;
+  --next:#5a4fb3; --next-soft:#e6e3f7; --edge:#b3bcc8; --out:#c0392b; --cmp:#2e8b3e; --kept:#d9781a;
+  --display:"Literata",Georgia,"Times New Roman",serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161e; --panel:#18202b; --ink:#e4e9f0; --muted:#9aa6b6; --rule:#2c3747;
+  --ours:#4fc2b0; --ours-soft:#16352f; --side:#e2b04a; --side-soft:#352a12;
+  --next:#a49bf0; --next-soft:#262247; --edge:#4a5568; --out:#ef7a6a; --cmp:#5fcf6e; --kept:#f2a14a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161e; --panel:#18202b; --ink:#e4e9f0; --muted:#9aa6b6; --rule:#2c3747;
+  --ours:#4fc2b0; --ours-soft:#16352f; --side:#e2b04a; --side-soft:#352a12;
+  --next:#a49bf0; --next-soft:#262247; --edge:#4a5568; --out:#ef7a6a; --cmp:#5fcf6e; --kept:#f2a14a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:1400px;margin:0 auto;padding-inline:20px;padding-block:28px 64px;display:flex;flex-direction:column;gap:24px}
+h1,h2,h3{font-family:var(--display);font-weight:650;text-wrap:balance;margin:0}
+h1{font-size:2rem;line-height:1.15}
+h2{font-size:1.35rem}
+h3{font-size:1.05rem}
+p{margin:0;max-width:74ch}
+.lede{color:var(--muted);font-size:1.02rem}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+section{display:flex;flex-direction:column;gap:16px;min-width:0}
+header{display:flex;flex-direction:column;gap:10px}
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--rule);flex-wrap:wrap}
+.tab{font:500 .95rem var(--body);color:var(--muted);background:none;border:0;border-bottom:2px solid transparent;padding:8px 14px;cursor:pointer;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ours)}
+.tab:focus-visible,.btn:focus-visible{outline:2px solid var(--ours);outline-offset:2px}
+
+/* toolbar + legend */
+.bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.84rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw{display:inline-block;width:24px;height:0;border-top:3px solid var(--edge)}
+.sw.ours{border-top-color:var(--ours)}
+.sw.side{border-top:2px dashed var(--side)}
+.sw.next{border-top:2px dashed var(--next)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--cmp)}
+.dot.kept{background:var(--kept)}
+.dot.out{background:var(--out)}
+.dot.na{background:none;border:1.5px solid var(--muted)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:500 .84rem var(--body);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:5px 12px;cursor:pointer}
+.btn:hover{border-color:var(--ours)}
+
+/* explorer */
+.explorer{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+@media (max-width:980px){.explorer{grid-template-columns:minmax(0,1fr)}}
+.canvas{background:var(--panel);border:1px solid var(--rule);border-radius:10px;overflow:auto;max-height:78vh;min-width:0}
+.canvas > svg{display:block}
+.canvas text{font-family:var(--body);fill:var(--ink);font-size:12.5px;pointer-events:none}
+.canvas .col{font-family:var(--mono);font-size:10px;fill:var(--muted);letter-spacing:.07em}
+.nd{cursor:pointer;outline:none}
+.nd rect.box{fill:var(--panel);stroke:var(--rule);stroke-width:1.2}
+.nd:hover rect.box,.nd:focus-visible rect.box{stroke:var(--ink)}
+.nd.ours rect.box{stroke:var(--ours);stroke-width:1.8;fill:var(--ours-soft)}
+.nd.side rect.box{stroke:var(--side);stroke-dasharray:4 3;fill:var(--side-soft)}
+.nd.next rect.box{stroke:var(--next);stroke-dasharray:5 4;fill:var(--next-soft)}
+.nd.conv rect.box{stroke:var(--ours);stroke-width:2.6;fill:var(--ours-soft)}
+.nd.leaf rect.box{fill:var(--bg)}
+.nd.sel rect.box{stroke:var(--ink);stroke-width:2.4}
+.nd .badge{font-family:var(--mono);font-size:10.5px;fill:var(--muted)}
+.nd circle.st{fill:var(--cmp)}
+.nd circle.st.kept{fill:var(--kept)}
+.nd circle.st.out{fill:var(--out)}
+.nd circle.st.na{fill:none;stroke:var(--muted);stroke-width:1.3}
+.e{fill:none;stroke:var(--edge);stroke-width:1.3}
+.e.ours{stroke:var(--ours);stroke-width:2.6}
+.e.side{stroke:var(--side);stroke-width:1.5;stroke-dasharray:5 4}
+.e.next{stroke:var(--next);stroke-width:1.8;stroke-dasharray:6 5}
+.e.conv{stroke:var(--ours);stroke-width:2.2;stroke-dasharray:2 0}
+@media (prefers-reduced-motion: no-preference){.nd{transition:opacity .25s}.nd.enter{opacity:0}}
+
+/* inspector */
+.inspector{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:78vh;overflow:auto;min-width:0}
+.crumbs{font-family:var(--mono);font-size:.7rem;color:var(--muted);letter-spacing:.03em}
+.pill{align-self:flex-start;font-family:var(--mono);font-size:.7rem;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--ours-soft);color:var(--ours)}
+.pill.side{background:var(--side-soft);color:var(--side)}
+.pill.next{background:var(--next-soft);color:var(--next)}
+.pill.plain{background:var(--bg);color:var(--muted)}
+.pill.out{background:var(--bg);color:var(--out)}
+.pill.cmp{background:var(--bg);color:var(--cmp);border:1px solid var(--cmp)}
+.pill.kept{background:var(--bg);color:var(--kept);border:1px solid var(--kept)}
+.dislike{border-left:3px solid var(--out);padding:4px 10px;font-size:.92rem;background:var(--bg);border-radius:0 6px 6px 0}
+.dislike b{color:var(--out)}
+.assume{border-left:3px solid var(--muted);padding:4px 10px;font-size:.92rem;background:var(--bg);border-radius:0 6px 6px 0}
+.core{background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:4px 10px;overflow-x:auto;font-size:.92rem}
+.kv{display:flex;flex-direction:column;gap:4px}
+.kv b{font-size:.74rem;font-family:var(--mono);letter-spacing:.04em;text-transform:uppercase}
+.kv.keep b{color:var(--ours)}
+.kv.leave b{color:var(--muted)}
+.kv ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:.92rem}
+.hint{font-size:.86rem;color:var(--muted)}
+.tag{font-family:var(--mono);font-size:.7rem;color:var(--muted);white-space:nowrap}
+.kids{display:flex;flex-wrap:wrap;gap:6px}
+.kid{font:500 .78rem var(--mono);border:1px solid var(--rule);border-radius:4px;padding:2px 7px;background:var(--bg);color:var(--ink);cursor:pointer}
+.kid:hover{border-color:var(--ours)}
+
+/* math tab */
+.math-sec{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.math-sec .disp{overflow-x:auto;padding-block:4px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}.cols > div{min-width:0;display:flex;flex-direction:column;gap:10px}.cols h3{margin:0;font-size:1rem}
+.cols3{grid-template-columns:1fr 1fr 1fr}
+@media (max-width:760px){.cols,.cols3{grid-template-columns:1fr}}
+.claim{border-left:3px solid var(--ours);padding:6px 12px;background:var(--ours-soft);border-radius:0 6px 6px 0;max-width:80ch}
+.claim.warn{border-left-color:var(--side);background:var(--side-soft)}
+.claim.next{border-left-color:var(--next);background:var(--next-soft)}
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:.88rem;background:var(--panel)}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--rule)}
+th{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500}
+tr.ours td,td.ours{background:var(--ours-soft)}
+.note{font-size:.86rem;color:var(--muted)}
+.cfig{margin:0;display:flex;flex-direction:column;gap:8px;overflow-x:auto}
+.cfig > svg{min-width:620px;width:100%;height:auto;display:block}
+.cfig .lbl{font-family:var(--body);font-size:12.5px;fill:var(--ink)}
+.cfig .lbl.s{font-size:11.5px;fill:var(--muted)}
+.cfig .ax{stroke:var(--muted);stroke-width:1.2}
+.cfig .c1{fill:var(--ours-soft);stroke:var(--ours);stroke-width:1.4}
+.cfig .c1i{fill:none;stroke:var(--ours);stroke-width:1;stroke-dasharray:3 3}
+.cfig .c2{fill:var(--next-soft);stroke:var(--next);stroke-width:1.4}
+.cfig .c2i{fill:none;stroke:var(--next);stroke-width:1;stroke-dasharray:3 3}
+.cfig .arr{fill:none;stroke:var(--side);stroke-width:1.6}
+.cfig .rk{fill:none;stroke:var(--ink);stroke-width:1.4}
+.cfig .pt1{fill:var(--ours)}.cfig .pt1h{fill:none;stroke:var(--ours);stroke-width:2}
+.cfig .pt2{fill:var(--next)}.cfig .pt2h{fill:none;stroke:var(--next);stroke-width:2}
+.cfig .gap{stroke:var(--out);stroke-width:1.6;stroke-dasharray:3 2}
+.cfig .c1t{fill:none;stroke:var(--ours);stroke-width:1.6;stroke-dasharray:5 3}
+.cfig .c2t{fill:none;stroke:var(--next);stroke-width:1.6;stroke-dasharray:5 3}
+.cfig .arrh{fill:var(--side)}
+.cfig .frame{fill:none;stroke:var(--rule);stroke-width:1}
+.cfig .sw1{fill:var(--ours-soft);stroke:var(--ours)}
+.cfig .sw2{fill:var(--next-soft);stroke:var(--next)}
+.cfig .swf{fill:none;stroke:var(--ink);stroke-width:1.4}
+.cfig .swt{fill:none;stroke:var(--ink);stroke-width:1.4;stroke-dasharray:4 2}
+.cfig .dom{fill:none;stroke:var(--ink);stroke-width:1.6}
+.cfig .domt{fill:none;stroke:var(--ink);stroke-width:1.6;stroke-dasharray:6 4}
+.cfig .mix1{fill:var(--ours-soft);stroke:none;opacity:.85}
+.cfig .mix2{fill:var(--next-soft);stroke:none;opacity:.85}
+.cfig .ptd{fill:var(--ink)}
+.cfig .ptdt{fill:var(--bg);stroke:var(--ink);stroke-width:2}
+.cfig .lphi{fill:none;stroke:var(--out);stroke-width:.9;opacity:.5}.cfig .lphir{fill:none;stroke:var(--out);stroke-width:1.6}
+.cfig .lpsi{fill:none;stroke:var(--cmp);stroke-width:1.6}
+.cfig .lop{fill:none;stroke:var(--next);stroke-width:2;stroke-dasharray:6 4}.cfig .arrop{fill:var(--next)}.cfig .lpsy{fill:none;stroke:var(--kept);stroke-width:1.6}.cfig .arrpsy{fill:var(--kept)}.cfig .tpsy{fill:var(--kept)}.cfig .arrphi{fill:var(--out)}.cfig .arrpsi{fill:var(--cmp)}
+.cfig .tphi{fill:var(--out)}.cfig .tpsi{fill:var(--cmp)}.cfig .top{fill:var(--next)}
+.cfig figcaption{font-size:.88rem;color:var(--muted)}
+
+.defs{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,1fr);gap:6px 16px;margin:0;font-size:.92rem}
+.defs dt{overflow-x:auto}
+.defs dd{margin:0;color:var(--ink)}
+@media (max-width:560px){.defs{grid-template-columns:minmax(0,1fr)}.defs dd{margin-bottom:6px}}
+</style>
+
+<script>
+window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},svg:{fontCache:'global'},startup:{typeset:true}};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js"></script>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">Tesis · fundamentos teóricos · etapa CREDA</span>
+  <h1>Ramas hacia CREDA</h1>
+  <p class="lede">Un recorrido por las formas de alinear dominios sin etiquetas en el objetivo, en tres preguntas: <b>dónde</b> se alinea, <b>qué compara</b> y <b>qué mide</b>. Cada nodo se abre en sus familias y cada familia en sus métodos, con el veredicto que les dio el embudo: si llegaron a la comparación final, si se descartaron después de pasar los criterios o por qué no los pasaron. Ninguna rama se descarta: cada una deja algo que nos llevamos y un límite que explica por qué seguimos, hasta la información estimada con kernels sobre el embedding, base de CREDA.</p>
+</header>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" id="tab-arbol" aria-controls="panel-arbol" aria-selected="true">Árbol</button>
+  <button class="tab" role="tab" id="tab-embebimiento" aria-controls="panel-embebimiento" aria-selected="false">Del embebimiento a CREDA</button>
+  <button class="tab" role="tab" id="tab-matematica" aria-controls="panel-matematica" aria-selected="false">Matemática</button>
+  <button class="tab" role="tab" id="tab-comparacion" aria-controls="panel-comparacion" aria-selected="false">Comparación final</button>
+</div>
+
+<div id="panel-arbol" role="tabpanel" aria-labelledby="tab-arbol" style="display:flex;flex-direction:column;gap:14px">
+  <div class="bar">
+    <div class="legend">
+      <span><i class="sw ours"></i>nuestro camino</span>
+      <span><i class="sw"></i>otras ramas, vigentes</span>
+      <span><i class="sw side"></i>rama lateral</span>
+      <span><i class="sw next"></i>siguiente etapa</span>
+      <span><i class="dot"></i>llegó a la comparación final</span>
+      <span><i class="dot kept"></i>pasa los tres criterios, descartado después</span>
+      <span><i class="dot out"></i>no pasa algún criterio (F1, F2 o F3: transversal a la arquitectura)</span>
+    </div>
+    <div class="btns">
+      <button class="btn" id="btn-ours">Abrir nuestro camino</button>
+      <button class="btn" id="btn-fam">Abrir familias</button>
+      <button class="btn" id="btn-all">Abrir todo</button>
+      <button class="btn" id="btn-reset">Contraer</button>
+    </div>
+  </div>
+  <div class="explorer">
+    <div class="canvas" id="canvas"><svg id="tree" role="tree" aria-label="Árbol de ramas hacia CREDA"></svg></div>
+    <aside class="inspector" id="inspector" aria-live="polite"></aside>
+  </div>
+  <p class="note">Clic en un nodo: lo explica a la derecha y, si tiene hijos, los abre o cierra (el número indica cuántos). Teclado: Tab para moverse, Enter para abrir. Quedan fuera del árbol tres familias del embudo: transformadores y CLIP, porque son una arquitectura y no una medida; y ponderación de la fuente y MIL, que son antecedentes de la siguiente etapa. Las fórmulas de los métodos están reescritas en la notación de la r29: son una lectura derivada, no la notación de sus autores. * evidencia débil · † en el límite. F3 exige que el método sea una pérdida sobre los rasgos y logits de un único extractor y una única cabeza, iguales para todos; «F3 en frontera» marca los casos que dependen de una decisión nuestra. Quién representa a cada familia es el último filtro.</p>
+</div>
+
