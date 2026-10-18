@@ -649,12 +649,21 @@ class R28DefaultsUnchangedTests(unittest.TestCase):
     #: and it is 4.8e-07 on the mean, which is the bias `-log(tr(A^2) + 1e-6)`
     #: carries even at a healthy trace. The sign and the ordering of the three
     #: classes are unchanged.
-    PINNED_MEAN = -0.7711763978004456
-    PINNED_PER_CLASS = (-0.865839421749, -0.72679233551, -0.720897495747)
-    #: What they replaced, read off the tree before `bounds_form` or
-    #: `balance_mass` existed and held until the epsilons came out.
-    SUPERSEDED_MEAN = -0.771175920963
-    SUPERSEDED_PER_CLASS = (-0.865838766098, -0.726791977882, -0.720897138119)
+    #: Re-measured a second time on 2026-10-18, for Eq. (24)'s own epsilon:
+    #: `forward` computed the confidence weight as
+    #: `1 - (-log(sum(g**2) + 1e-6))/ln C`, and Eq. (20) guarantees `g_j^t` is
+    #: a distribution, so `sum g^2` lives in `[1/C, 1]` and that epsilon
+    #: guarded another unreachable zero. It biased `w` by `~1e-6 * C / ln C`,
+    #: worst exactly where `w` must be ZERO -- the uniform distribution, the
+    #: bag the classifier knows nothing about.
+    PINNED_MEAN = -0.7711774110794067
+    PINNED_PER_CLASS = (-0.865841209888, -0.726793408394, -0.720897674561)
+    #: The two it replaced, in order. The first is from before `bounds_form` or
+    #: `balance_mass` existed; the second is after `_renyi_entropy_order_2`'s
+    #: two epsilons came out and before Eq. (24)'s did.
+    SUPERSEDED_MEAN = -0.7711763978004456
+    SUPERSEDED_PER_CLASS = (-0.865839421749, -0.72679233551, -0.720897495747)
+    PRE_EPSILON_MEAN = -0.771175920963
 
     @staticmethod
     def _default_fixture():

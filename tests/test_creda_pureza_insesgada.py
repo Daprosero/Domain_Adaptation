@@ -40,157 +40,96 @@ def _bloque(n=60, d=16, semilla=0, w=None):
     return K
 
 
-class LaPurezaInsesgada(unittest.TestCase):
+class ElInstrumentoRetirado(unittest.TestCase):
+    """`unbiased_purity` se retiró el 2026-10-18, y esto lo afirma.
 
-    def test_the_default_is_bit_for_bit_what_it_already_was(self):
-        K = _bloque()
-        a = CREDALoss()._renyi_entropy_order_2(K)
-        b = CREDALoss(unbiased_purity=False)._renyi_entropy_order_2(K)
-        self.assertEqual(float(a), float(b))
+    **Este archivo lleva el nombre de algo que ya no existe, y eso se dice en
+    vez de renombrarlo en silencio.** Estimaba la pureza como un estadístico U
+    --- saca los pares `j = k` del numerador Y del denominador --- y se fue por
+    tres razones acumuladas, ninguna de estilo:
 
-    def test_the_unbiased_one_differs(self):
-        K = _bloque()
-        a = float(CREDALoss()._renyi_entropy_order_2(K))
-        b = float(CREDALoss(unbiased_purity=True)._renyi_entropy_order_2(K))
-        self.assertNotAlmostEqual(a, b, places=4)
+    1. **No está en la formulación.** r34 declara UNA entropía, la Ec. (10):
+       `H_2(A) = -ln[tr(A^T A)]`. Un estadístico U de la pureza no aparece en
+       el documento, y la declaración del toyset lo rotulaba `# Instrumento`.
+    2. **Nunca corrió.** `PUREZA_U` valía `False` en la declaración y `False`
+       en cada corrida que el cuaderno ejecutado registra, una por una.
+    3. **Y estaba refutado donde se podía pedir.** Las clases que este archivo
+       tenía medían 109 de 600 configuraciones fuera de `[0, 1]`, en un rango
+       de `-0.7631` a `1.0517`, y una guarda lo rechazaba junto con el único
+       `bounds_form` admisible. Rederivar los extremos de las Ecs. (35)-(36)
+       para ese estimador es deliberación y no una bandera.
 
-    def test_it_drops_exactly_the_self_pairs(self):
-        """No una aproximación: la identidad algebraica."""
-        K = _bloque()
-        dg = torch.diagonal(K)
-        num = float(torch.trace(K @ K) - (dg**2).sum())
-        den = float(torch.trace(K)**2 - (dg**2).sum())
-        esperado = -np.log(num/den + 1e-6)
-        got = float(CREDALoss(unbiased_purity=True)._renyi_entropy_order_2(K))
-        self.assertAlmostEqual(got, esperado, places=5)
-
-    def test_it_kills_the_inequality_penalty_ON_THE_COMPOSITE_SCORE(self):
-        """La propiedad vive en `creda_c`, NO en un bloque suelto.
-
-        Medido: a nivel de `H2` de un bloque solo, la reducción es errática ---
-        14.1x, 1.4x, 1.7x, 3.2x, 10.5x y 0.97x sobre seis semillas. El
-        estadístico U no debiasa cada bloque por separado de forma consistente.
-
-        Lo que sí hace es que el sesgo `1/n_eff` entre en `h_t` y en `h_mix` de
-        forma COHERENTE y se cancele en la resta
-        `creda_c = h_mix - (h_s + h_t)/2`. Esa cancelación es la propiedad, y
-        sobre ella la reducción medida es del 97% con la correlación contra el
-        coeficiente de variación cayendo de r=+0.970 a r=+0.057.
-
-        Un test sobre un bloque suelto afirma algo que NO es cierto y habría
-        pasado por casualidad en dos de seis semillas.
-        """
-        g = torch.Generator().manual_seed(11)
-        for semilla in range(4):
-            gg = torch.Generator().manual_seed(semilla)
-            ft = torch.randn(60, 16, generator=gg) * 3.0
-            fs = torch.randn(40, 16, generator=gg) * 3.0
-            d2 = lambda a, b: ((a*a).sum(1)[:, None] + (b*b).sum(1)[None]
-                               - 2*a@b.T)
-            Ks = torch.exp(-d2(fs, fs).clamp_min(0)/128.0)
-            Kt = torch.exp(-d2(ft, ft).clamp_min(0)/128.0)
-            Kst = torch.exp(-d2(fs, ft).clamp_min(0)/128.0)
-            w = torch.clamp(1.0 + 0.6*torch.randn(60, generator=g), 0.0, 2.0)
-            w = w / w.mean()
-
-            def creda(cr, peso):
-                Kw = Kt * torch.outer(peso, peso)
-                Kc = Kst * peso.unsqueeze(0)
-                ts, tt = float(Ks.trace()), float(Kw.trace())
-                M = 0.5*torch.cat([
-                    torch.cat([Ks/ts, Kc/np.sqrt(ts*tt)], 1),
-                    torch.cat([(Kc/np.sqrt(ts*tt)).T, Kw/tt], 1)], 0)
-                h = cr._renyi_entropy_order_2
-                return float(h(M) - 0.5*(h(Ks) + h(Kw)))
-
-            uno = torch.ones(60)
-            mov = {}
-            for nom, cr in (('sesgada', CREDALoss()),
-                            ('U', CREDALoss(unbiased_purity=True))):
-                mov[nom] = abs(creda(cr, w) - creda(cr, uno))
-            self.assertGreater(mov['sesgada'], 0.005, (semilla, mov))
-            self.assertLess(mov['U'], mov['sesgada'] / 3.0, (semilla, mov))
-
-    def test_a_block_of_one_sample_is_refused_rather_than_divided_by_zero(self):
-        """Con n=1 no hay pares distintos: el denominador es cero y el valor
-        que saldría sería el del epsilon y no el del dato."""
-        K = _bloque(n=1)
-        with self.assertRaises(ValueError):
-            CREDALoss(unbiased_purity=True)._renyi_entropy_order_2(K)
-
-    def test_the_toy_REFUSES_the_flag_because_of_its_bounds(self):
-        """Y ésta es la consecuencia práctica, dicha como lo que es: el
-        remedio queda INDISPONIBLE en el toy tal como está configurado.
-
-        El toy corre `FORMA_DE_COTAS = 'entropy-cosh'`, así que pedirle
-        `PUREZA_U=True` es pedir la combinación inadmisible. Se niega en vez de
-        correr, que es lo correcto: con 109 de 600 configuraciones fuera de
-        [0,1], lo que produciría son puntajes que se leen como medidos.
-
-        Para usarlo hay que rederivar los extremos primero, y eso es
-        deliberación y no una bandera.
-        """
-        from CREDA import toy_experiment as T
-        fam = T.FAMILIAS[0]
-        D = T.datos_semilla(fam, 100)
-        k = dict(semilla=100, mover_fuente=False, cuadros=T.CTRL)
-        self.assertEqual(T.FORMA_DE_COTAS, 'entropy-cosh')
-        self.assertIs(T.NORMALIZAR_POR_COTAS, True)
-        *_, a = T.corrida(fam, D, 'layernorm', hp2={'PUREZA_U': False}, **k)
-        *_, b = T.corrida(fam, D, 'layernorm', **k)
-        self.assertEqual(a['acc_te'], b['acc_te'])
-        with self.assertRaises(ValueError) as ctx:
-            T.corrida(fam, D, 'layernorm', hp2={'PUREZA_U': True}, **k)
-        self.assertIn('unbiased_purity', str(ctx.exception))
-
-
-class LaCombinacionInadmisibleSeRefuta(unittest.TestCase):
-    """El estadístico U y las cotas de la Ec. 35 no se pueden combinar.
-
-    Las cotas se prueban sobre la mezcla balanceada con los TRES bloques
-    compartiendo el normalizador por traza. El estadístico U le da a cada uno
-    el suyo --- `S² − Σu_j²`, que depende de los pesos de ESE bloque --- así
-    que la hipótesis se rompe.
-
-    Medido sobre 600 configuraciones aleatorias: con la pureza sesgada, 0/600
-    caen fuera de [0,1]; con el estadístico U, **109/600**, con rango de
-    −0.7631 a 1.0517. El 18%, y ninguna cota lo delataría: un puntaje fuera de
-    rango bajo un mapa que declara acotarlo ahí se lee como un valor medido.
+    Lo que SOBREVIVE de este archivo es `LaInvarianciaDeEscala`, que es sobre
+    la única forma que queda --- y que se escribió precisamente porque el
+    estimador que quedaba tenía su propio defecto.
     """
 
-    def test_the_combination_is_refused_by_name(self):
-        with self.assertRaises(ValueError) as ctx:
-            CREDALoss(unbiased_purity=True, normalize_by_bounds=True,
-                      bounds_form='entropy-cosh', balance_mix_blocks=True,
-                      balance_mass='trace')
-        m = str(ctx.exception)
-        self.assertIn('unbiased_purity', m)
-        self.assertIn('entropy-cosh', m)
+    def test_the_keyword_is_gone_and_asking_for_it_is_a_TypeError(self):
+        """Y es `TypeError` a propósito, no un `ValueError` con nombre.
 
-    def test_each_half_alone_is_still_allowed(self):
-        """La guarda prohíbe la COMBINACIÓN, no cada mitad."""
-        CREDALoss(unbiased_purity=True, normalize_by_bounds=False)
-        CREDALoss(unbiased_purity=False, normalize_by_bounds=True,
-                  bounds_form='entropy-cosh', balance_mix_blocks=True,
-                  balance_mass='trace', weight_cross_block=True)
+        `bounds_form` se quedó con un solo valor legal justamente para que una
+        corrida que pida el mapa retirado reciba un mensaje que lo nombre. Acá
+        la decisión es la contraria: no hay nada que explicarle a quien pida un
+        instrumento que nunca estuvo en la matemática, así que la firma lo
+        rechaza y el error dice qué argumento no existe.
+        """
+        import inspect
+        firma = inspect.signature(CREDALoss.__init__)
+        self.assertNotIn('unbiased_purity', firma.parameters)
+        with self.assertRaises(TypeError) as ctx:
+            CREDALoss(unbiased_purity=True)
+        self.assertIn('unbiased_purity', str(ctx.exception))
+
+    def test_the_branch_and_its_fourth_epsilon_are_gone_from_the_source(self):
+        """La rama se fue entera, y con ella el cuarto épsilon.
+
+        Era el ÚNICO de los cuatro que tapaba un caso alcanzable: el
+        estadístico U puede salir no positivo de verdad --- medido, 139 de 400
+        veces con dos puntos y 54 de 400 con cuarenta --- y ahí el logaritmo no
+        está definido. Los otros tres guardaban ceros que no podían ocurrir.
+        """
+        import inspect
+        fuente = inspect.getsource(CREDALoss._renyi_entropy_order_2)
+        for muerto in ('self.unbiased_purity', 'propios', 'estadistico U es'):
+            self.assertNotIn(muerto, fuente, muerto)
+        # El CÓDIGO, sin docstring ni comentarios: la prosa sí nombra el
+        # instrumento y sus épsilon, para registrar por qué se fueron, y un
+        # chequeo que no los separe reporta la historia como si fuera el
+        # mecanismo.
+        codigo = [l for l in fuente.splitlines()
+                  if l.strip() and not l.strip().startswith('#')]
+        codigo = "\n".join(codigo).split('"""')[-1]
+        self.assertNotIn('1e-6', codigo, codigo)
+        self.assertIn('torch.trace(K_norm.T @ K_norm)', codigo)
+
+    def test_the_toyset_no_longer_declares_it(self):
+        """`PUREZA_U` sale de `HP_2`, y el artefacto en disco no la llevaba.
+
+        Comprobado antes de sacarla: el `hp2` que `barrido.json` guarda tiene
+        las llaves BUSCADAS, no el merge completo de `HP_2`, así que retirar
+        una llave no rompe la lectura de lo ya medido.
+        """
+        from CREDA import toy_experiment as T
+        self.assertNotIn('PUREZA_U', T.HP_2)
 
     def test_the_other_bounds_form_no_longer_exists(self):
-        """**Esto afirmaba lo contrario hasta 2026-10-18.**
+        """El mapa de r25 tampoco existe, y pedirlo se nombra.
 
-        Decía que `conservative` no quedaba bloqueado por esta hipótesis,
+        **Esto afirmaba lo contrario hasta 2026-10-18.** Decía que
+        `conservative` no quedaba bloqueado por la hipótesis `entropy-cosh`,
         porque sus extremos salen de las cardinalidades y no del normalizador
         compartido --- cierto mientras ese mapa existió. r33 declara UN par de
         extremos y el par de cardinalidades de r25 no está en la formulación,
         así que `conservative_bounds` y `class_global_loss` se retiraron de los
         dos paquetes y la bandera quedó con un solo valor legal.
 
-        Lo que esta clase sigue probando es que la guarda es de la
-        COMBINACIÓN: `unbiased_purity=True` con el normalizador apagado
-        construye, y es `test_each_half_alone_is_still_allowed` el que lo dice.
+        La guarda de la COMBINACIÓN que esta clase probaba se fue con el
+        instrumento: ya no hay dos estimadores que combinar.
         """
+        import CREDA.models as models
+        self.assertEqual(models.BOUNDS_FORMS, ('entropy-cosh',))
         with self.assertRaises(ValueError) as ctx:
-            CREDALoss(unbiased_purity=True, normalize_by_bounds=True,
-                      bounds_form='conservative')
+            CREDALoss(normalize_by_bounds=True, bounds_form='conservative')
         self.assertIn('bounds_form', str(ctx.exception))
         self.assertIn('entropy-cosh', str(ctx.exception))
 
