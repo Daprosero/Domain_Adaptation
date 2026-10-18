@@ -468,6 +468,13 @@ HP_2 = dict(LR_2=1e-3, WD_2=0.0, LOTE_2=128,
 #: parece: `_median_pairwise` es la mediana de las distancias pareadas sobre UN
 #: conjunto, y reimplementarla aca seria dos definiciones de la misma cosa que
 #: nada obliga a coincidir. `tests/test_toy_sigma_fijo.py` las fija iguales.
+#:
+#: **No nombra ninguna bandera y no le hace falta: esto no calcula una
+#: perdida.** Es la unica construccion de `CREDALoss` en este modulo que no
+#: declara `normalize_by_bounds`, y la razon es que solo se le llama
+#: `_median_pairwise`, un estadistico del ancho de banda que no mira cotas, ni
+#: entropias, ni bloques de clase. Las otras dos construcciones del modulo si
+#: la nombran, por `NORMALIZAR_POR_COTAS` directa o a traves de `cfg`.
 _HEURISTICO_DE_SIGMA = CREDALoss()
 
 
@@ -1059,7 +1066,7 @@ FACTOR_INTRUSO = 3.0
 
 
 def incertidumbre_declarada(logits):
-    """`U(g) = H2(g)/ln C` de la Ec. 19, en UN solo lugar del modulo.
+    """`U(g) = H2(g)/ln C` de la Ec. 24, en UN solo lugar del modulo.
 
     `H2(g) = -log(sum g^2 + 1e-6)`, con el mismo epsilon que
     `_renyi_entropy_order_2`. La que `CREDALoss.forward` usa es identica pero
@@ -1124,7 +1131,7 @@ def ec33_por_clase(cr, f_s, y_s, f_t, g_t):
     necesita para `J_c`; lo que falta no es el calculo, es que salgan. Asi que
     esto corre `forward` y OBSERVA sus tres entropias, parchando
     `_renyi_entropy_order_2` en la instancia mientras la llamada dura. Rehacer
-    la cuenta aqui --- los kernels, el sopesado de la Ec. 19, el balance por
+    la cuenta aqui --- los kernels, el sopesado de la Ec. 24, el balance por
     traza de la Ec. 32 --- seria una SEGUNDA via para el mismo numero, y la
     que se quedara atras no daria error: es el defecto que `cef_cu` ya existe
     para no cometer, derivada del `rut` que el registro guarda en vez de
@@ -1146,7 +1153,7 @@ def ec33_por_clase(cr, f_s, y_s, f_t, g_t):
     paso siguiente optimiza, o sea la medicion perturbaria lo que mide.
 
     **Lo que mide del sopesado es lo que el brazo configuro.** `target_weights`
-    no se pasa, asi que `forward` calcula los pesos de la Ec. 19 cuando el
+    no se pasa, asi que `forward` calcula los pesos de la Ec. 24 cuando el
     brazo los tiene prendidos y `h_t` es la entropia del bloque SOPESADO; con
     `use_entropy_weighting=False` es la del bloque crudo, que es lo que ese
     brazo le da al termino. Lo que NO replica es el RETARDO por paso
@@ -1260,7 +1267,7 @@ def caminata_al_centro(cab, inicio, centro, pasos=60):
 
     Lo que demuestra, y por eso no necesita semillas ni test estadistico: `w`
     es una funcion del posterior y nada mas, asi que esta curva es una
-    propiedad de la Ec. 19 y del cabezal, EXACTA. Y la premisa del operador se
+    propiedad de la Ec. 24 y del cabezal, EXACTA. Y la premisa del operador se
     ve literal: el punto puede no ser de esa clase --- nadie le pregunto su
     etiqueta --- y aun asi `w` sube al acercarse, porque lo que mide es
     confianza y no acierto.
@@ -1278,7 +1285,7 @@ def caminata_al_centro(cab, inicio, centro, pasos=60):
 
 
 def pesos_declarados(logits):
-    """`w_j = 1 - H2(g_j)/ln C`: el peso de la formulacion (Ecs. 19 y 26).
+    """`w_j = 1 - H2(g_j)/ln C`: el peso de la formulacion (Ecs. 24 y 26).
 
     Mide INCERTIDUMBRE, no error. Un punto que cae bien adentro de la clase
     equivocada esta confiadamente equivocado y tiene `w` ALTO; solo los que
@@ -2198,7 +2205,7 @@ def alineacion(Hs, Ht, ys, logits_t, yt, sigma, cfg):
 
     Esto existe porque faltaba. Las cuatro metricas del barrido --- acierto,
     confianza, concentracion, ruteo --- son del blanco solo o del clasificador,
-    y ninguna contesta la pregunta que la Ec. 19 promete: alinear usando solo
+    y ninguna contesta la pregunta que la Ec. 24 promete: alinear usando solo
     las muestras confiables. Un sopesado que cumple exactamente lo que promete
     y no mueve ninguna de esas cuatro es indistinguible, con esas cuatro, de uno
     que no hace nada.
@@ -2259,7 +2266,7 @@ def alineacion(Hs, Ht, ys, logits_t, yt, sigma, cfg):
 #: y el tercero no es un metodo.
 #:
 #: `apagado`    `use_entropy_weighting=False`: todo peso en 1.
-#: `declarado`  `w_j = 1 - H2(g_j)/ln C`, el de la formulacion (Ecs. 19 y 26).
+#: `declarado`  `w_j = 1 - H2(g_j)/ln C`, el de la formulacion (Ecs. 24 y 26).
 #: `oraculo`    `w_j = 1` donde la pseudoetiqueta acierta y `0` donde se
 #:              equivoca. LEE `y_t`, asi que es un TECHO y no un metodo.
 #:
@@ -2488,7 +2495,7 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
     assert cr.balance_mix_blocks is balance, (cr.balance_mix_blocks, balance)
     assert cr.bounds_form == FORMA_DE_COTAS, (cr.bounds_form, FORMA_DE_COTAS)
     assert cr.balance_mass == BALANCE_DE_MASA, (cr.balance_mass, BALANCE_DE_MASA)
-    # El sopesado por confianza (Ecs. 19 y 26), que es el UNICO eje de la
+    # El sopesado por confianza (Ecs. 24 y 26), que es el UNICO eje de la
     # seccion de contaminacion: los dos brazos de CREDA que esa seccion compara
     # difieren solo en esta bandera. Se afirma que llego donde tenia que llegar
     # porque `CREDALoss` la tiene en `True` por default, asi que un parametro
@@ -2751,7 +2758,7 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
                 _lg = cab(enc_t(D['Xt_tr']))
                 rut = _lg.argmax(1)
                 pok = float((rut == D['yt_tr']).float().mean())
-                # La incertidumbre normalizada de la Ec. 19, promediada sobre el
+                # La incertidumbre normalizada de la Ec. 24, promediada sobre el
                 # blanco: U(g) = H2(g)/log C, con H2(g) = -log(sum g^2). SIN
                 # ETIQUETAS -- es la unica senal de este bloque que un criterio
                 # de parada puede mirar sin fugarse y_t, y no es maquinaria
@@ -4156,7 +4163,7 @@ def buscar_hp2(fam, hp1, trials=None, semillas=None, al_paso=print,
 # ===========================================================================
 # La seccion de sopesado bajo contaminacion
 # ---------------------------------------------------------------------------
-# Lo que la seccion pregunta: el sopesado por confianza (Ecs. 19 y 26) gana
+# Lo que la seccion pregunta: el sopesado por confianza (Ecs. 24 y 26) gana
 # algo cuando el dano al blanco es DESIGUAL. Bajo el balance por traza (Ec. 32)
 # la escala COMUN de `w` se cancela --- medido, y ahora tambien probado en
 # `tests/test_toy_contamination.py` --- asi que una perturbacion que degrade
@@ -4993,7 +5000,7 @@ def cargar_contaminacion(origen):
 # La seccion de INTRUSOS: dano por distancia latente, y quien lo puede quitar
 # ---------------------------------------------------------------------------
 # Lo que esta seccion pregunta y las dos anteriores no podian: el sopesado por
-# confianza (Ecs. 19 y 26) gana algo cuando el dano al bloque del blanco es
+# confianza (Ecs. 24 y 26) gana algo cuando el dano al bloque del blanco es
 # GEOMETRICO. Las dos construcciones anteriores volvieron nulas y los dos nulos
 # estan explicados por medicion --- ver `MODO_INTRUSOS` --- de modo que esta no
 # es una variante mas: es el unico regimen declarado en el que hay algo para

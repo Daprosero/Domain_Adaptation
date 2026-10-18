@@ -117,7 +117,12 @@ GLOBAL_LOSS_SPAN = math.log(2.0)
 __provenance__ = {
     "revision": "research-concept-r34.md",
     "sections": ["3", "5"],
-    "equations": ["21", "35", "36"],
+    # La 34 estaba CALCULADA y no declarada: `entropy_cosh_bounds` devuelve
+    # `L_c = -ln 2`, que es el extremo inferior de la Ec. 34 y no de la 35 ---
+    # su propio docstring lo dice desde que r31 angosto la 35 a `U_c` sola. Una
+    # ecuacion que el modulo computa y su declaracion omite es exactamente lo
+    # que la declaracion existe para hacer visible.
+    "equations": ["21", "34", "35", "36"],
     "invariants": [
         "source_bound_copy_agrees_with_the_original",
         "source_loss_copy_agrees_with_the_original",
@@ -212,10 +217,15 @@ def class_global_loss_cosh(
 ) -> torch.Tensor:
     """Implement r31's Eq. (36): l_glob,c = (U_c - J_c) / ln 2, in [0, 1].
 
-    `score` is `J_c`, the quantity that is MAXIMIZED -- the same convention
-    `class_global_loss` above takes, and the reason `CREDALoss` passes it
-    `-creda_c`: this repository computes `creda_c = h_mix - (h_s + h_t)/2`,
-    which is `-J_c`.
+    `score` is `J_c`, the quantity that is MAXIMIZED, and that is why
+    `CREDALoss` passes it `-creda_c`: this repository computes
+    `creda_c = h_mix - (h_s + h_t)/2`, which is `-J_c`.
+
+    **Stated, not referenced.** This sentence used to say "the same convention
+    `class_global_loss` above takes"; that function was removed from this module
+    on 2026-10-18 with the rest of r25's pair, so the convention it pointed at
+    was defined nowhere and a reader could not check `-creda_c = J_c` against
+    anything.
 
     `h_source` and `h_target` are `H_2` of the two trace-normalized marginals,
     which is exactly what `CREDALoss._renyi_entropy_order_2` returns for
