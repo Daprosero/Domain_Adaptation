@@ -1,4 +1,22 @@
-"""Repository, data, and experiment-artifact path contracts."""
+"""Repository, data, and experiment-artifact path contracts.
+
+Where the repository is, where a dataset was extracted to, where a checkpoint
+`run_all_models` wrote is to be found, and how a results CSV becomes a LaTeX
+row. Every function here answers a question about a PATH or about the shape of
+a file at the end of one.
+
+**This module implements no equation, and the provenance below says so rather
+than naming one.** A provenance declares "this module implements these
+equations", so stamping a revision on an IO layer to satisfy the blanket rule
+would empty the check for every module that really does implement one --
+`two_phase.py` established that shape for a training protocol and the reason is
+the same here. What it does have is contracts, and the invariants below are
+them: `tests/test_creda_provenance.py` holds each one.
+
+`get_latex_rows` and `warn_on_incomplete_table_results` do arithmetic -- a mean
+and a count -- but neither is a term of the formulation: they describe a table
+that has already been measured.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +24,18 @@ import os
 import warnings
 from pathlib import Path
 from typing import Iterable
+
+
+__provenance__ = {
+    "revision": None,
+    "claims_no_equation": (
+        "path and artifact contracts, not a term; see the module docstring"),
+    "invariants": [
+        "the_repository_root_is_only_a_directory_carrying_both_markers",
+        "an_unsupported_backbone_or_dataset_is_refused_rather_than_guessed",
+        "a_baseline_checkpoint_needs_a_component_and_the_others_carry_none",
+    ],
+}
 
 
 BACKBONES = ("resnet18", "resnet50", "vit_tiny_patch16_224")

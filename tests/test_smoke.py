@@ -32,10 +32,29 @@ def test_package_imports() -> None:
 
 
 def test_every_module_declares_provenance() -> None:
+    """Every module names the same revision its own package is bound to.
+
+    Read off `MIL_CREDA.__implementation__` rather than written here as a
+    literal. The literal was `research-concept-r25.md`, and it went stale the
+    moment the package moved to r29: a sentence ages without anything failing,
+    and a hardcoded revision is that defect with an assertion wrapped around
+    it -- it reddens on the legitimate re-bind and says nothing about the
+    thing it was watching.
+
+    It still crosses a join, so red stays reachable: the bound revision lives
+    in `src/MIL_CREDA/__init__.py` and each module's in its own file, so a
+    re-bind that reaches nine modules and misses the tenth fails here. WHICH
+    revision is the current one is `verify`'s question (`fidelity`, against
+    the newest published revision of the family), never this one's.
+    """
+    bound = importlib.import_module("MIL_CREDA").__implementation__["revision"]
     for module in MODULES:
         provenance = getattr(importlib.import_module(module), "__provenance__", None)
         assert provenance is not None, f"{module} has no __provenance__"
-        assert provenance["revision"] == "research-concept-r25.md"
+        assert provenance["revision"] == bound, (
+            f"{module} is bound to {provenance['revision']!r} while its package "
+            f"declares {bound!r}; a module and its own package cannot name two"
+        )
 
 
 def test_every_module_declares_at_least_one_invariant() -> None:

@@ -289,19 +289,74 @@ class TestWhatItReplaces:
         for entry in drawn["record"]["bags"]:
             assert entry["label"] not in entry["donorClasses"]
 
-    def test_no_single_class_donates_the_whole_contamination(self):
-        """An unbalanced draw would build a confusion pair nobody declared."""
+    def test_every_class_donates_only_into_its_declared_partner(self):
+        """The aggregate counterpart of the per-bag single-donor invariant.
+
+        This replaced a test that asserted the OPPOSITE and survived the
+        change without going red, which is why it is written out here rather
+        than adjusted. It read:
+
+            "An unbalanced draw would build a confusion pair nobody declared."
+            for count in donated.values():
+                assert count <= -(-total // (config.CLASSES - 1)) + BAGS_PER_CLASS
+
+        Under the concentrated draw each class donates exactly
+        `BAGS_PER_CLASS * noise_instances` times -- 150 at the tie -- and that
+        bound evaluates to 179, so it passed while its own sentence had
+        stopped being true. A green that cannot go red says nothing about the
+        code; it says the assertion outlived its mechanism.
+
+        AGREED.md now declares the confusion pair instead of forbidding it, and
+        the objection the old test carried was to an UNDECLARED pair, which is
+        a different thing and still holds: `NOISE_PAIRING` is in `config`, the
+        manifest names the donor of every slot it moved, and this test is what
+        makes the declaration binding on the draw.
+
+        It fails three ways, which is why it is worth having beside the per-bag
+        test: under the old balanced draw a class donates into bags of many
+        labels; under a long cycle it donates into bags labelled the class it
+        receives from rather than the one it gives to (`sigma_inverse` instead
+        of `sigma`, equal only for an involution); and under any draw that
+        reads the pairing backwards the two sides swap.
+        """
         drawn = _material(self.RATE)
-        donated = {}
+        por_donante: dict[int, set[int]] = {}
+        veces: dict[int, int] = {}
         for entry in drawn["record"]["bags"]:
             for donor in entry["donorClasses"]:
-                donated[donor] = donated.get(donor, 0) + 1
-        total = sum(donated.values())
-        assert total > 0
-        # Balanced across the nine classes that are never the bag's own; the
-        # slack is the remainder of that division, not a tolerance chosen to pass.
-        for count in donated.values():
-            assert count <= -(-total // (config.CLASSES - 1)) + config.BAGS_PER_CLASS
+                por_donante.setdefault(donor, set()).add(entry["label"])
+                veces[donor] = veces.get(donor, 0) + 1
+
+        assert veces, "a draw that donated nothing proves nothing below"
+        for donor, etiquetas in sorted(por_donante.items()):
+            assert etiquetas == {config.NOISE_PAIRING[donor]}, (
+                f"class {donor} donated into bags labelled {sorted(etiquetas)}, "
+                f"but `NOISE_PAIRING` declares it the donor of "
+                f"{config.NOISE_PAIRING[donor]} and of nothing else"
+            )
+
+        # Every class donates, and donates exactly its partner's noised bags
+        # times the declared count -- derived from the record rather than from
+        # `BAGS_PER_CLASS`, which counts a domain's bags and not the ones a
+        # noised role holds. Only `train` and `eval` are contaminated, so a
+        # class serves ten of its partner's twelve bags, not all twelve, and an
+        # expected value computed from `BAGS_PER_CLASS` reads 144 against a
+        # real 120.
+        por_etiqueta: dict[int, int] = {}
+        for entry in drawn["record"]["bags"]:
+            por_etiqueta[entry["label"]] = por_etiqueta.get(entry["label"], 0) + 1
+        assert sorted(veces) == list(range(config.CLASSES)), (
+            "a class that never donates means the pairing left some class "
+            "unpaired, which a perfect matching cannot do"
+        )
+        for donor, count in sorted(veces.items()):
+            pareja = config.NOISE_PAIRING[donor]
+            esperado = por_etiqueta[pareja] * config.noise_instances(self.RATE)
+            assert count == esperado, (
+                f"class {donor} donated {count} times into the "
+                f"{por_etiqueta[pareja]} noised bags labelled {pareja}, "
+                f"where {esperado} is what the declared count demands"
+            )
 
     def test_the_record_names_every_slot_it_moved(self):
         """A manifest that under-reports is worse than one that is absent."""
@@ -314,21 +369,309 @@ class TestWhatItReplaces:
 
 
 class TestTheCap:
-    """Past the cap the bag's own class stops being the plurality."""
+    """Past the cap the donor class would outnumber the bag's own."""
 
-    def test_a_rate_at_or_above_one_half_is_refused(self):
+    def test_the_tie_itself_is_admitted_and_past_it_is_refused(self):
+        """`rate <= NOISE_CAP`, not `<`: at the tie the bag's own class is
+        still half the evidence, which is defensible, so 0.5 itself must NOT
+        raise. One step past it the donor would be the majority and that is
+        where the refusal belongs."""
+        assert config.noise_instances(config.NOISE_CAP) == (
+            config.NOISE_CAP * config.INSTANCES_PER_BAG)
         with pytest.raises(ValueError):
-            config.noise_instances(config.NOISE_CAP)
+            config.noise_instances(config.NOISE_CAP + 0.1)
 
     def test_every_declared_level_sits_under_the_cap_and_is_exact(self):
+        """The tie (0.5) sits AT the cap, not under it -- `<=`, because the
+        cap now admits the tie itself rather than excluding it. Before the
+        concentrated axis this read `count * 2 < INSTANCES_PER_BAG`, strictly
+        under half; at the declared tie `count * 2 == INSTANCES_PER_BAG`
+        exactly, so the old strict inequality is wrong for the level this
+        axis exists to reach, not merely incomplete."""
         for rate in config.NOISE_LEVELS:
             count = config.noise_instances(rate)
             assert count == rate * config.INSTANCES_PER_BAG
-            assert count * 2 < config.INSTANCES_PER_BAG or rate == 0.0
+            assert count * 2 <= config.INSTANCES_PER_BAG
 
     def test_the_reported_level_is_the_midpoint_and_not_a_choice(self):
         """Chosen after the curve it would be the level that flatters the method."""
         assert config.NOISE_REPORTED == config.NOISE_LEVELS[len(config.NOISE_LEVELS) // 2]
+
+
+class TestTheConcentratedDonor:
+    """AGREED.md, 'Label noise': contamination draws every replacement in a bag
+    from ONE donor class -- the class `NOISE_PAIRING` declares for that bag's
+    own label -- instead of balancing them across the other nine.
+
+    The decision a bag poses is its own class against the strongest single
+    competitor, never against the summed contaminant count. Balanced across
+    nine donors that competitor never exceeds `ceil(k / 9)`: one instance up
+    to rho 0.30, two at 0.40 under the old ladder, so the axis measured
+    robustness to DILUTED evidence while being unable to reach ambiguous
+    evidence at any admitted rate. Concentrating every replacement on the
+    single paired donor is what lets the top rung pose an equally-sized
+    competitor instead of a diluted field.
+    """
+
+    RATE = 0.4
+
+    def test_cada_bolsa_contaminada_tiene_un_solo_donante(self):
+        """Shown against the CURRENT balanced implementation, this has to
+        fail: a balanced draw at rate 0.4 (k = 12) rotates across all nine
+        other classes, so a bag's `donorClasses` holds several distinct
+        values rather than one."""
+        drawn = _material(self.RATE)
+        expected = config.noise_instances(self.RATE)
+        assert expected > 1, "need more than one replacement to see concentration"
+        for entry in drawn["record"]["bags"]:
+            donors = set(entry["donorClasses"])
+            assert len(donors) == 1, (
+                f"bag {entry['bag']} (label {entry['label']}) drew from "
+                f"{len(donors)} distinct donor classes {sorted(donors)}; the "
+                f"concentrated axis needs exactly one, never a rotation "
+                f"across the other nine"
+            )
+            assert donors == {config.NOISE_PAIRING[entry["label"]]}, (
+                "the one donor a bag draws from must be the class "
+                "NOISE_PAIRING declares for the bag's own label"
+            )
+
+
+class TestNoisePairingIsAnInvolution:
+    """AGREED.md, 'Label noise': `NOISE_PAIRING` is an involution on the ten
+    classes with no fixed point -- five mutual pairs -- DERIVED from
+    confusability in the data (two independent class-centroid cosine proxies,
+    raw pixels and the declared backbone's untrained ImageNet features, each
+    normalized per domain and averaged over the three domains, matched by
+    exhaustively enumerating all 945 perfect matchings on ten classes) rather
+    than chosen from a prior about which digits look alike, and never from a
+    trained model. The averaged optimum -- 0-6, 1-4, 2-8, 3-5, 7-9 -- is the
+    only matching near-optimal under both proxies (ranks 2 and 19 of 945).
+    """
+
+    def test_el_emparejamiento_es_una_involucion_sin_punto_fijo(self):
+        pairing = config.NOISE_PAIRING
+        assert sorted(pairing) == list(range(config.CLASSES)), (
+            "NOISE_PAIRING must be a permutation of all ten classes"
+        )
+        assert all(pairing[c] != c for c in range(config.CLASSES)), (
+            "no class may be paired with itself"
+        )
+        assert all(pairing[pairing[c]] == c for c in range(config.CLASSES)), (
+            "NOISE_PAIRING must be an involution: applying it twice has to "
+            "return the original class, or the tie it forces at the top "
+            "rung stops being undecidable"
+        )
+        assert pairing == [6, 4, 8, 5, 1, 3, 0, 9, 2, 7], (
+            "the specific averaged-proxy optimum this project derived"
+        )
+
+
+class TestTheInvolutionIsWhatTheTieNeeds:
+    """AGREED.md: the pairing may not be a long cycle, because there the
+    unordered pair identifies the label, so a model learns the pairing and
+    scores 100% on the one rung that exists to be undecidable.
+
+    This proves `test_el_emparejamiento_es_una_involucion_sin_punto_fijo`
+    above is not vacuous: a long-cycle permutation on the ten classes is
+    ALSO a fixed-point-free permutation and ALSO gives every contaminated
+    bag exactly one donor -- it passes every other invariant this file
+    checks -- and it still has to break the tie, because the tie's
+    undecidability needs the SPECIFIC symmetry an involution gives: a bag
+    labelled `c` and a bag labelled its partner must show the same two
+    classes back at each other. Without a test built to fail on exactly
+    this, the four witnesses above could not tell a forced error apart from
+    a rule a model can learn.
+    """
+
+    #: A 10-cycle: 0->1->2->...->9->0. Squaring it shifts every class by two
+    #: (`cycle[cycle[c]] == (c + 2) % 10`), never the identity, so it is
+    #: nowhere an involution even though it is a fixed-point-free permutation
+    #: and a perfectly good source of "one donor per bag".
+    LONG_CYCLE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
+
+    def test_el_ciclo_largo_pasa_los_otros_invariantes(self):
+        """Sanity on the mutation itself, so the red below is read for the
+        right reason and not because the substitute was obviously broken."""
+        assert sorted(self.LONG_CYCLE) == list(range(config.CLASSES)), (
+            "must still be a permutation"
+        )
+        assert all(self.LONG_CYCLE[c] != c for c in range(config.CLASSES)), (
+            "must still have no fixed point"
+        )
+        assert any(self.LONG_CYCLE[self.LONG_CYCLE[c]] != c
+                   for c in range(config.CLASSES)), (
+            "and yet must NOT be an involution -- that is the one invariant "
+            "this mutation exists to break"
+        )
+
+    def test_bajo_un_ciclo_largo_la_bolsa_y_su_pareja_dejan_de_coincidir(
+            self, monkeypatch):
+        """Swap `NOISE_PAIRING` for the long cycle above: every bag still
+        gets exactly one donor (the per-bag concentration invariant never
+        breaks), but the donor a class points to and the donor that class's
+        own bags receive back stop being the same class -- which is exactly
+        what makes the real tie undecidable and this one decidable instead."""
+        monkeypatch.setattr(config, "NOISE_PAIRING", self.LONG_CYCLE)
+        # The mutation has to actually have taken effect before anything
+        # below is evidence about what reads it -- a same-size substitution
+        # served from a stale import would pass this for the wrong reason.
+        assert config.NOISE_PAIRING == self.LONG_CYCLE
+        assert bags.config.NOISE_PAIRING == self.LONG_CYCLE
+
+        drawn = _material(config.NOISE_CAP)
+        donor_of = {}
+        for entry in drawn["record"]["bags"]:
+            donors = set(entry["donorClasses"])
+            assert len(donors) == 1, "one donor per bag still holds"
+            donor_of[entry["label"]] = donors.pop()
+
+        broken = [label for label, donor in donor_of.items()
+                  if donor_of.get(donor) != label]
+        # EVERY class, not merely one. The docstring above claims the cycle
+        # breaks the symmetry for all ten, and `assert broken` only asked for
+        # at least one -- a gap between the prose and the assertion that would
+        # let a pairing broken in a single place pass as if it were this
+        # mutation. Under a 10-cycle `pairing[pairing[c]] == (c + 2) % 10`,
+        # which equals `c` for no class at all, so ten is the exact count and
+        # anything less means the substitution did not reach the draw.
+        assert sorted(broken) == list(range(config.CLASSES)), (
+            f"the long cycle has to break the involution symmetry for every "
+            f"one of the ten classes; it broke {sorted(broken)}, so either the "
+            f"substitution never reached the draw or this is not the mutation "
+            f"the test believes it is exercising"
+        )
+
+    def test_el_techo_del_empate_se_niega_fuera_de_una_involucion(
+            self, monkeypatch):
+        """El hueco que cerró esta pasada, y es el que importa de los tres.
+
+        `tie_ceiling` suma sobre `a < NOISE_PAIRING[a]` esperando que eso
+        enumere cada par mutuo una sola vez. Con el ciclo largo encuentra
+        NUEVE pares en lugar de cinco, cuenta ocho de las diez clases dos
+        veces, y **devolvía 0.9444** -- adentro de (0, 1], con pinta de techo,
+        e indistinguible de uno real para cualquier lector. Medido antes de
+        poner la negativa: no es un error absurdo que se note, es un número
+        creíble que se publica.
+
+        Y es además lo más cerca que un test puede estar de medir la
+        consecuencia que `AGREED.md` afirma. Que el empate sea indecidible
+        bajo una involución y aprendible bajo un ciclo es un argumento sobre
+        lo que un modelo haría, y eso lo mediría una corrida. Lo que sí se
+        puede afirmar acá es más chico y es verdad: el techo del empate
+        **sólo está definido** para una involución, así que fuera de ella la
+        función se niega en vez de derivar un número que nadie puede sostener.
+        """
+        monkeypatch.setattr(config, "NOISE_PAIRING", self.LONG_CYCLE)
+        assert bags.config.NOISE_PAIRING == self.LONG_CYCLE
+        with pytest.raises(ValueError, match="involution"):
+            bags.tie_ceiling("M", config.DATA_CACHE, 0)
+
+        # Y con un punto fijo, que es la otra forma de no ser una involución:
+        # `pairing[pairing[c]] == c` se cumple trivialmente para una clase
+        # emparejada consigo misma, así que una comprobación que sólo elevara
+        # al cuadrado la dejaría pasar y la clase se contaminaría con su
+        # propia clase, que no contamina nada.
+        con_punto_fijo = list(config.NOISE_PAIRING)
+        con_punto_fijo[0] = 0
+        con_punto_fijo[6] = 6
+        monkeypatch.setattr(config, "NOISE_PAIRING", con_punto_fijo)
+        with pytest.raises(ValueError, match="involution"):
+            bags.tie_ceiling("M", config.DATA_CACHE, 0)
+
+
+class TestTheTopRungIsTheTieAndTheCapAdmitsIt:
+    """AGREED.md, 'Label noise': the declared levels are 0, 0.1, 0.2, 0.3 and
+    the tie at 15 of `INSTANCES_PER_BAG`, which under one donor is 15
+    instances of the bag's own class against 15 of its declared partner. The
+    top rung forces an error by construction and that is the intent, not a
+    side effect. `NOISE_CAP` stays at 0.5 and its own stated reason becomes
+    exact rather than approximate -- past the cap the donor class is the
+    plurality and the bag's label stops being defensible -- where under the
+    balanced draw that reason held for the wrong quantity, since the
+    plurality there only broke at rho 0.90.
+    """
+
+    def test_el_ultimo_peldano_es_el_empate_y_el_tope_lo_admite(self):
+        # Las dos declaraciones, cada una por su cuenta: el acuerdo fija el
+        # último nivel en el empate Y fija el tope en 0.5, y hoy los dos
+        # valen lo mismo. Acá decía además `NOISE_LEVELS[-1] == NOISE_CAP`,
+        # que es una TERCERA afirmación: que tienen que moverse juntos. Eso no
+        # lo decidió nadie, y es la misma confusión que `tables` tenía en su
+        # guarda -- el empate es una propiedad del conteo de instancias, y
+        # atarlo al tope falla en las dos direcciones sin ponerse rojo
+        # (`test_el_techo_sigue_al_empate_y_no_al_tope`, en
+        # `tests/test_report_tables.py`, es la que las separa). Lo que se
+        # afirma en su lugar es lo que el acuerdo sí dice: el último nivel ES
+        # el empate, derivado del conteo.
+        assert config.NOISE_LEVELS[-1] == 0.5
+        assert config.NOISE_CAP == 0.5
+        assert (config.noise_instances(config.NOISE_LEVELS[-1]) * 2
+                == config.INSTANCES_PER_BAG), (
+            "el último nivel declarado tiene que SER el empate, y eso se "
+            "deriva del conteo de instancias y no de que coincida con el tope"
+        )
+
+        # Under one donor the tie is exact: own and partner at 15 each.
+        own_count = config.INSTANCES_PER_BAG - config.noise_instances(
+            config.NOISE_LEVELS[-1])
+        donor_count = config.noise_instances(config.NOISE_LEVELS[-1])
+        assert own_count == donor_count == 15
+
+        # The cap admits the tie itself rather than excluding it...
+        assert config.noise_instances(config.NOISE_CAP) == 15
+        # ...and refuses one step past it, where the donor would be the
+        # majority and the label would stop being defensible.
+        with pytest.raises(ValueError):
+            config.noise_instances(config.NOISE_CAP + 0.1)
+
+
+class TestTheTieCeilingTravelsWithTheResult:
+    """AGREED.md, 'Label noise': the tie's ceiling is derived per (domain,
+    seed) and travels with the result, never written down as a constant: for
+    each mutual pair a composition reader can get at most `max(n_a, n_b)` of
+    that pair's `n_a + n_b` evaluation bags, and the figure ranges 0.5000 to
+    0.5556 across the domains and seeds because the evaluation split is drawn
+    from a seeded generator.
+    """
+
+    #: Measured 2026-10-01 against the real cached MNIST/USPS/SVHN label
+    #: arrays through `bags.tie_ceiling`'s actual replay of `_select` and
+    #: `_split_counts` -- not asserted from memory and not approximated.
+    #: Kept as hard numbers, one per (domain, seed), so a future change to
+    #: `_share`'s own draw is caught by exactly which pair it moved rather
+    #: than only by the aggregate range still looking plausible.
+    MEASURED = {
+        ("M", 0): 19 / 36, ("M", 1): 20 / 36, ("M", 2): 20 / 36,
+        ("U", 0): 20 / 36, ("U", 1): 20 / 36, ("U", 2): 18 / 36,
+        ("S", 0): 20 / 36, ("S", 1): 19 / 36, ("S", 2): 19 / 36,
+    }
+
+    #: `(archivo, directorio-en-caché)` de cada dominio medido; se salta la
+    #: clase entera si alguno falta, en vez de reportar un número parcial
+    #: como si fuera la medida completa.
+    _CACHED = {"M": "MNIST", "U": "usps.bz2", "S": "train_32x32.mat"}
+
+    @pytest.fixture(scope="class", autouse=True)
+    def _requiere_cache(self):
+        faltan = [nombre for nombre, ruta in self._CACHED.items()
+                  if not (config.DATA_CACHE / ruta).exists()]
+        if faltan:
+            pytest.skip(f"material no cacheado localmente para {faltan}; "
+                       f"una prueba que exige red no es una prueba")
+
+    def test_el_techo_del_empate_se_deriva_por_dominio_y_semilla(self):
+        techos = []
+        for (code, seed), esperado in self.MEASURED.items():
+            techo = bags.tie_ceiling(code, config.DATA_CACHE, seed)
+            assert techo == pytest.approx(esperado), f"{code}/{seed}"
+            techos.append(techo)
+        assert min(techos) == pytest.approx(0.5)
+        assert max(techos) == pytest.approx(20 / 36)
+        assert len({round(t, 4) for t in techos}) > 1, (
+            "el techo nunca puede ser una constante: tiene que variar entre "
+            "dominio y semilla porque el split de evaluación lo hace"
+        )
 
 
 class TestTheRateReachesTheRefusal:
@@ -481,7 +824,7 @@ class TestTheAxisReadsWhatRan:
 
         self._tree(tmp_path, monkeypatch, {0.0: {"B": 0.8}, 0.2: {"B": 0.6}})
         assert axis.available() == [0.0, 0.2]
-        assert axis.missing() == [0.1, 0.3, 0.4]
+        assert axis.missing() == [0.1, 0.3, 0.5]
 
     def test_an_arm_absent_from_one_level_is_named_and_never_drawn(
             self, tmp_path, monkeypatch):
@@ -494,6 +837,36 @@ class TestTheAxisReadsWhatRan:
         drawn = axis.curve(self.METRIC)
         assert drawn["arms"] == ["B"]
         assert drawn["dropped"] == ["G"]
+
+    def test_degradation_names_the_rate_its_worst_point_ran_at(
+            self, tmp_path, monkeypatch):
+        """T7: a table that prints `worst` with no idea which rate produced it
+        has to assume whether that rate is the axis's own tie -- and an
+        assumption is exactly what `conclusion_noise_floor` is not allowed to
+        make about a number it did not derive. `drawn["rates"][-1]` is already
+        computed inside `degradation`; this only asks that it travel with the
+        row instead of being thrown away when the row is built.
+        """
+        from MIL_CREDA_Benchmark import contamination as axis
+
+        self._tree(tmp_path, monkeypatch, {0.0: {"B": 0.8}, 0.3: {"B": 0.5}})
+        rows = axis.degradation(self.METRIC)
+        assert rows[0]["rate"] == 0.3, (
+            "degradation() does not name the rate its own `worst` column ran "
+            "at, so a renderer reading this row cannot tell 0.3 from the tie")
+
+    def test_the_named_rate_follows_whichever_level_actually_ran_worst(
+            self, tmp_path, monkeypatch):
+        """The pole that matters for T7: when the worst level that ran IS the
+        axis's tie (`config.NOISE_CAP`), the row has to say so by naming that
+        exact rate -- a renderer cannot otherwise distinguish "the worst rung
+        reached the tie" from "the worst rung is merely the highest one that
+        happened to run"."""
+        from MIL_CREDA_Benchmark import contamination as axis
+
+        self._tree(tmp_path, monkeypatch, {0.0: {"B": 0.8}, 0.5: {"B": 0.3}})
+        rows = axis.degradation(self.METRIC)
+        assert rows[0]["rate"] == config.NOISE_CAP
 
     def test_a_directory_that_contradicts_its_own_record_is_visible(
             self, tmp_path, monkeypatch):

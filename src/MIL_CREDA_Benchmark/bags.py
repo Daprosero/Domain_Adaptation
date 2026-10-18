@@ -27,6 +27,7 @@ from torch.utils.data import Dataset
 from torchvision import datasets, transforms
 
 from MIL_CREDA_Benchmark import config
+from MIL_CREDA_Benchmark import toy
 
 #: The transform CREDA's own generator applies to the digit domains: one shape and
 #: one normalization for all three, so the backbone sees the same kind of input
@@ -40,7 +41,12 @@ TRANSFORM = transforms.Compose([
 
 
 def _raw_dataset(code: str, root: Path):
-    """The domain as torchvision serves it. Downloads on first use."""
+    """The domain as torchvision serves it, or -- for a toy code -- as
+    `toy.build_toy_dataset` generates it. Downloads on first use; a toy
+    domain never touches `root` at all, since it has nothing to download.
+    """
+    if code in toy.TOY_CODES:
+        return toy.build_toy_dataset(code)
     root.mkdir(parents=True, exist_ok=True)
     if code == "M":
         return datasets.MNIST(str(root), train=True, download=True, transform=TRANSFORM)
@@ -60,6 +66,19 @@ def _labels(dataset) -> np.ndarray:
                 return values.numpy()
             return np.asarray(values)
     raise ValueError("the dataset exposes neither `targets` nor `labels`")
+
+
+def _subject_ids(dataset) -> np.ndarray | None:
+    """Per-point subject id, when the dataset declares one -- `None` for a
+    digit domain, which has no subject notion at all and is unaffected by
+    anything this returns.
+    """
+    values = getattr(dataset, "subjects", None)
+    if values is None:
+        return None
+    if torch.is_tensor(values):
+        return values.numpy()
+    return np.asarray(values)
 
 
 #: How many of a domain's bags fall under one of the noised roles, per class.
@@ -85,9 +104,20 @@ def _reserve_size(rate: float) -> int:
     be justified. More to the point, `_select` must draw exactly what it drew
     before at rate 0 or every clean result stops being comparable to itself.
 
-    Donors are balanced across the `CLASSES - 1` classes that are not the bag's,
-    so no single class supplies the whole contamination; the slack absorbs the
-    remainder of that division. Sized over every role `NOISE_ROLES` names (all
+    Every bag draws its whole contamination from the ONE donor class
+    `NOISE_PAIRING` declares for the bag's own label, so a class is never a
+    donor to more than one other class -- its paired partner. The reserve a
+    class holds is therefore sized against the noised bags labelled its
+    partner, not against the whole noised population split over nine
+    classes: `_noised_bag_count() * per_bag / CLASSES` rather than
+    `/ (CLASSES - 1)`, because under a mutual pairing every class carries
+    exactly one partner's worth of bags, not one ninth of everyone else's.
+    The slack absorbs the remainder of that division.
+
+    Checked against USPS, the domain that binds: at the top rung (k = 15)
+    this asks class 8 -- the smallest class, 542 images -- for 180, and it
+    has 182 spare once its own 360 are drawn (`BAGS_PER_CLASS *
+    INSTANCES_PER_BAG`). Sized over every role `NOISE_ROLES` names (all
     three, `train`/`valid`/`eval`, since the noisy condition contaminates all
     three with one shared draw) rather than `TRAIN_BAGS` alone -- USPS is what
     binds, and a caller sizing the reserve over the wrong role count would
@@ -96,12 +126,13 @@ def _reserve_size(rate: float) -> int:
     per_bag = config.noise_instances(rate)
     if per_bag == 0:
         return 0
-    donors = config.CLASSES - 1
-    return -(-_noised_bag_count() * per_bag // donors) + config.INSTANCES_PER_BAG
+    return (-(-_noised_bag_count() * per_bag // config.CLASSES)
+            + config.INSTANCES_PER_BAG)
 
 
-def _select(labels: np.ndarray, rng: np.random.Generator,
-            reserve: int = 0) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
+def _select(labels: np.ndarray, rng: np.random.Generator, reserve: int = 0,
+            subjects: np.ndarray | None = None,
+            ) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
     """Draw the images each class contributes, refusing rather than shrinking.
 
     A class that cannot fill its quota is an error. Returning a smaller slice
@@ -112,22 +143,76 @@ def _select(labels: np.ndarray, rng: np.random.Generator,
     same permutation so a domain that cannot fund both is refused here rather than
     halfway through the replacement. At `reserve == 0` this draws exactly what it
     drew before the noise axis existed, image for image.
+
+    `subjects` is `None` for every digit domain, and this function's behaviour
+    at `subjects=None` is UNCHANGED, byte for byte, from before this parameter
+    existed -- `test_toy_domains.py` pins that directly against a hand-replayed
+    permutation, so a later edit to the branch below reddens rather than
+    silently shifting the digit campaign by one image.
+
+    When `subjects` is given (one id per entry of `labels`, meaningful only
+    within a class), the draw goes subject by subject instead of permuting
+    the whole class pool at once: for class `c`, subject `k`'s own pool is
+    permuted on its own, its first `INSTANCES_PER_BAG` images become bag `k`
+    of class `c` (`bags.build`'s own per-class loop assigns bags to classes in
+    exactly that order), and the REST of that subject's pool -- never a share
+    carved out of `reserve` by this function -- becomes that subject's own
+    contamination reserve. The reserve stays subject-local on purpose: a
+    contaminated bag's clean part has to come from its own subject, or the
+    manifold patch that makes a bag a subject in the first place is blurred
+    across subjects, which is the one thing this whole mechanism exists to
+    avoid. `reserve` is still honoured, but as a single bound checked against
+    the SUM of every subject's own leftover, not as a quota divided evenly
+    across subjects beforehand.
     """
     needed = config.BAGS_PER_CLASS * config.INSTANCES_PER_BAG
     chosen: dict[int, np.ndarray] = {}
     spare: dict[int, np.ndarray] = {}
     for class_id in range(config.CLASSES):
         pool = np.flatnonzero(labels == class_id)
-        if pool.size < needed + reserve:
+        if subjects is None:
+            if pool.size < needed + reserve:
+                raise ValueError(
+                    f"class {class_id} offers {pool.size} images and the draw needs "
+                    f"{needed}"
+                    + (f" plus {reserve} held back for contamination" if reserve else "")
+                    + "; this domain cannot fund the agreed bag count"
+                )
+            drawn = rng.permutation(pool)
+            chosen[class_id] = drawn[:needed]
+            spare[class_id] = drawn[needed:needed + reserve]
+            continue
+
+        class_subjects = subjects[pool]
+        subject_ids = sorted(int(s) for s in np.unique(class_subjects))
+        if len(subject_ids) != config.BAGS_PER_CLASS:
             raise ValueError(
-                f"class {class_id} offers {pool.size} images and the draw needs "
-                f"{needed}"
-                + (f" plus {reserve} held back for contamination" if reserve else "")
-                + "; this domain cannot fund the agreed bag count"
+                f"class {class_id} offers {len(subject_ids)} subjects and "
+                f"the draw needs exactly {config.BAGS_PER_CLASS}, one per bag"
             )
-        drawn = rng.permutation(pool)
-        chosen[class_id] = drawn[:needed]
-        spare[class_id] = drawn[needed:needed + reserve]
+        chosen_parts: list[np.ndarray] = []
+        spare_parts: list[np.ndarray] = []
+        for subject_id in subject_ids:
+            subject_pool = pool[class_subjects == subject_id]
+            if subject_pool.size < config.INSTANCES_PER_BAG:
+                raise ValueError(
+                    f"class {class_id} subject {subject_id} offers "
+                    f"{subject_pool.size} images and its own bag needs "
+                    f"{config.INSTANCES_PER_BAG}; this subject cannot fund its bag"
+                )
+            drawn = rng.permutation(subject_pool)
+            chosen_parts.append(drawn[:config.INSTANCES_PER_BAG])
+            spare_parts.append(drawn[config.INSTANCES_PER_BAG:])
+        chosen[class_id] = np.concatenate(chosen_parts)
+        spare_for_class = np.concatenate(spare_parts)
+        if spare_for_class.size < reserve:
+            raise ValueError(
+                f"class {class_id} offers {spare_for_class.size} spare images "
+                f"across its {len(subject_ids)} subjects and the draw needs "
+                f"{reserve} held back for contamination; this domain cannot "
+                f"fund the agreed bag count"
+            )
+        spare[class_id] = spare_for_class
     return chosen, spare
 
 
@@ -157,6 +242,19 @@ def _contaminate(flat: list[int], members: list[list[int]], bag_labels: list[int
     one pass rather than one stream per role, which is what makes the draw a
     single shared one instead of independent ones that happened to use the same
     seed.
+
+    Every bag's replacements come from exactly ONE donor class: the one
+    `config.NOISE_PAIRING` declares for the bag's own label, never a rotation
+    across the other nine. The decision a bag poses is its own class against
+    the single strongest competitor, not against the summed contaminant count
+    -- balanced over nine donors that competitor never exceeds `ceil(k / 9)`,
+    one instance up to rho 0.30, which measured robustness to diluted evidence
+    and could never reach ambiguous evidence at any admitted rate.
+    `NOISE_PAIRING` is an involution, and that is what the top rung needs: a
+    bag labelled `c` and a bag labelled `NOISE_PAIRING[c]` end up with
+    IDENTICAL class composition and two different labels, so any composition
+    reader gets exactly one of the pair right, which is the forced error the
+    axis exists to reach rather than a side effect of raising the rate.
     """
     per_bag = config.noise_instances(rate)
     if per_bag == 0:
@@ -181,14 +279,14 @@ def _contaminate(flat: list[int], members: list[list[int]], bag_labels: list[int
               for position in role_positions.get(role, [])}
     for position in noised_positions:
         own = bag_labels[position]
-        others = [c for c in range(config.CLASSES) if c != own]
-        # Balanced rather than uniform: an unbalanced draw would let one class
-        # donate most of the contamination and create a systematic confusion pair
-        # nobody declared. The rotation keeps consecutive bags from all leaning on
-        # the same donors, and the shuffle keeps the slot a donor lands in from
-        # being a function of its class.
-        donors = [others[(position + i) % len(others)] for i in range(per_bag)]
-        rng.shuffle(donors)
+        # ONE donor, concentrated rather than balanced: every replacement in
+        # this bag comes from the single class `NOISE_PAIRING` pairs with
+        # `own`, never a rotation across the other nine. That concentration
+        # is the point -- it is what lets the top rung pose the bag's own
+        # class against an equally-sized competitor instead of nine diluted
+        # ones.
+        donor = config.NOISE_PAIRING[own]
+        donors = [donor] * per_bag
         slots = sorted(int(s) for s in
                        rng.permutation(config.INSTANCES_PER_BAG)[:per_bag])
 
@@ -241,6 +339,70 @@ def _split_counts(rng: np.random.Generator) -> tuple[dict[int, int], dict[int, i
     verdict rests on is never the one that absorbs a rounding remainder.
     """
     return _share(config.TRAIN_BAGS, rng), _share(config.VALID_BAGS, rng)
+
+
+def tie_ceiling(code: str, root: Path, seed: int) -> float:
+    """The top rung's own ceiling for this (domain, seed), never a constant.
+
+    AGREED.md, 'Label noise': for each mutual pair `NOISE_PAIRING` declares, a
+    composition reader can get at most `max(n_a, n_b)` of that pair's
+    `n_a + n_b` evaluation bags right -- guessing the larger side on every
+    bag it cannot otherwise decide. Summed over the five pairs and divided by
+    `EVAL_BAGS`, that is the best ANY composition reader can do at the tie,
+    and it depends on how the evaluation split landed for this domain and
+    this seed, so it travels with the result instead of being written down
+    once as 1.0 or as a single shared number.
+
+    Replays exactly the two calls `build()` makes before contamination ever
+    enters the picture -- `_select` then `_split_counts`, on the SAME `rng`
+    seeded from `(seed, code)` -- because the eval share per class is a
+    function of that replay alone: `_select` always permutes each class's
+    full pool regardless of how large a reserve it is asked to hold back, so
+    the state `_split_counts` sees, and therefore the eval split it returns,
+    does not depend on the noise rate. `reserve=0` here is exact for that
+    reason, not an approximation of the real draw.
+
+    Needs the real per-class pool sizes, which is why `root` has to point at
+    actual cached material (`config.DATA_CACHE` today) rather than a
+    synthetic fixture: a domain's own class sizes are what makes the eval
+    split -- and therefore the ceiling -- differ from another domain's.
+    """
+    # The ceiling is only DEFINED for an involution, and the sum below is
+    # where that assumption lives: it walks `a < NOISE_PAIRING[a]` expecting
+    # that to enumerate each mutual pair exactly once. Refused rather than
+    # computed, because the wrong answer is plausible instead of absurd --
+    # measured against the long cycle `[1,2,...,9,0]`, which is a
+    # fixed-point-free permutation like any other, the walk finds NINE pairs
+    # instead of five, counts eight of the ten classes twice, and returns
+    # 0.9444. That is inside (0, 1], reads like a ceiling, and nothing
+    # downstream could tell it from one. A conclusion printing it would
+    # report a bound nobody derived.
+    #
+    # `config.NOISE_PAIRING` being an involution is declared and asserted on
+    # its own (`test_el_emparejamiento_es_una_involucion_sin_punto_fijo`), so
+    # this cannot fire for the shipped declaration; it fires for a caller
+    # that substituted one, which is exactly what a test exploring the
+    # alternative does.
+    pairing = config.NOISE_PAIRING
+    if any(pairing[pairing[a]] != a or pairing[a] == a
+           for a in range(config.CLASSES)):
+        raise ValueError(
+            f"the tie ceiling is defined only for an involution with no fixed "
+            f"point -- five mutual pairs -- and {pairing} is not one: a bag's "
+            f"own class and its partner's must show each other back, or the "
+            f"pairs this sums over are neither five nor disjoint"
+        )
+
+    dataset = _raw_dataset(code, root)
+    labels = _labels(dataset)
+    rng = np.random.default_rng(seed * 1000 + ord(code))
+    _select(labels, rng, 0)
+    train_share, valid_share = _split_counts(rng)
+    eval_share = {class_id: config.BAGS_PER_CLASS - train_share[class_id]
+                  - valid_share[class_id] for class_id in range(config.CLASSES)}
+    paired = sum(max(eval_share[a], eval_share[pairing[a]])
+                for a in range(config.CLASSES) if a < pairing[a])
+    return paired / config.EVAL_BAGS
 
 
 @dataclass
@@ -303,9 +465,10 @@ def build(code: str, root: Path, seed: int, noise: float | None = None) -> BagSe
     rate = config.NOISE if noise is None else noise
     dataset = _raw_dataset(code, root)
     labels = _labels(dataset)
+    subjects = _subject_ids(dataset)
     rng = np.random.default_rng(seed * 1000 + ord(code))
 
-    selected, spare = _select(labels, rng, _reserve_size(rate))
+    selected, spare = _select(labels, rng, _reserve_size(rate), subjects=subjects)
     train_share, valid_share = _split_counts(rng)
 
     flat: list[int] = []

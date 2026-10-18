@@ -77,14 +77,14 @@ def test_the_sweep_draws_the_floor_against_rho_in_each_domain(
     _levels(tmp_path, monkeypatch, {
         0.0: {"B": {"targetAccuracy": 0.80, "sourceAccuracy": 0.95}},
         0.2: {"B": {"targetAccuracy": 0.60, "sourceAccuracy": 0.88}},
-        0.4: {"B": {"targetAccuracy": 0.40, "sourceAccuracy": 0.71}},
+        0.5: {"B": {"targetAccuracy": 0.40, "sourceAccuracy": 0.71}},
     })
 
     target = _drawn(figures.noise_curves("targetAccuracy"))
-    assert target[config.NAME_OF["B"]] == ([0.0, 0.2, 0.4], [0.80, 0.60, 0.40])
+    assert target[config.NAME_OF["B"]] == ([0.0, 0.2, 0.5], [0.80, 0.60, 0.40])
 
     source = _drawn(figures.noise_curves("sourceAccuracy"))
-    assert source[config.NAME_OF["B"]] == ([0.0, 0.2, 0.4], [0.95, 0.88, 0.71])
+    assert source[config.NAME_OF["B"]] == ([0.0, 0.2, 0.5], [0.95, 0.88, 0.71])
 
     # the floor is the whole sweep: no adapted arm is drawn beside it
     assert set(target) == {config.NAME_OF["B"]}
