@@ -76,31 +76,36 @@ not silently renumbered.
 
 **What the r31 declaration claims about its own default, and what the default
 used to make it claim.** Eqs. 35 and 36 are in `equations` because they are
-APPLIED here, and they are applied through two reachable maps: `bounds_form`
-selects r25's `conservative_bounds`/`class_global_loss` or r31's
-`entropy_cosh_bounds`/`class_global_loss_cosh`. **`entropy-cosh` is the
-default**, so the path a caller gets without asking computes r31's Eq. 36 --
-which is what makes the `r31` on this file a claim about its own default rather
-than a claim contradicted by it.
+APPLIED here, and they are applied through ONE map: `entropy_cosh_bounds`/
+`class_global_loss_cosh`, reached when `normalize_by_bounds` is on.
+`BOUNDS_FORMS` holds a single admissible value and `bounds_form` survives only
+so that a caller naming the retired map is refused by name rather than meeting
+`TypeError: unexpected keyword argument`.
 
-**It read the other way until 2026-10-17, and the change is not a tightening of
-prose.** `conservative` was the default, on the reasoning that every number
-already published out of this repository was measured under r25's ends, so the
-path nobody asked about had to keep computing them. What that reasoning protects
-is real and is still protected -- it is just protected by a NAME now. The two
-reachable sets do not overlap: `Plots_Generator` and `Results_Generator` reach
-`CREDA.training_pipeline`, and `train_creda` there asks for
-`bounds_form='conservative', balance_mass='cardinality'` by name; the toyset
-reaches `CREDA.toy_experiment`, which asks for r31's by name through
-`FORMA_DE_COTAS`/`BALANCE_DE_MASA`. A number protected by a default is protected
-by nothing once the default moves, and the default had to move so that a caller
-computing with this term without asking computes what the repository currently
-states.
+**Which path a caller gets WITHOUT asking is the part this paragraph used to
+state wrongly, four times over.** It read that `bounds_form` "selects r25's
+`conservative_bounds`/`class_global_loss` or r31's"; both r25 symbols were
+removed on 2026-10-18 and neither exists under `src/`. It read that
+"**`entropy-cosh` is the default**, so the path a caller gets without asking
+computes r31's Eq. 36"; `normalize_by_bounds` defaults to `False`, so no default
+path applies Eq. 36 at all -- `bounds_form` names which map would be used if the
+normalization were on, which is a different claim. It read that `train_creda`
+"asks for `bounds_form='conservative', balance_mass='cardinality'` by name";
+`training_pipeline.py` passes `balance_mass='cardinality'` and nothing else. And
+it read that `CREDA.bounds` "carries the same r25/r31 split in its own
+`__provenance__` -- which stays at r25"; that module declares
+`research-concept-r34.md` and holds one pair of ends.
 
-`CREDA.bounds` implements both maps, declares them, and carries the same r25/r31
-split in its own `__provenance__` -- which stays at r25, because the four copies
-it is held equal to genuinely are r25's. The two declarations disagree on
-purpose and each is a claim about what its own file holds.
+**What the superseded paragraph was protecting is still real.** Every number
+published out of this repository was measured under some specific pair of flags,
+and a number protected by a default is protected by nothing once the default
+moves. That is why the two reachable sets are named rather than defaulted:
+`Plots_Generator`/`Results_Generator` reach `CREDA.training_pipeline`, whose
+`train_creda` names `balance_mass='cardinality'`, and the toyset reaches
+`CREDA.toy_experiment`, which names `NORMALIZAR_POR_COTAS`/`FORMA_DE_COTAS`/
+`BALANCE_DE_MASA`. Those two namings are what the campaign's numbers rest on,
+and `normalize_by_bounds`'s own default is a separate open question recorded
+beside Eq. 37's aggregation.
 
 Nothing in this file implements either equation: neither the subtraction
 Eq. 36's numerator is, nor either denominator any revision gave it, is written
@@ -521,11 +526,31 @@ BALANCE_MASSES = ('cardinality', 'trace')
 #: class requires the three matrices that must be normalized to have POSITIVE
 #: trace, and this is where that word gets a number.
 #:
-#: It is `_renyi_entropy_order_2`'s own epsilon and not an independent choice:
-#: that function divides by `trace + 1e-6`, so at or below 1e-6 the estimator
-#: cannot tell the matrix from zero and there is nothing left to normalize. A
-#: smaller floor would admit classes whose entropy is the epsilon's and not the
-#: data's; a larger one would start excluding classes that still carry signal.
+#: **Su razon escrita murio el 2026-10-18 y el valor se queda, declarado como
+#: lo que ahora es: una decision sin medir.** Decia "es el epsilon propio de
+#: `_renyi_entropy_order_2`: esa funcion divide por `trace + 1e-6`, asi que en
+#: o por debajo de 1e-6 el estimador no distingue la matriz del cero". Ese
+#: epsilon se removio --- dividia por una constante sumada a una traza que
+#: puede ser mucho menor que ella --- y el estimador es ahora exacto a 7
+#: digitos en float32 desde `tr(K) = 1` hasta `1.175e-38`, el minimo normal de
+#: float32. Medido:
+#:
+#:     tr(K)      forma nueva       forma vieja
+#:     1e+00      1.14525199        1.14525080
+#:     1e-06      1.14525199        2.53153396
+#:     1e-09      1.14525199       13.53976822
+#:     1e-38      1.14525199       13.81551075
+#:
+#: Asi que el piso que el ESTIMADOR necesita es `torch.finfo(torch.float32).
+#: tiny`, treinta y dos ordenes de magnitud por debajo de este. Lo que queda
+#: sin derivar es cual debe ser el piso de la CLASE, que es otra pregunta: 1e-6
+#: excluye del conjunto activo clases cuya entropia ahora se calcula exacta, y
+#: bajarlo cambia `C_act`, los pesos de la Ec. (37) y cuantas clases cobran su
+#: carga de uno. Eso es una decision sobre el experimento y no sobre la
+#: aritmetica, de modo que el valor NO se mueve aqui: se deja en 1e-6, donde
+#: estaba cuando se midio todo lo publicado, y se dice que su razon es
+#: historica. Un numero cuya justificacion se removio y que se reescribe solo
+#: para que la prosa cierre es peor que uno que declara no tenerla.
 MIN_CLASS_TRACE = 1e-6
 
 
@@ -879,9 +904,42 @@ class CREDALoss(nn.Module):
                     f'en el bloque; con {K.shape[0]} el denominador del '
                     f'estadistico U es {float(den):.3e}')
             return -torch.log((torch.trace(K @ K) - propios) / den + 1e-6)
-        tr_K = torch.trace(K) + 1e-6
+        # La traza VERDADERA, sin epsilon, y una negativa en vez de un
+        # amortiguador. Es la forma de `MIL_CREDA.renyi.trace_normalize`, y la
+        # razon es medida y no de estilo: `trace(K) + 1e-6` suma una constante
+        # a una cantidad que puede ser mucho menor que ella, asi que en cuanto
+        # `tr(K)` se acerca a `1e-6` el epsilon ES el normalizador y la
+        # entropia reportada es la del epsilon. Sobre un bloque de rango
+        # completo en float32, entropia exacta 1.14525202:
+        #
+        #     tr(K) = 1e-06  ->   2.53153396
+        #     tr(K) = 1e-09  ->  13.53976822
+        #     tr(K) = 1e-20  ->  13.81551075   saturada en -log(1e-6)
+        #
+        # Y la ultima no es solo erronea: una matriz de densidad 5x5 no puede
+        # llevar mas de `ln 5 = 1.609` nats, de modo que el estimador se salia
+        # del rango de su propia cantidad. Esta forma es exacta a 7 digitos en
+        # float32 desde `tr(K) = 1` hasta `1.175e-38`, el minimo normal.
+        tr_K = torch.trace(K)
+        if float(tr_K) <= 0.0:
+            # La Ec. (9) solo define la entropia para traza positiva. El portal
+            # de actividad (`MIN_CLASS_TRACE`) excluye esas clases antes de
+            # llegar aca, asi que esto es el respaldo y no la via normal ---
+            # pero refuta, porque un epsilon aqui devolveria un numero que es
+            # del epsilon y la clase se reportaria con una entropia medida.
+            # Misma disciplina que `trace_normalize` y que el denominador del
+            # estadistico U de la rama de arriba.
+            raise ValueError(
+                f'una matriz de Gram con traza no positiva no tiene '
+                f'normalizacion: la Ec. (9) la exige positiva y esta vale '
+                f'{float(tr_K):.3e}')
         K_norm = K / tr_K
-        return -torch.log(torch.trace(K_norm.T @ K_norm) + 1e-6)
+        # Sin epsilon dentro del log tampoco, y esta vez no hace falta ninguno:
+        # para `A` PSD de traza uno con autovalores `l_i >= 0` que suman uno,
+        # Cauchy-Schwarz da `tr(A^2) = sum l_i^2 >= 1/n > 0`. El epsilon no
+        # protegia de un cero alcanzable y si sesgaba el resultado --- es el
+        # 1.75e-06 de error relativo que quedaba incluso a traza uno.
+        return -torch.log(torch.trace(K_norm.T @ K_norm))
 
     def _mix_kernel_concat(self, K_s, K_t, K_st):
         """The mixed kernel, with `balance_mix_blocks` governing whose it is.

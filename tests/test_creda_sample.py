@@ -502,8 +502,15 @@ def test_the_pinned_pre_fork_means_still_come_out_of_the_default_path() -> None:
     # `True` arm's do not. One of the two is bit-identical and the other moved
     # by 3e-8, which is exactly what "the difference is rounding" predicts and
     # what a single re-measured number would have hidden.
-    superseded = {True: -0.309462308883667, False: 0.13413619995117188}
-    pinned = {True: -0.3094622790813446, False: 0.13413619995117188}
+    # **Re-measured on 2026-10-18 and BOTH arms moved this time**, which is
+    # the difference from r33's re-measurement: there the `False` arm was
+    # bit-identical and only the `True` one shifted by 3e-8. The cause is a
+    # different one -- `_renyi_entropy_order_2`'s two `1e-6` epsilons were
+    # removed, so every entropy this fixture computes changed slightly, and
+    # that reaches both arms. Measured rather than assumed, because assuming
+    # the unchanged arm is exactly the mistake r33's pass made.
+    superseded = {True: -0.3094622790813446, False: 0.13413619995117188}
+    pinned = {True: -0.3094612658023834, False: 0.13413672149181366}
     for use_entropy_weighting, expected in pinned.items():
         value = float(CREDALoss(
             sigma="auto", lambda_creda=1.0,
@@ -513,11 +520,25 @@ def test_the_pinned_pre_fork_means_still_come_out_of_the_default_path() -> None:
             f"default path produced {value!r}; r33's pinned value is "
             f"{expected!r} (the pre-fork one was "
             f"{superseded[use_entropy_weighting]!r})")
-        # The move is Eq. (37)'s rounding and nothing larger.
-        assert abs(value - superseded[use_entropy_weighting]) < 1e-6, (
-            f"the default path moved by more than Eq. (37)'s float32 rounding "
-            f"against the pre-fork number: {value!r} against "
-            f"{superseded[use_entropy_weighting]!r}")
+        # **The bound here was `1e-6` and its stated reason was Eq. (37)'s
+        # rounding; that reason no longer covers the move.** Removing
+        # `_renyi_entropy_order_2`'s two epsilons is a change to the ESTIMATOR
+        # rather than to the aggregation, and it shifts the `True` arm by
+        # 1.013e-06 -- just past the old bound. So the bound is re-derived from
+        # what it now has to admit instead of being relaxed until the test
+        # passes: the log's epsilon biased `-log(tr(A^2) + 1e-6)` by
+        # `1e-6 / tr(A^2)`, and with `tr(A^2) >= 1/n` for a unit-trace density
+        # matrix of size n, that bias cannot exceed `1e-6 * n`. Both arms are
+        # within it with room to spare, and anything an order larger than that
+        # is a different cause.
+        techo = 1e-6 * f_s.shape[0]
+        movimiento = abs(value - superseded[use_entropy_weighting])
+        assert movimiento < techo, (
+            f"with use_entropy_weighting={use_entropy_weighting!r} the default "
+            f"path moved by {movimiento:.3e} against the superseded number "
+            f"{superseded[use_entropy_weighting]!r}, past the "
+            f"{techo:.3e} the log epsilon's own bias `1e-6 / tr(A^2)` can "
+            f"account for on {f_s.shape[0]} samples")
 
 
 # ========================================================== 3. one per flag

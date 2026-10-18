@@ -428,10 +428,16 @@ def test_the_term_is_invariant_to_the_common_confidence_level():
     over `c sqrt(tr(K_s) tr(K~_t))`, so the `c` cancels too. The per-class
     loss is therefore EXACTLY the same number at every `c`.
 
-    The sweep spans two decades. The assertion at `1e-6` is made over the part
-    of it where `tr(K~_t) >= 1`, and that restriction is MEASURED rather than
-    chosen: the companion test below shows the residual below it is the
-    `1e-6` epsilon inside `_renyi_entropy_order_2` and nothing else.
+    The sweep spans two decades and the assertion is made at EVERY rung.
+
+    **It used to be made only where `tr(K~_t) >= 1`, and the epsilon is what
+    made that restriction necessary.** `_renyi_entropy_order_2` added `1e-6` to
+    the trace it divided by, so below `tr(K~_t) = 1` the perturbation was
+    `1e-6 / tr(K~_t)` and grew without bound as the weights shrank -- the
+    algebra above held and the estimator did not. With the epsilon gone the
+    deviation is flat float32 round-off: measured over all nine rungs, from
+    `tr(K~_t) = 300` down to `0.03`, the worst is 1.714e-07 and the companion
+    test below holds that it no longer follows the epsilon's law.
     """
     medir, C, n_t = _perdida_por_clase()
     cs = [1.0 - 1e-12, 0.5623, 0.3162, 0.1778, 0.1, 0.0562, 0.0316, 0.0178, 0.01]
@@ -442,38 +448,70 @@ def test_the_term_is_invariant_to_the_common_confidence_level():
 
     ref, _ = medir(cs[0])
     assert len(ref) == C
-    exactos = 0
+    exactos = bajo_uno = 0
     for c in cs:
         l, w = medir(c)
         assert w == pytest.approx(c, rel=1e-6), (w, c)
         traza = w ** 2 * n_t / C          # tr(K~_t) of a class: sum_j w_j^2
-        if traza >= 1.0:
-            assert np.abs(l - ref).max() <= 1e-6, (
-                f"c={c}: the per-class loss moved by "
-                f"{np.abs(l - ref).max():.3e} where the epsilon cannot explain it")
-            exactos += 1
-    assert exactos >= 5, (exactos, "too few rungs reached the exact assertion")
+        assert np.abs(l - ref).max() <= 1e-6, (
+            f"c={c} (tr(K~_t)={traza:.4f}): the per-class loss moved by "
+            f"{np.abs(l - ref).max():.3e}, and the algebra above says it may "
+            f"not move at all")
+        exactos += 1
+        # The rungs the old restriction excluded are the ones that matter now:
+        # a sweep that only reached `tr >= 1` could not tell the repaired
+        # estimator from the one that saturated below it.
+        if traza < 1.0:
+            bajo_uno += 1
+    assert exactos == len(cs), (exactos, len(cs))
+    assert bajo_uno >= 3, (
+        bajo_uno, "no rung landed below tr(K~_t) = 1, which is where the "
+                  "epsilon used to break the invariance")
 
 
-def test_the_residual_of_that_invariance_is_the_entropy_epsilon():
-    """Below `tr(K~_t) = 1` the deviation scales as `1/c^2`, which is the epsilon's.
+def test_the_residual_of_that_invariance_no_longer_follows_the_epsilons_law():
+    """Below `tr(K~_t) = 1` the deviation is FLAT, not `1/c^2`.
 
-    `_renyi_entropy_order_2` adds `1e-6` to the trace it divides by, so the
-    perturbation it introduces is `1e-6 / tr(K~_t)` and `tr(K~_t)` falls as
-    `c^2`. If the deviation were the algebra failing it would not follow that
-    law, and this is what licenses the restriction in the test above instead of
-    leaving it as a tolerance somebody picked.
+    **This test changed poles and the inversion is the point.** It used to
+    assert the opposite -- that the deviation below `tr(K~_t) = 1` scaled as
+    `1/c^2`, which is exactly the law `1e-6 / tr(K~_t)` follows -- and that is
+    what licensed the restriction the test above no longer needs. The epsilon
+    was removed from `_renyi_entropy_order_2` on 2026-10-18, so the quantity
+    this characterised is gone and what is kept is its absence, measured the
+    same way rather than deleted.
+
+    Measured over the same four rungs after the repair:
+
+        c = 0.0562  ->  8.196e-08
+        c = 0.0316  ->  1.714e-07
+        c = 0.0178  ->  1.714e-07
+        c = 0.0100  ->  1.714e-07
+
+    Flat, where the epsilon's law would have it grow by 32x across that span.
+    `dev * c^2` therefore spreads by 15.1x instead of staying constant, and the
+    old assertion required that spread to be under 1.3x.
     """
     medir, C, n_t = _perdida_por_clase()
     ref, _ = medir(1.0 - 1e-12)
-    productos = []
+    productos, devs = [], []
     for c in (0.0562, 0.0316, 0.0178, 0.01):
         l, w = medir(c)
         dev = float(np.abs(l - ref).max())
-        assert dev > 1e-6, (c, dev, "the restriction above is not measured")
+        # Float32 round-off, not a scale-dependent bias: bounded, and bounded
+        # by a number that does not depend on `c`.
+        assert dev <= 1e-6, (c, dev, "the deviation is back above the float32 "
+                                     "noise this test exists to bound")
+        devs.append(dev)
         productos.append(dev * c ** 2)
-    assert max(productos) / min(productos) < 1.3, (
-        productos, "the residual does not follow the epsilon's 1/c^2 law")
+    # The epsilon's signature was a CONSTANT `dev * c^2`. Its absence is that
+    # product spreading, which is what a flat deviation does.
+    assert max(productos) / min(productos) > 2.0, (
+        productos, "`dev * c^2` is still nearly constant, which is the "
+                   "epsilon's own signature: the division is biased again")
+    # And the deviation itself does not grow as the weights shrink.
+    assert max(devs) / min(devs) < 5.0, (
+        devs, "the deviation grows with 1/c, so something scale-dependent is "
+              "back in the estimator")
 
 
 # ======================= 8. both weighting arms share one phase-2 search

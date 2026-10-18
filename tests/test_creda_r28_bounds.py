@@ -637,11 +637,24 @@ class R28ActiveClassTests(unittest.TestCase):
 class R28DefaultsUnchangedTests(unittest.TestCase):
     """The contract both new keywords are opt-in values in order to keep."""
 
-    #: Read off the UNEDITED tree, before `bounds_form` or `balance_mass`
-    #: existed, with `_default_fixture` below as the input. Hard-coded so that
-    #: the reference cannot move with the code it is checking.
-    PINNED_MEAN = -0.771175920963
-    PINNED_PER_CLASS = (-0.865838766098, -0.726791977882, -0.720897138119)
+    #: Read off the tree with `_default_fixture` below as the input, hard-coded
+    #: so the reference cannot move with the code it is checking.
+    #:
+    #: **Re-measured on 2026-10-18, and the superseded values are kept beside
+    #: them.** `_renyi_entropy_order_2` divided by `trace(K) + 1e-6` and added
+    #: a second `1e-6` inside its own logarithm; both are gone, because a
+    #: constant added to a trace that can be far smaller than it makes the
+    #: epsilon the normalizer. The movement here is the log's epsilon alone --
+    #: this fixture's traces are order 1, so the first epsilon barely bit --
+    #: and it is 4.8e-07 on the mean, which is the bias `-log(tr(A^2) + 1e-6)`
+    #: carries even at a healthy trace. The sign and the ordering of the three
+    #: classes are unchanged.
+    PINNED_MEAN = -0.7711763978004456
+    PINNED_PER_CLASS = (-0.865839421749, -0.72679233551, -0.720897495747)
+    #: What they replaced, read off the tree before `bounds_form` or
+    #: `balance_mass` existed and held until the epsilons came out.
+    SUPERSEDED_MEAN = -0.771175920963
+    SUPERSEDED_PER_CLASS = (-0.865838766098, -0.726791977882, -0.720897138119)
 
     @staticmethod
     def _default_fixture():
@@ -681,6 +694,13 @@ class R28DefaultsUnchangedTests(unittest.TestCase):
         self.assertEqual(tuple(per_class.shape), (CLASSES,))
         for measured, pinned in zip(per_class.tolist(), self.PINNED_PER_CLASS):
             self.assertAlmostEqual(measured, pinned, places=10)
+        # And the superseded pin is kept live rather than left as a comment: it
+        # has to DISAGREE now, or this class is pinning a number that never
+        # moved and the re-measurement above recorded nothing.
+        self.assertNotAlmostEqual(
+            float(mean), self.SUPERSEDED_MEAN, places=10,
+            msg="the mean matches the pre-epsilon-removal pin, so either the "
+                "epsilons are back or they never affected this fixture")
 
     def test_the_conservative_map_is_gone_from_both_packages(self) -> None:
         """r25's ends and its loss are no longer importable, from either side.
