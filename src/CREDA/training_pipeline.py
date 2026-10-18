@@ -1,3 +1,26 @@
+"""The paper's ResNet campaign: the five training loops, their runners and the
+readers that turn their checkpoints back into features and figures.
+
+`train_baseline`, `train_dann`, `train_adda_phase1`/`2`, `train_cdan` and
+`train_creda` are the loops; `run_baseline` through `run_creda` and
+`run_all_models` drive them over a dataset's transfers; the rest loads what they
+saved and prepares what the notebooks draw.
+
+**This module implements no equation, and the provenance below says so.** It is
+the campaign harness. Each arm's mathematics comes from where it is declared --
+`CREDALoss` for CREDA's adaptation term and `creda_ramp` for its coefficient,
+both imported above -- and nothing here writes a term inline. That is the one
+claim this declaration rests on, so it is tested rather than asserted in prose:
+`tests/test_creda_provenance.py::test_the_campaign_builds_its_adaptation_term_from_the_method_module`
+reddens if `train_creda` stops calling the loss, or if any of the term's own
+helpers is copied into this file.
+
+`get_lambda`, `get_eta` and `entropy` are prior work's own schedules and
+weighting, which DANN, ADDA and CDAN+E read directly. `entropy` is Shannon's,
+not the revision's quadratic Renyi estimator, and serves CDAN+E; the two are
+different quantities and neither is a claim from this revision.
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -38,6 +61,23 @@ from .models import (
     GradientReversalLayer,
     CREDALoss
 )
+
+
+__provenance__ = {
+    "revision": None,
+    "claims_no_equation": (
+        "the campaign's training harness, not a term; "
+        "see the module docstring"),
+    "invariants": [
+        # Pre-existing: `get_lambda` and `CREDA.schedules.creda_ramp` have not
+        # drifted apart. Held against `tests/golden_creda_schedule.json`,
+        # committed before the reparameterization.
+        "the_shared_implementation_matches_the_one_the_other_methods_use",
+        # Written with this declaration, because it is the claim the
+        # declaration itself rests on.
+        "the_campaign_builds_its_adaptation_term_from_the_method_module",
+    ],
+}
 
 
 def resolve_device():
@@ -451,7 +491,36 @@ def train_creda(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, d
     criterion_class = nn.CrossEntropyLoss()
     # No coefficient here at all: the schedule below supplies it. The loss
     # returns its own magnitude, and `lambda_creda` keeps its own default of one.
-    creda_loss_fn = CREDALoss(sigma=sigma, use_entropy_weighting=True)
+    #
+    # `balance_mass` is named rather than defaulted, and this is the one call in
+    # this repository where that is load-bearing. This function is what
+    # `Plots_Generator` and `Results_Generator` reach -- they import
+    # `CREDA.training_pipeline`, and the `CREDA.models` import beside it only
+    # allow-lists classes for `torch.load` and never constructs this loss -- so
+    # every number already published out of those two notebooks was measured
+    # under r25's cardinality balance and must keep being computed under it.
+    #
+    # It used to be the constructor's default and is no longer: the default
+    # moved to r28's `trace`, so that a caller which does not ask gets the
+    # formulation the repository currently states. A number protected by a
+    # default is protected by nothing once the default moves, which is why the
+    # protection is written here instead.
+    #
+    # **2026-10-18: `bounds_form='conservative'` was a third keyword here and
+    # is gone.** r33's Eq. (35) states one pair of ends and r25's cardinality
+    # pair is nowhere in the formulation, so `conservative_bounds` and
+    # `class_global_loss` were removed from `CREDA.bounds` rather than kept
+    # behind a name -- see `models.BOUNDS_FORMS`. This path therefore CANNOT be
+    # held on r25's two ends any more, and saying so is the honest form of the
+    # paragraph above: what those two notebooks published is reachable in the
+    # artefacts that recorded it, not by re-running this function.
+    #
+    # Measured, the flag that READS `balance_mass` is off on this call
+    # (`balance_mix_blocks` is `False`), so the pin changes no bit today. It is
+    # not decoration: it is what keeps this path on r25's balance the moment
+    # that flag is turned on, and `tests/test_r31_ec36.py` holds both halves.
+    creda_loss_fn = CREDALoss(sigma=sigma, use_entropy_weighting=True,
+                              balance_mass='cardinality')
 
     for epoch in range(epochs):
         print(f"[CREDA] => Epoch {epoch+1}/{epochs} - INICIO")
