@@ -3432,7 +3432,7 @@ def figura_cuadro_fronteras(nombre, H, ys, cab, j, pasos=60):
                     + 'los tres llegan a 1 sin que nadie mire la etiqueta',
                     fontsize=10.5, linespacing=1.4)
     fig.suptitle(
-        f'{nombre.upper()} {chr(183)} qué hace el peso de la Ec. 19 '
+        f'{nombre.upper()} {chr(183)} qué hace el peso de la Ec. 24 '
         f'{chr(183)} construido, no medido {chr(183)} paso {j+1} de {pasos}',
         fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.94))
@@ -3458,7 +3458,7 @@ def figura_fronteras_w(nombre, H, ys, cab, destino=None, pasos=60):
     Todo lo demas que tenemos del sopesado es estadistica de RESULTADOS. Esta
     figura muestra el MECANISMO, y no necesita semillas ni test porque no es
     una medicion con varianza: `w = 1 - H2(g)/ln C` es funcion del posterior y
-    nada mas, asi que la curva es una propiedad de la Ec. 19 y del cabezal ya
+    nada mas, asi que la curva es una propiedad de la Ec. 24 y del cabezal ya
     entrenado --- exacta.
 
     **Los tres puntos arrancan en lugares DISTINTOS a proposito.** Medido
@@ -3538,7 +3538,7 @@ def figura_fronteras_w(nombre, H, ys, cab, destino=None, pasos=60):
                     + 'los tres llegan a 1 sin que nadie mire la etiqueta',
                     fontsize=10.5, linespacing=1.4)
     fig.suptitle(
-        f'{nombre.upper()} {chr(183)} qué hace el peso de la Ec. 19 '
+        f'{nombre.upper()} {chr(183)} qué hace el peso de la Ec. 24 '
         f'{chr(183)} construido, no medido: `w` es función del posterior y '
         f'nada más', fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.94))

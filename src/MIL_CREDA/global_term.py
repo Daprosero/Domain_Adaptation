@@ -7,9 +7,20 @@ Eq. (33) averages the two marginal entropies against the joint's; Eqs. (34)-(35)
 bound that score by `-ln 2` below and `2 ln cosh((H_t - H_s)/4)` above, both read
 off the same matrices; and Eq. (36) divides the corrected score `U_c - J_c` by
 the constant `ln 2` that r30 proved bounds it, so minimizing the loss maximizes
-`J_c - U_c`. Eq. (37) aggregates the active classes SUB-convexly, weighted by
-the confidences of the bags routed to each, and yields zero when no class is
-active.
+`J_c - U_c`. Eq. (37) aggregates over EVERY class with the observed source
+proportions `n_c^s / N_s`, which are non-negative and sum to one, so `L_glob` is
+a CONVEX combination; a class with no active pair is charged the maximum loss of
+one rather than skipped, and an empty active set therefore reads one and not
+zero. The confidences do not enter this aggregation at all.
+
+**That paragraph said the opposite until 2026-10-18 and the function did not.**
+It read "aggregates the active classes SUB-convexly, weighted by the confidences
+of the bags routed to each, and yields zero when no class is active" -- r31's
+form, whose weights were `q_c / sum n^t` with `q_c = sum_j w_j^t`, summed to at
+most one, and let the shortfall gate the term. r32 rewrote it and `global_loss`
+below has implemented r32's form since; the three clauses above it survived
+their own mechanism, which is the defect this repository keeps finding in prose
+rather than in code.
 
 **What r31 changed here, and what it did not.** Eq. (36)'s denominator was the
 per-class span `U_c - L_c` through r29, with that span explicitly excluded from
@@ -215,11 +226,13 @@ def balanced_dependency_score(
 ) -> torch.Tensor:
     """Implement Eq. (33) over Eq. (32)'s densities: J_c = (H_s + H_t)/2 - H_mix.
 
-    The same contrast `dependency_score` computes, over the three matrices
-    Eq. (32) now defines rather than three independent trace normalizations.
-    The signature is the reason this is a sibling and not a keyword: the r25
-    function's third argument is the ASSEMBLED mixed matrix, and the balance
-    cannot be applied to one — it needs `tr(K_s)` and `tr(K̃_t)` separately, so
+    The same contrast r25's `dependency_score` USED TO compute -- that function
+    was removed on 2026-10-18 and nothing under `src/` defines it any more --
+    over the three matrices Eq. (32) now defines rather than three independent
+    trace normalizations. The signature is why this replaced it rather than
+    becoming a keyword on it: the r25 function's third argument was the
+    ASSEMBLED mixed matrix, and the balance cannot be applied to one — it needs
+    `tr(K_s)` and `tr(K̃_t)` separately, so
     the blocks have to arrive separately. A keyword would have left the third
     positional argument meaning one thing under one setting and another under
     the other, which is worse than two names.
@@ -330,11 +343,19 @@ def entropy_cosh_bounds(
     forces coinciding structures and hence equal entropies -- so it is not used
     to normalize anything.
 
-    **Which Eq. (35) a run uses is a LAW here, and the law is asserted.** CREDA
-    selects between r25's pair and this one with two flags,
-    `normalize_by_bounds` and `bounds_form`; here the normalization always
-    happens and `conservative_bounds` is retained only for the copies CREDA
-    pins, never reached by a consumer.
+    **Which Eq. (35) a run uses is a LAW here, and the law is asserted.** Here
+    the normalization ALWAYS happens: this package carries one pair of ends and
+    no flag selects another, which is why `wiring.py` reaches
+    `class_global_loss_cosh` unconditionally.
+
+    **r25's pair is gone from both packages and this sentence used to say
+    otherwise.** It read that `conservative_bounds` "is retained only for the
+    copies CREDA pins, never reached by a consumer"; that function was removed
+    on 2026-10-18, here and in `CREDA.bounds`, because r33 states one pair of
+    ends and r25's appears nowhere in the formulation. CREDA's own
+    `normalize_by_bounds`/`bounds_form` keywords survive -- the second with a
+    single admissible value -- so that a caller naming the retired map is
+    refused by name instead of meeting `TypeError: unexpected keyword`.
     `the_bounds_are_credas_entropy_cosh_choice_and_not_r25s_pair` measures that
     the pinned reading is the one CREDA's declaration selects and that r25's
     pair would read something else, so the pin is evidence rather than silence.
@@ -351,8 +372,11 @@ def class_global_loss_cosh(
 ) -> torch.Tensor:
     """Implement r31's Eq. (36): l_glob,c = (U_c - J_c) / ln 2, in [0, 1].
 
-    `score` is `J_c`, the quantity that is MAXIMIZED -- the same convention
-    `class_global_loss` above takes. `h_source` and `h_target` are `H_2` of
+    `score` is `J_c`, the quantity that is MAXIMIZED. That was the convention
+    r25's `class_global_loss` took too, and it is stated here rather than by
+    reference because that function was removed on 2026-10-18 and a reader can
+    no longer check the convention against it. `h_source` and `h_target` are
+    `H_2` of
     Eq. (32)'s two trace-normalized marginals, which is exactly what
     `balanced_mixture` returns as its first two values.
 
