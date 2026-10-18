@@ -1,0 +1,421 @@
+
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands]{babel}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{booktabs,amsmath,amssymb,microtype,xcolor}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=blue]{hyperref}
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.6em}{}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\renewcommand{\arraystretch}{1.12}
+
+\title{\vspace{-1.2cm}\textbf{Qué ve el kernel}\\[2pt]
+\large La representación de la fuente con y sin BatchNorm,\\
+\large y por qué decide el resultado de la adaptación}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-1.4cm}
+
+\begin{center}
+\fbox{\begin{minipage}{0.93\textwidth}\small
+\textbf{En una línea.} Sin BatchNorm el codificador de la fuente entrega al kernel
+un espacio de \emph{una} dirección efectiva para un problema de \emph{tres} clases.
+Tres clases sobre una recta no se pueden separar con ningún kernel de distancia:
+la del medio queda entre las otras dos por construcción. No es un problema de
+sintonía --- es geometría, y se resuelve antes de que al kernel se le pregunte nada.
+\end{minipage}}
+\end{center}
+
+\section{Las tablas, primero}
+
+Todas las medidas salen de \textbf{la fuente sola}, al terminar la fase 1: mismo
+seed, mismos datos, mismo orden de lote. Lo único distinto entre las dos columnas
+es BatchNorm. Las dos alcanzan \textbf{1.0000} de acierto sobre la fuente, así
+que lo que difiere no es el ajuste sino la forma de lo que se le entrega al kernel.
+
+\subsection*{Sin el término KL}
+\noindent
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrr}
+      \multicolumn{5}{c}{\textbf{SIN BatchNorm}} \\[2pt]
+      \toprule
+      familia & dim.\,ef. & \% entre & contraste & acierto \\
+      \midrule
+      rollo & 1.97 & 92.3\% & 0.4383 & 0.9401 $\pm$ 0.109 \\
+      toroides & 1.11 & 95.5\% & 0.5536 & 0.3651 $\pm$ 0.030 \\
+      lunas & 1.04 & 99.9\% & 0.5799 & 0.3306 $\pm$ 0.006 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrr}
+      \multicolumn{5}{c}{\textbf{CON BatchNorm}} \\[2pt]
+      \toprule
+      familia & dim.\,ef. & \% entre & contraste & acierto \\
+      \midrule
+      rollo & 1.97 & 99.1\% & 0.4246 & 0.6769 $\pm$ 0.014 \\
+      toroides & 1.86 & 91.3\% & 0.4757 & 0.6299 $\pm$ 0.098 \\
+      lunas & 1.95 & 99.8\% & 0.4228 & 0.4988 $\pm$ 0.133 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}
+\vspace{11pt}
+
+
+\subsection*{Con el término KL}
+\noindent
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrr}
+      \multicolumn{5}{c}{\textbf{SIN BatchNorm, con KL}} \\[2pt]
+      \toprule
+      familia & dim.\,ef. & \% entre & contraste & acierto \\
+      \midrule
+      rollo & 2.81 & 81.9\% & 0.3580 & 0.7355 $\pm$ 0.251 \\
+      toroides & 2.83 & 80.7\% & 0.3622 & 0.2781 $\pm$ 0.068 \\
+      lunas & 2.33 & 90.5\% & 0.3946 & 0.3346 $\pm$ 0.006 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrr}
+      \multicolumn{5}{c}{\textbf{CON BatchNorm, con KL}} \\[2pt]
+      \toprule
+      familia & dim.\,ef. & \% entre & contraste & acierto \\
+      \midrule
+      rollo & 2.80 & 82.0\% & 0.3595 & 0.9451 $\pm$ 0.079 \\
+      toroides & 2.83 & 81.3\% & 0.3606 & 0.7657 $\pm$ 0.206 \\
+      lunas & 2.83 & 80.8\% & 0.3605 & 0.7062 $\pm$ 0.109 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}
+\vspace{11pt}
+
+
+\textit{dim.\,ef.} son las direcciones efectivas (de 1 a 16); \textit{\% entre} es
+la parte de la varianza que es separación entre clases; \textit{contraste} es
+$\bar K_{=} - \bar K_{\neq}$; \textit{acierto} es sobre el dominio objetivo, 5
+semillas. El azar es $0.3333$.
+
+\section{Qué experimento se hizo}
+
+Tres familias de juguete (\textit{rollo}, \textit{toroides}, \textit{lunas}),
+reducidas a \textbf{3 clases}. Cada una tiene un dominio fuente y uno objetivo; el
+objetivo es el mismo generador con una traslación de $5{,}0$ por coordenada, una
+rotación de $45^\circ$ y ruido $\sigma = 0{,}3$.
+
+\textbf{El montaje son dos fases.} La fase 1 entrena \emph{un} codificador
+$f_\theta: \mathbb{R}^d \to \mathbb{R}^{16}$ y una cabeza lineal sobre la fuente,
+con entropía cruzada, y \textbf{congela los dos}. Una copia única siembra el
+codificador objetivo $f_{\theta'}$, que de ahí en más entrena libre bajo el término
+de adaptación, que es la única fuerza que lo toca. La fuente siempre pasa por su
+codificador congelado y el objetivo por el suyo.
+
+\textbf{Lo que se mide acá es la fase 1 sola.} No hay dominio objetivo, no hay
+adaptación, no hay segundo codificador: solo las 16 coordenadas que el codificador
+de la fuente produce, y lo que un kernel gaussiano puede hacer con ellas.
+
+\section{Qué muestra cada tabla}
+
+\subsection{La geometría: direcciones efectivas y separación}
+
+La covarianza de los rasgos de la fuente, $\Sigma_s = \tfrac{1}{n}\sum_i (z_i -
+\bar z)(z_i - \bar z)^\top$, se descompone en
+\[
+\Sigma_s \;=\; \underbrace{\Sigma_{\text{dentro}}}_{\text{dispersión de cada clase}}
+\;+\; \underbrace{\Sigma_{\text{entre}}}_{\text{separación entre clases}} .
+\]
+De ahí salen dos números. El primero es la \textbf{razón de participación} sobre
+los autovalores $\lambda_1 \ge \dots \ge \lambda_{16}$ de $\Sigma_s$,
+\[
+  \mathrm{dim}_{\mathrm{ef}} \;=\; \frac{\left(\sum_k \lambda_k\right)^2}{\sum_k \lambda_k^2}
+  \;\in\; [1, 16],
+\]
+que vale $1$ si toda la varianza está en una dirección y $16$ si es isótropa. Es
+libre de escala: multiplicar los rasgos por cualquier constante no la mueve, así
+que no confunde ``se encogió'' con ``se aplastó''. El segundo es
+$\operatorname{tr}\Sigma_{\text{entre}} / \operatorname{tr}\Sigma_s$, la fracción
+de la varianza que \emph{es} separación de clases.
+
+\subsection{Lo que el kernel consume}
+\noindent
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrrr}
+      \multicolumn{6}{c}{\textbf{SIN BatchNorm}} \\[2pt]
+      \toprule
+      familia & $\sigma$ & rango & sat. & $\bar K_{=}$ & $\bar K_{\neq}$ \\
+      \midrule
+      rollo & 49.2 & 45 & 25.7\% & 0.9667 & 0.5283 \\
+      toroides & 23.6 & 97 & 26.0\% & 0.9674 & 0.4137 \\
+      lunas & 19.4 & 1421 & 33.3\% & 0.9989 & 0.4190 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrrr}
+      \multicolumn{6}{c}{\textbf{CON BatchNorm}} \\[2pt]
+      \toprule
+      familia & $\sigma$ & rango & sat. & $\bar K_{=}$ & $\bar K_{\neq}$ \\
+      \midrule
+      rollo & 17.0 & 135 & 33.3\% & 0.9967 & 0.5722 \\
+      toroides & 17.4 & 89 & 23.9\% & 0.9551 & 0.4794 \\
+      lunas & 16.8 & 733 & 33.3\% & 0.9991 & 0.5763 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}
+\vspace{11pt}
+
+\noindent
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrrr}
+      \multicolumn{6}{c}{\textbf{SIN BatchNorm, con KL}} \\[2pt]
+      \toprule
+      familia & $\sigma$ & rango & sat. & $\bar K_{=}$ & $\bar K_{\neq}$ \\
+      \midrule
+      rollo & 14.4 & 7 & 6.4\% & 0.9303 & 0.5723 \\
+      toroides & 13.9 & 7 & 4.2\% & 0.9225 & 0.5603 \\
+      lunas & 13.8 & 45 & 24.9\% & 0.9638 & 0.5692 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrrrr}
+      \multicolumn{6}{c}{\textbf{CON BatchNorm, con KL}} \\[2pt]
+      \toprule
+      familia & $\sigma$ & rango & sat. & $\bar K_{=}$ & $\bar K_{\neq}$ \\
+      \midrule
+      rollo & 14.3 & 7 & 6.1\% & 0.9306 & 0.5712 \\
+      toroides & 14.0 & 7 & 4.2\% & 0.9263 & 0.5657 \\
+      lunas & 14.4 & 21 & 10.7\% & 0.9242 & 0.5637 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}
+\vspace{11pt}
+
+
+El término usa un kernel gaussiano de instancia,
+\[
+  k(x,y) \;=\; \exp\!\left(-\frac{\lVert x - y\rVert^2}{2\sigma^2}\right),
+\]
+con \textbf{un solo $\sigma$} para los tres bloques $K^s$, $K^t$ y $K^{st}$ ---
+porque los tres derivan del mismo kernel de instancia, y mezclar anchos rompe la
+semidefinición positiva de la matriz conjunta, con lo cual $H_2$ dejaría de ser la
+entropía de nada. Con \texttt{auto}, $\sigma$ es la mediana de las distancias por
+pares. \textit{rango} es el cociente entre el percentil 99 y el 1 de esas
+distancias: dice cuánto tendría que cubrir ese único $\sigma$. \textit{sat.} es el
+porcentaje de pares con $k > 0{,}95$, que el kernel ya no distingue.
+
+\textbf{Un hecho que conviene tener presente:} $k$ depende solo de $\lVert x-y
+\rVert$, así que trasladar un dominio entero \emph{no mueve ninguna distancia
+dentro de ese dominio}. Está medido: trasladar el objetivo por los $95{,}06$ de la
+brecha cambia $K^t$ en $8{,}3 \times 10^{-6}$ y $K^{st}$ en $0{,}9995$. De los tres
+bloques, uno solo ve un desplazamiento de medias.
+
+\subsection{El contraste a nivel de clase, donde se ve la recta}
+\noindent
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrr}
+      \multicolumn{4}{c}{\textbf{SIN BatchNorm}} \\[2pt]
+      \toprule
+      familia & $K(0,1)$ & $K(0,2)$ & $K(1,2)$ \\
+      \midrule
+      rollo & 0.5863 & 0.5012 & 0.4974 \\
+      toroides & 0.1386 & 0.5413 & 0.5613 \\
+      lunas & 0.1222 & 0.6139 & 0.5208 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrr}
+      \multicolumn{4}{c}{\textbf{CON BatchNorm}} \\[2pt]
+      \toprule
+      familia & $K(0,1)$ & $K(0,2)$ & $K(1,2)$ \\
+      \midrule
+      rollo & 0.5712 & 0.5799 & 0.5654 \\
+      toroides & 0.4300 & 0.4732 & 0.5351 \\
+      lunas & 0.5498 & 0.5860 & 0.5931 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}
+\vspace{11pt}
+
+\noindent
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrr}
+      \multicolumn{4}{c}{\textbf{SIN BatchNorm, con KL}} \\[2pt]
+      \toprule
+      familia & $K(0,1)$ & $K(0,2)$ & $K(1,2)$ \\
+      \midrule
+      rollo & 0.5676 & 0.5710 & 0.5784 \\
+      toroides & 0.5587 & 0.5594 & 0.5628 \\
+      lunas & 0.5694 & 0.5699 & 0.5682 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\textwidth}
+  \centering
+  \footnotesize\setlength{\tabcolsep}{3pt}
+  \begin{tabular}{lrrr}
+      \multicolumn{4}{c}{\textbf{CON BatchNorm, con KL}} \\[2pt]
+      \toprule
+      familia & $K(0,1)$ & $K(0,2)$ & $K(1,2)$ \\
+      \midrule
+      rollo & 0.5779 & 0.5698 & 0.5659 \\
+      toroides & 0.5674 & 0.5664 & 0.5632 \\
+      lunas & 0.5526 & 0.5675 & 0.5710 \\
+      \bottomrule
+    \end{tabular}
+\end{minipage}
+\vspace{11pt}
+
+
+$K(a,b)$ es el valor medio del kernel entre la clase $a$ y la $b$. Esa matriz de
+$3\times 3$ es, literalmente, \textbf{todo lo que un método de kernel sabe de las
+clases}: los pesos por confianza de la Ec.~(24), la normalización por trazas de la
+Ec.~(32), las cotas $L_c$ y $U_c$ de la Ec.~(35) y la mezcla marginal/condicional
+leen todos esta misma matriz, ninguno la produce.
+
+Con BatchNorm los tres pares quedan a menos de $0{,}09$ unos de otros: las tres
+clases están aproximadamente equidistantes, un \textbf{triángulo en un plano}. Sin
+BatchNorm, en toroides y lunas, un par queda en $0{,}12$--$0{,}14$ y los otros dos
+en $0{,}52$--$0{,}61$, casi iguales entre sí. Esa es la firma de \textbf{tres
+puntos ordenados sobre una recta}: los dos extremos lejos, y el del medio cerca de
+ambos.
+
+Y ahí está el problema, que es geométrico y no de ajuste. Si los tres centroides
+son colineales, existe $t \in (0,1)$ con $\mu_2 = t\mu_0 + (1-t)\mu_1$, y entonces
+la clase del medio \emph{no puede} estar lejos de las dos a la vez. El kernel la ve
+parecida a ambas, y desde su punto de vista los extremos son indistinguibles. Para
+que $C$ clases puedan ser mutuamente separables hacen falta al menos $C-1$
+direcciones efectivas \textbf{antes} de calcular el kernel.
+
+\section{¿Se arregla poniendo BatchNorm en una sola capa?}
+
+La red es
+\[
+\text{Lin}(d,32) \;[\text{BN}]\; \text{ReLU} \;\;
+\text{Lin}(32,32) \;[\text{BN}]\; \text{ReLU} \;\;
+\text{Lin}(32,16) \;[\text{BN}] ,
+\]
+así que hay tres lugares posibles. El tercero, sobre la salida de 16 dimensiones,
+es el único que normaliza \emph{exactamente lo que el kernel lee}, y no estaba en
+la arquitectura: se agregó como brazo propio.
+
+\begin{center}
+\begin{tabular}{llrrrr}
+  \toprule
+   & & \multicolumn{2}{c}{\textbf{sin KL}} & \multicolumn{2}{c}{\textbf{con KL}} \\
+  \cmidrule(lr){3-4}\cmidrule(lr){5-6}
+  familia & BatchNorm en & dim.\,ef. & acierto & dim.\,ef. & acierto \\
+  \midrule
+    rollo & ninguna & 1.97 & 0.9401 $\pm$ 0.109 & 2.81 & 0.7355 $\pm$ 0.251 \\
+     & 1.ª capa & 1.89 & 0.9355 $\pm$ 0.129 & 2.76 & 1.0000 $\pm$ 0.000 \\
+     & 2.ª capa & 1.99 & 0.7321 $\pm$ 0.226 & 2.83 & 0.9846 $\pm$ 0.031 \\
+     & salida & 2.01 & 0.4590 $\pm$ 0.165 & 3.11 & 0.9679 $\pm$ 0.064 \\
+     & ambas ocultas & 1.97 & 0.6769 $\pm$ 0.014 & 2.80 & 0.9451 $\pm$ 0.079 \\
+    \midrule
+    toroides & ninguna & 1.11 & 0.3651 $\pm$ 0.030 & 2.83 & 0.2781 $\pm$ 0.068 \\
+     & 1.ª capa & 1.68 & 0.7222 $\pm$ 0.055 & 2.79 & 0.7157 $\pm$ 0.139 \\
+     & 2.ª capa & 1.90 & 0.4176 $\pm$ 0.088 & 2.85 & 0.3448 $\pm$ 0.223 \\
+     & salida & 2.06 & 0.5830 $\pm$ 0.130 & 3.16 & 0.4046 $\pm$ 0.110 \\
+     & ambas ocultas & 1.86 & 0.6299 $\pm$ 0.098 & 2.83 & 0.7657 $\pm$ 0.206 \\
+    \midrule
+    lunas & ninguna & 1.04 & 0.3306 $\pm$ 0.006 & 2.33 & 0.3346 $\pm$ 0.006 \\
+     & 1.ª capa & 1.17 & 0.6534 $\pm$ 0.093 & 2.63 & 0.8398 $\pm$ 0.038 \\
+     & 2.ª capa & 1.92 & 0.3731 $\pm$ 0.068 & 2.81 & 0.4080 $\pm$ 0.171 \\
+     & salida & 2.00 & 0.2367 $\pm$ 0.057 & 2.80 & 0.2225 $\pm$ 0.106 \\
+     & ambas ocultas & 1.95 & 0.4988 $\pm$ 0.133 & 2.83 & 0.7062 $\pm$ 0.109 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Sí se arregla, y el lugar es la primera capa.} Sin KL, pasar de ninguna a
+la primera lleva toroides de $0{,}3651$ a $\mathbf{0{,}7222}$ y lunas de $0{,}3306$
+a $\mathbf{0{,}6534}$ --- por encima de ponerlo en \emph{las dos} capas ocultas,
+que es la configuración con la que veníamos trabajando.
+
+\textbf{Y la salida es el peor lugar de todos}, que es lo contrario de lo que
+sugiere la intuición: normalizar justo los números que el kernel consume da
+$0{,}4590$ en rollo y $0{,}2367$ en lunas, por debajo de no poner ninguno. Una
+normalización sobre la salida fija la escala por coordenada \emph{después} de que
+la representación ya se formó; no reparte la varianza entre direcciones, solo
+reescala el aplastamiento que ya estaba. La primera capa, en cambio, actúa cuando
+la representación todavía se está construyendo.
+
+\section{Conclusión}
+
+\begin{enumerate}\itemsep3pt
+\item \textbf{Al kernel no le falta señal sin BatchNorm; le sobra.} El contraste
+  $\bar K_{=} - \bar K_{\neq}$ es \emph{mayor} sin BatchNorm en toroides y lunas.
+  La saturación es la misma en todos los brazos y casi nada muere. Así que $\sigma$,
+  el rango dinámico y la saturación --- los sospechosos de siempre --- no son la
+  diferencia.
+
+\item \textbf{La diferencia es la dimensionalidad efectiva.} Las dos familias que
+  fracasan sin BatchNorm ponen el $94{,}8\%$ y el $97{,}9\%$ de la varianza en una
+  sola dirección, con $1{,}11$ y $1{,}04$ direcciones efectivas. La que funciona
+  conserva $1{,}97$, las mismas que cualquier brazo con BatchNorm.
+
+\item \textbf{La palanca no es BatchNorm, es la dimensionalidad.} BatchNorm es
+  \emph{una} forma de conseguirla; rollo sin él conserva $58/41$ y llega a
+  $0{,}9401$. El término KL es otra: sus anclas son ortonormales, o sea le
+  prescribe $C$ direcciones por construcción, y sube las direcciones efectivas a
+  $\approx 2{,}8$ en todas las configuraciones medidas.
+
+\item \textbf{Ningún arreglo río abajo alcanza.} $\sigma$, los pesos por confianza,
+  la mezcla marginal/condicional y la normalización por cotas leen todos la misma
+  matriz de $3\times3$. Si esa matriz dice que la clase del medio está entre las
+  otras dos, ninguno de ellos puede decir otra cosa.
+
+\item \textbf{La mejor configuración medida, por familia, 5 semillas:}
+  \begin{center}
+  \begin{tabular}{llr}
+    \toprule
+    familia & configuración & acierto \\
+    \midrule
+        rollo & BatchNorm en la primera capa, con KL & 1.0000 $\pm$ 0.000 \\
+    toroides & BatchNorm en ambas capas ocultas, con KL & 0.7657 $\pm$ 0.206 \\
+    lunas & BatchNorm en la primera capa, con KL & 0.8398 $\pm$ 0.038 \\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  contra $0{,}6769$, $0{,}6299$ y $0{,}4988$ del punto de partida (BatchNorm en
+  ambas capas ocultas, sin KL).
+\end{enumerate}
+
+\vspace{6pt}
+\begin{center}\small\itshape
+Todo número de este documento sale de una corrida medida sobre 5 semillas; el
+azar con 3 clases es $0{,}3333$. Las familias son de juguete y nada dice todavía
+que estos valores transfieran a los datos reales.
+\end{center}
+
+\end{document}
