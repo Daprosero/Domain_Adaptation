@@ -1,0 +1,2384 @@
+{
+  "epocas": 20,
+  "semillas": [
+    0,
+    1,
+    2
+  ],
+  "tasas": [
+    0.0,
+    0.3,
+    0.5
+  ],
+  "rol": "eval",
+  "brazos": [
+    "B",
+    "E",
+    "F",
+    "G"
+  ],
+  "redes": [
+    "mlp",
+    "mlp-nobn"
+  ],
+  "elegido": {
+    "metodo": {
+      "[\"rollo suizo\", \"mlp\"]": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "[\"rollo suizo\", \"mlp-nobn\"]": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "[\"toroides\", \"mlp\"]": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "[\"toroides\", \"mlp-nobn\"]": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "[\"medias lunas\", \"mlp\"]": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "[\"medias lunas\", \"mlp-nobn\"]": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      }
+    },
+    "tasa": {
+      "[\"rollo suizo\", \"mlp\", \"B\"]": 0.05,
+      "[\"rollo suizo\", \"mlp\", \"E\"]": 0.01,
+      "[\"rollo suizo\", \"mlp\", \"F\"]": 0.05,
+      "[\"rollo suizo\", \"mlp\", \"G\"]": 0.05,
+      "[\"rollo suizo\", \"mlp-nobn\", \"B\"]": 0.01,
+      "[\"rollo suizo\", \"mlp-nobn\", \"E\"]": 0.01,
+      "[\"rollo suizo\", \"mlp-nobn\", \"F\"]": 0.01,
+      "[\"rollo suizo\", \"mlp-nobn\", \"G\"]": 0.001,
+      "[\"toroides\", \"mlp\", \"B\"]": 0.001,
+      "[\"toroides\", \"mlp\", \"E\"]": 0.01,
+      "[\"toroides\", \"mlp\", \"F\"]": 0.01,
+      "[\"toroides\", \"mlp\", \"G\"]": 0.01,
+      "[\"toroides\", \"mlp-nobn\", \"B\"]": 0.001,
+      "[\"toroides\", \"mlp-nobn\", \"E\"]": 0.001,
+      "[\"toroides\", \"mlp-nobn\", \"F\"]": 0.001,
+      "[\"toroides\", \"mlp-nobn\", \"G\"]": 0.001,
+      "[\"medias lunas\", \"mlp\", \"B\"]": 0.001,
+      "[\"medias lunas\", \"mlp\", \"E\"]": 0.001,
+      "[\"medias lunas\", \"mlp\", \"F\"]": 0.001,
+      "[\"medias lunas\", \"mlp\", \"G\"]": 0.001,
+      "[\"medias lunas\", \"mlp-nobn\", \"B\"]": 0.01,
+      "[\"medias lunas\", \"mlp-nobn\", \"E\"]": 0.01,
+      "[\"medias lunas\", \"mlp-nobn\", \"F\"]": 0.001,
+      "[\"medias lunas\", \"mlp-nobn\", \"G\"]": 0.01
+    }
+  },
+  "filas": [
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.3333333333333333,
+      "std": 0.06804138174397718,
+      "fuente": 0.8518518518518517
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.7685185185185185,
+      "std": 0.1543827037086395,
+      "fuente": 0.9351851851851851
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.7962962962962963,
+      "std": 0.09166199015381175,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.7407407407407408,
+      "std": 0.07965115988002436,
+      "fuente": 0.9259259259259259
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.14814814814814814,
+      "std": 0.09166199015381173,
+      "fuente": 0.9259259259259259
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.9074074074074074,
+      "std": 0.013094570021973109,
+      "fuente": 0.9074074074074074
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.9166666666666666,
+      "std": 0.022680460581325734,
+      "fuente": 0.9166666666666666
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.898148148148148,
+      "std": 0.013094570021973109,
+      "fuente": 0.9259259259259259
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.8425925925925926
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.7685185185185185,
+      "std": 0.03464497580346244,
+      "fuente": 0.8425925925925926
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.7685185185185185,
+      "std": 0.013094570021973109,
+      "fuente": 0.8425925925925926
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.7777777777777778,
+      "std": 0.022680460581325734,
+      "fuente": 0.8333333333333334
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.25925925925925924,
+      "std": 0.09166199015381171,
+      "fuente": 0.8518518518518517
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.19444444444444442,
+      "std": 0.022680460581325723,
+      "fuente": 0.9166666666666666
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.20370370370370372,
+      "std": 0.013094570021973095,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.25925925925925924,
+      "std": 0.026189140043946218,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.14814814814814814,
+      "std": 0.04721314364437764,
+      "fuente": 0.9259259259259259
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.6944444444444443,
+      "std": 0.039283710065919325,
+      "fuente": 0.9166666666666666
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.7037037037037037,
+      "std": 0.04721314364437766,
+      "fuente": 0.9074074074074074
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.6203703703703703,
+      "std": 0.013094570021973055,
+      "fuente": 0.9259259259259259
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.0925925925925926,
+      "std": 0.013094570021973102,
+      "fuente": 0.8425925925925926
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.22222222222222224,
+      "std": 0.06000685831859131,
+      "fuente": 0.8425925925925926
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.25,
+      "std": 0.08177556357710969,
+      "fuente": 0.8425925925925926
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.2962962962962963,
+      "std": 0.02618914004394619,
+      "fuente": 0.8425925925925926
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.3333333333333333,
+      "std": 0.02268046058132571,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.28703703703703703,
+      "std": 0.013094570021973109,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.29629629629629634,
+      "std": 0.013094570021973109,
+      "fuente": 0.861111111111111
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.001,
+      "media": 0.21296296296296294,
+      "std": 0.04721314364437765,
+      "fuente": 0.8425925925925926
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.26851851851851855,
+      "std": 0.06928995160692483,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.26851851851851855,
+      "std": 0.06928995160692483,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.26851851851851855,
+      "std": 0.06928995160692483,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.6666666666666666
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.13888888888888887,
+      "std": 0.03928371006591931,
+      "fuente": 0.8240740740740741
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.13888888888888887,
+      "std": 0.03928371006591931,
+      "fuente": 0.8240740740740741
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.16666666666666666,
+      "std": 0.03928371006591931,
+      "fuente": 0.8333333333333334
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.0925925925925926,
+      "std": 0.013094570021973102,
+      "fuente": 0.8055555555555557
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.23148148148148148,
+      "std": 0.05237828008789242,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.21296296296296294,
+      "std": 0.03464497580346242,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.2037037037037037,
+      "std": 0.026189140043946204,
+      "fuente": 0.9074074074074074
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.001,
+      "media": 0.2222222222222222,
+      "std": 0.022680460581325723,
+      "fuente": 0.8148148148148148
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1574074074074074,
+      "std": 0.026189140043946204,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1574074074074074,
+      "std": 0.026189140043946204,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1574074074074074,
+      "std": 0.047213143644377634,
+      "fuente": 0.8796296296296297
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.12037037037037036,
+      "std": 0.034644975803462416,
+      "fuente": 0.7037037037037037
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.16666666666666666,
+      "std": 0.045360921162651446,
+      "fuente": 0.8240740740740741
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.14814814814814814,
+      "std": 0.03464497580346242,
+      "fuente": 0.8148148148148149
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.13888888888888887,
+      "std": 0.060006858318591295,
+      "fuente": 0.8333333333333334
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.0,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.8333333333333334
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.3796296296296296,
+      "std": 0.03464497580346244,
+      "fuente": 0.8518518518518517
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.8888888888888888,
+      "std": 0.02268046058132569,
+      "fuente": 0.9537037037037037
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.8240740740740741,
+      "std": 0.07965115988002432,
+      "fuente": 0.9351851851851851
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.888888888888889,
+      "std": 0.0785674201318386,
+      "fuente": 0.9259259259259259
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.12962962962962962,
+      "std": 0.0654728501098655,
+      "fuente": 0.8518518518518517
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.9259259259259259,
+      "std": 0.013094570021973109,
+      "fuente": 0.9444444444444443
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.9259259259259259,
+      "std": 0.013094570021973109,
+      "fuente": 0.9444444444444443
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.9351851851851851,
+      "std": 0.03464497580346244,
+      "fuente": 0.9537037037037037
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.7407407407407408
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.6018518518518519,
+      "std": 0.18885257457751056,
+      "fuente": 0.7314814814814815
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.6018518518518519,
+      "std": 0.18885257457751056,
+      "fuente": 0.7222222222222222
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.6574074074074074,
+      "std": 0.19554363038835995,
+      "fuente": 0.7222222222222222
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.2222222222222222,
+      "std": 0.022680460581325723,
+      "fuente": 0.8518518518518517
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.32407407407407407,
+      "std": 0.057077907434897934,
+      "fuente": 0.9444444444444443
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.35185185185185186,
+      "std": 0.09442628728875527,
+      "fuente": 0.7870370370370371
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.34259259259259256,
+      "std": 0.034644975803462416,
+      "fuente": 0.9166666666666666
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.12962962962962962,
+      "std": 0.0654728501098655,
+      "fuente": 0.8518518518518517
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.6944444444444445,
+      "std": 0.09886183566695658,
+      "fuente": 0.9351851851851851
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.6481481481481481,
+      "std": 0.12491423669659298,
+      "fuente": 0.9444444444444443
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.5833333333333334,
+      "std": 0.060006858318591275,
+      "fuente": 0.9444444444444443
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.7407407407407408
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.25,
+      "std": 0.06000685831859131,
+      "fuente": 0.7314814814814815
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.24074074074074078,
+      "std": 0.07290748031492418,
+      "fuente": 0.7407407407407408
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.22222222222222224,
+      "std": 0.0600068583185913,
+      "fuente": 0.7314814814814815
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.40740740740740744,
+      "std": 0.034644975803462416,
+      "fuente": 0.9629629629629629
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.40740740740740744,
+      "std": 0.034644975803462416,
+      "fuente": 0.9722222222222222
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.3796296296296296,
+      "std": 0.026189140043946218,
+      "fuente": 0.9722222222222222
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.001,
+      "media": 0.25925925925925924,
+      "std": 0.013094570021973109,
+      "fuente": 0.7407407407407408
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.5
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.9444444444444445
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.8981481481481483
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.5555555555555556
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.0925925925925926,
+      "std": 0.013094570021973102,
+      "fuente": 0.9537037037037037
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.16666666666666666,
+      "std": 0.0600068583185913,
+      "fuente": 0.9629629629629629
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.17592592592592593,
+      "std": 0.034644975803462416,
+      "fuente": 0.9722222222222222
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.1574074074074074,
+      "std": 0.047213143644377634,
+      "fuente": 0.9722222222222222
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.001,
+      "media": 0.14814814814814814,
+      "std": 0.026189140043946204,
+      "fuente": 0.7870370370370371
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.8611111111111112
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.12962962962962962,
+      "std": 0.04721314364437764,
+      "fuente": 0.5833333333333334
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.1111111111111111,
+      "std": 0.022680460581325727,
+      "fuente": 0.9444444444444445
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.16666666666666666,
+      "std": 0.022680460581325723,
+      "fuente": 0.9351851851851851
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.12962962962962962,
+      "std": 0.04721314364437764,
+      "fuente": 0.5555555555555556
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.3,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.12037037037037036,
+      "std": 0.013094570021973109,
+      "fuente": 0.8703703703703703
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.22222222222222224,
+      "std": 0.03928371006591931,
+      "fuente": 0.47222222222222215
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.47222222222222215,
+      "std": 0.039283710065919325,
+      "fuente": 0.3796296296296296
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.40740740740740744,
+      "std": 0.09442628728875527,
+      "fuente": 0.36111111111111116
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.48148148148148145,
+      "std": 0.013094570021973109,
+      "fuente": 0.4444444444444445
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.16666666666666666,
+      "std": 0.022680460581325723,
+      "fuente": 0.4351851851851852
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.4259259259259259,
+      "std": 0.013094570021973081,
+      "fuente": 0.4259259259259259
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.4259259259259259,
+      "std": 0.013094570021973081,
+      "fuente": 0.4259259259259259
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.4444444444444445,
+      "std": 0.0392837100659193,
+      "fuente": 0.4537037037037037
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.14814814814814814,
+      "std": 0.03464497580346242,
+      "fuente": 0.4444444444444444
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.47222222222222227,
+      "std": 0.10393492741038728,
+      "fuente": 0.4444444444444444
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.48148148148148145,
+      "std": 0.08586683792125653,
+      "fuente": 0.4444444444444444
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.49074074074074076,
+      "std": 0.09166199015381173,
+      "fuente": 0.4537037037037037
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.13888888888888887,
+      "std": 0.03928371006591931,
+      "fuente": 0.47222222222222215
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.1388888888888889,
+      "std": 0.045360921162651446,
+      "fuente": 0.4166666666666667
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.23148148148148148,
+      "std": 0.06928995160692485,
+      "fuente": 0.4259259259259259
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.1799,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.05,
+      "media": 0.25925925925925924,
+      "std": 0.05707790743489792,
+      "fuente": 0.5
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.12037037037037036,
+      "std": 0.013094570021973109,
+      "fuente": 0.4351851851851852
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.3611111111111111,
+      "std": 0.08177556357710969,
+      "fuente": 0.4166666666666667
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.35185185185185186,
+      "std": 0.11188005531106085,
+      "fuente": 0.40740740740740744
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 28.3535,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.01,
+      "media": 0.40740740740740744,
+      "std": 0.02618914004394619,
+      "fuente": 0.4537037037037037
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.4444444444444444
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.16666666666666666,
+      "std": 0.045360921162651446,
+      "fuente": 0.46296296296296297
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.17592592592592593,
+      "std": 0.034644975803462416,
+      "fuente": 0.4444444444444444
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 30.5506,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.20370370370370372,
+      "std": 0.03464497580346242,
+      "fuente": 0.4537037037037037
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.28703703703703703,
+      "std": 0.09166199015381173,
+      "fuente": 0.48148148148148145
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.27777777777777773,
+      "std": 0.09886183566695658,
+      "fuente": 0.4351851851851852
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.3055555555555555,
+      "std": 0.0988618356669566,
+      "fuente": 0.4166666666666667
+    },
+    {
+      "transfer": "r->R",
+      "columna": "rollo suizo",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.001,
+      "media": 0.1851851851851852,
+      "std": 0.047213143644377634,
+      "fuente": 0.4444444444444444
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.39814814814814814
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.39814814814814814
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.39814814814814814
+    },
+    {
+      "transfer": "t->T",
+      "columna": "toroides",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.0925925925925926,
+      "std": 0.013094570021973102,
+      "fuente": 0.32407407407407407
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.12962962962962962,
+      "std": 0.026189140043946204,
+      "fuente": 0.5092592592592592
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.5185185185185185
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.13888888888888887,
+      "std": 0.060006858318591295,
+      "fuente": 0.4259259259259259
+    },
+    {
+      "transfer": "n->N",
+      "columna": "medias lunas",
+      "fila": 1,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.5
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.0925925925925926,
+      "std": 0.06928995160692483,
+      "fuente": 0.48148148148148145
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.0925925925925926,
+      "std": 0.04721314364437764,
+      "fuente": 0.4444444444444444
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.01,
+      "media": 0.0925925925925926,
+      "std": 0.06547285010986552,
+      "fuente": 0.4537037037037037
+    },
+    {
+      "transfer": "r->1",
+      "columna": "rollo suizo",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 19.4545,
+        "attentionTemperature": 1.0
+      },
+      "lr": 0.001,
+      "media": 0.16666666666666666,
+      "std": 0.0600068583185913,
+      "fuente": 0.47222222222222227
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.39814814814814814
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.3888888888888889
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.39814814814814814
+    },
+    {
+      "transfer": "t->2",
+      "columna": "toroides",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 17.9939,
+        "attentionTemperature": 0.5
+      },
+      "lr": 0.001,
+      "media": 0.12037037037037036,
+      "std": 0.034644975803462416,
+      "fuente": 0.3703703703703704
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "B",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.5092592592592592
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "E",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.1111111111111111,
+      "std": 0.0,
+      "fuente": 0.5092592592592592
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "F",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.001,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.4351851851851852
+    },
+    {
+      "transfer": "n->3",
+      "columna": "medias lunas",
+      "fila": 2,
+      "tasa": 0.5,
+      "red": "mlp-nobn",
+      "brazo": "G",
+      "hyper": {
+        "kernelSigma": 10.7776,
+        "attentionTemperature": 0.1
+      },
+      "lr": 0.01,
+      "media": 0.10185185185185185,
+      "std": 0.013094570021973102,
+      "fuente": 0.47222222222222227
+    }
+  ]
+}

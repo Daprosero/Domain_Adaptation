@@ -1,0 +1,5455 @@
+{
+  "celdas": {
+    "lunas|ninguna|TGL|0": {
+      "family": "lunas",
+      "normalization": "ninguna",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp-nobn",
+      "targetAccuracy": 0.2222222222222222,
+      "sourceAccuracy": 0.7777777777777778,
+      "predictTargetAccuracy": 0.5555555555555556,
+      "adabnTargetAccuracy": null,
+      "adabnLayers": 0,
+      "adabnNormLayers": 0,
+      "adabnBatches": 0,
+      "adabnNote": "no hay AdaBN en esta fila: el backbone no lleva NINGUNA capa de normalización, así que no normaliza y no hay estadísticas que reestimar. Es una lectura del backbone y no una medición que faltó",
+      "frameStride": 7,
+      "trajectoryFrames": 23,
+      "phase1Epochs": 6,
+      "phase1BestEpoch": 2,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase1RestoredValidAccuracy": 0.9333333333333333,
+      "phase2Steps": 152,
+      "phase2BestStep": 128,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 9,
+      "phase2BestEpoch": 8,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 9,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.5,
+        0.5,
+        0.6111111111111112,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.5,
+        0.5,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.2222222222222222,
+        0.3333333333333333
+      ],
+      "watchmanBest": 0.6,
+      "watchmanFinal": 0.6,
+      "watchmanRestored": 0.6,
+      "supervised": 0.01914745936473513,
+      "phaseTwoObjective": 0.6269876262859294,
+      "contribution": 0.6269876230017919,
+      "contributionGlobal": 0.47440562063926145,
+      "contributionLocal": 0.15258200236253047,
+      "adaptationShare": 0.9703661666309684,
+      "weightingCostRatio": 0.2097381504157493,
+      "weightingCostOmegaSum": 0.26002436876296997,
+      "weightingCostGlobalUnweighted": 0.44775599241256714,
+      "parameters": 15235,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 2.3916189670562744,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.11230236099800095,
+      "secondsPerPhase2Step": 0.1347546609146153,
+      "sigma": {
+        "scales": {
+          "withinBag": 0.12574854493141174,
+          "betweenBags": 0.37294161319732666,
+          "pooled": 0.3836733400821686,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.0015686185797676444,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.04705855739302933
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 0.06287427246570587,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 2.2911737385362744e-08,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 0.09431140869855881,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.0004022260854450309,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 0.12574854493141174,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.012303098632010618,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 0.18862281739711761,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.14161770695018108,
+            "inBand": true
+          }
+        ],
+        "range": [
+          0.06287427246570587,
+          0.55941241979599
+        ],
+        "scaleRatio": 2.9657727920489565,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.9999939449439954,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 0.20521293580532074,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 5.946841716766357,
+        "frozenPooledToWithinRatio": 28.978883292269376,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.9976212453442392,
+        "frozenPooledKernelInBand": false,
+        "frozenWeightSpreadRelativeToUniform": 0.03831632318906486,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.0010507789556868374,
+        "frozenWeightSpreadGainOverPooled": 36.46468458632153,
+        "frozenReading": {
+          "sigma": 0.20521293580532074,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 5.946841716766357,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 28.978883292269376,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.9976212453442392,
+          "pooledInBand": false,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.03831632318906486,
+          "pooledWeightSpreadRelativeToUniform": 0.0010507789556868374,
+          "weightSpreadGainOverPooled": 36.46468458632153,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 0.20521293580532074,
+            "betweenBags": 6.082535266876221,
+            "pooled": 5.946841716766357,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.0016176793724298477,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.04853038117289543
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 0.10260646790266037,
+        "bootstrapSigma": 0.030370555818080902,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 6.756970041461956,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 0.10260646790266037,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 23.574984500010032
+    },
+    "lunas|batchnorm|TGL|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp",
+      "targetAccuracy": 0.3888888888888889,
+      "sourceAccuracy": 0.6666666666666666,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 0.5555555555555556,
+      "adabnLayers": 2,
+      "adabnNormLayers": 2,
+      "adabnBatches": 16,
+      "adabnNote": null,
+      "frameStride": 7,
+      "trajectoryFrames": 23,
+      "phase1Epochs": 5,
+      "phase1BestEpoch": 1,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase1RestoredValidAccuracy": 0.9333333333333333,
+      "phase2Steps": 152,
+      "phase2BestStep": 112,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 9,
+      "phase2BestEpoch": 7,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 9,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7777777777777778,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7777777777777778,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.16666666666666666,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.16666666666666666,
+        0.16666666666666666,
+        0.16666666666666666,
+        0.2222222222222222,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.2222222222222222,
+        0.3333333333333333,
+        0.4444444444444444,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.3888888888888889,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.4444444444444444,
+        0.5
+      ],
+      "watchmanBest": 0.3333333333333333,
+      "watchmanFinal": 0.3333333333333333,
+      "watchmanRestored": 0.3333333333333333,
+      "supervised": 0.022812980570291217,
+      "phaseTwoObjective": 0.4108391890400334,
+      "contribution": 0.410839189189382,
+      "contributionGlobal": 0.2651616737857694,
+      "contributionLocal": 0.14567751540361265,
+      "adaptationShare": 0.9473933669398357,
+      "weightingCostRatio": 0.03838804408164812,
+      "weightingCostOmegaSum": 0.03844878822565079,
+      "weightingCostGlobalUnweighted": 0.44350525736808777,
+      "parameters": 15491,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 5.122370719909668,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.2641283667995594,
+      "secondsPerPhase2Step": 0.16756283086827975,
+      "sigma": {
+        "scales": {
+          "withinBag": 2.0712084770202637,
+          "betweenBags": 2.048670768737793,
+          "pooled": 3.1481876373291016,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.001704581081867218,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.05113743245601654
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 1.0356042385101318,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 0.1413224536278518,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 1.5534063577651978,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.41909846976353754,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 2.0712084770202637,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.6131303189162431,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 3.1068127155303955,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.804598129822877,
+            "inBand": true
+          }
+        ],
+        "range": [
+          1.0243353843688965,
+          3.1068127155303955
+        ],
+        "scaleRatio": 0.9891185708572927,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.9983586374851691,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 0.6793394684791565,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 5.754119873046875,
+        "frozenPooledToWithinRatio": 8.470168656516714,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.9725079876296653,
+        "frozenPooledKernelInBand": false,
+        "frozenWeightSpreadRelativeToUniform": 0.03239082754589617,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.008608044299762696,
+        "frozenWeightSpreadGainOverPooled": 3.7628555822823904,
+        "frozenReading": {
+          "sigma": 0.6793394684791565,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 5.754119873046875,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 8.470168656516714,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.9725079876296653,
+          "pooledInBand": false,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.03239082754589617,
+          "pooledWeightSpreadRelativeToUniform": 0.008608044299762696,
+          "weightSpreadGainOverPooled": 3.7628555822823904,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 0.6793394684791565,
+            "betweenBags": 5.8514790534973145,
+            "pooled": 5.754119873046875,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.001365861389786005,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.04097584169358015
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 0.33966973423957825,
+        "bootstrapSigma": 0.4896509051322937,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 1.387395512514396,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 0.33966973423957825,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 29.376933082996402
+    },
+    "lunas|layernorm|TGL|0": {
+      "family": "lunas",
+      "normalization": "layernorm",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp-layernorm",
+      "targetAccuracy": 0.3333333333333333,
+      "sourceAccuracy": 0.7777777777777778,
+      "predictTargetAccuracy": 0.6666666666666666,
+      "adabnTargetAccuracy": null,
+      "adabnLayers": 0,
+      "adabnNormLayers": 2,
+      "adabnBatches": 0,
+      "adabnNote": "no hay AdaBN en esta fila, y por eso esta fila es el control: el backbone SÍ normaliza —2 capa(s) de `LayerNorm`, sobre los features dentro de cada muestra— y no guarda ninguna estadística corrida, así que no hay nada que reestimar. Es lo que separa «normalizar ayuda» de «reestimar ayuda»: donde BatchNorm gana, esta fila dice si ganó por normalizar. Un número acá sería `.predict` con otro nombre",
+      "frameStride": 7,
+      "trajectoryFrames": 23,
+      "phase1Epochs": 6,
+      "phase1BestEpoch": 2,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase1RestoredValidAccuracy": 0.9333333333333333,
+      "phase2Steps": 152,
+      "phase2BestStep": 80,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 9,
+      "phase2BestEpoch": 5,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 9,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.5,
+        0.5,
+        0.4444444444444444,
+        0.5,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.3888888888888889,
+        0.5,
+        0.6111111111111112,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.5555555555555556,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.5555555555555556,
+        0.5,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.4444444444444444,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.4444444444444444,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.6111111111111112,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.6111111111111112,
+        0.5,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.16666666666666666,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.16666666666666666,
+        0.16666666666666666,
+        0.16666666666666666,
+        0.2222222222222222,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.16666666666666666,
+        0.16666666666666666,
+        0.2222222222222222,
+        0.2222222222222222,
+        0.2222222222222222,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2222222222222222
+      ],
+      "watchmanBest": 0.6,
+      "watchmanFinal": 0.6,
+      "watchmanRestored": 0.6,
+      "supervised": 0.016722801435542733,
+      "phaseTwoObjective": 0.40472256367732035,
+      "contribution": 0.4047225636497483,
+      "contributionGlobal": 0.2030168970476983,
+      "contributionLocal": 0.20170566660205,
+      "adaptationShare": 0.9603203574628033,
+      "weightingCostRatio": 0.060044916590247355,
+      "weightingCostOmegaSum": 0.0978395938873291,
+      "weightingCostGlobalUnweighted": 0.8078522086143494,
+      "parameters": 15491,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 1.6767916679382324,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.1348319098324282,
+      "secondsPerPhase2Step": 0.13842371408559542,
+      "sigma": {
+        "scales": {
+          "withinBag": 0.5868019461631775,
+          "betweenBags": 1.433139681816101,
+          "pooled": 1.6491984128952026,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.0014800259377807379,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.044400778133422136
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 0.29340097308158875,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 6.592704829100811e-06,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 0.4401014596223831,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.0049815169701086905,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 0.5868019461631775,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.05067175053679509,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 0.8802029192447662,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.2656687078965276,
+            "inBand": true
+          }
+        ],
+        "range": [
+          0.29340097308158875,
+          2.1497095227241516
+        ],
+        "scaleRatio": 2.4422885629243885,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.9998681536832691,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 0.33627232909202576,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 6.049578666687012,
+        "frozenPooledToWithinRatio": 17.990117364166046,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.9938394312954546,
+        "frozenPooledKernelInBand": false,
+        "frozenWeightSpreadRelativeToUniform": 0.036859007086604834,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.00925867643672973,
+        "frozenWeightSpreadGainOverPooled": 3.981023350204023,
+        "frozenReading": {
+          "sigma": 0.33627232909202576,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 6.049578666687012,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 17.990117364166046,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.9938394312954546,
+          "pooledInBand": false,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.036859007086604834,
+          "pooledWeightSpreadRelativeToUniform": 0.00925867643672973,
+          "weightSpreadGainOverPooled": 3.981023350204023,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 0.33627232909202576,
+            "betweenBags": 6.08676290512085,
+            "pooled": 6.049578666687012,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.0013239048421382904,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.03971714526414871
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 0.16813616454601288,
+        "bootstrapSigma": 0.13540585339069366,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 2.4834401222062494,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 0.16813616454601288,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 23.496703292010352
+    },
+    "toroide|ninguna|TGL|0": {
+      "family": "toroide",
+      "normalization": "ninguna",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp-nobn",
+      "targetAccuracy": 0.7222222222222222,
+      "sourceAccuracy": 1.0,
+      "predictTargetAccuracy": 0.5555555555555556,
+      "adabnTargetAccuracy": null,
+      "adabnLayers": 0,
+      "adabnNormLayers": 0,
+      "adabnBatches": 0,
+      "adabnNote": "no hay AdaBN en esta fila: el backbone no lleva NINGUNA capa de normalización, así que no normaliza y no hay estadísticas que reestimar. Es una lectura del backbone y no una medición que faltó",
+      "frameStride": 7,
+      "trajectoryFrames": 20,
+      "phase1Epochs": 6,
+      "phase1BestEpoch": 2,
+      "phase1ValidAccuracy": 1.0,
+      "phase1RestoredValidAccuracy": 1.0,
+      "phase2Steps": 128,
+      "phase2BestStep": 48,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 8,
+      "phase2BestEpoch": 3,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888
+      ],
+      "watchmanBest": 0.9333333333333333,
+      "watchmanFinal": 0.9333333333333333,
+      "watchmanRestored": 0.9333333333333333,
+      "supervised": 0.007494262010183661,
+      "phaseTwoObjective": 1.0053949425928295,
+      "contribution": 1.0053949470166117,
+      "contributionGlobal": 0.7315704000648111,
+      "contributionLocal": 0.2738245469518006,
+      "adaptationShare": 0.9926011039081122,
+      "weightingCostRatio": 0.860541733035823,
+      "weightingCostOmegaSum": 0.8262582421302795,
+      "weightingCostGlobalUnweighted": 0.756555438041687,
+      "parameters": 15235,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 2.8268840312957764,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.2682621179992566,
+      "secondsPerPhase2Step": 0.13323579003895247,
+      "sigma": {
+        "scales": {
+          "withinBag": 0.7902472615242004,
+          "betweenBags": 0.7783416509628296,
+          "pooled": 1.093662142753601,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.00068209960591048,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.0204629881773144
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 0.3951236307621002,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 0.1436764706904986,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 0.5926854461431503,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.4221868809708444,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 0.7902472615242004,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.6156677612297569,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 1.1853708922863007,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.8060763577761754,
+            "inBand": true
+          }
+        ],
+        "range": [
+          0.3891708254814148,
+          1.1853708922863007
+        ],
+        "scaleRatio": 0.9849343222798296,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.9997608955739412,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 1.870482325553894,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 8.580669403076172,
+        "frozenPooledToWithinRatio": 4.587410041704207,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.9093388594205247,
+        "frozenPooledKernelInBand": true,
+        "frozenWeightSpreadRelativeToUniform": 0.02931873081251979,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.020679337321780622,
+        "frozenWeightSpreadGainOverPooled": 1.4177790301645536,
+        "frozenReading": {
+          "sigma": 1.870482325553894,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 8.580669403076172,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 4.587410041704207,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.9093388594205247,
+          "pooledInBand": true,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.02931873081251979,
+          "pooledWeightSpreadRelativeToUniform": 0.020679337321780622,
+          "weightSpreadGainOverPooled": 1.4177790301645536,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 1.870482325553894,
+            "betweenBags": 9.10827350616455,
+            "pooled": 8.580670356750488,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.0012098811566829681,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.036296434700489044
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 0.935241162776947,
+        "bootstrapSigma": 0.19726359844207764,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 9.482146429074305,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 0.935241162776947,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 21.032617999997456
+    },
+    "toroide|batchnorm|TGL|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp",
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.9444444444444444,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 1.0,
+      "adabnLayers": 2,
+      "adabnNormLayers": 2,
+      "adabnBatches": 16,
+      "adabnNote": null,
+      "frameStride": 7,
+      "trajectoryFrames": 23,
+      "phase1Epochs": 5,
+      "phase1BestEpoch": 1,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase1RestoredValidAccuracy": 0.9333333333333333,
+      "phase2Steps": 152,
+      "phase2BestStep": 96,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 9,
+      "phase2BestEpoch": 6,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 9,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.3333333333333333,
+        0.5555555555555556,
+        0.7222222222222222,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.9444444444444444,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8888888888888888
+      ],
+      "watchmanBest": 0.6,
+      "watchmanFinal": 0.6,
+      "watchmanRestored": 0.6,
+      "supervised": 0.008736584870121078,
+      "phaseTwoObjective": 0.8575709085715445,
+      "contribution": 0.8575709065128314,
+      "contributionGlobal": 0.6745001995249799,
+      "contributionLocal": 0.18307070698785155,
+      "adaptationShare": 0.9899151456532205,
+      "weightingCostRatio": 0.9527696081432879,
+      "weightingCostOmegaSum": 0.9629473686218262,
+      "weightingCostGlobalUnweighted": 0.41858065128326416,
+      "parameters": 15491,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 4.153575897216797,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.1130733917991165,
+      "secondsPerPhase2Step": 0.1542848834932987,
+      "sigma": {
+        "scales": {
+          "withinBag": 3.011397123336792,
+          "betweenBags": 1.567535400390625,
+          "pooled": 3.4902822971343994,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.0009429794154129922,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.028289382462389767
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 1.505698561668396,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 0.5816351891842191,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 2.258547842502594,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.7859597383560054,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 3.011397123336792,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.8732984079222988,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 4.517095685005188,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.9415644978328599,
+            "inBand": true
+          }
+        ],
+        "range": [
+          0.7837677001953125,
+          4.517095685005188
+        ],
+        "scaleRatio": 0.5205342690417764,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.996533463587131,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 1.9456504583358765,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 8.26286792755127,
+        "frozenPooledToWithinRatio": 4.246840891769705,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.8950359106478781,
+        "frozenPooledKernelInBand": true,
+        "frozenWeightSpreadRelativeToUniform": 0.04988863016478717,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.04726040060631931,
+        "frozenWeightSpreadGainOverPooled": 1.0556116648346066,
+        "frozenReading": {
+          "sigma": 1.9456504583358765,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 8.26286792755127,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 4.246840891769705,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.8950359106478781,
+          "pooledInBand": true,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.04988863016478717,
+          "pooledWeightSpreadRelativeToUniform": 0.04726040060631931,
+          "weightSpreadGainOverPooled": 1.0556116648346066,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 1.9456504583358765,
+            "betweenBags": 8.615120887756348,
+            "pooled": 8.26286792755127,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.0017453334294259548,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.052360002882778645
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 0.9728252291679382,
+        "bootstrapSigma": 0.7802804112434387,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 2.493527237516226,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 0.9728252291679382,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 26.395837707997998
+    },
+    "toroide|layernorm|TGL|0": {
+      "family": "toroide",
+      "normalization": "layernorm",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp-layernorm",
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 1.0,
+      "predictTargetAccuracy": 0.5555555555555556,
+      "adabnTargetAccuracy": null,
+      "adabnLayers": 0,
+      "adabnNormLayers": 2,
+      "adabnBatches": 0,
+      "adabnNote": "no hay AdaBN en esta fila, y por eso esta fila es el control: el backbone SÍ normaliza —2 capa(s) de `LayerNorm`, sobre los features dentro de cada muestra— y no guarda ninguna estadística corrida, así que no hay nada que reestimar. Es lo que separa «normalizar ayuda» de «reestimar ayuda»: donde BatchNorm gana, esta fila dice si ganó por normalizar. Un número acá sería `.predict` con otro nombre",
+      "frameStride": 7,
+      "trajectoryFrames": 20,
+      "phase1Epochs": 6,
+      "phase1BestEpoch": 2,
+      "phase1ValidAccuracy": 1.0,
+      "phase1RestoredValidAccuracy": 1.0,
+      "phase2Steps": 128,
+      "phase2BestStep": 48,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 8,
+      "phase2BestEpoch": 3,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8888888888888888,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.6666666666666666,
+        0.6111111111111112,
+        0.5,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.7777777777777778
+      ],
+      "watchmanBest": 0.9333333333333333,
+      "watchmanFinal": 0.9333333333333333,
+      "watchmanRestored": 0.9333333333333333,
+      "supervised": 0.007000748760219722,
+      "phaseTwoObjective": 0.5111358447466046,
+      "contribution": 0.5111358440262848,
+      "contributionGlobal": 0.2932211704683141,
+      "contributionLocal": 0.21791467355797067,
+      "adaptationShare": 0.9864886038591288,
+      "weightingCostRatio": 0.14361315526181817,
+      "weightingCostOmegaSum": 0.1527603268623352,
+      "weightingCostGlobalUnweighted": 0.6739046573638916,
+      "parameters": 15491,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 1.6325228214263916,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.1991914653335698,
+      "secondsPerPhase2Step": 0.1584621774061361,
+      "sigma": {
+        "scales": {
+          "withinBag": 0.9658084511756897,
+          "betweenBags": 1.5218700170516968,
+          "pooled": 2.024742603302002,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.0012809906620532274,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.03842971986159682
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 0.48290422558784485,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 0.006971263236916906,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 0.7243563383817673,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.11002003273597963,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 0.9658084511756897,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.2889534409380618,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 1.4487126767635345,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.5759276674604832,
+            "inBand": true
+          }
+        ],
+        "range": [
+          0.48290422558784485,
+          2.282805025577545
+        ],
+        "scaleRatio": 1.5757472563002601,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.9996428768651824,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 0.4642484188079834,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 8.42364501953125,
+        "frozenPooledToWithinRatio": 18.14469296666648,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.9939436314761659,
+        "frozenPooledKernelInBand": false,
+        "frozenWeightSpreadRelativeToUniform": 0.03175319521687925,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.003757539961952716,
+        "frozenWeightSpreadGainOverPooled": 8.450527616046369,
+        "frozenReading": {
+          "sigma": 0.4642484188079834,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 8.42364501953125,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 18.14469296666648,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.9939436314761659,
+          "pooledInBand": false,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.03175319521687925,
+          "pooledWeightSpreadRelativeToUniform": 0.003757539961952716,
+          "weightSpreadGainOverPooled": 8.450527616046369,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 0.4642484188079834,
+            "betweenBags": 8.556151390075684,
+            "pooled": 8.423645973205566,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.0011619736906141043,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.03485921071842313
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 0.2321242094039917,
+        "bootstrapSigma": 0.2352086752653122,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 1.9737725161893689,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 0.2321242094039917,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 24.344502250023652
+    },
+    "rollo|ninguna|TGL|0": {
+      "family": "rollo",
+      "normalization": "ninguna",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp-nobn",
+      "targetAccuracy": 0.3333333333333333,
+      "sourceAccuracy": 1.0,
+      "predictTargetAccuracy": 0.4444444444444444,
+      "adabnTargetAccuracy": null,
+      "adabnLayers": 0,
+      "adabnNormLayers": 0,
+      "adabnBatches": 0,
+      "adabnNote": "no hay AdaBN en esta fila: el backbone no lleva NINGUNA capa de normalización, así que no normaliza y no hay estadísticas que reestimar. Es una lectura del backbone y no una medición que faltó",
+      "frameStride": 7,
+      "trajectoryFrames": 20,
+      "phase1Epochs": 6,
+      "phase1BestEpoch": 2,
+      "phase1ValidAccuracy": 1.0,
+      "phase1RestoredValidAccuracy": 1.0,
+      "phase2Steps": 128,
+      "phase2BestStep": 48,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 8,
+      "phase2BestEpoch": 3,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5555555555555556,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333
+      ],
+      "watchmanBest": 0.6666666666666666,
+      "watchmanFinal": 0.6666666666666666,
+      "watchmanRestored": 0.6666666666666666,
+      "supervised": 0.00783851520418466,
+      "phaseTwoObjective": 1.0552428462542593,
+      "contribution": 1.0552428453229368,
+      "contributionGlobal": 0.769984393613413,
+      "contributionLocal": 0.2852584517095238,
+      "adaptationShare": 0.9926266083714439,
+      "weightingCostRatio": 0.7218648447564028,
+      "weightingCostOmegaSum": 0.794589102268219,
+      "weightingCostGlobalUnweighted": 0.8157841563224792,
+      "parameters": 15235,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 3.4380924701690674,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.13618870149851622,
+      "secondsPerPhase2Step": 0.10952116633575315,
+      "sigma": {
+        "scales": {
+          "withinBag": 1.750533938407898,
+          "betweenBags": 2.639741897583008,
+          "pooled": 3.550844192504883,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.0015884782187640667,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.047654346562922
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 0.875266969203949,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 0.010589313500503492,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 1.3129004538059235,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.1324840113812716,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 1.750533938407898,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.3207871414091329,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 2.625800907611847,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.6033104770717969,
+            "inBand": true
+          }
+        ],
+        "range": [
+          0.875266969203949,
+          3.9596128463745117
+        ],
+        "scaleRatio": 1.5079638501518229,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.998827265148369,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 3.0400187969207764,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 11.414263725280762,
+        "frozenPooledToWithinRatio": 3.754668799035791,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.8677351432137586,
+        "frozenPooledKernelInBand": true,
+        "frozenWeightSpreadRelativeToUniform": 0.1091069751419127,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.10130446404218674,
+        "frozenWeightSpreadGainOverPooled": 1.077020407476582,
+        "frozenReading": {
+          "sigma": 3.0400187969207764,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 11.414263725280762,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 3.754668799035791,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.8677351432137586,
+          "pooledInBand": true,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.1091069751419127,
+          "pooledWeightSpreadRelativeToUniform": 0.10130446404218674,
+          "weightSpreadGainOverPooled": 1.077020407476582,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 3.0400187969207764,
+            "betweenBags": 10.666023254394531,
+            "pooled": 11.414263725280762,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.0036132019013166428,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.10839605703949928
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 1.5200093984603882,
+        "bootstrapSigma": 0.4456256031990051,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 6.821912329761674,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 1.5200093984603882,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 16.573263166996185
+    },
+    "rollo|batchnorm|TGL|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp",
+      "targetAccuracy": 0.5,
+      "sourceAccuracy": 1.0,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 0.7777777777777778,
+      "adabnLayers": 2,
+      "adabnNormLayers": 2,
+      "adabnBatches": 16,
+      "adabnNote": null,
+      "frameStride": 7,
+      "trajectoryFrames": 23,
+      "phase1Epochs": 5,
+      "phase1BestEpoch": 1,
+      "phase1ValidAccuracy": 1.0,
+      "phase1RestoredValidAccuracy": 1.0,
+      "phase2Steps": 152,
+      "phase2BestStep": 112,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 9,
+      "phase2BestEpoch": 7,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 9,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.9444444444444444,
+        1.0,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.9444444444444444,
+        0.9444444444444444,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9444444444444444,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.6111111111111112,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.8333333333333334,
+        0.8888888888888888,
+        1.0,
+        1.0,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.8888888888888888,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.7777777777777778,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7222222222222222,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.8333333333333334,
+        0.8333333333333334,
+        0.7777777777777778,
+        0.8888888888888888,
+        0.8888888888888888,
+        0.9444444444444444,
+        0.8333333333333334,
+        0.9444444444444444,
+        0.8888888888888888,
+        0.7222222222222222,
+        0.6666666666666666,
+        0.6111111111111112,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2222222222222222,
+        0.2222222222222222,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6111111111111112,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7777777777777778,
+        0.7777777777777778,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.6666666666666666,
+        0.7222222222222222,
+        0.7777777777777778
+      ],
+      "watchmanBest": 0.3333333333333333,
+      "watchmanFinal": 0.4666666666666667,
+      "watchmanRestored": 0.3333333333333333,
+      "supervised": 0.016063026008563804,
+      "phaseTwoObjective": 0.3949162183133395,
+      "contribution": 0.39491621793039433,
+      "contributionGlobal": 0.2416597687192016,
+      "contributionLocal": 0.15325644921119275,
+      "adaptationShare": 0.9609152378241524,
+      "weightingCostRatio": 0.04216024977230089,
+      "weightingCostOmegaSum": 0.0464705228805542,
+      "weightingCostGlobalUnweighted": 0.6604440212249756,
+      "parameters": 15491,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 4.7649245262146,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.3227321499958634,
+      "secondsPerPhase2Step": 0.11941882126963096,
+      "sigma": {
+        "scales": {
+          "withinBag": 2.408033847808838,
+          "betweenBags": 1.7747645378112793,
+          "pooled": 3.2366440296173096,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.0015213160077109933,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.0456394802313298
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 1.204016923904419,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 0.3374319672557501,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 1.8060253858566284,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.6170281650288366,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 2.408033847808838,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.7621607085888159,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 3.612050771713257,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.8862908120364269,
+            "inBand": true
+          }
+        ],
+        "range": [
+          0.8873822689056396,
+          3.612050771713257
+        ],
+        "scaleRatio": 0.7370181027256761,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.9977820250143833,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 1.0041911602020264,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 5.471563339233398,
+        "frozenPooledToWithinRatio": 5.448726852099168,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.9348531042322148,
+        "frozenPooledKernelInBand": true,
+        "frozenWeightSpreadRelativeToUniform": 0.043983348878100514,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.027939118444919586,
+        "frozenWeightSpreadGainOverPooled": 1.5742568601372027,
+        "frozenReading": {
+          "sigma": 1.0041911602020264,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 5.471563339233398,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 5.448726852099168,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.9348531042322148,
+          "pooledInBand": true,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.043983348878100514,
+          "pooledWeightSpreadRelativeToUniform": 0.027939118444919586,
+          "weightSpreadGainOverPooled": 1.5742568601372027,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 1.0041911602020264,
+            "betweenBags": 5.401911735534668,
+            "pooled": 5.471563339233398,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.0016472857678309083,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.04941857303492725
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 0.5020955801010132,
+        "bootstrapSigma": 0.6083703637123108,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 1.650624718262728,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 0.5020955801010132,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 21.970572332997108
+    },
+    "rollo|layernorm|TGL|0": {
+      "family": "rollo",
+      "normalization": "layernorm",
+      "arm": "TGL",
+      "seed": 0,
+      "backbone": "mlp-layernorm",
+      "targetAccuracy": 0.5,
+      "sourceAccuracy": 0.9444444444444444,
+      "predictTargetAccuracy": 0.5,
+      "adabnTargetAccuracy": null,
+      "adabnLayers": 0,
+      "adabnNormLayers": 2,
+      "adabnBatches": 0,
+      "adabnNote": "no hay AdaBN en esta fila, y por eso esta fila es el control: el backbone SÍ normaliza —2 capa(s) de `LayerNorm`, sobre los features dentro de cada muestra— y no guarda ninguna estadística corrida, así que no hay nada que reestimar. Es lo que separa «normalizar ayuda» de «reestimar ayuda»: donde BatchNorm gana, esta fila dice si ganó por normalizar. Un número acá sería `.predict` con otro nombre",
+      "frameStride": 7,
+      "trajectoryFrames": 23,
+      "phase1Epochs": 6,
+      "phase1BestEpoch": 2,
+      "phase1ValidAccuracy": 1.0,
+      "phase1RestoredValidAccuracy": 1.0,
+      "phase2Steps": 152,
+      "phase2BestStep": 128,
+      "phase2StepsPerEpoch": 16,
+      "phase2Epochs": 9,
+      "phase2BestEpoch": 8,
+      "phase2StepsWithoutARead": 8,
+      "phase2EpochPass": [
+        {
+          "epoch": 1,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 2,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 3,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 4,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 5,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 6,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 7,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 8,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        },
+        {
+          "epoch": 9,
+          "steps": 16,
+          "distinct": 48,
+          "total": 48
+        }
+      ],
+      "phase2EpochDefinedBy": "the source training role",
+      "targetAccuracySeries": [
+        0.5,
+        0.3333333333333333,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.2777777777777778,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3333333333333333,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.5,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.5,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.3888888888888889,
+        0.4444444444444444,
+        0.4444444444444444,
+        0.5,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.5555555555555556,
+        0.6111111111111112,
+        0.6666666666666666
+      ],
+      "watchmanBest": 0.8666666666666667,
+      "watchmanFinal": 0.8666666666666667,
+      "watchmanRestored": 0.8666666666666667,
+      "supervised": 0.011170627886282378,
+      "phaseTwoObjective": 0.7504573550663496,
+      "contribution": 0.7504573549683157,
+      "contributionGlobal": 0.45253857058521946,
+      "contributionLocal": 0.2979187843830962,
+      "adaptationShare": 0.9853332228624077,
+      "weightingCostRatio": 0.5296080300341974,
+      "weightingCostOmegaSum": 0.575228214263916,
+      "weightingCostGlobalUnweighted": 0.521335780620575,
+      "parameters": 15491,
+      "sourceMoved": 0.0,
+      "sourceBuffersMoved": 0.0,
+      "latentSourceMoved": 0.0,
+      "latentTargetMoved": 0.6078789830207825,
+      "phase2Note": null,
+      "secondsPerPhase1Epoch": 0.11223727766385612,
+      "secondsPerPhase2Step": 0.09664984703953164,
+      "sigma": {
+        "scales": {
+          "withinBag": 0.8374813199043274,
+          "betweenBags": 2.0702292919158936,
+          "pooled": 2.2569351196289062,
+          "bagsRead": 16,
+          "bagsOffered": 48,
+          "bagsTruncated": true,
+          "bagLimit": 16,
+          "instancesPerBag": 30,
+          "groupingCheckedAgainstBagUnit": 0.0,
+          "weightSpread": 0.001933376770466566,
+          "uniformWeight": 0.03333333333333333,
+          "weightSpreadRelativeToUniform": 0.05800130311399698
+        },
+        "centredOn": "withinBag",
+        "multipliers": [
+          0.5,
+          0.75,
+          1.0,
+          1.5
+        ],
+        "band": [
+          0.05,
+          0.95
+        ],
+        "points": [
+          {
+            "multiplier": 0.5,
+            "sigma": 0.4187406599521637,
+            "kernelWithinBag": 0.1353352832366127,
+            "kernelBetweenBags": 4.924546495639267e-06,
+            "inBand": true
+          },
+          {
+            "multiplier": 0.75,
+            "sigma": 0.6281109899282455,
+            "kernelWithinBag": 0.41111229050718745,
+            "kernelBetweenBags": 0.004375741554278265,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.0,
+            "sigma": 0.8374813199043274,
+            "kernelWithinBag": 0.6065306597126334,
+            "kernelBetweenBags": 0.04710766311220074,
+            "inBand": true
+          },
+          {
+            "multiplier": 1.5,
+            "sigma": 1.256221979856491,
+            "kernelWithinBag": 0.8007374029168081,
+            "kernelBetweenBags": 0.2571952335533049,
+            "inBand": true
+          }
+        ],
+        "range": [
+          0.4187406599521637,
+          3.1053439378738403
+        ],
+        "scaleRatio": 2.471970708734606,
+        "declaredRange": [
+          3.6135014304860875,
+          361.35014304860874
+        ],
+        "declaredConstant": 36.135014304860874,
+        "declaredKernelWithinBag": 0.9997314621662081,
+        "replaced": "`config.KERNEL_SIGMA_RANGE` was measured on digits under resnet18 and is meaningless on these families; the range searched here spans both measured scales",
+        "oneBandwidthTwoJobs": "the within-bag and between-bag medians differ by `scaleRatio`, and Decision 1 declares ONE bandwidth for both; no single value is in band for both and the search chooses the trade-off. Which of the two is larger is NOT fixed: it varies by family and by backbone, so neither the range nor any reader may assume a direction",
+        "frozenSigma": 1.4270836114883423,
+        "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+        "frozenScope": "within-bag instance pairs, pooled over the source training role's bags",
+        "frozenPooledSigma": 6.04477071762085,
+        "frozenPooledToWithinRatio": 4.235750918137587,
+        "frozenKernelWithinBag": 0.1353352832366127,
+        "frozenKernelInBand": true,
+        "frozenPooledKernelWithinBag": 0.8945156625740933,
+        "frozenPooledKernelInBand": true,
+        "frozenWeightSpreadRelativeToUniform": 0.1936184987425804,
+        "frozenPooledWeightSpreadRelativeToUniform": 0.18018232192844152,
+        "frozenWeightSpreadGainOverPooled": 1.0745698949282882,
+        "frozenReading": {
+          "sigma": 1.4270836114883423,
+          "statistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+          "scope": "within-bag instance pairs, pooled over the source training role's bags",
+          "pooledSigma": 6.04477071762085,
+          "pooledScope": "every instance against every instance over the source training role, which is NOT the set Eq. (14) evaluates",
+          "pooledToWithinRatio": 4.235750918137587,
+          "multiplierRead": 0.5,
+          "kernelWithinBag": 0.1353352832366127,
+          "inBand": true,
+          "pooledKernelWithinBag": 0.8945156625740933,
+          "pooledInBand": true,
+          "bandIsAnIdentityNote": "the within-bag kernel at m times the within-bag median is exp(-1/(2 m^2)) whatever the measured distance is, so `inBand` holds by construction once the scope is right. It reports that the SCOPE is right and says nothing about the mechanism; `weightSpreadGainOverPooled` is the reading with a reachable red",
+          "weightSpreadRelativeToUniform": 0.1936184987425804,
+          "pooledWeightSpreadRelativeToUniform": 0.18018232192844152,
+          "weightSpreadGainOverPooled": 1.0745698949282882,
+          "weightSpreadNote": "zero gain means `attentionGamma` is zero, not that the bandwidth does not matter: Eq. (15)'s consensus term is the only path the bandwidth takes into Eq. (16), and config.ATTENTION_GAMMA is 0.0",
+          "attentionGamma": 0.6027633760716439,
+          "bags": 48,
+          "instances": 1440,
+          "instancesPerBag": 30,
+          "dims": 64,
+          "bagsTruncated": false,
+          "readsTargetRows": false,
+          "measuredAt": "after phase 1, with theta_s frozen",
+          "withinBagReading": {
+            "withinBag": 1.4270836114883423,
+            "betweenBags": 4.905721664428711,
+            "pooled": 6.04477071762085,
+            "bagsRead": 48,
+            "bagsOffered": 48,
+            "bagsTruncated": false,
+            "bagLimit": 48,
+            "instancesPerBag": 30,
+            "groupingCheckedAgainstBagUnit": 0.0,
+            "weightSpread": 0.006251772399991751,
+            "uniformWeight": 0.03333333333333333,
+            "weightSpreadRelativeToUniform": 0.18755317199975252
+          }
+        },
+        "frozenSigmaMultiplier": 0.5,
+        "frozenSigmaMultiplierSource": "search",
+        "phaseTwoSigma": 0.7135418057441711,
+        "bootstrapSigma": 0.1891203671693802,
+        "bootstrapNote": "what phase 1 POOLED at, which CREDA has no counterpart for: its phase 1 is CE over points and needs no bandwidth, while a bag score cannot be computed without one",
+        "frozenToBootstrapRatio": 7.545901231305331,
+        "declaredConstantUsed": false
+      },
+      "hyper": {
+        "kernelSigma": 0.7135418057441711,
+        "attentionGamma": 0.6027633760716439,
+        "attentionTemperature": 1.229607110732571,
+        "tauLocal": 1.2520653814999467,
+        "lr1": 0.004430375245218269,
+        "weightDecay1": 0.0003766576841599299,
+        "dim": 64,
+        "lr2": 0.0013981961408994052,
+        "weightDecay2": 0.0001032326035197658,
+        "sigmaMultiplier": 0.5
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "cellElapsedSeconds": 17.22136875000433
+    }
+  },
+  "filas": {
+    "lunas|ninguna|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.2222222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.6269876230017919,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.01914745936473513,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9703661666309684,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.3888888888888889,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.6666666666666666,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.410839189189382,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.022812980570291217,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9473933669398357,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|layernorm|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.3333333333333333,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.4047225636497483,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.016722801435542733,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9603203574628033,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|ninguna|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.7222222222222222,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 1.0053949470166117,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.007494262010183661,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9926011039081122,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.8575709065128314,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.008736584870121078,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9899151456532205,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|layernorm|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.5111358440262848,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.007000748760219722,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9864886038591288,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|ninguna|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.3333333333333333,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 1.0552428453229368,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.00783851520418466,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9926266083714439,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.5,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 1.0,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.39491621793039433,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.016063026008563804,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9609152378241524,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|layernorm|TGL": {
+      "summary": {
+        "targetAccuracy": {
+          "mean": 0.5,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "sourceAccuracy": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "contribution": {
+          "mean": 0.7504573549683157,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "supervised": {
+          "mean": 0.011170627886282378,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "adaptationShare": {
+          "mean": 0.9853332228624077,
+          "stdev": 0.0,
+          "n": 1
+        }
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    }
+  },
+  "hp1": {
+    "lunas": {
+      "lr1": 0.004430375245218269,
+      "weightDecay1": 0.0003766576841599299,
+      "attentionGamma": 0.6027633760716439,
+      "attentionTemperature": 1.229607110732571,
+      "dim": 64,
+      "sigmaMultiplier": 0.5,
+      "kernelSigma": 0.1760956346988678
+    },
+    "toroide": {
+      "lr1": 0.004430375245218269,
+      "weightDecay1": 0.0003766576841599299,
+      "attentionGamma": 0.6027633760716439,
+      "attentionTemperature": 1.229607110732571,
+      "dim": 64,
+      "sigmaMultiplier": 0.5,
+      "kernelSigma": 0.4155462682247162
+    },
+    "rollo": {
+      "lr1": 0.004430375245218269,
+      "weightDecay1": 0.0003766576841599299,
+      "attentionGamma": 0.6027633760716439,
+      "attentionTemperature": 1.229607110732571,
+      "dim": 64,
+      "sigmaMultiplier": 0.5,
+      "kernelSigma": 0.4577643871307373
+    }
+  },
+  "hp2": {
+    "lunas": {
+      "tauLocal": 1.2520653814999467,
+      "lr2": 0.0013981961408994052,
+      "weightDecay2": 0.0001032326035197658
+    },
+    "toroide": {
+      "tauLocal": 1.2520653814999467,
+      "lr2": 0.0013981961408994052,
+      "weightDecay2": 0.0001032326035197658
+    },
+    "rollo": {
+      "tauLocal": 1.2520653814999467,
+      "lr2": 0.0013981961408994052,
+      "weightDecay2": 0.0001032326035197658
+    }
+  },
+  "busqueda1": {
+    "lunas": {
+      "trials": 2,
+      "bestAccuracy": 0.8222222222222223,
+      "tied": 1,
+      "validLoss": 0.022130838905771572,
+      "frozenSigma": 0.40694208939870197,
+      "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+      "criterion": "max(sourceValidAccuracy), ties by validLoss",
+      "dimensions": [
+        "attentionGamma",
+        "attentionTemperature",
+        "dim",
+        "kernelSigma",
+        "lr1",
+        "weightDecay1"
+      ],
+      "ranges": {
+        "kernelSigma": "measured median, see `sigma_grid`",
+        "attentionGamma": [
+          0.0,
+          1.0
+        ],
+        "attentionTemperature": [
+          0.1,
+          10.0
+        ],
+        "lr1": [
+          0.0001,
+          0.1
+        ],
+        "weightDecay1": [
+          1e-07,
+          0.01
+        ],
+        "dim": [
+          8,
+          16,
+          32,
+          64
+        ]
+      },
+      "dimensionCount": 6,
+      "trialsPerDimension": 0.3333333333333333,
+      "budgetNote": {
+        "trialsUnchanged": true,
+        "phase1DimensionsBefore": 5,
+        "phase1DimensionsAfter": 6,
+        "phase2DimensionsBefore": 1,
+        "phase2DimensionsAfter": 3,
+        "expectedByTheBrief": {
+          "phase1": 7,
+          "phase2": 4
+        },
+        "shortfall": "the bag lot of each phase -- CREDA's `LOTE_1`/`LOTE_2` -- is not reachable from this module; see `PHASE_ONE_NOT_SEARCHED` for the measurement",
+        "whyItMatters": "the trial budget is fixed, so every dimension added divides the same 25 trials further. Phase 1 now spends 25 trials over 6 dimensions and phase 2 over 3, where they spent them over 5 and 1; a gap between two cells smaller than the variance between two searches of this budget is not a reading of the method"
+      },
+      "notSearched": {
+        "LOTE_1": "CREDA sweeps `[32, 64, 128, 256]` POINTS per step; the unit here is the BAG and there is no lot to choose. `harness.balanced_batches` yields exactly one bag per class per step -- it takes no lot argument and reads no `config.BAGS_PER_STEP` -- so the training lot in bags IS the class count. `config.BAGS_PER_STEP` divides the role length to get the STEP COUNT of an epoch, which is an epoch length and not a lot, so searching it would search a repetition field wearing another name. Making the lot searchable means giving `balanced_batches` a per-class count, which is the DIGIT benchmark's own batching and outside this toyset's surface. A range derived from the realized train count would be `(3, 6, 12, 24, 48)` -- one bag per class doubling to the whole 48-bag training role -- and it is written here rather than searched because nothing can consume it yet"
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide": {
+      "trials": 2,
+      "bestAccuracy": 1.0,
+      "tied": 2,
+      "validLoss": 0.0031858421280048788,
+      "frozenSigma": 1.1662485003471375,
+      "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+      "criterion": "max(sourceValidAccuracy), ties by validLoss",
+      "dimensions": [
+        "attentionGamma",
+        "attentionTemperature",
+        "dim",
+        "kernelSigma",
+        "lr1",
+        "weightDecay1"
+      ],
+      "ranges": {
+        "kernelSigma": "measured median, see `sigma_grid`",
+        "attentionGamma": [
+          0.0,
+          1.0
+        ],
+        "attentionTemperature": [
+          0.1,
+          10.0
+        ],
+        "lr1": [
+          0.0001,
+          0.1
+        ],
+        "weightDecay1": [
+          1e-07,
+          0.01
+        ],
+        "dim": [
+          8,
+          16,
+          32,
+          64
+        ]
+      },
+      "dimensionCount": 6,
+      "trialsPerDimension": 0.3333333333333333,
+      "budgetNote": {
+        "trialsUnchanged": true,
+        "phase1DimensionsBefore": 5,
+        "phase1DimensionsAfter": 6,
+        "phase2DimensionsBefore": 1,
+        "phase2DimensionsAfter": 3,
+        "expectedByTheBrief": {
+          "phase1": 7,
+          "phase2": 4
+        },
+        "shortfall": "the bag lot of each phase -- CREDA's `LOTE_1`/`LOTE_2` -- is not reachable from this module; see `PHASE_ONE_NOT_SEARCHED` for the measurement",
+        "whyItMatters": "the trial budget is fixed, so every dimension added divides the same 25 trials further. Phase 1 now spends 25 trials over 6 dimensions and phase 2 over 3, where they spent them over 5 and 1; a gap between two cells smaller than the variance between two searches of this budget is not a reading of the method"
+      },
+      "notSearched": {
+        "LOTE_1": "CREDA sweeps `[32, 64, 128, 256]` POINTS per step; the unit here is the BAG and there is no lot to choose. `harness.balanced_batches` yields exactly one bag per class per step -- it takes no lot argument and reads no `config.BAGS_PER_STEP` -- so the training lot in bags IS the class count. `config.BAGS_PER_STEP` divides the role length to get the STEP COUNT of an epoch, which is an epoch length and not a lot, so searching it would search a repetition field wearing another name. Making the lot searchable means giving `balanced_batches` a per-class count, which is the DIGIT benchmark's own batching and outside this toyset's surface. A range derived from the realized train count would be `(3, 6, 12, 24, 48)` -- one bag per class doubling to the whole 48-bag training role -- and it is written here rather than searched because nothing can consume it yet"
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo": {
+      "trials": 2,
+      "bestAccuracy": 1.0,
+      "tied": 2,
+      "validLoss": 0.012696839248140654,
+      "frozenSigma": 1.3842657208442688,
+      "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+      "criterion": "max(sourceValidAccuracy), ties by validLoss",
+      "dimensions": [
+        "attentionGamma",
+        "attentionTemperature",
+        "dim",
+        "kernelSigma",
+        "lr1",
+        "weightDecay1"
+      ],
+      "ranges": {
+        "kernelSigma": "measured median, see `sigma_grid`",
+        "attentionGamma": [
+          0.0,
+          1.0
+        ],
+        "attentionTemperature": [
+          0.1,
+          10.0
+        ],
+        "lr1": [
+          0.0001,
+          0.1
+        ],
+        "weightDecay1": [
+          1e-07,
+          0.01
+        ],
+        "dim": [
+          8,
+          16,
+          32,
+          64
+        ]
+      },
+      "dimensionCount": 6,
+      "trialsPerDimension": 0.3333333333333333,
+      "budgetNote": {
+        "trialsUnchanged": true,
+        "phase1DimensionsBefore": 5,
+        "phase1DimensionsAfter": 6,
+        "phase2DimensionsBefore": 1,
+        "phase2DimensionsAfter": 3,
+        "expectedByTheBrief": {
+          "phase1": 7,
+          "phase2": 4
+        },
+        "shortfall": "the bag lot of each phase -- CREDA's `LOTE_1`/`LOTE_2` -- is not reachable from this module; see `PHASE_ONE_NOT_SEARCHED` for the measurement",
+        "whyItMatters": "the trial budget is fixed, so every dimension added divides the same 25 trials further. Phase 1 now spends 25 trials over 6 dimensions and phase 2 over 3, where they spent them over 5 and 1; a gap between two cells smaller than the variance between two searches of this budget is not a reading of the method"
+      },
+      "notSearched": {
+        "LOTE_1": "CREDA sweeps `[32, 64, 128, 256]` POINTS per step; the unit here is the BAG and there is no lot to choose. `harness.balanced_batches` yields exactly one bag per class per step -- it takes no lot argument and reads no `config.BAGS_PER_STEP` -- so the training lot in bags IS the class count. `config.BAGS_PER_STEP` divides the role length to get the STEP COUNT of an epoch, which is an epoch length and not a lot, so searching it would search a repetition field wearing another name. Making the lot searchable means giving `balanced_batches` a per-class count, which is the DIGIT benchmark's own batching and outside this toyset's surface. A range derived from the realized train count would be `(3, 6, 12, 24, 48)` -- one bag per class doubling to the whole 48-bag training role -- and it is written here rather than searched because nothing can consume it yet"
+      },
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    }
+  },
+  "busqueda2": {
+    "lunas": {
+      "trials": 2,
+      "bestWatchman": 0.6444444444444444,
+      "criterion": "min(watchman)",
+      "frozenSigma": {
+        "ninguna|100": 0.32897838950157166,
+        "batchnorm|100": 0.6166332960128784,
+        "layernorm|100": 0.2710202932357788
+      },
+      "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+      "frozenSigmaMultiplier": 0.5,
+      "retired": {
+        "ceiling": "lambda_glob of Eq. (39), as harness.ramp's ceiling",
+        "ceilingLocal": "lambda_loc of Eq. (39), as harness.ramp's ceiling",
+        "rampDelta": "how fast lambda_glob grows, as harness.ramp's delta",
+        "rampDeltaLocal": "how fast lambda_loc grows, as harness.ramp's delta"
+      },
+      "fixedCoefficient": 1.0,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "dimensions": [
+        "lr2",
+        "tauLocal",
+        "weightDecay2"
+      ],
+      "ranges": {
+        "tauLocal": [
+          0.1,
+          10.0
+        ],
+        "lr2": [
+          1e-05,
+          0.01
+        ],
+        "weightDecay2": [
+          1e-07,
+          0.01
+        ]
+      },
+      "dimensionCount": 3,
+      "trialsPerDimension": 0.6666666666666666,
+      "budgetNote": {
+        "trialsUnchanged": true,
+        "phase1DimensionsBefore": 5,
+        "phase1DimensionsAfter": 6,
+        "phase2DimensionsBefore": 1,
+        "phase2DimensionsAfter": 3,
+        "expectedByTheBrief": {
+          "phase1": 7,
+          "phase2": 4
+        },
+        "shortfall": "the bag lot of each phase -- CREDA's `LOTE_1`/`LOTE_2` -- is not reachable from this module; see `PHASE_ONE_NOT_SEARCHED` for the measurement",
+        "whyItMatters": "the trial budget is fixed, so every dimension added divides the same 25 trials further. Phase 1 now spends 25 trials over 6 dimensions and phase 2 over 3, where they spent them over 5 and 1; a gap between two cells smaller than the variance between two searches of this budget is not a reading of the method"
+      },
+      "notSearched": {
+        "LOTE_2": "the same block as `LOTE_1`: `harness.balanced_batches` fixes the lot at one bag per class and takes no lot argument, and `adapt_phase_two` draws its steps from that same generator. CREDA's `[32, 64, 128, 256]` are POINTS and do not transfer to a bag-unit axis"
+      }
+    },
+    "toroide": {
+      "trials": 2,
+      "bestWatchman": 0.6888888888888888,
+      "criterion": "min(watchman)",
+      "frozenSigma": {
+        "ninguna|100": 1.6237441301345825,
+        "batchnorm|100": 1.2946648597717285,
+        "layernorm|100": 0.5824734568595886
+      },
+      "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+      "frozenSigmaMultiplier": 0.5,
+      "retired": {
+        "ceiling": "lambda_glob of Eq. (39), as harness.ramp's ceiling",
+        "ceilingLocal": "lambda_loc of Eq. (39), as harness.ramp's ceiling",
+        "rampDelta": "how fast lambda_glob grows, as harness.ramp's delta",
+        "rampDeltaLocal": "how fast lambda_loc grows, as harness.ramp's delta"
+      },
+      "fixedCoefficient": 1.0,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "dimensions": [
+        "lr2",
+        "tauLocal",
+        "weightDecay2"
+      ],
+      "ranges": {
+        "tauLocal": [
+          0.1,
+          10.0
+        ],
+        "lr2": [
+          1e-05,
+          0.01
+        ],
+        "weightDecay2": [
+          1e-07,
+          0.01
+        ]
+      },
+      "dimensionCount": 3,
+      "trialsPerDimension": 0.6666666666666666,
+      "budgetNote": {
+        "trialsUnchanged": true,
+        "phase1DimensionsBefore": 5,
+        "phase1DimensionsAfter": 6,
+        "phase2DimensionsBefore": 1,
+        "phase2DimensionsAfter": 3,
+        "expectedByTheBrief": {
+          "phase1": 7,
+          "phase2": 4
+        },
+        "shortfall": "the bag lot of each phase -- CREDA's `LOTE_1`/`LOTE_2` -- is not reachable from this module; see `PHASE_ONE_NOT_SEARCHED` for the measurement",
+        "whyItMatters": "the trial budget is fixed, so every dimension added divides the same 25 trials further. Phase 1 now spends 25 trials over 6 dimensions and phase 2 over 3, where they spent them over 5 and 1; a gap between two cells smaller than the variance between two searches of this budget is not a reading of the method"
+      },
+      "notSearched": {
+        "LOTE_2": "the same block as `LOTE_1`: `harness.balanced_batches` fixes the lot at one bag per class and takes no lot argument, and `adapt_phase_two` draws its steps from that same generator. CREDA's `[32, 64, 128, 256]` are POINTS and do not transfer to a bag-unit axis"
+      }
+    },
+    "rollo": {
+      "trials": 2,
+      "bestWatchman": 0.5333333333333333,
+      "criterion": "min(watchman)",
+      "frozenSigma": {
+        "ninguna|100": 1.6220606565475464,
+        "batchnorm|100": 0.9685203433036804,
+        "layernorm|100": 1.5703598260879517
+      },
+      "frozenStatistic": "CREDA.toy_experiment.sigma_de_la_fuente",
+      "frozenSigmaMultiplier": 0.5,
+      "retired": {
+        "ceiling": "lambda_glob of Eq. (39), as harness.ramp's ceiling",
+        "ceilingLocal": "lambda_loc of Eq. (39), as harness.ramp's ceiling",
+        "rampDelta": "how fast lambda_glob grows, as harness.ramp's delta",
+        "rampDeltaLocal": "how fast lambda_loc grows, as harness.ramp's delta"
+      },
+      "fixedCoefficient": 1.0,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "steps_2": 152,
+        "patience_1": 3,
+        "patience_2": 3,
+        "min_steps_2": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      },
+      "dimensions": [
+        "lr2",
+        "tauLocal",
+        "weightDecay2"
+      ],
+      "ranges": {
+        "tauLocal": [
+          0.1,
+          10.0
+        ],
+        "lr2": [
+          1e-05,
+          0.01
+        ],
+        "weightDecay2": [
+          1e-07,
+          0.01
+        ]
+      },
+      "dimensionCount": 3,
+      "trialsPerDimension": 0.6666666666666666,
+      "budgetNote": {
+        "trialsUnchanged": true,
+        "phase1DimensionsBefore": 5,
+        "phase1DimensionsAfter": 6,
+        "phase2DimensionsBefore": 1,
+        "phase2DimensionsAfter": 3,
+        "expectedByTheBrief": {
+          "phase1": 7,
+          "phase2": 4
+        },
+        "shortfall": "the bag lot of each phase -- CREDA's `LOTE_1`/`LOTE_2` -- is not reachable from this module; see `PHASE_ONE_NOT_SEARCHED` for the measurement",
+        "whyItMatters": "the trial budget is fixed, so every dimension added divides the same 25 trials further. Phase 1 now spends 25 trials over 6 dimensions and phase 2 over 3, where they spent them over 5 and 1; a gap between two cells smaller than the variance between two searches of this budget is not a reading of the method"
+      },
+      "notSearched": {
+        "LOTE_2": "the same block as `LOTE_1`: `harness.balanced_batches` fixes the lot at one bag per class and takes no lot argument, and `adapt_phase_two` draws its steps from that same generator. CREDA's `[32, 64, 128, 256]` are POINTS and do not transfer to a bag-unit axis"
+      }
+    }
+  },
+  "trials1": {
+    "lunas": [
+      {
+        "params": {
+          "lr1": 0.004430375245218269,
+          "weightDecay1": 0.0003766576841599299,
+          "attentionGamma": 0.6027633760716439,
+          "attentionTemperature": 1.229607110732571,
+          "dim": 64,
+          "sigmaMultiplier": 0.5
+        },
+        "value": 0.8222222222222223,
+        "validLoss": 0.022130838905771572,
+        "kernelSigma": 0.1760956346988678,
+        "frozenSigma": 0.40694208939870197
+      },
+      {
+        "params": {
+          "lr1": 0.0050598038746604325,
+          "weightDecay1": 0.004246031301768213,
+          "attentionGamma": 0.07103605819788694,
+          "attentionTemperature": 0.1493683554419846,
+          "dim": 64,
+          "sigmaMultiplier": 0.5
+        },
+        "value": 0.7999999999999999,
+        "validLoss": 0.029387351125478745,
+        "kernelSigma": 0.1760956346988678,
+        "frozenSigma": 0.0963573728998502
+      }
+    ],
+    "toroide": [
+      {
+        "params": {
+          "lr1": 0.004430375245218269,
+          "weightDecay1": 0.0003766576841599299,
+          "attentionGamma": 0.6027633760716439,
+          "attentionTemperature": 1.229607110732571,
+          "dim": 64,
+          "sigmaMultiplier": 0.5
+        },
+        "value": 1.0,
+        "validLoss": 0.0031858421280048788,
+        "kernelSigma": 0.4155462682247162,
+        "frozenSigma": 1.1662485003471375
+      },
+      {
+        "params": {
+          "lr1": 0.0050598038746604325,
+          "weightDecay1": 0.004246031301768213,
+          "attentionGamma": 0.07103605819788694,
+          "attentionTemperature": 0.1493683554419846,
+          "dim": 64,
+          "sigmaMultiplier": 0.5
+        },
+        "value": 1.0,
+        "validLoss": 0.008510104070107142,
+        "kernelSigma": 0.4155462682247162,
+        "frozenSigma": 0.5358080863952637
+      }
+    ],
+    "rollo": [
+      {
+        "params": {
+          "lr1": 0.004430375245218269,
+          "weightDecay1": 0.0003766576841599299,
+          "attentionGamma": 0.6027633760716439,
+          "attentionTemperature": 1.229607110732571,
+          "dim": 64,
+          "sigmaMultiplier": 0.5
+        },
+        "value": 1.0,
+        "validLoss": 0.012696839248140654,
+        "kernelSigma": 0.4577643871307373,
+        "frozenSigma": 1.3842657208442688
+      },
+      {
+        "params": {
+          "lr1": 0.0050598038746604325,
+          "weightDecay1": 0.004246031301768213,
+          "attentionGamma": 0.07103605819788694,
+          "attentionTemperature": 0.1493683554419846,
+          "dim": 64,
+          "sigmaMultiplier": 0.5
+        },
+        "value": 1.0,
+        "validLoss": 0.019498875985542934,
+        "kernelSigma": 0.4577643871307373,
+        "frozenSigma": 0.7035432656606039
+      }
+    ]
+  },
+  "trials2": {
+    "lunas": [
+      {
+        "params": {
+          "tauLocal": 1.2520653814999467,
+          "lr2": 0.0013981961408994052,
+          "weightDecay2": 0.0001032326035197658
+        },
+        "watchman": 0.6444444444444444,
+        "targetAccuracy": 0.5555555555555555
+      },
+      {
+        "params": {
+          "tauLocal": 1.229607110732571,
+          "lr2": 0.00018662266976517984,
+          "weightDecay2": 0.00016961746387290997
+        },
+        "watchman": 0.7777777777777778,
+        "targetAccuracy": 0.6666666666666666
+      }
+    ],
+    "toroide": [
+      {
+        "params": {
+          "tauLocal": 1.2520653814999467,
+          "lr2": 0.0013981961408994052,
+          "weightDecay2": 0.0001032326035197658
+        },
+        "watchman": 0.6888888888888888,
+        "targetAccuracy": 0.6851851851851851
+      },
+      {
+        "params": {
+          "tauLocal": 1.229607110732571,
+          "lr2": 0.00018662266976517984,
+          "weightDecay2": 0.00016961746387290997
+        },
+        "watchman": 0.8888888888888888,
+        "targetAccuracy": 0.5185185185185185
+      }
+    ],
+    "rollo": [
+      {
+        "params": {
+          "tauLocal": 1.2520653814999467,
+          "lr2": 0.0013981961408994052,
+          "weightDecay2": 0.0001032326035197658
+        },
+        "watchman": 0.5333333333333333,
+        "targetAccuracy": 0.611111111111111
+      },
+      {
+        "params": {
+          "tauLocal": 1.229607110732571,
+          "lr2": 0.00018662266976517984,
+          "weightDecay2": 0.00016961746387290997
+        },
+        "watchman": 0.6,
+        "targetAccuracy": 0.5925925925925927
+      }
+    ]
+  },
+  "costo": {
+    "cells": 9,
+    "secondsPerPhase1Epoch": 0.18477197132446302,
+    "secondsPerPhase2Step": 0.13470154349464372,
+    "secondsPerCell": 47.19464894444294,
+    "sweepSeconds": 424.75184049998643,
+    "measuredAt": "pilot",
+    "workHere": {
+      "families": 3,
+      "normalizations": 3,
+      "searchSeeds": 1,
+      "reportSeeds": 1,
+      "arms": 1,
+      "phase1Trainings": 36,
+      "phase2Runs": 27,
+      "phase1EpochCeiling": 216,
+      "phase2StepCeiling": 4104
+    },
+    "workAtFullScale": {
+      "families": 3,
+      "normalizations": 3,
+      "searchSeeds": 3,
+      "reportSeeds": 10,
+      "arms": 1,
+      "phase1Trainings": 792,
+      "phase2Runs": 765,
+      "phase1EpochCeiling": 158400,
+      "phase2StepCeiling": 153000
+    },
+    "instanceScale": 1.0,
+    "forecastFullSeconds": 49877.216412475434,
+    "forecastFullHours": 13.854782336798731,
+    "caveat": "an upper bound, not a measurement: both early stops end a phase before its declared length, so the epoch and step counts are ceilings, and the per-epoch cost is scaled linearly in instances per bag, which is an assumption about the encoder and not a measurement of it",
+    "scale": {
+      "name": "pilot",
+      "epochs_1": 6,
+      "steps_2": 152,
+      "patience_1": 3,
+      "patience_2": 3,
+      "min_steps_2": 3,
+      "search_seeds": [
+        100
+      ],
+      "report_seeds": [
+        0
+      ],
+      "trials_1": 2,
+      "trials_2": 2,
+      "points_per_domain": 2835,
+      "lr_1": 0.01,
+      "lr_2": 0.001,
+      "classes": 3,
+      "bags_per_class": 27,
+      "instances_per_bag": 30,
+      "frac_train": 0.6,
+      "frac_valid": 0.2,
+      "isPilot": true,
+      "realizedSplit": {
+        "requested": {
+          "train": 0.6,
+          "valid": 0.2,
+          "test": 0.2
+        },
+        "bagsPerClass": {
+          "train": 16,
+          "valid": 5,
+          "test": 6
+        },
+        "realized": {
+          "train": 0.5925925925925926,
+          "valid": 0.18518518518518517,
+          "test": 0.2222222222222222
+        }
+      }
+    }
+  },
+  "escala": {
+    "name": "pilot",
+    "epochs_1": 6,
+    "steps_2": 152,
+    "patience_1": 3,
+    "patience_2": 3,
+    "min_steps_2": 3,
+    "search_seeds": [
+      100
+    ],
+    "report_seeds": [
+      0
+    ],
+    "trials_1": 2,
+    "trials_2": 2,
+    "points_per_domain": 2835,
+    "lr_1": 0.01,
+    "lr_2": 0.001,
+    "classes": 3,
+    "bags_per_class": 27,
+    "instances_per_bag": 30,
+    "frac_train": 0.6,
+    "frac_valid": 0.2,
+    "isPilot": true,
+    "realizedSplit": {
+      "requested": {
+        "train": 0.6,
+        "valid": 0.2,
+        "test": 0.2
+      },
+      "bagsPerClass": {
+        "train": 16,
+        "valid": 5,
+        "test": 6
+      },
+      "realized": {
+        "train": 0.5925925925925926,
+        "valid": 0.18518518518518517,
+        "test": 0.2222222222222222
+      }
+    }
+  }
+}

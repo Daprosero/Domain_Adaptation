@@ -1,0 +1,454 @@
+{
+  "methodAxes": {
+    "weightCrossBlock": {
+      "value": true,
+      "parameter": "weight_cross_block",
+      "function": "MIL_CREDA.conditional.weighted_blocks",
+      "what": "whether Eq. (26)'s confidence diagonal multiplies the CROSS block K_st as well as the target block",
+      "declaredBy": "CREDA.toy_experiment.HP_2",
+      "declaredAs": "CRUZADO_SOPESADO",
+      "declaredValue": true,
+      "carriedBy": "the function's own keyword-only default",
+      "agreesWithCreda": true,
+      "searched": false
+    },
+    "detachTargetEntropy": {
+      "value": false,
+      "parameter": "detach_target_entropy",
+      "function": "MIL_CREDA.global_term.balanced_dependency_score",
+      "what": "whether H_2(K~_t) enters the per-class score detached, removing the dispersive force without changing the value",
+      "declaredBy": "CREDA.toy_experiment.HP_2",
+      "declaredAs": "RHO_T_SIN_GRAD",
+      "declaredValue": false,
+      "carriedBy": "the function's own keyword-only default",
+      "agreesWithCreda": true,
+      "searched": false
+    }
+  },
+  "methodAxesNote": "each axis is keyword-only with CREDA's declared value as its default and the call sites pass neither, so the effective value IS the default and is read with inspect.signature rather than copied. Threading a searchable value through would mean editing the call sites, which live in wiring.py",
+  "conditionalByConstruction": {
+    "isConditional": true,
+    "byAKnob": false,
+    "knobHere": null,
+    "equation": "23",
+    "builtBy": "MIL_CREDA.conditional.conditional_blocks",
+    "how": "the Gram blocks are built class by class, so every block the global term reads is already per class; there is no explicit conditional entropy and nothing mixes a marginal in",
+    "credasKnob": "CREDA.models.CREDALoss.class_mixing",
+    "credasKnobNote": "0.0 is the pure marginal and 1.0 the pure conditional, switched at CREDA's own PASO_COND. A 1.0 printed for this package would read as that end having been chosen, which no run here chose",
+    "searchedUnder": "src/MIL_CREDA/",
+    "modulesSearched": 10,
+    "modulesCarryingTheKnob": []
+  },
+  "phaseTwoObjective": {
+    "equation": "L = lambda_glob*L_glob(Eqs. 32-37) + lambda_loc*L_loc(Eqs. 30-31, 38)",
+    "summands": [
+      "contributionGlobal",
+      "contributionLocal"
+    ],
+    "readingOnly": "Eq. 21 over the source, computed and recorded as `supervised` on every step and drawn in the figure, and summed into nothing",
+    "why": "CREDA's phase 2 carries ONE adaptation term, the Renyi, and no supervised summand. Here the adaptation term is two -- global and local -- and that is the whole of the difference between the two objectives. A third summand CREDA's phase 2 does not have makes the two tables incomparable at the one place they are read side by side",
+    "whyItMovesNothing": "phase 2 moves theta_t alone and Eq. (21) is head o theta_s over the source, so it carries no gradient into theta_t. The optimizer's step is bit-identical with and without it -- measured, parameter by parameter, in `test_the_phase_two_objective_drops_eq_21_and_moves_no_step`, not argued here",
+    "notAFlag": "this is the objective, not an axis: there is no pole where Eq. (21) is summed back in. `wiring.training_step` still assembles Eq. (39) in full for every other caller -- the digit benchmark reads it and is out of scope -- and nothing in that file changed"
+  },
+  "scale": {
+    "name": "full",
+    "epochs_1": 200,
+    "steps_2": 200,
+    "patience_1": 30,
+    "patience_2": 30,
+    "min_steps_2": 40,
+    "search_seeds": [
+      100,
+      101,
+      102
+    ],
+    "report_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "trials_1": 25,
+    "trials_2": 25,
+    "points_per_domain": 4050,
+    "lr_1": 0.01,
+    "lr_2": 0.001,
+    "classes": 3,
+    "bags_per_class": 27,
+    "instances_per_bag": 30,
+    "frac_train": 0.6,
+    "frac_valid": 0.2,
+    "isPilot": false,
+    "realizedSplit": {
+      "requested": {
+        "train": 0.6,
+        "valid": 0.2,
+        "test": 0.2
+      },
+      "bagsPerClass": {
+        "train": 16,
+        "valid": 5,
+        "test": 6
+      },
+      "realized": {
+        "train": 0.5925925925925926,
+        "valid": 0.18518518518518517,
+        "test": 0.2222222222222222
+      }
+    }
+  },
+  "revision": "research-concept-r29.md",
+  "device": "mps",
+  "families": [
+    "lunas",
+    "toroide",
+    "rollo"
+  ],
+  "familyCodes": {
+    "lunas": [
+      "l",
+      "L"
+    ],
+    "toroide": [
+      "o",
+      "O"
+    ],
+    "rollo": [
+      "w",
+      "W"
+    ]
+  },
+  "normalizations": {
+    "ninguna": "mlp-nobn",
+    "batchnorm": "mlp",
+    "layernorm": "mlp-layernorm"
+  },
+  "normalizationsAbsent": [],
+  "arms": [
+    "TGL"
+  ],
+  "armsNote": "one arm, so no ladder, no rung and no floor margin. This run reports a bare accuracy and nothing on this path says what it is better or worse than; the floor arm the rung was read against was retired by the operator",
+  "armDeclaration": {
+    "arms": [
+      {
+        "id": "TGL",
+        "name": "Toy-MIL-CREDA (global + local, weighted)",
+        "label": "global + local, confidence weighting on, both coefficients 1",
+        "unit": "bag",
+        "adaptation": "milcreda",
+        "weighting": true,
+        "local": true,
+        "attention": "learned",
+        "selection": null,
+        "normalization": "shared",
+        "why": "what this toyset exists to find out: whether MIL-CREDA works at all under the conditions CREDA uses. Phase 2 computes BOTH declared terms -- the global one (Eqs. 32-37) and the local correspondence (Eqs. 30-31, aggregated by Eq. 38) -- with the confidence weighting ON: Eq. (26)'s `D`, Eq. (37)'s `omega_c` and Eq. (38)'s own aggregation all run, and nothing about the confidence is switched off anywhere. What IS off is Eq. (39)'s pair of balance coefficients, which the operator's `sin sopesado los dos loss de la fase 2` was about: both are exactly 1, fixed, with no ramp (`FIXED_COEFFICIENT`). The `weighting: False` an earlier stretch declared here came from reading `sopesado` as the confidence weighting; see the module docstring. What the confidence costs on this toyset is measured in `WEIGHTING_COST`, because at a fixed coefficient of 1 it cannot be absorbed."
+      }
+    ],
+    "owner": "MIL_CREDA_Benchmark.toy_run.TOY_ARMS -- this module's own, declared here and derived from nothing",
+    "notDerivedFrom": {
+      "declaration": "MIL_CREDA_Benchmark.config.ARMS",
+      "ids": [
+        "B",
+        "E",
+        "F",
+        "G"
+      ],
+      "why": "the digit benchmark's declaration, for a different experiment. It is pinned by tests/test_benchmark_declarations.py, so adding an arm there to serve this toyset would change the digit campaign and trip a pin doing its job; and the protocol is not theirs either -- one phase read at the last epoch under a ramped coefficient, against two phases read at the best step under a fixed one",
+      "sameFlagsAsDigitArm": "G",
+      "whatDiffersInstead": "the schedule: the digit arm's two coefficients come out of harness.ramp with a searched ceiling; this path fixes both at 1.0 and calls no ramp"
+    },
+    "weightingGates": {
+      "eq26D": "Eq. (26)'s `D` inside the kernel blocks: with the flag on -- which is this arm -- `conditional.weighted_blocks` forms `K~_c^t = D K_c^t D` and `K~_c^{st} = K_c^{st} D` from Eq. (25)'s diagonal of target confidences. With it off those two blocks would enter the mixture RAW, which is `D = I` -- `wiring.py`'s own `K_st_w, K_t_w = K_st_c, K_t_c` branch, which this arm does not take.",
+      "eq37Omega": "Eq. (37)'s `omega_c` in the aggregation over active classes: with the flag on -- which is this arm -- `global_loss` is given `confidence_weights(routed_confidences)`, which is SUB-convex and so lets the ABSOLUTE confidence level gate the term from outside the score. With it off, `global_loss` would be called with its weights argument absent and its uniform `1/|C_act|` default would run -- still a member of Eq. (37)'s family, and no longer a gate. On this toyset the gate is what `WEIGHTING_COST` measures, per cell and not once: where the routed confidences are low the sub-convex weights divide the term, and where they are not the gate is open and the term passes essentially unchanged.",
+      "whyBothBehindOneFlag": "deliberate, and not this module's decision: a previous stretch hung Eq. (37)'s weights behind the same flag so the digit ladder's E->F rung would isolate ONE mechanism -- the confidence reading, wherever it enters -- rather than half of one. Both weights are built from the same `w_j^t` of Eq. (24).",
+      "notGated": "Eq. (38)'s own confidence weighting, in the LOCAL term's aggregation: `local_loss(distances, w_t, EPSILON_LOCAL)` weights each bag's `l_loc,j` by that bag's `w_j^t` and is NOT behind this flag -- it is behind `spec[\"local\"]`. It therefore ran even while this arm declared `weighting: False`, which is why that declaration never meant `sin sopesado` in any complete sense and is part of why the mis-reading was worth recording. With the flag now true, all three confidence readings are live together."
+    },
+    "weightingCost": {
+      "what": "Eq. (37)'s sub-convex `omega_c` divides the global term when the routed confidences are low, and leaves it essentially alone when they are not. Which of the two happens is per cell and not a property of the toyset: measured on the pilot of 2026-10 at TWELVE bags per class, the ratio ran 0.0398 to 1.0411 over the six cells, and the one above 1 was the cell whose sum(omega) came back at 0.9994. An earlier wording said the confidences are low 'here', full stop, which that twelve-bag pilot contradicts on one cell in six. The declared cut is now 27 bags per class, so those two bounds are the PRIOR reading and the pilot that re-measures them is the one that replaces them",
+      "whyItMatters": "a searched ceiling could absorb a 37x division -- config.CEILING_RANGE spans four orders -- but this path fixes both coefficients at 1 (`FIXED_COEFFICIENT`), so it cannot be absorbed and the global term's share in the tables carries the factor",
+      "measuredBy": "MIL_CREDA_Benchmark.toy_run.weighting_cost, called by run_cell once per cell; every row carries weightingCostRatio, weightingCostOmegaSum and weightingCostGlobalUnweighted",
+      "priorMeasurement": {
+        "ratioRange": [
+          0.027,
+          0.683
+        ],
+        "omegaSumRange": [
+          0.0203,
+          0.7649
+        ],
+        "divisionRange": "1.5x to 37x",
+        "measuredOn": "the six pilot cells of this toyset, three families x two normalizations, comparing the global term under `weighting: True` with the same arm's term under `weighting: False` on the same batch and bit-identical parameters -- but on an arm TRAINED under `weighting: False`, through a phase-2 search that still chose a ceiling and two deltas",
+        "reproduced": "no. Read the live per-row fields instead: the ratio depends on how confident this cell's target bags end up, which the training this arm now runs moves"
+      }
+    },
+    "sharedWithDigitBenchmark": {
+      "wiring.Arm": "the trainable module itself, constructed from a spec dict this module hands it. Safe because the spec is the argument: `Arm.__init__(spec, classes, source, target, hyper=...)` reads `adaptation`, `weighting`, `local`, `unit`, `attention` and `selection` off whatever dict it was given and never consults `config.ARMS`. It is `wiring.build` -- NOT `Arm` -- that resolves an id through `config.ARMS_BY_ID`, and this module no longer calls it.",
+      "MIL_CREDA.*": "every equation. Not merely safe but required: SKILL.md's rule is that an arm calls the method's modules and never reimplements them, so a toyset with its own copy of a term would have forked the formulation.",
+      "wiring.Pool / harness.pool_of": "how a bagset becomes the tensor an arm draws target bags from. Material plumbing with no arm identity in it.",
+      "bags.build / bags.roles": "the draw, the three disjoint roles and the manifest. `material_bound` bends the globals it reads and restores them; the arm declaration is not among them.",
+      "harness.accuracy / target_accuracy / balanced_batches / spread": "the readings and the stratified draw. No arm id crosses that seam: each takes a model and a dataset.",
+      "harness.ramp -- NOT shared, and this is the entry that says so": "`ramp` is the digit benchmark's schedule and this path does not call it. It used to: `adapt_phase_two` evaluated it twice a step, with `ceiling`/`rampDelta` out of the hyper dict. Both coefficients of Eq. (39) are now fixed at 1 (`FIXED_COEFFICIENT`), and a fixed 1 is NOT a ramp evaluated at its ceiling -- `milcreda_ramp` is a warmup that starts near zero and approaches the ceiling, so routing a constant through it would leave a schedule nobody declared. The function is untouched and the digit path still uses it; what changed is that this path has no caller.",
+      "verdict.decide -- NOT shared any more, and this is the entry that says so": "`decide` refuses a winner inside the combined standard error, and this module used to call it from `ladder_rungs` and `floor_comparison`. Both are retired with the floor arm, so `verdict` is no longer imported here at all: one arm declares no pair and there is nothing for a rule about two dispersions to decide. The module is untouched and the digit path still uses it. Named rather than deleted from this list because an entry silently dropped reads as a dependency that was never there.",
+      "config's constants and ranges": "`KERNEL_SIGMA_RANGE`, `CEILING_RANGE`, `EPSILON`, `REVISION` and the rest. Shared and reported: `sigma_grid` says out loud where a declared constant was measured on digits and is meaningless here, rather than silently using it."
+    }
+  },
+  "bentGlobals": {
+    "CLASSES": 10,
+    "BAGS_PER_CLASS": 12,
+    "INSTANCES_PER_BAG": 30,
+    "TRAIN_BAGS": 64,
+    "VALID_BAGS": 20,
+    "EVAL_BAGS": 36,
+    "BAGS_PER_STEP": 10,
+    "BACKBONE": "resnet18",
+    "MLP_OUTPUT_DIM": 16
+  },
+  "searchRanges": {
+    "kernelSigma": "measured median, see `sigma_grid`",
+    "attentionGamma": [
+      0.0,
+      1.0
+    ],
+    "attentionTemperature": [
+      0.1,
+      10.0
+    ],
+    "tauLocal": [
+      0.1,
+      10.0
+    ]
+  },
+  "retiredRanges": {
+    "ceiling": {
+      "range": [
+        0.0001,
+        1.0
+      ],
+      "was": "lambda_glob of Eq. (39), as harness.ramp's ceiling",
+      "why": "the coefficient is fixed at 1 (`FIXED_COEFFICIENT`), so there is no ceiling for a curve to approach"
+    },
+    "ceilingLocal": {
+      "range": [
+        0.0001,
+        1.0
+      ],
+      "was": "lambda_loc of Eq. (39), as harness.ramp's ceiling",
+      "why": "the same, for the local term's coefficient: also fixed at 1"
+    },
+    "rampDelta": {
+      "range": [
+        1.0,
+        100.0
+      ],
+      "was": "how fast lambda_glob grows, as harness.ramp's delta",
+      "why": "nothing grows: no ramp is evaluated on this path, so the steepness of a curve that does not exist is not a dimension"
+    },
+    "rampDeltaLocal": {
+      "range": [
+        1.0,
+        100.0
+      ],
+      "was": "how fast lambda_loc grows, as harness.ramp's delta",
+      "why": "the same, for the local term's curve"
+    }
+  },
+  "fixedCoefficient": {
+    "value": 1.0,
+    "equation": "Eq. (39): L = L_src + lambda_glob*L_glob + lambda_loc*L_loc",
+    "what": "both lambdas, at every step, with no ramp. harness.ramp is not called on this path"
+  },
+  "searchSplit": {
+    "phase1": [
+      "attentionGamma",
+      "attentionTemperature",
+      "dim",
+      "kernelSigma",
+      "lr1",
+      "weightDecay1"
+    ],
+    "phase2": [
+      "lr2",
+      "tauLocal",
+      "weightDecay2"
+    ],
+    "ranges": {
+      "phase1": {
+        "kernelSigma": "measured median, see `sigma_grid`",
+        "attentionGamma": [
+          0.0,
+          1.0
+        ],
+        "attentionTemperature": [
+          0.1,
+          10.0
+        ],
+        "lr1": [
+          0.0001,
+          0.1
+        ],
+        "weightDecay1": [
+          1e-07,
+          0.01
+        ],
+        "dim": [
+          8,
+          16,
+          32,
+          64
+        ]
+      },
+      "phase2": {
+        "tauLocal": [
+          0.1,
+          10.0
+        ],
+        "lr2": [
+          1e-05,
+          0.01
+        ],
+        "weightDecay2": [
+          1e-07,
+          0.01
+        ]
+      }
+    },
+    "budget": {
+      "trialsUnchanged": true,
+      "phase1DimensionsBefore": 5,
+      "phase1DimensionsAfter": 6,
+      "phase2DimensionsBefore": 1,
+      "phase2DimensionsAfter": 3,
+      "expectedByTheBrief": {
+        "phase1": 7,
+        "phase2": 4
+      },
+      "shortfall": "the bag lot of each phase -- CREDA's `LOTE_1`/`LOTE_2` -- is not reachable from this module; see `PHASE_ONE_NOT_SEARCHED` for the measurement",
+      "whyItMatters": "the trial budget is fixed, so every dimension added divides the same 25 trials further. Phase 1 now spends 25 trials over 6 dimensions and phase 2 over 3, where they spent them over 5 and 1; a gap between two cells smaller than the variance between two searches of this budget is not a reading of the method"
+    },
+    "notSearched": {
+      "phase1": {
+        "LOTE_1": "CREDA sweeps `[32, 64, 128, 256]` POINTS per step; the unit here is the BAG and there is no lot to choose. `harness.balanced_batches` yields exactly one bag per class per step -- it takes no lot argument and reads no `config.BAGS_PER_STEP` -- so the training lot in bags IS the class count. `config.BAGS_PER_STEP` divides the role length to get the STEP COUNT of an epoch, which is an epoch length and not a lot, so searching it would search a repetition field wearing another name. Making the lot searchable means giving `balanced_batches` a per-class count, which is the DIGIT benchmark's own batching and outside this toyset's surface. A range derived from the realized train count would be `(3, 6, 12, 24, 48)` -- one bag per class doubling to the whole 48-bag training role -- and it is written here rather than searched because nothing can consume it yet"
+      },
+      "phase2": {
+        "LOTE_2": "the same block as `LOTE_1`: `harness.balanced_batches` fixes the lot at one bag per class and takes no lot argument, and `adapt_phase_two` draws its steps from that same generator. CREDA's `[32, 64, 128, 256]` are POINTS and do not transfer to a bag-unit axis"
+      }
+    },
+    "retired": [
+      "ceiling",
+      "ceilingLocal",
+      "rampDelta",
+      "rampDeltaLocal"
+    ],
+    "why": "phase 1's supervised term is Eq. (21) over Eq. (19)'s bag representation, which reads kernelSigma, attentionGamma and attentionTemperature through wiring.Arm.weights_for; a phase-2 trial varying them would vary phase 1 too, and phase 1 would stop being trained once and frozen"
+  },
+  "phase1NotSearched": {
+    "LOTE_1": "CREDA sweeps `[32, 64, 128, 256]` POINTS per step; the unit here is the BAG and there is no lot to choose. `harness.balanced_batches` yields exactly one bag per class per step -- it takes no lot argument and reads no `config.BAGS_PER_STEP` -- so the training lot in bags IS the class count. `config.BAGS_PER_STEP` divides the role length to get the STEP COUNT of an epoch, which is an epoch length and not a lot, so searching it would search a repetition field wearing another name. Making the lot searchable means giving `balanced_batches` a per-class count, which is the DIGIT benchmark's own batching and outside this toyset's surface. A range derived from the realized train count would be `(3, 6, 12, 24, 48)` -- one bag per class doubling to the whole 48-bag training role -- and it is written here rather than searched because nothing can consume it yet"
+  },
+  "criteria": {
+    "phase1Stop": "max(sourceValidAccuracy)",
+    "phase1Search": "max(sourceValidAccuracy), ties by validLoss",
+    "phase2Stop": "min(watchman)",
+    "phase2Search": "min(watchman)"
+  },
+  "watchman": "head o target-encoder over the SOURCE valid role against SOURCE labels; zero target labels; minimized",
+  "syncRetired": {
+    "constant": "config.SOURCE_TO_TARGET_SYNC_STEPS",
+    "value": 7,
+    "why": "two phases means the source freezes and nothing transmits after the one copy",
+    "declaredRisk": "MIL-CREDA/AGREED.md records the full arm falling below the floor on digits without the transmission (0.2500 vs 0.5833 on U->M; 0.0833 vs 0.1389 on M->S), measured under resnet18 on digits and not under an MLP on 3-D points",
+    "riskNotMeasurableHere": "the risk names a fall below a floor and this toyset declares one arm, so nothing on this path can answer whether it reproduces on these families. The two readings that computed it -- a rung and a floor margin -- were retired with the floor arm, deliberately and not by oversight"
+  },
+  "cost": {
+    "cells": 90,
+    "secondsPerPhase1Epoch": 0.09621715110414658,
+    "secondsPerPhase2Step": 0.04913609861771408,
+    "secondsPerCell": 65.74026009120021,
+    "sweepSeconds": 5916.623408208019,
+    "measuredAt": "full",
+    "workHere": {
+      "families": 3,
+      "normalizations": 3,
+      "searchSeeds": 3,
+      "reportSeeds": 10,
+      "arms": 1,
+      "phase1Trainings": 792,
+      "phase2Runs": 765,
+      "phase1EpochCeiling": 158400,
+      "phase2StepCeiling": 153000
+    },
+    "workAtFullScale": {
+      "families": 3,
+      "normalizations": 3,
+      "searchSeeds": 3,
+      "reportSeeds": 10,
+      "arms": 1,
+      "phase1Trainings": 792,
+      "phase2Runs": 765,
+      "phase1EpochCeiling": 158400,
+      "phase2StepCeiling": 153000
+    },
+    "instanceScale": 1.0,
+    "forecastFullSeconds": 22758.619823407073,
+    "forecastFullHours": 6.321838839835298,
+    "caveat": "an upper bound, not a measurement: both early stops end a phase before its declared length, so the epoch and step counts are ceilings, and the per-epoch cost is scaled linearly in instances per bag, which is an assumption about the encoder and not a measurement of it",
+    "scale": {
+      "name": "full",
+      "epochs_1": 200,
+      "steps_2": 200,
+      "patience_1": 30,
+      "patience_2": 30,
+      "min_steps_2": 40,
+      "search_seeds": [
+        100,
+        101,
+        102
+      ],
+      "report_seeds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "trials_1": 25,
+      "trials_2": 25,
+      "points_per_domain": 4050,
+      "lr_1": 0.01,
+      "lr_2": 0.001,
+      "classes": 3,
+      "bags_per_class": 27,
+      "instances_per_bag": 30,
+      "frac_train": 0.6,
+      "frac_valid": 0.2,
+      "isPilot": false,
+      "realizedSplit": {
+        "requested": {
+          "train": 0.6,
+          "valid": 0.2,
+          "test": 0.2
+        },
+        "bagsPerClass": {
+          "train": 16,
+          "valid": 5,
+          "test": 6
+        },
+        "realized": {
+          "train": 0.5925925925925926,
+          "valid": 0.18518518518518517,
+          "test": 0.2222222222222222
+        }
+      }
+    }
+  }
+}
