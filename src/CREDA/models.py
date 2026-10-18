@@ -743,10 +743,20 @@ class CREDALoss(nn.Module):
             # el bloque cruzado queda grande frente a un bloque objetivo
             # encogido, `J_c` pasa `U_c` y la Ec. 36 da negativo.
             #
-            # MEDIDO sobre 600 configuraciones aleatorias (1733 lecturas por
-            # clase): con el cruzado sin sopesar, 1378/1733 caen fuera de [0, 1],
-            # hasta -20.26. Con el cruzado sopesado, 7/1733, hasta -0.41. No es un
-            # borde, es el 80%.
+            # MEDIDO sobre 600 configuraciones aleatorias (1769 lecturas por
+            # clase), re-medido el 2026-10-18 despues de que salieran los
+            # epsilon de las Ecs. (10) y (24): con el cruzado sin sopesar,
+            # 956/1769 caen fuera de [0, 1], hasta -13.78. Con el cruzado
+            # sopesado, 0/1769. No es un borde, es el 54%.
+            #
+            # **Y el residuo sopesado era el epsilon.** La lectura anterior
+            # decia 1378/1733 crudo y 7/1733 sopesado, y ese 7 --- que al
+            # cerrar el aterrizaje de r33 reporte como "medido, no
+            # diagnosticado", porque -0.41 parecia demasiado grande para un
+            # epsilon de 1e-6 --- desaparecio entero al sacarlos. El
+            # razonamiento estaba mal: el epsilon no perturba la perdida por su
+            # propia magnitud sino por `1e-6/tr(K)`, que llego a 1210% de error
+            # relativo, y esas entropias entran en `U_c` y `J_c` sin tope.
             #
             # Refutado por la misma razon que las otras dos: un puntaje fuera de
             # [0, 1] bajo un mapa que declara acotarlo ahi se lee como un valor
@@ -756,9 +766,12 @@ class CREDALoss(nn.Module):
                     "bounds_form='entropy-cosh' with use_entropy_weighting=True "
                     "requires weight_cross_block=True: Eq. 26 weights BOTH blocks "
                     "that touch target bags, and Eq. 35's bound is proved on that "
-                    "mixture. Measured, 1378 of 1733 per-class readings fall "
-                    "outside [0, 1] with the cross block left raw, down to -20.26; "
-                    "with it weighted, 7 of 1733.")
+                    "mixture. Re-measured on 2026-10-18 after the entropy "
+                    "epsilons came out, over 600 random configurations: 956 of "
+                    "1769 per-class readings fall outside [0, 1] with the cross "
+                    "block left raw, down to -13.78; with it weighted, 0 of "
+                    "1769. The weighted residual used to be 7 of 1733 and that "
+                    "residual WAS the epsilon.")
         self.lambda_creda = lambda_creda
         self.sigma = sigma
         self.use_entropy_weighting = use_entropy_weighting
