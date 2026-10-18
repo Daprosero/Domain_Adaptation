@@ -517,6 +517,20 @@ def test_the_defaults_are_r31s_and_the_published_path_asks_by_name() -> None:
     assert "bounds_form=" not in pin, (
         "the published path names a bounds form again, and there is only one "
         "map left for it to name")
+    # **`normalize_by_bounds=False` is a DECISION of the first paper's ResNet
+    # arm, not an inherited default, and on 2026-10-18 it became one it says
+    # out loud.** The operator's own statement of the fact: that arm is `False`
+    # always, and every other measurement this repository takes is `True` --
+    # the toyset names `NORMALIZAR_POR_COTAS = True` and the bag method has no
+    # such flag at all, its normalization always happening. So the default
+    # `False` was serving exactly one caller, and that caller was the one not
+    # naming it: the published numbers rested on a default rather than on a
+    # decision, which is the same defect this file already corrected for
+    # `bounds_form`.
+    assert "normalize_by_bounds=False" in pin, (
+        "the published ResNet path no longer names normalize_by_bounds, so it "
+        "inherits whatever the default happens to be -- and that arm's numbers "
+        "were measured with the bounds normalization OFF, deliberately")
     assert "balance_mass='cardinality'" in pin, (
         "the published path no longer asks for balance_mass='cardinality' by "
         "name, so it is back to taking whatever the constructor defaults to")

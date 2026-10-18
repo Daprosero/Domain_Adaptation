@@ -519,7 +519,20 @@ def train_creda(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, d
     # (`balance_mix_blocks` is `False`), so the pin changes no bit today. It is
     # not decoration: it is what keeps this path on r25's balance the moment
     # that flag is turned on, and `tests/test_r31_ec36.py` holds both halves.
+    # `normalize_by_bounds=False` es la DECISION de este brazo y no el defecto
+    # heredado, y se nombra por la misma razon por la que `balance_mass` se
+    # nombra: un numero protegido por un defecto no esta protegido por nada en
+    # cuanto el defecto se mueve. El brazo CREDA de la campana ResNet de este
+    # articulo se midio SIN la normalizacion por cotas y se queda asi; todo lo
+    # demas que mide este repositorio la tiene encendida --- el toyset nombra
+    # `NORMALIZAR_POR_COTAS = True` y el metodo de bolsas no tiene bandera
+    # siquiera, su normalizacion ocurre siempre. De modo que el defecto `False`
+    # servia exactamente a un llamante, y era el unico que no lo nombraba.
+    #
+    # `tests/test_r31_ec36.py::test_the_defaults_are_r31s_and_the_published_
+    # path_asks_by_name` lo fija: afirma que este bloque nombra los dos.
     creda_loss_fn = CREDALoss(sigma=sigma, use_entropy_weighting=True,
+                              normalize_by_bounds=False,
                               balance_mass='cardinality')
 
     for epoch in range(epochs):
