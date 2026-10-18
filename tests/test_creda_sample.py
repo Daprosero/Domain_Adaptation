@@ -108,8 +108,10 @@ def _prefork_creda_forward(loss: CREDALoss, f_s, f_t, y_s, g_t,
     valid_class_count = 0
 
     if loss.use_entropy_weighting:
+        # Eq. (24) sin epsilon: `sum_c g_c^2` vive en `[1/C, 1]` por la
+        # Ec. (20), asi que no hay cero del que guardar. Salio el 2026-10-18.
         squared_sum = torch.sum(g_t ** 2, dim=1)
-        entropy = -torch.log(squared_sum + 1e-6)
+        entropy = -torch.log(squared_sum)
         target_weights = 1.0 - entropy / torch.log(
             torch.tensor(float(g_t.shape[1]), device=g_t.device))
     else:
@@ -157,8 +159,9 @@ def _target_weights(g_t: torch.Tensor) -> torch.Tensor:
     """D's diagonal of Eq. (25), as `CREDALoss` builds it. Read independently
     here so a block-level reference does not have to call into the method whose
     composition is under test."""
+    # Eq. (24) sin epsilon -- ver la nota en la referencia de arriba.
     squared_sum = torch.sum(g_t ** 2, dim=1)
-    entropy = -torch.log(squared_sum + 1e-6)
+    entropy = -torch.log(squared_sum)
     return 1.0 - entropy / torch.log(torch.tensor(float(g_t.shape[1])))
 
 
@@ -509,8 +512,14 @@ def test_the_pinned_pre_fork_means_still_come_out_of_the_default_path() -> None:
     # removed, so every entropy this fixture computes changed slightly, and
     # that reaches both arms. Measured rather than assumed, because assuming
     # the unchanged arm is exactly the mistake r33's pass made.
-    superseded = {True: -0.3094622790813446, False: 0.13413619995117188}
-    pinned = {True: -0.3094612658023834, False: 0.13413672149181366}
+    # **Tercera medición, y esta vez el brazo `False` NO se movió.** Es Eq.
+    # (24)'s epsilon el que salió: `forward` calculaba el peso de confianza
+    # como `1 - (-log(sum(g**2) + 1e-6))/ln C`, y con
+    # `use_entropy_weighting=False` ese peso no se calcula, así que ese brazo
+    # es inmune por construcción y no por suerte. El `True` se movió 4.8e-07.
+    # Medido antes de escribir, las tres veces.
+    superseded = {True: -0.3094612658023834, False: 0.13413672149181366}
+    pinned = {True: -0.3094617426395416, False: 0.13413672149181366}
     for use_entropy_weighting, expected in pinned.items():
         value = float(CREDALoss(
             sigma="auto", lambda_creda=1.0,

@@ -108,7 +108,6 @@ def _un_loss(sopesado=True):
                      bounds_form=T.FORMA_DE_COTAS,
                      weight_cross_block=T.HP_2['CRUZADO_SOPESADO'],
                      detach_target_entropy=T.HP_2['RHO_T_SIN_GRAD'],
-                     unbiased_purity=T.HP_2['PUREZA_U'],
                      use_entropy_weighting=sopesado,
                      balance_mix_blocks=True,
                      balance_mass=T.BALANCE_DE_MASA)
@@ -173,7 +172,10 @@ class LaEcuacion33PorClase(unittest.TestCase):
         if cr.use_entropy_weighting:
             # La Ec. 19, copiada de `CREDALoss.forward` a proposito: un lock de
             # contenido que llamara a la misma funcion no probaria nada.
-            w = 1.0 - (-torch.log((g_t ** 2).sum(1) + 1e-6)
+            # Ec. (24) sin épsilon: la Ec. (20) hace de `g_t` una
+            # distribución, así que `sum g^2` vive en `[1/C, 1]` y no hay cero
+            # del que guardar. El `+1e-6` salió el 2026-10-18.
+            w = 1.0 - (-torch.log((g_t ** 2).sum(1))
                        / math.log(float(g_t.shape[1])))
         else:
             w = None

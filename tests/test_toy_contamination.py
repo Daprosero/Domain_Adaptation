@@ -480,16 +480,19 @@ def test_the_residual_of_that_invariance_no_longer_follows_the_epsilons_law():
     this characterised is gone and what is kept is its absence, measured the
     same way rather than deleted.
 
-    Measured over the same four rungs after the repair:
+    Measured over the same four rungs, after BOTH repairs -- Eq. (10)'s two
+    epsilons on 2026-10-18 and Eq. (24)'s own on the same day:
 
-        c = 0.0562  ->  8.196e-08
-        c = 0.0316  ->  1.714e-07
+        c = 0.0562  ->  1.714e-07
+        c = 0.0316  ->  0.000e+00
         c = 0.0178  ->  1.714e-07
         c = 0.0100  ->  1.714e-07
 
-    Flat, where the epsilon's law would have it grow by 32x across that span.
-    `dev * c^2` therefore spreads by 15.1x instead of staying constant, and the
-    old assertion required that spread to be under 1.3x.
+    One rung is now EXACTLY zero and the rest sit at a single float32 ulp, so
+    this is stated as a bound and not as a ratio: a ratio over those numbers
+    divides by zero, which is how the first version of this test broke when
+    Eq. (24)'s epsilon came out too. The epsilon's law would have the deviation
+    grow by 32x across that span; it does not grow at all.
     """
     medir, C, n_t = _perdida_por_clase()
     ref, _ = medir(1.0 - 1e-12)
@@ -503,15 +506,18 @@ def test_the_residual_of_that_invariance_no_longer_follows_the_epsilons_law():
                                      "noise this test exists to bound")
         devs.append(dev)
         productos.append(dev * c ** 2)
-    # The epsilon's signature was a CONSTANT `dev * c^2`. Its absence is that
-    # product spreading, which is what a flat deviation does.
-    assert max(productos) / min(productos) > 2.0, (
-        productos, "`dev * c^2` is still nearly constant, which is the "
-                   "epsilon's own signature: the division is biased again")
-    # And the deviation itself does not grow as the weights shrink.
-    assert max(devs) / min(devs) < 5.0, (
-        devs, "the deviation grows with 1/c, so something scale-dependent is "
-              "back in the estimator")
+    # Bounded by float32 round-off, and bounded by a number that does not
+    # depend on `c`. Stated as a bound rather than a ratio because one rung is
+    # exactly zero now.
+    ulp = float(np.finfo(np.float32).eps)
+    assert max(devs) <= 4.0 * ulp, (
+        devs, f"the worst deviation is above four float32 ulps ({4*ulp:.2e}), "
+              f"so something scale-dependent is back in the estimator")
+    # And it does not GROW as the weights shrink, which is the epsilon's own
+    # signature: its law would multiply the deviation by 32x across this span.
+    assert devs[-1] <= devs[0] + ulp, (
+        devs, "the deviation at the smallest c exceeds the one at the largest: "
+              "the perturbation scales with 1/c again")
 
 
 # ======================= 8. both weighting arms share one phase-2 search

@@ -542,15 +542,33 @@ BALANCE_MASSES = ('cardinality', 'trace')
 #:     1e-38      1.14525199       13.81551075
 #:
 #: Asi que el piso que el ESTIMADOR necesita es `torch.finfo(torch.float32).
-#: tiny`, treinta y dos ordenes de magnitud por debajo de este. Lo que queda
-#: sin derivar es cual debe ser el piso de la CLASE, que es otra pregunta: 1e-6
-#: excluye del conjunto activo clases cuya entropia ahora se calcula exacta, y
-#: bajarlo cambia `C_act`, los pesos de la Ec. (37) y cuantas clases cobran su
-#: carga de uno. Eso es una decision sobre el experimento y no sobre la
-#: aritmetica, de modo que el valor NO se mueve aqui: se deja en 1e-6, donde
-#: estaba cuando se midio todo lo publicado, y se dice que su razon es
-#: historica. Un numero cuya justificacion se removio y que se reescribe solo
-#: para que la prosa cierre es peor que uno que declara no tenerla.
+#: tiny`, treinta y dos ordenes de magnitud por debajo de este.
+#:
+#: **Y aun asi el valor NO baja, porque la Ec. (37) se contradice consigo misma
+#: en ese caso.** Su condicion de membresia pide traza POSITIVA (r34 linea
+#: 1109: "aquellas para las cuales existen sujetos en ambos dominios y las tres
+#: matrices que deben normalizarse poseen traza positiva"), de modo que por la
+#: letra una clase de traza `2.9e-15` entra al conjunto activo. Pero su carga
+#: de uno existe, dice la misma ecuacion en la linea 1132, para "que `L_glob`
+#: no descienda cuando el enrutamiento abandona clases, de modo que ese
+#: abandono se lea como un aumento de la perdida y no como una CONVERGENCIA
+#: APARENTE".
+#:
+#: Medido sobre `_one_dead_class` de `tests/test_creda_r28_bounds.py`, donde el
+#: clasificador queda maximamente incierto sobre nueve bolsas y la Ec. (24) les
+#: da peso `1.8e-08`:
+#:
+#:     piso 0.0   -> 3 clases activas; la colapsada lee 0.00059861, L_glob = 0.00053086
+#:     piso 1e-6  -> 2 clases activas; la colapsada cobra 1,        L_glob = 0.33366465
+#:
+#: Seguir la letra hace que una clase sin evidencia objetivo lea alineacion casi
+#: perfecta, que es exactamente la lectura que la carga de uno existe para
+#: impedir. Las dos mitades de la Ec. (37) no pueden cumplirse a la vez aqui, y
+#: elegir cual gana no es una decision de implementacion: queda para una
+#: deliberacion y el valor se queda donde se midio todo lo publicado.
+#:
+#: Lo que cuesta mantenerlo, medido: 1 de 1158 bloques de clase de un barrido
+#: aleatorio cae en la franja `(1.2e-38, 1e-6]`, un 0.09%.
 MIN_CLASS_TRACE = 1e-6
 
 
@@ -647,7 +665,7 @@ class CREDALoss(nn.Module):
     def __init__(self, sigma='auto', lambda_creda=1.0, use_entropy_weighting=True,
                  normalize_kernel_embedding=False, weight_cross_block=False,
                  normalize_by_bounds=False, sigma_from='class-pooled',
-                 detach_target_entropy=False, unbiased_purity=False,
+                 detach_target_entropy=False,
                  class_mixing=1.0, balance_mix_blocks=False,
                  bounds_form='entropy-cosh', balance_mass='trace'):
         super(CREDALoss, self).__init__()
@@ -703,22 +721,6 @@ class CREDALoss(nn.Module):
         # rompe y los extremos dejan de ser `L = -ln 2` y
         # `U_c = 2 ln cosh((h_t - h_s)/4)`.
         #
-        # MEDIDO sobre 600 configuraciones aleatorias: con la pureza sesgada,
-        # 0/600 caen fuera de [0, 1]; con el estadistico U, 109/600, con un
-        # rango de -0.7631 a 1.0517. No es un borde: es el 18%.
-        #
-        # Refutado y no amortiguado. Un puntaje fuera de [0, 1] bajo un mapa
-        # que declara acotarlo ahi se lee como un valor medido, y ninguna cota
-        # lo delata. Rederivar los extremos para el estadistico U es
-        # deliberacion, no una guarda.
-        if normalize_by_bounds and unbiased_purity and bounds_form == 'entropy-cosh':
-            raise ValueError(
-                "unbiased_purity=True con bounds_form='entropy-cosh' no es "
-                "admisible: las Ecs. 35-36 se prueban sobre los tres bloques "
-                "compartiendo el normalizador por traza, y el estadistico U le "
-                "da a cada uno el suyo. Medido, 109 de 600 configuraciones dan "
-                "l_c fuera de [0, 1], con un rango de -0.763 a 1.052. Los "
-                "extremos hay que rederivarlos antes de combinarlos.")
         if normalize_by_bounds and bounds_form == 'entropy-cosh':
             if not balance_mix_blocks:
                 raise ValueError(
@@ -803,7 +805,6 @@ class CREDALoss(nn.Module):
         # las purezas internas; en la mezcla concatenada la diagonal es la
         # union de esos dos conjuntos de pares propios, y quitarla deja los
         # terminos cruzados intactos.
-        self.unbiased_purity = unbiased_purity
         self.class_mixing = float(class_mixing)
         self.balance_mix_blocks = balance_mix_blocks
         self.bounds_form = bounds_form
@@ -887,23 +888,37 @@ class CREDALoss(nn.Module):
 
 
     def _renyi_entropy_order_2(self, K):
-        if self.unbiased_purity:
-            # El estadistico U: los pares `j = k` salen del numerador Y del
-            # denominador, que es lo que conserva la invariancia de escala ---
-            # multiplicar `K` por `c` multiplica los dos por `c^2`.
-            dg = torch.diagonal(K)
-            propios = (dg ** 2).sum()
-            den = torch.trace(K) ** 2 - propios
-            if float(den) <= 0.0:
-                # Con un solo punto no hay pares distintos. Refutado en vez de
-                # amortiguado: el epsilon convertiria la division en un numero
-                # que es del epsilon y no del dato, y el bloque se reportaria
-                # como si tuviera una pureza medida.
-                raise ValueError(
-                    f'unbiased_purity necesita al menos dos muestras distintas '
-                    f'en el bloque; con {K.shape[0]} el denominador del '
-                    f'estadistico U es {float(den):.3e}')
-            return -torch.log((torch.trace(K @ K) - propios) / den + 1e-6)
+        """Ec. (10): `H_2(A) = -ln[tr(A^T A)] = -ln||A||_F^2`, sobre la matriz
+        normalizada por traza de la Ec. (9).
+
+        **Una sola forma, y el 2026-10-18 dejo de haber dos.** Habia una rama
+        optativa, `unbiased_purity`, que estimaba la pureza como estadistico U:
+        saca los pares `j = k` del numerador Y del denominador. Se retiro por
+        tres razones acumuladas.
+
+        **No esta en la formulacion.** r34 declara UNA entropia, la Ec. (10),
+        escrita con el mismo `tr(A^T A)` que la linea de abajo. Un estadistico U
+        de la pureza no aparece en el documento, y la declaracion del toyset lo
+        rotulaba `# Instrumento`.
+
+        **Nunca corrio.** `PUREZA_U` valia `False` en la declaracion y `False`
+        en cada corrida que el cuaderno ejecutado registra, una por una. Nada lo
+        buscaba y nada lo ponia en un espacio de busqueda.
+
+        **Y estaba refutado donde se podia pedir.** Medido sobre 600
+        configuraciones: con esta forma, 0 de 600 fuera de `[0, 1]`; con el
+        estadistico U, 109 de 600, en un rango de `-0.7631` a `1.0517`. Una
+        guarda lo rechazaba junto con `bounds_form='entropy-cosh'`, que es el
+        unico valor admisible, de modo que lo unico alcanzable era con la
+        normalizacion por cotas apagada. Rederivar los extremos de las
+        Ecs. (35)-(36) para ese estimador es deliberacion y no una bandera.
+
+        Su cuenta llevaba un cuarto epsilon, `+1e-6` dentro del logaritmo, y era
+        el UNICO de los cuatro que tapaba un caso alcanzable: el estadistico U
+        puede salir no positivo de verdad --- medido, 139 de 400 veces con dos
+        puntos y 54 de 400 con cuarenta --- y ahi el logaritmo no esta definido.
+        Se va con la rama que lo necesitaba.
+        """
         # La traza VERDADERA, sin epsilon, y una negativa en vez de un
         # amortiguador. Es la forma de `MIL_CREDA.renyi.trace_normalize`, y la
         # razon es medida y no de estilo: `trace(K) + 1e-6` suma una constante
@@ -927,8 +942,9 @@ class CREDALoss(nn.Module):
             # llegar aca, asi que esto es el respaldo y no la via normal ---
             # pero refuta, porque un epsilon aqui devolveria un numero que es
             # del epsilon y la clase se reportaria con una entropia medida.
-            # Misma disciplina que `trace_normalize` y que el denominador del
-            # estadistico U de la rama de arriba.
+            # Misma disciplina que `MIL_CREDA.renyi.trace_normalize`: la
+            # Ec. (9) no define la entropia ahi, y decirlo es mejor que
+            # devolver un numero.
             raise ValueError(
                 f'una matriz de Gram con traza no positiva no tiene '
                 f'normalizacion: la Ec. (9) la exige positiva y esta vale '
@@ -1146,8 +1162,29 @@ class CREDALoss(nn.Module):
                     f'{g_t.shape[0]} target samples')
             target_weights = target_weights.to(g_t.device)
         elif self.use_entropy_weighting:
+            # Ec. (24): `w_j^t = 1 - H_2(g_j^t) / ln C`, con
+            # `H_2(g) = -ln(sum_c g_c^2)`.
+            #
+            # **Sin epsilon, y por la misma razon que `_renyi_entropy_order_2`
+            # perdio los suyos: no hay cero del que guardar.** La Ec. (20)
+            # garantiza que `g_j^t` es una distribucion --- su ultima capa es
+            # una normalizacion exponencial, "estrictamente positivas que
+            # suman uno" --- de modo que `sum_c g_c^2` vive en `[1/C, 1]`.
+            #
+            # Lo que el `+1e-6` hacia era sesgar el peso JUSTO en el extremo.
+            # `w` vale cero en la uniforme, que es la bolsa de la que el
+            # clasificador no sabe nada y por eso no debe pesar; ahi
+            # `sum g^2` toca su piso `1/C` y el epsilon pesa mas que en
+            # ningun otro punto. Medido: daba `w = 2.89e-06` con C=2,
+            # `2.73e-06` con C=3 y `4.34e-06` con C=10 --- un sesgo de
+            # `~1e-6 * C / ln C`, que crece con el numero de clases. Un peso
+            # que deberia anular una bolsa le dejaba peso.
+            #
+            # Y alimentaba el porton de `C_act` (Ec. 37), que mira
+            # `tr(K~_c^t) = sum_j w_j^2`: un peso espurio ahi mueve la traza
+            # que decide si la clase entra en la suma.
             squared_sum = torch.sum(g_t ** 2, dim=1)
-            entropy = -torch.log(squared_sum + 1e-6)
+            entropy = -torch.log(squared_sum)
             target_weights = 1.0 - entropy / torch.log(torch.tensor(float(g_t.shape[1]), device=g_t.device))
         else:
             target_weights = None

@@ -421,8 +421,6 @@ HP_2 = dict(LR_2=1e-3, WD_2=0.0, LOTE_2=128,
             # Instrumento: `h_t` sin gradiente dentro de la
             # puntuacion por clase. Ver `CREDALoss`.
             RHO_T_SIN_GRAD=False,
-            # Purezas como estadistico U. Ver `CREDALoss`.
-            PUREZA_U=False,
             # El paso en que el SOPESADO empieza a actuar. Antes de el,
             # `w = 1` para todos y el brazo declarado ES el apagado.
             #
@@ -2474,7 +2472,6 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
                    bounds_form=FORMA_DE_COTAS,
                    weight_cross_block=h2['CRUZADO_SOPESADO'],
                    detach_target_entropy=h2['RHO_T_SIN_GRAD'],
-                   unbiased_purity=h2['PUREZA_U'],
                    use_entropy_weighting=sopesado,
                    balance_mix_blocks=balance,
                    balance_mass=BALANCE_DE_MASA)
@@ -3251,7 +3248,6 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
                  bounds_form=FORMA_DE_COTAS,
                  weight_cross_block=h2['CRUZADO_SOPESADO'],
                  detach_target_entropy=h2['RHO_T_SIN_GRAD'],
-                 unbiased_purity=h2['PUREZA_U'],
                  balance_mix_blocks=balance,
                  balance_mass=BALANCE_DE_MASA))
     # Lo que cuesta congelar la vara: cuanto se movio la escala del blanco
