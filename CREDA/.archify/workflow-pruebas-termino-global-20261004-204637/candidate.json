@@ -1,0 +1,321 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Las once pruebas sobre el término global por clase",
+    "locale": "es",
+    "quality_profile": "showcase",
+    "output": "implementations/Domain_Adaptation/CREDA/pruebas-termino-global.html"
+  },
+  "lanes": [
+    {
+      "id": "arreglo",
+      "label": "Arreglo fijado · two_phase.py"
+    },
+    {
+      "id": "cuello",
+      "label": "Localizar el cuello"
+    },
+    {
+      "id": "pie",
+      "label": "Lo que quedó en pie"
+    },
+    {
+      "id": "candidatos",
+      "label": "Candidatos: uno pasa, dos no",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "montaje",
+      "label": "Montaje",
+      "fromCol": 0,
+      "toCol": 2
+    },
+    {
+      "id": "diagnostico",
+      "label": "Diagnóstico",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "veredicto",
+      "label": "Veredicto",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "dos_fases",
+      "label": "Dos codificadores, dos fases",
+      "lane": "arreglo",
+      "fromCol": 0,
+      "toCol": 2,
+      "variant": "emphasis"
+    },
+    {
+      "id": "refutados",
+      "label": "Refutados",
+      "lane": "candidatos",
+      "fromCol": 3,
+      "toCol": 3,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "n_fase1",
+    "n_copia",
+    "n_fase2",
+    "n_regimen",
+    "n_traza",
+    "n_control",
+    "n_clases",
+    "n_marginal"
+  ],
+  "nodes": [
+    {
+      "id": "n_fase1",
+      "lane": "arreglo",
+      "col": 0,
+      "type": "backend",
+      "icon": "start",
+      "label": "Fase 1 · fuente",
+      "sublabel": "enc_s + cabeza",
+      "tag": "congelados",
+      "width": 132
+    },
+    {
+      "id": "n_copia",
+      "lane": "arreglo",
+      "col": 1,
+      "type": "backend",
+      "label": "Copia única",
+      "sublabel": "enc_t ← enc_s",
+      "tag": "una sola vez",
+      "width": 132
+    },
+    {
+      "id": "n_fase2",
+      "lane": "arreglo",
+      "col": 2,
+      "type": "backend",
+      "icon": "active",
+      "label": "Fase 2 · libre",
+      "sublabel": "solo el término mueve",
+      "tag": "sin sincronizar",
+      "width": 132
+    },
+    {
+      "id": "n_regimen",
+      "lane": "cuello",
+      "col": 2,
+      "type": "messagebus",
+      "label": "P1 · Régimen",
+      "sublabel": "libre vs cada 7",
+      "tag": "libre, por mucho",
+      "width": 132
+    },
+    {
+      "id": "n_traza",
+      "lane": "cuello",
+      "col": 3,
+      "type": "messagebus",
+      "label": "P2 · Traza",
+      "sublabel": "cos → pseudo-clase",
+      "tag": "0,92–0,98",
+      "width": 132
+    },
+    {
+      "id": "n_control",
+      "lane": "cuello",
+      "col": 4,
+      "type": "messagebus",
+      "icon": "flag",
+      "label": "P3 · Partición",
+      "sublabel": "control de 3 brazos",
+      "tag": "EL CUELLO",
+      "width": 132
+    },
+    {
+      "id": "n_clases",
+      "lane": "cuello",
+      "col": 5,
+      "type": "database",
+      "label": "P4 · Clases usadas",
+      "sublabel": "de 10 posibles",
+      "tag": "10,00 vs 1,86",
+      "width": 132
+    },
+    {
+      "id": "n_marginal",
+      "lane": "pie",
+      "col": 5,
+      "type": "cloud",
+      "icon": "success",
+      "label": "P11 · marginal",
+      "sublabel": "Ec. (26) con C = 1",
+      "tag": "GANADOR",
+      "width": 132
+    },
+    {
+      "id": "n_blando",
+      "lane": "candidatos",
+      "col": 3,
+      "type": "security",
+      "icon": "failure",
+      "label": "P7 · Ruteo blando",
+      "sublabel": "D_c = diag(g·w)",
+      "tag": "REFUTADO",
+      "width": 132
+    },
+    {
+      "id": "n_reloj",
+      "lane": "candidatos",
+      "col": 4,
+      "type": "messagebus",
+      "label": "P8 · α por reloj",
+      "sublabel": "mezcla convexa",
+      "tag": "pasa los dos polos",
+      "width": 132
+    },
+    {
+      "id": "n_conteo",
+      "lane": "candidatos",
+      "col": 5,
+      "type": "security",
+      "label": "P9 · α por conteo",
+      "sublabel": "α = |{ỹ}| / C",
+      "tag": "MEDIO refutado",
+      "width": 132
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_congela",
+      "from": "n_fase1",
+      "to": "n_copia",
+      "label": "congela",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_copia",
+      "from": "n_copia",
+      "to": "n_fase2",
+      "label": "una vez",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_regimen",
+      "from": "n_fase2",
+      "to": "n_regimen",
+      "label": "¿una o cada 7?",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_traza",
+      "from": "n_regimen",
+      "to": "n_traza",
+      "label": "¿a dónde empuja?",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_control",
+      "from": "n_traza",
+      "to": "n_control",
+      "label": "aislar",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_clases",
+      "from": "n_control",
+      "to": "n_clases",
+      "label": "¿cuántas clases?",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e_blando",
+      "from": "n_traza",
+      "to": "n_blando",
+      "label": "¿partición blanda?",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e_reloj",
+      "from": "n_blando",
+      "to": "n_reloj",
+      "label": "¿de a poco?",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e_conteo",
+      "from": "n_reloj",
+      "to": "n_conteo",
+      "label": "α medido",
+      "variant": "security",
+      "role": "branch"
+    },
+    {
+      "id": "e_clases_pie",
+      "from": "n_clases",
+      "to": "n_marginal",
+      "label": "¿qué queda?",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Los dos polos de un remedio",
+      "items": [
+        "Ganarle a lo declarado SIN BatchNorm",
+        "No romper lo que ya funciona CON BatchNorm",
+        "Un polo solo no distingue mejora de medición complaciente"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "P11 · el ganador, en su pico",
+      "items": [
+        "sin BN  +0,1493 (t=5,15)  ·  +0,2091 (t=8,25)  ·  +0,0442 (t=2,16)",
+        "con BN  −0,0044 (t=−0,31)  ·  +0,0141 (t=1,80)  ·  +0,0367 (t=2,19)",
+        "Cero notación nueva: es la Ec. (26) con C = 1"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "P1 a P4 · el cuello, medido",
+      "items": [
+        "P1 régimen: libre 0,5943 vs correa 0,2754, sobre un piso de 0,2572",
+        "P2 traza: el descenso apunta a la pseudo-clase los 200 pasos",
+        "P3 partición: quitarla gana +0,162 y +0,193 sin BatchNorm",
+        "P4 clases del argmax: 10,00 con BN · 8,40 / 3,00 / 1,86 sin BN"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "P5 a P9 · lo descartado",
+      "items": [
+        "P5 el término es casi ortogonal al corrimiento: coseno 0,02–0,09",
+        "P6 estandarizar después: 0,598 sin BatchNorm contra 0,910 con él",
+        "P7 ruteo blando: 0,5646 vs 0,5885, t = −0,54",
+        "P7 el motivo: 81–91 % de las mal ruteadas tienen p ≥ 0,95",
+        "P9 α por conteo: exacto con BN, pero +0,0093 en rollo sin BN"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "P10 y lo que queda abierto",
+      "items": [
+        "P10 toda celda tiene pico en 50–100 y después se degrada",
+        "Por eso medir en 200 retractó mi propio rechazo de marginal",
+        "lunas sigue sin resolver: el oráculo con etiquetas también falla"
+      ]
+    }
+  ]
+}

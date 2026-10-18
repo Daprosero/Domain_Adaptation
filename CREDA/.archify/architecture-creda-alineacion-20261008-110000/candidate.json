@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "CREDA · dónde se engancha cada término",
+    "output": "creda-alineacion.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "provider": "github",
+      "url": "https://github.com/Daprosero/Domain_Adaptation",
+      "revision": "2a3b868caa734326e571b7dca7294464eabff67f"
+    }
+  },
+  "components": [
+    {
+      "id": "xs",
+      "type": "external",
+      "label": "Fuente etiquetada",
+      "sublabel": "X_s, y_s · split 60/40",
+      "pos": [
+        40,
+        230
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "enc",
+      "type": "backend",
+      "label": "Encoder de la fuente",
+      "sublabel": "Linear → norma → ReLU → … → DIM",
+      "tag": "se suelta en fase 2",
+      "pos": [
+        250,
+        215
+      ],
+      "size": [
+        180,
+        90
+      ]
+    },
+    {
+      "id": "cab",
+      "type": "backend",
+      "label": "Cabeza",
+      "sublabel": "Linear(DIM, C)",
+      "pos": [
+        560,
+        230
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "ce",
+      "type": "backend",
+      "label": "Cross-entropy",
+      "sublabel": "contra y_s · el único término supervisado",
+      "pos": [
+        810,
+        230
+      ],
+      "size": [
+        180,
+        60
+      ]
+    },
+    {
+      "id": "tsrc",
+      "type": "backend",
+      "label": "Término de fuente",
+      "sublabel": "1 + H₂(K_c^s) − H₂(K^μ), en [0,2]",
+      "tag": "sólo sobre f_s",
+      "pos": [
+        250,
+        50
+      ],
+      "size": [
+        180,
+        90
+      ]
+    },
+    {
+      "id": "xt",
+      "type": "external",
+      "label": "Blanco SIN etiquetas",
+      "sublabel": "X_t · y_t sólo para evaluar",
+      "pos": [
+        40,
+        430
+      ],
+      "size": [
+        140,
+        60
+      ]
+    },
+    {
+      "id": "enct",
+      "type": "backend",
+      "label": "Encoder del blanco",
+      "sublabel": "clon de pesos · siempre se mueve",
+      "pos": [
+        250,
+        415
+      ],
+      "size": [
+        180,
+        90
+      ]
+    },
+    {
+      "id": "creda",
+      "type": "backend",
+      "label": "Regularizador de Rényi",
+      "sublabel": "Ĩ₂ = ½H₂(K_c^s) + ½H₂(K̃_c^t) − H₂(K_c^mix)",
+      "tag": "Ec. 21 · por clase",
+      "pos": [
+        560,
+        415
+      ],
+      "size": [
+        230,
+        90
+      ],
+      "sources": [
+        {
+          "path": "src/CREDA/models.py",
+          "line": 306,
+          "label": "creda_c = h_mix − ½(h_s + h_t)"
+        },
+        {
+          "path": "src/CREDA/models.py",
+          "line": 234,
+          "label": "class CREDALoss"
+        }
+      ]
+    },
+    {
+      "id": "kmix",
+      "type": "database",
+      "label": "K_c^mix",
+      "sublabel": "bloque de la Ec. 22 · normalizado por cardinalidad",
+      "pos": [
+        560,
+        610
+      ],
+      "size": [
+        230,
+        70
+      ],
+      "sources": [
+        {
+          "path": "src/CREDA/models.py",
+          "line": 264,
+          "label": "_mix_kernel_concat(K_s, K_t, K_st)"
+        },
+        {
+          "path": "src/CREDA/models.py",
+          "line": 301,
+          "label": "arma K_mix_c por clase"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Fase 1 — sólo la fuente, para en su mejor época de validación",
+      "wraps": [
+        "xs",
+        "enc",
+        "cab",
+        "ce",
+        "tsrc"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Fase 2 — fuente y blanco juntos, 200 pasos sin criterio de parada",
+      "wraps": [
+        "xt",
+        "enct",
+        "creda",
+        "kmix"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "xs-enc",
+      "from": "xs",
+      "to": "enc",
+      "label": "X_s"
+    },
+    {
+      "id": "enc-cab",
+      "from": "enc",
+      "to": "cab",
+      "label": "f_s",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cab-ce",
+      "from": "cab",
+      "to": "ce",
+      "label": "logits"
+    },
+    {
+      "id": "enc-tsrc",
+      "from": "enc",
+      "to": "tsrc",
+      "label": "f_s + y_s",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelDx": 64
+    },
+    {
+      "id": "copia",
+      "from": "enc",
+      "to": "enct",
+      "label": "copia de pesos",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDx": -74,
+      "labelDy": 72
+    },
+    {
+      "id": "xt-enct",
+      "from": "xt",
+      "to": "enct",
+      "label": "X_t"
+    },
+    {
+      "id": "enct-creda",
+      "from": "enct",
+      "to": "creda",
+      "label": "f_t",
+      "variant": "emphasis"
+    },
+    {
+      "id": "fs-creda",
+      "from": "enc",
+      "to": "creda",
+      "label": "f_s",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "ruteo",
+      "from": "cab",
+      "to": "creda",
+      "label": "g_t · rutea por clase",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDx": 92
+    },
+    {
+      "id": "creda-kmix",
+      "from": "creda",
+      "to": "kmix",
+      "label": "arma el bloque",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDx": 80,
+      "labelDy": 72
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Qué toca cada término",
+      "items": [
+        "Cross-entropy: f_s y la cabeza. Corre en las dos fases.",
+        "Término de fuente: sólo f_s. Nunca toca el blanco.",
+        "Rényi de CREDA: f_s y f_t juntos, una vez por clase."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Los tres bloques de K_c^mix",
+      "items": [
+        "K_c^s — fuente contra fuente, n_s × n_s",
+        "K̃_c^t — blanco contra blanco, ponderado por confianza",
+        "K_c^st — el CRUZADO, lo único que mide alineación",
+        "‖K_mix‖²_F = ‖K_s‖²_F + 2‖K_st‖²_F + ‖K_t‖²_F"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Lo que el término de fuente NO hace en fase 2",
+      "items": [
+        "H₂(K_c^s) es el MISMO escalar que el +½H₂(K_c^s) de la Ec. 21.",
+        "Entran con signo opuesto, así que en fase 2 queda sólo 1 − H₂(K^μ).",
+        "La mitad que separa no choca: CREDA no tiene término sobre las medias."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Con la fuente quieta",
+      "items": [
+        "f_s entra desprendida y enc/cab salen del optimizador.",
+        "La CE y el término de fuente se calculan y no mueven nada.",
+        "El único término con camino de gradiente es el de Rényi."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "De dónde sale cada afirmación",
+      "items": [
+        "Citado a src/CREDA/models.py en el commit fijado: CREDALoss y K_c^mix.",
+        "ATENCIÓN: ese archivo tiene 318 líneas en el commit y 601 en disco.",
+        "La red, la cabeza y el término de fuente viven en el cuaderno, sin commitear.",
+        "Nada de lo que produjo los resultados está todavía en el repositorio."
+      ]
+    }
+  ]
+}

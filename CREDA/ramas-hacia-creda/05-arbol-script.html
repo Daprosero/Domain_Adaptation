@@ -1,0 +1,219 @@
+<script>
+(function(){
+const R=String.raw;
+/* ---------- builders ---------- */
+const CMP='cmp',KEPT='kept',OUT='out';
+function M(label,st,why,o){return Object.assign({label,st,why:why||''},o||{});}
+function F(id,label,desc,dislike,kids,o){o=o||{};return Object.assign({id,label,desc,dislike,fam:true,kids:kids.map((k,i)=>Object.assign({id:id+'-'+i,leaf:true},k))},o);}
+function core(tex){return '<div class="core">$$'+tex+'$$</div>';}
+function nope(t){return '<div class="dislike"><b>No nos gusta</b> '+t+'</div>';}
+function block(assume,good,bad,dislike){
+  return '<div class="assume"><b>Supone</b> '+assume+'</div>'+
+  '<div class="kv keep"><b>Lo bueno de suponerlo · nos llevamos</b><ul>'+good.map(x=>'<li>'+x+'</li>').join('')+'</ul></div>'+
+  '<div class="kv leave"><b>Lo malo de suponerlo · por qué seguimos</b><ul>'+bad.map(x=>'<li>'+x+'</li>').join('')+'</ul></div>'+nope(dislike);}
+
+/* reasons a method that aligns by class without target labels was still set aside */
+const R2ENC='no se lleva a dos codificadores';
+const RFIX='trabaja sobre rasgos fijos: no se lleva a dos codificadores';
+const RADV='la familia la representa CDAN+E, condicional y con peso por entropía';
+const RDSN='la familia la representa DSAN/LMMD, la MMD condicional más cercana';
+const RPFN='la familia la representa PFAN, que alinea prototipos de clase';
+const RSHT='el subconjunto sin fuente lo representa SHOT';
+const RTTA='la familia sale de la comparación: no se lleva a dos codificadores';
+
+/* ---------- formulas of the methods that reached the comparison (instance-level r29 notation) ---------- */
+const FX={
+ dann:R`<p>Un codificador y un discriminador \(D\) sobre el embedding:</p>`+core(R`\min_{\theta,\psi}\max_D\ \mathcal L_{\mathrm{src}}-\lambda\Big[\tfrac1{N_s}\textstyle\sum_{i}\log D(\mathbf h_i^s)+\tfrac1{N_t}\sum_{j}\log\big(1-D(\mathbf h_j^t)\big)\Big]`)+R`<p class="hint">Entra a la comparación como piso adversario marginal aunque no alinea por clase. Detalle de cada variable en la pestaña Comparación final. <span class="tag">[derivado]</span></p>`,
+ cdane:core(R`\max_D\min_{\theta}\ \mathcal L_{\mathrm{src}}-\lambda\Big[\textstyle\sum_i\tilde v^s_i\log D\big(\mathbf h^s_i\otimes\mathbf e_{y_i^s}\big)+\sum_j\tilde v^t_j\log\big(1-D(\mathbf h^t_j\otimes \mathbf g_j^t)\big)\Big],\quad v_j^t=1+e^{-\hat H_1(\mathbf g_j^t)}`)+R`<p class="hint">El discriminador ve el producto del embedding por la predicción; \(v\) pondera por entropía. <span class="tag">[code / derivado]</span></p>`,
+ dsan:core(R`\hat d=\frac1{|\mathcal C_{both}|}\sum_{c}\Big\|\tfrac1{n^s_c}\textstyle\sum_{i\in S_c}\Phi_\sigma(\mathbf h_i^s)-\sum_{j}a_{jc}\Phi_\sigma(\mathbf h^t_j)\Big\|^2_{\mathcal H_I},\quad a_{jc}=\frac{\mathrm{sg}[g^t_{j,c}]}{\sum_{j'}\mathrm{sg}[g^t_{j',c}]}`)+R`<p class="hint">MMD por clase con enrutamiento blando. <span class="tag">[paper + code / derivado]</span></p>`,
+ csda:core(R`\hat D_{CS}=\ln\tfrac{\mathbf 1^\top\mathbf K^s\mathbf 1}{N_s^2}+\ln\tfrac{\mathbf 1^\top\mathbf K^t\mathbf 1}{N_t^2}-2\ln\tfrac{\mathbf 1^\top\mathbf K^{st}\mathbf 1}{N_sN_t}`)+R`<p class="hint">Logaritmo del coseno entre los embeddings de media de cada dominio. <span class="tag">[paper / derivado]</span></p>`,
+ pfan:core(R`\widetilde y_j^t=\arg\max_c\cos(\mathbf h^t_j,\bar{\mathbf h}^s_c),\quad w^{\mathrm{PFAN}}_j=\mathbb 1\big[\cos\ge\tau(m)\big],\quad \mathcal L_{apa}=\textstyle\sum_c d\big(\bar{\mathbf h}_c^s,\bar{\mathbf h}_c^{t,\mathrm{EMA}}\big)`)+R`<p class="hint">Pseudo-etiqueta por prototipo con umbral que cambia con el calendario. <span class="tag">[paper / derivado]</span></p>`,
+ shot:core(R`\mathcal L=\mathbb E_j\big[\hat H_1(\mathbf g^t_j)\big]-\hat H_1(\bar{\mathbf g}^t)+\beta\,\mathrm{CE}\big(\mathbf g^t_j,\widetilde y^{\,\mathrm{cent}}_j\big)`)+R`<p class="hint">Sin datos de la fuente al adaptar; información de la salida más pseudo-etiquetas por centroides. <span class="tag">[code / derivado]</span></p>`,
+ creda:R`<p>La referencia: información estimada con kernels, por clase, con peso de confianza.</p>`+core(R`J_c=\tfrac12\Big[H_2(\breve{\mathbf K}_c^{s})+H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})\Big]-H_2\big(\breve{\mathbf K}_c^{\mathrm{mix}}\big),\qquad \mathcal L_{\mathrm{CREDA}}=\mathcal L_{\mathrm{src}}-\lambda\sum_{c}J_c`)+R`<p class="hint">Cada variable está explicada en la pestaña Comparación final. <span class="tag">[paper / derivado]</span></p>`,
+ jumbot:core(R`\min_{\gamma\ge0}\ \langle\gamma,\mathbf C\rangle+\tau\,\mathrm{KL}(\gamma\mathbf 1\Vert\mathbf a)+\tau\,\mathrm{KL}(\gamma^\top\mathbf 1\Vert\mathbf b),\quad C_{ij}=\alpha\lVert\mathbf h_i^s-\mathbf h_j^t\rVert^2+\beta\,\mathrm{CE}(\mathbf y_i^s,\mathbf g_j^t)`)+R`<p class="hint">Transporte desbalanceado: la masa de la fuente que no encaja queda sin transportar. <span class="tag">[no abierto: Fatras et al., ICML 2021]</span></p>`
+};
+
+/* ---------- families (level 4) ---------- */
+const fam={
+ oMom:F('o-mom-f','Momentos marginales',R`Igualan media y covarianza de rasgos fijos con una transformación cerrada.`,'mira solo dos momentos y nunca la clase.',[M('CORAL',OUT,'alinea covarianzas marginales: no alinea por clase')]),
+ oSub:F('o-sub','Subespacios',R`Alinean las bases de los subespacios principales de cada dominio.`,'una base lineal común no garantiza que las clases coincidan.',[M('SA',OUT,'subespacios PCA por dominio, sin clase'),M('GFK',OUT,'kernel geodésico entre subespacios, sin clase')]),
+ oJda:F('a2-jda','MMD superficial (familia JDA)',R`Buscan una proyección \(A\) que minimiza la MMD marginal y, desde JDA, también la condicional por clase con pseudo-etiquetas que se refinan. Se resuelve como un problema de autovalores.`,'la proyección es lineal y los rasgos no se aprenden.',[M('TCA',OUT,'solo marginal: su versión por clase es JDA'),M('MIDA (Yan)',OUT,'busca independencia del dominio, no alinea por clase'),M('JDA',KEPT,RFIX),M('BDA',KEPT,RFIX),M('VDA',KEPT,RFIX),M('DICD',KEPT,RFIX),M('JGSA',OUT,'no pasa F3, transversal a la arquitectura: dos proyecciones por dominio; el objetivo se clasifica con otra'),M('ARTL',KEPT,RFIX),M('MEDA',KEPT,'F3 en frontera (GFK es una transformación propia al inferir); '+RFIX),M('DJP-MMD',KEPT,RFIX)]),
+ oIw:F('a2-iw','Ponderación por importancia',R`Repesan las muestras de la fuente para que se parezcan al objetivo: KMM iguala medias en el RKHS; KLIEP ajusta el cociente de densidades con una base de kernels.`,'corrige el desplazamiento de las entradas, no el de las clases.',[M('KMM',OUT,'corrige covariate shift: no alinea por clase'),M('KLIEP',OUT,'no alinea por clase')]),
+ oItl:F('a3-tools','Herramientas ITL',R`Rényi cuadrática por Parzen, divergencia de Cauchy–Schwarz e información mutua cuadrática (Ecs. 5–8 de la r29). Son estimadores, no métodos de adaptación: el embudo no encontró métodos de adaptación sobre rasgos fijos en esta casilla.`,'sobre rasgos fijos no hay nada que el estimador pueda mover.',[]),
+ oJdot:F('a1-ot','Transporte sobre rasgos fijos',R`Transporte óptimo con un costo que suma la distancia entre rasgos y la pérdida entre etiquetas.`,'el costo se mide en un espacio que no se aprende.',[M('JDOT',KEPT,RFIX)]),
+ eMom:F('b1-mom','Momentos profundos',R`Igualan momentos de los rasgos aprendidos: covarianzas (Deep CORAL), momentos centrales (CMD) o de orden alto (HoMM). COT los condiciona por clase.`,'un número finito de momentos no caracteriza la distribución.',[M('Deep CORAL',OUT,'covarianzas marginales: no alinea por clase'),M('CMD',OUT,'momentos marginales: no alinea por clase'),M('HoMM',OUT,'marginal: su versión por clase es COT'),M('COT',KEPT,RDSN)]),
+ eMmdM:F('b2-marg','MMD profundo marginal',R`MMD de una o varias capas del embedding, sin distinguir clases.`,'alinear marginales puede mezclar clases.',[M('DAN',OUT,'solo marginal: su versión por clase es DSAN'),M('RTN',OUT,'MMD marginal tensorial: no alinea por clase')]),
+ eMmdC:F('b2-cond','MMD conjunta y condicional',R`MMD entre distribuciones conjuntas de capas (JAN) o por clase con pesos objetivo (LMMD, CDD, CMMD). CDD resta además un término de repulsión entre clases.`,'resta potenciales en lugar de compararlos: premia dispersar la clase y depende de la amplitud del kernel.',[M('DSAN / LMMD',CMP,'',{fx:'dsan'}),M('JAN',KEPT,RDSN),M('WMMD',KEPT,RDSN),M('CAN / CDD',KEPT,'F3 en frontera (BN por dominio en el método publicado); '+RDSN),M('DCAN / CMMD',KEPT,RDSN),M('TPN',OUT,'no pasa F3, transversal a la arquitectura: infiere por distancia a prototipos, no con la cabeza compartida'),M('CPDA',KEPT,'F3 en frontera (necesita un extractor temporal); '+RDSN)],{kind:'ours'}),
+ eRenyi:F('b3-renyi','Rényi matricial',R`Entropía de Rényi de orden \(\alpha\) sobre la Gram normalizada por traza (Ecs. 9–12 de la r29), sin estimar densidades. CREDA compara la pureza de las Gram de fuente y objetivo con la de su mezcla, clase por clase.`,'en CREDA la mezcla puede no ser semidefinida positiva y la puntuación puede tener el signo equivocado.',[M('CREDA',CMP,'',{fx:'creda'}),M('DARES *',KEPT,'F3 en frontera (muestreo espacial; exige un extractor denso por píxel); la familia la representa CS-DA, con revisión por pares')],{kind:'ours'}),
+ eCs:F('b3-cs','Cauchy–Schwarz y Jensen',R`Divergencias estimadas con sumas de kernel: Cauchy–Schwarz (CS-DA, también condicional) y Jensen–Shannon entre operadores de covarianza (RJSD).`,'CS-DA mira medias, no covarianzas por clase; RJSD cuesta \\(O(n^3)\\).',[M('CS-DA',CMP,'',{fx:'csda'}),M('RJSD',OUT,'su uso en adaptación es una conjunta de capas, sin clase')],{kind:'ours'}),
+ eMi:F('b3-mi','Información mutua',R`Maximizan dependencia o independencia condicional entre rasgo y clase. El estimador no se pudo verificar desde los resúmenes; se ubica aquí de forma provisoria.`,'no sabemos con qué estiman la información.',[M('Independencia condicional (arXiv 2203.03212)',KEPT,R2ENC),M('SIDA',KEPT,R2ENC)]),
+ eOt:F('b1-ot','Transporte óptimo profundo',R`Minimizan un plan de transporte entre rasgos aprendidos, con costos que incluyen la etiqueta o la clase.`,'el plan exacto es caro y no tiene lectura informacional.',[M('DeepJDOT',KEPT,RDSN),M('ETD',KEPT,RDSN),M('RWOT',KEPT,RDSN),M('PCT',KEPT,'F3 en frontera (sus prototipos son los pesos de la cabeza; exige cabeza lineal); '+RDSN),M('MARS',KEPT,RDSN)]),
+ eUot:F('b1-uot','Transporte desbalanceado',R`Permiten que parte de la masa de la fuente no se transporte, lo que pondera implícitamente las muestras de la fuente.`,'pondera por par de muestras, sin estructura de clase.',[M('JUMBOT',CMP,'',{fx:'jumbot'}),M('m-POT',KEPT,'la familia la representa JUMBOT')]),
+ cMarg:F('b3-adv-marg','Adversaria marginal y de píxel',R`Un discriminador de dominio juega contra el extractor; con discriminador óptimo el juego minimiza una divergencia de Jensen–Shannon entre marginales.`,'el discriminador no ve la clase.',[M('DANN',OUT,'discriminador sin clase: no alinea por clase'),M('ADDA',OUT,'discriminador sin clase'),M('CoGAN',OUT,'conjunta de imágenes, sin clase'),M('PixelDA',OUT,'discriminador sin clase'),M('CyCADA',OUT,'preserva la etiqueta pero no alinea por clase')]),
+ cWrap:F('b3-adv-wrap','Envoltorios adversarios',R`Modifican el entrenamiento adversario (espectro, optimizador, suavizado, gradientes) sin cambiar qué se alinea.`,'mejoran el juego, no lo que se alinea.',[M('BSP',OUT,'envoltorio: no alinea por clase'),M('GVB',OUT,'base marginal tipo DANN'),M('SDAT',OUT,'optimizador: no alinea por clase'),M('ELS',OUT,'envoltorio: no alinea por clase'),M('GH / GH++',OUT,'envoltorio: no alinea por clase'),M('AFN',OUT,'norma de rasgos, no adversaria ni por clase')]),
+ cDom:F('b3-adv-dom','Confianza sobre el dominio',R`Ponderan por la entropía del discriminador de dominio, no por la de la clase.`,'la confianza que miden es la del dominio, no la de la clase.',[M('RADA',OUT,'pondera por el dominio, no por la clase'),M('TADA',OUT,'atención por entropía del dominio, no por la clase')]),
+ cCls:F('b3-adv-cls','Adversaria condicionada por la clase',R`El discriminador ve la clase: varios discriminadores por clase, o el producto del embedding por la predicción.`,'el estadístico alineado es el que el discriminador logre detectar: implícito e inestable.',[M('CDAN+E',CMP,'',{fx:'cdane'}),M('CDAN',KEPT,'su versión con peso por entropía, CDAN+E, la reemplaza'),M('MADA',KEPT,RADV),M('DAAN',KEPT,RADV),M('SRADA',KEPT,RADV),M('ToAlign',KEPT,RADV),M('CAT †',KEPT,RADV),M('BACG * (retirado)',KEPT,'F3 en frontera (cabeza Dirichlet, no verificable); '+RADV),M('NOUN / PRONOUN',KEPT,R2ENC),M('DADA',OUT,'no pasa F3, transversal a la arquitectura: cabeza con K+1 salidas, una neurona de dominio'),M('SymNets',OUT,'no pasa F3, transversal a la arquitectura: tres clasificadores; infiere con el del objetivo'),M('InAIt †',OUT,'no pasa F3, transversal a la arquitectura: cabeza c+1 y reponderación del posterior en prueba')]),
+ cHyp:F('b3-hyp','Discrepancia de hipótesis',R`El crítico es un par de clasificadores: miden cuánto discrepan sus predicciones en el objetivo (MCD, SWD) o una divergencia entre hipótesis (MDD, f-DAL).`,'mide el desacuerdo de clasificadores, no la forma de las distribuciones.',[M('f-DAL',KEPT,RADV),M('DALN',KEPT,RADV),M('MCD',OUT,'no pasa F3, transversal a la arquitectura: dos clasificadores; su desacuerdo es el método'),M('SWD',OUT,'no pasa F3, transversal a la arquitectura: par de clasificadores de MCD'),M('MDD',KEPT,R2ENC),M('CGDM †',OUT,'no pasa F3, transversal a la arquitectura: dos clasificadores; predice promediándolos')]),
+ sOut:F('b3-out','Estructura de la predicción',R`Miden propiedades de la matriz de predicciones \(\mathbf g\) del objetivo, como la confusión entre clases o su norma nuclear, sin comparar dominios.`,'no compara dominios.',[M('MCC',OUT,'confusión entre clases, sin alinear dominios'),M('BNM',OUT,'norma nuclear marginal: no alinea por clase')]),
+ sPl:F('s-pl','Pseudo-etiquetado',R`Entrenan con pseudo-etiquetas del objetivo, seleccionadas o regularizadas; los que alinean por clase lo hacen con prototipos.`,'confirma sus propios errores si nada lo ancla.',[M('PFAN',CMP,'',{fx:'pfan'}),M('MSTN',KEPT,RPFN),M('ProDA',KEPT,RPFN),M('ATDOC-NC',KEPT,RPFN),M('ATDOC-NA',KEPT,RPFN),M('PCL',KEPT,RPFN),M('CBST',OUT,'selección equilibrada por clase, sin alineación'),M('CRST',OUT,'selección equilibrada por clase, sin alineación'),M('AdaMatch',OUT,'alineación marginal'),M('CST',OUT,'consistencia cíclica, sin alineación')]),
+ sSf:F('s-sfda','Sin fuente (SFDA)',R`Adaptan sin ver datos de la fuente: parten del modelo fuente y se guían por la información de la salida y por vecinos o centroides.`,'renuncia a la fuente justo cuando podría anclar el objetivo.',[M('SHOT',CMP,'',{fx:'shot'}),M('SHOT++',KEPT,RSHT),M('NRC',KEPT,RSHT),M('AaD',KEPT,RSHT),M('G-SFDA',OUT,'no pasa F3, transversal a la arquitectura: máscara de atención por dominio sobre el extractor al inferir'),M('CoWA-JMDS',KEPT,RSHT),M('SF(DA)²',KEPT,RSHT),M('DaC',KEPT,RSHT),M('A2Net',OUT,'no pasa F3, transversal a la arquitectura: dos clasificadores, fuente y objetivo'),M('PLUE',KEPT,RSHT),M('U-SFAN',OUT,'solo entropía e información mutua, sin clase'),M('C-SFDA',OUT,'fiabilidad sin clase'),M('DIFO',OUT,'no alinea por clase')]),
+ sKd:F('s-kd','Maestro–alumno y destilación',R`Un maestro produce las etiquetas blandas que el alumno imita.`,'imita al maestro, errores incluidos.',[M('DDSR †',KEPT,'F3 en frontera (maestro CLIP y subred que recorta capas del extractor); '+RSHT),M('Self-ensembling',OUT,'consistencia y balance marginal'),M('DINE',OUT,'destilación sin clase'),M('KD-DA',OUT,'confianza por dominio, sin clase'),M('MT-MTDA',OUT,'destilación multimaestro, sin clase'),M('DTBS',OUT,'no alinea por clase')]),
+ sTta:F('s-tta','Adaptación en prueba (TTA)',R`Ajustan el modelo durante la inferencia, casi siempre minimizando la entropía de la salida.`,'minimizar entropía sin anclas lleva a colapsar a una clase.',[M('T3A',OUT,'no pasa F3, transversal a la arquitectura: reemplaza la cabeza por prototipos en prueba'),M('TAST †',OUT,'no pasa F3, transversal a la arquitectura: ensamble de módulos que predicen en prueba'),M('Tent',OUT,'minimiza entropía, sin clase'),M('EATA',OUT,'selección sin alineación'),M('SAR',OUT,'filtro de entropía, sin clase'),M('CoTTA',OUT,'maestro promediado, sin clase'),M('RoTTA',OUT,'memoria balanceada, sin alineación'),M('DeYO',OUT,'selección sin alineación')])
+};
+
+/* ---------- criterion nodes (level 3) ---------- */
+function C(id,label,html,kids,o){return Object.assign({id,label,html,kids},o||{});}
+const DIST=(where,what,good,bad,dislike)=>R`<h3>Distancia</h3><p>`+what+R`</p>`+block('que basta con medir cuán lejos están las dos distribuciones '+where+'.',good,bad,dislike);
+const INFO=(where,what,good,bad,dislike)=>R`<h3>Medida de información</h3><p>`+what+R`</p>`+block('que la discrepancia se lee mejor como información (incertidumbre, solapamiento, divergencia) '+where+'.',good,bad,dislike);
+
+/* ---------- tree ---------- */
+const tree={id:'root',label:'Desplazamiento sin etiquetas',open:true,
+ html:R`<h3>El problema</h3><p>La fuente trae etiquetas y el objetivo no, y \(P_s(X,Y)\neq P_t(X,Y)\). Toda la familia se apoya en la misma cota: el error en el objetivo queda acotado por el error en la fuente, una discrepancia entre dominios y el error de la mejor hipótesis conjunta.</p>`+core(R`\varepsilon_t(h)\le\varepsilon_s(h)+\tfrac12\,d_{\mathcal H\Delta\mathcal H}(\mathcal D_s,\mathcal D_t)+\lambda^\ast`)+R`<p class="hint">El árbol se abre en tres preguntas: <b>dónde</b> se alinea, <b>qué compara</b> y <b>qué mide</b>. Los métodos se clasifican con tres criterios: <b>alineación por clase</b> (alinea \(P(Z\mid Y=c)\), no solo la marginal), <b>sin etiquetas del objetivo</b> y <b>transversal a la arquitectura</b> (una pérdida sobre los rasgos y logits de un único extractor y una única cabeza, iguales para todos; en inferencia el modelo es exactamente esa cabeza sobre ese extractor). Verde: llegó a la comparación final. Naranja: pasa los tres criterios y se descartó después, porque no se lleva al escenario de CREDA con doble codificador o porque la familia la representa otro método. Rojo: no pasa alguno. <span class="tag">[no abierto: Ben-David et al., 2010]</span></p>`+nope('ninguna cota dice cómo bajar la discrepancia sin mezclar clases; esa decisión es de cada rama.'),
+ kids:[
+ {id:'orig',label:'Espacio original',open:true,
+  html:R`<h3>Espacio original</h3><p>Se alinea directamente sobre la señal cruda o sobre rasgos dados, a lo sumo con una transformación cerrada.</p>`+block('que los dominios se pueden alinear directamente sobre la señal cruda o sobre rasgos fijos, sin aprender una representación.',['Soluciones cerradas o convexas, con garantías limpias.','La alineación no puede destruir información discriminante.'],[R`Si en ese espacio ninguna hipótesis sirve para ambos dominios, \(\lambda^\ast\) queda fijo y ninguna alineación lo corrige.`,'La señal cruda mezcla lo que discrimina con lo que cambia entre dominios.'],'no puede aprender un espacio donde las clases de ambos dominios coincidan.'),
+  kids:[
+  C('o-mom','Momentos y geometría',R`<h3>Original · compara momentos y geometría</h3><p>Compara estadísticos de bajo orden de la señal o de rasgos fijos.</p>`+core(R`A^\ast=C_s^{-1/2}C_t^{1/2}\ (\text{CORAL})`)+block('que la diferencia entre dominios vive en la media y la covarianza.',['Forma cerrada e interpretable.','Las covarianzas tienen su propia geometría (matrices SPD) y se puede aprovechar.'],[R`Momentos de orden \(\le 2\) no caracterizan una distribución.`,'Es marginal: recentrar sin clase falla ante desplazamiento de proporciones.'],'dos distribuciones con igual media y covarianza pueden ser muy distintas.'),
+   [C('o-mom-d','Distancia',DIST('sobre rasgos fijos','Distancia de Frobenius entre covarianzas o recentrado a una referencia común.',['Cálculo directo.'],['Marginal y de bajo orden.'],'una distancia entre covarianzas marginales no ve la clase.'),[fam.oMom,fam.oSub])]),
+  C('o-ker','Kernel (RKHS)',R`<h3>Original · compara con kernels</h3><p>Compara distribuciones completas a través de un kernel, sobre rasgos fijos o una proyección.</p>`+core(R`\mathrm{MMD}^2(P,Q)=\mathbb E\,k(x,x')+\mathbb E\,k(y,y')-2\,\mathbb E\,k(x,y)`)+block('que la diferencia se ve comparando distribuciones completas en un RKHS sobre los rasgos dados.',[R`Con kernel característico se comparan todos los momentos a la vez.`,'No estima densidades.','JDA ya condiciona por clase: la estructura condicional nace acá.'],['La representación es fija o una proyección lineal.',R`Depende del ancho \(\sigma\).`],'el kernel no puede compensar rasgos que no separan las clases.'),
+   [C('o-ker-d','Distancia',DIST('en el RKHS, sobre rasgos fijos','La MMD: diferencia de embeddings de media.',[R`Identificable: \(\mathrm{MMD}=0\iff P=Q\) con kernel característico.`,'Estimador insesgado y prueba de dos muestras.'],['Escala con la amplitud del kernel.'],'resta potenciales: confunde dispersión con desalineación.'),[fam.oJda,fam.oIw]),
+    C('o-ker-i','Información',INFO('sobre rasgos fijos','Entropías y divergencias estimadas con ventanas de Parzen: el aprendizaje teórico-informacional de Príncipe.',['Lectura informacional con sumas de kernel, en \\(O(n^2)\\).','Cauchy–Schwarz es un cociente: invariante a la escala del kernel.'],['Una entropía no es una divergencia por sí sola.','Depende del ancho de banda.'],'sobre rasgos fijos no hay nada que el estimador pueda mover.'),[fam.oItl])]),
+  C('o-ot','Transporte',R`<h3>Original · compara por transporte</h3><p>Compara distribuciones por el costo de mover la masa de una a otra.</p>`+core(R`W_c(P,Q)=\min_{\gamma\in\Pi(P,Q)}\textstyle\int c\,d\gamma`)+block('que la discrepancia es el costo de mover la fuente hasta el objetivo con una métrica fija.',['Respeta la geometría del espacio.','JDOT acopla rasgo y etiqueta en el costo.'],[R`Cuesta \(O(n^3\log n)\).`,'La métrica es la del espacio fijo.'],'la métrica del espacio original no es la que separa las clases.'),
+   [C('o-ot-d','Distancia',DIST('con un costo de transporte','Distancia de Wasserstein con costo conjunto.',['Gradiente útil aun con soportes disjuntos.'],['Caro y sin lectura informacional.'],'el transporte se paga en un espacio que no se aprende.'),[fam.oJdot])])
+  ]},
+ {id:'emb',label:'Embedding aprendido',kind:'ours',open:true,
+  html:R`<h3>Embedding aprendido</h3><p>El extractor se entrena para bajar a la vez el error en la fuente y la discrepancia. En la r29: instancias \(\mathbf h=\mathcal F_\theta(\mathbf x)\) (Ec. 13), su imagen \(\Phi_\sigma(\mathbf h)\) en \(\mathcal H_I\) (Ec. 14) y la salida del clasificador \(\mathbf g=\mathcal G_\psi(\cdot)\) (Ec. 20).</p>`+block('que existe una representación aprendible donde ambos dominios coinciden y las clases siguen separadas.',[R`\(f_\theta\) puede volver chico \(\lambda^\ast\).`,'La discrepancia se vuelve una pérdida diferenciable más.'],[R`\(\lambda^\ast\) ahora depende de \(f_\theta\) y puede crecer.`,'Alinear solo las marginales puede mezclar clases. <span class="tag">[no abierto: Zhao et al., 2019]</span>',R`Una \(f_\theta\) constante anula cualquier discrepancia.`],'sin condicionar por clase, aprender el espacio también permite aprender a hacer trampa.'),
+  kids:[
+  C('e-mom','Momentos y geometría',R`<h3>Embedding · compara momentos</h3><p>Igualar momentos de los rasgos aprendidos.</p>`+core(R`\ell_{\text{CORAL}}=\tfrac1{4d^2}\lVert C_s-C_t\rVert_F^2`)+block('que igualar algunos momentos del embedding basta para alinear.',['Barato y diferenciable.'],['Un número finito de momentos no caracteriza la distribución.'],'iguala resúmenes, no distribuciones.'),
+   [C('e-mom-d','Distancia',DIST('en los momentos del embedding','Distancias entre momentos de orden fijo.',['Simple de calcular.'],['Casi siempre marginal.'],'lo que no está en los momentos elegidos, no se alinea.'),[fam.eMom])]),
+  C('e-ker','Kernel (RKHS)',R`<h3>Embedding · compara con kernels</h3><p>Compara distribuciones completas del embedding en \(\mathcal H_I\), con el kernel de instancia \(\kappa^I_\sigma\) (Ec. 14) y sus matrices de Gram.</p>`+core(R`[\mathbf K^s]_{ii'}=\kappa^I_\sigma(\mathbf h_i^s,\mathbf h_{i'}^s),\qquad [\mathbf K^{st}]_{ij}=\kappa^I_\sigma(\mathbf h_i^s,\mathbf h_j^t)`)+block('que la discrepancia se ve comparando distribuciones completas del embedding a través de un kernel.',['Comparador sin densidades, característico, identificable.','Todo se calcula con matrices de Gram.'],[R`Depende del ancho \(\sigma\).`,'El costo crece como \\(O(n^2)\\) por lote.'],'el kernel solo no decide qué hacer con los tres potenciales: eso lo decide el criterio.',),
+   [C('e-ker-d','Distancia',DIST('en el RKHS del embedding','La MMD, marginal o por clase: resta los tres potenciales.',['Estimador insesgado y prueba de dos muestras.','La alineación condicional por clase con pesos, que adopta CREDA.'],['Escala con la amplitud del kernel.','Premia dispersar la clase: baja sin alinear.'],'resta los potenciales y confunde dispersión con desalineación.'),[fam.eMmdM,fam.eMmdC]),
+    C('e-ker-i','Información',INFO('en el RKHS del embedding','Entropía de Rényi matricial y divergencias de Cauchy–Schwarz sobre las mismas matrices de Gram: combina los tres potenciales como logaritmo de cocientes.',['Separa la dispersión de la clase del solapamiento entre dominios.','Invariante a la amplitud del kernel.','Con \\(\\alpha=2\\) cuesta \\(O(n^2)\\).'],['No mira información extra: los mismos tres potenciales que la MMD bajo \\(\\kappa^2\\).','Sin prueba de dos muestras y con sesgo.'],'sin normalizar, la puntuación puede tener el signo equivocado y premiar desajustar purezas.'),[fam.eRenyi,fam.eCs,fam.eMi],{kind:'ours'})],{kind:'ours'}),
+  C('e-ot','Transporte',R`<h3>Embedding · compara por transporte</h3><p>Planes de transporte entre rasgos aprendidos.</p>`+core(R`W_c(P,Q)=\min_{\gamma\in\Pi(P,Q)}\textstyle\int c\,d\gamma`)+block('que la discrepancia es el costo de mover la masa en el embedding.',['Respeta la geometría del costo.','El transporte desbalanceado pondera la fuente.'],[R`Exacto cuesta \(O(n^3\log n)\); la regularización entrópica lo sesga.`],'es una distancia sin lectura informacional, y cara.'),
+   [C('e-ot-d','Distancia',DIST('con un costo de transporte en el embedding','Wasserstein, balanceado o desbalanceado.',['Gradiente útil con soportes disjuntos.'],['Marginal salvo que el costo incluya la clase.'],'el plan de transporte no dice cuánta incertidumbre queda.'),[fam.eOt,fam.eUot])]),
+  C('e-crit','Crítico aprendido',R`<h3>Embedding · compara con un crítico aprendido</h3><p>Un discriminador o un par de clasificadores aprende a distinguir los dominios, y el extractor aprende a engañarlo.</p>`+core(R`\min_{\theta}\max_D\ \mathbb E_s\log D(\mathbf h)+\mathbb E_t\log\big(1-D(\mathbf h)\big)`)+block('que una red puede aprender el estadístico que mejor separa los dominios.',['No hay que elegir el estadístico: lo aprende el crítico.','Con la clase en la entrada, condiciona naturalmente.'],['Juego minimax inestable.','El estadístico alineado queda implícito.'],'no sabemos qué estadístico se está alineando.'),
+   [C('e-crit-i','Información',INFO('a través del crítico','Con discriminador óptimo, el juego minimiza una divergencia de Jensen–Shannon.',['Divergencia genuina entre dominios.'],['Jensen–Shannon se satura con soportes disjuntos. <span class="tag">[no abierto: Goodfellow et al., 2014]</span>'],'la divergencia es implícita: depende de que el crítico esté bien entrenado.'),[fam.cMarg,fam.cWrap,fam.cDom,fam.cCls]),
+    C('e-crit-d','Distancia',DIST('entre hipótesis','Discrepancia entre las predicciones de dos clasificadores.',['Se conecta con la cota de Ben-David.'],['Mide desacuerdo, no forma de las distribuciones.'],'el desacuerdo entre clasificadores no describe la distribución de la clase.'),[fam.cHyp])]),
+  C('side','Salida g (lateral)',R`<h3>Rama lateral: la salida del clasificador</h3><p>No compara dominios: mira \(\mathbf g=\mathcal G_\psi(\cdot)\in\Delta^{C-1}\), la salida del clasificador sobre el embedding. Entra en el recorrido porque aporta el enrutamiento por clase (Ec. 22) y el peso de confianza (Ec. 24).</p>`+core(R`\widetilde y_j^{t}=\mathfrak a(\mathbf g_j^{t}),\qquad w_j^{t}=1-\frac{\widehat H_2(\mathbf g_j^{t})}{\ln C}`)+block('que las predicciones del modelo sobre el objetivo son lo bastante buenas para entrenarse con ellas.',['La pseudo-etiqueta como enrutador de clase.','El peso por certeza: 1 en un one-hot, 0 en la uniforme.'],['No compara dominios.','Confirma sus propios errores si nada lo ancla.'],'sin una medida entre dominios, se entrena con sus propios errores.'),
+   [C('side-i','Información de la salida',INFO('de la salida','Entropía, información mutua y estructura de las predicciones del objetivo.',['Barato: \\(O(n)\\).','Da el peso de confianza.'],['Ciego a la geometría del embedding.','Puede colapsar a una clase.'],'mira la predicción, no los datos.'),[fam.sOut,fam.sPl,fam.sSf,fam.sKd,fam.sTta])],{kind:'side'})
+  ]}
+ ]};
+
+const conv={id:'conv',label:'Información con kernels · CREDA',kind:'conv',
+ html:R`<h3>Convergencia: información estimada con kernels sobre el embedding</h3><p class="hint">Embedding → kernel → información, con el enrutamiento y el peso de la rama lateral. Así lo formula CREDA y lo hereda la r29 (Ecs. 26–33):</p>`+core(R`J_c=\tfrac12\big[H_2(\breve{\mathbf K}_c^{s})+H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})\big]-H_2(\breve{\widetilde{\mathbf K}}{}_c^{\mathrm{mix}}),\qquad H_2(\mathbf A)=-\ln\lVert\mathbf A\rVert_F^2`)+block('que la información estimada con kernels, clase por clase sobre el embedding, captura la discrepancia condicional.',['Separa la dispersión de la clase del solapamiento entre dominios; la MMD los mezcla. <span class="tag">[derivado]</span>','Invariante a la amplitud del kernel. <span class="tag">[verificado]</span>','Axiomas tipo Rényi sobre matrices PSD. <span class="tag">[verificado]</span>',R`Con \(\alpha=2\) cuesta \(O(n^2)\). <span class="tag">[verificado]</span>`],[R`En CREDA la mezcla puede no ser semidefinida positiva; <b>la r29 lo resuelve</b> por congruencia. <span class="tag">[derivado]</span>`,R`Sin normalizar, \(J_c\) puede tener el signo equivocado; <b>la r29 lo resuelve</b> con \(\ell_{\mathrm{glob},c}\). <span class="tag">[derivado]</span>`,R`Mira los mismos tres potenciales que la MMD bajo \(\kappa^2\); sin prueba de dos muestras y con sesgo. <span class="tag">[derivado / verificado]</span>`],R`el gradiente de \(\ell_{\mathrm{glob},c}\) sigue premiando desajustar las purezas \(r_c\).`)+'<p class="hint">Las demostraciones están en la pestaña Matemática.</p>'};
+const next={id:'next',label:'MIL-CREDA',kind:'next',
+ html:R`<h3>Siguiente etapa: MIL-CREDA</h3><p>La unidad pasa a ser la bolsa, aparece la referencia local entre bolsas y la normalización \(\ell_{\mathrm{glob},c}\) vuelve la pérdida monótona en \(D_{CS,c}\). Se desarrolla en esa etapa.</p>`};
+const CONV_SOURCES=['b2-cond','b3-renyi','b3-cs','side'];
+
+/* ---------- index ---------- */
+const byId={};
+(function idx(n,p,depth){n.parent=p;n.depth=depth;byId[n.id]=n;(n.kids||[]).forEach(k=>idx(k,n,depth+1));})(tree,null,0);
+byId.conv=conv;byId.next=next;
+
+function detail(n){
+  if(n.html)return n.html;
+  if(n.leaf){
+    const p=n.parent;
+    if(n.st===CMP)return '<h3>'+n.label+'</h3><span class="pill cmp">llegó a la comparación final</span>'+FX[n.fx];
+    if(n.st===KEPT&&n.why.startsWith('F3 en frontera'))return '<h3>'+n.label+'</h3><span class="pill kept">F3 en frontera, descartado después</span><p>Alinea por clase y no usa etiquetas del objetivo; si es transversal a la arquitectura depende de una decisión nuestra, y no llegó a la comparación: '+n.why.replace(/^F3 en frontera /,'')+'.</p><p class="hint"><b>'+p.label+'.</b> '+p.desc+'</p>';
+    if(n.st===KEPT)return '<h3>'+n.label+'</h3><span class="pill kept">pasa los criterios, descartado después</span><p>Alinea por clase, no usa etiquetas del objetivo y es una pérdida sobre un extractor y una cabeza compartidos, pero no llegó a la comparación: '+n.why+'.</p><p class="hint"><b>'+p.label+'.</b> '+p.desc+'</p>';
+    return '<h3>'+n.label+'</h3><span class="pill out">no pasa algún criterio</span><p>Por qué se va: '+n.why+'.</p><p class="hint"><b>'+p.label+'.</b> '+p.desc+'</p>';
+  }
+  const c=s=>n.kids.filter(k=>k.st===s).length;
+  const parts=[];if(c(CMP))parts.push(c(CMP)+' en la comparación final');if(c(KEPT))parts.push(c(KEPT)+' pasan los criterios y se descartan después');if(c(OUT))parts.push(c(OUT)+' no pasan los criterios');
+  return '<h3>'+n.label+'</h3><p>'+n.desc+'</p>'+nope(n.dislike)+(n.kids.length?'<p class="hint">'+n.kids.length+' métodos · '+parts.join(' · ')+'</p>':'<p class="hint">Sin métodos de adaptación en esta casilla.</p>');
+}
+
+/* ---------- layout + render ---------- */
+const SVGNS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('tree'), insp=document.getElementById('inspector'), canvas=document.getElementById('canvas');
+const COLW=[140,150,165,150,220,215], GAP=40;
+const colX=[];{let x=16;for(let d=0;d<6;d++){colX.push(x);x+=COLW[d]+GAP;}}
+let selected='root', focusId=null;
+const seen=new Set();
+
+function visible(n,out){out.push(n);if(n.open&&n.kids)n.kids.forEach(k=>visible(k,out));return out;}
+function layout(){
+  let cur=40;
+  (function place(n){
+    const h=n.leaf?24:30; n.h=h; n.w=COLW[n.depth]; n.x=colX[n.depth];
+    if(n.open&&n.kids&&n.kids.length){n.kids.forEach(place);n.y=(n.kids[0].y+n.kids[n.kids.length-1].y)/2;}
+    else{n.y=cur+h/2;cur+=n.leaf?30:42;}
+  })(tree);
+  const vis=visible(tree,[]); const maxD=Math.max(...vis.map(n=>n.depth));
+  const srcs=CONV_SOURCES.map(id=>{let n=byId[id];while(n&&!vis.includes(n))n=n.parent;return n;}).filter((v,i,a)=>v&&a.indexOf(v)===i);
+  conv.w=200;conv.h=44;conv.x=colX[maxD]+COLW[maxD]+GAP+20;conv.y=srcs.reduce((s,n)=>s+n.y,0)/srcs.length;
+  next.w=130;next.h=34;next.x=conv.x+conv.w+GAP;next.y=conv.y;
+  return {vis,srcs,maxD,W:next.x+next.w+20,H:cur+20};
+}
+function el(tag,attrs,parent){const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+function curve(a,b){const x1=a.x+a.w,y1=a.y,x2=b.x,y2=b.y,m=(x1+x2)/2;return 'M'+x1+' '+y1+' C'+m+' '+y1+' '+m+' '+y2+' '+x2+' '+y2;}
+function edgeClass(n){if(n.kind==='ours')return 'e ours';if(n.kind==='side')return 'e side';return 'e';}
+function fit(label,w){const max=Math.floor(w/6.7);return label.length>max?label.slice(0,max-1)+'…':label;}
+
+function render(){
+  const L=layout();
+  svg.setAttribute('width',L.W);svg.setAttribute('height',L.H);svg.setAttribute('viewBox','0 0 '+L.W+' '+L.H);
+  svg.textContent='';
+  const heads=['PROBLEMA','¿DÓNDE?','¿QUÉ COMPARA?','¿QUÉ MIDE?','FAMILIA','MÉTODO'];
+  for(let d=0;d<=L.maxD;d++){el('text',{x:colX[d],y:18,class:'col'},svg).textContent=heads[d];}
+  el('text',{x:conv.x,y:18,class:'col'},svg).textContent='CONVERGENCIA';
+  el('text',{x:next.x,y:18,class:'col'},svg).textContent='SIGUIENTE';
+  const ge=el('g',{},svg), gn=el('g',{},svg);
+  L.vis.forEach(n=>{if(n.parent)el('path',{d:curve(n.parent,n),class:edgeClass(n)},ge);});
+  L.srcs.forEach(s=>{el('path',{d:curve(s,conv),class:s.kind==='side'?'e side':'e conv'},ge);});
+  el('path',{d:curve(conv,next),class:'e next'},ge);
+  [...L.vis,conv,next].forEach(n=>drawNode(n,gn));
+  if(focusId){const f=svg.querySelector('[data-id="'+CSS.escape(focusId)+'"]');if(f)f.focus({preventScroll:true});}
+}
+function drawNode(n,g){
+  const cls=['nd'];if(n.kind)cls.push(n.kind);if(n.leaf)cls.push('leaf');if(n.id===selected)cls.push('sel');
+  if(!seen.has(n.id)){cls.push('enter');seen.add(n.id);}
+  const hasKids=n.kids&&n.kids.length;
+  const gg=el('g',{class:cls.join(' '),transform:'translate('+n.x+','+(n.y-n.h/2)+')',tabindex:0,role:'treeitem','data-id':n.id,'aria-label':n.label+(hasKids?(n.open?', abierto':', cerrado, '+n.kids.length+' hijos'):'')},g);
+  if(hasKids)gg.setAttribute('aria-expanded',n.open?'true':'false');
+  el('title',{},gg).textContent=n.label;
+  el('rect',{class:'box',width:n.w,height:n.h,rx:6},gg);
+  let tx=10;
+  if(n.leaf){el('circle',{class:'st'+(n.st===CMP?'':' '+n.st),cx:11,cy:n.h/2,r:4},gg);tx=21;}
+  const room=n.w-tx-(hasKids?30:8);
+  const t=el('text',{x:tx,y:n.h/2+4.2},gg);
+  if(n.id==='conv'){t.textContent='Información con kernels';t.setAttribute('y',n.h/2-3);el('text',{x:tx,y:n.h/2+12},gg).textContent='sobre el embedding · CREDA';}
+  else t.textContent=fit(n.label,room);
+  if(hasKids){const b=el('text',{x:n.w-8,y:n.h/2+4,'text-anchor':'end',class:'badge'},gg);b.textContent=n.open?'−':'+'+n.kids.length;}
+  requestAnimationFrame(()=>gg.classList.remove('enter'));
+  const act=()=>{selected=n.id;focusId=n.id;if(hasKids)n.open=!n.open;render();show(n);};
+  gg.addEventListener('click',act);
+  gg.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();act();}});
+}
+function crumbs(n){if(n.id==='conv')return 'convergencia';if(n.id==='next')return 'siguiente etapa';const p=[];let c=n;while(c){p.unshift(c.label);c=c.parent;}return p.join(' › ');}
+function show(n){
+  let pill='';
+  if(n.kind==='ours'||n.kind==='conv')pill='<span class="pill">nuestro camino</span>';
+  else if(n.kind==='side')pill='<span class="pill side">rama lateral</span>';
+  else if(n.kind==='next')pill='<span class="pill next">se desarrolla aparte</span>';
+  let kids='';
+  if(n.kids&&n.kids.length&&!n.kids[0].leaf)kids='<div class="kv"><b>'+(['Dónde','Qué compara','Qué mide','Familias'][n.depth]||'Hijos')+'</b><div class="kids">'+n.kids.map(k=>'<button class="kid" data-go="'+k.id+'">'+k.label+'</button>').join('')+'</div></div>';
+  insp.innerHTML='<div class="crumbs">'+crumbs(n)+'</div>'+pill+detail(n)+kids;
+  insp.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{const k=byId[b.dataset.go];let p=k.parent;while(p){p.open=true;p=p.parent;}selected=k.id;focusId=null;if(k.kids)k.open=true;render();show(k);}));
+  if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([insp]).catch(()=>{});
+  insp.scrollTop=0;
+}
+function setOpen(fn){(function w(n){if(n.kids){n.open=fn(n);n.kids.forEach(w);}})(tree);}
+const OURS=new Set(['root','emb','e-ker','e-ker-d','e-ker-i','side','side-i']);
+document.getElementById('btn-ours').addEventListener('click',()=>{setOpen(n=>OURS.has(n.id));selected='conv';focusId=null;render();show(conv);});
+document.getElementById('btn-fam').addEventListener('click',()=>{setOpen(n=>n.depth<=3);focusId=null;render();});
+document.getElementById('btn-all').addEventListener('click',()=>{setOpen(()=>true);focusId=null;render();});
+document.getElementById('btn-reset').addEventListener('click',()=>{setOpen(n=>n.depth<=1);selected='root';focusId=null;render();show(tree);canvas.scrollTo(0,0);});
+
+render();show(tree);
+
+/* ---------- tabs ---------- */
+const tabs={},panels={};
+['arbol','embebimiento','matematica','comparacion'].forEach(k=>{tabs[k]=document.getElementById('tab-'+k);panels[k]=document.getElementById('panel-'+k);});
+function tab(name){for(const k in tabs){const on=k===name;tabs[k].setAttribute('aria-selected',on);panels[k].hidden=!on;}
+  if(window.MathJax&&MathJax.typesetPromise)MathJax.typesetPromise([panels[name]]).catch(()=>{});}
+for(const k in tabs)tabs[k].addEventListener('click',()=>tab(k));
+if(tabs[location.hash.slice(1)])tab(location.hash.slice(1));
+})();
+</script>

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/candidate.json",
+    "sha256": "8b86fbe4761b6142130be0bb275359d597855d9a8a33d5c7268c3daaf2cb269e",
+    "bytes": 39426
+  },
+  "artifact": {
+    "path": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/embudo-mil-creda.html",
+    "sha256": "038a9aa20bb8ac5ac46f1cbada84d82046a90a7c42c1dd12a85870ac0702dafc",
+    "bytes": 782149
+  },
+  "gates": {
+    "validate": "pass",
+    "deliver": "pass",
+    "check": "pass",
+    "browser-check": "fail"
+  },
+  "failedStage": "browser-check",
+  "diagnostics": [
+    {
+      "code": "viewer/evidence-path-conflict",
+      "severity": "error",
+      "message": "browser-check will not replace the existing unowned evidence path \"/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/embudo-mil-creda.browser-check.json\".",
+      "subject": {
+        "artifact": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/embudo-mil-creda.html",
+        "evidencePath": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/embudo-mil-creda.browser-check.json"
+      },
+      "evidence": {
+        "reason": {
+          "code": "ownership-artifact-mismatch"
+        }
+      },
+      "supportedFixes": [
+        "move the conflicting file aside, or choose a separate --out-dir, then rerun browser-check"
+      ]
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 1,
+    "shown": 1,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/embudo-mil-creda.finalize.json",
+    "summaryReceipt": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/embudo-mil-creda.finalize-summary.json",
+    "browserCheckReceipt": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/architecture-embudo-mil-creda-20261010-110531/embudo-mil-creda.browser-check.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.0.1",
+    "availableVersion": "3.0.1",
+    "releaseNotes": null,
+    "checkedAt": "2026-10-10T16:00:36.775Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 864
+}

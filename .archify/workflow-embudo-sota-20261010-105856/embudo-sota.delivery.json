@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "4d2a0309-1cc5-4560-ae34-409443d6f40e",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/workflow-embudo-sota-20261010-105856/candidate.json",
+  "output": "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/.archify/workflow-embudo-sota-20261010-105856/embudo-sota.html",
+  "specification": {
+    "sha256": "eda77e5cc3fa9630e188837f3f20d8eb56a7002fd3b6783b4315774505223ca1",
+    "bytes": 37346
+  },
+  "artifact": {
+    "sha256": "6fa05bb0c6231141bec3533fb854d03fe972223ba62565743760a435c653527c",
+    "bytes": 774582
+  }
+}
