@@ -21,6 +21,7 @@ the only thing standing between a pilot and a misquote.
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 
@@ -391,13 +392,36 @@ def execution_seed_units() -> "list[int] | None":
 
 # ------------------------------------------------------------------- material
 
-REVISION = "research-concept-r25.md"
+REVISION = "research-concept-r33.md"
 
 #: Every domain supplies its own bags; a transfer names which is source and which
 #: is target. All three hold far more than the 3600 images a domain contributes.
-DOMAINS = {"M": "MNIST", "U": "USPS", "S": "SVHN"}
+#:
+#: Nine more codes join the three digit domains below: `toy.py`'s own synthetic
+#: manifolds, with no pretrained backbone to hide behind. Every measurement of
+#: the adaptation term so far ran under `resnet18` -- 11M ImageNet-pretrained
+#: parameters on 32x32 digit images -- which makes the objection that a bare
+#: normalization statistic is already sufficient unanswerable at that cost: the
+#: backbone is strong enough to absorb almost anything. These three toy families
+#: remove it. Lowercase is a source, uppercase is a translation-only target, and
+#: the digit suffix is a translation+rotation+ambient-noise target -- see
+#: `TOY_TRANSFERS` for which pairs are declared, and `toy.py` for the generator.
+DOMAINS = {
+    "M": "MNIST", "U": "USPS", "S": "SVHN",
+    "r": "SwissRoll", "R": "SwissRollTranslated", "1": "SwissRollRotatedNoisy",
+    "t": "Tori", "T": "ToriTranslated", "2": "ToriRotatedNoisy",
+    "n": "Moons", "N": "MoonsTranslated", "3": "MoonsRotatedNoisy",
+}
 
 TRANSFERS = [("M", "U"), ("U", "M"), ("M", "S"), ("S", "M"), ("U", "S"), ("S", "U")]
+
+#: The toy counterpart of `TRANSFERS`: one source-to-target pair per manifold
+#: family, never mixed across families (a swiss-roll source has no business
+#: adapting to a moons target). `harness.py`'s digit campaign reads `TRANSFERS`
+#: alone and never this list, so declaring it here changes nothing about that
+#: campaign -- these nine domain codes exist for `toy.py`/`bags.py` and the
+#: tests that exercise them, not for the digit grid.
+TOY_TRANSFERS = [("r", "R"), ("r", "1"), ("t", "T"), ("t", "2"), ("n", "N"), ("n", "3")]
 
 CLASSES = 10
 
@@ -440,6 +464,74 @@ TRAIN_BAGS = 64
 VALID_BAGS = 20
 EVAL_BAGS = 36
 
+# -------------------------------------------------------------- toy domains
+
+#: Deterministic from the domain code alone, never from a campaign's own
+#: `seed` -- `bags.rebuild` reconstructs a toy domain from `(domain, seed)`
+#: it is given in the manifest plus whatever `toy.py` generates, and the
+#: generator must therefore answer the same way on every call regardless of
+#: which seed a particular bag draw happened to use. One shared constant
+#: rather than one per family: the three generators consume independent
+#: `numpy.random.Generator` streams of their own (offset by family and by
+#: domain code), so a single seed cannot make two families collide.
+TOY_SEED = 20260925
+
+#: How many points `toy.py` generates for each of a class's `BAGS_PER_CLASS`
+#: subjects. Forced by the funding arithmetic `bags._select` already enforces
+#: for the digit domains, carried over unchanged: a class must offer at least
+#: `BAGS_PER_CLASS * INSTANCES_PER_BAG` images for its own bags plus
+#: `bags._reserve_size(NOISE_CAP)` held back for contamination at the top
+#: rung. With `INSTANCES_PER_BAG = 30`, `BAGS_PER_CLASS = 12`,
+#: `NOISE_ROLES = ("train", "eval")` and `NOISE_CAP = 0.5`:
+#:
+#:     noise_instances(0.5) = 15 per bag
+#:     _noised_bag_count() = TRAIN_BAGS + EVAL_BAGS = 64 + 36 = 100
+#:     reserve = ceil(100 * 15 / CLASSES) + INSTANCES_PER_BAG = 150 + 30 = 180
+#:     needed per class = BAGS_PER_CLASS * INSTANCES_PER_BAG = 360
+#:     360 + 180 = 540, spread over 12 subjects = 45 per subject, exactly
+#:
+#: So 45 is the floor, not a margin above it: a smaller value refuses mid-draw
+#: at the top contamination rung, which `test_toy_domains.py` pins directly
+#: against `bags._reserve_size(NOISE_CAP)` rather than against this number
+#: restated. `toy.py` never hardcodes the per-class total either -- it reads
+#: `BAGS_PER_CLASS * TOY_POINTS_PER_SUBJECT`, so the two cannot drift apart.
+TOY_POINTS_PER_SUBJECT = 45
+
+#: The constant added to every ambient coordinate of a translation-only (`R`,
+#: `T`, `N`) or translation+rotation+noise (`1`, `2`, `3`) target, relative to
+#: a source domain. Large enough that an unadapted model genuinely degrades:
+#: each class is one equal-width band of the manifold parameter (10 bands over
+#: roughly `3*pi ~= 9.4` for the swiss roll, `pi` for one moons branch, `2*pi`
+#: for one torus's major angle), so a shift of this size is several multiples
+#: of a single class's own band width in every family -- large enough to move
+#: a point's *apparent* position past its neighbouring classes' bands, which
+#: is exactly the failure an unadapted encoder cannot see past. A per-coordinate
+#: constant on purpose: `BatchNorm1d`'s running mean can absorb exactly this,
+#: which is the whole point of declaring `R`/`T`/`N` as translation-only targets
+#: a normalization statistic alone should already repair.
+TOY_TRANSLATION_SCALE = 5.0
+
+#: The angle `toy.py` rotates a translation+rotation+noise target (`1`, `2`,
+#: `3`) by, about the manifold's own "width" axis (the swiss roll's height, a
+#: torus's minor angle) so the rotation mixes exactly two of the ambient
+#: coordinates and leaves the third untouched. 45 degrees: a real mixing
+#: rather than a near-identity or a near-reflection, and -- the reason this
+#: axis exists at all -- NOT expressible as a per-coordinate affine map.
+#: `BatchNorm1d` is one scale and one shift per coordinate; a rotation matrix
+#: with a nonzero off-diagonal block cannot be written that way at any angle
+#: other than a multiple of 90 degrees, and 45 sits exactly at the point of
+#: maximum mixing between those multiples.
+TOY_ROTATION_ANGLE = math.pi / 4
+
+#: The standard deviation of the ambient Gaussian noise `toy.py` adds, per
+#: coordinate, only to a translation+rotation+noise target (`1`, `2`, `3`).
+#: Modest relative to a class's own band width in every family (a few percent
+#: of `TOY_TRANSLATION_SCALE`): enough to blur the manifold -- so the rotated
+#: target is not merely a noiseless rigid copy of the source -- without
+#: destroying the class structure the band assignment depends on, which the
+#: generator itself never re-derives after translating/rotating a point.
+TOY_NOISE_SIGMA = 0.3
+
 # ---------------------------------------------------------------- label noise
 
 #: The fraction of a training bag's instances replaced by images of another
@@ -457,14 +549,52 @@ NOISE = 0.0
 
 #: Every level the axis runs over, `0.0` first. The clean campaign is the first
 #: point of the curve rather than a separate document — a second set of notebooks
-#: differing in one parameter forks from the first day.
-NOISE_LEVELS = [0.0, 0.1, 0.2, 0.3, 0.4]
+#: differing in one parameter forks from the first day. The last level, `0.5`,
+#: is the tie `NOISE_CAP` admits: under the single donor `NOISE_PAIRING`
+#: declares for each label, the bag's own class and its paired donor land at
+#: exactly fifteen instances each -- the rung where the label stops being
+#: decidable from composition alone, which is the error this axis exists to
+#: force rather than a side effect of raising the rate far enough.
+NOISE_LEVELS = [0.0, 0.1, 0.2, 0.3, 0.5]
 
-#: Past this the bag's label stops being defensible. Contaminants are drawn from
-#: the other `CLASSES - 1` classes, so the bag's own class remains the plurality
-#: while the rate is under one half; at that point the label is a coin toss and
-#: the curve measures nothing. Declared as a cap and enforced, not left to whoever
-#: edits `NOISE_LEVELS` next.
+#: The one donor class each label's bags are contaminated from. An involution
+#: on the ten classes with no fixed point -- five mutual pairs -- and DERIVED
+#: from confusability in the data rather than chosen from a prior about which
+#: digits look alike, and never from a trained model, because a declaration
+#: must not depend on a run.
+#:
+#: Two independent class-centroid cosine proxies decided it: raw pixels
+#: exactly as the bags hand them to the encoder (no model needed at all), and
+#: the declared backbone's UNTRAINED ImageNet features (closer to what the
+#: encoder actually sees, at the cost of inheriting the backbone choice). Each
+#: proxy is normalized per domain and averaged over the three domains, and the
+#: matching itself is solved exactly rather than approximated -- all 945
+#: perfect matchings on ten classes, enumerated.
+#:
+#: The two proxies disagree on their own optimum, so neither alone is
+#: defensible: the backbone proxy's own winner falls to rank 754 of 945 under
+#: pixels, and declaring it would have declared the proxy rather than the
+#: confusability. The averaged optimum below is the only matching near-optimal
+#: under BOTH -- ranks 2 and 19 of 945 -- and it stays rank 2 under pixels
+#: alone, which matters because that proxy needs no backbone while three are
+#: declared. It carries the two most confusable pairs of the averaged matrix,
+#: 3-5 (cosine distance 0.0546) and 7-9.
+#:
+#:     0-6   1-4   2-8   3-5   7-9
+NOISE_PAIRING = [6, 4, 8, 5, 1, 3, 0, 9, 2, 7]
+
+#: Past this the donor class would outnumber the bag's own and the label would
+#: stop being defensible. Under the single donor `NOISE_PAIRING` declares for
+#: each label, the two counts a composition reader faces are exact:
+#: `rate * INSTANCES_PER_BAG` for the donor against
+#: `(1 - rate) * INSTANCES_PER_BAG` for the bag's own class, so plurality
+#: breaks exactly at one half rather than approximately -- a claim this
+#: docstring made too early once already, back when the donor was still spread
+#: across the other nine classes and the plurality in fact only broke at rho
+#: 0.90. `rate <= NOISE_CAP` admits the tie itself: at 0.5 the two counts are
+#: equal and the bag's own class is still half the evidence, not yet the
+#: minority. Declared as a cap and enforced, not left to whoever edits
+#: `NOISE_LEVELS` next.
 NOISE_CAP = 0.5
 
 #: Which roles the noise reaches: `train` and `eval`, in both domains, with ONE
@@ -493,16 +623,19 @@ NOISE_ROLES = ("train", "eval")
 def noise_instances(rate: float) -> int:
     """How many of a bag's instances a rate replaces.
 
-    Exact at every declared level: the levels are tenths and `INSTANCES_PER_BAG`
-    is thirty, so nothing rounds. Refuses above the cap rather than clamping,
-    because a run silently held at 0.5 while its record says 0.7 is a table
-    nobody can attribute.
+    Exact at every declared level: the levels are tenths and a half, and
+    `INSTANCES_PER_BAG` is thirty, so nothing rounds. Refuses past the cap
+    rather than clamping, because a run silently held at 0.5 while its record
+    says 0.7 is a table nobody can attribute. The cap itself is admitted --
+    `<=`, not `<` -- because at the tie the bag's own class is still half the
+    evidence, which is defensible; one step past it the donor would be the
+    majority and it would stop being.
     """
-    if not 0.0 <= rate < NOISE_CAP:
+    if not 0.0 <= rate <= NOISE_CAP:
         raise ValueError(
-            f"noise rate {rate} is outside [0, {NOISE_CAP}); past the cap the "
-            f"bag's own class stops being the plurality of its instances and its "
-            f"label stops being defensible"
+            f"noise rate {rate} is outside [0, {NOISE_CAP}]; past the cap the "
+            f"donor class would outnumber the bag's own and its label would "
+            f"stop being defensible"
         )
     return round(rate * INSTANCES_PER_BAG)
 
@@ -533,8 +666,46 @@ NOISE_TRANSFER = ("M", "U")
 
 # -------------------------------------------------------------------- network
 
+#: `"resnet18"`/`"resnet50"`/`"vit_tiny_patch16_224"` build `CREDA.models.
+#: FeatureExtractor` exactly as before; `"mlp"`/`"mlp-nobn"` (`mlp.py`, read by
+#: `wiring._resolve_encoder`) build a small plain MLP instead, for the toy
+#: domains above -- the two differ in EXACTLY their `BatchNorm1d` layers and
+#: nothing else, which is the whole instrument this pair of backbones exists
+#: to be: if a normalization statistic alone already recovers a translated
+#: target, `"mlp"` should and `"mlp-nobn"` should not.
 BACKBONE = "resnet18"
 PRETRAINED = True          # ImageNet weights, identical on both sides
+
+#: The MLP backbones' hidden width. Deliberately small -- toy domains are meant
+#: to be solved by the method's own kernels, never brute-forced by backbone
+#: capacity the way an 11M-parameter ImageNet resnet can.
+#:
+#: Thirty-two, and the number is MEASURED rather than chosen. Swept 8/16/32/64/128
+#: over three seeds, reading source-against-source accuracy for BOTH backbone
+#: variants, since what makes the pair a fair instrument is that NEITHER variant
+#: is left unable to learn its own domain. Criterion: maximise the WORSE of the
+#: two, breaking ties on the smaller gap. Measured (worse-of-two, by width):
+#:   toroides  0.852 / 0.917 / 0.926 / 0.907 / 0.917
+#:   rollo     0.806 / 0.889 / 0.880 / 0.870 / 0.815
+#:   lunas     0.806 / 0.815 / 0.824 / 0.796 / 0.787
+#: So 8 is too small and 128 too large in all three, while 16, 32 and 64 are
+#: indistinguishable inside a dispersion of +-0.013 to +-0.082. One width for all
+#: three columns rather than three per-column values: nothing in the measurement
+#: justifies differentiating them, and a single value removes a free parameter
+#: instead of adding three decisions to defend. Thirty-two is the toroides' own
+#: best and the other two accept it at no measurable cost.
+#:
+#: The gap between the two variants runs -0.065 to +0.074 across all fifteen
+#: (dataset, width) cells with no systematic direction, which is the evidence
+#: that giving both the identical architecture is fair: the variant without
+#: BatchNorm is not handicapped at LEARNING, only at transferring.
+MLP_HIDDEN_WIDTH = 32
+
+#: The MLP backbones' `output_dim`, read by every caller that already reads
+#: `FeatureExtractor.output_dim` (`Arm.head`, `self.creda`'s instance reshape,
+#: and `Arm.encoder.output_dim` elsewhere) -- half the hidden width, for the same
+#: reason `MLP_HIDDEN_WIDTH` is small.
+MLP_OUTPUT_DIM = 16
 
 #: Cada cuantos pasos del optimizador los parametros de `theta_s` se transmiten
 #: a `theta_t`. Procedimiento de ENTRENAMIENTO, no matematica: la Ec. (13) sigue
@@ -662,6 +833,35 @@ TAU_LOCAL = 1.0
 #: rather than asserting they must agree.
 KERNEL_SIGMA = 36.135014304860874
 
+#: Whether the instance kernel kappa^I (Eq. 14) evaluates on the L2-normalized
+#: instance embedding rather than the raw one `Arm.instance_embeddings` hands
+#: it. `KERNEL_SIGMA` above is a constant CHOSEN BEFORE TRAINING, and the
+#: kernel's regime is set by the ratio of the embedding's own scale to that
+#: constant -- a ratio training is free to move. Measured on toy datasets this
+#: session: the trained encoder's median instance-embedding distance ended at
+#: 7.03 with BatchNorm and 38.97 without -- same architecture, same data, a
+#: 5.5x drift -- and two of six cells ended with a dead or saturated kernel
+#: because of it.
+#:
+#: Normalizing bounds ||h - h'||^2 to [0, 4] by construction, which pins the
+#: scale this sigma governs. But a global normalization would also change
+#: what the classification head eats (Eq. 19's `z = sum_a beta_a h_a`, read
+#: by `self.head`), and the head is the one consumer that wants the scale
+#: free -- so this flag governs only the kernel's own view of the embedding;
+#: see `Arm._kernel_embedding` for the fork and every routed call site.
+#:
+#: Run-level, never per-arm: a per-arm flag would let two adjacent rungs of
+#: the ablation ladder differ in the component under test AND in the
+#: normalization, so no difference between them could be attributed to
+#: either one -- the same confound this repository already walked into once
+#: with the learning rate.
+#:
+#: Defaulted to the CURRENT behaviour (off, not normalized) so every existing
+#: number stays reproducible and the full suite stays green with no flag set;
+#: `test_kernel_normalization.py`'s own bit-identical-with-the-flag-off test
+#: is what a later change to this default has to keep passing.
+NORMALIZE_KERNEL_EMBEDDING = False
+
 #: The stabilizer inside a logarithm, shared by two call sites rather than
 #: private to either: `wiring.py` passes it as eps_src, `source_loss`'s (and
 #: `source_bound`'s) own stabilizer for Eq. (21) -- what fixes B_src's scale --
@@ -672,16 +872,84 @@ KERNEL_SIGMA = 36.135014304860874
 #: `wiring.py`'s `source_loss(..., config.EPSILON)`.
 EPSILON = 1e-8
 
-#: eps_loc: the stabilizer of Eq. (38)'s `local_loss`, declared here rather
-#: than left at that function's own default. `local_loss(squared_distances,
-#: target_weights, epsilon=1e-8)` has a default of its own -- one a caller
-#: could omit without anyone noticing which value governed the run. Passing
-#: this explicitly from `wiring.py` is what makes the number a declared fact
-#: of the comparison rather than an implicit one; it happens to equal
-#: `EPSILON` today, and the two are kept as separate names because they
-#: stabilize two different equations and nothing requires them to move
-#: together.
+#: The stabilizer of the DISPERSION probe's divisor, and nothing else.
+#:
+#: **It was `eps_loc`, Eq. (38)'s own stabilizer, until 2026-10-18.** r32
+#: replaced that equation's confidence-weighted quotient with the uniform mean
+#: `(1/N_t) sum_j l_loc,j`, so there is no `sum_j w_j^t` left to keep away from
+#: zero and `eps_loc` left the formulation with it. `local_loss` no longer
+#: takes an epsilon at all, which is why no call site passes this any more.
+#:
+#: What still reads it is `wiring._dispersion_normalized_local_term`, where the
+#: divisor is a MEASURED dispersion that genuinely can reach zero -- that is
+#: the regime the probe exists to visit. Kept as its own name rather than
+#: folded into `EPSILON`: that one stabilizes Eq. (21)'s logarithm, this one a
+#: probe's denominator, and nothing requires them to move together.
 EPSILON_LOCAL = 1e-8
+
+#: Whether the local term's first half (Eq. (38)'s `l_loc,j`) normalizes
+#: `d_j^2 = ||Psi(B_j^t) - mu_j^s||^2` by the target representations' own
+#: MEASURED DISPERSION instead of the revision's constant 2.
+#:
+#: r25:1047 proves `<Psi, mu> > 0` (every inner product in H_I is strictly
+#: positive and both are convex combinations with non-negative weights),
+#: hence `d_j^2 < 2` -- the tight bound `normalized_local_distance` divides
+#: by. That bound stops the term from DIVERGING; it does nothing to stop it
+#: from DEGENERATING. Minimizing `d_j^2` alone has a degenerate global
+#: minimum: collapse every bag representation to one point in H_I and
+#: `d_j^2 -> 0` for every bag, a perfect local score carrying zero
+#: information. Dividing by a constant does not move where that minimum
+#: sits -- only WHAT is in the denominator can.
+#:
+#: Measured, without BatchNorm, on the target embedding's covariance
+#: participation ratio (1 = all variance in one direction, 16 = isotropic):
+#:
+#:              B      E      F      G
+#:     rollo    2.09   2.09   2.09   1.74
+#:     toroides 2.55   2.56   2.56   1.07
+#:     lunas    1.32   1.32   1.32   1.15
+#:
+#: `E` and `F` leave it bit-identical to the floor; only `G` -- the arm
+#: carrying the local term -- lowers it, and on the rollo it does so while
+#: LOSING transfer accuracy against the floor (0.4722 -> 0.2222). The
+#: remedy this flag probes: normalize `d_j^2` by the bags' actual spread
+#: rather than the constant bound, so collapse shrinks the numerator and
+#: the denominator together instead of paying for free.
+#:
+#: **The denominator carries gradient. It must.** `wiring._target_dispersion`
+#: is NOT detached: with `L = d_j^2 / D` and `D` detached, descent on `d_j^2`
+#: alone is scaled by `1/D`, which EXPLODES as the cloud collapses (`D -> 0`)
+#: -- a detached denominator is a positive feedback loop into the exact
+#: collapse this flag exists to resist, not merely an inert rescaling. Live,
+#: a second gradient term appears that pushes to INCREASE `D`; that term is
+#: the entire remedy. See `wiring._target_dispersion`'s own docstring for the
+#: full derivation, and `tests/test_local_dispersion.py`'s own
+#: `test_the_dispersion_denominator_carries_gradient_and_resists_collapse`
+#: for the measurement.
+#:
+#: **This is a PROBE on the harness side, not a change to the mathematics.**
+#: `MIL_CREDA.local_term.normalized_local_distance` is never touched, stays
+#: bound to Eq. (38), and keeps running by default (flag off). And the cost
+#: is paid in the open, not hidden behind the probe succeeding: dividing by
+#: a MEASURED dispersion instead of the declared constant 2 LOSES Eq. (38)'s
+#: `[0, 1]` guarantee -- the ratio is unbounded above whenever the measured
+#: dispersion is small, which is exactly the regime a probe of collapse has
+#: to visit. `wiring._milcreda_term` restates this at the call site and
+#: applies no clamp; if this probe ever earned a remedy, the lost bound is
+#: part of what a deliberation would have to decide about, not a detail to
+#: paper over here.
+#:
+#: Run-level, never per-arm, for the same reason `NORMALIZE_KERNEL_EMBEDDING`
+#: above is one: a per-arm flag would make two adjacent rungs of the ladder
+#: differ in the component under test AND in the normalization, so no
+#: difference between them could be attributed to either one.
+#:
+#: Defaulted to the CURRENT behaviour (off, divide by the constant 2) so
+#: every number measured so far stays reproducible and the full suite stays
+#: green with no flag set; the bit-identical-with-the-flag-off invariant in
+#: `tests/test_local_dispersion.py` is what a later change to this default
+#: has to keep passing.
+NORMALIZE_LOCAL_BY_DISPERSION = False
 
 # ------------------------------------------------------- schedules, shared by all
 
@@ -1704,6 +1972,21 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "dibuja una cota del objetivo medida sobre `tests/sweep.py` y no sobre "
         "una corrida: no hay material contaminado, ni forma, ni escala que "
         "llevar, asi que el archivo es uno por repositorio y no uno por corrida"),
+    # Los dos cuadernos que `steps.CUADERNOS_SIN_PASO` declara sin paso dejan su
+    # salida al lado suyo, y por eso la componen a mano. La razon es la misma
+    # para los tres destinos y vale la pena decirla una vez: estos archivos
+    # llevan su escala ADENTRO, como campos (`epocas`, `semillas`, `tasas`, y la
+    # huella de la sintonizacion), y al abrirlos el cuaderno compara esos campos
+    # contra los suyos y descarta el archivo ENTERO si no coinciden. Una
+    # coordenada en la ruta serviria para tener dos archivos a la vez; lo que
+    # estos cuadernos necesitan es lo contrario, que una corrida de otra escala
+    # no se pueda reanudar ni mezclar fila por fila.
+    "Ablation_Ladder.ipynb: REPOSITORY / 'MIL-CREDA' / 'Notebooks' / 'ablation_ladder.json'": (
+        "la escalera de ablacion no es un producto declarado: no escribe bajo "
+        "`results_for(...)` y su salida la lee una persona al lado del "
+        "cuaderno. El archivo guarda `epocas`, `semillas` y `tasas`, y el "
+        "cuaderno lo descarta entero cuando no coinciden con los suyos, asi "
+        "que la escala esta adentro del archivo y no en su nombre"),
     "steps.py: config.PRODUCT": (
         "no es un destino sino la raiz contra la que `entradas_faltantes` "
         "resuelve las raices que un paso DECLARA en `reads`, que ya vienen "
@@ -1733,6 +2016,35 @@ DESTINOS_SIN_COORDENADA: dict[str, str] = {
         "que este stretch posea (ver el mapa de propiedad del cambio), asi que "
         "si una figura de ensayo y una de la corrida completa debieran vivir "
         "aparte, corregirlo es trabajo de quien sea dueno de ese cuaderno"),
+    "Toyset_Plot.ipynb: ROOT / 'MIL-CREDA' / 'Notebooks' / 'toy_figures'": (
+        "el directorio de la figura de las tres familias duras de CREDA con "
+        "cada clase partida en bolsas. No lleva coordenada porque no hay "
+        "corrida que coordinar: ese cuaderno no entrena, no compara los "
+        "dominios de `DOMAINS` y no escribe nada bajo `results_for(...)`, asi "
+        "que no tiene escala, ni tasa de ruido, ni clase de corrida con que "
+        "nombrarse. La figura se redibuja entera en cada ejecucion desde los "
+        "generadores de `CREDA.toy_experiment`, de modo que no hay dos "
+        "versiones entre las cuales elegir, y una coordenada en la ruta "
+        "dejaria figuras viejas en el arbol diciendo algo distinto de la tabla "
+        "que esta arriba de ellas.\n\n"
+        "Anclar la ruta en `steps.CUADERNOS` en vez de acá habria esquivado "
+        "este control entero --- sin raiz de `config` y sin segmento de "
+        "producto, el destino no se deriva --- y por eso no se hizo: seria "
+        "esconder un destino de salida nuevo detras de una declaracion sobre "
+        "donde viven los cuadernos, que es el silencio que este control existe "
+        "para impedir"),
+    "toy_run.py: root / 'MIL-CREDA' / 'Results' / 'Toyset' / scale.name": (
+        "el artefacto del toyset, y es el unico de esta lista que SI lleva "
+        "coordenada: `scale.name` es `pilot` o `full`, de modo que una corrida "
+        "de ensayo no puede pisar a una completa ni mezclarse fila por fila "
+        "con ella. Lo que lo trae aca es componerse a mano en vez de pasar por "
+        "`results_for(...)`, y eso es deliberado: `results_for` lleva TRES "
+        "coordenadas --- tasa de ruido, clase de corrida y ensayo --- que son "
+        "las de la campana de digitos, y dos de ellas no existen de este lado. "
+        "El toyset no tiene eje de contaminacion y no compara los dominios de "
+        "`DOMAINS`, asi que pasar por ahi obligaria a inventarle una tasa y "
+        "una clase de corrida para que el nombre saliera, y un cero inventado "
+        "en una ruta se lee despues como un cero medido"),
 }
 
 

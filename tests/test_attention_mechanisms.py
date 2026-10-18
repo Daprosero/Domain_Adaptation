@@ -28,17 +28,27 @@ def _bag(m: int = 5, d: int = 4) -> torch.Tensor:
 
 # ------------------------------------------------------------------------ ours
 
-def test_ours_is_eq15s_hybrid_with_the_l1_ball_reparametrization() -> None:
+def test_ours_is_eq15s_hybrid_with_the_l1_ball_projection() -> None:
     """`"ours"` is exactly `MIL_CREDA.attention.relevance_logits` -- the
     hybrid of `R_phi` (l1-ball-constrained `v_R`) plus `gamma` times the
     consensus term -- recomputed here from the same primitives
     `relevance_logits` itself is built from, never by calling
     `mechanism_weights` and comparing it to itself.
 
-    Reachable red: `mechanism_weights("ours", ...)` reading `v_R` raw
-    (skipping the l1-ball reparametrization), or dropping the consensus term.
+    **This test had been red since r31 landed, and the rename is the repair.**
+    It imported `_l1_ball_reparametrization`, which divided `v_R` by
+    `max(1, ||v_R||_1)` INSIDE the forward -- r30's form. r31 states
+    `||v_R||_1 <= 1` as a CONSTRAINT and maintains it by projecting after each
+    optimizer step, so the forward reads the raw parameter and the helper
+    became `project_onto_l1_ball`, which mutates in place and returns whether
+    it bound. The import failed outright; this file was carrying an
+    `ImportError`, not a weaker check.
+
+    Reachable red: `mechanism_weights("ours", ...)` dropping the consensus
+    term, or reading a `v_R` outside the ball -- the projection below is what
+    puts the fixture's own `v_R` inside it.
     """
-    from MIL_CREDA.attention import _l1_ball_reparametrization, gaussian_kernel
+    from MIL_CREDA.attention import gaussian_kernel, project_onto_l1_ball
 
     H = _bag()
     V_R = torch.randn(3, H.shape[1])
@@ -46,9 +56,12 @@ def test_ours_is_eq15s_hybrid_with_the_l1_ball_reparametrization() -> None:
     v_R = torch.randn(3)
     gamma, sigma, tau = 0.7, 2.0, 1.3
 
-    v_tilde = _l1_ball_reparametrization(v_R)
+    # r31's maintenance, applied once before the forward, exactly as the arm's
+    # constructor does it: the forward then reads the parameter itself.
+    project_onto_l1_ball(v_R)
+    assert float(v_R.abs().sum()) <= 1.0 + 1e-6
     hidden = torch.tanh(H @ V_R.transpose(0, 1) + b_R)
-    relevance = hidden @ v_tilde
+    relevance = hidden @ v_R
     K = gaussian_kernel(H, H, sigma)
     consensus = K.sum(dim=1) / H.shape[0]
     logits = relevance + gamma * consensus

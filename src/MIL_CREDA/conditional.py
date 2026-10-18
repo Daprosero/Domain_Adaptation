@@ -15,13 +15,18 @@ import torch
 from MIL_CREDA import as_index, as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r25.md",
+    "revision": "research-concept-r33.md",
     "sections": ["3"],
     "equations": ["23", "25", "26", "27"],
     "invariants": [
         "weighted_target_equals_diagonal_congruence",
         "source_block_never_weighted",
         "mixed_matrix_symmetric_psd",
+        # The axis `weighted_blocks` used to pin with no name. See its
+        # docstring for what each pole decides.
+        "weight_cross_block_off_leaves_the_cross_block_unweighted",
+        "weight_cross_block_freezes_a_zero_confidence_bag",
+        "weight_cross_block_defaults_to_the_axis_value_creda_declares",
     ],
 }
 
@@ -53,15 +58,43 @@ def conditional_blocks(
 
 
 def weighted_blocks(
-    K_st_c: torch.Tensor, K_t_c: torch.Tensor, target_weights: torch.Tensor
+    K_st_c: torch.Tensor,
+    K_t_c: torch.Tensor,
+    target_weights: torch.Tensor,
+    *,
+    weight_cross_block: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Implement Eq. (26): K~_c^t = D K_c^t D and K~_c^{st} = K_c^{st} D.
 
     `D` is the diagonal matrix of Eq. (25) built from the confidences of the
     target bags of this class. The source block is deliberately absent here.
+
+    **`weight_cross_block` is an axis, and it used to be pinned here with no
+    name.** `True` -- the default -- is what r31 describes and what is
+    published: the weight enters the CROSS block too, from the right and only
+    on the target side, since rows of `K_c^{st}` are source bags and columns
+    are target bags. `False` is CREDA's original (`CREDALoss`'s own default),
+    which weights the target block and feeds the cross block in raw.
+
+    **The difference is not cosmetic, and it is not a tightening either.** With
+    the cross block weighted, a bag of confidence zero has its row and column
+    emptied out of BOTH blocks that reach it, so the global term's gradient
+    with respect to that bag is exactly zero and the bag stays FROZEN where it
+    is. Without, the cross block still reaches it and the term can still repair
+    it. CREDA names this the axis separating *who defines the geometry* from
+    *whom the term repairs*, and observes that one number decides both when the
+    opposite would suit each. Nothing here chooses between them; what this
+    parameter buys is that a run can say which one it used.
+
+    Under `False` the cross block is returned as it arrived -- not a clone, the
+    same tensor `as_tensor` hands back -- so the setting costs nothing when it
+    is off. The target block is weighted either way: Eq. (26)'s congruence on
+    `K_c^t` is not what this axis is about.
     """
     D = torch.diag(as_tensor(target_weights).reshape(-1))
-    return as_tensor(K_st_c) @ D, D @ as_tensor(K_t_c) @ D
+    K_st_c = as_tensor(K_st_c)
+    cross = K_st_c @ D if weight_cross_block else K_st_c
+    return cross, D @ as_tensor(K_t_c) @ D
 
 
 def mixed_matrix(

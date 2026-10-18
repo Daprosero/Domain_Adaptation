@@ -10,7 +10,7 @@ penalizing -- a collapse invisible in `targetAccuracy` alone. The same
 sentence that prescribes the instrument excludes a different one that looks
 similar and does not detect this case (the intra-bag attention collapse), and
 a third candidate elsewhere in this codebase (the per-class weighted
-`H_target` inside `global_term.dependency_score`) is excluded for an
+`H_target` inside the per-class score) is excluded for an
 independent reason: it cannot see a collapse uniform across classes.
 
 Level 2 tests (4.1.1-4.1.4) exercise `wiring._target_bag_entropy` directly,
@@ -34,7 +34,7 @@ from MIL_CREDA import DTYPE
 from MIL_CREDA.attention import effective_bag_size, uniform_self_similarity
 from MIL_CREDA.bag_kernel import bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix
-from MIL_CREDA.global_term import dependency_score, is_active
+from MIL_CREDA.global_term import balanced_dependency_score, is_active
 from MIL_CREDA_Benchmark import config, harness, wiring
 
 SIGMA = 1.5
@@ -141,7 +141,7 @@ def _bag(center: torch.Tensor, m: int, seed: int) -> tuple[torch.Tensor, torch.T
 
 def test_a_class_uniform_pseudo_label_collapse_defeats_the_per_class_reading() -> None:
     """Spec `target-degeneracy-diagnostic`, "The per-class weighted `H_target`
-    inside `dependency_score` MUST NOT substitute...", scenario "A
+    inside the per-class score MUST NOT substitute...", scenario "A
     class-uniform collapse defeats the per-class reading but not the
     required instrument": every target bag's hard pseudo-label collapses to
     the SAME class (here, by construction rather than through a trained
@@ -152,9 +152,9 @@ def test_a_class_uniform_pseudo_label_collapse_defeats_the_per_class_reading() -
     The required diagnostic reads its minimum (every target bag is the
     identical bag, so `K_tt` is exactly rank one). The per-class loop
     `_milcreda_term` runs (mirrored here over the same public functions,
-    `conditional_blocks`/`mixed_matrix`/`is_active`/`dependency_score`) finds
+    `conditional_blocks`/`mixed_matrix`/`is_active`/the score) finds
     target bags in exactly ONE class -- `C_act` has shrunk to a single class,
-    the collapse `dependency_score`'s per-class reading cannot characterize
+    the collapse the per-class reading cannot characterize
     on its own, demonstrating the required diagnostic is not redundant with
     it. Measured numerically before being pinned: with three declared
     classes and a target pseudo-label collapsed to one of them, exactly one
@@ -201,7 +201,11 @@ def test_a_class_uniform_pseudo_label_collapse_defeats_the_per_class_reading() -
         K_mix = mixed_matrix(K_s_c, K_st_c, K_t_c)
         if not is_active(K_s_c, K_t_c, K_mix):
             continue
-        losses.append(dependency_score(K_s_c, K_t_c, K_mix))
+        # r33's score. It was r25's `dependency_score` until 2026-10-18, when
+        # that function was removed with the ends it was bounded by; this
+        # assertion is about how many classes stay ACTIVE, not about either
+        # score's value, so the substitution leaves the claim untouched.
+        losses.append(balanced_dependency_score(K_s_c, K_st_c, K_t_c))
 
     assert len(losses) == 1, (
         "the per-class loop should have at most one active class once every "

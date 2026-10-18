@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from MIL_CREDA.local_term import local_loss
 from MIL_CREDA_Benchmark import config, harness, wiring
 
 CLASSES = config.CLASSES
@@ -201,16 +202,25 @@ def test_weights_for_reads_the_arms_own_gamma_and_temperature(encoder) -> None:
     )
 
 
-def test_local_loss_reads_the_declared_local_stabilizer(encoder, monkeypatch) -> None:
-    """Defect (h): `local_loss`'s epsilon (Eq. 38's stabilizer) is passed
-    explicitly from `config.EPSILON_LOCAL` in `_milcreda_term`, rather than
-    silently falling through to the method's own `epsilon=1e-8` default --
-    a value a caller could omit without anyone noticing which number
-    governed the run.
+def test_the_local_term_no_longer_reads_a_stabilizer(encoder, monkeypatch) -> None:
+    """**The inverse of what this asserted until 2026-10-18.**
 
-    Patched to something far from the true default so a mutant that dropped
-    the explicit argument (falling back to the function's own default) would
-    read differently and this test would catch it.
+    It was defect (h)'s test: `local_loss`'s epsilon -- Eq. (38)'s stabilizer
+    -- had to be passed explicitly from `config.EPSILON_LOCAL` rather than
+    falling through to the function's own default, so the number governing a
+    run was a declared fact. That was right while the equation had a
+    denominator to stabilize.
+
+    r32 made Eq. (38) the uniform mean `(1/N_t) sum_j l_loc,j`. There is no
+    `sum_j w_j^t` left to keep away from zero, `eps_loc` left the formulation
+    with it, and `local_loss` takes no epsilon at all. So the claim inverts:
+    patching `config.EPSILON_LOCAL` must now change NOTHING in the local term,
+    because the only thing that still reads that constant is
+    `wiring._dispersion_normalized_local_term`, the probe behind
+    `config.NORMALIZE_LOCAL_BY_DISPERSION` -- which is off here.
+
+    Patched to the same value the old test used, 0.5, which is far enough from
+    1e-8 that a local term still reading it could not come back equal.
     """
     arm = _arm("G")
     x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
@@ -219,17 +229,26 @@ def test_local_loss_reads_the_declared_local_stabilizer(encoder, monkeypatch) ->
     embeddings = arm.instance_embeddings(x)
     target = arm.target.take(arm._draw_target(generator))
 
+    assert config.NORMALIZE_LOCAL_BY_DISPERSION is False, (
+        "the probe is the one consumer of EPSILON_LOCAL left, so a test of "
+        "the default path has to run with it off"
+    )
+
     monkeypatch.setattr(config, "EPSILON_LOCAL", 1e-8)
     _, local_default = arm._milcreda_term(embeddings, y, target)
 
     monkeypatch.setattr(config, "EPSILON_LOCAL", 0.5)
     _, local_patched = arm._milcreda_term(embeddings, y, target)
 
-    assert local_default.detach().item() != pytest.approx(
-        local_patched.detach().item()), (
-        "the local term did not move when config.EPSILON_LOCAL changed -- "
-        "local_loss is not reading it"
+    assert torch.equal(local_default, local_patched), (
+        f"the local term moved when config.EPSILON_LOCAL changed: "
+        f"{local_default!r} against {local_patched!r}. Eq. (38) has no "
+        f"stabilizer since r32, so something is still reading that constant "
+        f"on the default path"
     )
+    # And the signature is the other half: a stabilizer cannot arrive at all.
+    assert 'epsilon' not in local_loss.__code__.co_varnames
+    assert 'target_weights' not in local_loss.__code__.co_varnames
 
 
 def test_every_sigma_consumer_receives_the_one_declared_constant(
@@ -308,6 +327,97 @@ def test_every_sigma_consumer_receives_the_one_declared_constant(
             f"{name} was called with sigma={sigma!r}, not the declared "
             f"constant {config.KERNEL_SIGMA!r}"
         )
+
+
+def test_every_sigma_consumer_receives_the_same_one_whatever_it_is(
+        encoder, monkeypatch) -> None:
+    """r25 line 732's own claim, and only that one: "Un unico ancho de banda
+    sigma gobierna los tres bloques, ya que los tres derivan del mismo kernel
+    de instancia". Every consumer receives ONE value -- not a per-call
+    recomputation, not a scaled copy in one block -- and this test says
+    nothing about WHERE that value came from.
+
+    Split out of `test_every_sigma_consumer_receives_the_one_declared_constant`
+    because that test bundles two claims under one assertion. `assert sigma ==
+    config.KERNEL_SIGMA` checks the sharing only as a side effect of checking
+    the source, so it cannot distinguish "two blocks disagree" from "the value
+    is not the declared constant" -- and the second of those is no longer a
+    recorded agreement, having been reversed for a provenance defect: neither
+    r21 nor r25 ever states that sigma is a constant hyperparameter, and r25
+    declares exactly gamma and tau_att fixed during training.
+
+    Built with a bandwidth DELIBERATELY unequal to `config.KERNEL_SIGMA`, which
+    is what makes this a different test rather than a copy: it passes on a value
+    the declared-constant test would reject, so the two claims are demonstrably
+    separable. The same property is what lets this one survive a bandwidth that
+    is a learned parameter rather than a constant, should one ever arrive.
+
+    Reachable red: scale `sigma` at any single consumer in `_milcreda_term`,
+    `bag_representations` or `local_distance` -- e.g. `bag_kernel_matrix(bags_s,
+    bags_s, sigma * 2)` -- which this catches while leaving the sharing of
+    every other consumer untouched.
+    """
+    import MIL_CREDA.attention as attention_module
+    import MIL_CREDA.bag_kernel as bag_kernel_module
+
+    seen: list[tuple[str, object]] = []
+
+    real_relevance_logits = attention_module.relevance_logits
+
+    def spy_relevance_logits(H, V_R, b_R, v_R, gamma, sigma):
+        seen.append(("relevance_logits", sigma))
+        return real_relevance_logits(H, V_R, b_R, v_R, gamma, sigma)
+
+    real_bag_kernel_matrix = bag_kernel_module.bag_kernel_matrix
+
+    def spy_bag_kernel_matrix(rows, cols, sigma):
+        seen.append(("bag_kernel_matrix", sigma))
+        return real_bag_kernel_matrix(rows, cols, sigma)
+
+    real_bag_kernel = bag_kernel_module.bag_kernel
+
+    def spy_bag_kernel(H_u, w_u, H_v, w_v, sigma):
+        seen.append(("bag_kernel", sigma))
+        return real_bag_kernel(H_u, w_u, H_v, w_v, sigma)
+
+    monkeypatch.setattr(wiring, "relevance_logits", spy_relevance_logits)
+    monkeypatch.setattr(wiring, "bag_kernel_matrix", spy_bag_kernel_matrix)
+    monkeypatch.setattr(wiring, "bag_kernel", spy_bag_kernel)
+
+    # Not the declared constant, on purpose -- see the docstring.
+    foreign = config.KERNEL_SIGMA * 2.5
+    assert foreign != config.KERNEL_SIGMA, "the override has to differ to mean anything"
+
+    torch.manual_seed(11)
+    arm = wiring.build("G", CLASSES, _pool(1), _pool(2),
+                       hyper={"kernelSigma": foreign})
+    x = arm.source.take(torch.arange(config.BAGS_PER_STEP))
+    y = arm.source.labels[:config.BAGS_PER_STEP]
+    arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
+    # The evaluation path too: `harness.accuracy` calls `model(x)` and never
+    # `training_step`, so a drift confined to `forward` would escape otherwise.
+    arm(x)
+
+    assert seen, "no sigma consumer was ever called"
+    consumers = {name for name, _ in seen}
+    assert consumers >= {"relevance_logits", "bag_kernel_matrix", "bag_kernel"}
+
+    # ONE value across every consumer. Compared as a float rather than by
+    # identity so a bandwidth carried as a zero-dimensional tensor reads the
+    # same as one carried as a float.
+    first_name, first_sigma = seen[0]
+    for name, sigma in seen:
+        assert float(sigma) == float(first_sigma), (
+            f"{name} was called with sigma={sigma!r} while {first_name} was "
+            f"called with {first_sigma!r}: the three blocks no longer share "
+            f"one bandwidth"
+        )
+    # And it is the one this arm was built with, so the sharing is not the
+    # vacuous kind where every consumer independently read the same global.
+    assert float(first_sigma) == foreign, (
+        f"the arm was built with sigma={foreign!r} and its consumers saw "
+        f"{first_sigma!r}: the override never reached them"
+    )
 
 
 class _FakeDataset:

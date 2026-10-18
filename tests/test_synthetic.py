@@ -13,7 +13,12 @@ from MIL_CREDA import DTYPE
 from MIL_CREDA.bag_kernel import bag_kernel, bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix, weighted_blocks
 from MIL_CREDA.confidence import confidences
-from MIL_CREDA.global_term import class_global_loss, conservative_bounds, dependency_score
+from MIL_CREDA.global_term import (
+    balanced_dependency_score,
+    balanced_mixture,
+    class_global_loss_cosh,
+)
+from MIL_CREDA.renyi import quadratic_entropy
 from MIL_CREDA.local_term import class_correspondence, local_distance, local_loss
 
 SEED = 20260810
@@ -43,36 +48,49 @@ def test_aligned_domains_score_better_than_shifted_ones() -> None:
             K_ss, K_st, K_tt, torch.arange(n_s), torch.arange(n_t)
         )
         K_st_w, K_t_w = weighted_blocks(K_st_c, K_t_c, w)
-        score = dependency_score(K_s_c, K_t_w, mixed_matrix(K_s_c, K_st_w, K_t_w))
-        return class_global_loss(score, *conservative_bounds(n_s, n_t))
+        # r33's path, which is the one the consumer runs. It was r25's
+        # `dependency_score`/`conservative_bounds`/`class_global_loss` until
+        # 2026-10-18; those three were removed with the ends they computed, and
+        # the EXPECTATION above is about the formulation rather than about
+        # either map, so it moved rather than being deleted.
+        breve_s, breve_t, _ = balanced_mixture(K_s_c, K_st_w, K_t_w)
+        score = balanced_dependency_score(K_s_c, K_st_w, K_t_w)
+        return class_global_loss_cosh(
+            score, quadratic_entropy(breve_s), quadratic_entropy(breve_t))
 
     aligned = torch.stack([class_loss(0.0) for _ in range(20)]).mean()
     shifted = torch.stack([class_loss(3.0) for _ in range(20)]).mean()
     assert float(aligned) < float(shifted)
 
 
-def test_confident_predictions_dominate_the_local_aggregate() -> None:
-    """Expectation: in Eq. (38) a target bag with near-zero confidence contributes
-    almost nothing, so replacing its distance by a much larger one barely moves
-    the aggregate, while doing the same on a confident bag moves it clearly.
+def test_the_local_aggregate_ignores_the_confidences() -> None:
+    """Expectation: in r33's Eq. (38) the aggregate is the UNIFORM mean, so
+    moving one bag's distance moves it by the same amount whichever bag it is,
+    and lowering a bag's confidence changes nothing at all.
 
-    Stated before running: w_j^t controls each subject's external participation.
+    Stated before running: `w_j^t` left Eq. (38) at r32, because it is a
+    differentiable function of the classifier's outputs -- a weight the model
+    computes can be lowered on the worst-aligned subject instead of aligning
+    it. This test replaces one that asserted the OPPOSITE claim (a near-zero
+    confidence bag barely moved the aggregate), which was true of r31 and is
+    the behaviour r33 removed.
     """
     rng = Sampler(SEED)
     C = 4
-    scores = simplex_rows(rng, 2, C)
     confident = torch.zeros(C, dtype=DTYPE)
     confident[0] = 1.0
     unconfident = torch.full((C,), 1.0 / C, dtype=DTYPE)
     w = confidences(torch.stack([confident, unconfident]))
     assert float(w[0]) > 0.99 and float(w[1]) < 0.01
-    assert scores.shape == (2, C)
 
-    baseline = local_loss(torch.tensor([0.5, 0.5], dtype=DTYPE), w)
-    moved_unconfident = local_loss(torch.tensor([0.5, 3.5], dtype=DTYPE), w)
-    moved_confident = local_loss(torch.tensor([3.5, 0.5], dtype=DTYPE), w)
-    assert abs(float(moved_unconfident - baseline)) < 0.01
-    assert float(moved_confident - baseline) > 0.5
+    baseline = local_loss(torch.tensor([0.5, 0.5], dtype=DTYPE))
+    moved_first = local_loss(torch.tensor([3.5, 0.5], dtype=DTYPE))
+    moved_second = local_loss(torch.tensor([0.5, 3.5], dtype=DTYPE))
+    # Same move, same effect: under r31 the second of these was ~0.
+    assert allclose(moved_first, moved_second)
+    assert float(moved_first - baseline) > 0.5
+    # And the confidences cannot enter: `local_loss` has nowhere to take them.
+    assert 'target_weights' not in local_loss.__code__.co_varnames
 
 
 def test_correspondence_concentrates_on_the_most_similar_subject() -> None:
@@ -112,4 +130,4 @@ def test_target_matching_its_reference_has_no_local_penalty() -> None:
     pi = torch.tensor([0.0, 1.0, 0.0], dtype=DTYPE)
     d2 = local_distance(bag_kernel(H_t, w_t, H_t, w_t, SIGMA), cross, K_ss, pi)
     assert abs(float(d2)) < 1e-9
-    assert float(local_loss(d2.reshape(1), torch.ones(1, dtype=DTYPE))) < 1e-9
+    assert float(local_loss(d2.reshape(1))) < 1e-9
