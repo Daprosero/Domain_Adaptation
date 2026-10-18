@@ -1,0 +1,89 @@
+{
+  "huella": {
+    "multiplicadores": [
+      0.5,
+      0.75,
+      1.0,
+      1.5
+    ],
+    "tau": [
+      0.1,
+      0.5,
+      1.0
+    ],
+    "tasa": [
+      0.001,
+      0.01,
+      0.05
+    ],
+    "arranque": 0.5,
+    "epocas": 20,
+    "brazo": "G",
+    "semillas": [
+      0
+    ],
+    "ancho": 32,
+    "salida": 16
+  },
+  "rol": "valid",
+  "escala": {
+    "[\"rollo suizo\", \"mlp\"]": 19.17989158630371,
+    "[\"rollo suizo\", \"mlp-nobn\"]": 38.90904235839844,
+    "[\"toroides\", \"mlp\"]": 18.902324676513672,
+    "[\"toroides\", \"mlp-nobn\"]": 17.9938907623291,
+    "[\"medias lunas\", \"mlp\"]": 20.367063522338867,
+    "[\"medias lunas\", \"mlp-nobn\"]": 21.555139541625977
+  },
+  "metodo": {
+    "[\"rollo suizo\", \"mlp\"]": {
+      "kernelSigma": 19.1799,
+      "attentionTemperature": 0.5
+    },
+    "[\"rollo suizo\", \"mlp-nobn\"]": {
+      "kernelSigma": 19.4545,
+      "attentionTemperature": 1.0
+    },
+    "[\"toroides\", \"mlp\"]": {
+      "kernelSigma": 28.3535,
+      "attentionTemperature": 0.5
+    },
+    "[\"toroides\", \"mlp-nobn\"]": {
+      "kernelSigma": 17.9939,
+      "attentionTemperature": 0.5
+    },
+    "[\"medias lunas\", \"mlp\"]": {
+      "kernelSigma": 30.5506,
+      "attentionTemperature": 0.1
+    },
+    "[\"medias lunas\", \"mlp-nobn\"]": {
+      "kernelSigma": 10.7776,
+      "attentionTemperature": 0.1
+    }
+  },
+  "tasa": {
+    "[\"rollo suizo\", \"mlp\", \"B\"]": 0.05,
+    "[\"rollo suizo\", \"mlp\", \"E\"]": 0.01,
+    "[\"rollo suizo\", \"mlp\", \"F\"]": 0.05,
+    "[\"rollo suizo\", \"mlp\", \"G\"]": 0.05,
+    "[\"rollo suizo\", \"mlp-nobn\", \"B\"]": 0.01,
+    "[\"rollo suizo\", \"mlp-nobn\", \"E\"]": 0.01,
+    "[\"rollo suizo\", \"mlp-nobn\", \"F\"]": 0.01,
+    "[\"rollo suizo\", \"mlp-nobn\", \"G\"]": 0.001,
+    "[\"toroides\", \"mlp\", \"B\"]": 0.001,
+    "[\"toroides\", \"mlp\", \"E\"]": 0.01,
+    "[\"toroides\", \"mlp\", \"F\"]": 0.01,
+    "[\"toroides\", \"mlp\", \"G\"]": 0.01,
+    "[\"toroides\", \"mlp-nobn\", \"B\"]": 0.001,
+    "[\"toroides\", \"mlp-nobn\", \"E\"]": 0.001,
+    "[\"toroides\", \"mlp-nobn\", \"F\"]": 0.001,
+    "[\"toroides\", \"mlp-nobn\", \"G\"]": 0.001,
+    "[\"medias lunas\", \"mlp\", \"B\"]": 0.001,
+    "[\"medias lunas\", \"mlp\", \"E\"]": 0.001,
+    "[\"medias lunas\", \"mlp\", \"F\"]": 0.001,
+    "[\"medias lunas\", \"mlp\", \"G\"]": 0.001,
+    "[\"medias lunas\", \"mlp-nobn\", \"B\"]": 0.01,
+    "[\"medias lunas\", \"mlp-nobn\", \"E\"]": 0.01,
+    "[\"medias lunas\", \"mlp-nobn\", \"F\"]": 0.001,
+    "[\"medias lunas\", \"mlp-nobn\", \"G\"]": 0.01
+  }
+}
