@@ -10,10 +10,18 @@ the code tied to the mathematics.
 So the separation the name promises is real. Nothing here is part of the
 formulation; deleting this package leaves MIL-CREDA intact.
 
-What it does declare is which revision it was built against and which sections of it
-each arm exercises. Without that, a new revision raises a question nobody can answer:
-does this change oblige the bench to change? With it, the verification names the arms
-a changed section reaches.
+What it does declare is which sections of the revision each arm exercises. Without
+that, a new revision raises a question nobody can answer: does this change oblige the
+bench to change? With it, the verification names the arms a changed section reaches.
+
+It does NOT declare the revision itself, and this sentence used to say it did. The
+revision lives in two hand-written constants outside this file --
+`MIL_CREDA.__implementation__["revision"]`, which is what the forge's verification
+reads for this package, and `config.REVISION`, which the shard stamps carry -- and
+`tests/test_benchmark_declarations.py` is what holds those two equal. Nothing under
+this checkout resolves either against the published document, because the proposals
+live in the forge and not here; binding them to the newest published revision is the
+verification's own question (`fidelity`), never this package's.
 """
 
 __benchmark__ = {
@@ -224,6 +232,14 @@ __benchmark__ = {
             "latent.latent_grid",
             "latent.correspondence_grid",
             "plt.show",
+            # El gif 3xN del toyset: filas = normalizaciones declaradas,
+            # columnas = embedding por clase real / por prediccion / loss de
+            # fase 1 / loss de fase 2, cuadros = pasos de la fase 2. Es la
+            # figura de `CREDA/Notebooks/Toyset_Plot.ipynb` con las piezas de
+            # MIL-CREDA, y se declara aca por la misma razon que las otras:
+            # sin la declaracion el motor no puede distinguir una celda que
+            # dibuja de una que muestra una imagen sin haberla dibujado.
+            "toy_run.animar_familia",
         ],
         # Constants that name a subset of another constant. Each one is a selection
         # somebody wrote out, which is legitimate only when the rule that fixed it
@@ -353,7 +369,15 @@ __benchmark__ = {
             # registro. Sin esta línea las cuarenta salidas del piloto se
             # reportan como material que nadie declaró, que es justo lo que
             # `undeclaredRecords` existe para forzar a escribir.
-            "Results/Pilot",
+            # El artefacto del toyset, bajo su propia coordenada de escala.
+        # Declarado como DIRECTORIO y no archivo por archivo: adentro va
+        # un `<familia>.npz` por familia, y la lista de familias es de
+        # `CREDA.toy_experiment`, no de este paquete --- enumerarlas aca
+        # pondria el nombre de cada una en una segunda lista que nadie
+        # mantiene, y el dia que se agregue una cuarta este bloque
+        # quedaria corto sin que nada lo diga.
+        "Results/Toyset",
+        "Results/Pilot",
         ],
         # The terms Eq. (39) combines, and the dimension carrying their share.
         #

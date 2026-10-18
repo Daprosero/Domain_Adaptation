@@ -322,6 +322,19 @@ CUADERNOS_QUE_NO_EXISTEN_A_PROPOSITO: dict[str, str] = {
     "Benchmark_Noise_Diagnostic_Report_v1.ipynb": (
         "borrado junto con el diagnóstico de ruido entero -- ver "
         "`Benchmark_Noise_Diagnostic_Search_v1.ipynb`"),
+    "Toy_Datasets.ipynb": (
+        "retirado el 2026-10-12 por decisión del operador, para rehacer el "
+        "cuaderno de juguete con la estructura de dos secciones sobre el "
+        "toyset de CREDA en vez del propio. Su reemplazo es "
+        "`Toyset_Plot.ipynb`, que NO hereda el nombre a propósito: el viejo "
+        "corría sobre los nueve códigos de `MIL_CREDA_Benchmark.toy` y el "
+        "nuevo sobre las tres familias duras de `CREDA.toy_experiment`, así "
+        "que un nombre reciclado dejaría una referencia vieja resolviendo "
+        "contra otro artefacto. Su código se perdió --- estaba sin rastrear y "
+        "el único respaldo vivía en un directorio temporal de sesión --- y lo "
+        "que dejó está bajo `MIL-CREDA/Notebooks/_retirado-2026-10-12/`, cuyo "
+        "`LEEME.md` es la prosa que nombra este archivo y la razón por la que "
+        "esta exención existe"),
 }
 
 

@@ -1690,3 +1690,206 @@ def test_el_objetivo_de_parameters_declara_la_asimetria_de_codificadores() -> No
         "la frase no fija los conteos: salen del modelo, y clavarlos acá haría "
         f"envejecer el informe con el primer cambio de respaldo. {frase!r}"
     )
+
+
+# ------------------------------------------------ T7: the tie's ceiling travels
+
+def _curva_del_eje(tmp_path, monkeypatch, metric: str, rates, *,
+                   transfer: str = "M->U", seeds=(0, 1), arm: str = "B") -> None:
+    """Un árbol `curve` por tasa, en la forma que `contamination.load` espera.
+
+    `transfer`/`seed` viajan en cada corrida porque son justo lo que T7 le pide
+    al lector del eje: `harness.py` ya los escribe así (`"transfer":
+    f"{t[0]}->{t[1]}"`, `"seed": seed`), y es de ahí ---nunca de una
+    configuración--- de donde `conclusion_noise_floor` tiene que sacar el
+    dominio y las semillas que corrieron. Un fixture que los omitiera
+    probaría la mitad incorrecta: la que `bags.tie_ceiling` ya tiene cubierta
+    desde T5.
+    """
+    monkeypatch.setattr(config, "PRODUCT", tmp_path)
+    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
+    for rate in rates:
+        root = config.results_for(rate, "curve")
+        root.mkdir(parents=True, exist_ok=True)
+        lines = [json.dumps({"arm": arm, "transfer": transfer, "seed": seed,
+                             metric: 0.80 - rate})
+                for seed in seeds]
+        (root / "runs.jsonl").write_text("\n".join(lines), encoding="utf-8")
+        (root / "summary.json").write_text(
+            json.dumps({"reduction": {"labelNoise": rate}, "grid": {}}),
+            encoding="utf-8")
+
+
+def test_conclusion_noise_floor_prints_the_derived_ceiling_when_the_worst_level_is_the_tie(
+        tmp_path, monkeypatch) -> None:
+    """La mitad que T7 cablea: el techo derivado viaja al lado del peldaño que
+    lo necesita.
+
+    Sin esto un lector ve «cae de 0.80 a 0.30» en ρ=0.5 y lee un fracaso,
+    cuando el empate acota lo alcanzable muy por debajo de 1.0 -- exactamente
+    el engaño que `AGREED.md` ('Label noise') nombra. `bags.tie_ceiling` se
+    reemplaza por un doble determinista: lo que se prueba acá es el cableado
+    de `conclusion_noise_floor` -- qué dominio pide, de qué semillas, y cómo
+    agrega -- no la aritmética de `tie_ceiling`, que T5 ya fija por su cuenta
+    contra datos reales.
+    """
+    from MIL_CREDA_Benchmark import bags
+
+    metric = "targetAccuracy"
+    _curva_del_eje(tmp_path, monkeypatch, metric, config.NOISE_LEVELS)
+    techos_por_semilla = {0: 0.5278, 1: 0.5556}
+    llamadas = []
+
+    def _techo_doble(code, root, seed):
+        llamadas.append((code, seed))
+        return techos_por_semilla[seed]
+
+    monkeypatch.setattr(bags, "tie_ceiling", _techo_doble)
+
+    frase = tables.conclusion_noise_floor(metric)
+
+    assert llamadas, (
+        "conclusion_noise_floor nunca consultó bags.tie_ceiling: el peor "
+        "nivel es el empate (ρ=0.5=config.NOISE_CAP) y la frase no trae el "
+        "techo que AGREED.md pide al lado del peldaño superior")
+    # targetAccuracy se mide sobre las bolsas del dominio OBJETIVO -- "U" en
+    # la transferencia "M->U" que escribió el registro -- nunca el de origen.
+    assert all(code == "U" for code, _ in llamadas), (
+        f"targetAccuracy tiene que leer el dominio objetivo (U), no el de "
+        f"origen: se consultó {llamadas}")
+    assert {seed for _, seed in llamadas} == set(techos_por_semilla), (
+        "el promedio tiene que correr sobre las semillas PRESENTES en el "
+        f"registro (0 y 1), no sobre una fija: se consultó {llamadas}")
+
+    promedio = sum(techos_por_semilla.values()) / len(techos_por_semilla)
+    assert f"{promedio * 100:.1f}" in frase, (
+        f"la frase no imprime el techo promediado sobre las semillas que "
+        f"corrieron ({promedio * 100:.1f}): {frase!r}")
+
+
+def test_conclusion_noise_floor_prints_no_ceiling_when_the_worst_level_is_not_the_tie(
+        tmp_path, monkeypatch) -> None:
+    """La mutación que importa es la INVERSA, y es la que `AGREED.md` nombra:
+    un registro cuyo peor nivel NO es el empate no tiene que imprimir ningún
+    techo, porque por debajo de ρ=0.5 la clase propia conserva pluralidad
+    estricta y un lector perfecto SÍ llega a 1.0 -- poner un techo al lado de
+    un peldaño donde 1.0 es alcanzable sería una mentira nueva.
+
+    Sin este test, uno que sólo ejercite el caso del empate (el de arriba) no
+    distingue "lo imprime cuando corresponde" de "lo imprime siempre": un
+    renderizador que SIEMPRE llama a `bags.tie_ceiling` y siempre imprime su
+    resultado pasaría ese test igual. Por eso `tie_ceiling` devuelve acá un
+    valor centinela, imposible de confundir con cualquier techo real
+    (0.5000–0.5556): si apareciera en la frase, o si se lo hubiera llamado
+    siquiera, la guarda que decide "sólo en el empate" no está.
+    """
+    from MIL_CREDA_Benchmark import bags
+
+    metric = "targetAccuracy"
+    _curva_del_eje(tmp_path, monkeypatch, metric, [0.0, 0.1, 0.2, 0.3])
+    llamadas = []
+
+    def _techo_centinela(code, root, seed):
+        llamadas.append((code, seed))
+        return 0.9999
+
+    monkeypatch.setattr(bags, "tie_ceiling", _techo_centinela)
+
+    frase = tables.conclusion_noise_floor(metric)
+
+    assert not llamadas, (
+        "bags.tie_ceiling fue consultado para un peor nivel (ρ=0.3) que no "
+        "es el empate: un renderizador que SIEMPRE deriva e imprime el "
+        "techo no distingue este caso del anterior, que es exactamente la "
+        "mutación que este test existe para atrapar")
+    assert "99.99" not in frase and "0.9999" not in frase, (
+        f"el techo centinela aparece en la frase aunque el peor nivel no es "
+        f"el empate: {frase!r}")
+
+
+def test_el_techo_sigue_al_empate_y_no_al_tope(tmp_path, monkeypatch) -> None:
+    """El empate es una propiedad del CONTEO de instancias, no del tope.
+
+    La guarda decía `worst_rate == config.NOISE_CAP`, y los dos coinciden hoy
+    nada más que porque el último nivel declarado y el tope valen los dos 0.5.
+    Nada en la suite separaba las dos preguntas, así que la coincidencia leía
+    como una propiedad. Este test la separa moviendo el tope sin mover el
+    conteo, y falla en las DOS direcciones contra la guarda vieja:
+
+    * Tope 0.6 con el empate todavía arriba: `0.5 != 0.6`, así que la guarda
+      vieja NO imprime el techo y vuelve el número leído contra 1.0 que T7
+      existe para evitar.
+    * Tope 0.4 y peor nivel 0.4: `0.4 == 0.4`, así que la guarda vieja SÍ
+      imprime un techo donde la clase propia conserva 18 contra 12 y un lector
+      perfecto llega a 1.0. Es la mentira inversa, y es peor que la primera
+      porque inventa una excusa en vez de omitirla.
+
+    Ninguna de las dos se pone roja con la declaración de hoy, que es
+    exactamente por qué hace falta escribirlas: una guarda que lee la cantidad
+    equivocada y acierta por coincidencia es indistinguible de una correcta
+    hasta que alguien toca la declaración.
+    """
+    from MIL_CREDA_Benchmark import bags
+
+    metric = "targetAccuracy"
+
+    # --- el tope se mueve, el empate sigue siendo 15 de 30 ---
+    monkeypatch.setattr(config, "NOISE_CAP", 0.6)
+    monkeypatch.setattr(config, "NOISE_LEVELS", [0.0, 0.2, 0.5])
+    _curva_del_eje(tmp_path, monkeypatch, metric, [0.0, 0.2, 0.5])
+    llamadas: list[tuple] = []
+
+    def _techo_centinela(code, root, seed):
+        llamadas.append((code, seed))
+        return 0.5278
+
+    monkeypatch.setattr(bags, "tie_ceiling", _techo_centinela)
+    # Escalado como la propia tabla lo escribe, no a mano: `targetAccuracy`
+    # está en `tables.PERCENT`, así que un 0.5278 se imprime 52.8 y buscar
+    # "0.53" en la frase fallaría contra un renderizador correcto.
+    centinela_impreso = f"{tables._scaled(0.5278, metric):.1f}"
+    frase = tables.conclusion_noise_floor(metric)
+    assert llamadas, (
+        "con el tope en 0.6 el peor nivel sigue siendo el empate (15 de 30) y "
+        "el techo tiene que derivarse igual: una guarda que compara la tasa "
+        "contra el tope lo omite acá y deja el 1.0 implícito")
+    assert centinela_impreso in frase, (
+        f"el techo no viajó en la frase: {frase!r}")
+
+    # --- el tope baja hasta un nivel que NO es empate ---
+    monkeypatch.setattr(config, "NOISE_CAP", 0.4)
+    monkeypatch.setattr(config, "NOISE_LEVELS", [0.0, 0.2, 0.4])
+    _curva_del_eje(tmp_path, monkeypatch, metric, [0.0, 0.2, 0.4])
+    llamadas.clear()
+    frase = tables.conclusion_noise_floor(metric)
+    assert not llamadas, (
+        "con el tope en 0.4 el peor nivel reemplaza 12 de 30 y la clase propia "
+        "conserva 18 contra 12: un lector perfecto SÍ llega a 1.0, así que un "
+        "techo impreso acá es una mentira nueva. Una guarda que compara contra "
+        "el tope lo imprime igual porque 0.4 == 0.4")
+    assert centinela_impreso not in frase, (
+        f"techo impreso fuera del empate: {frase!r}")
+
+
+def test_conclusion_noise_floor_reads_the_source_domain_for_source_accuracy(
+        tmp_path, monkeypatch) -> None:
+    """El otro lado de la elección por métrica: `sourceAccuracy` se mide sobre
+    las bolsas de eval del dominio de ORIGEN, nunca del objetivo -- una sola
+    de las dos respuestas sería incorrecta la mitad de las veces, que es
+    exactamente la frase que T7 resuelve en el task entry.
+    """
+    from MIL_CREDA_Benchmark import bags
+
+    metric = "sourceAccuracy"
+    _curva_del_eje(tmp_path, monkeypatch, metric, config.NOISE_LEVELS)
+    llamadas = []
+    monkeypatch.setattr(
+        bags, "tie_ceiling",
+        lambda code, root, seed: llamadas.append((code, seed)) or 0.52)
+
+    tables.conclusion_noise_floor(metric)
+
+    assert llamadas, "sourceAccuracy también tiene que disparar el techo en el empate"
+    assert all(code == "M" for code, _ in llamadas), (
+        f"sourceAccuracy tiene que leer el dominio de ORIGEN (M), no el "
+        f"objetivo: se consultó {llamadas}")

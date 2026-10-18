@@ -43,13 +43,48 @@ CUADERNOS = Path(__file__).resolve().parents[2] / "MIL-CREDA" / "Notebooks"
 # que estar acá, y estar acá cuesta escribir por qué. El próximo que se excluya
 # tiene que decir lo suyo.
 #
-# Está vacío, y vacío es una afirmación: hoy todo cuaderno del árbol lo corre un
-# paso. `Benchmark_Campaign_v1.ipynb` estuvo acá con la razón «lanza al servicio
-# remoto», que era falsa contra el archivo --- el cuaderno no importa
+# Estuvo vacío, y ese vacío era una afirmación: todo cuaderno del árbol lo corría
+# un paso. `Benchmark_Campaign_v1.ipynb` estuvo acá con la razón «lanza al
+# servicio remoto», que era falsa contra el archivo --- el cuaderno no importa
 # `remote_cli`, no submite, y sólo menciona `/kaggle/working` para encontrar el
 # repositorio si alguien lo corre allá --- y por esa razón inventada el único
 # cuaderno que de verdad se envía era el único que el ensayo nunca ejercitaba.
-CUADERNOS_SIN_PASO: dict[str, str] = {}
+# Las dos entradas de hoy no son ese caso: ninguna de las dos escribe bajo
+# `config.results_for(...)`, y es eso --- y no el tamaño ni la utilidad --- lo
+# que las deja afuera del flujo.
+CUADERNOS_SIN_PASO: dict[str, str] = {
+    "Ablation_Ladder.ipynb": (
+        "aísla qué parte de la formulación hace qué, variando la atención, la "
+        "copia de pesos y el loss de adaptación una cosa por fila. No es un "
+        "producto declarado: no escribe bajo `config.results_for(...)` y su "
+        "salida es el JSON que él mismo deja al lado, para leer a mano. "
+        "Convertirlo en un peldaño del flujo es un acto de deliberación que "
+        "nadie hizo, y correrlo desde un paso lo volvería obligatorio en cada "
+        "campaña para contestar una pregunta que ya se contestó una vez"),
+    "Toyset_Plot.ipynb": (
+        "dibuja el toyset de CREDA --- las tres familias duras de "
+        "`CREDA.toy_experiment.DURAS` --- con cada clase partida en bolsas, "
+        "para poder leerlo al lado del `Toyset_Plot.ipynb` de CREDA y ver que "
+        "lo único que MIL-CREDA cambió es el agrupamiento. No son los tres "
+        "dominios que `config.DOMAINS` compara, así que su número no entra en "
+        "ninguna tabla del flujo ni es comparable con una: son datos "
+        "sintéticos de tres dimensiones y no bolsas de imágenes. No escribe "
+        "nada bajo `config.results_for(...)` --- su única salida es la figura "
+        "vectorial que deja al lado, redibujada entera en cada ejecución --- "
+        "y no entrena ni carga ningún modelo, así que un paso que lo corriera "
+        "agregaría a cada campaña un dibujo que no depende de ella"),
+    "Toyset_Generator.ipynb": (
+        "corre el protocolo de dos fases de CREDA sobre las tres familias "
+        "duras de `CREDA.toy_experiment`, con el vigia como unico criterio de "
+        "busqueda y de parada. No es un paso del flujo por la misma razon que "
+        "su cuaderno de graficas: no escribe bajo `config.results_for(...)` "
+        "--- deja su artefacto bajo `Results/Toyset/<escala>/`, que lleva su "
+        "propia coordenada de escala y esta declarado aparte --- y no compara "
+        "los dominios de `config.DOMAINS` que la campana compara, asi que su "
+        "numero no entra en ninguna tabla del flujo. Correrlo desde un paso lo "
+        "volveria obligatorio en cada campana para contestar una pregunta que "
+        "es de otro banco"),
+}
 
 
 def _ejecutar(nombre: str) -> str:

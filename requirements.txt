@@ -11,6 +11,16 @@ matplotlib
 optuna
 numpy==1.26.4
 pandas==2.2.3
+# Y scipy se declara por la misma razon que el comentario de arriba enuncia, que
+# es la razon por la que este renglon existe: la frase estaba escrita y scipy no
+# estaba en la lista. Llegaba transitivamente por scikit-image/scikit-learn, o
+# sea por casualidad, mientras TRES archivos lo importan directo --
+# `CREDA/toy_plots.py` (scipy.stats), `CREDA/comparators/shot/
+# upstream_image_target.py` y `MIL_CREDA_Benchmark/toy_bags.py`
+# (scipy.spatial.ConvexHull, el casco que encierra cada bolsa). El dia que
+# alguno de los dos scikit saliera de esta lista, los tres dejarian de importar
+# y nada en el archivo diria por que.
+scipy
 scikit-image
 scikit-learn
 timm

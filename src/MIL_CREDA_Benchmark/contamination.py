@@ -152,11 +152,22 @@ def degradation(metric: str, levels: list[float] | None = None) -> list[dict]:
     was corrupted; reading the fall against anything else would be measuring the
     distance between two contaminations. An arm the clean level never ran gets no
     row rather than a fall computed from nothing.
+
+    `rate` carries the contamination rate `worst` was measured at
+    (`drawn["rates"][-1]`), the same for every row -- `curve` draws one series
+    per arm against one shared x-axis, so the point every row's `worst` sits
+    on is a single rate, never a per-arm one. Without it a renderer holding
+    only `clean`/`worst`/`fall` has no way to tell "the worst rung reached
+    `config.NOISE_CAP`, the tie the axis is built around" from "the worst
+    rung is merely whichever rate happened to run highest" -- and a caption
+    that reads the tie's own derived ceiling against the wrong row would be
+    citing a bound that does not apply to what it is printed beside.
     """
     pooling.refuse(metric)
     drawn = curve(metric, levels)
     if not drawn["rates"] or drawn["rates"][0] != config.NOISE_LEVELS[0]:
         return []
+    worst_rate = drawn["rates"][-1]
     rows = []
     for arm in drawn["arms"]:
         series = drawn["series"][arm]
@@ -167,6 +178,7 @@ def degradation(metric: str, levels: list[float] | None = None) -> list[dict]:
             "worst": series[-1],
             "fall": series[0] - series[-1],
             "series": list(series),
+            "rate": worst_rate,
         })
     return rows
 

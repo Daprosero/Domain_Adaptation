@@ -734,6 +734,15 @@ def run_one(arm_id: str, transfer: tuple[str, str], seed: int,
                                        ramp_local=coefficient_local)
             step["loss"].backward()
             optimizer.step()
+            # r31 Eq. (15): the l1 constraint on `v_R` is a max norm imposed
+            # after each OPTIMIZER step -- the same position, and for the same
+            # reason, as `sync_target_from_source` below: the rule counts
+            # optimizer steps, and projecting before the update would constrain
+            # the value the step is about to move. The arm decides whether there
+            # is a selector to project; a pooling arm returns without touching a
+            # tensor. The rescale itself lives in `MIL_CREDA.attention`, never
+            # here: see `wiring.Arm.project_constraints`.
+            model.project_constraints()
             # `theta_s` -> `theta_t` en el intervalo declarado. Aca y no en
             # `training_step` porque el intervalo cuenta pasos del OPTIMIZADOR:
             # transmitir antes de la actualizacion re-anclaria `theta_t` y el
@@ -923,6 +932,15 @@ def run_mechanism(mechanism: str, transfer: tuple[str, str], seed: int,
                                        ramp_local=coefficient_local)
             step["loss"].backward()
             optimizer.step()
+            # r31 Eq. (15): the l1 constraint on `v_R` is a max norm imposed
+            # after each OPTIMIZER step -- the same position, and for the same
+            # reason, as `sync_target_from_source` below: the rule counts
+            # optimizer steps, and projecting before the update would constrain
+            # the value the step is about to move. The arm decides whether there
+            # is a selector to project; a pooling arm returns without touching a
+            # tensor. The rescale itself lives in `MIL_CREDA.attention`, never
+            # here: see `wiring.Arm.project_constraints`.
+            model.project_constraints()
             # `theta_s` -> `theta_t` en el intervalo declarado. Aca y no en
             # `training_step` porque el intervalo cuenta pasos del OPTIMIZADOR:
             # transmitir antes de la actualizacion re-anclaria `theta_t` y el

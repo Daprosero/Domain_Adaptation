@@ -2180,6 +2180,92 @@ def conclusions(record: dict) -> dict:
 
 # ------------------------------------------------------- el eje de contaminación
 
+#: Qué dominio de la transferencia responde cada métrica, para el techo del
+#: empate (T7). `targetAccuracy` se mide sobre las bolsas de eval del dominio
+#: OBJETIVO -- el segundo de `"M->U"` --, `sourceAccuracy` sobre las del
+#: dominio de ORIGEN -- el primero. Una sola de las dos respuestas sería
+#: incorrecta la mitad de las veces, así que la elección va por métrica y no
+#: por una constante: no hay "el" dominio de un registro, hay uno por lado de
+#: la transferencia y cada métrica lee el suyo.
+_TIE_CEILING_DOMAIN_INDEX = {"targetAccuracy": 1, "sourceAccuracy": 0}
+
+
+def _es_el_empate(rate: float) -> bool:
+    """Si a esta tasa la clase propia de una bolsa EMPATA con su donante.
+
+    Derivado del conteo de instancias y de nada más: `noise_instances(rate)`
+    reemplazadas contra las que quedan, iguales exactamente cuando el doble
+    del reemplazo es la bolsa entera.
+
+    Esto decía `rate == config.NOISE_CAP`, y los dos coinciden hoy nada más
+    que porque el último nivel declarado y el tope valen los dos 0.5. El
+    empate es una propiedad del CONTEO, no del tope, y atarlo al tope falla en
+    las dos direcciones sin que nada se ponga rojo: con un tope de 0.6 y el
+    empate todavía arriba, el techo deja de imprimirse y vuelve el número
+    leído contra 1.0 que T7 existe para evitar; con un tope de 0.4, imprime un
+    techo donde la clase propia conserva 18 contra 12 y un lector perfecto SÍ
+    llega a 1.0, que es la mentira inversa. `test_el_techo_sigue_al_empate_y_no_al_tope`
+    es la que separa las dos preguntas, moviendo el tope sin mover el conteo.
+
+    Una tasa que el tope no admite llega acá sólo desde un registro escrito
+    bajo otra declaración, y `noise_instances` se negaría antes de responder;
+    se reporta como "no es el empate" en vez de propagar la negativa, porque
+    quien pregunta está renderizando una conclusión y no validando una
+    corrida.
+    """
+    try:
+        return config.noise_instances(rate) * 2 == config.INSTANCES_PER_BAG
+    except ValueError:
+        return False
+
+
+def _tie_ceiling_for_worst_level(metric: str, rate: float) -> float | None:
+    """El techo derivado del empate para esta métrica y esta tasa, o `None`.
+
+    `None` cubre tres casos distintos a propósito, y los tres significan "no
+    hay nada que imprimir" y no "el techo es cero": la métrica no es una de
+    las dos para las que AGREED.md resuelve el dominio (`targetAccuracy` /
+    `sourceAccuracy`), la tasa no tiene registro `curve`, o ese registro no
+    trae `transfer`/`seed` por corrida -- lo que pasaría contra un registro
+    escrito por una versión de `harness` anterior a esos dos campos.
+
+    El techo se deriva del REGISTRO, nunca de una configuración: cada corrida
+    trae su propia `transfer` (`"M->U"`) y su propia `seed`
+    (`harness.py:804-806`), y de ahí salen el dominio que corresponde a esta
+    métrica y las semillas que de verdad corrieron -- nunca `config.NOISE_TRANSFER`
+    ni una lista de semillas declarada, que podrían no coincidir con lo que
+    este registro en particular ejecutó.
+
+    Agregado sobre las semillas PRESENTES porque el techo varía con la
+    semilla (0.5000 a 0.5556 medido en T5): el techo de una curva de varias
+    semillas es el promedio de los techos de esas semillas, nunca el de la
+    semilla 0 sola. Un `(dominio, semilla)` se consulta una sola vez aunque
+    varios brazos o varias transferencias lo compartan, porque es una
+    propiedad del split de evaluación y no del brazo que se está leyendo.
+    """
+    from MIL_CREDA_Benchmark import bags
+    from MIL_CREDA_Benchmark import contamination as noise_axis
+
+    indice = _TIE_CEILING_DOMAIN_INDEX.get(metric)
+    if indice is None:
+        return None
+    record = noise_axis.load(rate)
+    if record is None:
+        return None
+    pares = set()
+    for run in record["runs"]:
+        transfer, seed = run.get("transfer"), run.get("seed")
+        if not transfer or seed is None or "->" not in transfer:
+            continue
+        dominio = transfer.split("->")[indice]
+        pares.add((dominio, int(seed)))
+    if not pares:
+        return None
+    techos = [bags.tie_ceiling(dominio, config.DATA_CACHE, semilla)
+             for dominio, semilla in sorted(pares)]
+    return sum(techos) / len(techos)
+
+
 def conclusion_noise_floor(metric: str, arms: list[str] | None = None) -> str:
     """Cuánto cae la exactitud del piso entre el primer y el último nivel.
 
@@ -2187,6 +2273,16 @@ def conclusion_noise_floor(metric: str, arms: list[str] | None = None) -> str:
     adapta. `arms=None` toma `sorted(set(config.FLOOR_OF.values()))` -- los
     pisos declarados hoy, nunca un id escrito acá -- así que una declaración
     con más de un piso concluye sobre todos, uno por frase.
+
+    T7 (AGREED.md, 'Label noise'): cuando el peor nivel que corrió ES el
+    empate (`config.NOISE_CAP`, hoy 0.5) -- comprobado contra la `rate` que
+    `degradation` nombra en cada fila, nunca asumido -- la frase agrega el
+    techo que ese empate acota, derivado por `_tie_ceiling_for_worst_level`.
+    Por debajo del empate la clase propia conserva pluralidad estricta y un
+    lector perfecto SÍ llega a 1.0, así que un techo impreso ahí sería una
+    mentira nueva y no un arreglo: la mutación que esto evita es imprimir el
+    techo SIEMPRE, que es indistinguible de imprimirlo correctamente en el
+    único caso que un test que sólo mira el empate llega a ejercitar.
     """
     from MIL_CREDA_Benchmark import contamination as noise_axis
 
@@ -2214,8 +2310,20 @@ def conclusion_noise_floor(metric: str, arms: list[str] | None = None) -> str:
     if faltan:
         nombres = ", ".join(config.NAME_OF.get(arm, arm) for arm in faltan)
         cola = f" Sin registro para {nombres}."
+    # El peor nivel es compartido por toda fila presente -- `degradation`
+    # dibuja una sola curva contra una sola tasa -- así que basta leerlo de
+    # la primera para saber si ESTE registro llegó hasta el empate.
+    worst_rate = rows[present[0]]["rate"]
+    techo = None
+    if _es_el_empate(worst_rate):
+        techo = _tie_ceiling_for_worst_level(metric, worst_rate)
+    cierre = ""
+    if techo is not None:
+        cierre = (f" En ρ={worst_rate:g} el peor peldaño es el empate: el techo "
+                 f"derivado para esa tasa es {_scaled(techo, metric):.{decimals}f}, "
+                 f"no {_scaled(1.0, metric):.{decimals}f}.")
     return ("El ruido perjudica incluso al método que no adapta: "
-            + "; ".join(partes) + "." + cola)
+            + "; ".join(partes) + "." + cola + cierre)
 
 
 def conclusion_versus_clean(metric: str, rate: float) -> str:

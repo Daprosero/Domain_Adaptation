@@ -16,11 +16,42 @@ is where it always came from and it is not always the same number —
 `Results_Generator.ipynb` carries at least two configurations, one with
 `creda_lambda_default` at 1e-3 against a `creda_lambda_special` of 1e-4. The
 default below is the published special value, for a caller that passes none.
+
+**No equation in the managed revision, and the provenance below says so.** The
+curve is prior work's `training_pipeline.get_lambda` — a warm-up schedule DANN,
+ADDA and CDAN+E already ran — scaled by a published coefficient. The revision
+states the coefficients of the objective as free non-negative constants
+(Eq. 39) and declares no time dependence for them anywhere: there is no
+schedule to be faithful to, so naming a revision here would claim a binding the
+document does not offer. `CREDA_CEILING` is a published NUMBER, read off a
+configuration, not a constant the mathematics fixes.
+
+The invariants below are what this module can be held to instead, and
+`tests/test_creda_schedule.py` holds each against
+`tests/golden_creda_schedule.json` — numbers committed before the
+reparameterization, so they are what prior work produced rather than a fixture
+written by the same hand as the code.
 """
 
 from __future__ import annotations
 
 import math
+
+
+__provenance__ = {
+    "revision": None,
+    "claims_no_equation": (
+        "a warm-up schedule and a published coefficient, not a term; "
+        "see the module docstring"),
+    "invariants": [
+        "the_untouched_loops_still_see_the_schedule_they_saw_before",
+        "credas_default_ceiling_is_its_published_coefficient",
+        "credas_coefficient_is_what_the_product_used_to_be",
+        "moving_the_coefficient_to_the_ceiling_costs_at_most_two_ulp",
+        "and_the_gradient_comes_out_bit_identical",
+        "a_negative_ceiling_is_refused_rather_than_rewarding_misalignment",
+    ],
+}
 
 #: CREDA's published coefficient for its special domains, `creda_lambda_special`.
 CREDA_CEILING = 1e-4
