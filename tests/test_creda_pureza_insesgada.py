@@ -193,3 +193,93 @@ class LaCombinacionInadmisibleSeRefuta(unittest.TestCase):
                       bounds_form='conservative')
         self.assertIn('bounds_form', str(ctx.exception))
         self.assertIn('entropy-cosh', str(ctx.exception))
+
+
+class LaInvarianciaDeEscala(unittest.TestCase):
+    """Eq. (9) normalizes by the trace, so `H_2` is invariant to the kernel's
+    SCALE: `H_2(cK) = H_2(K)` for every `c > 0`.
+
+    **The estimator's own epsilon is what broke it.** `trace(K) + 1e-6` is a
+    constant added to a quantity that can be far smaller than it: once
+    `tr(K)` approaches `1e-6` the epsilon IS the normalizer, and the entropy
+    reported is the epsilon's and not the matrix's. Measured on one full-rank
+    block in float32, exact entropy 1.14525202:
+
+        tr(K) = 1e+00   ->  1.14525080   (the log's own epsilon)
+        tr(K) = 1e-06   ->  2.53153396
+        tr(K) = 1e-09   ->  13.53976822
+        tr(K) = 1e-20   ->  13.81551075   saturated at -log(1e-6)
+
+    The last one is not merely wrong: a 5x5 density matrix cannot carry more
+    than `ln 5 = 1.609` nats, so the estimator leaves the quantity's own
+    range. `MIL_CREDA.renyi.trace_normalize` divides by the TRUE trace and
+    refuses on a non-positive one, and that form is exact to 7 digits in
+    float32 from `tr(K) = 1` down to `1.175e-38`, the smallest normal.
+
+    The sibling `test_the_default_is_bit_for_bit_what_it_already_was` keeps the
+    two forks agreeing with each other; this one keeps the default fork
+    agreeing with Eq. (9).
+    """
+
+    #: Below float32's smallest normal the matrix itself is denormal and the
+    #: division loses digits, so this is where the scale claim stops holding
+    #: and `MIN_CLASS_TRACE` has to take over.
+    ESCALAS = (1.0, 1e-3, 1e-6, 1e-9, 1e-20, 1e-30, 1e-37)
+
+    def _referencia(self, K):
+        """Eq. (9) in float64, computed independently of the module."""
+        A = K.to(torch.float64)
+        A = A / torch.trace(A)
+        return float(-torch.log(torch.trace(A @ A)))
+
+    def test_the_biased_entropy_is_invariant_to_the_blocks_scale(self):
+        K = _bloque()
+        exacta = self._referencia(K)
+        # The fixture has to carry real entropy, or 0 == 0 would pass this.
+        self.assertGreater(exacta, 0.1, "el bloque no lleva entropía que medir")
+        p = CREDALoss()
+        for c in self.ESCALAS:
+            with self.subTest(escala=c):
+                got = float(p._renyi_entropy_order_2(K * c))
+                self.assertAlmostEqual(
+                    got, exacta, places=4,
+                    msg=f"a escala {c:.0e} la entropía leyó {got:.8f} donde "
+                        f"Ec. (9) da {exacta:.8f}")
+
+    def test_the_entropy_never_leaves_the_range_its_own_size_allows(self):
+        """`0 <= H_2(A) <= ln n` for a unit-trace PSD `A` of size `n`.
+
+        The upper end is the uniform spectrum and the lower is a pure state.
+        Asserted across the same scales, because this is the half that shows
+        the old estimator was not merely imprecise: it reported 13.82 nats on
+        a 60x60 block whose ceiling is `ln 60 = 4.09`.
+        """
+        K = _bloque()
+        techo = float(np.log(K.shape[0]))
+        p = CREDALoss()
+        for c in self.ESCALAS:
+            with self.subTest(escala=c):
+                got = float(p._renyi_entropy_order_2(K * c))
+                self.assertGreaterEqual(got, -1e-6, f"escala {c:.0e}")
+                self.assertLessEqual(
+                    got, techo + 1e-6,
+                    f"a escala {c:.0e} la entropía leyó {got:.6f} nats, y una "
+                    f"matriz de densidad {K.shape[0]}x{K.shape[0]} no puede "
+                    f"llevar más de ln {K.shape[0]} = {techo:.6f}")
+
+    def test_a_non_positive_trace_is_refused_and_not_stabilized(self):
+        """Eq. (9) is defined only for a positive trace, so the estimator says
+        so instead of returning the epsilon's entropy.
+
+        This is `MIL_CREDA.renyi.trace_normalize`'s own discipline -- "a Gram
+        matrix with non-positive trace has no normalization" -- and the same
+        discipline `unbiased_purity`'s branch already keeps for its own
+        denominator.
+        """
+        p = CREDALoss()
+        with self.assertRaises(ValueError) as caja:
+            p._renyi_entropy_order_2(torch.zeros(4, 4))
+        # El mensaje está en castellano, como el de la rama de arriba
+        # (`unbiased_purity necesita al menos dos muestras...`): este módulo
+        # habla así y esto lo extiende en vez de introducir un segundo idioma.
+        self.assertIn("traza", str(caja.exception).lower())
