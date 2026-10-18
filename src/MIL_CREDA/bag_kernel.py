@@ -19,7 +19,7 @@ from MIL_CREDA import DTYPE, as_tensor
 from MIL_CREDA.kernels import gaussian_kernel
 
 __provenance__ = {
-    "revision": "research-concept-r33.md",
+    "revision": "research-concept-r34.md",
     "sections": ["3"],
     "equations": ["17", "18"],
     "invariants": [

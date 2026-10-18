@@ -766,15 +766,20 @@ class R28BoundsProvenanceTests(unittest.TestCase):
         `entropy_cosh_bounds`, `class_global_loss_cosh`, `source_bound`,
         `source_loss` -- answers Eqs. 34, 35, 36 and 21 as r33 writes them,
         and Eq. 21 is byte-identical from r25 forward.
+
+        **It reads r34 since 2026-10-18 and no arithmetic moved with it.** r34
+        changed Eq. 15's consensus term to a leave-one-out average -- MIL-CREDA's
+        attention over the instances of a bag -- and this module holds Eqs. 21,
+        34, 35 and 36, all byte-identical in r33 and r34.
         """
         from CREDA import bounds
         self.assertEqual(bounds.__provenance__['revision'],
-                         'research-concept-r33.md')
+                         'research-concept-r34.md')
         declared = bounds.__provenance__['invariants']
         for retired in ('conservative_bounds_copy_agrees_with_the_original',
                         'class_global_loss_copy_agrees_with_the_original'):
             self.assertNotIn(retired, declared)
-        self.assertIn('research-concept-r33.md', bounds.__provenance__['revision'])
+        self.assertIn('research-concept-r34.md', bounds.__provenance__['revision'])
         self.assertIn('entropy_cosh_bounds', bounds.__doc__)
 
 

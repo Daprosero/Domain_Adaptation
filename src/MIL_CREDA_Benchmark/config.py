@@ -392,7 +392,7 @@ def execution_seed_units() -> "list[int] | None":
 
 # ------------------------------------------------------------------- material
 
-REVISION = "research-concept-r33.md"
+REVISION = "research-concept-r34.md"
 
 #: Every domain supplies its own bags; a transfer names which is source and which
 #: is target. All three hold far more than the 3600 images a domain contributes.

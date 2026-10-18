@@ -26,6 +26,16 @@ moves the result onto the ball -- so the exception is gone and `v_R_tilde` stops
 existing as an object. What the optimizer sees therefore changed, which is why
 this is a change to the training loop and not only to a function.
 
+**The consensus EXCLUDES the instance itself, and r34 is where that changed.**
+Through r33 the average ran over all m instances, self term included. The self
+evaluation is `kappa^I(h, h) = 1` exactly, so it added `1/m` to every consensus
+of the bag and shrank the differences between them by `(m - 1)/m`: the effective
+weight of `gamma` therefore depended on the bag's instance count, which is the
+one thing a bounded, comparable scale may not do. Leaving it out, the consensus
+lies in `(0, 1]` for ANY bag size. A bag with a single instance has no other
+instance to average over, so the term is omitted there; nothing is lost, because
+Eq. (16) gives that bag's only instance weight one whatever its logit is.
+
 Because the constraint is now the parameter's rather than the forward pass's,
 it has to be ESTABLISHED as well as maintained: see `Arm.__init__`, which
 projects once at construction. `nn.init.normal_(v_R, std=0.1)` over 128
@@ -41,7 +51,7 @@ from MIL_CREDA import as_matrix, as_tensor
 from MIL_CREDA.kernels import gaussian_kernel
 
 __provenance__ = {
-    "revision": "research-concept-r33.md",
+    "revision": "research-concept-r34.md",
     "sections": ["3"],
     "equations": ["15", "16", "19"],
     "invariants": [
@@ -59,7 +69,9 @@ __provenance__ = {
         "attention_logit_ratio_bounded_by_temperature",
         "relevance_logit_reduces_to_the_raw_relevance_at_neutral_hyperparameters",
         "effective_bag_size_in_range",
-        "uniform_self_similarity_in_range",
+        "mean_consensus_in_range",
+        "consensus_component_excludes_the_instance_itself",
+        "consensus_component_omits_the_term_for_a_singleton_bag",
         "separation_condition_implies_majority_consensus",
     ],
 }
@@ -132,17 +144,41 @@ def relevance_component(
 
 
 def consensus_component(H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
-    """The consensus term of Eq. (15): (1/m) sum_a' kappa^I(h_a, h_a'), for
-    every instance a of ONE bag, over its own instances only.
+    """The consensus term of Eq. (15): (1/(m-1)) sum_{a' != a} kappa^I(h_a,
+    h_a'), for every instance a of ONE bag, over its own OTHER instances.
 
     Reuses the instance kernel of Eq. (14) and its own bandwidth sigma, never
-    a second similarity. Because kappa^I(h, h) = 1, this lies in (0, 1] and
-    equals 1/m in the limit sigma -> 0 (only self-terms survive) and 1 in the
-    limit sigma -> infinity (the kernel saturates at one everywhere).
+    a second similarity.
+
+    **The instance itself is excluded, and the module docstring says why.**
+    This lies in (0, 1] for any bag size: kappa^I is strictly positive, so no
+    average of off-diagonal entries reaches zero, and it is at most one
+    everywhere. The limits moved with the self term -- as sigma -> 0 the kernel
+    vanishes between distinct embeddings and the consensuses of the bag tend to
+    ZERO, where r33's form tended to 1/m; as sigma -> infinity the kernel
+    saturates at one and so do they.
+
+    A single-instance bag has no other instance to average over and the term is
+    OMITTED, which is the zero returned here rather than a refusal: Eq. (16)
+    gives that bag's only instance weight one whatever its logit is, so the
+    omission changes no weight and no bag embedding.
     """
     H = as_matrix(H)
+    m = H.shape[0]
     K = gaussian_kernel(H, H, sigma)
-    return K.sum(dim=1) / H.shape[0]
+    if m == 1:
+        return torch.zeros(1, dtype=K.dtype, device=K.device)
+    # The diagonal is MASKED OUT before the sum, never subtracted after it.
+    # `K.sum(dim=1) - K.diagonal()` is the same number in real arithmetic and
+    # a different one in float64: the row sum is at least the diagonal's 1.0,
+    # and adding an off-diagonal entry below the machine epsilon relative to
+    # that 1.0 leaves the sum unchanged, so the subtraction returns exactly
+    # 0.0 where the true average is positive. Measured on the attention sweep,
+    # that form read zero on an instance whose largest off-diagonal entry was
+    # 3.46e-18 -- the sum of a' != a simply does not contain the diagonal, so
+    # it is excluded rather than cancelled.
+    off_diagonal = K * (1.0 - torch.eye(m, dtype=K.dtype, device=K.device))
+    return off_diagonal.sum(dim=1) / (m - 1)
 
 
 def relevance_logits(
@@ -216,12 +252,32 @@ def effective_bag_size(weights: torch.Tensor) -> torch.Tensor:
     return 1.0 / (weights * weights).sum()
 
 
-def uniform_self_similarity(H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
-    """||Psi_bar(B)||^2 = (1/m^2) sum_a sum_a' kappa^I(h_a, h_a'), the average
-    consensus of the bag. In [1/m, 1], and equals 1 only if every embedding
-    of the bag coincides.
+def mean_consensus(H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
+    """c_bar(B) = (1/(m(m-1))) sum_a sum_{a' != a} kappa^I(h_a, h_a'), the
+    average of the bag's consensuses. In (0, 1]: it equals one only if every
+    embedding of the bag coincides, and tends to zero as they disperse.
+
+    **This replaced the uniform self-similarity, and r34 is where.** Through
+    r33 the pair's second reading was `||Psi_bar(B)||^2 = (1/m^2) sum_a sum_a'
+    kappa^I`, whose floor was `1/m` -- the self terms' own contribution -- so
+    "dispersed" was read against a threshold that moved with the instance
+    count. The leave-one-out average has floor zero for every bag size, which
+    is what makes the pair's second reading comparable across bags: `m_eff`
+    near `m` with this near ONE is collapse, `m_eff` near `m` with this near
+    ZERO is a dispersed bag with no dominant group, where near-uniform weights
+    are the expected behaviour.
+
+    Refuses on a single-instance bag rather than inventing a value: there is no
+    other instance, so the bag has no consensus to average. `m_eff` is 1 there
+    by construction and the pair has nothing to diagnose.
     """
     H = as_matrix(H)
-    K = gaussian_kernel(H, H, sigma)
     m = H.shape[0]
-    return K.sum() / (m * m)
+    if m < 2:
+        raise ValueError(
+            "the mean consensus needs a bag with at least two instances: "
+            "a single instance has no other to be compared with")
+    K = gaussian_kernel(H, H, sigma)
+    # Masked, not subtracted, for the reason `consensus_component` records.
+    off_diagonal = K * (1.0 - torch.eye(m, dtype=K.dtype, device=K.device))
+    return off_diagonal.sum() / (m * (m - 1))

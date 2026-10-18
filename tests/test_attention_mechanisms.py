@@ -63,7 +63,13 @@ def test_ours_is_eq15s_hybrid_with_the_l1_ball_projection() -> None:
     hidden = torch.tanh(H @ V_R.transpose(0, 1) + b_R)
     relevance = hidden @ v_R
     K = gaussian_kernel(H, H, sigma)
-    consensus = K.sum(dim=1) / H.shape[0]
+    # r34's leave-one-out average, masking the diagonal before the sum rather
+    # than subtracting it after: `K.sum(dim=1) - K.diagonal()` cancels an
+    # off-diagonal entry below the machine epsilon relative to the diagonal's
+    # 1.0. r33 read `K.sum(dim=1) / m` here, self term included.
+    m = H.shape[0]
+    off_diagonal = K * (1.0 - torch.eye(m, dtype=K.dtype))
+    consensus = off_diagonal.sum(dim=1) / (m - 1)
     logits = relevance + gamma * consensus
     expected = torch.softmax(logits / tau, dim=0)
 

@@ -16,7 +16,7 @@ import torch
 from MIL_CREDA import as_index, as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r33.md",
+    "revision": "research-concept-r34.md",
     "sections": ["4", "5"],
     "equations": ["28", "29", "30", "31", "38"],
     "invariants": [

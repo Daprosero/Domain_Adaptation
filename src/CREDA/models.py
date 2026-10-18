@@ -43,13 +43,19 @@ the source batch is balanced, which is how the toyset runs.
 is deliberately not written; `_mix_kernel_concat`'s docstring says why it is a
 no-op here.
 
-**Why `revision` says `research-concept-r33.md`.** It said r28 until
-2026-10-17, r31 until 2026-10-18, and the second rebind DID change arithmetic
-here, unlike the first: r32 rewrote Eq. 37, which `_eq37_aggregate` now
-implements, and r33 scoped Eq. 26's confidence weighting to the
-class-conditional blocks, which took the weighting out of `_marginal_score`.
-The paragraph below is the first rebind's reasoning, kept because it is the
-one that explains why a declaration can move without a number moving.
+**Why `revision` says `research-concept-r34.md`.** It said r28 until
+2026-10-17, r31 and then r33 until 2026-10-18. The r31 -> r33 rebind DID change
+arithmetic here, unlike the other two: r32 rewrote Eq. 37, which
+`_eq37_aggregate` now implements, and r33 scoped Eq. 26's confidence weighting
+to the class-conditional blocks, which took the weighting out of
+`_marginal_score`. The r33 -> r34 rebind changed nothing here, and the reason is
+narrow: r34 moved Eq. 15's consensus term to a leave-one-out average, and Eq. 15
+is MIL-CREDA's attention over the instances of a bag. This module is the
+SAMPLE-level method -- it has no bags and no attention -- so it implements no
+equation r34 touched, and every equation it does implement is byte-identical in
+r33 and r34. The paragraph below is the first rebind's reasoning, kept because
+it is the one that explains why a declaration can move without a number
+moving.
 
 **Why the r28 -> r31 rebind changed nothing here.** The rebind was not
 housekeeping and it was not an upgrade either: measured equation by equation against the two revisions, this module
@@ -156,7 +162,7 @@ from CREDA.bounds import class_global_loss_cosh
 #: for why `revision` moved from r28 to r31 without a line of arithmetic
 #: changing in this file.
 __provenance__ = {
-    "revision": "research-concept-r33.md",
+    "revision": "research-concept-r34.md",
     "sections": ["2", "3", "5"],
     "equations": ["10", "22", "23", "24", "25", "26", "27", "32", "33",
                   "35", "36", "37"],
