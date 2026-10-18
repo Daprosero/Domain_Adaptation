@@ -1040,8 +1040,17 @@ class R28BoundHypothesisTests(unittest.TestCase):
         `test_creda_sample.py`'s sign-chain measurement from r25's map to r33's
         on 2026-10-18 produced per-class losses of about -1.28 under a pairing
         the constructor accepted. Measured over 600 random configurations,
-        1378 of 1733 per-class readings fall outside [0, 1] with the cross
-        block raw, down to -20.26; with it weighted, 7 of 1733.
+        956 of 1769 per-class readings fall outside [0, 1] with the cross
+        block raw, down to -13.78; with it weighted, 0 of 1769.
+
+        **Both halves were re-measured on 2026-10-18** after
+        `_renyi_entropy_order_2`'s two epsilons and Eq. (24)'s came out. The
+        superseded reading was 1378 of 1733 raw, down to -20.26, and 7 of 1733
+        weighted -- and that weighted residual, which I had reported as
+        "measured, not diagnosed" at the end of the r33 landing, WAS the
+        epsilon. The sweep is a fresh one of 600 configurations, so the two
+        counts are not strictly comparable; what is comparable is that the
+        weighted side now reads exactly zero.
         """
         with self.assertRaises(ValueError) as raised:
             CREDALoss(normalize_by_bounds=True, bounds_form='entropy-cosh',
@@ -1082,7 +1091,7 @@ class R28BoundHypothesisTests(unittest.TestCase):
         `use_entropy_weighting` defaults to `True`, so this construction used
         to leave Eq. 26 half applied -- `D K_c^t D` weighted, `K_c^st` raw --
         and `test_entropy_cosh_refuses_a_raw_cross_block` above has the
-        measurement that makes that inadmissible: 1378 of 1733 per-class
+        measurement that makes that inadmissible: 956 of 1769 per-class
         readings outside [0, 1]. Naming it here is not a workaround; it is
         what the admissible pairing is.
         """

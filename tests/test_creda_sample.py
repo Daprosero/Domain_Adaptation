@@ -702,7 +702,9 @@ def test_normalize_by_bounds_maps_each_class_onto_its_own_unit_interval() -> Non
     # the only difference between them is the normalizer.
     # `weight_cross_block=True` because Eq. 26 weights BOTH blocks that touch
     # target bags, and Eq. 35's bound is proved on that mixture -- measured,
-    # 1378 of 1733 per-class readings leave [0, 1] with the cross block raw.
+    # 956 of 1769 per-class readings leave [0, 1] with the cross block raw,
+    # re-measured 2026-10-18 after the entropy epsilons came out (it read
+    # 1378 of 1733 before).
     # `CREDALoss` refuses the pairing since 2026-10-18; this test is how that
     # combination was found.
     shared = dict(sigma="auto", use_entropy_weighting=True,
