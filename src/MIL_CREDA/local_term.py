@@ -6,7 +6,7 @@ correspondence with the SAME bag kernel: Eq. (28) spreads relevance among the
 source bags of one class, Eq. (29) weights those distributions by the target's
 own class scores so the total mass is one, Eq. (30) builds a personalized
 reference in H_I, and Eq. (31) measures the squared RKHS distance to it using
-kernel evaluations alone. Eq. (38) normalizes and aggregates it by confidence.
+kernel evaluations alone. Eq. (38) normalizes it and takes the uniform mean.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import torch
 from MIL_CREDA import as_index, as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r25.md",
+    "revision": "research-concept-r33.md",
     "sections": ["4", "5"],
     "equations": ["28", "29", "30", "31", "38"],
     "invariants": [
@@ -26,6 +26,7 @@ __provenance__ = {
         "local_distance_bounded_by_two",
         "local_distance_zero_iff_reference_matches",
         "local_loss_in_unit_interval",
+        "local_loss_is_the_uniform_mean_and_ignores_confidence",
     ],
 }
 
@@ -117,24 +118,28 @@ def normalized_local_distance(
     return as_tensor(squared_distance) / 2.0
 
 
-def local_loss(
-    squared_distances: torch.Tensor,
-    target_weights: torch.Tensor,
-    epsilon: float = 1e-8,
-) -> torch.Tensor:
-    """Implement Eq. (38): the confidence-weighted aggregation of l_loc,j.
+def local_loss(squared_distances: torch.Tensor) -> torch.Tensor:
+    """Implement Eq. (38): the UNIFORM mean of l_loc,j over the target bags.
 
-    The stabilizer keeps the quotient defined when the total confidence is
-    tiny, and drives the term to zero in that case: if no pseudo-label is
-    reliable, local alignment imposes no penalty. Aggregation acts only at this
-    external level, leaving beta and pi untouched inside d_j^2.
+    Every target subject contributes the same weight, so `L_loc` estimates the
+    mean local discrepancy over the target distribution.
+
+    **It was confidence-weighted until r31 and r32 removed the weights, which
+    is why this signature lost two arguments.** The old form was
+    `sum_j w_j^t l_loc,j / (sum_j w_j^t + eps_loc)`, and the revision's own
+    reason for dropping it is that `w_j^t` is a DIFFERENTIABLE function of the
+    classifier's outputs (Eq. 24): a weight the model computes can be lowered
+    on the worst-aligned subjects instead of aligning them, which lowers
+    `L_loc` without moving the geometry. A uniform mean has no such channel.
+    `eps_loc` went with the denominator it stabilized; nothing reads it now.
+
+    The pseudo-label's uncertainty did not leave the term, it moved inside it:
+    `total_correspondence` (Eq. 29) keeps the whole `g_j^t`, so a subject with
+    an uncertain prediction is compared against a reference that mixes the
+    classes in proportion to that uncertainty. Aggregation still acts only at
+    this external level, leaving beta and pi untouched inside `d_j^2`.
     """
-    if epsilon <= 0:
-        raise ValueError("the local stabilizer must be strictly positive")
     losses = normalized_local_distance(as_tensor(squared_distances).reshape(-1))
-    w = as_tensor(target_weights).reshape(-1)
-    if losses.numel() != w.numel():
-        raise ValueError("one confidence per target bag is required")
     if losses.numel() == 0:
         return torch.zeros((), dtype=losses.dtype, device=losses.device)
-    return (w @ losses) / (w.sum() + epsilon)
+    return losses.mean()

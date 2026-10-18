@@ -28,6 +28,7 @@ from MIL_CREDA.attention import (
     bag_weights,
     consensus_component,
     effective_bag_size,
+    project_onto_l1_ball,
     relevance_component,
     relevance_logits,
     uniform_self_similarity,
@@ -36,9 +37,13 @@ from MIL_CREDA.bag_kernel import bag_gram, bag_kernel, bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix, weighted_blocks
 from MIL_CREDA.confidence import bag_confidence, confidences, pseudolabel
 from MIL_CREDA.global_term import (
-    class_global_loss,
-    conservative_bounds,
-    dependency_score,
+    balanced_dependency_score,
+    balanced_mixture,
+
+    class_global_loss_cosh,
+
+    entropy_cosh_bounds,
+    GLOBAL_LOSS_SPAN,
     global_loss,
 )
 from MIL_CREDA.kernels import gaussian_kernel, gram
@@ -462,28 +467,73 @@ def test_consensus_component_reads_the_declared_bandwidth_not_a_scaled_one(
     )
 
 
-def test_relevance_component_bounded_by_l1_normalization(rng: Sampler) -> None:
-    """r21 Sec. 3 (definition preceding Eq. 15): |R_phi(h)| <= 1 for ANY v_R.
+def test_project_onto_l1_ball_imposes_the_max_norm_constraint(rng: Sampler) -> None:
+    """r31 Eq. (15): "tras cada paso de optimizacion, si ||v_R||_1 > 1, se
+    reescala v_R <- v_R / ||v_R||_1".
 
-    'El parametro que se aprende es v_R, sin restriccion alguna; el selector
-    emplea su version normalizada v_R_tilde, ... de modo que ||v_R_tilde||_1
-    <= 1 para cualquier valor de los parametros.' The bound has to hold for
-    the raw, unconstrained parameter at any scale -- huge, tiny, negative, or
-    drawn at random -- never only for values gradient descent happens to
-    visit; this is the mechanism (`_l1_ball_reparametrization`), tested
-    directly rather than trusted.
+    The projection is the whole mechanism by which Eq. (15)'s bound holds under
+    r31, so it is tested directly: it must land every infeasible parameter
+    exactly on the ball's edge, leave every feasible one untouched, and report
+    which of the two it did.
+    """
+    hidden = 8
+    for scale in (1e6, -1e6, 3.0, -2.5):
+        v_R = torch.full((hidden,), float(scale), dtype=DTYPE)
+        assert float(torch.linalg.vector_norm(v_R, ord=1)) > 1.0
+        assert project_onto_l1_ball(v_R) is True
+        assert float(torch.linalg.vector_norm(v_R, ord=1)) == pytest.approx(
+            1.0, abs=1e-12)
+
+    for scale in (1e-9, -1e-9, 0.0):
+        v_R = torch.full((hidden,), float(scale), dtype=DTYPE)
+        before = v_R.clone()
+        assert project_onto_l1_ball(v_R) is False
+        assert torch.equal(v_R, before), "a feasible parameter must not move"
+
+    # Random infeasible draws, and the direction has to survive the rescale.
+    for _ in range(16):
+        v_R = rng.normal(size=hidden) * 1e5
+        direction = v_R / torch.linalg.vector_norm(v_R, ord=2)
+        assert project_onto_l1_ball(v_R) is True
+        assert float(torch.linalg.vector_norm(v_R, ord=1)) == pytest.approx(
+            1.0, abs=1e-12)
+        assert allclose(v_R / torch.linalg.vector_norm(v_R, ord=2),
+                        direction, atol=TOL)
+
+
+def test_relevance_component_bounded_by_the_l1_constraint(rng: Sampler) -> None:
+    """r31 Eq. (15): |R_phi(h)| <= ||v_R||_1 <= 1 for every FEASIBLE v_R.
+
+    "Como cada coordenada de tanh pertenece a [-1,1], la desigualdad de Hoelder
+    da |R_phi(h)| <= ||v_R||_1 <= 1 para todo h."
+
+    **Both poles, because r31 moved the reason the bound holds.** Through r30
+    the selector divided by `max(1, ||v_R||_1)` inside the forward pass, so the
+    bound held for ANY parameter at any scale and the earlier version of this
+    test asserted exactly that. r31 constrains the parameter instead, so the
+    bound is a statement about feasible parameters only -- and a test that
+    still demanded it for an unconstrained `v_R` would be asserting r30.
+
+    So the test asserts the bound on the feasible side AND asserts that it
+    genuinely fails on the infeasible side. Without the second half it could
+    not distinguish r31's raw selector from r30's dividing one, since both
+    satisfy the first half.
     """
     dimension, hidden = 5, 8
     H = rng.normal(size=(9, dimension))
     V_R = rng.normal(size=(hidden, dimension))
     b_R = rng.normal(size=hidden)
 
-    for scale in (1e6, -1e6, 1e-9, -1e-9):
+    # The feasible pole: projected parameters respect the bound.
+    for scale in (1e6, -1e6, 1e-9, -1e-9, 3.0):
         v_R = torch.full((hidden,), float(scale), dtype=DTYPE)
+        project_onto_l1_ball(v_R)
+        assert float(torch.linalg.vector_norm(v_R, ord=1)) <= 1.0 + TOL
         component = relevance_component(H, V_R, b_R, v_R)
         assert bool((component.abs() <= 1.0 + TOL).all())
 
     random_huge = rng.normal(size=hidden) * 1e5
+    project_onto_l1_ball(random_huge)
     component = relevance_component(H, V_R, b_R, random_huge)
     assert bool((component.abs() <= 1.0 + TOL).all())
 
@@ -491,8 +541,22 @@ def test_relevance_component_bounded_by_l1_normalization(rng: Sampler) -> None:
     assert allclose(relevance_component(H, V_R, b_R, zero),
                      torch.zeros(9, dtype=DTYPE), atol=TOL)
 
+    # The infeasible pole: WITHOUT the projection the bound is breached, which
+    # is what makes the projection the mechanism rather than a formality. The
+    # hidden layer is driven into saturation so `tanh` reaches its own ends and
+    # Hoelder's inequality is close to tight.
+    saturating = rng.normal(size=(hidden, dimension)) * 50.0
+    infeasible = torch.full((hidden,), 2.0, dtype=DTYPE)
+    assert float(torch.linalg.vector_norm(infeasible, ord=1)) > 1.0
+    breached = relevance_component(H, saturating, b_R, infeasible).abs().max()
+    assert float(breached) > 1.0 + TOL, (
+        "an unprojected v_R no longer breaches the bound, so this test can no "
+        f"longer tell r31's raw selector from r30's dividing one: {float(breached)}")
+
     for cfg in _attention_configurations():
-        component = relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"])
+        v_R = cfg["v_R"].clone()
+        project_onto_l1_ball(v_R)
+        component = relevance_component(cfg["H"], cfg["V_R"], cfg["b_R"], v_R)
         assert bool((component.abs() <= 1.0 + TOL).all())
 
 
@@ -609,12 +673,29 @@ def test_attention_logit_ratio_bounded_by_temperature(rng: Sampler) -> None:
     """r21 Sec. 3: 'dos logits de una misma bolsa difieren a lo sumo en
     2 + gamma, de modo que la razon entre dos pesos de la bolsa es a lo sumo
     exp((2 + gamma) / tau_att).'
+
+    **The `2` is `|R_phi| <= 1` twice, so under r31 it needs a FEASIBLE `v_R`.**
+    Through r30 the selector divided by `max(1, ||v_R||_1)` inside the forward
+    pass, so the spread bound held for any parameter and this test could draw
+    `v_R` freely. r31 constrains the parameter instead, so an unprojected draw
+    makes `|R_phi|` exceed 1 and the bound is genuinely false: measured without
+    the projection, the ratio reaches 7.06 against a bound of 4.27.
+
+    So the fixture's `v_R` is projected first, which is the state the training
+    loop maintains it in. The sweep still ends by confirming the bound really
+    does bind -- an unprojected draw must breach it -- so this cannot pass by
+    having become vacuous.
     """
+    breached_unprojected = 0
     for cfg in _attention_configurations():
         if cfg["m"] < 2:
             continue
+        v_R = cfg["v_R"].clone()
+        project_onto_l1_ball(v_R)
+        assert float(torch.linalg.vector_norm(v_R, ord=1)) <= 1.0 + TOL
+
         logits = relevance_logits(
-            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"], cfg["sigma"]
+            cfg["H"], cfg["V_R"], cfg["b_R"], v_R, cfg["gamma"], cfg["sigma"]
         )
         spread = float(logits.max() - logits.min())
         assert spread <= 2.0 + cfg["gamma"] + 1e-8
@@ -623,24 +704,39 @@ def test_attention_logit_ratio_bounded_by_temperature(rng: Sampler) -> None:
         bound = math.exp((2.0 + cfg["gamma"]) / cfg["tau_att"])
         assert ratio <= bound * (1.0 + 1e-6) + 1e-9
 
+        raw_logits = relevance_logits(
+            cfg["H"], cfg["V_R"], cfg["b_R"], cfg["v_R"], cfg["gamma"],
+            cfg["sigma"]
+        )
+        if float(raw_logits.max() - raw_logits.min()) > 2.0 + cfg["gamma"] + 1e-8:
+            breached_unprojected += 1
 
-def test_relevance_logit_reduces_to_l1_normalized_relevance_at_neutral_hyperparameters() -> None:
+    assert breached_unprojected > 0, (
+        "no configuration breaches the spread bound without the projection, so "
+        "this test can no longer tell r31's constrained parameter from r30's "
+        "reparametrized forward pass")
+
+
+def test_relevance_logit_reduces_to_the_raw_relevance_at_neutral_hyperparameters() -> None:
     """At gamma = 0 and tau_att = 1 (`config.ATTENTION_GAMMA`,
-    `config.ATTENTION_TEMPERATURE`'s declared neutral) Eqs. (15)-(16) reduce
-    to R_phi with the l1-normalized v_R (r25 Eq. (15)): a plain softmax of the
-    learned relevance alone, WITH the l1-ball reparametrization Eq. (15)
-    always applies to v_R.
+    `config.ATTENTION_TEMPERATURE`'s declared neutral) r31's Eqs. (15)-(16)
+    reduce to a plain softmax of `v_R^T tanh(V_R h + b_R)` -- the learned
+    relevance alone, with `v_R` read RAW.
 
-    Deliberately not a comparison against a bare, unconstrained
-    v_R^T tanh(V_R h + b_R) computed with v_R as-is -- an earlier version of
-    this test claimed that reduction under the name "r17", and it is false:
-    r21 never mentions r17, and the l1-ball reparametrization is not gated by
-    gamma or tau_att at all, so it applies here exactly as it does at any
-    other hyperparameters. `v_R` is drawn at a scale where
-    ||v_R||_1 >> 1 -- the harness's own trained selector sits around 9-11
-    against `config.ATTENTION_WIDTH = 128` raw components -- so this cannot
-    pass by accident of a `v_R` small enough for the reparametrization to be
-    a no-op.
+    **This reduction is r31's and the opposite of r30's.** r30 reparametrized
+    inside the forward pass, so the reduction was to `R_phi` with an
+    l1-NORMALIZED `v_R`, and the previous version of this test asserted exactly
+    that -- including a closing assertion that the bare, unconstrained pipeline
+    gives a DIFFERENT number. r31 imposes the constraint on the parameter after
+    each optimizer step instead, so the forward pass normalizes nothing and the
+    bare pipeline is now the right-hand side rather than the refuted one.
+
+    `v_R` is still drawn far outside the unit ball, and for the same reason it
+    always was: inside the ball the two revisions agree exactly, so a small
+    `v_R` would let this pass under either one. The closing assertion is
+    therefore inverted rather than deleted -- it now pins that r30's dividing
+    pipeline gives a different number, which is what makes this a test of which
+    revision is implemented.
     """
     for index in range(SWEEP_SIZE):
         s = Sampler(_ATTENTION_SWEEP_SEED + 700_000 + index)
@@ -650,24 +746,28 @@ def test_relevance_logit_reduces_to_l1_normalized_relevance_at_neutral_hyperpara
         H = s.normal(size=(m, dimension))
         V_R = s.normal(size=(hidden, dimension))
         b_R = s.normal(size=hidden)
-        # ||v_R||_1 far above the unit ball, so the reparametrization is never
-        # a no-op here and this cannot pass by accident of a small v_R.
+        # ||v_R||_1 far above the unit ball, so r30 and r31 cannot agree here
+        # and this cannot pass by accident of a small v_R.
         v_R = s.normal(size=hidden) * float(s.uniform(20.0, 80.0))
+        assert float(torch.linalg.vector_norm(v_R, ord=1)) > 1.0
 
         logits = relevance_logits(H, V_R, b_R, v_R, 0.0, SIGMA)
-        component = relevance_component(H, V_R, b_R, v_R)  # already l1-normalized inside
+        raw = torch.tanh(H @ V_R.transpose(0, 1) + b_R) @ v_R
+        assert allclose(logits, raw, atol=1e-12)
+
+        component = relevance_component(H, V_R, b_R, v_R)
         assert allclose(logits, component, atol=1e-12)
 
         beta = bag_weights(logits, 1.0)
-        expected_beta = torch.softmax(component, dim=0)
-        assert allclose(beta, expected_beta, atol=1e-12)
+        assert allclose(beta, torch.softmax(raw, dim=0), atol=1e-12)
 
-        # And the reparametrization really is doing work here: the old,
-        # unconstrained pipeline this used to be checked against gives a
-        # DIFFERENT number at this scale, so the false claim is refuted
-        # rather than merely unmade.
-        unconstrained_logits = torch.tanh(H @ V_R.transpose(0, 1) + b_R) @ v_R
-        assert not allclose(logits, unconstrained_logits, atol=1e-6)
+        # And r30's pipeline really is a different number at this scale, so
+        # the reduction above identifies the revision rather than restating an
+        # algebraic identity both revisions would satisfy.
+        norm = torch.linalg.vector_norm(v_R, ord=1)
+        r30_logits = torch.tanh(H @ V_R.transpose(0, 1) + b_R) @ (
+            v_R / torch.clamp(norm, min=1.0))
+        assert not allclose(logits, r30_logits, atol=1e-6)
 
 
 def test_effective_bag_size_in_range(rng: Sampler) -> None:
@@ -906,6 +1006,68 @@ def _class_setup(rng: Sampler, n_source: int = 4, n_target: int = 3):
     return K_ss, K_st, K_tt, torch.arange(n_source), torch.arange(n_target), w
 
 
+def _class_bags(
+    rng: Sampler,
+    n_source: int = 4,
+    n_target: int = 5,
+    withdrawn: int | None = None,
+):
+    """One class's bags, with the target side on the gradient's path.
+
+    The bags are real bags rather than a Gram matrix written down directly, so
+    whatever reads `H.grad` reads it through Eq. (14)'s bag kernel. `withdrawn`
+    names one target bag whose Eq. (24) confidence is driven to exactly zero;
+    the rest are floored well above it so "this one got nothing" cannot be an
+    accident of a confidence that was nearly zero anyway.
+    """
+    source = make_bags(rng, n_source, 4, shift=0.0)
+    target = [
+        (H.clone().requires_grad_(True), w)
+        for H, w in make_bags(rng, n_target, 4, shift=0.6)
+    ]
+    confidence = confidences(simplex_rows(rng, n_target, 3)).clamp_min(0.2)
+    if withdrawn is not None:
+        confidence = confidence.clone()
+        confidence[withdrawn] = 0.0
+    return source, target, confidence, withdrawn
+
+
+def _class_blocks_over_bags(source, target, confidence, *, weight_cross_block=True):
+    """Eqs. (23) and (26) over one class's bags: `(K_s_c, K~_st_c, K~_t_c)`."""
+    K_ss = bag_kernel_matrix(source, source, SIGMA)
+    K_st = bag_kernel_matrix(source, target, SIGMA)
+    K_tt = bag_kernel_matrix(target, target, SIGMA)
+    K_s_c, K_st_c, K_t_c = conditional_blocks(
+        K_ss, K_st, K_tt, torch.arange(len(source)), torch.arange(len(target))
+    )
+    K_st_w, K_t_w = weighted_blocks(
+        K_st_c, K_t_c, confidence, weight_cross_block=weight_cross_block
+    )
+    return K_s_c, K_st_w, K_t_w
+
+
+def _global_term_over_bags(
+    source,
+    target,
+    confidence,
+    *,
+    weight_cross_block: bool = True,
+    detach_target_entropy: bool = False,
+):
+    """One class's whole global term, Eq. (32) through Eq. (36), as a scalar."""
+    K_s_c, K_st_w, K_t_w = _class_blocks_over_bags(
+        source, target, confidence, weight_cross_block=weight_cross_block
+    )
+    breve_s, breve_t, _ = balanced_mixture(K_s_c, K_st_w, K_t_w)
+    return class_global_loss_cosh(
+        balanced_dependency_score(
+            K_s_c, K_st_w, K_t_w, detach_target_entropy=detach_target_entropy
+        ),
+        quadratic_entropy(breve_s),
+        quadratic_entropy(breve_t),
+    )
+
+
 def test_weighted_target_equals_diagonal_congruence(rng: Sampler) -> None:
     """r16 Sec. 3, Eq. (26): K_c^t . (w w^T) equals D_c^t K_c^t D_c^t.
 
@@ -951,57 +1113,250 @@ def test_mixed_matrix_symmetric_psd(rng: Sampler) -> None:
     assert float(torch.linalg.eigvalsh(K_mix).min()) >= -1e-8
 
 
+def test_weight_cross_block_off_leaves_the_cross_block_unweighted(
+    rng: Sampler,
+) -> None:
+    """r29 Sec. 3, Eq. (26): `weight_cross_block` decides whether `D` reaches it.
+
+    Both poles of the axis, measured on the block itself. Under the default the
+    cross block is `K_c^{st} D`, which is the Hadamard form `K_c^{st} * w^T`
+    broadcast across ROWS -- weight on the target side only, since rows are
+    source bags whose labels are observed. Under the axis off it is the block
+    as it arrived, which is CREDA's original.
+
+    The two have to actually differ, or naming the axis named nothing; and the
+    target block has to be weighted under both, because Eq. (26)'s congruence
+    on `K_c^t` is not what this axis is about.
+    """
+    K_ss, K_st, K_tt, S_c, T_c, w = _class_setup(rng)
+    _, K_st_c, K_t_c = conditional_blocks(K_ss, K_st, K_tt, S_c, T_c)
+    weighted_cross, weighted_target = weighted_blocks(K_st_c, K_t_c, w)
+    raw_cross, raw_target = weighted_blocks(
+        K_st_c, K_t_c, w, weight_cross_block=False
+    )
+
+    # The default pole, against the broadcast Hadamard form rather than
+    # against this test's own copy of the matrix product.
+    assert allclose(weighted_cross, K_st_c * w.reshape(1, -1), atol=TOL)
+    # The other pole: the block as it arrived.
+    assert allclose(raw_cross, K_st_c, atol=TOL)
+    # The axis moves something. `w` is Eq. (24)'s confidence and is not all
+    # ones, so this is reachable rather than an accident of the fixture.
+    assert float(w.max()) < 1.0
+    assert not allclose(weighted_cross, raw_cross)
+    # And it moves only the cross block.
+    assert allclose(weighted_target, raw_target, atol=TOL)
+
+
+def test_weight_cross_block_freezes_a_zero_confidence_bag(rng: Sampler) -> None:
+    """r29 Sec. 3, Eq. (26): which pole can still repair a withdrawn bag.
+
+    The axis that separates *who defines the geometry* from *whom the term
+    repairs*, measured as the gradient it is about rather than as a value.
+    With the cross block weighted, a bag of confidence zero has its row and
+    column emptied out of every block that reaches it, so the global term's
+    gradient with respect to that bag's instance embeddings is exactly zero and
+    the bag stays FROZEN. With the cross block raw, `K_c^{st}` still carries it
+    and the term can still move it.
+
+    The gradient travels the whole path a training step travels -- Eq. (14)'s
+    bag kernel, Eq. (23)'s blocks, Eq. (26)'s weighting, Eq. (32)'s balance,
+    Eq. (33)'s score, Eq. (36)'s map -- because a gradient only exists at the
+    end of one, and the claim is about where it arrives.
+
+    The bags the gate KEPT are the control: they receive gradient under both
+    poles, so the zero is this bag's and not the whole term's.
+    """
+    source, target, w, withdrawn = _class_bags(rng, withdrawn=2)
+    assert float(w[withdrawn]) == 0.0
+    assert float(w.min()) == 0.0 and float(w[:withdrawn].min()) > 0.0
+
+    norms = {}
+    for weighted in (True, False):
+        loss = _global_term_over_bags(
+            source, target, w, weight_cross_block=weighted
+        )
+        grads = torch.autograd.grad(loss, [H for H, _ in target])
+        norms[weighted] = [float(g.norm()) for g in grads]
+
+    # The declared pole freezes it; the other one does not.
+    assert norms[True][withdrawn] == 0.0
+    assert norms[False][withdrawn] > 0.0
+    # The control: every kept bag is reached under both.
+    for index in range(len(target)):
+        if index == withdrawn:
+            continue
+        assert norms[True][index] > 0.0, index
+        assert norms[False][index] > 0.0, index
+
+
 # --------------------------------------------------------------------------
 # global_term.py - Section 5, Eqs. (32)-(37)
 # --------------------------------------------------------------------------
+# **r25's two retained claims lived here and were removed on 2026-10-18.**
+# `test_score_within_conservative_bounds` and
+# `test_class_global_loss_in_unit_interval` asserted Eq. (34)/(36) over r25's
+# cardinality ends, and said so: they were kept "because `src/CREDA/bounds.py`
+# copies the latter and `tests/test_creda_sample.py` pins the copy to it". r33
+# states one pair of ends, `conservative_bounds` and `class_global_loss` were
+# removed from both packages with the CREDA copies, and a test of a function
+# that no longer exists is not a weaker check -- it is an import error. r33's
+# own bound claims are in `tests/test_milcreda_r29_global_term.py`.
 
 
-def test_score_within_conservative_bounds(rng: Sampler) -> None:
-    """r16 Sec. 5, Eq. (34): L_c <= J_c <= U_c.
+def test_detach_target_entropy_removes_the_dispersive_force_and_not_the_value(
+    rng: Sampler,
+) -> None:
+    """r29 Sec. 5, Eq. (33): `detach_target_entropy` moves gradient, never value.
 
-    Each entropy lies in [0, ln n] for its own size; combining the permitted
-    extremes separately gives the two conservative ends.
+    **The value cannot see this axis, and that is why the test reads the
+    gradient.** `x.detach()` and `x` are the same number, so `J_c` and every
+    loss built on it come out bit-identical under both poles -- a test
+    asserting on the score or on Eq. (36)'s loss would pass with the axis on
+    AND with the axis broken. It is asserted here as an equality to the last
+    bit, because it is the trap and not a tolerance.
+
+    What the axis removes is the DISPERSIVE force the target block exerts on
+    itself. Everything else is left intact: `H_mix` still carries the target
+    inside, so the alignment is untouched, and Eq. (35)'s ends read
+    `H_2(K~_t)` through `class_global_loss_cosh`'s own argument and not through
+    the score, so the bounds are untouched too.
+
+    The removal is exact rather than merely non-zero, which is what makes this
+    a measurement of the axis and not of the fact that two gradients differ.
+    r31's Eq. (36) is `(U_c - J_c) / ln 2` -- a CONSTANT denominator, where r29
+    divided by the per-class span `U_c - L_c` and detached it -- and `H_2(K~_t)`
+    enters `J_c` with coefficient `1/2`, so detaching it must move the gradient
+    by exactly `-(1/2) grad H_2(K~_t) / ln 2` and by nothing else.
+
+    **The denominator here follows Eq. (36) and is not a free constant.** It
+    was `float((upper - lower).detach())` while that was Eq. (36)'s
+    denominator; under r31 that value is `U_c + ln 2`, which differs from
+    `ln 2` by `U_c` -- measured at this fixture, 0.694154 against 0.693147 --
+    so leaving it would have pinned r29's map inside a test about a different
+    axis entirely.
     """
-    for n_s, n_t in ((4, 3), (2, 6), (5, 5)):
-        K_ss, K_st, K_tt, S_c, T_c, w = _class_setup(rng, n_s, n_t)
-        K_s_c, K_st_c, K_t_c = conditional_blocks(K_ss, K_st, K_tt, S_c, T_c)
-        K_st_w, K_t_w = weighted_blocks(K_st_c, K_t_c, w)
-        score = dependency_score(K_s_c, K_t_w, mixed_matrix(K_s_c, K_st_w, K_t_w))
-        lower, upper = conservative_bounds(n_s, n_t)
-        assert lower - TOL <= float(score) <= upper + TOL
+    source, target, w, _ = _class_bags(rng)
+    leaves = [H for H, _ in target]
 
+    values, grads = {}, {}
+    for detached in (False, True):
+        loss = _global_term_over_bags(
+            source, target, w, detach_target_entropy=detached
+        )
+        values[detached] = float(loss.detach())
+        grads[detached] = torch.autograd.grad(loss, leaves)
 
-def test_class_global_loss_in_unit_interval(rng: Sampler) -> None:
-    """r16 Sec. 5, Eq. (36): the affine map sends U_c to 0, L_c to 1, and stays in [0, 1]."""
-    for n_s, n_t in ((3, 4), (6, 2)):
-        K_ss, K_st, K_tt, S_c, T_c, w = _class_setup(rng, n_s, n_t)
-        K_s_c, K_st_c, K_t_c = conditional_blocks(K_ss, K_st, K_tt, S_c, T_c)
-        K_st_w, K_t_w = weighted_blocks(K_st_c, K_t_c, w)
-        score = dependency_score(K_s_c, K_t_w, mixed_matrix(K_s_c, K_st_w, K_t_w))
-        lower, upper = conservative_bounds(n_s, n_t)
-        assert -TOL <= float(class_global_loss(score, lower, upper)) <= 1.0 + TOL
-        assert close(class_global_loss(upper, lower, upper), 0.0, atol=TOL)
-        assert close(class_global_loss(lower, lower, upper), 1.0, atol=TOL)
+    # The trap: identical to the last bit, so no value test can see the axis.
+    assert values[False] == values[True]
 
+    # The gradient can see it.
+    moved = max(
+        float((attached - held).abs().max())
+        for attached, held in zip(grads[False], grads[True])
+    )
+    assert moved > 0.0
 
-def test_global_loss_is_convex_combination(rng: Sampler) -> None:
-    """r16 Sec. 5, Eq. (37): a convex combination of values in [0, 1] stays in [0, 1].
+    # And what moved is exactly the force the detach removes.
+    K_s_c, K_st_w, K_t_w = _class_blocks_over_bags(source, target, w)
+    breve_s, breve_t, _ = balanced_mixture(K_s_c, K_st_w, K_t_w)
+    h_source, h_target = quadratic_entropy(breve_s), quadratic_entropy(breve_t)
+    # r31 Eq. (36)'s denominator, read from the module rather than recomputed,
+    # so a later change to the equation cannot leave this reference behind.
+    denominator = GLOBAL_LOSS_SPAN
+    # And it really is the constant and not the old span: the two differ here.
+    _lower, upper = entropy_cosh_bounds(h_source, h_target)
+    assert abs(float((upper - _lower).detach()) - denominator) > 1e-6, (
+        "U_c has collapsed to 0 at this fixture, so r29's span and r31's "
+        "constant coincide and this test cannot tell the two maps apart")
+    dispersive = torch.autograd.grad(h_target, leaves)
+    for attached, held, force in zip(grads[False], grads[True], dispersive):
+        assert allclose(
+            attached - held, (-0.5 / denominator) * force, atol=1e-14, rtol=0.0
+        )
+def test_global_loss_is_convex_combination_of_source_proportions() -> None:
+    """r33 Sec. 5, Eq. (37): the weights are `n_c^s / N_s`, they sum to exactly
+    one, and the term is a convex combination of values in [0, 1].
 
-    It also never leaves the range of the per-class losses it aggregates, and
-    it rejects weights that do not form a distribution.
+    **This replaced a SUB-convex claim.** r31's weights were
+    `omega_c = q_c / sum_c' n_c'^t`, built from Eq. (24)'s confidences, summing
+    to at most one -- the shortfall was a gate on the absolute confidence
+    level, and the test here asserted exactly that scaling every confidence
+    scaled the term. r32 removed it, because a weight the model computes can be
+    lowered instead of earned, and replaced it with the observed source
+    proportions. There is no shortfall left to assert: `sum_c n_c^s / N_s` is
+    one identically, so a caller cannot scale the term at all.
     """
-    losses = rng.uniform(0.0, 1.0, size=5)
-    weights = rng.dirichlet(5)
-    aggregate = global_loss(losses, weights)
-    assert float(losses.min()) - TOL <= float(aggregate) <= float(losses.max()) + TOL
-    assert close(global_loss(losses), losses.mean(), atol=TOL)
+    losses = [0.1, 0.3, 0.5, 0.7, 0.9]
+    counts = [2, 2, 2, 2, 2]
+    balanced = float(global_loss(losses, counts))
+    assert close(balanced, sum(losses) / len(losses), atol=TOL)
+    assert 0.0 - TOL <= balanced <= 1.0 + TOL
+
+    # Unbalanced: each class weighs the source evidence it brought, so the term
+    # moves toward the loss of the class with more source bags.
+    heavy_low = float(global_loss(losses, [50, 1, 1, 1, 1]))
+    heavy_high = float(global_loss(losses, [1, 1, 1, 1, 50]))
+    assert heavy_low < balanced < heavy_high
+    assert 0.0 - TOL <= heavy_low and heavy_high <= 1.0 + TOL
+
+    # Counts, not weights: the caller has no way to hand a sum that is not one.
     with pytest.raises(ValueError):
-        global_loss(losses, torch.full((5,), 0.5, dtype=DTYPE))
+        global_loss(losses, [2, 2, 2, 2])            # one count per class
+    with pytest.raises(ValueError):
+        global_loss(losses, [2, 2, 2, 2, -1])        # a count is non-negative
+    with pytest.raises(ValueError):
+        global_loss(losses, [0, 0, 0, 0, 0])         # N_s = 0, weights undefined
+    with pytest.raises(ValueError):
+        global_loss([], [])                          # Eq. (37) sums over C
 
 
-def test_global_loss_zero_when_no_active_class() -> None:
-    """r16 Sec. 5, Eq. (37): with C_act empty the global term imposes no penalty."""
-    assert float(global_loss([])) == 0.0
+def test_global_loss_charges_one_for_an_inactive_class() -> None:
+    """r33 Sec. 5, Eq. (37): `l~_c = 1` for `c` not in `C_act`, so abandoning a
+    class RAISES the term.
+
+    **r31 answered 0 with `C_act` empty and excluded inactive classes from the
+    sum, which is the defect this replaces.** A target encoder that collapsed
+    until the hard pseudo-label named one class left a sum over one class --
+    fewer terms, each in [0, 1] -- and the term went down while nothing was
+    aligned. Charging the maximum makes the collapse read as a rise.
+    """
+    losses = [0.1, 0.2, 0.3]
+    counts = [4, 4, 4]
+    all_active = float(global_loss(losses, counts))
+
+    # Abandon the third class. r31 would have averaged the surviving two and
+    # reported LESS; r33 charges 1 for it and reports more.
+    abandoned = float(global_loss([0.1, 0.2, None], counts))
+    r31_would_have = (0.1 + 0.2) / 2
+    assert abandoned > all_active
+    assert abandoned > r31_would_have
+    assert close(abandoned, (0.1 + 0.2 + 1.0) / 3, atol=TOL)
+
+    # Every class abandoned: the weights still sum to one, so the term is 1.
+    assert close(global_loss([None, None, None], counts), 1.0, atol=TOL)
+
+    # A class with no SOURCE bag cannot be active and weighs zero, so it costs
+    # nothing -- the charge is for a class the source has and the routing left.
+    assert close(global_loss([0.1, 0.2, None], [4, 4, 0]),
+                 (0.1 + 0.2) / 2, atol=TOL)
+
+
+def test_global_loss_inactive_charge_carries_no_gradient() -> None:
+    """r33 Sec. 5, Eq. (37): the charge is a literal and the weights are counts,
+    so an inactive class contributes no gradient.
+
+    Eq. (22)'s routing is an `argmax`, so there is no path to differentiate in
+    the first place -- the charge's job is the VALUE. Asserted by differentiating
+    a term in which one class is active and one is not, and checking that the
+    gradient equals the active class's own weight.
+    """
+    active = torch.tensor(0.4, dtype=DTYPE, requires_grad=True)
+    value = global_loss([active, None], [3, 1])
+    value.backward()
+    assert close(value, 0.4 * 0.75 + 1.0 * 0.25, atol=TOL)
+    # d/d(l_glob,0) = n_0^s / N_s = 3/4, with nothing added by the charge.
+    assert close(active.grad, 0.75, atol=TOL)
 
 
 # --------------------------------------------------------------------------
@@ -1113,8 +1468,12 @@ def test_local_loss_in_unit_interval(rng: Sampler) -> None:
     w = rng.uniform(0.0, 1.0, size=7)
     per_subject = normalized_local_distance(d2)
     assert bool(((per_subject >= 0.0) & (per_subject <= 1.0)).all())
-    assert -TOL <= float(local_loss(d2, w)) <= 1.0 + TOL
-    assert float(local_loss(d2, torch.zeros(7, dtype=DTYPE))) == 0.0
+    assert -TOL <= float(local_loss(d2)) <= 1.0 + TOL
+    # r33 Eq. (38) is the uniform mean, so zero confidence is not a zero term
+    # any more: `w_j^t` left the aggregation at r32 and `local_loss` has no
+    # argument to pass it through. The claim that replaces "no reliable
+    # pseudo-label, no penalty" is that the confidences cannot enter at all.
+    assert 'target_weights' not in local_loss.__code__.co_varnames
 
 
 # --------------------------------------------------------------------------

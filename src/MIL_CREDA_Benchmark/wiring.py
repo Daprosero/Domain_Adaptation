@@ -43,14 +43,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from CREDA.models import CREDALoss, FeatureExtractor
-from MIL_CREDA.attention import bag_embedding, bag_weights, relevance_logits
+from MIL_CREDA.attention import (
+    bag_embedding,
+    bag_weights,
+    project_onto_l1_ball,
+    relevance_logits,
+)
 from MIL_CREDA.bag_kernel import bag_kernel, bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix, weighted_blocks
 from MIL_CREDA.confidence import confidences, pseudolabel
 from MIL_CREDA.global_term import (
-    class_global_loss,
-    conservative_bounds,
-    dependency_score,
+    balanced_dependency_score,
+    balanced_mixture,
+    class_global_loss_cosh,
     global_loss,
     is_active,
 )
@@ -58,6 +63,7 @@ from MIL_CREDA.local_term import local_distance, local_loss, total_correspondenc
 from MIL_CREDA.objective import source_loss, total_objective
 from MIL_CREDA.renyi import quadratic_entropy, trace_normalize
 from MIL_CREDA_Benchmark import config
+from MIL_CREDA_Benchmark.mlp import MLP_BACKBONES, build_mlp
 
 #: The two domains Eq. (13) names, and the only two values any caller may
 #: state at an embedding boundary (spec `per-domain-encoders`, "No embedding
@@ -117,6 +123,123 @@ def _off_diagonal_mean(K: torch.Tensor) -> float:
     return float(K[off_diagonal].mean())
 
 
+def _off_diagonal_mean_live(K: torch.Tensor) -> torch.Tensor:
+    """`_off_diagonal_mean`'s identical computation, with no `.detach()` and
+    no cast to `float` -- a LIVE tensor, gradient attached.
+
+    A second spelling of one number is normally the defect this repository
+    calls out repeatedly, and that rule still holds for every DIAGNOSTIC
+    reading in this file -- `sourceKernelMean`/`crossKernelMean`/
+    `targetKernelMean` have no business carrying gradient, since nothing
+    trains on a number only ever printed. `_target_dispersion` is not one of
+    those: once it is a divisor the loss itself uses, it is part of the
+    objective, and `_off_diagonal_mean`'s own `.detach()` -- correct for
+    every OTHER caller, which is why it is not removed there -- would sever
+    the one gradient path this function exists to keep open. So the
+    computation is kept twice on purpose, named apart, each serving the
+    caller its own contract demands: `_off_diagonal_mean` for every
+    diagnostic reader, this one for `_target_dispersion` alone.
+    """
+    n, m = K.shape[0], K.shape[1]
+    if n <= 1 or m <= 1:
+        return K.mean() if K.numel() else torch.tensor(float("nan"))
+    off_diagonal = ~torch.eye(n, m, dtype=torch.bool, device=K.device)
+    return K[off_diagonal].mean()
+
+
+def _target_dispersion(K_tt: torch.Tensor) -> torch.Tensor:
+    """The PROBE's own reading (`config.NORMALIZE_LOCAL_BY_DISPERSION`): the
+    mean pairwise squared distance among the target bag representations
+    Psi(B_j^t) in H_I,
+
+        mean over i != j of ( K_tt[i,i] + K_tt[j,j] - 2*K_tt[i,j] )
+
+    read off `K_tt` -- already built by `_milcreda_term` -- rather than
+    recomputed from scratch. For `n` bags there are `n*(n-1)` ordered
+    off-diagonal pairs `(i, j)`; each diagonal entry `K_tt[i,i]` occurs in
+    exactly `n-1` of them (once per choice of the other index), so the first
+    two terms' average over those pairs is `K_tt`'s own diagonal mean, taken
+    twice over, and the third term's average is exactly `_off_diagonal_
+    mean_live(K_tt)`. Hence:
+
+        dispersion = 2 * (diagonal_mean(K_tt) - _off_diagonal_mean_live(K_tt))
+
+    **A LIVE tensor, deliberately NOT detached -- this is the correction to
+    an earlier version of this probe, which detached it.** `L = d^2 / D`
+    with `D` detached gives `dL/dtheta = (1/D) * d(d^2)/dtheta`: descent
+    lowers `d^2` with a step scaled by `1/D`, and as the cloud collapses
+    `D -> 0` so that scale explodes -- a detached denominator is a POSITIVE
+    FEEDBACK LOOP into the exact collapse this probe exists to resist, not
+    merely "no anti-collapse force." With `D` live, `dL/dtheta =
+    (1/D) * d(d^2)/dtheta - (d^2/D^2) * dD/dtheta`; the second term is the
+    entire remedy -- it pushes to INCREASE `D`, i.e. to spread the target
+    representations apart, which is the one thing a detached divisor can
+    never do. `tests/test_local_dispersion.py`'s own
+    `test_the_dispersion_denominator_carries_gradient_and_resists_collapse`
+    measures exactly this: a gradient step must increase the measured
+    dispersion when `d_j^2` is held fixed.
+
+    `K_tt` itself must reach here with `requires_grad` still true -- i.e.
+    computed in the ordinary forward pass, never under `torch.no_grad()` or
+    behind an earlier `.detach()` in the call chain -- or this correction is
+    inert. `_milcreda_term` builds it in the ordinary forward path with no
+    such break.
+
+    The diagnostic `self._diagnostics["targetDispersion"]` still wants a
+    plain, detached number to report; `_dispersion_normalized_local_term`
+    reads this same live tensor twice -- once live, for the loss, once
+    `.detach()`ed, for the diagnostic -- rather than computing it twice.
+    """
+    diagonal_mean = K_tt.diagonal().mean()
+    return 2.0 * (diagonal_mean - _off_diagonal_mean_live(K_tt))
+
+
+def _dispersion_normalized_local_term(
+    distances: torch.Tensor, K_tt: torch.Tensor,
+) -> tuple[torch.Tensor, float]:
+    """The PROBE's own local term: Eq. (38)'s aggregation, with `d_j^2`
+    divided by `_target_dispersion(K_tt)` instead of the revision's constant 2.
+
+    Mirrors `MIL_CREDA.local_term.local_loss`'s aggregation precisely -- the
+    uniform mean, over losses read off the measured dispersion rather than
+    Eq. (38)'s constant bound.
+
+    **It mirrored a confidence-weighted aggregation until 2026-10-18, and
+    following r33 here is not cosmetic.** This probe exists to isolate ONE
+    change, the divisor, which is the same reason
+    `config.NORMALIZE_LOCAL_BY_DISPERSION` is a run-level flag and not a
+    per-arm one: "a per-arm flag would make two adjacent rungs of the ladder
+    differ in the component under test AND in the normalization, so no
+    difference between them could be attributed to either one". A probe left on
+    r31's aggregation would reintroduce exactly that confound at the moment
+    somebody turns it on -- the divisor and the weights would move together and
+    neither could be read off the result. `target_weights` left the signature
+    with the weights, and `w.sum()`'s stabilizer with the denominator it held
+    up; `config.EPSILON_LOCAL` remains below, now stabilizing only the measured
+    dispersion, which is a different divisor with a real risk of reaching zero.
+
+    `dispersion` is LIVE here -- see `_target_dispersion`'s own docstring
+    for why a detached divisor amplifies collapse instead of resisting it --
+    so `local_term` carries a gradient path to `K_tt` through the
+    denominator as well as through `distances`. The returned second element
+    is a `.detach()`ed COPY of the same number, for `_milcreda_term`'s own
+    `self._diagnostics["targetDispersion"]`: a diagnostic has no business
+    holding a graph open, and reading the live tensor once rather than
+    recomputing it is what keeps the live and the reported numbers from
+    ever being able to disagree.
+
+    **No `[0, 1]` guarantee survives this division** -- see `config.
+    NORMALIZE_LOCAL_BY_DISPERSION`'s own docstring. The ratio is unbounded
+    above whenever the measured dispersion is small, which is exactly the
+    regime a probe of collapse has to visit, and nothing here clamps it to
+    recover a bound Eq. (38) never claimed for this divisor.
+    """
+    dispersion = _target_dispersion(K_tt)
+    normalized = distances / (dispersion + config.EPSILON_LOCAL)
+    local_term = normalized.mean()
+    return local_term, float(dispersion.detach())
+
+
 @dataclass
 class Pool:
     """One domain's training bags, already on the device the run uses."""
@@ -128,6 +251,24 @@ class Pool:
     def take(self, positions: torch.Tensor) -> torch.Tensor:
         """The instances of the chosen bags, as (B, 30, 3, 32, 32)."""
         return self.images[self.members[positions]]
+
+
+def _resolve_encoder(reference_images: torch.Tensor) -> nn.Module:
+    """Which encoder `config.BACKBONE` builds, resolved through the plain
+    module-level `FeatureExtractor` name on the resnet/vit path -- never a
+    local alias, a second import, or a call through this module's own name --
+    so the six existing test files that `monkeypatch.setattr(wiring,
+    "FeatureExtractor", ...)` keep intercepting construction exactly as they
+    did before this resolver existed.
+
+    `reference_images` is read only on the MLP path, to size its input layer
+    to this transfer's own instance dimensionality (2 or 3 for a toy domain);
+    the resnet/vit path ignores it completely, exactly as construction did
+    before `config.BACKBONE` could ever name an MLP.
+    """
+    if config.BACKBONE in MLP_BACKBONES:
+        return build_mlp(config.BACKBONE, reference_images.shape[-1])
+    return FeatureExtractor(backbone=config.BACKBONE, pretrained=config.PRETRAINED)
 
 
 class Arm(nn.Module):
@@ -154,7 +295,7 @@ class Arm(nn.Module):
             "attentionTemperature", config.ATTENTION_TEMPERATURE)
         self.tau_local = hyper.get("tauLocal", config.TAU_LOCAL)
 
-        self.encoder = FeatureExtractor(backbone=config.BACKBONE, pretrained=config.PRETRAINED)
+        self.encoder = _resolve_encoder(source.images)
         self.head = nn.Linear(self.encoder.output_dim, classes)
 
         width = self.encoder.output_dim
@@ -168,10 +309,36 @@ class Arm(nn.Module):
             self.v_R = nn.Parameter(torch.empty(config.ATTENTION_WIDTH))
             nn.init.xavier_uniform_(self.V_R)
             nn.init.normal_(self.v_R, std=0.1)
+            # r31 states `||v_R||_1 <= 1` as a CONSTRAINT of Eq. (15) and then
+            # says how it is maintained -- a projection after each optimizer
+            # step. Maintenance is not establishment: `std=0.1` over
+            # `ATTENTION_WIDTH = 128` coordinates draws a norm near 11, so
+            # without this line the FIRST forward would run at `|R_phi| <= 11`
+            # and the bound Eq. (15) claims would be false exactly where no
+            # step has yet had the chance to restore it.
+            #
+            # It also keeps r31 agreeing with r30 where the two should agree:
+            # r30's forward divided by that same norm, so the selector sat at
+            # the ball's edge from the start. Projecting here leaves the
+            # intended difference -- that the optimizer now sees the raw
+            # parameter -- as the only one between the revisions.
+            #
+            # Consumes no generator state, so the draw order every other
+            # parameter depends on is untouched.
+            project_onto_l1_ball(self.v_R)
         # Selection arms (SU, SA, SK) are removed. Every declared arm's
         # `spec["selection"]` is `None`, so `select` always returns every
         # instance of a bag unchanged; this branch stays only as the
         # construction that would feed a future arm declaring one again.
+
+        # How often r31's Eq. (15) projection was asked, and how often it bound.
+        # Plain ints, assigned unconditionally so every arm answers the question
+        # (an arm with no learned selector answers 0/0 rather than raising), and
+        # deliberately NOT tensors or parameters: they are a tally the harness
+        # keeps, not a quantity any equation reads. Nothing here consumes the
+        # global generator, which the `target_encoder` note below depends on.
+        self.projection_calls = 0
+        self.projection_firings = 0
 
         if spec["adaptation"] == "creda":
             # lambda_creda is one because the coefficient is applied outside, from
@@ -181,6 +348,27 @@ class Arm(nn.Module):
             # not `src/CREDA/`'s prior work, and no declared arm reaches this
             # branch today. It is kept rather than deleted because a future arm
             # could still declare `"adaptation": "creda"` and land here.
+            #
+            # `bounds_form` and `balance_mass` are deliberately NOT named here,
+            # which is the opposite of what `CREDA.training_pipeline` does. That
+            # is a ruling, not an oversight: the image benchmark is going to be
+            # replaced by the toyset benchmark, so freezing it at r25 is not
+            # worth it, and an arm landing here should compute whatever the
+            # constructor currently defaults to -- r31's `entropy-cosh`/`trace`
+            # since 2026-10-17. Whatever this branch computes is meant to move
+            # with the formulation.
+            #
+            # What that move costs here, measured rather than assumed, is
+            # nothing on two independent counts. First, this construction leaves
+            # `normalize_by_bounds` and `balance_mix_blocks` at `False`, and
+            # those are the only flags under which either keyword is read: on a
+            # fixed seeded batch the loss is bit-identical under both defaults,
+            # at `-0.6323614716529846` for `weighting=True` and
+            # `0.058492064476013184` for `weighting=False`. Second, every
+            # `adaptation` value declared anywhere -- `config.ARMS`,
+            # `config.SEARCH_ARMS`, `toy_run.TOY_ARMS` -- is `"milcreda"` or
+            # `None`, so no arm constructs this at all. Nothing in any reported
+            # number moved.
             self.creda = CREDALoss(sigma="auto", lambda_creda=1.0,
                                    use_entropy_weighting=spec["weighting"])
 
@@ -201,7 +389,7 @@ class Arm(nn.Module):
         # from identical generator state, and only the module `B` does not
         # have consumes state afterwards.
         self.target_encoder = (
-            FeatureExtractor(backbone=config.BACKBONE, pretrained=config.PRETRAINED)
+            _resolve_encoder(source.images)
             if spec["adaptation"] is not None else None
         )
 
@@ -217,6 +405,38 @@ class Arm(nn.Module):
         flat = self.encoder(bags.reshape(B * m, *bags.shape[2:]))
         return flat.reshape(B, m, -1)
 
+    def _kernel_embedding(self, H: torch.Tensor) -> torch.Tensor:
+        """The embedding the instance kernel kappa^I (Eq. 14) evaluates on --
+        the one fork `config.NORMALIZE_KERNEL_EMBEDDING` governs.
+
+        Every caller that feeds an embedding to `gaussian_kernel`, whether
+        directly (`bag_kernel`, through `bag_kernel_matrix`) or through
+        `relevance_logits`'s own consensus term, routes it through here
+        first. Every caller that feeds an embedding to `bag_embedding` --
+        and so to `self.head` -- never does: Eq. (19)'s convex combination is
+        what the head trains on, and the head is the one consumer this flag
+        must leave alone (see `config.NORMALIZE_KERNEL_EMBEDDING`'s own
+        docstring for why). Routing happens at each kernel call site rather
+        than once where the embedding is produced, precisely so the two
+        consumers can keep seeing different views of the same `H`.
+
+        With the flag off this returns `H` itself, unmodified -- not even a
+        clone -- so every path that never calls this method differently is
+        bit-identical to before this fork existed.
+        """
+        if not config.NORMALIZE_KERNEL_EMBEDDING:
+            return H
+        return F.normalize(H, p=2, dim=-1)
+
+    def _kernel_pairs(self, pairs: list[tuple]) -> list[tuple]:
+        """A `bags_of`-shaped list of `(H, weights)` with every embedding
+        routed through `_kernel_embedding`; the weights travel unchanged,
+        since `_kernel_embedding` never changes which instance a weight
+        belongs to. Used wherever a whole bag list reaches `bag_kernel_matrix`
+        or a per-bag `bag_kernel` call rather than `bag_embedding`.
+        """
+        return [(self._kernel_embedding(H), w) for H, w in pairs]
+
     def weights_for(self, H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
         """The in-bag weights beta of Eq. (16), over whatever instances survive.
 
@@ -225,10 +445,14 @@ class Arm(nn.Module):
         `config.KERNEL_SIGMA` -- passed explicitly and with no default, so a
         caller supplying a different value is a visible, deliberate choice
         rather than something this method could quietly default to.
+
+        `relevance_logits`'s consensus half evaluates the instance kernel, so
+        the embedding handed to it is `self._kernel_embedding(H)` rather than
+        `H` itself -- the fork `config.NORMALIZE_KERNEL_EMBEDDING` governs.
         """
         if self.spec["attention"] == "learned":
             logits = relevance_logits(
-                H, self.V_R, self.b_R, self.v_R,
+                self._kernel_embedding(H), self.V_R, self.b_R, self.v_R,
                 self.attention_gamma, sigma,
             )
             return bag_weights(logits, self.attention_temperature)
@@ -327,6 +551,36 @@ class Arm(nn.Module):
         # device is; the indices move to wherever the bags actually live.
         return order[: config.BAGS_PER_STEP].to(self.target.members.device)
 
+    def project_constraints(self) -> bool:
+        """Re-impose Eq. (15)'s `||v_R||_1 <= 1` after an optimizer step.
+
+        r31 states the constraint as a max norm applied "tras cada paso de
+        optimizacion", so this is called by the training loop right after
+        `optimizer.step()` -- the same position, and for the same reason, as
+        `sync_target_from_source` above: the rule counts OPTIMIZER steps, and a
+        projection applied before the update would constrain the parameter the
+        step is about to move and leave the moved value unconstrained.
+
+        **The rescale itself is not implemented here.** Eq. (15) lives in
+        `MIL_CREDA.attention`, and an arm that wrote the projection inline
+        would have forked the formulation: the module could then move to a
+        later revision and this copy would not, which is invisible to every
+        check that reads the two declarations separately. This method decides
+        only WHETHER there is a selector to project and keeps the tally.
+
+        Returns whether the constraint bound on this call. An arm with no
+        learned selector returns `False` without touching a tensor -- the
+        pooling arms (`max`, `mean`) have no `v_R`, so there is nothing whose
+        norm could exceed one.
+        """
+        self.projection_calls += 1
+        if not hasattr(self, "v_R"):
+            return False
+        fired = project_onto_l1_ball(self.v_R)
+        if fired:
+            self.projection_firings += 1
+        return fired
+
     def sync_target_from_source(self) -> None:
         """Transmit `theta_s`'s parameters into `theta_t`. A no-op on the floor.
 
@@ -409,9 +663,19 @@ class Arm(nn.Module):
         bags_s = self.bags_of(H_s, sigma)
         bags_t = self.bags_of(H_t, sigma)
 
-        K_ss = bag_kernel_matrix(bags_s, bags_s, sigma)
-        K_st = bag_kernel_matrix(bags_s, bags_t, sigma)
-        K_tt = bag_kernel_matrix(bags_t, bags_t, sigma)
+        # The fork `config.NORMALIZE_KERNEL_EMBEDDING` governs (see
+        # `Arm._kernel_embedding`): every kernel block below -- the three
+        # Grams and the local term's own self-similarity further down --
+        # reads the kernel's own view of each bag, built once here and
+        # reused. `bags_s`/`bags_t` themselves are NEVER routed through it:
+        # their raw `H` is what `Z_t` just below, and `bag_representations`
+        # elsewhere, hand to `self.head`.
+        kernel_bags_s = self._kernel_pairs(bags_s)
+        kernel_bags_t = self._kernel_pairs(bags_t)
+
+        K_ss = bag_kernel_matrix(kernel_bags_s, kernel_bags_s, sigma)
+        K_st = bag_kernel_matrix(kernel_bags_s, kernel_bags_t, sigma)
+        K_tt = bag_kernel_matrix(kernel_bags_t, kernel_bags_t, sigma)
 
         Z_t = torch.stack([bag_embedding(H, w) for H, w in bags_t])
         G_t = F.softmax(self.head(Z_t), dim=1)                    # Eq. (20)
@@ -419,23 +683,48 @@ class Arm(nn.Module):
         pseudo = torch.tensor([pseudolabel(g) for g in G_t],      # Eq. (22)
                               device=K_ss.device)
 
-        losses = []
+        # r33 Eq. (37) sums over EVERY class, not only the active ones, so
+        # these two lists carry one entry per class in `C` rather than one per
+        # active class: `None` marks a class the aggregation charges `1` for,
+        # and `source_counts` carries its `n_c^s`. Both are built here because
+        # this loop is the only place the routing and the class index sets
+        # exist.
+        class_losses = []
+        source_counts = []
         for class_id in range(self.classes):
             s_idx = torch.nonzero(source_labels == class_id, as_tuple=False).reshape(-1)
             t_idx = torch.nonzero(pseudo == class_id, as_tuple=False).reshape(-1)
+            # `n_c^s` for Eq. (37)'s weight, recorded for every class before
+            # any exclusion: a class with no source bag weighs `0 / N_s`, so it
+            # contributes nothing whichever branch it takes and needs no
+            # special case. A class the SOURCE batch has and the target routing
+            # abandoned is the one the charge below is for.
+            source_counts.append(int(s_idx.numel()))
             if s_idx.numel() == 0 or t_idx.numel() == 0:
-                continue                                          # excluded by Eq. (37)
+                class_losses.append(None)       # not in C_act (Eq. 37)
+                continue
             K_s_c, K_st_c, K_t_c = conditional_blocks(K_ss, K_st, K_tt, s_idx, t_idx)
             if self.spec["weighting"]:
                 K_st_w, K_t_w = weighted_blocks(K_st_c, K_t_c, w_t[t_idx])
             else:
                 K_st_w, K_t_w = K_st_c, K_t_c
             K_mix = mixed_matrix(K_s_c, K_st_w, K_t_w)
+            # Unchanged under r29: Eq. (37)'s active set still asks that the
+            # three matrices which must be normalized have positive trace, and
+            # Eq. (32) divides by `tr(K_s)`, `tr(K~_t)` and their geometric
+            # mean -- the same two traces this already reads.
             if not is_active(K_s_c, K_t_w, K_mix):
+                class_losses.append(None)       # not in C_act (Eq. 37)
                 continue
-            score = dependency_score(K_s_c, K_t_w, K_mix)
-            lower, upper = conservative_bounds(int(s_idx.numel()), int(t_idx.numel()))
-            losses.append(class_global_loss(score, lower, upper))
+            # r29 Eqs. (32)-(35): the balanced congruence, the score over its
+            # three densities, and the ends read off the same two marginals.
+            # This replaces r25's `dependency_score`/`conservative_bounds`
+            # pair, whose constant ends ordered a collapsed target ABOVE
+            # perfect alignment (see `entropy_cosh_bounds`' docstring).
+            breve_s, breve_t, _ = balanced_mixture(K_s_c, K_st_w, K_t_w)
+            score = balanced_dependency_score(K_s_c, K_st_w, K_t_w)
+            class_losses.append(class_global_loss_cosh(
+                score, quadratic_entropy(breve_s), quadratic_entropy(breve_t)))
 
         # Spec `target-degeneracy-diagnostic`: six readings and one count, all
         # free -- read off matrices this method already builds, with no new
@@ -459,16 +748,37 @@ class Arm(nn.Module):
             "targetConfidenceMin": float(w_t.min().detach()),
             # |C_act| (Eq. 37) -- r25's third named observable, already
             # computed as the length of this loop's own accumulator.
-            "activeClasses": len(losses),
+            "activeClasses": sum(1 for loss in class_losses if loss is not None),
             # Decision 10: whether one sigma still describes both clouds,
             # read as the off-diagonal means of the three kernels this method
             # already built above.
             "sourceKernelMean": _off_diagonal_mean(K_ss),
             "crossKernelMean": _off_diagonal_mean(K_st),
             "targetKernelMean": _off_diagonal_mean(K_tt),
+            # The PROBE's own reading (`config.NORMALIZE_LOCAL_BY_DISPERSION`):
+            # nan whenever this run never computed one -- the local term is
+            # off, or the flag is off and Eq. (38)'s constant bound governed
+            # instead -- so a reader can never mistake "unmeasured" for "the
+            # cloud is a single point" (which is `0.0`, a real reading).
+            "targetDispersion": float("nan"),
         }
 
-        global_term = global_loss(losses)
+        # r33 Eq. (37): `L_glob = sum_{c in C} (n_c^s / N_s) * l~_c`, with
+        # `l~_c = 1` for every class that is not active. Not gated on the arm's
+        # confidence axis, and that is the change: r29's weights were built
+        # from `w_j^t` and this call sat behind `spec["weighting"]` for that
+        # reason, while r33's come from the OBSERVED source labels and have
+        # nothing to do with the confidences. The axis still means what it
+        # always meant -- Eq. (26)'s `D`, applied above -- and arm `E`
+        # (`MIL-CREDA**`, "lacks the local term and the weighting") still
+        # differs from the arms that declare it, at that one site.
+        #
+        # The empty-`C_act` branch went with the weights. r31 answered zero
+        # there, so an encoder that collapsed until one class was left reported
+        # a SMALLER term for having abandoned the rest; `global_loss` now
+        # charges `1` per abandoned class, which has no gradient and is not
+        # meant to: it makes the collapse visible in the value.
+        global_term = global_loss(class_losses, source_counts)
         local_term = torch.zeros_like(global_term)
 
         if self.spec["local"]:
@@ -477,11 +787,33 @@ class Arm(nn.Module):
                 cross = K_st[:, column]
                 pi = total_correspondence(cross, source_labels, G_t[column],
                                           self.tau_local)
-                H_j, w_j = bags_t[column]
+                # The local term's own kernel evaluation (Eq. 31's
+                # self-similarity term): the kernel's view, not the raw one --
+                # `bags_t[column]` would hand `bag_kernel` the same raw `H`
+                # `Z_t` above hands the head, which is exactly the consumer
+                # this fork must not reach.
+                H_j, w_j = kernel_bags_t[column]
                 distances.append(
                     local_distance(bag_kernel(H_j, w_j, H_j, w_j, sigma), cross, K_ss, pi)
                 )
-            local_term = local_loss(torch.stack(distances), w_t, config.EPSILON_LOCAL)
+            distances_tensor = torch.stack(distances)
+            if config.NORMALIZE_LOCAL_BY_DISPERSION:
+                # The PROBE: divide `d_j^2` by the target bags' own measured
+                # dispersion in H_I instead of Eq. (38)'s constant 2 -- see
+                # `_target_dispersion` and `_dispersion_normalized_local_term`
+                # above for the derivation and the aggregation, and
+                # `config.NORMALIZE_LOCAL_BY_DISPERSION`'s own docstring for
+                # why Eq. (38)'s `[0, 1]` guarantee does not survive it.
+                local_term, dispersion = _dispersion_normalized_local_term(
+                    distances_tensor, K_tt)
+                self._diagnostics["targetDispersion"] = dispersion
+            else:
+                # r33 Eq. (38): the uniform mean. `w_t` left this call with
+                # r32 -- a weight the classifier computes can be lowered on the
+                # worst-aligned subject instead of aligning it -- and
+                # `config.EPSILON_LOCAL` left with the denominator it
+                # stabilized.
+                local_term = local_loss(distances_tensor)
 
         return global_term, local_term
 
@@ -573,6 +905,7 @@ class Arm(nn.Module):
             "sourceKernelMean": float("nan"),
             "crossKernelMean": float("nan"),
             "targetKernelMean": float("nan"),
+            "targetDispersion": float("nan"),
         }
         if self.spec["adaptation"] == "milcreda":
             target_bags = self.target.take(target_indices)
@@ -638,6 +971,7 @@ class Arm(nn.Module):
             "sourceKernelMean": diagnostics["sourceKernelMean"],
             "crossKernelMean": diagnostics["crossKernelMean"],
             "targetKernelMean": diagnostics["targetKernelMean"],
+            "targetDispersion": diagnostics["targetDispersion"],
         }
 
 
