@@ -42,6 +42,7 @@ import numpy as np
 import pytest
 import torch
 import torch.nn.functional as F
+from scipy import stats as _st
 
 from CREDA import toy_experiment as T
 from CREDA import toy_plots
@@ -1515,3 +1516,301 @@ def test_the_ceiling_mark_reaches_the_saved_json_and_comes_back(
     assert T.BRAZO_TECHO not in res["rangos"], res["rangos"]
     assert res["no_tratamientos"] == [T.BRAZO_TECHO], res["no_tratamientos"]
     assert [t["brazo"] for t in res["filas_techo"]] == [T.BRAZO_TECHO]
+
+
+# --------------------------------------------------------------------------
+# The four-arm table's statistics: the sign, the Holm family and the arity.
+#
+# These three are the half of this table that breaks WITHOUT MOVING A NUMBER.
+# An inverted sign prints the same magnitude and says the other arm won; a Holm
+# family of six where four were declared prints a larger adjusted p and a
+# tamer conclusion; an arity inherited from the sweep's roster ranks the
+# ceiling among the methods and moves every other arm's rank. None of the
+# three raises, and none of them is visible in a figure.
+# --------------------------------------------------------------------------
+
+#: Ten seeds, which is not a round number chosen for looks. Wilcoxon's exact
+#: two-sided p is quantized, and the window where Holm's denominator CHANGES A
+#: VERDICT at 0.05 is `[0.05/6, 0.05/3) = [0.00833, 0.01667)`. Enumerated over
+#: every sign pattern: n = 6 admits no p in that window at all, n = 7 and n = 8
+#: admit only 0.01562, n = 9 admits 0.01172, and n = 10 admits 0.00977 and
+#: 0.01367. At 0.00977 the three declared pairs give 0.0293 -- significant --
+#: and the six pairs of four arms give 0.0586 -- not. A fixture at n = 8 could
+#: not show that, which is why the count is measured and not picked.
+_SEMILLAS_ESTADISTICAS = 10
+
+#: The axis pair's paired differences: eight seeds favour the weighted arm and
+#: the two that do not carry the two SMALLEST magnitudes, which is the sign
+#: pattern that lands Wilcoxon on p = 0.00977 exactly.
+_DIF_EJE = (-0.001, -0.002, 0.004, 0.006, 0.009,
+            0.012, 0.016, 0.021, 0.027, 0.034)
+
+_SIN_SOP = (0.700, 0.705, 0.710, 0.695, 0.715,
+            0.690, 0.708, 0.702, 0.712, 0.698)
+
+#: AdaBN and the floor sit CLOSE to the weighted arm rather than below it, and
+#: that is deliberate: Holm's denominator only decides a verdict where a p sits
+#: near the threshold, so a fixture with the four arms cleanly ordered would
+#: leave every pair far from 0.05 and both families would conclude the same
+#: thing. The ordering here is not the experiment's expected one and is not
+#: meant to be; what this fixture exercises is the correction, not the science.
+_ADABN = (0.699037, 0.711962, 0.705776, 0.674282, 0.710360,
+          0.672251, 0.725804, 0.763206, 0.724234, 0.713386)
+_PISO = (0.713732, 0.722669, 0.708938, 0.646368, 0.709482,
+         0.693110, 0.685478, 0.749478, 0.667197, 0.674700)
+
+
+def _brazos_estadisticos():
+    """The four methods plus the ceiling, over `_SEMILLAS_ESTADISTICAS` blocks.
+
+    Asserts its own properties before anything under test reads it, because a
+    fixture that already equals the mutant is a passing nothing: the axis pair
+    has to land on the p that makes Holm's denominator decide, and the ceiling
+    has to be above every method or "the ceiling is not a treatment" would be
+    testable by accident.
+    """
+    sin_sop = np.array(_SIN_SOP, dtype=float)
+    con_sop = np.round(sin_sop + np.array(_DIF_EJE, dtype=float), 6)
+    brazos = {
+        toy_plots.BRAZO_PISO: np.array(_PISO, dtype=float),
+        toy_plots.BRAZO_ADABN: np.array(_ADABN, dtype=float),
+        T.BRAZO_SIN_SOP: sin_sop,
+        T.BRAZO_CON_SOP: con_sop,
+    }
+    assert list(brazos) == list(toy_plots.BRAZOS_CUATRO), (
+        list(brazos), "the fixture's arm order is not the declared one")
+    techo = np.round(con_sop + 0.08, 6)
+    assert all(len(v) == _SEMILLAS_ESTADISTICAS for v in brazos.values())
+
+    # The property the window was computed for, asserted rather than trusted.
+    cruda = float(_st.wilcoxon(con_sop - sin_sop).pvalue)
+    assert 0.05 / 6 <= cruda < 0.05 / 3, (
+        cruda, "the axis pair's raw p left the window where Holm's "
+               "denominator changes the verdict, so this fixture can no "
+               "longer tell a family of three from a family of six")
+    # And the ceiling is above every method, so a rank that included it would
+    # take the top rather than land somewhere harmless in the middle.
+    assert all(float(techo.mean()) > float(v.mean()) for v in brazos.values())
+    return brazos, techo
+
+
+def test_the_four_arm_sign_is_the_first_named_arm_minus_the_second():
+    """`delta = (first named) - (second named)`, so `delta > 0` means the FIRST
+    wins.
+
+    It came out inverted once in this repository -- the subtracted arm sat in
+    the first column, so `+0.0819` beside `.predict` read as `.predict` winning
+    when it means the opposite -- and a table whose sign is read backwards is
+    worse than no table, because it is read with confidence.
+
+    Asserted against the arrays themselves and against the ORDER the declared
+    pair names, not against the row's own label: a mutation that swapped both
+    the subtraction and the label would keep every number consistent with its
+    own heading and still invert the reading of `PARES_CUATRO_BRAZOS`.
+    """
+    brazos, techo = _brazos_estadisticos()
+    res = toy_plots.comparar_n_brazos(
+        brazos, toy_plots.PARES_CUATRO_BRAZOS, _SEMILLAS_ESTADISTICAS,
+        familia="el signo", extra={toy_plots.BRAZO_TECHO_CUATRO: techo})
+    lectura = {**brazos, toy_plots.BRAZO_TECHO_CUATRO: techo}
+
+    assert len(res["filas"]) == len(toy_plots.PARES_CUATRO_BRAZOS)
+    for fila, (primero, segundo) in zip(res["filas"],
+                                        toy_plots.PARES_CUATRO_BRAZOS):
+        # The row reports the pair in the order the DECLARATION names, so the
+        # sign cannot be rescued by relabelling.
+        assert (fila["primero"], fila["segundo"]) == (primero, segundo)
+        esperado = float(np.mean(lectura[primero]) - np.mean(lectura[segundo]))
+        assert fila["delta"] == pytest.approx(esperado, abs=1e-12), fila
+        # The win count follows the same direction, which is the other half an
+        # inversion breaks: `gana` counts the seeds where the FIRST is ahead.
+        gana = int((np.asarray(lectura[primero])
+                    > np.asarray(lectura[segundo])).sum())
+        assert fila["gana"] == gana, fila
+
+    # The axis pair, by name: the weighted arm is ahead on average in this
+    # fixture, so its delta must be POSITIVE. Under the inversion it is the
+    # same magnitude with the other sign, which is why the magnitude alone
+    # cannot be what this asserts.
+    eje = res["filas"][0]
+    assert (eje["primero"], eje["segundo"]) == (T.BRAZO_CON_SOP,
+                                                T.BRAZO_SIN_SOP)
+    assert eje["delta"] > 0, eje
+    assert eje["delta"] == pytest.approx(float(np.mean(_DIF_EJE)), abs=1e-12)
+
+
+def test_the_four_arm_holm_corrects_within_its_own_declared_pairs():
+    """Holm's family is `PARES_CUATRO_BRAZOS` -- three pairs -- and never the
+    six pairs four arms admit.
+
+    **The name used to assert a number and the number went stale.** It read
+    `..._within_its_own_six_pairs`; six was every pair of four arms, the
+    roster then grew to five, and a declaration naming a count that no longer
+    holds is worse than none, because its test stays green on the old fixture
+    and nobody reads the name again.
+
+    Measured, which is why this fixture is at ten seeds: the axis pair's raw p
+    is 0.00977, so Holm over THREE gives 0.0293 and Holm over SIX gives
+    0.0586. At 0.05 that is significant and not significant -- the family is
+    not a cosmetic denominator, it decides the conclusion of the one pair the
+    section exists to report.
+    """
+    brazos, techo = _brazos_estadisticos()
+    res = toy_plots.comparar_n_brazos(
+        brazos, toy_plots.PARES_CUATRO_BRAZOS, _SEMILLAS_ESTADISTICAS,
+        familia="la familia", extra={toy_plots.BRAZO_TECHO_CUATRO: techo})
+
+    # The declared family is three, and the table reports the REAL denominator
+    # rather than `len(pares)`.
+    assert len(toy_plots.PARES_CUATRO_BRAZOS) == 3, toy_plots.PARES_CUATRO_BRAZOS
+    assert res["familia_de"] == 3, res["familia_de"]
+    assert res["pares_sin_p"] == [], res["pares_sin_p"]
+
+    # Recomputed from the raw p's of exactly those pairs, so a family that
+    # silently included another pair disagrees here.
+    crudas = [fila["p"] for fila in res["filas"]]
+    assert [fila["holm"] for fila in res["filas"]] == pytest.approx(
+        toy_plots._holm(crudas))
+
+    # The six pairs four arms admit, which is what the stale name corrected
+    # over. Same data, same Wilcoxon, different denominator.
+    seis = tuple((a, b) for i, a in enumerate(brazos)
+                 for b in list(brazos)[i + 1:])
+    assert len(seis) == 6, seis
+    ancha = toy_plots.comparar_n_brazos(
+        brazos, seis, _SEMILLAS_ESTADISTICAS, familia="los seis")
+    assert ancha["familia_de"] == 6, ancha["familia_de"]
+
+    def _por_par(resultado, primero, segundo):
+        for fila in resultado["filas"]:
+            if {fila["primero"], fila["segundo"]} == {primero, segundo}:
+                return fila
+        raise AssertionError((primero, segundo, resultado["familia"]))
+
+    eje = toy_plots.PARES_CUATRO_BRAZOS[0]
+    estrecha = _por_par(res, *eje)
+    amplia = _por_par(ancha, *eje)
+    # The same raw p, so nothing but the denominator differs.
+    assert estrecha["p"] == pytest.approx(amplia["p"])
+    assert estrecha["p"] == pytest.approx(0.009766, abs=1e-6), estrecha["p"]
+    assert estrecha["holm"] == pytest.approx(0.029297, abs=1e-6)
+    assert amplia["holm"] == pytest.approx(0.058594, abs=1e-6)
+    # And the verdict, which is the consequence and not a number.
+    assert estrecha["holm"] < 0.05 <= amplia["holm"], (
+        estrecha["holm"], amplia["holm"],
+        "the two families agree on this fixture, so it no longer shows that "
+        "the declared family is what decides")
+
+
+def test_the_oracle_ceiling_is_outside_the_friedman_and_outside_the_ranks():
+    """The ceiling is not a treatment: out of the omnibus and out of the ranks.
+
+    **Part of this is already covered under another name** --
+    `test_the_ceiling_mark_reaches_the_saved_json_and_comes_back` asserts the
+    ceiling is absent from `brazos` and `rangos` and present in
+    `no_tratamientos`. What that test cannot say is whether the exclusion is
+    doing any WORK: an absence is asserted by looking where the thing would
+    live, and the place it would live is the Friedman statistic itself.
+
+    So this runs the mutation: the same ceiling handed in as a treatment rather
+    than as `extra`. A ceiling reads the target's labels, so asking a rank
+    which method beats it is asking which method beats something no method can
+    be -- and it takes the top rank, pushing every method's mean rank down.
+    """
+    brazos, techo = _brazos_estadisticos()
+    fuera = toy_plots.comparar_n_brazos(
+        brazos, toy_plots.PARES_CUATRO_BRAZOS, _SEMILLAS_ESTADISTICAS,
+        familia="el techo afuera",
+        extra={toy_plots.BRAZO_TECHO_CUATRO: techo})
+
+    assert toy_plots.BRAZO_TECHO_CUATRO not in fuera["brazos"]
+    assert toy_plots.BRAZO_TECHO_CUATRO not in fuera["rangos"]
+    assert fuera["no_tratamientos"] == [toy_plots.BRAZO_TECHO_CUATRO]
+    assert fuera["gl_friedman"] == 3, "four treatments give three degrees"
+    assert fuera["mejor_rango"] == 4, fuera["mejor_rango"]
+    assert sorted(fuera["rangos"]) == sorted(toy_plots.BRAZOS_CUATRO)
+
+    # The mutation: the ceiling as a fifth treatment. Nothing raises, and that
+    # is the point -- this is what "silently" means for this defect.
+    adentro = dict(brazos)
+    adentro[toy_plots.BRAZO_TECHO_CUATRO] = techo
+    mutado = toy_plots.comparar_n_brazos(
+        adentro, toy_plots.PARES_CUATRO_BRAZOS, _SEMILLAS_ESTADISTICAS,
+        familia="el techo adentro")
+
+    assert mutado["gl_friedman"] == 4, "the mutation did not add a treatment"
+    assert mutado["mejor_rango"] == 5
+    assert mutado["chi2"] != pytest.approx(fuera["chi2"]), (
+        fuera["chi2"], mutado["chi2"],
+        "the omnibus read the same with and without the ceiling, so this "
+        "fixture cannot tell whether the exclusion does anything")
+    # And the ceiling takes the top rank, which is the reading it corrupts.
+    assert mutado["rangos"][toy_plots.BRAZO_TECHO_CUATRO] == pytest.approx(
+        float(mutado["mejor_rango"]))
+
+    # **The four methods keep their mean ranks to the digit, and that is the
+    # finding rather than a weakness here.** A first version of this test
+    # asserted that they MOVE; they do not, because a ceiling reads the
+    # target's labels and therefore sits above every method in every single
+    # block, so it takes rank 5 everywhere and displaces nobody. What changes
+    # is the SCALE those unchanged numbers are read against: 3.1 out of 4 and
+    # 3.1 out of 5 are the same printed rank and two different statements, and
+    # the second one is the table silently reporting that its best method
+    # reaches 62% of the way up a ladder whose top rung no method can stand on.
+    for b in toy_plots.BRAZOS_CUATRO:
+        assert mutado["rangos"][b] == pytest.approx(fuera["rangos"][b]), (
+            b, "a method's mean rank moved, so the ceiling did not dominate "
+               "every block and this fixture is not the one described")
+    assert mutado["mejor_rango"] != fuera["mejor_rango"], (
+        "the best rank is identical with and without the ceiling, so nothing "
+        "here distinguishes the two readings")
+
+
+def test_the_four_arm_arity_does_not_follow_the_contamination_roster():
+    """Four treatments, declared, and never `len(BRAZOS_CONTAMINACION)`.
+
+    This is the chain that was CUT, and the cut is the invariant. The sweep's
+    roster grew to five by adding the oracle ceiling; a table deriving its
+    treatments from that roster would have ranked the ceiling among the methods
+    without a line of code changing. `BRAZOS_CUATRO` is written out instead,
+    and the module asserts at import that none of its members carries the word
+    that marks a ceiling.
+
+    The mutation is the roster growing again: a sixth arm is added to
+    `BRAZOS_CONTAMINACION` and the four-arm declaration must not notice.
+    """
+    assert len(toy_plots.BRAZOS_CUATRO) == 4, toy_plots.BRAZOS_CUATRO
+    # The roster is STRICTLY larger, which is what makes the two distinguishable
+    # at all. If they were ever the same length this test proves nothing.
+    assert len(T.BRAZOS_CONTAMINACION) > len(toy_plots.BRAZOS_CUATRO), (
+        T.BRAZOS_CONTAMINACION, toy_plots.BRAZOS_CUATRO,
+        "the roster is no longer bigger than the declared treatments, so a "
+        "table deriving one from the other would look identical here")
+    assert toy_plots.BRAZO_TECHO_CUATRO in T.BRAZOS_CONTAMINACION, (
+        "the ceiling left the roster, so inheriting it would no longer be the "
+        "defect this guards")
+    assert toy_plots.BRAZO_TECHO_CUATRO not in toy_plots.BRAZOS_CUATRO
+
+    # The word that marks a ceiling, read from the module that writes it.
+    for brazo in toy_plots.BRAZOS_CUATRO:
+        assert T.PALABRA_TECHO not in brazo.lower(), brazo
+    assert T.PALABRA_TECHO in toy_plots.BRAZO_TECHO_CUATRO.lower()
+
+    # And the declared pairs never name a treatment that is not one of the four.
+    for primero, segundo in toy_plots.PARES_CUATRO_BRAZOS:
+        for brazo in (primero, segundo):
+            assert brazo in toy_plots.BRAZOS_CUATRO, (brazo, "a tested pair "
+                                                      "names a non-treatment")
+
+    # The mutation: the roster grows and the arity must not follow. Asserted on
+    # the ARITY the table actually runs, not only on the tuple's length.
+    brazos, techo = _brazos_estadisticos()
+    padron_crecido = tuple(T.BRAZOS_CONTAMINACION) + ("brazo nuevo del barrido",)
+    assert len(padron_crecido) == len(T.BRAZOS_CONTAMINACION) + 1
+    res = toy_plots.comparar_n_brazos(
+        brazos, toy_plots.PARES_CUATRO_BRAZOS, _SEMILLAS_ESTADISTICAS,
+        familia="el padron crecido",
+        extra={toy_plots.BRAZO_TECHO_CUATRO: techo})
+    assert len(res["brazos"]) == 4, res["brazos"]
+    assert res["gl_friedman"] == 3
+    assert "brazo nuevo del barrido" not in res["brazos"]

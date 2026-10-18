@@ -50,6 +50,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from scipy import stats as _st
 
 from CREDA import toy_experiment as T
 from CREDA import toy_plots
@@ -782,3 +783,182 @@ def test_the_ladder_tables_count_their_seeds_from_the_data():
                     toy_plots.tabla_sopesado_agrupamiento):
         with pytest.raises(ValueError):
             llamada("lunas", CONTAM, mal, perturbacion=PERT)
+
+
+# --------------------------------------------------------------------------
+# The two-arm table's statistics: the sign, and the row that averages.
+#
+# `comparar_sin_contra_con` is the entry point for `sin CREDA` against
+# `con CREDA` in one toyset, and nothing in this repository called it from a
+# test until now. Both properties below break while every printed number stays
+# plausible: an inverted sign reports the same magnitude for the other arm, and
+# a pooled average row reports the same delta with a p inflated by orders of
+# magnitude.
+# --------------------------------------------------------------------------
+
+#: Ten report seeds and the three declared normalizations, so the pooled
+#: alternative has thirty cell-seed pairs against ten independent ones. The
+#: counts have to differ by more than one for the degrees of freedom to be
+#: distinguishable at all.
+_SEMILLAS_PAREADAS = 10
+
+#: `(sin CREDA, con CREDA)` per declared position. Written out rather than
+#: drawn, so the degrees of freedom and the p values this test pins do not
+#: depend on a generator's version.
+_SERIES_DOS_BRAZOS = (
+    ((0.588141, 0.607917, 0.618214, 0.570835, 0.623030,
+      0.607652, 0.623489, 0.608173, 0.634860, 0.571867),
+     (0.663663, 0.671965, 0.646215, 0.624038, 0.671925,
+      0.612737, 0.675393, 0.636465, 0.669860, 0.599819)),
+    ((0.607157, 0.622152, 0.622902, 0.573225, 0.611939,
+      0.579656, 0.581877, 0.609591, 0.645659, 0.638926),
+     (0.635064, 0.647944, 0.646354, 0.616080, 0.670672,
+      0.620017, 0.635732, 0.655899, 0.715743, 0.638792)),
+    ((0.576069, 0.634047, 0.659096, 0.627684, 0.652773,
+      0.604794, 0.602219, 0.618503, 0.665240, 0.660891),
+     (0.601804, 0.677669, 0.686145, 0.668085, 0.670487,
+      0.643863, 0.627504, 0.657616, 0.692199, 0.684456)),
+)
+
+
+def _celdas_dos_brazos():
+    """`CELDAS` for one toyset over the declared positions, and its flags.
+
+    Asserts its own properties first: the weighted arm has to be ahead on
+    average, or an inverted sign would be undetectable, and the three
+    positions have to carry DIFFERENT series, or averaging within the seed and
+    pooling the cells would give the same degrees of freedom by accident.
+    """
+    pos_filas = list(T.POS_FILAS)
+    assert len(pos_filas) == len(_SERIES_DOS_BRAZOS), (
+        pos_filas, "the declared positions and the fixture's series disagree")
+    CELDAS, sin_pos, con_pos = {}, [], []
+    for pos, (sin, con) in zip(pos_filas, _SERIES_DOS_BRAZOS):
+        assert len(sin) == len(con) == _SEMILLAS_PAREADAS
+        CELDAS[("lunas", pos, T.ETQ_UNICA)] = [
+            dict(acc_predict=float(s), acc_te=float(c))
+            for s, c in zip(sin, con)]
+        sin_pos.append(np.array(sin, dtype=float))
+        con_pos.append(np.array(con, dtype=float))
+
+    assert float(np.mean(con_pos)) > float(np.mean(sin_pos)), (
+        "`con CREDA` is not ahead on this fixture, so an inverted sign would "
+        "not change which arm the table reports as winning")
+    assert len({tuple(s) for s in sin_pos}) == len(sin_pos), (
+        "two positions carry the identical series, so the within-seed mean "
+        "and the pooled stack cannot be told apart here")
+
+    banderas = dict(POS_FILAS=pos_filas,
+                    SEMILLAS_REPORTE=list(range(_SEMILLAS_PAREADAS)),
+                    BALANCE_DE_MASA="trace")
+    return CELDAS, banderas, sin_pos, con_pos
+
+
+def test_the_sign_of_a_toy_table_delta_is_the_first_named_arm_minus_the_second():
+    """`delta = con CREDA - sin CREDA`, so `delta > 0` means CREDA wins.
+
+    It came out inverted once in this repository: the subtracted arm sat in
+    the first column, so `+0.0819` beside `.predict` read as `.predict`
+    winning when it means the opposite. A table whose sign is read backwards
+    is worse than no table, because it is read with confidence.
+
+    Every row is checked, not only the one that averages, and the check is
+    against the arrays -- `mean(con) - mean(sin)` -- rather than against the
+    row's own `sin`/`con` columns. A mutation that swapped the subtraction AND
+    the two columns would stay internally consistent and still invert what the
+    header `con CREDA vs sin CREDA` claims.
+    """
+    CELDAS, banderas, sin_pos, con_pos = _celdas_dos_brazos()
+    res = toy_plots.comparar_sin_contra_con("lunas", CELDAS, banderas)
+
+    # The header names the first arm first, which is what the sign refers to.
+    assert (res["primero"], res["segundo"]) == ("con CREDA", "sin CREDA")
+
+    por_clave = {fila["clave"]: fila for fila in res["filas"]}
+    for pos, sin, con in zip(banderas["POS_FILAS"], sin_pos, con_pos):
+        fila = por_clave[pos]
+        assert (fila["primero"], fila["segundo"]) == ("con CREDA", "sin CREDA")
+        esperado = float(np.mean(con) - np.mean(sin))
+        assert fila["delta"] == pytest.approx(esperado, abs=1e-12), pos
+        assert fila["delta"] > 0, (pos, fila["delta"])
+        # The win count follows the same direction: seeds where CREDA is ahead.
+        assert fila["gana"] == int((con > sin).sum()), pos
+        # And the two level columns are not swapped either, which is the other
+        # half of the inversion that shipped.
+        assert fila["con"] == pytest.approx(float(np.mean(con)), abs=1e-12)
+        assert fila["sin"] == pytest.approx(float(np.mean(sin)), abs=1e-12)
+        assert fila["con"] > fila["sin"], pos
+
+    # The averaging row carries no position key, so nothing can confuse it for
+    # one, and its sign points the same way.
+    promedio = por_clave[None]
+    assert promedio["rotulo"] == toy_plots.ROTULO_PROMEDIO
+    assert promedio["delta"] > 0
+    assert promedio["delta"] == pytest.approx(
+        float(np.mean(con_pos) - np.mean(sin_pos)), abs=1e-12)
+
+
+def test_the_averaged_row_of_a_toy_table_is_a_within_seed_mean():
+    """`PROMEDIO` averages the three normalizations WITHIN each seed, giving
+    ten independent pairs, and never pools the thirty cell-seed pairs.
+
+    Seed 0 appears in all three normalizations, so the thirty pairs are not
+    thirty independent observations and pooling them is pseudo-replication.
+
+    **The delta is identical either way, and that is what makes this silent.**
+    Measured on this fixture: the within-seed row and the pooled stack both
+    report a delta of 0.03718757 to every digit. What changes is the
+    denominator -- 9 degrees of freedom against 29 -- and with it the p, from
+    8.0e-07 to 2.0e-12. Five orders of magnitude, with the table keeping its
+    exact shape, its exact columns and its correct-looking effect size.
+
+    A sibling covers the same property on the OTHER module:
+    `tests/test_toy_tables.py::test_the_average_row_pairs_inside_the_seed_and_
+    never_pools_the_cells` holds it for `MIL_CREDA_Benchmark.toy_tables`. That
+    is a different table in a different package, and a property held on one of
+    two implementations is held on one of two.
+    """
+    CELDAS, banderas, sin_pos, con_pos = _celdas_dos_brazos()
+    res = toy_plots.comparar_sin_contra_con("lunas", CELDAS, banderas)
+    promedio = [f for f in res["filas"]
+                if f["rotulo"] == toy_plots.ROTULO_PROMEDIO][0]
+
+    # The pair count is the seed count, not the cell-seed count.
+    assert promedio["n"] == _SEMILLAS_PAREADAS
+    assert promedio["gl"] == _SEMILLAS_PAREADAS - 1, promedio["gl"]
+    assert promedio["gana"] <= _SEMILLAS_PAREADAS, (
+        promedio["gana"], "more wins than there are independent pairs")
+
+    # The within-seed vectors, recomputed: ten numbers, not a stack of thirty.
+    dentro_sin = np.mean(sin_pos, axis=0)
+    dentro_con = np.mean(con_pos, axis=0)
+    assert dentro_sin.shape == (_SEMILLAS_PAREADAS,)
+    assert promedio["delta"] == pytest.approx(
+        float((dentro_con - dentro_sin).mean()), abs=1e-12)
+    assert promedio["t"] == pytest.approx(
+        float(_st.ttest_rel(dentro_con, dentro_sin).statistic), abs=1e-9)
+    assert promedio["p"] == pytest.approx(
+        float(_st.ttest_rel(dentro_con, dentro_sin).pvalue), rel=1e-9)
+
+    # The mutation: the pooled stack. Same delta, different denominator.
+    pila_sin = np.concatenate(sin_pos)
+    pila_con = np.concatenate(con_pos)
+    esperado_pares = _SEMILLAS_PAREADAS * len(banderas["POS_FILAS"])
+    assert pila_sin.shape == (esperado_pares,)
+    apilada = _st.ttest_rel(pila_con, pila_sin)
+
+    assert promedio["delta"] == pytest.approx(
+        float((pila_con - pila_sin).mean()), abs=1e-12), (
+        "the pooled delta differs from the within-seed one on this fixture, "
+        "so the silent half of this defect is not what it exercises")
+    assert promedio["gl"] != esperado_pares - 1, (
+        promedio["gl"], "the row reports the pooled degrees of freedom")
+    assert promedio["p"] != pytest.approx(float(apilada.pvalue), rel=1e-6), (
+        promedio["p"], float(apilada.pvalue),
+        "the two readings give the same p here, so this fixture cannot show "
+        "that pooling changes the conclusion")
+    # The direction and the size of that inflation, pinned: the pooled p is
+    # SMALLER -- pooling buys significance it did not measure.
+    assert float(apilada.pvalue) < promedio["p"]
+    assert promedio["p"] / float(apilada.pvalue) > 1e3, (
+        promedio["p"], float(apilada.pvalue))
