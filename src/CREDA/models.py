@@ -213,9 +213,9 @@ __provenance__ = {
         "entropy_cosh_refuses_an_unbalanced_mixture",
         "entropy_cosh_refuses_the_cardinality_balance",
         # Section 5's active-class rule, which runs under every setting.
-        "the_collapsed_class_does_not_reach_the_per_class_reduction",
+        "the_collapsed_class_does_reach_the_per_class_reduction",
         "the_collapsed_class_produces_no_nan_and_no_inf",
-        "the_floor_is_a_declared_constant_tied_to_the_estimator",
+        "the_membership_test_is_positive_trace_and_nothing_else",
         # The marginal block, which belongs to no class.
         "the_marginal_block_equals_the_loop_when_one_class_holds_everything",
     ],
@@ -534,54 +534,23 @@ BOUNDS_FORMS = ('entropy-cosh',)
 #: mass -- not a rounding difference.
 BALANCE_MASSES = ('cardinality', 'trace')
 
-#: The floor below which a class's trace counts as collapsed -- r28 §5's active
-#: class requires the three matrices that must be normalized to have POSITIVE
-#: trace, and this is where that word gets a number.
+#: **`MIN_CLASS_TRACE` se retiro el 2026-10-18 y no se reemplaza.** Era el piso
+#: `1e-6` bajo el cual una clase contaba como colapsada, y su justificacion
+#: escrita era numerica: "es el epsilon propio de `_renyi_entropy_order_2`, que
+#: divide por `trace + 1e-6`". Ese epsilon se removio, el estimador quedo exacto
+#: en float32 desde `tr(K) = 1` hasta `1.175e-38`, y el piso que el estimador
+#: necesita bajo a `torch.finfo(torch.float32).tiny` --- treinta y dos ordenes de
+#: magnitud por debajo del que habia.
 #:
-#: **Su razon escrita murio el 2026-10-18 y el valor se queda, declarado como
-#: lo que ahora es: una decision sin medir.** Decia "es el epsilon propio de
-#: `_renyi_entropy_order_2`: esa funcion divide por `trace + 1e-6`, asi que en
-#: o por debajo de 1e-6 el estimador no distingue la matriz del cero". Ese
-#: epsilon se removio --- dividia por una constante sumada a una traza que
-#: puede ser mucho menor que ella --- y el estimador es ahora exacto a 7
-#: digitos en float32 desde `tr(K) = 1` hasta `1.175e-38`, el minimo normal de
-#: float32. Medido:
-#:
-#:     tr(K)      forma nueva       forma vieja
-#:     1e+00      1.14525199        1.14525080
-#:     1e-06      1.14525199        2.53153396
-#:     1e-09      1.14525199       13.53976822
-#:     1e-38      1.14525199       13.81551075
-#:
-#: Asi que el piso que el ESTIMADOR necesita es `torch.finfo(torch.float32).
-#: tiny`, treinta y dos ordenes de magnitud por debajo de este.
-#:
-#: **Y aun asi el valor NO baja, porque la Ec. (37) se contradice consigo misma
-#: en ese caso.** Su condicion de membresia pide traza POSITIVA (r34 linea
-#: 1109: "aquellas para las cuales existen sujetos en ambos dominios y las tres
-#: matrices que deben normalizarse poseen traza positiva"), de modo que por la
-#: letra una clase de traza `2.9e-15` entra al conjunto activo. Pero su carga
-#: de uno existe, dice la misma ecuacion en la linea 1132, para "que `L_glob`
-#: no descienda cuando el enrutamiento abandona clases, de modo que ese
-#: abandono se lea como un aumento de la perdida y no como una CONVERGENCIA
-#: APARENTE".
-#:
-#: Medido sobre `_one_dead_class` de `tests/test_creda_r28_bounds.py`, donde el
-#: clasificador queda maximamente incierto sobre nueve bolsas y la Ec. (24) les
-#: da peso `1.8e-08`:
-#:
-#:     piso 0.0   -> 3 clases activas; la colapsada lee 0.00059861, L_glob = 0.00053086
-#:     piso 1e-6  -> 2 clases activas; la colapsada cobra 1,        L_glob = 0.33366465
-#:
-#: Seguir la letra hace que una clase sin evidencia objetivo lea alineacion casi
-#: perfecta, que es exactamente la lectura que la carga de uno existe para
-#: impedir. Las dos mitades de la Ec. (37) no pueden cumplirse a la vez aqui, y
-#: elegir cual gana no es una decision de implementacion: queda para una
-#: deliberacion y el valor se queda donde se midio todo lo publicado.
-#:
-#: Lo que cuesta mantenerlo, medido: 1 de 1158 bloques de clase de un barrido
-#: aleatorio cae en la franja `(1.2e-38, 1e-6]`, un 0.09%.
-MIN_CLASS_TRACE = 1e-6
+#: Lo que fija el valor es la formulacion. La Ec. (37) admite "aquellas para las
+#: cuales existen sujetos en ambos dominios y las tres matrices que deben
+#: normalizarse poseen traza POSITIVA", y positiva es `> 0`.
+#: `MIL_CREDA.global_term.is_active` ya lo leia asi, de modo que los dos
+#: paquetes discrepaban sobre que clases entran a la suma de UNA ecuacion.
+#: Se deja escrito aqui, y no solo en el historial, porque un lector que
+#: recuerde el piso necesita que se le diga que termino --- no descubrirlo por
+#: su ausencia.
+
 
 
 class CREDALoss(nn.Module):
@@ -665,8 +634,9 @@ class CREDALoss(nn.Module):
     target trace has collapsed is skipped rather than divided by, because the
     score is not defined there. It used to produce a finite number anyway, out
     of `_renyi_entropy_order_2`'s epsilon, which is a number that was never
-    about the data. No ordinary class comes near the floor; see
-    `MIN_CLASS_TRACE`.
+    about the data. The test is POSITIVE TRACE, which is what Eq. (37) states;
+    the `1e-6` floor that stood here until 2026-10-18 was the removed epsilon's
+    own tolerance and outlived it.
 
     A trainable bandwidth is deliberately absent and must stay absent: measured
     with features frozen, a learned sigma grows about seventeenfold and drives
@@ -969,8 +939,13 @@ class CREDALoss(nn.Module):
         # una cantidad de la que derivar.
         if bool(tr_K <= 0.0):
             # La Ec. (9) solo define la entropia para traza positiva. El portal
-            # de actividad (`MIN_CLASS_TRACE`) excluye esas clases antes de
-            # llegar aca, asi que esto es el respaldo y no la via normal ---
+            # de actividad de la Ec. (37) pide lo MISMO --- traza positiva ---
+            # asi que excluye exactamente estas clases antes de llegar aca y
+            # esto es el respaldo y no la via normal. Las dos condiciones
+            # coinciden a proposito desde que el piso `1e-6` se retiro: un
+            # portal mas laxo que el estimador dejaria pasar casos que el
+            # estimador refuta, y uno mas estricto excluiria clases que la
+            # Ec. (37) admite ---
             # pero refuta, porque un epsilon aqui devolveria un numero que es
             # del epsilon y la clase se reportaria con una entropia medida.
             # Misma disciplina que `MIL_CREDA.renyi.trace_normalize`: la
@@ -1276,14 +1251,29 @@ class CREDALoss(nn.Module):
             # written out rather than inferred, because that implication rests
             # on Eq. (27)'s block structure and not on anything checked here.
             #
-            # Skipped and not clamped: r28 says the score is not defined for
-            # such a class, and the epsilon inside `_renyi_entropy_order_2`
-            # would otherwise turn the division into a finite number that is
-            # the epsilon's and not the data's.
+            # Skipped and not clamped: r34 says the score is not defined for
+            # such a class.
+            #
+            # **The test is POSITIVE TRACE and nothing else, since 2026-10-18.**
+            # It read `<= MIN_CLASS_TRACE = 1e-6`, a floor justified as "the
+            # epsilon inside `_renyi_entropy_order_2`, which divides by
+            # `trace + 1e-6`, so at or below 1e-6 the estimator cannot tell the
+            # matrix from zero". That epsilon was removed, the estimator is now
+            # exact in float32 from `tr(K) = 1` down to `1.175e-38`, and the
+            # floor outlived its reason by thirty-two orders of magnitude.
+            #
+            # What settles the value is the formulation and not a tolerance:
+            # Eq. (37) admits "aquellas para las cuales existen sujetos en ambos
+            # dominios y las tres matrices que deben normalizarse poseen traza
+            # POSITIVA". Positive is `> 0`. `MIL_CREDA.global_term.is_active`
+            # already read it that way, so the two packages disagreed on which
+            # classes enter the sum of ONE equation -- the same defect as two
+            # copies of one formula, in the one shape a name-based check cannot
+            # see: a named constant here against an inline `> 0.0` there.
             trace_s = torch.trace(K_s_c)
             trace_t = torch.trace(K_t_c)
-            if (trace_s <= MIN_CLASS_TRACE or trace_t <= MIN_CLASS_TRACE
-                    or trace_s + trace_t <= MIN_CLASS_TRACE):
+            if (trace_s <= 0.0 or trace_t <= 0.0
+                    or trace_s + trace_t <= 0.0):
                 # The other half of Eq. (37)'s membership, and so the other
                 # place the charge of `1` is owed. Same reasoning as the count
                 # check above.
@@ -1337,7 +1327,8 @@ class CREDALoss(nn.Module):
             # gradiente, que es exactamente lo que la ecuacion pide.
             #
             # El camino estaba vivo y nunca se recorria: el unico piso que
-            # llegaba aca era `MIN_CLASS_TRACE = 1e-6`, que casi no dispara. Lo
+            # llegaba aca era `MIN_CLASS_TRACE = 1e-6` --- retirado el
+            # 2026-10-18 por `> 0`, que dispara todavia menos. Lo
             # destapo una medicion que puso un piso de CONTEO por bloque de
             # clase. Era alcanzable antes de ese piso igual --- basta con que
             # ninguna clase tenga muestras de los DOS dominios --- y hay un

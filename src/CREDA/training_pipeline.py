@@ -174,6 +174,23 @@ def get_lambda(epoch, total_epochs, delta):
     return (1 - np.exp(-delta * p)) / (1 + np.exp(-delta * p))
 
 def entropy(p):
+    """Shannon's `H(p) = -sum_c p_c ln p_c`, for the BASELINES and not for r34.
+
+    **Not one of the formulation's estimators, and the `1e-5` is not one of its
+    epsilons.** r34 states a single entropy, Eq. (10)'s quadratic Renyi; this
+    one belongs to the entropy-conditioning the CDAN and ADDA comparators
+    published, which `train_cdan` reads at lines 451 and 466. Its `1e-5` guards
+    a zero that IS reachable --- a confident softmax underflows to exactly zero
+    in float32, and `ln 0` is undefined --- unlike the four epsilons removed
+    from CREDA's own estimators on 2026-10-18, whose zeros were forbidden by
+    Cauchy-Schwarz and by Eq. (20).
+
+    Said here because the shape is the trap: an entropy with an epsilon inside
+    a logarithm, in this repository, reads like one of ours. It was deleted on
+    2026-10-18 on the strength of a grep that searched for `def entropy` and
+    `entropy_loss` and so missed both call sites, and restored in the same
+    session.
+    """
     return -torch.sum(p * torch.log(p + 1e-5), dim=1)
 def grl_hook(coeff):
     def hook(grad):
