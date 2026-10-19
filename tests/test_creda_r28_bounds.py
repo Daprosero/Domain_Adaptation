@@ -583,18 +583,42 @@ class R28ActiveClassTests(unittest.TestCase):
                 g_t[row, label] = 1.0
         return f_s, f_t, y_s, g_t
 
-    def test_the_collapsed_class_does_not_reach_the_per_class_reduction(self) -> None:
-        """Three classes contribute target samples; only two are active."""
+    def test_the_collapsed_class_does_reach_the_per_class_reduction(self) -> None:
+        """All three classes are active, because all three have positive trace.
+
+        **This asserted the opposite until 2026-10-18, and the change is the
+        formulation's and not a repair.** With the `1e-6` floor the collapsed
+        class was excluded and Eq. (37) charged it one; with Eq. (37)'s own
+        test -- positive trace -- it is active and gets measured. Both
+        behaviours are written down here because the trade is real and a reader
+        is owed it:
+
+            floor 1e-6  ->  2 active; the collapsed class charges 1;  L_glob = 0.33366465
+            `> 0`       ->  3 active; the collapsed class reads  0.00059861,  L_glob = 0.00053086
+
+        So following the letter makes a class with no target evidence read as
+        near-perfect alignment. That is a genuine tension inside Eq. (37),
+        whose charge of one exists so abandonment reads as a HIGHER loss -- and
+        the operator ruled on 2026-10-18 that the implementation follows the
+        formulation and the tension is the formulation's to resolve, not the
+        code's to paper over with a tolerance.
+
+        **What keeps this from being alarming is the fixture.** `_one_dead_class`
+        BUILDS the posterior: every one of those rows is `1/CLASSES` plus a
+        `1e-7` tilt, identical by construction. A model does not produce that.
+        Measured on softmax posteriors from logits with noise as flat as `1e-4`,
+        the weights of a class already span a factor of 19 and the entropy
+        differs from the unweighted block by about a nat -- so the regime this
+        fixture forces is not one a run visits. It is kept as a boundary
+        document, not as evidence of a defect in a measured number.
+        """
         f_s, f_t, y_s, g_t = self._one_dead_class()
         self.assertEqual(len(torch.unique(torch.argmax(g_t, dim=1))), CLASSES)
-        # One form, since 2026-10-18: `'conservative'` named a map r33 does not
-        # state, and it was removed. The rule under test is about CLASSES and
-        # never depended on which map normalized them.
         for form in ('entropy-cosh',):
             with self.subTest(form=form):
                 with torch.no_grad():
                     per_class = _loss_for(form)(f_s, f_t, y_s, g_t, reduction='none')
-                self.assertEqual(tuple(per_class.shape), (CLASSES - 1,))
+                self.assertEqual(tuple(per_class.shape), (CLASSES,))
                 self.assertTrue(bool(torch.isfinite(per_class).all()))
 
     def test_the_collapsed_class_produces_no_nan_and_no_inf(self) -> None:
@@ -606,18 +630,47 @@ class R28ActiveClassTests(unittest.TestCase):
                 self.assertFalse(math.isnan(value))
                 self.assertFalse(math.isinf(value))
 
-    def test_the_floor_is_a_declared_constant_tied_to_the_estimator(self) -> None:
-        """Not a number buried in a comparison.
+    def test_the_membership_test_is_positive_trace_and_nothing_else(self) -> None:
+        """No floor, and the two packages answer the same question.
 
-        It is the same 1e-6 that `_renyi_entropy_order_2` adds to the trace it
-        divides by: at or below that, the estimator cannot tell the matrix from
-        zero, so there is nothing to normalize.
+        It was `MIN_CLASS_TRACE = 1e-6`, declared as "the same 1e-6 that
+        `_renyi_entropy_order_2` adds to the trace it divides by". That epsilon
+        was removed on 2026-10-18 and the floor lost its reason: the estimator
+        is exact in float32 down to `1.175e-38`, so what it needs is thirty-two
+        orders of magnitude lower.
+
+        What decides the value is Eq. (37), which admits the classes whose three
+        matrices have POSITIVE trace -- and positive is `> 0`.
+        `MIL_CREDA.global_term.is_active` already read it that way, so until the
+        floor went the two packages disagreed about which classes enter the sum
+        of one equation. That is the same defect as two copies of one formula,
+        in the shape no name-based check can see: a named constant on one side
+        against an inline `> 0.0` on the other.
         """
-        self.assertTrue(hasattr(models, 'MIN_CLASS_TRACE'))
-        self.assertEqual(models.MIN_CLASS_TRACE, 1e-6)
-        # And `forward` reads the constant rather than repeating its value.
+        from MIL_CREDA.global_term import is_active
+
+        self.assertFalse(hasattr(models, 'MIN_CLASS_TRACE'))
         source = inspect.getsource(CREDALoss.forward)
-        self.assertIn('MIN_CLASS_TRACE', source)
+        # On the CODE and not on the comments: `forward` still names the retired
+        # floor in prose, to tell a reader who remembers it that it ended, and a
+        # bare substring search cannot tell that paragraph from a live use.
+        code = [l for l in source.splitlines() if not l.lstrip().startswith('#')]
+        self.assertNotIn('MIN_CLASS_TRACE', '\n'.join(code))
+        self.assertIn('trace_s <= 0.0', source)
+
+        # And the two gates agree on the same input, which is the property the
+        # constant's absence is supposed to buy. A trace that a floor would have
+        # excluded is the case that separates them.
+        empty = torch.zeros((0, 0), dtype=torch.float64)
+        tiny = torch.eye(3, dtype=torch.float64) * 1e-12
+        dead = torch.zeros((3, 3), dtype=torch.float64)
+        for name, M in (('tiny', tiny), ('dead', dead), ('empty', empty)):
+            with self.subTest(block=name):
+                mil = is_active(M, M, M)
+                creda = bool(torch.trace(M) > 0.0) if M.numel() else False
+                self.assertEqual(mil, creda, name)
+        self.assertTrue(is_active(tiny, tiny, tiny),
+                        'a positive trace is active however small it is')
 
     def test_an_ordinary_class_is_nowhere_near_the_floor(self) -> None:
         """Red has to be reachable from the other side too.
@@ -979,7 +1032,8 @@ class R28BoundHypothesisTests(unittest.TestCase):
             K_s = loss._gaussian_kernel(f_s, f_s, sigma)
             K_t = loss._gaussian_kernel(f_t, f_t, sigma) * torch.outer(weights, weights)
             K_st = loss._gaussian_kernel(f_s, f_t, sigma) * weights.unsqueeze(0)
-            if float(torch.trace(K_t)) <= models.MIN_CLASS_TRACE:
+            # Eq. (37)'s own test, since the `1e-6` floor was retired.
+            if float(torch.trace(K_t)) <= 0.0:
                 return 0.0
             h_s = loss._renyi_entropy_order_2(K_s)
             h_t = loss._renyi_entropy_order_2(K_t)
@@ -991,7 +1045,7 @@ class R28BoundHypothesisTests(unittest.TestCase):
         """The positive half: the hypothesis holds, so the bound holds.
 
         The spread assertions are not decoration. A sweep whose every
-        configuration short-circuited on `MIN_CLASS_TRACE` would return 300
+        configuration short-circuited on a non-positive trace would return 300
         zeros and satisfy "none left [0, 1]" having measured nothing -- the
         shape of green this repository has shipped before. Requiring values on
         both sides of the interval's middle is what makes the emptiness of
