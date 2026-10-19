@@ -164,17 +164,28 @@ class ElPesoDeLaEc24(unittest.TestCase):
                     f"Ec. 24 daba entre 2.7e-06 y 4.3e-06 ahí")
 
     def test_forward_computes_eq24_without_an_epsilon(self):
-        """La fuente de `forward`, leída: no suma nada adentro del logaritmo.
+        """La fuente de `forward`, leída: ya no CALCULA la Ec. 24, la delega.
 
-        Asertado sobre el CÓDIGO y no sobre un valor, porque un épsilon de
-        1e-6 sobre un peso cae por debajo de la tolerancia de casi cualquier
-        comparación numérica que uno escriba sin pensarlo.
+        Seguía siendo una lectura del código y no de un valor, y la razón era
+        buena: un épsilon de 1e-6 sobre un peso cae por debajo de la
+        tolerancia de casi cualquier comparación que uno escriba sin pensarlo.
+        El 2026-10-18 la razón dejó de aplicar de dos maneras. El valor SÍ se
+        asierta ahora, en el test de la uniforme de arriba, donde el épsilon
+        dejaba entre 2.7e-06 y 4.3e-06 --- un orden por encima del redondeo de
+        float32, así que ahí es detectable. Y la fórmula dejó de estar acá: la
+        calcula `MIL_CREDA.confidence.confidences`, su única implementación.
+
+        Lo que esto asierta es la delegación, que es lo que hace que no haya
+        una segunda copia donde volver a meter un épsilon. Las tres líneas que
+        vivían acá eran la segunda copia, y fue la que se quedó atrás.
         """
         import inspect
+        from MIL_CREDA.confidence import confidences
+        from CREDA import models
         fuente = inspect.getsource(CREDALoss.forward)
-        self.assertIn("squared_sum = torch.sum(g_t ** 2, dim=1)", fuente)
-        self.assertIn("entropy = -torch.log(squared_sum)", fuente)
-        self.assertNotIn("torch.log(squared_sum + ", fuente)
+        self.assertIn("target_weights = confidences(g_t)", fuente)
+        self.assertNotIn("squared_sum", fuente)
+        self.assertIs(models.confidences, confidences)
 
     def test_the_weight_stays_in_the_unit_interval(self):
         """`w in [0, 1]`, y los dos extremos se alcanzan.

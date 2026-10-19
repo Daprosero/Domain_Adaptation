@@ -142,6 +142,18 @@ from itertools import permutations
 from tqdm import tqdm
 import timm
 
+# Eq. (24), IMPORTED and not copied, which is the one exception to the rule
+# the next paragraph states. The rule protects a BASELINE: CREDA is the control
+# MIL-CREDA is measured against, so a copied Eq. (35)-(36) keeps prior work from
+# depending on the method it controls. Eq. (24) is not prior work. It is the
+# METHOD's own confidence weight -- the toy's two arms differ in exactly this
+# flag, so it is the treatment, not the control -- and a treatment has no claim
+# to independence from the method that proposes it. Importing it costs the
+# baseline nothing and buys the only thing a copy cannot: there is one
+# implementation, so there is nothing to keep in step. It had two, and the
+# second one drifted (it kept an epsilon the first one lost on 2026-10-18).
+from MIL_CREDA.confidence import confidences
+
 # Eqs. (35)-(36), copied onto the CREDA side rather than imported from
 # `MIL_CREDA` -- `CREDA.bounds`' own module docstring says why, and
 # `tests/test_creda_sample.py` is what holds each copy equal to its original.
@@ -949,7 +961,13 @@ class CREDALoss(nn.Module):
         # del rango de su propia cantidad. Esta forma es exacta a 7 digitos en
         # float32 desde `tr(K) = 1` hasta `1.175e-38`, el minimo normal.
         tr_K = torch.trace(K)
-        if float(tr_K) <= 0.0:
+        # Sobre el TENSOR y no sobre `float(tr_K)`: el cast de un tensor con
+        # gradiente emite un `UserWarning` de torch en cada paso, y esto corre
+        # una vez por bloque por clase por paso --- medido, miles de veces por
+        # corrida. Es la forma que `MIL_CREDA.renyi.trace_normalize` usa, y el
+        # `bool()` dice explicitamente que esto es una DECISION de control y no
+        # una cantidad de la que derivar.
+        if bool(tr_K <= 0.0):
             # La Ec. (9) solo define la entropia para traza positiva. El portal
             # de actividad (`MIN_CLASS_TRACE`) excluye esas clases antes de
             # llegar aca, asi que esto es el respaldo y no la via normal ---
@@ -1196,9 +1214,21 @@ class CREDALoss(nn.Module):
             # Y alimentaba el porton de `C_act` (Ec. 37), que mira
             # `tr(K~_c^t) = sum_j w_j^2`: un peso espurio ahi mueve la traza
             # que decide si la clase entra en la suma.
-            squared_sum = torch.sum(g_t ** 2, dim=1)
-            entropy = -torch.log(squared_sum)
-            target_weights = 1.0 - entropy / torch.log(torch.tensor(float(g_t.shape[1]), device=g_t.device))
+            # Computed by `MIL_CREDA.confidence.confidences`, which is this
+            # equation's single implementation; the import at the top of the
+            # module says why this one is imported and Eqs. (35)-(36) are not.
+            # Two differences from the three lines that used to sit here, both
+            # measured. `ln C` is now evaluated in double rather than float32,
+            # which moves `w` by 1.4e-8 relative -- 70 times less than the
+            # `1e-6` epsilon that was measured to move no decision at all. And
+            # the uniform distribution reads exactly `0.0` at `C=2` and one
+            # float32 epsilon (1.19e-07) at C=3 and C=10. That residue is the
+            # INPUT's, not the estimator's: `1/3` and `1/10` are not
+            # representable in float32, so `sum g^2` misses its floor `1/C`
+            # before this is called, and the double normalizer cannot repair
+            # what arrives already rounded. `tests/test_creda_mil_copies.py`
+            # asserts it as a bound against that epsilon.
+            target_weights = confidences(g_t)
         else:
             target_weights = None
 
