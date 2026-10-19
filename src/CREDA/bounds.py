@@ -10,6 +10,16 @@ the method it is the control for -- and the comparison would be contaminated
 at the import line, before a single number was produced. A baseline that has
 to be installed alongside the thing it baselines is not a baseline.
 
+**One equation is imported instead, and the rule says which.** Eq. (24)'s
+confidence weight comes from `MIL_CREDA.confidence` -- `CREDA.models` imports
+it, and `CREDA.toy_experiment` with it -- because what the paragraph above
+protects is a BASELINE, and Eq. (24) is not part of one. It is the method's
+treatment: the toy's two arms differ in exactly that weight, so a run with it
+off is the control and a run with it on is the thing being measured. A
+treatment has no independence to lose by depending on the method that proposes
+it. Eqs. (21), (35), (36) and the plumbing below are the baseline's own
+arithmetic and stay copies.
+
 **What keeps a copy from drifting is a test, not a promise.**
 `tests/test_creda_sample.py` imports both this module and its originals and
 asserts, function by function, that they agree -- on ordinary inputs and on

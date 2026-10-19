@@ -39,6 +39,7 @@ import torch.nn.functional as F
 
 from CREDA.bounds import source_bound, source_loss
 from CREDA.models import CREDALoss
+from MIL_CREDA.confidence import confidences
 from CREDA.two_phase import clone_for_target
 
 
@@ -1064,21 +1065,36 @@ FACTOR_INTRUSO = 3.0
 
 
 def incertidumbre_declarada(logits):
-    """`U(g) = H2(g)/ln C` de la Ec. 24, en UN solo lugar del modulo.
+    """`U(g) = H2(g)/ln C` de la Ec. 24: el complemento de la confianza.
 
-    `H2(g) = -log(sum g^2 + 1e-6)`, con el mismo epsilon que
-    `_renyi_entropy_order_2`. La que `CREDALoss.forward` usa es identica pero
-    esta escrita EN LINEA dentro de `forward` y no se puede importar; que no sea
-    importable es un defecto de `models.py` y no algo que este modulo pueda
-    arreglar sin tocar la linea base.
+    **Ya no calcula: delega en `MIL_CREDA.confidence.confidences`, que es la
+    UNICA implementacion de la Ec. 24.** Hasta el 2026-10-18 esta funcion
+    calculaba `-log(sum g^2 + 1e-6) / ln C` por su cuenta, y la razon estaba
+    escrita aqui mismo: la de `CREDALoss.forward` estaba EN LINEA dentro de
+    `forward` y no se podia importar. Esa razon se termino --- `forward` ahora
+    llama a la misma funcion que esta --- y mientras duro hizo exactamente el
+    daño que una copia hace: `forward` perdio su epsilon ese dia y esta se
+    quedo con el suyo, de modo que las dos mitades de una sola ecuacion
+    discrepaban sin que nada fallara.
 
-    Existe como funcion porque la expresion ya se leia en dos sitios --- el
-    `u_t` del punto de control y el peso por punto --- y ahora en cuatro, con la
-    perturbacion de frontera y su premisa. Cuatro copias de una formula son
-    cuatro oportunidades de que una se quede atras sin que nada falle.
+    **Que se movio al delegar, y no es nada que entrene.** El peso que entra al
+    gradiente nunca salio de aqui: en el brazo declarado `corrida` pasa
+    `target_weights=None` y pesa el bloque de `CREDALoss.forward`. Lo que esta
+    funcion alimenta son LECTURAS --- el `u_t` y el `w_cu` de cada punto de
+    control, el brazo de control `PESO_BARAJADO`, la perturbacion de frontera y
+    la `w` que `alineacion` usa --- y todas ellas pasan de la forma con
+    epsilon a la forma de la ecuacion.
+
+    Sigue existiendo como funcion, y por la razon de siempre: la expresion se
+    lee en cuatro sitios de este modulo, y cuatro llamadas a una funcion son
+    una sola oportunidad de equivocarse.
     """
-    g = F.softmax(logits, 1)
-    return -torch.log((g**2).sum(1) + 1e-6) / float(np.log(CLASES))
+    # `confidences` normaliza por `ln(G.shape[1])`, y este modulo por `CLASES`.
+    # Son el mismo numero mientras el cabezal tenga una salida por clase, que
+    # es lo que esto afirma: si alguna vez dejaran de serlo, el normalizador
+    # cambiaria sin que ninguna lectura se viera distinta.
+    assert logits.shape[1] == CLASES, (logits.shape[1], CLASES)
+    return 1.0 - confidences(F.softmax(logits, 1))
 
 
 def clases_efectivas(rut):
@@ -2030,6 +2046,14 @@ def perdida_fuente(logits, y):
     numero. `src/CREDA/bounds.py` lo explica en su propio docstring y
     `tests/test_creda_sample.py` sostiene, funcion por funcion, que la copia y
     el original dan lo mismo. Misma funcion; otra procedencia.
+
+    **La Ec. 24 es la excepcion, y la regla dice por que.** El peso de
+    confianza SI se importa de `MIL_CREDA.confidence`, porque lo que el
+    parrafo de arriba protege es una LINEA BASE y la Ec. 24 no es parte de
+    ninguna: es el TRATAMIENTO --- los dos brazos de esta corrida difieren
+    exactamente en ese peso --- y un tratamiento no tiene independencia que
+    perder respecto del metodo que lo propone. La Ec. 21 de aqui abajo si es
+    aritmetica de la linea base, y se queda copiada.
 
     **Que cambia respecto de la cross-entropy cruda que corria antes.** La Ec.
     21 divide por `B_src`, el supremo exacto de la perdida de una unidad, de

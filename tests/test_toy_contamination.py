@@ -31,6 +31,7 @@ nothing, and that has happened in this repository.
 from __future__ import annotations
 
 import ast
+import warnings
 import json
 import math
 from pathlib import Path
@@ -61,7 +62,22 @@ FUNCIONES_CON_TERMINO = ("train_source_ce", "corrida")
 
 
 def _tree(path: Path) -> ast.Module:
-    return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    """Parse, and account for any SyntaxWarning instead of letting it pass.
+
+    One file under `src/CREDA` raises one: `comparators/daln/upstream_grl.py`
+    spells LaTeX in a non-raw docstring. It is VENDORED upstream and not ours
+    to repair, so it is tolerated by PATH and never by warning class --- the
+    same mistake in a module we wrote still fails here. Before the import rule
+    below widened to the whole package nothing parsed that file, which is why
+    this appeared the day the rule stopped reading a list of three.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", SyntaxWarning)
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    assert not caught or "comparators" in path.parts, (
+        f"{path.name} raised {[str(w.message) for w in caught]} while being "
+        "parsed, and it is not vendored, so it is ours to fix")
+    return tree
 
 
 def _function(path: Path, name: str) -> ast.FunctionDef:
@@ -212,6 +228,20 @@ def test_the_supervised_term_lives_in_the_unit_interval():
 # =============================== 2. `MIL_CREDA` is never imported by the toy
 
 
+#: The ONE module of `MIL_CREDA` that `src/CREDA` may import, and the ruling
+#: that allows it. Eq. (24)'s confidence weight is the METHOD's treatment --
+#: the two arms of this very sweep differ in exactly that weight -- so it is
+#: not part of the baseline and has no independence to lose from the method
+#: that proposes it. Decided by the operator on 2026-10-18, after the two
+#: copies of that one equation disagreed: `forward` lost its epsilon and
+#: `incertidumbre_declarada` kept hers, and nothing failed.
+#:
+#: It is a set of ONE on purpose. The rule below keeps its full force over
+#: every other module of `MIL_CREDA`, so a second import cannot arrive under
+#: the cover of this exception -- it has to be ruled on its own.
+IMPORT_PERMITIDO = {"MIL_CREDA.confidence"}
+
+
 def test_the_toy_never_imports_the_method_it_is_the_baseline_for():
     """AST, like the no-torch rule next door, and for a stronger reason.
 
@@ -219,13 +249,28 @@ def test_the_toy_never_imports_the_method_it_is_the_baseline_for():
     against. An import pointing that way makes the baseline depend on the thing
     it is the control for, and the contamination happens at the import line --
     before any number is produced, and invisible to every other check here.
+
+    **Over every module of the package, not over a list of three.** It used to
+    check `toy_experiment.py` and `toy_plots.py` by name, which left
+    `models.py` -- the module that holds the loss -- outside the only check
+    that enforces this rule. A guard whose scope is a hand-written list is a
+    guard somebody has to remember to extend, and the module that escapes it is
+    the one nobody listed. The scope is now derived from the package.
     """
-    for nombre in ("toy_experiment.py", "toy_plots.py"):
-        importados = _imported_modules(PAQUETE / nombre)
-        culpables = sorted(m for m in importados
-                           if m == "MIL_CREDA" or m.startswith("MIL_CREDA."))
-        assert culpables == [], f"{nombre} imports {culpables}"
-        modulo = T if nombre == "toy_experiment.py" else toy_plots
+    revisados = 0
+    for path in sorted(PAQUETE.rglob("*.py")):
+        importados = _imported_modules(path)
+        culpables = sorted(
+            m for m in importados
+            if (m == "MIL_CREDA" or m.startswith("MIL_CREDA."))
+            and m not in IMPORT_PERMITIDO)
+        assert culpables == [], (
+            f"{path.name} imports {culpables}, and only {sorted(IMPORT_PERMITIDO)} "
+            "is ruled admissible: CREDA is the baseline MIL_CREDA is measured "
+            "against, so any other import points the dependency backwards")
+        revisados += 1
+    assert revisados > 5, revisados
+    for modulo in (T, toy_plots):
         assert "MIL_CREDA" not in vars(modulo)
 
 
