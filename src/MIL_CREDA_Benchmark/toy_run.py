@@ -826,6 +826,13 @@ TOY_ARMS = [
         "id": "TGL", "name": "Toy-MIL-CREDA (global + local, weighted)",
         "label": "global + local, confidence weighting on, both coefficients 1",
         "unit": "bag", "adaptation": "milcreda", "weighting": True,
+        # `global` is written out although `_milcreda_term` defaults it to
+        # True: the ablation reads the pair of flags to tell its three rows
+        # apart, and a row whose flag is absent would have to be read through
+        # a default to know what it computes. Behaviourally identical --
+        # `spec.get("global", True)` with the key present and True is the same
+        # branch -- so no number this arm has ever produced moves.
+        "global": True,
         "local": True,
         "attention": "learned", "selection": None, "normalization": "shared",
         "why": ("what this toyset exists to find out: whether MIL-CREDA works "
@@ -934,6 +941,28 @@ assert all(0 < k < FULL.instances_per_bag for k in PRESUPUESTOS_K), (
     PRESUPUESTOS_K, FULL.instances_per_bag,
     "a budget at or above the bag size selects nothing and the three rules "
     "would be byte-identical, which `Arm.select` refuses")
+#: The ablation's arms are RESOLVABLE without being DECLARED in `TOY_ARMS`.
+#: `build_arm` looks every id up here, so registering them makes
+#: `run_cell(..., arms=ABLACION_IDS)` work; `TOY_ARMS` stays length one, so
+#: `TOY_ADAPTED` -- which phase 1 trains and every later reading shares --
+#: does not move. The two rosters answer different questions: what section 1
+#: measures, and what ids exist.
+#:
+#: `BRAZO_AMBOS` is `TOY_ADAPTED`'s own id, and overwriting its entry with the
+#: ablation's copy would redefine section 1's arm from here. It is skipped,
+#: and the assertion below is what keeps that skip honest.
+for _arm in ABLACION:
+    if _arm["id"] not in TOY_ARMS_BY_ID:
+        TOY_ARMS_BY_ID[_arm["id"]] = _arm
+del _arm
+
+ABLACION_IDS = tuple(a["id"] for a in ABLACION)
+
+assert TOY_ARMS_BY_ID[TOY_ADAPTED] is TOY_ARMS[0], (
+    "el padron de la ablacion piso el brazo de la seccion 1")
+assert all(i in TOY_ARMS_BY_ID for i in ABLACION_IDS), ABLACION_IDS
+assert len(TOY_ARMS) == 1, (
+    TOY_ARMS, "la seccion 1 dejo de tener exactamente un brazo")
 assert {a["id"] for a in ABLACION} == {BRAZO_SOLO_GLOBAL, BRAZO_SOLO_LOCAL,
                                        BRAZO_AMBOS}, ABLACION
 assert any(a["global"] and a["local"] for a in ABLACION), (
@@ -1147,6 +1176,160 @@ def build_family(name: str, seed: int, scale: Scale) -> toy_bags.Familia:
     return toy_bags.construir(name, generators[name], semilla=seed,
                               n=scale.points_per_domain,
                               bolsas_por_clase=scale.bags_per_class)
+
+
+# ------------------------------------------- section 2: moving a bag at the frontier
+#
+# **Three bags, chosen by the frontier and displaced, and `w` is what the
+# section reads.** CREDA's own frontier is a point of the LATENT where two
+# classes tie and win (`CREDA.toy_experiment.puntos_de_frontera`, solved
+# exactly because the head is a `Linear`). That construction does not transfer
+# to a bag: a bag is thirty instances and there is no single latent point to
+# place it at, and moving a bag so its latent lands on a named point would be
+# an optimization inside a perturbation, which is a second mechanism nobody
+# asked for.
+#
+# So the two halves are split, and each takes the form it can take exactly:
+#
+#   WHICH bags -- in the method's own terms, with the frozen phase-1 head. A
+#   bag is at the frontier when its two highest class scores are closest: the
+#   margin is the distance to the decision, and the smallest margins are the
+#   bags the classifier is least decided about. This reads `g_j` (Eq. 23),
+#   which is the same quantity Eq. (24) turns into `w_j`, so the bags chosen
+#   are the ones whose weight has the most room to move.
+#
+#   WHERE to -- in INPUT space, toward the band of the class that came second.
+#   The toyset's bags ARE bands of a class by construction, so that direction
+#   is known rather than estimated, and the displacement is the one CREDA's
+#   `reubicado` performs with the bag as its unit.
+#
+# **It is NOT noise.** A noise level perturbs everything a little; this moves
+# three named bags a declared amount and leaves every other bag untouched, so
+# a change in `w` elsewhere is a change the method propagated and not damage
+# that was applied there.
+
+#: How far a displaced bag travels, as a FRACTION of the distance between its
+#: own centroid and the centroid it moves toward. Declared as a ladder and run
+#: whole: one magnitude would make "the weight did not move" and "the bag did
+#: not move far enough" the same reading.
+#:
+#: `0.0` is the control and is not decoration -- it runs the entire
+#: perturbation path and displaces nothing, so a difference between it and the
+#: unperturbed run is the HARNESS and not the perturbation. `1.0` lands the bag
+#: on the other centroid, which is the most a displacement can mean here.
+ESCALERA_DESPLAZAMIENTO = (0.0, 0.25, 0.5, 1.0)
+
+#: How many bags move. Three, which is the operator's own number: enough that
+#: one unlucky bag does not carry the reading, few enough that the untouched
+#: bags still outnumber them by sixteen to one in the training role.
+BOLSAS_DESPLAZADAS = 3
+
+assert ESCALERA_DESPLAZAMIENTO[0] == 0.0, (
+    ESCALERA_DESPLAZAMIENTO,
+    'sin el cero no hay forma de separar el arnes de la perturbacion')
+assert len(set(ESCALERA_DESPLAZAMIENTO)) == len(ESCALERA_DESPLAZAMIENTO)
+assert all(0.0 <= f <= 1.0 for f in ESCALERA_DESPLAZAMIENTO)
+
+
+def bolsas_en_la_frontera(scores: np.ndarray, cuantas: int = BOLSAS_DESPLAZADAS
+                          ) -> np.ndarray:
+    """The `cuantas` bags the classifier is LEAST decided about.
+
+    `scores` is `(bags, classes)` -- Eq. (23)'s `g_j`, the same quantity
+    Eq. (24) turns into `w_j`. The margin of a bag is its highest score minus
+    its second highest, so a margin near zero is a bag sitting on a decision
+    boundary and a margin near one is a bag the head has settled.
+
+    Returns the bag POSITIONS, ascending by margin, so the reader can see the
+    order the section chose and not only the set. Ties break by position,
+    which is deterministic: a tie broken by the order of a dict would make the
+    same material choose different bags on two runs.
+    """
+    scores = np.asarray(scores, dtype=float)
+    if scores.ndim != 2 or scores.shape[0] == 0:
+        raise ValueError(f"se esperaba (bolsas, clases) y llego {scores.shape}")
+    if cuantas <= 0 or cuantas > scores.shape[0]:
+        raise ValueError(
+            f"se piden {cuantas} bolsas de {scores.shape[0]}: el pedido tiene "
+            "que caber en el material")
+    ordenados = np.sort(scores, axis=1)
+    margen = ordenados[:, -1] - ordenados[:, -2]
+    return np.lexsort((np.arange(len(margen)), margen))[:cuantas]
+
+
+def desplazar_bolsas(X: np.ndarray, bolsas: np.ndarray, y: np.ndarray,
+                     elegidas: np.ndarray, scores: np.ndarray,
+                     fraccion: float) -> tuple[np.ndarray, list[dict]]:
+    """Move each chosen bag toward the class that came SECOND for it.
+
+    Every instance of a bag moves by the same vector, so the bag arrives whole
+    and its internal geometry is untouched: what changes is where the bag SITS,
+    never what it looks like. A per-instance displacement would change the
+    within-bag kernel too, and then a move in `w` could be either one.
+
+    The destination is the centroid of the target bags of the runner-up class.
+    It is a centroid of BAGS and not of points so that one crowded band does
+    not pull the destination toward itself, and it is computed on the material
+    this function receives -- never on the source -- so nothing the source
+    knows enters a perturbation of the target.
+
+    Returns the moved copy and one record per bag: what moved, where to, how
+    far, and the margin that put it on the list. `fraccion = 0.0` returns a
+    copy that is numerically identical and the records all the same, which is
+    what makes the control run the whole path.
+    """
+    X = np.asarray(X, dtype=float)
+    movido = X.copy()
+    bolsas = np.asarray(bolsas)
+    y = np.asarray(y)
+    scores = np.asarray(scores, dtype=float)
+    registros: list[dict] = []
+    for posicion in np.asarray(elegidas, dtype=int):
+        filas = np.flatnonzero(bolsas == posicion)
+        if filas.size == 0:
+            raise ValueError(f"la bolsa {posicion} no tiene ninguna instancia")
+        propia = int(np.bincount(y[filas]).argmax())
+        # **La segunda entre las OTRAS clases, nunca la propia.** Tomar el
+        # segundo lugar del orden pelado parece lo mismo y no lo es: con un
+        # empate exacto en la punta --- que es precisamente el caso que
+        # `bolsas_en_la_frontera` selecciona, porque elige margen chico --- el
+        # segundo lugar puede SER la clase de la bolsa, y entonces la bolsa se
+        # desplaza hacia su propia banda. Eso corre el camino entero, escribe
+        # un registro con su distancia y no perturba nada: un no-op disfrazado
+        # de perturbacion, que es la forma en que una seccion entera sale nula
+        # sin que nada falle. Lo encontro una prueba, no una lectura.
+        candidatas = [c for c in range(scores.shape[1]) if c != propia]
+        segunda = max(candidatas, key=lambda c: scores[posicion, c])
+        vecinas = [b for b in np.unique(bolsas)
+                   if b != posicion
+                   and int(np.bincount(y[bolsas == b]).argmax()) == segunda]
+        if not vecinas:
+            raise ValueError(
+                f"la bolsa {posicion} tiene como segunda a la clase {segunda} "
+                "y el blanco no trae ninguna bolsa de esa clase, asi que no "
+                "hay destino que nombrar")
+        centro = X[filas].mean(axis=0)
+        destino = np.stack([X[bolsas == b].mean(axis=0) for b in vecinas]
+                           ).mean(axis=0)
+        paso = float(fraccion) * (destino - centro)
+        movido[filas] = X[filas] + paso
+        registros.append({
+            "bolsa": int(posicion),
+            "claseOriginal": propia,
+            "claseDestino": segunda,
+            "margen": float(np.sort(scores[posicion])[-1]
+                            - np.sort(scores[posicion])[-2]),
+            # El puntaje de la clase a la que de verdad se va, al lado del
+            # margen: con la propia excluida, los dos pueden no ser el mismo
+            # par de numeros y el registro tiene que decir cual se uso.
+            "puntajeDestino": float(scores[posicion, segunda]),
+            "puntajePropio": float(scores[posicion, propia]),
+            "fraccion": float(fraccion),
+            "distanciaRecorrida": float(np.linalg.norm(paso)),
+            "distanciaTotal": float(np.linalg.norm(destino - centro)),
+            "instancias": int(filas.size),
+        })
+    return movido, registros
 
 
 def datasets_of(familia: toy_bags.Familia) -> dict:
