@@ -106,28 +106,76 @@ the DIGIT benchmark report, which is being retired. Its content stays in git at
 
 ## The sections of the toyset
 
-- [x] Section 1 is the method against its rungs, one figure, one table and the
-      declared tests per family block -- CREDA's shape, so the two documents can be
-      read side by side.
-- [ ] **Section 2 perturbs a BAG, not a point.** `w_j` is defined per bag (Eq. 24),
-      so a bag-level perturbation enters exactly where the weighting can see it;
-      perturbing single points dilutes the damage across a weight that is not
-      defined at that scale. The table structure mirrors CREDA's.
-- [ ] **Section 3 varies the ACTIVATION on the best architecture**, with the same
-      tables and the same tests. The best architecture is read from the existing
-      record BEFORE the activations run, never chosen after seeing their result. It
-      is not the same in the three families (`lunas` none, `toroide` and `rollo`
-      BatchNorm), so either one is fixed and said, or one runs per family.
-- [ ] **Section 4 is the ablation**: local only, global only, and both. `config.ARMS`
-      already declares the floor (`B`), global unweighted (`E`), global weighted
-      (`F`) and the full method (`G`); **local-only is the one that does not exist**
-      and has to be declared.
-- [ ] **Section 5 validates the bag-to-bag correspondence.** Eq. (29) IS the
-      bag-to-bag relation and `latent.correspondence_grid` already draws it,
-      choosing its columns by MECHANISM so the figure can come out wrong. What is
-      missing is a quantitative reading, and it must be scored against something
-      the method's own kernel never evaluates -- the true class, and proximity in
-      the INPUT space -- or a collapse would read as clean correspondence.
+**Only section 1 searches.** From section 2 on, every section reads the
+hyperparameters section 1 chose and runs its own tests. Nothing re-searches, so
+no later section can win by being tuned harder than the one before it.
+
+**Every section from 2 on runs on the BEST ARCHITECTURE only**, read from the
+record before it runs and never picked after seeing a result. Measured on the
+full run: `lunas` none (0.4056), `toroide` BatchNorm (0.7944), `rollo` BatchNorm
+(0.3944) -- it is not the same in the three families, so either one is fixed and
+said out loud, or one runs per family.
+
+- [x] **Section 1 -- the method against its rungs.** Three families, three
+      architectures, ten seeds. One figure, one table and the declared tests per
+      family block, which is CREDA's shape so the two documents can be read side
+      by side. The only section that searches.
+
+- [ ] **Section 2 -- three bags moved at the frontier.** The three target bags
+      closest to the decision frontier are DISPLACED, and the section shows how
+      `w` moves. This is not noise and nobody asked for noise: it is a directed
+      geometric displacement, the bag-unit counterpart of CREDA's frontier. The
+      bag is the right unit because `w_j` is defined per bag (Eq. 24); perturbing
+      single points dilutes the damage across a weight that is not defined at
+      that scale. Table structure mirrors CREDA's.
+
+- [ ] **Section 3 -- is the aggregation the best one?** Two axes:
+      - mechanism: `ours`, `abmil-published`, `abmil-gated`, `max`, `mean`.
+        `wiring.MECHANISMS` already implements all five.
+      - selection: all instances, `top-k`, `arbitrary-k`, `regular-k`.
+      **`top-k` against `arbitrary-k` at the SAME `k` is the clean test**: if the
+      attention knows which instances matter, keeping its best `k` has to beat
+      keeping `k` at random. If they tie, the attention is scoring nothing even
+      with the mechanism switched on, and `regular-k` is the third foot that
+      separates "top-k wins" from "fewer instances already helps".
+      **`k` is declared BEFORE the run: 5, 10 and 15 of 30, and all three are
+      reported, never the best.** A `k` chosen after seeing the result chooses
+      the number that gives the answer we wanted.
+      Not the full cross: the five mechanisms over all instances, then the four
+      selections over the winning mechanism.
+      It runs the FULL two phases, not source only. The aggregation enters both
+      -- phase 1 scores bags with it and phase 2 builds its representations from
+      it -- so source-only would answer "which classifies source bags best" while
+      the claim is about transfer. The two can disagree, and the interesting one
+      is the second.
+
+- [ ] **Section 4 -- the correspondence, moved and followed.** A target bag's
+      correspondence mass `pi_ji` is read, the bag is DISPLACED toward another
+      class's region, and the mass is read again. If the method does what it
+      claims, **the mass moves with it**: toward source bags carrying the
+      characteristics the bag now has. If it does not move, the correspondence is
+      anchored in something that is not the bag's characteristics, and that reads
+      without interpreting anybody.
+      A static score against input-space proximity answers "did it hit"; this
+      answers "does it follow", which is causal and stronger. It needs no new
+      mathematics: `total_correspondence` already returns the mass per source bag
+      and this reads it twice.
+      **Sections 2 and 4 share the move-a-bag machinery**, built once in 2.
+
+- [ ] **Sections 3 and 4 run CONSECUTIVELY, in that order, and that is not
+      cosmetic.** They are MIL's claim split in two halves: "we know which
+      INSTANCES matter inside the bag" and "we know which BAGS correspond across
+      domains". Neither half holds alone -- a good attention over arbitrary
+      correspondences aligns noise carefully.
+
+- [ ] **Section 5 -- the ablation**: global only, local only, both, plus
+      `.predict` as the floor. It goes LAST because it opens the fewest new
+      questions and because read after 3 and 4 it interprets better: if the local
+      term buys nothing, section 4 has already said whether that is because the
+      correspondence fails or in spite of it working.
+      `.predict` costs no second sweep -- `run_cell` measures it itself.
+      **Local-only is the one that does not exist**: `spec["local"]` already gates
+      the local term, and the symmetric gate on the global one has to be declared.
 
 ## Open -- nobody has decided these
 
