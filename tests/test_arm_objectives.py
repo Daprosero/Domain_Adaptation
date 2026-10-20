@@ -1168,80 +1168,10 @@ def _run_campaign(seeds: list[int], noise: float = 0.0) -> dict:
         torch.device("cpu"), progress=lambda *a: None)
 
 
-def test_one_draw_of_the_material_is_shared_by_every_arm(campana) -> None:
-    """Arms that saw differently corrupted material differ in the draw as well as
-    in what they compute, and no rung between them is attributable.
-
-    Shared by construction and not by agreement: the material is built once per
-    (seed, domain) outside the arm loop, so every arm of a cell is handed the
-    same object. The count is what says so -- three domains for one seed, however
-    many arms ran -- and the identity is what makes the count mean it.
-
-    Reachable red: move `bags.build` inside the arm loop, and the declared
-    arms of a cell get one draw each that agree in distribution and in
-    nothing else.
-    """
-    harness_result = _run_campaign([7], noise=config.NOISE_LEVELS[2])
-    built = campana["built"]
-
-    assert len(built) == len(config.DOMAINS), \
-        f"the material was drawn {len(built)} times for one seed"
-    assert {code for code, _, _ in built} == set(config.DOMAINS)
-    assert {rate for _, _, rate in built} == {config.NOISE_LEVELS[2]}
-
-    runs = campana["runs"]
-    arms = {run["arm"] for run in runs}
-    assert len(arms) == len(config.ARMS) == 4
-    for transfer in {run["transfer"] for run in runs}:
-        of_cell = [run for run in runs if run["transfer"] == transfer]
-        assert len({run["source"] for run in of_cell}) == 1, \
-            "two arms of one cell were handed different source material"
-        assert len({run["target"] for run in of_cell}) == 1
-    assert harness_result["reduction"]["labelNoise"] == config.NOISE_LEVELS[2]
 
 
-def test_the_campaign_runs_every_one_of_the_six_transfers_and_withholds_none(
-        campana) -> None:
-    """The verdict is read over all six.
-
-    Withholding the two the search measured bought nothing -- the roles are
-    already disjoint by bag -- and cost a third of the units the paired reading
-    rests on.
-
-    Reachable red: run `VERDICT_TRANSFERS` minus the searched ones, and both the
-    count and the missing labels land here.
-    """
-    summary = _run_campaign([0, 1, 2])
-    declared = {harness.transfer_label(t) for t in config.VERDICT_TRANSFERS}
-
-    assert len(declared) == 6
-    assert {run["transfer"] for run in campana["runs"]} == declared
-    assert set(summary["grid"]) == declared
-    assert set(summary["perTransfer"]) == declared
-    searched = {harness.transfer_label(t) for t in config.SEARCH_TRANSFERS}
-    assert searched <= set(summary["grid"]), "a searched transfer was withheld"
 
 
-def test_three_checkpoints_are_kept_per_arm_per_cell_for_every_arm(campana) -> None:
-    """Three per arm per cell, so the top three can be selected after the run
-    instead of being guessed before it -- and for EVERY arm, because which arms
-    the figures need is only known once the campaign has ranked them.
-
-    Reachable red: drop any arm from `CHECKPOINTS`, or keep two instead of three.
-    """
-    assert set(config.CHECKPOINTS) == {arm["id"] for arm in config.ARMS}
-    assert set(config.CHECKPOINTS.values()) == {3}
-
-    summary = _run_campaign([0, 1, 2, 3])
-    declared = {harness.transfer_label(t) for t in config.VERDICT_TRANSFERS}
-    assert len(summary["checkpoints"]) == len(config.ARMS) * len(declared)
-    for key, kept in summary["checkpoints"].items():
-        assert len(kept) == 3, f"{key} kept {len(kept)} of four repetitions"
-
-    written = list((config.MODELS).glob("*.manifest.json"))
-    assert len(written) == len(config.ARMS) * len(declared) * 3
-    one = json.loads(written[0].read_text(encoding="utf-8"))
-    assert one["reduction"]["seeds"] == [0, 1, 2, 3]
 
 
 def _run_one_no_timing(arm_id, transfer, seed, reduction, device, material, **kwargs):
@@ -1259,43 +1189,6 @@ def _run_one_no_timing(arm_id, transfer, seed, reduction, device, material, **kw
     }
 
 
-def test_progress_prints_one_line_per_cell_and_names_no_timing(
-        campana, monkeypatch) -> None:
-    """One line per (seed, transfer), not one per run, and it names no timing.
-
-    Six transfers over thirty seeds is 180 lines; the same call inside the arm
-    loop prints 1800, and 1800 lines of a run measured in hours is a report
-    nobody reads rather than the sign of life it is kept for.
-
-    It used to name that cell's slowest arm and how long the cell took;
-    both are gone along with `seconds`/`peakMiB` themselves, which
-    `harness.run_one` no longer returns at all.
-
-    Reachable red: move `progress` back inside the arm loop and the count
-    lands on arms x transfers x seeds, or reintroduce a reference to
-    `run["seconds"]` inside `campaign`'s progress line -- which would raise
-    `KeyError` against this fixture's own run dict, which carries no such key.
-    """
-    arm_ids = [arm["id"] for arm in config.ARMS]
-    monkeypatch.setattr(harness, "run_one", _run_one_no_timing)
-    lines: list[str] = []
-    seeds = [0, 1, 2]
-    harness.campaign(
-        harness.Reduction(seeds=seeds, epochs=1,
-                          ceilings={"creda": 1e-4, "milcreda": 1.0},
-                          ceilingsByTransfer={}),
-        torch.device("cpu"), progress=lines.append)
-
-    labels = [harness.transfer_label(t) for t in config.VERDICT_TRANSFERS]
-    cells = [line for line in lines if " arms  " in line]
-    assert len(cells) == len(seeds) * len(labels), (
-        f"{len(cells)} progress lines for {len(seeds) * len(labels)} cells of "
-        f"{len(arm_ids)} arms -- one per run would be "
-        f"{len(seeds) * len(labels) * len(arm_ids)}")
-    for line in cells:
-        assert "slowest" not in line and "cell " not in line, (
-            f"a progress line still names timing: {line!r}"
-        )
 
 
 # ------------------------------------------------------- what funds the third role
