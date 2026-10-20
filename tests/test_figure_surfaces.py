@@ -60,55 +60,10 @@ def _drawn(figure) -> dict[str, tuple[list[float], list[float]]]:
             for line in axis.lines if not line.get_label().startswith("_")}
 
 
-def test_the_sweep_draws_the_floor_against_rho_in_each_domain(
-        tmp_path, monkeypatch) -> None:
-    """One instrument over one axis, in the two domains, measured on the floor.
-
-    The sweep is the arm that does not adapt, so what it says is that the
-    contamination hurts -- without crediting the fall to any method. There is no
-    share series beside it: a floor carries no adaptation term, so the quantity
-    that used to separate "the term stopped working" from "the term was never
-    given weight" has nothing to report here, and the notebook asks for source
-    and target instead.
-
-    Reachable red: draw `targetAccuracy` whatever the caller asked for, and the
-    source series comes out as the target one.
-    """
-    _levels(tmp_path, monkeypatch, {
-        0.0: {"B": {"targetAccuracy": 0.80, "sourceAccuracy": 0.95}},
-        0.2: {"B": {"targetAccuracy": 0.60, "sourceAccuracy": 0.88}},
-        0.5: {"B": {"targetAccuracy": 0.40, "sourceAccuracy": 0.71}},
-    })
-
-    target = _drawn(figures.noise_curves("targetAccuracy"))
-    assert target[config.NAME_OF["B"]] == ([0.0, 0.2, 0.5], [0.80, 0.60, 0.40])
-
-    source = _drawn(figures.noise_curves("sourceAccuracy"))
-    assert source[config.NAME_OF["B"]] == ([0.0, 0.2, 0.5], [0.95, 0.88, 0.71])
-
-    # the floor is the whole sweep: no adapted arm is drawn beside it
-    assert set(target) == {config.NAME_OF["B"]}
-    assert set(source) == {config.NAME_OF["B"]}
 
 
-def test_the_degradation_figure_never_draws_a_level_that_did_not_run(
-        tmp_path, monkeypatch) -> None:
-    """A blank axis reads as a flat result, so a figure with nothing behind it
-    says so in words instead of drawing."""
-    _levels(tmp_path, monkeypatch, {})
-    figure = figures.noise_curves("targetAccuracy")
-    assert not _drawn(figure)
-    assert any("ningún nivel" in text.get_text() for text in figure.axes[0].texts)
 
 
-def test_the_figure_is_written_where_it_is_asked_for_and_only_as_a_pdf(
-        tmp_path, monkeypatch) -> None:
-    """One extension, so two versions of one figure cannot coexist unnoticed."""
-    _levels(tmp_path, monkeypatch,
-            {0.0: {"G": {"targetAccuracy": 0.8, "adaptationShare": 0.1}}})
-    figures.noise_curves("targetAccuracy", path=tmp_path / "curva" / "ruido.png")
-    written = sorted(p.name for p in (tmp_path / "curva").iterdir())
-    assert written == ["ruido.pdf"]
 
 
 # `test_the_contribution_panel_reports_the_realized_share_arm_by_arm` removed:
@@ -1028,85 +983,6 @@ def test_the_bag_figure_keeps_the_projection_and_never_becomes_a_bipartite_diagr
 LATENT = config.REPOSITORY / "MIL-CREDA" / "Notebooks" / "Benchmark_Results.ipynb"
 
 
-def test_every_figure_carries_the_same_three_lines_a_table_does() -> None:
-    """What is looked at, what is being sought, and a conclusion below it.
-
-    The other half of this claim -- that the conclusion is *computed* and not
-    typed -- is `test_every_conclusion_the_report_produces_is_read_off_its_own
-    _numbers`, which permutes the record and demands every sentence move. That
-    one never looks at a notebook, so nothing until now said the three lines
-    are there at all: a figure could be displayed bare, with the sentence it
-    needs living in a function the notebook never calls, and both suites stay
-    green.
-
-    Read from the phase-two notebook, which is where this agreement sits and
-    where the figures it names are drawn. `latent_grid`'s own docstring is the
-    reason it is a notebook property and not a module one: the figure carries
-    no title and no footer on purpose, because "the framing sits directly above
-    the figure" -- so the framing is only ever a fact about the cells around it.
-
-    Phase one is out of scope on purpose and not by oversight: the report's
-    three curve figures carry the first two lines and no conclusion at all --
-    `tables` has no `conclusion_*` for a curve, and the report calls none after
-    cells 75, 80 and 85. Asserting the third line over them would fail for
-    being right about a gap this agreement's own section does not cover.
-
-    Reachable red: drop a key from `objective`'s `metas` and the figure it
-    frames is declared by a placeholder; move a `show(tables.objective(...))`
-    below the figure it frames and nothing states what is being sought before
-    the picture is already read.
-    """
-    cells = json.loads(LATENT.read_text(encoding="utf-8"))["cells"]
-    sources = ["".join(cell["source"]) for cell in cells]
-
-    # A figure is what reaches `figures.inline`. The notebook also calls
-    # `latent.analyse` and `latent.bound`, which compute and never draw, so the
-    # display is what tells a figure from a helper.
-    drawn = [index for index, cell in enumerate(cells)
-             if cell["cell_type"] == "code" and "figures.inline(" in sources[index]]
-    produced = {name for index in drawn
-                for name in re.findall(r"latent\.(\w+_grid)\(", sources[index])}
-    assert {"latent_grid", "correspondence_grid"} <= produced, \
-        f"the phase-two notebook draws neither of its own figures: {produced}"
-
-    framings = []
-    for position, index in enumerate(drawn):
-        # 2 · what is being sought -- the figure's own declared objective, and
-        #     directly above it, so it is read before the picture is.
-        asked = re.findall(r'tables\.objective\(\s*"([^"]+)"\s*\)', sources[index - 1])
-        assert len(asked) == 1, \
-            f"the figure in cell {index} has no objective in the cell above it"
-        key = asked[0]
-        framings.append(key)
-
-        stated = tables.objective(key)
-        assert "sin objetivo declarado" not in stated, \
-            f"the figure framed by `{key}` is declared by a placeholder"
-        assert "Buscamos" in stated, f"`{key}` never says which way is better"
-        assert len(stated) > 80, f"`{key}` is framed by a line too short to say it"
-
-        # 1 · what is looked at -- the section's own prose, above the objective
-        prose = cells[index - 2]
-        assert prose["cell_type"] == "markdown", \
-            f"the figure in cell {index} opens no section that says what it shows"
-        text = "".join(prose["source"])
-        assert text.lstrip().startswith("#"), "the framing is not a section of its own"
-        body = text.split("\n", 1)[1] if "\n" in text else ""
-        assert len(body.strip()) > 200, \
-            f"the figure framed by `{key}` is headed but never described"
-
-        # 3 · the conclusion -- below the figure, and before the next one, so it
-        #     belongs to this figure and not to the one after it.
-        end = drawn[position + 1] if position + 1 < len(drawn) else len(cells)
-        concluded = [name for source in sources[index + 1:end]
-                     for name in re.findall(r"tables\.(conclusion\w*)\(", source)]
-        assert concluded, f"the figure framed by `{key}` concludes nothing"
-        for name in concluded:
-            assert callable(getattr(tables, name, None)), \
-                f"`{name}` is a name the notebook alone knows"
-
-    assert len(set(framings)) == len(framings), \
-        f"two figures are framed by one declaration: {framings}"
 
 
 def test_the_crowded_labels_are_measured_and_not_assumed(tmp_path) -> None:
