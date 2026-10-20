@@ -523,7 +523,7 @@ def _por_celda(registro: dict, familia: str | None = None) -> list[dict]:
 # row, and the map below is what each of its eight columns reads out of this
 # artefact. Its header is
 #
-#     método · normalización · época fuente · paso que eligió · fuente · test ·
+#     método · normalización · época fuente · época que eligió · fuente · test ·
 #     blanco · test · vigía: fuente conservada · blanco pico · test (oráculo)
 #
 # * `método` -- the rung, by CREDA's own row label (`ROTULO_ESCALON`). Three
@@ -537,8 +537,13 @@ def _por_celda(registro: dict, familia: str | None = None) -> list[dict]:
 #   cannot train).
 # * `época fuente` -- the median `phase1BestEpoch`, dashed on AdaBN exactly as
 #   CREDA dashes it.
-# * `paso que eligió` -- the median `phase2BestStep`, on the one rung that ran a
-#   phase 2 and dashed on the two that did not.
+# * `época que eligió` -- the median `phase2BestEpoch`, on the one rung that ran
+#   a phase 2 and dashed on the two that did not. It said `paso que eligió` and
+#   read `phase2BestStep` until 2026-10-19; the criterion chooses an EPOCH, and
+#   a column reporting the step inside it reported a number the criterion never
+#   looked at. The record carries both, so this is a change of which field is
+#   read and not a recomputation -- measured over the pilot, every
+#   `phase2BestStep` falls inside its own `phase2BestEpoch`, 9 cells of 9.
 # * `fuente · test` -- `sourceAccuracy`, the frozen phase-1 encoder read on the
 #   source role nothing selected on. It prints on all three rungs because it IS
 #   the same reading on all three: AdaBN re-estimates the TARGET encoder's
@@ -1074,9 +1079,9 @@ def render_familia_escalera(registro: dict, familia: str) -> str:
         Columna("método", lambda r: ROTULO_ESCALON[r["escalon"]]),
         Columna("normalización", lambda r: _rotulo_norma(r["norma"])),
         Columna("época fuente", _epoca, ("phase1BestEpoch",)),
-        Columna("paso que eligió",
-                _del_metodo(lambda r: _mediana_entera(_de("phase2BestStep")(r))),
-                ("phase2BestStep",)),
+        Columna("época que eligió",
+                _del_metodo(lambda r: _mediana_entera(_de("phase2BestEpoch")(r))),
+                ("phase2BestEpoch",)),
         Columna(f"fuente · {rol_publicado(registro)}",
                 lambda r: _media_desvio(_de("sourceAccuracy")(r)),
                 ("sourceAccuracy",)),

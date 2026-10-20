@@ -81,11 +81,37 @@ class FiguraPorBrazo(unittest.TestCase):
         self.assertIn('figuras', cel, 'el .npz no persistió las figuras por brazo')
         for b, _ in T.BRAZOS_POR_PESO:
             self.assertIn(b, cel['figuras'], f'falta {b!r} tras el viaje')
-        a = np.asarray(cel['figuras'][T.BRAZO_CON_SOP]['PS_t'])
-        bb = np.asarray(cel['figuras'][T.BRAZO_SIN_SOP]['PS_t'])
-        if a.shape == bb.shape:
-            self.assertFalse(np.array_equal(a, bb),
-                             'tras el viaje los dos brazos son la misma figura')
+        # **Sobre `Pt` y NO sobre `PS_t`, y la aserción vieja era imposible.**
+        # `PS_t` es `proy(Zs)` --- la proyección de la FUENTE --- y en el
+        # régimen declarado (`mover_fuente=False`) la fuente está congelada,
+        # así que es idéntica entre brazos POR CONSTRUCCIÓN. El nombre engaña:
+        # la `t` sugiere el blanco y es la fuente.
+        #
+        # Y pasaba por accidente. La comparación estaba bajo
+        # `if a.shape == bb.shape`, y con la parada temprana los dos brazos
+        # cortaban en épocas distintas: las formas no coincidían, la aserción
+        # se salteaba y nunca corrió. Al retirar la paciencia el 2026-10-19 los
+        # dos corren el techo completo, las formas coinciden, y recién ahí se
+        # vio que lo que afirmaba no podía ser cierto.
+        #
+        # `Pt` es `punto(cu, j)['proy']` sobre `Zt`, el BLANCO, que es lo que
+        # cada brazo mueve distinto. Sin el `if`: las formas tienen que
+        # coincidir, y si no coinciden eso es el defecto y no una excusa para
+        # no comparar.
+        a = np.asarray(cel['figuras'][T.BRAZO_CON_SOP]['Pt'])
+        bb = np.asarray(cel['figuras'][T.BRAZO_SIN_SOP]['Pt'])
+        self.assertEqual(a.shape, bb.shape,
+                         'los dos brazos dejaron trayectorias de largo '
+                         'distinto: con el techo completo tienen que coincidir')
+        self.assertFalse(np.array_equal(a, bb),
+                         'tras el viaje los dos brazos son la misma figura')
+        # Y la de la FUENTE sí tiene que ser idéntica, que es la otra mitad: si
+        # difiriera, la fase 1 no se estaría compartiendo entre brazos.
+        s_con = np.asarray(cel['figuras'][T.BRAZO_CON_SOP]['PS_t'])
+        s_sin = np.asarray(cel['figuras'][T.BRAZO_SIN_SOP]['PS_t'])
+        self.assertTrue(np.array_equal(s_con, s_sin),
+                        'la proyección de la FUENTE difiere entre brazos, así '
+                        'que la fase 1 no se compartió')
 
 
 if __name__ == '__main__':

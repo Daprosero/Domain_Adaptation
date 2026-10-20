@@ -42,9 +42,11 @@ from CREDA.toy_experiment import (
     ASPECTO_1D, ASPECTO_MAX, BRAZO_CON_SOP, BRAZO_SIN_SOP, BRAZO_TECHO,
     BRAZOS_CONTAMINACION, CAMPOS_CU, CAMPOS_HS, CAMPOS_HT, CLASES, COLOR,
     COL_DURA, VISTA_DURA, caminata_al_centro, puntos_de_frontera,
-    ETQ_UNICA, FAMILIAS, FILAS, MARCA, NOMBRE_FILA, PALABRA_TECHO, PASOS_2,
-    PESO_APAGADO, PESO_DECLARADO, POS_FILAS, RHOS, TABLA, cargar,
-    cargar_contaminacion, punto,
+    ESCALERA_CONTAMINACION,
+    CUADROS,
+    ETQ_UNICA, EPOCAS_2, FAMILIAS, FILAS, MARCA, NOMBRE_FILA, PALABRA_TECHO,
+    PESO_APAGADO, PESO_DECLARADO, POS_CONTAMINACION, POS_FILAS, RHOS, TABLA,
+    cargar, cargar_contaminacion, punto,
 )
 
 # `cargar` y `cargar_contaminacion` se RE-EXPORTAN a proposito y no son un
@@ -127,7 +129,11 @@ __provenance__ = {
         "the_extracted_input_panel_leaves_the_two_column_figure_pixel_identical",
         "the_ladder_frame_keeps_the_four_columns_of_the_trajectory_frame",
         "the_ladder_gif_is_written_with_more_than_one_frame",
-        "every_section_two_ladder_table_carries_the_zero_rung",
+        # Renombrado el 2026-10-19 al salir el cero de la escalera de esta
+        # seccion: lo que el test mide ahora es el MECANISMO --- un escalon
+        # declarado que el barrido salteo se imprime como ausente --- y el cero
+        # ya no es uno de los declarados aqui. El padron lo encontro solo.
+        "a_declared_rung_the_sweep_skipped_is_printed_as_absent",
         "the_clustering_table_reports_only_the_within_class_trace",
         "no_section_two_table_prints_the_ratio_of_the_two_traces",
         "a_section_two_table_with_a_test_reports_the_median_and_the_win_count",
@@ -339,7 +345,103 @@ def panel_fase1(a, hist_s, titulo, ep_s):
                (e[k_mej], av[k_mej]), textcoords='offset points',
                xytext=(-52, -16), fontsize=7.5, color='#8c564b')
 
-def panel_fase2(a, h, k, titulo, mejor_paso):
+def pasos_por_epoca_del_cuadro(pasos) -> int:
+    """El pase de ESTA corrida, recuperado de su propia rejilla de cuadros.
+
+    **Por que se recupera en vez de leerse.** `pasos_por_epoca` sale de
+    `LOTE_2`, que la busqueda elige por celda, y el artefacto lo guarda en el
+    registro del barrido pero NO en cada figura de contaminacion --- que es
+    justo donde los otros cuatro paneles de fase 2 lo necesitan. Escribir una
+    constante seria peor que recuperarlo: medido sobre el barrido de hoy el
+    pase es 34 en lunas y toroide y 9 en rollo, asi que un literal rotularia
+    bien una familia y mal otra sin que nada falle.
+
+    **De donde sale.** `CUADROS` declara la rejilla EN EPOCAS y `corrida` la
+    convierte a pasos multiplicando por el pase de la celda, asi que dividir
+    la deshace exactamente. No es una estimacion: las tres comprobaciones de
+    abajo --- la rejilla tiene el largo declarado, el cociente es unico, y el
+    producto reconstruye cada paso --- dejan pasar un solo valor y revientan
+    ante cualquier otro. Medido sobre el artefacto de hoy: 90 celdas del
+    barrido y 120 brazos de contaminacion, cero cuadros fuera de una frontera
+    de epoca.
+    """
+    pasos = [int(x) for x in pasos]
+    # **Un PREFIJO de la rejilla declarada, no necesariamente toda.** La figura
+    # de un escenario corta en el punto de control que el criterio eligio, asi
+    # que su rejilla es la declarada hasta ahi; exigir el largo completo
+    # rechazaria una figura legitima. Lo que NO se afloja es la aritmetica: el
+    # cuadro `i` tiene que ser exactamente `CUADROS[i] * pasos_por_epoca`, que
+    # es lo que distingue una rejilla en epocas de uno cualquiera en pasos.
+    assert 0 < len(pasos) <= len(CUADROS), (
+        len(pasos), len(CUADROS),
+        'la rejilla del cuadro es mas larga que la rejilla declarada en epocas')
+    cuad = CUADROS[:len(pasos)]
+    cocientes = {p // e for p, e in zip(pasos, cuad) if e}
+    assert len(cocientes) == 1, (
+        sorted(cocientes), pasos, cuad,
+        'la rejilla no sale de un solo pasos_por_epoca')
+    por_epoca = int(next(iter(cocientes)))
+    assert all(p == e * por_epoca for p, e in zip(pasos, cuad)), (
+        pasos, cuad, por_epoca,
+        'algun cuadro no cae en una frontera de epoca')
+    return por_epoca
+
+
+def epoca_elegida_del_brazo(r) -> int:
+    """La EPOCA que el criterio eligio en un brazo de contaminacion.
+
+    **Por que se deriva y no se lee.** El barrido guarda `mejor_epoca` celda
+    por celda; el registro de contaminacion no --- medido sobre el artefacto de
+    hoy, los 120 brazos con traza tienen `mejor_paso` y `paso_fin` y ninguno
+    tiene `mejor_epoca`. Asi que o se deriva aca, o la tabla sigue imprimiendo
+    el paso de adentro de la epoca, que es el numero que el criterio nunca
+    miro.
+
+    **El pase sale de la corrida, no de una constante.** Desde el 2026-10-19 la
+    fase 2 no tiene parada temprana: corre su techo entero, asi que `paso_fin`
+    ES `EPOCAS_2` pasadas y el cociente es el pase de esta celda. Las dos
+    comprobaciones estan para el dia que eso deje de valer: si `paso_fin` no es
+    multiplo del techo, la corrida no llego, y derivar un pase de ella seria
+    inventarlo. Medido: 0 de 120 brazos fallan cualquiera de las dos.
+
+    Devuelve `-1` tal cual cuando el criterio no eligio --- es el valor que
+    `barrer_contaminacion` escribe y la tabla de arriba ya lo imprime como una
+    raya con su aviso, no como la epoca 0.
+    """
+    mejor = int(r['mejor_paso'])
+    if mejor < 0:
+        return mejor
+    fin = int(r['paso_fin'])
+    assert fin % EPOCAS_2 == 0, (
+        fin, EPOCAS_2,
+        'el techo corrido no es un multiplo de las epocas declaradas, asi que '
+        'no hay pase que derivar de el')
+    por_epoca = fin // EPOCAS_2
+    assert por_epoca > 0 and mejor % por_epoca == 0, (
+        mejor, por_epoca, 'el paso elegido no cae en una frontera de epoca')
+    return mejor // por_epoca
+
+
+def panel_fase2(a, h, k, titulo, mejor_paso, por_epoca):
+    """El panel de la fase 2, dibujado en EPOCAS.
+
+    `h` es la historia de la fase 2 y cada fila suya es UN paso del optimizador
+    --- eso es lo que el arreglo guarda ---, asi que el corte por `k` y por
+    `mejor_paso` se hace en pasos, que es el indice propio del arreglo.
+    Convertir antes de cortar compararia una epoca contra un paso y el filtro
+    se quedaria con las filas equivocadas.
+
+    Lo que llega al LECTOR es otra cosa: la abscisa, su limite y el rotulo van
+    en epocas, que es la unidad en la que este paquete decide y reporta. El
+    divisor entra por parametro y no se deriva aca: `pasos_por_epoca` sale de
+    `LOTE_2`, que la busqueda elige por celda --- medido sobre el barrido de
+    hoy da 34 en lunas y toroide y 9 en rollo ---, asi que una constante
+    escrita aca rotularia bien una familia y mal otra.
+
+    En pasos los tres paneles corrian 0-3400, 0-3400 y 0-900 y no se podian
+    mirar uno al lado del otro; en epocas los tres corren 0-100. Esa es la
+    razon del cambio, y no la palabra.
+    """
     # La fase 2 hasta el cuadro k, y nunca mas alla de `mejor_paso`: ahi es donde
     # la parada temprana dejo el encoder del blanco, y es ese el que se reporta.
     # Los pasos de paciencia que siguen corroboraron que era el mejor; no se
@@ -352,7 +454,8 @@ def panel_fase2(a, h, k, titulo, mejor_paso):
         len(h[0]), CAMPOS_HT, 'la historia de la fase 2 cambio de aridad')
     tope = min(k, mejor_paso)
     hh = [r for r in h if r[0] <= tope] or h[:1]
-    s = [r[0] for r in hh]
+    assert por_epoca > 0, (por_epoca, 'pasos por epoca tiene que ser positivo')
+    s = [r[0] / por_epoca for r in hh]
     ce  = [r[1] for r in hh]        # CE de la fuente, de train
     re_ = [r[2] for r in hh]        # CREDA de train, CRUDO (ya sin factor)
     tot = [r[3] for r in hh]        # el total que recibio backward()
@@ -391,8 +494,9 @@ def panel_fase2(a, h, k, titulo, mejor_paso):
     # un valor que el termino pudiera tomar. Ahora lo es.
     a.set_ylim(0.0, 1.0)
     a.set_title(titulo, fontsize=10)
-    a.set_xlim(0, max(mejor_paso, 1)); a.grid(alpha=.25); a.tick_params(labelsize=8)
-    a.set_xlabel('paso de la fase 2', fontsize=9)
+    a.set_xlim(0, max(mejor_paso / por_epoca, 1))
+    a.grid(alpha=.25); a.tick_params(labelsize=8)
+    a.set_xlabel('época de la fase 2', fontsize=9)
     a.legend(loc='lower right', fontsize=8, framealpha=.9)
     # El vigia: el encoder del BLANCO sobre la fuente etiquetada. Mide cuanto
     # del comportamiento de la FUENTE conserva --- no 'cuanto se movio', que
@@ -458,21 +562,29 @@ def cuadro_config(fam, D, mov, POR_NORM, pred_s, k, lim, asp):
                     'fase 1 ' + chr(183) + ' hasta la época que eligió',
                     int(info['ep_s']))
         panel_fase2(ax[r,3], info['hist_t'], cu[k][0],
-                    'fase 2 ' + chr(183) + ' hasta el paso que eligió',
-                    int(info['mejor_paso']))
+                    'fase 2 ' + chr(183) + ' hasta la época que eligió',
+                    int(info['mejor_paso']), int(info['pasos_por_epoca']))
         # Cuando la caja dejo de ser cuadrada hay que DECIRLO: ahi las
         # distancias que se ven no son las que hay.
-        # El rotulo de la fila dice en que paso paro ESA fila. Sin esto, una
+        # El rotulo de la fila dice que EPOCA eligio ESA fila. Sin esto, una
         # animacion que llega al cuadro de la mas corta deja creer que las tres
         # pararon ahi.
         etq_asp = (NOMBRE_FILA[q] if asp[q] <= ASPECTO_MAX else
                    NOMBRE_FILA[q] + chr(10) + f'(ejes {asp[q]:.0f}:1, no cuadrados)')
-        etq_asp += chr(10) + f"paró en el paso {int(info['mejor_paso'])}"
+        etq_asp += chr(10) + f"eligió la época {int(info['mejor_epoca'])}"
         ax[r,0].set_ylabel(etq_asp, fontsize=11.5, labelpad=10, linespacing=1.4)
     assert not mov, 'la fuente suelta se retiro como brazo'
     reg = 'fuente y cabeza QUIETAS'
+    # EL CUADRO, EN EPOCAS. `cu[k][0]` es el PASO del punto de control, no la
+    # epoca: la rejilla se declara en epocas y `corrida` la convierte a paso
+    # contra su propio `pasos_por_epoca`, asi que para volver hay que dividir
+    # por el mismo numero. Escribir `cu[k][0]` bajo la palabra «época» seria
+    # rotular un paso como una pasada --- a lote 128 el cuadro 5 cae en el paso
+    # 45, y «época 45 de 100» es una figura que miente sobre su propio eje.
+    _ppe = int(POR_NORM[POS_FILAS[0]][2]['pasos_por_epoca'])
+    _epoca_k = int(POR_NORM[POS_FILAS[0]][1][k][0]) // _ppe
     fig.suptitle(f"{fam['nombre']} {chr(183)} {reg} {chr(183)} "
-                 f"paso {POR_NORM[POS_FILAS[0]][1][k][0]} de {PASOS_2} {chr(183)} "
+                 f"época {_epoca_k} de {EPOCAS_2} {chr(183)} "
                  f"azar {1/CLASES:.3f}", fontsize=13, y=0.985)
     pie = (f"`x` fuente, `o` blanco {chr(183)} {RB} hueco = centroide fuente, "
            f"{RB} relleno = centroide blanco, ambos por clase REAL {chr(183)} "
@@ -621,7 +733,13 @@ def tabla_dataset(nombre, CELDAS, ADA, semillas):
     # busqueda minimiza el Renyi de valid, y la epoca de fase 1 la elige el
     # acierto de la FUENTE. Usar y_t para MEDIR el resultado no es fuga; usarlo
     # para ELEGIR si lo seria.
-    enc = ('método', 'normalización', 'época fuente', 'paso que eligió',
+    # `época que eligió` y no «paso que eligió»: lo que el criterio elige ES
+    # una epoca --- el maximo de `cef` se evalua una vez por pasada --- y la
+    # columna reportaba el paso de adentro, un numero que el criterio nunca
+    # miro. El registro guarda los dos, asi que esto cambia QUE CAMPO se lee y
+    # no recalcula nada: medido sobre el barrido de hoy, los 90 `mejor_paso`
+    # caen exactamente en su propia `mejor_epoca`.
+    enc = ('método', 'normalización', 'época fuente', 'época que eligió',
            'fuente · test', 'blanco · test', 'vigía: fuente conservada',
            'blanco pico · test (oráculo)')
     _med = lambda ac, k: f"{int(np.median([r[k] for r in ac]))}"
@@ -639,21 +757,21 @@ def tabla_dataset(nombre, CELDAS, ADA, semillas):
     fil.append(('**AdaBN** (sólo buffers, sin optimizador)', 'BatchNorm',
                 '—', '—', _m([r['acc_s_te'] for r in a]),
                 _m([r['acc_te'] for r in a]), '—', '—'))
-    # ---- 3. CREDA, en el paso que su parada eligio
+    # ---- 3. CREDA, en la epoca que su criterio eligio
     for pos in POS_FILAS:
         for bal, mov, etq, clv in TABLA:
             ac = CELDAS[(nombre, pos, etq)]
-            # El pico sobre TEST, el MISMO split que la columna del paso
-            # elegido. Antes era sobre valid, y entonces la brecha entre las dos
-            # mezclaba 'la parada no acerto el mejor paso' con 'valid no es
+            # El pico sobre TEST, el MISMO split que la columna de la epoca
+            # elegida. Antes era sobre valid, y entonces la brecha entre las dos
+            # mezclaba 'el criterio no acerto la mejor epoca' con 'valid no es
             # test': no se podia leer como ninguna de las dos.
             #
-            # Es informativo y nada mas: no eligio ningun paso y no entro en
+            # Es informativo y nada mas: no eligio ninguna epoca y no entro en
             # ninguna busqueda. El pico es sobre los PUNTOS DE CONTROL, asi que
             # es una cota inferior del verdadero.
             pico = _m([max(r['acc_te_ser']) for r in ac])
             fil.append(('**CREDA** · HP sintonizados', NOMBRE_FILA[pos],
-                        _med(ac, 'ep_s'), _med(ac, 'mejor_paso'),
+                        _med(ac, 'ep_s'), _med(ac, 'mejor_epoca'),
                         _m([r['acc_s_te'] for r in ac]),
                         _m([r['acc_te'] for r in ac]),
                         _m([r['vigia_fin'] for r in ac]), pico))
@@ -1199,6 +1317,173 @@ def tabla_sin_contra_con(nombre, CELDAS, banderas):
     return Markdown(
         f'**{nombre} {chr(183)} {res["n"]} semillas {chr(183)} test, sólo '
         f'reporte {chr(183)} {etiqueta_balance(banderas)}**'
+        + chr(10) * 2 + _md(enc, fil) + chr(10) * 2 + pie)
+
+
+#: El orden de lectura de la escalera del sopesado, de menos intervencion a
+#: mas. Derivado de `BRAZOS_CONTAMINACION` y no escrito a mano: el padron de
+#: brazos es lo que el barrido corre, y una tabla con su propio orden se
+#: desincroniza del barrido sin que nada falle.
+#:
+#: **Sin el techo de oraculo.** Lo decidio el operador el 2026-10-18 para ESTA
+#: tabla, mientras el brazo seguia corriendo y seguia en el registro; el
+#: 2026-10-19 lo retiro de la seccion entera, asi que `BRAZOS_CONTAMINACION` ya
+#: no lo trae y `barrer_contaminacion` ya no lo mide. Ver la declaracion de
+#: `BRAZOS_CONTAMINACION` en `toy_experiment`, donde esta la medicion que lo
+#: retiro.
+#:
+#: Se deriva por RESTA del padron y no se escribe la lista a mano: un brazo
+#: nuevo entra solo, y --- esto es lo que esa decision escribio aqui de
+#: antemano --- si el techo dejara de existir esta resta no se quedaria
+#: nombrando algo que no esta. Dejo de existir, y la resta no se movio.
+ESCALERA_SOPESADO = tuple(b for b in BRAZOS_CONTAMINACION
+                          if PALABRA_TECHO not in b)
+#: La resta ya no saca nada, y eso es LO QUE SE ASERTA. Decia
+#: `== len(BRAZOS_CONTAMINACION) - 1` mientras el padron traia exactamente un
+#: techo; con el techo retirado ese `-1` afirmaria que el padron todavia trae
+#: uno. La asercion se invierte en vez de borrarse: un archivo sin ella no
+#: podria distinguir «el techo se retiro» de «nadie comprobo nunca que la resta
+#: correspondiera al padron».
+assert ESCALERA_SOPESADO == tuple(BRAZOS_CONTAMINACION), (
+    ESCALERA_SOPESADO, BRAZOS_CONTAMINACION,
+    'el padron volvio a traer un techo: esta tabla lo dejaria fuera en '
+    'silencio, que es el defecto que la resta y esta asercion existen para '
+    'hacer ruidoso')
+
+
+def _celda_sopesado(CONTAM, nombre, modo, rho):
+    """La celda `(familia, modo, rho)` del registro de contaminacion.
+
+    Refuta en vez de devolver vacio: una celda ausente con una tabla que
+    renderiza igual es la forma en que un escenario que nunca corrio se publica
+    como si hubiera corrido.
+    """
+    clave = (nombre, modo, float(rho))
+    celdas = CONTAM['celdas']
+    if clave not in celdas:
+        raise KeyError(
+            f'el registro de contaminacion no tiene la celda {clave!r}; '
+            f'tiene {sorted(celdas)!r}. Una tabla no puede reportar un '
+            f'escenario que el barrido no corrio.')
+    return celdas[clave]
+
+
+def tabla_sopesado_acc(nombre, CONTAM, modo, rho):
+    """Los CINCO brazos del sopesado sobre una familia, en escalera.
+
+    **La misma forma que `tabla_dataset` de la seccion anterior, con una sola
+    arquitectura.** `POS_CONTAMINACION` es `batchnorm`, y no porque sea la
+    mejor: la escalera incluye AdaBN, que necesita los buffers de BatchNorm
+    para existir, de modo que la arquitectura la EXIGE un brazo y no la elige
+    una comparacion. Se dice en el titulo para que no se lea como una eleccion.
+
+    Todo sobre TEST y en el paso que el criterio eligio --- `acc_te` de
+    `_fila_brazo` sale de `nf`, que es el modelo que la regla de puntos de
+    control restauro, nunca el ultimo cuadro de la trayectoria ni el pico.
+
+    **El techo lleva su marca en la fila.** Lee `y_t`, asi que no es un metodo
+    que nadie pueda correr, y una fila sin marcar al lado de cuatro metodos se
+    lee como un quinto metodo.
+
+    **Y si el criterio no llego a elegir, lo dice.** Con menos de
+    `MIN_EPOCAS_2` epocas el criterio nunca es legal, no se restauran pesos y
+    `mejor_paso` queda en `-1`: la corrida termina y publica el ULTIMO modelo.
+    Un ensayo corto que no avisara de eso reportaria la trayectoria final bajo
+    el rotulo del modelo elegido, que es exactamente lo que esta columna
+    existe para distinguir.
+    """
+    celda = _celda_sopesado(CONTAM, nombre, modo, rho)
+    brazos = celda['brazos']
+    n = len(brazos[ESCALERA_SOPESADO[0]])
+
+    enc = ('método', 'época que eligió', 'acc fuente (test)',
+           'acc blanco (test)', 'vigía final')
+    fil, sin_elegir = [], []
+    for etq in ESCALERA_SOPESADO:
+        filas = brazos[etq]
+        assert len(filas) == n, (etq, len(filas), n)
+        assert not any(r.get('techo_no_es_metodo') for r in filas), (
+            etq, 'un techo llego a la escalera: lee `y_t` y esta tabla no lo '
+            'imprime, asi que una fila suya aqui se leeria como un metodo')
+        rotulo = f'**{etq}**'
+        # `.predict` y AdaBN no corren fase 2, asi que no tienen epoca ni
+        # vigia: un guion y no un cero, que se leeria como que eligieron la
+        # epoca 0.
+        tiene_fase2 = 'mejor_paso' in filas[0]
+        if tiene_fase2:
+            epocas = [epoca_elegida_del_brazo(r) for r in filas]
+            if any(q < 0 for q in epocas):
+                sin_elegir.append(etq)
+            paso = ('—' if any(q < 0 for q in epocas)
+                    else f'{int(np.median(epocas))}')
+            vigia = _m([r['vigia_fin'] for r in filas])
+        else:
+            paso, vigia = '—', '—'
+        fil.append((rotulo, paso,
+                    _m([r['acc_s_te'] for r in filas]) if 'acc_s_te' in filas[0] else '—',
+                    _m([r['acc_te'] for r in filas]), vigia))
+
+    aviso = ''
+    if sin_elegir:
+        aviso = (chr(10) * 2 + f'> **El criterio no eligió en {sorted(sin_elegir)}**: '
+                 f'`mejor_paso = -1`, o sea que la fase 2 no alcanzó '
+                 f'`MIN_EPOCAS_2` épocas, no se restauraron pesos y lo que la '
+                 f'columna del blanco reporta es el ÚLTIMO modelo y no el '
+                 f'elegido. Es un ensayo corto, no un resultado.')
+    return Markdown(
+        f'**{nombre} {chr(183)} {n} semillas {chr(183)} '
+        f'{POS_CONTAMINACION} (la exige AdaBN, no la elige una comparación) '
+        f'{chr(183)} {modo} {chr(183)} ' + chr(961) + f' = {float(rho):.2f} '
+        f'{chr(183)} media {chr(177)} desvío {chr(183)} azar {1/CLASES:.4f}**'
+        + chr(10) * 2 + _md(enc, fil) + aviso)
+
+
+def tabla_sopesado_test(nombre, CONTAM, modo, rho):
+    """El eje del sopesado, testeado: con sopesado contra sin sopesado.
+
+    **La misma forma que `tabla_sin_contra_con`, y el mismo t pareado.** Dos
+    brazos, asi que t pareado con Shapiro-Wilk sobre las diferencias pareadas
+    al lado y Wilcoxon reportado; nada de Friedman, que es para tres o mas. No
+    hay un segundo t en este archivo: `_fila_dos_brazos` es el que corren las
+    tablas de la escalera y es el que corre aqui.
+
+    `delta = con sopesado - sin sopesado`, de modo que `delta > 0` quiere decir
+    que gana el sopesado. Los dos brazos difieren SOLO en la bandera del peso:
+    misma fase 1, mismos HP de fase 2, misma semilla, misma arquitectura.
+
+    **El techo va en una fila SIN test**, y eso es una declaracion y no una
+    omision: lee `y_t`, asi que testear si le gana a un metodo pregunta por una
+    hipotesis sobre la que nadie va a actuar. Lleva delta e IC95 --- cuanto hay
+    para ganar sopesando --- y ninguna p.
+    """
+    celda = _celda_sopesado(CONTAM, nombre, modo, rho)
+    brazos = celda['brazos']
+    sin = np.array([r['acc_te'] for r in brazos[BRAZO_SIN_SOP]], dtype=float)
+    con = np.array([r['acc_te'] for r in brazos[BRAZO_CON_SOP]], dtype=float)
+    n = len(sin)
+    assert len(con) == n, (n, len(con))
+
+    probado = _fila_dos_brazos(f'con sopesado {chr(8722)} sin sopesado',
+                               None, sin, con, n)
+    enc = ('par', 'con', 'sin', f'{_DELTA}', f'IC95 de {_DELTA}',
+           f't({probado["gl"]})', 'p', 'Shapiro p', 'Wilcoxon p', 'gana')
+    fil = [(probado['rotulo'], f'{probado["con"]:.4f}', f'{probado["sin"]:.4f}',
+            f'{probado["delta"]:+.4f}',
+            f'[{probado["ic"][0]:+.4f}, {probado["ic"][1]:+.4f}]',
+            f'{probado["t"]:+.3f}', f'{probado["p"]:.4f}',
+            f'{probado["shapiro"]:.4f}', f'{probado["wilcoxon"]:.4f}',
+            f'{probado["gana"]}/{probado["n"]}')]
+    # El techo NO lleva fila, por la misma decision que lo saco de la escalera.
+    # Sigue corriendo y sigue en el registro; lo que no hace es imprimirse.
+    pie = (f'`{_DELTA} = con sopesado {chr(8722)} sin sopesado`, así que '
+           f'**{_DELTA}>0 quiere decir que gana el sopesado** {chr(183)} '
+           f'los dos brazos difieren SOLO en la bandera del peso {chr(183)} '
+           f't pareado, Shapiro-Wilk sobre las diferencias pareadas, Wilcoxon '
+           f'al lado')
+    return Markdown(
+        f'**{nombre} {chr(183)} {n} semillas {chr(183)} '
+        f'{POS_CONTAMINACION} {chr(183)} {modo} {chr(183)} '
+        + chr(961) + f' = {float(rho):.2f} {chr(183)} test, sólo reporte**'
         + chr(10) * 2 + _md(enc, fil) + chr(10) * 2 + pie)
 
 
@@ -2013,7 +2298,8 @@ def figura_entradas(nombre, CONTAM, ENTR, banderas, destino=None,
         # escalera dibuja, y por eso vive afuera.
         _panel_entradas(a, X, y, rot, mal if col == 1 else None)
     fig.suptitle(f'{nombre}: el dato de entrada, semilla {sem}, '
-                 f'en el paso que la parada eligió (paso {int(f["pasos"][k])})',
+                 f'en la época que el criterio eligió (época '
+                 f'{int(f["pasos"][k]) // pasos_por_epoca_del_cuadro(f["pasos"])})',
                  fontsize=12)
     fig.tight_layout()
     ruta = destino/f'entradas_{nombre}.png'
@@ -2095,10 +2381,12 @@ def figura_contaminacion(nombre, CONTAM, banderas, destino=None,
                     int(f['ep_s']))
         panel_fase2(ax[r, 3], [tuple(x) for x in f['hist_t']],
                     f['pasos'][k], 'fase 2 ' + chr(183) + ' eje fijo 0-1',
-                    int(f['mejor_paso']))
+                    int(f['mejor_paso']),
+                    pasos_por_epoca_del_cuadro(f['pasos']))
         etq = (f'{chr(961)} = {rho:.2f}' + chr(10)
                + f'{len(np.asarray(f["idx"]))} reubicados' + chr(10)
-               + f"paró en el paso {int(f['mejor_paso'])}")
+               + f"eligió la época "
+                 f"{int(f['mejor_paso']) // pasos_por_epoca_del_cuadro(f['pasos'])}")
         ax[r, 0].set_ylabel(etq, fontsize=11.5, labelpad=10, linespacing=1.4)
     sem = sorted({int(f['semilla']) for f in figs})
     fig.suptitle(
@@ -2149,7 +2437,7 @@ def figura_contaminacion(nombre, CONTAM, banderas, destino=None,
 #: `tests/test_toy_contamination.py` lee el cuerpo de `tabla_dataset` y
 #: comprueba que cada nombre de aca sigue siendo uno que esa tabla lee.
 CAMPOS_TABLA_DATASET = ('ep_s', 'acc_predict', 'acc_s_te', 'acc_te',
-                        'vigia_fin', 'acc_te_ser', 'mejor_paso')
+                        'vigia_fin', 'acc_te_ser', 'mejor_epoca')
 
 #: Por que falta cada uno en el registro de contaminacion. El nombre del campo
 #: es un contrato de datos y se imprime como esta; la razon es para el lector.
@@ -2160,6 +2448,9 @@ RAZON_CAMPO_AUSENTE = {
                    'las otras filas',
     'acc_te_ser': 'la serie de test por punto de control no se persiste por '
                   'semilla; solo su maximo, en la columna del pico',
+    'mejor_epoca': 'el registro de contaminacion guarda `mejor_paso` y '
+                   '`paso_fin` y no la epoca; la tabla la deriva con '
+                   '`epoca_elegida_del_brazo`',
 }
 
 #: El pie del GIF: el de la figura estatica MAS lo que solo la animacion puede
@@ -2515,26 +2806,37 @@ def rotulo_fila_contaminacion(escenario, f, j):
     perturbaciones que predicen lo contrario, asi que un rotulo con el rho
     solo no dice que escenario se esta mirando.
 
-    `mejor_paso` es el de ESTA fila y nunca el de otra. Medido en `lunas`, la
-    escalera paro en 52, 44, 52 y 102: un rotulo que lleva el numero de una
-    fila sobre los paneles de otra afirma que el criterio disparo en un paso
-    donde no disparo, y nada revienta.
+    `mejor_paso` es el de ESTA fila y nunca el de otra. Medido en `lunas` bajo
+    el techo en PASOS --- la cita se deja fechada, no se actualiza a ojo: es de
+    antes del 2026-10-19 --- la escalera eligio en 52, 44, 52 y 102, cuatro
+    puntos distintos. Un rotulo que lleva el numero de una fila sobre los
+    paneles de otra afirma que el criterio eligio donde no eligio, y nada
+    revienta.
 
-    El cuadro en pantalla va al lado de la parada a proposito: sin los dos
-    juntos no se puede ver CUANDO disparo el criterio respecto de lo que se
-    esta mirando.
+    **Lo que el rotulo IMPRIME son epocas**, que es la unidad en la que este
+    paquete decide; los pasos de arriba son el indice del arreglo y no salen de
+    esta funcion. El cuadro en pantalla va al lado de la eleccion a proposito:
+    sin los dos juntos no se puede ver CUANDO eligio el criterio respecto de lo
+    que se esta mirando.
     """
     perturbacion, rho = escenario
     pasos = [int(v) for v in f['pasos']]
+    por_epoca = pasos_por_epoca_del_cuadro(pasos)
     mejor = int(f['mejor_paso'])
     paso = pasos[j]
     estado = ('el criterio ya eligió' if paso >= mejor
               else 'el criterio todavía no eligió')
+    # **La comparacion de arriba es en PASOS y los dos numeros de abajo en
+    # EPOCAS.** «ya eligió» es una pregunta sobre el orden de dos puntos de la
+    # traza, que el arreglo indexa por paso; lo que el lector lee es la epoca,
+    # que es la unidad en la que este paquete decide. Convertir antes de
+    # comparar no cambiaria el resultado --- la division es exacta --- pero
+    # haria que la guarda dependiera de una conversion en vez del indice.
     return (f'{rotulo_perturbacion(perturbacion)}' + chr(10)
             + f'{chr(961)} = {float(rho):.2f}' + chr(10)
             + f'{len(np.asarray(f["idx"]))} perturbados del {SPLIT_DIBUJADO}'
-            + chr(10) + f'paso {paso} de la fase 2' + chr(10)
-            + f'paró en el paso {mejor} {chr(183)} {estado}')
+            + chr(10) + f'época {paso // por_epoca} de la fase 2' + chr(10)
+            + f'eligió la época {mejor // por_epoca} {chr(183)} {estado}')
 
 
 def panel_medias_w(a, pasos, W, idx, j):
@@ -2552,8 +2854,14 @@ def panel_medias_w(a, pasos, W, idx, j):
     en una oracion envejece sin que nada falle, y esta es exactamente la
     oracion que la figura existe para sostener.
     """
+    # El eje en EPOCAS, que es la unidad de este paquete. `pasos` es la
+    # rejilla de cuadros en pasos --- `corrida` la escribe multiplicando la
+    # rejilla declarada en epocas por el pase de la celda --- y dividir por ese
+    # mismo pase la deshace exactamente.
     pasos = [int(v) for v in pasos]
-    s = pasos[:j+1]
+    _ppe = pasos_por_epoca_del_cuadro(pasos)
+    epocas = [v // _ppe for v in pasos]
+    s = epocas[:j+1]
     pares = [medias_w(W[t], idx) for t in range(j+1)]
     sucios = [p[0] for p in pares]
     limpios = [p[1] for p in pares]
@@ -2566,9 +2874,9 @@ def panel_medias_w(a, pasos, W, idx, j):
            label='limpios (media de w)')
     a.plot([s[-1]], [limpios[-1]], 'o', ms=9, color='#8c564b')
     a.set_ylim(0.0, 1.0)
-    a.set_xlim(0, max(pasos[-1], 1))
+    a.set_xlim(0, max(epocas[-1], 1))
     a.grid(alpha=.25); a.tick_params(labelsize=8)
-    a.set_xlabel('paso de la fase 2', fontsize=9)
+    a.set_xlabel('época de la fase 2', fontsize=9)
     a.legend(loc='lower right', fontsize=8, framealpha=.9)
     if not hay:
         a.set_title(f'{SPLIT_DIBUJADO} {chr(183)} sin contaminación: '
@@ -2598,8 +2906,13 @@ def panel_aciertos(a, pasos, acc_va, acc_te, j, mejor_paso):
     ni verdicto: lo que compara los brazos es la tabla de al lado, sobre las
     semillas que el barrido corrio.
     """
+    # El eje en EPOCAS, por la misma via que `panel_medias_w`: la rejilla de
+    # cuadros sale de la rejilla declarada en epocas, asi que dividir por el
+    # pase de la celda la devuelve sin aproximar nada.
     pasos = [int(v) for v in pasos]
-    s = pasos[:j+1]
+    _ppe = pasos_por_epoca_del_cuadro(pasos)
+    epocas = [v // _ppe for v in pasos]
+    s = epocas[:j+1]
     va = [float(v) for v in acc_va[:j+1]]
     te = [float(v) for v in acc_te[:j+1]]
     a.plot(s, va, color='#1f77b4', lw=1.6, ls='--', marker='o', ms=3.5,
@@ -2609,12 +2922,15 @@ def panel_aciertos(a, pasos, acc_va, acc_te, j, mejor_paso):
     a.plot([s[-1]], [te[-1]], 'o', ms=9, color='#d62728')
     a.axhline(1/CLASES, color='#555555', lw=.9, ls=':', alpha=.8,
               label=f'azar {1/CLASES:.3f}')
+    # La guarda compara PASOS --- `mejor_paso` y la rejilla son pasos --- y la
+    # linea se dibuja en EPOCAS, que es el eje. Mezclar las dos pondria la
+    # marca cuadros antes de donde va.
     if int(mejor_paso) <= pasos[-1]:
-        a.axvline(int(mejor_paso), color='#2ca02c', lw=1.0, alpha=.7)
+        a.axvline(int(mejor_paso) // _ppe, color='#2ca02c', lw=1.0, alpha=.7)
     a.set_ylim(0.0, 1.0)
-    a.set_xlim(0, max(pasos[-1], 1))
+    a.set_xlim(0, max(epocas[-1], 1))
     a.grid(alpha=.25); a.tick_params(labelsize=8)
-    a.set_xlabel('paso de la fase 2', fontsize=9)
+    a.set_xlabel('época de la fase 2', fontsize=9)
     a.legend(loc='lower right', fontsize=7.5, framealpha=.9)
     a.set_title(f'acierto del blanco {chr(183)} una semilla' + chr(10)
                 + f'valid {va[-1]:.4f} {chr(183)} test {te[-1]:.4f}',
@@ -2673,7 +2989,8 @@ def figura_cuadro_contaminacion(nombre, escenario, f, j, lim, cuadrada, brazo,
     panel_fase1(a[2], [tuple(x) for x in f['hist_s']],
                 'fase 1 ' + chr(183) + ' Ec. 21, eje fijo 0-1', int(f['ep_s']))
     panel_fase2(a[3], [tuple(x) for x in f['hist_t']], pasos[j],
-                'fase 2 ' + chr(183) + ' eje fijo 0-1', int(f['mejor_paso']))
+                'fase 2 ' + chr(183) + ' eje fijo 0-1', int(f['mejor_paso']),
+                pasos_por_epoca_del_cuadro(pasos))
     panel_medias_w(a[4], pasos, f['w'], f['idx'], j)
     panel_aciertos(a[5], pasos, f['acc_va'], f['acc_te'], j,
                    int(f['mejor_paso']))
@@ -2684,8 +3001,10 @@ def figura_cuadro_contaminacion(nombre, escenario, f, j, lim, cuadrada, brazo,
         f"{NOMBRE_FILA[pos]} {chr(183)} "
         f"brazo «{brazo}» {chr(183)} semilla {int(f['semilla'])} {chr(183)} "
         f"perturbación {rotulo_perturbacion(perturbacion)} {chr(183)} "
-        f"{chr(961)} = {float(rho):.2f} {chr(183)} paso {pasos[j]} de "
-        f"{pasos[-1]} (cuadro {j+1} de {len(pasos)}) {chr(183)} "
+        f"{chr(961)} = {float(rho):.2f} {chr(183)} época "
+        f"{pasos[j] // pasos_por_epoca_del_cuadro(pasos)} de "
+        f"{pasos[-1] // pasos_por_epoca_del_cuadro(pasos)} "
+        f"(cuadro {j+1} de {len(pasos)}) {chr(183)} "
         f"{SPLIT_DIBUJADO} {chr(183)} azar {1/CLASES:.3f} {chr(183)} "
         f"{etiqueta_balance(banderas)}", fontsize=13, y=0.985)
     # El pie lleva lo MEDIDO en este cuadro, no una afirmacion fija: con dos
@@ -2797,7 +3116,7 @@ def tabla_aciertos_contaminacion(nombre, escenario, CONTAM, banderas):
             f'{faltan}')
     n = _semillas([len(brazos[b]) for b in padron], banderas,
                   f'{nombre} rho={rho}: la tabla de aciertos')
-    enc = ('método', 'paso que eligió', 'fuente · test', 'blanco · test',
+    enc = ('método', 'época que eligió', 'fuente · test', 'blanco · test',
            'vigía: fuente conservada', 'blanco pico · test (oráculo)')
     _col = lambda filas, k: (_m([float(r[k]) for r in filas])
                              if all(k in r for r in filas) else _NADA)
@@ -2814,7 +3133,15 @@ def tabla_aciertos_contaminacion(nombre, escenario, CONTAM, banderas):
                     f'{nombre} rho={rho}: el brazo {b!r} registra el split '
                     f'{r.get("split")!r} y esta tabla reporta test')
         rotulo = f'`{b}`' + (f' {MARCA_TECHO}' if b in techos else '')
-        fil.append((rotulo, _med(filas, 'mejor_paso'),
+        # La EPOCA, derivada por `epoca_elegida_del_brazo` porque el registro
+        # de contaminacion no la guarda. `_med` toma un campo del brazo y este
+        # no es un campo, asi que la mediana se arma aca con la misma forma:
+        # una raya cuando a algun brazo le falta la traza de la que sale.
+        _epoca = lambda fs: (
+            f"{int(np.median([epoca_elegida_del_brazo(r) for r in fs]))}"
+            if all('mejor_paso' in r and 'paso_fin' in r for r in fs)
+            else _NADA)
+        fil.append((rotulo, _epoca(filas),
                     _col(filas, 'acc_s_te'), _col(filas, 'acc_te'),
                     _col(filas, 'vigia_fin'), _col(filas, 'pico_te')))
     # Lo ausente, MEDIDO contra lo que `tabla_dataset` lee, y no una nota.
@@ -3063,10 +3390,18 @@ def _celdas_de_la_escalera(CONTAM, nombre, perturbacion=None):
             f'{nombre} {rotulo_perturbacion(perturbacion)}: el artefacto no '
             f'trae ningún nivel de este toyset; las claves que hay son '
             f'{sorted(str(k) for k in CONTAM["celdas"])[:8]}')
+    # Las filas salen de `ESCALERA_CONTAMINACION` --- la escalera que esta
+    # seccion DECLARA correr --- y no de `RHOS`, que declara los escalones que
+    # existen. Salian de `RHOS`, y con la seccion en un nivel desde el
+    # 2026-10-19 eso ponia tres filas diciendo «el barrido no corrio este
+    # nivel»: cierto, y ruido en un reporte de un nivel. Lo que esa eleccion
+    # protegia --- que un nivel declarado y NO corrido salga como fila ausente
+    # en vez de desaparecer --- se conserva entero: sigue siendo la escalera
+    # declarada la que manda, solo que la de esta seccion.
     return perturbacion, [
         (float(r), CONTAM['celdas'][corridos[float(r)][0]]
          if float(r) in corridos else None)
-        for r in RHOS]
+        for r in ESCALERA_CONTAMINACION]
 
 
 # -------------------------------------------- la figura de entradas en escalera
@@ -3265,7 +3600,8 @@ def cuadro_escalera_panel(a, f, j, lim, cuadrada):
     panel_fase1(a[2], [tuple(x) for x in f['hist_s']],
                 'fase 1 ' + chr(183) + ' Ec. 21, eje fijo 0-1', int(f['ep_s']))
     panel_fase2(a[3], [tuple(x) for x in f['hist_t']], pasos[j],
-                'fase 2 ' + chr(183) + ' eje fijo 0-1', int(f['mejor_paso']))
+                'fase 2 ' + chr(183) + ' eje fijo 0-1', int(f['mejor_paso']),
+                pasos_por_epoca_del_cuadro(pasos))
 
 
 def figura_cuadro_escalera(nombre, escenarios, figs, j, lim, cuadrada, pos,
@@ -3300,8 +3636,10 @@ def figura_cuadro_escalera(nombre, escenarios, figs, j, lim, cuadrada, pos,
         f"{nombre} {chr(183)} la escalera de ruido {chr(183)} "
         f"{NOMBRE_FILA[pos]} {chr(183)} perturbación "
         f"{rotulo_perturbacion(perturbaciones[0])} {chr(183)} semilla "
-        f"{int(figs[0]['semilla'])} {chr(183)} paso {pasos[j]} de "
-        f"{pasos[-1]} (cuadro {j+1} de {len(pasos)}) {chr(183)} "
+        f"{int(figs[0]['semilla'])} {chr(183)} época "
+        f"{pasos[j] // pasos_por_epoca_del_cuadro(pasos)} de "
+        f"{pasos[-1] // pasos_por_epoca_del_cuadro(pasos)} "
+        f"(cuadro {j+1} de {len(pasos)}) {chr(183)} "
         f"azar {1/CLASES:.3f} {chr(183)} {etiqueta_balance(banderas)}",
         fontsize=13, y=0.985)
     # `wrap=False`: el texto ya viene partido, y dejar que matplotlib lo
@@ -3433,7 +3771,15 @@ def figura_cuadro_fronteras(nombre, H, ys, cab, j, pasos=60):
                     fontsize=10.5, linespacing=1.4)
     fig.suptitle(
         f'{nombre.upper()} {chr(183)} qué hace el peso de la Ec. 24 '
-        f'{chr(183)} construido, no medido {chr(183)} paso {j+1} de {pasos}',
+        # **Ni «paso» ni «época»: es un BARRIDO.** Los `pasos` de esta figura
+        # no son actualizaciones del optimizador ni pasadas por los datos ---
+        # son los puntos de una caminata CONSTRUIDA sobre la frontera del peso
+        # de la Ec. 24, como el propio subtitulo dice dos palabras antes.
+        # Rotularlos «época» para igualar al resto seria la misma mentira que
+        # «paso», en la otra direccion. **Decidido por el operador el
+        # 2026-10-19: «ese sí es un barrido, colocá así porque no es ni paso ni
+        # época».**
+        f'{chr(183)} construido, no medido {chr(183)} barrido {j+1} de {pasos}',
         fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.94))
     return fig
@@ -3608,7 +3954,8 @@ def cuadro_sopesado_panel(a, f_con, f_sin, j, lim, cuadrada):
         pasos = [int(v) for v in f['pasos']]
         k = min(j, len(pasos) - 1)
         panel_fase2(a[col], [tuple(x) for x in f['hist_t']], pasos[k],
-                    COLUMNAS_SOPESADO[col], int(f['mejor_paso']))
+                    COLUMNAS_SOPESADO[col], int(f['mejor_paso']),
+                    pasos_por_epoca_del_cuadro(pasos))
 
 
 def figura_cuadro_sopesado(nombre, escenarios, pares, j, lim, cuadrada, pos,
@@ -3630,7 +3977,8 @@ def figura_cuadro_sopesado(nombre, escenarios, pares, j, lim, cuadrada, pos,
         f"{nombre} {chr(183)} sopesado contra sin sopesar {chr(183)} "
         f"{NOMBRE_FILA[pos]} {chr(183)} perturbación "
         f"{rotulo_perturbacion(perturbaciones[0])} {chr(183)} semilla "
-        f"{int(pares[0][0]['semilla'])} {chr(183)} paso {pasos[k]} "
+        f"{int(pares[0][0]['semilla'])} {chr(183)} época "
+        f"{pasos[k] // pasos_por_epoca_del_cuadro(pasos)} "
         f"{chr(183)} azar {1/CLASES:.3f} {chr(183)} "
         f"{etiqueta_balance(banderas)}", fontsize=13, y=0.985)
     fig.subplots_adjust(left=0.05, right=0.99, top=0.92, bottom=0.05,
@@ -3820,11 +4168,11 @@ def tabla_acc_escalera(nombre, CONTAM, banderas, perturbacion=None):
                 for b in padron))
     ausentes = [r for r, c in niveles if c is None]
     nota_ausentes = (
-        f'**{len(ausentes)} de los {len(RHOS)} niveles declarados no '
+        f'**{len(ausentes)} de los {len(ESCALERA_CONTAMINACION)} niveles declarados no '
         f'corrieron** ({", ".join(f"{r:.2f}" for r in ausentes)}) y salen como '
         f'raya: una fila ausente y una fila medida en cero se leen igual si la '
         f'ausente desaparece' if ausentes else
-        f'los {len(RHOS)} niveles declarados corrieron')
+        f'los {len(ESCALERA_CONTAMINACION)} niveles declarados corrieron')
     # Cuantos techos marco el registro, DICHO. Un techo sin marcar se lee como
     # un metodo que gana, y un registro que no trae la bandera deja la tabla
     # sin marcas sin que nada falle: el numero medido es lo que hace visible la
@@ -4045,12 +4393,12 @@ def _tablas_sopesado(nombre, CONTAM, banderas, campos, asunto, nota_extra='',
     glosa = ' {} '.format(chr(183)).join(
         f'`{c}`: {GLOSA_CAMPO[c]}' for c in campos)
     nota_ausentes = (
-        f'**{len(uno["rhos_ausentes"])} de los {len(RHOS)} niveles declarados '
+        f'**{len(uno["rhos_ausentes"])} de los {len(ESCALERA_CONTAMINACION)} niveles declarados '
         f'no corrieron** '
         f'({", ".join(f"{r:.2f}" for r in uno["rhos_ausentes"])}) y salen como '
         f'raya: sin el nivel más bajo no hay contra qué leer el '
         f'daño' if uno['rhos_ausentes'] else
-        f'los {len(RHOS)} niveles declarados corrieron')
+        f'los {len(ESCALERA_CONTAMINACION)} niveles declarados corrieron')
     cabeza = (
         f'**{nombre.upper()} {chr(183)} {asunto} {chr(183)} sopesado '
         f'(`{PESO_DECLARADO}`) contra sin sopesar (`{PESO_APAGADO}`) '
@@ -4193,11 +4541,11 @@ def tabla_agrupamiento(nombre, CONTAM, banderas, perturbacion=None,
         fil.append((f'{rho:.2f}',) + tuple(celdas))
     ausentes = [r for r, c in niveles if c is None]
     nota_ausentes = (
-        f'**{len(ausentes)} de los {len(RHOS)} niveles declarados no '
+        f'**{len(ausentes)} de los {len(ESCALERA_CONTAMINACION)} niveles declarados no '
         f'corrieron** ({", ".join(f"{r:.2f}" for r in ausentes)}) y salen como '
         f'raya: sin el nivel más bajo no hay contra qué leer el '
         f'daño' if ausentes else
-        f'los {len(RHOS)} niveles declarados corrieron')
+        f'los {len(ESCALERA_CONTAMINACION)} niveles declarados corrieron')
     nota_brazo = (
         f'el brazo se DERIVA del registro: `{brazo}` es el único que '
         f'declara `sopesado: True` en sus filas'

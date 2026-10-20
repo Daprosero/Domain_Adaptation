@@ -172,11 +172,15 @@ class ElCriterioEsElMaximoDeLaCef(unittest.TestCase):
         epocas = _epocas(nf)
         mejor_epoca = int(nf['mejor_epoca'])
         self.assertGreater(mejor_epoca, 0, 'el criterio no eligio ninguna')
-        if int(nf['paso_fin']) < T.PASOS_2:
-            self.assertGreaterEqual(
-                int(nf['epoca_fin']) - mejor_epoca, T.PACIENCIA_2_EPOCAS,
-                (nf['epoca_fin'], mejor_epoca, T.PACIENCIA_2_EPOCAS,
-                 'corto antes del techo sin agotar la paciencia'))
+        # **La fase 2 NO para, desde el 2026-10-19**, asi que la corrida
+        # SIEMPRE llega al techo y la rama que leia la paciencia se fue con
+        # ella. Lo que queda es la afirmacion mas fuerte: el techo se corre
+        # entero, en vez de «si corto temprano, fue por la paciencia».
+        self.assertEqual(int(nf['paso_fin']), int(nf['pasos_techo']),
+                         (nf['paso_fin'], nf['pasos_techo'],
+                          'la fase 2 no corrio su techo entero'))
+        self.assertEqual(int(nf['epoca_fin']), T.EPOCAS_2,
+                         (nf['epoca_fin'], T.EPOCAS_2))
         posteriores = [float(e['cef']) for e in epocas
                        if int(e['epoca']) + 1 > mejor_epoca]
         if posteriores:

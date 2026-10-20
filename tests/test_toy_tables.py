@@ -78,7 +78,25 @@ def artefacto() -> Path:
 
 @pytest.fixture(scope="module")
 def registro(artefacto) -> dict:
-    return toy_run.cargar(artefacto)
+    """The stored artefact, SKIPPED when it is from another protocol.
+
+    The fixture above skips when the artefact is MISSING and names the
+    notebook that writes it. This is the other half, and it was absent: a
+    STALE artefact was read without complaint and its readers died much later
+    with a `KeyError` inside a `suptitle` -- measured on 2026-10-19, when
+    `steps_2` became `epochs_2` and nine tests failed with a message that
+    named neither the artefact nor what to do about it.
+
+    `toy_run.cargar` refuses it now, which is where the guard belongs because
+    a renderer and a notebook read through the same function. Here the refusal
+    becomes a SKIP with the same remedy the missing case already gives: this
+    file tests renderers, and an artefact from another protocol is a reason it
+    cannot run rather than a defect in what it tests.
+    """
+    try:
+        return toy_run.cargar(artefacto)
+    except toy_run.ArtefactoDeOtroProtocolo as viejo:
+        pytest.skip(str(viejo))
 
 
 @pytest.fixture(scope="module")
@@ -625,7 +643,14 @@ def test_a_table_follows_the_artefact_on_disk_and_not_a_value_in_the_code(
     for origen in artefacto.iterdir():
         (tmp_path / origen.name).write_bytes(origen.read_bytes())
 
-    base = toy_run.cargar(tmp_path)
+    # The copy inherits the stored artefact's scale stamp, so it is refused for
+    # the same reason the `registro` fixture skips: this test reads the real
+    # files on purpose, which is also what makes it the one that cannot run on
+    # an artefact from another protocol.
+    try:
+        base = toy_run.cargar(tmp_path)
+    except toy_run.ArtefactoDeOtroProtocolo as viejo:
+        pytest.skip(str(viejo))
     barrido = json.loads((tmp_path / "barrido.json").read_text(encoding="utf-8"))
     clave = next(iter(barrido["celdas"]))
     familia = clave.split(toy_tables.SEP)[0]
@@ -2187,21 +2212,31 @@ def test_the_frame_carries_credas_shape_and_not_this_experiments_additions(
     familia, filas = filas_animadas["familia"], filas_animadas["filas"]
     columnas = len(toy_run.GRID_COLUMNS)
 
-    # 1 y 2 --- el suptitle: UNA línea, y el paso dicho como lo dice CREDA.
+    # 1 y 2 --- el suptitle: UNA línea, y la ÉPOCA dicha como la dice CREDA.
+    # Decía «paso» hasta el 2026-10-19 y leía `"paso {"` acá; con el techo en
+    # épocas el rótulo de CREDA dice «época» y esta aserción lo sigue en vez de
+    # quedar leyendo una palabra que su referencia ya no escribe.
     referencia = _suptitle_de_creda()
     assert "chr(10)" not in referencia and "\\n" not in referencia, (
         "el suptitle de CREDA trae un salto de línea: la referencia de esta "
         "aserción cambió y hay que volver a leerla")
-    assert "paso {" in referencia and " de {" in referencia, referencia
+    assert "época {" in referencia and " de {" in referencia, referencia
+    assert "paso {" not in referencia, (
+        "el suptitle de CREDA volvió a decir «paso»: o el techo volvió a pasos "
+        "o alguien revirtió el rótulo sin traer el techo con él")
 
     fig = toy_run.figura_del_cuadro(registro, familia, filas, 0)
     try:
         titulo = fig._suptitle.get_text()
         assert "\n" not in titulo, (
             f"el suptitle trae más de una línea: {titulo!r}")
+            # «época», no «paso»: este regex decía `paso` y el test estaba
+            # en SKIP cuando el rótulo cambió, así que la mitad de arriba
+            # de este mismo test ya seguía a CREDA a épocas mientras esta
+            # seguía leyendo la palabra vieja sin que nada lo dijera.
         assert re.fullmatch(
             rf"{re.escape(familia)} · fuente y cabeza QUIETAS · "
-            rf"paso \d+ de \d+ · azar \d\.\d{{3}}", titulo), titulo
+            rf"época \d+ de \d+ · azar \d\.\d{{3}}", titulo), titulo
         # El sello retirado, nombrado por sus palabras y no por su función: lo
         # que no puede volver es la LÍNEA, la escriba quien la escriba.
         for palabra in ("escala «", "ENSAYO", "revisión", "dispositivo",
@@ -2253,7 +2288,7 @@ def test_the_frame_carries_credas_shape_and_not_this_experiments_additions(
                            "no cuadrados)")
             esperado = (f"{toy_tables.NOMBRE_FILA[fila['normalizacion']]}"
                         f"{condicional}\n"
-                        f"paró en el paso {fila['pasoElegido']}")
+                        f"eligió la época {fila['epocaElegidaFase2']}")
             assert real.get_ylabel() == esperado, (real.get_ylabel(), esperado)
 
         # 7 --- la cuarta columna del cuadro 0 son EJES, no una caja de texto.
@@ -2264,7 +2299,7 @@ def test_the_frame_carries_credas_shape_and_not_this_experiments_additions(
                 "el panel de la fase 2 del cuadro 0 dibuja texto adentro de los "
                 "ejes: CREDA dibuja sus ejes y los deja salir vacíos")
             assert len(fase_dos.get_xticks()) > 0, "el eje x quedó sin marcas"
-            assert fase_dos.get_xlabel() == "paso de la fase 2", (
+            assert fase_dos.get_xlabel() == "época de la fase 2", (
                 fase_dos.get_xlabel())
             assert fase_dos.get_legend() is not None, (
                 "el panel de la fase 2 del cuadro 0 no trae leyenda: la de "
@@ -2414,7 +2449,7 @@ def test_the_row_label_says_when_the_box_stopped_being_square(registro,
         condicional = ("" if fila["cajaCuadrada"] else
                        f"\n(ejes {fila['razonDeAspecto']:.0f}:1, no cuadrados)")
         return (f"{toy_tables.NOMBRE_FILA[fila['normalizacion']]}{condicional}\n"
-                f"paró en el paso {fila['pasoElegido']}")
+                f"eligió la época {fila['epocaElegidaFase2']}")
 
     def _medir(grilla: list) -> None:
         """Cada fila de la grilla, rótulo y dibujo, contra su propio lado."""
@@ -2523,7 +2558,8 @@ def test_a_phase_two_panel_drawn_past_the_chosen_step_is_caught(registro,
     cuadros = toy_run.cuadros_comunes(len(fila["pasos"]) for fila in filas)
     k = cuadros - 1
     assert any(fila["pasos"][k] > fila["pasoElegido"] for fila in filas), (
-        "ninguna fila corre más allá del paso que eligió, así que el techo no "
+        "ninguna fila corre más allá de la época que eligió, así que el techo "
+        "no "
         "recorta nada acá y esta mutación no distingue nada")
 
     def _hasta_donde(modulo):
@@ -2540,12 +2576,18 @@ def test_a_phase_two_panel_drawn_past_the_chosen_step_is_caught(registro,
         finally:
             plt.close(fig)
 
+    # El panel dibuja en ÉPOCAS desde el 2026-10-19, así que el lado esperado
+    # se convierte con el mismo pase que el panel usa. La guarda de adentro
+    # sigue siendo en pasos --- es el índice del arreglo --- y por eso este
+    # test cruza las dos unidades en vez de quedarse en una: es el único lugar
+    # donde se puede ver que el techo recorta donde dice.
     propio = _hasta_donde(toy_run)
     for fila, hasta in zip(filas, propio):
-        assert hasta <= fila["pasoElegido"], (
-            fila["normalizacion"], hasta, fila["pasoElegido"],
-            "el panel dibuja más allá del paso que eligió y su título dice que "
-            "no")
+        tope_ep = fila["pasoElegido"] / fila["pasosPorEpoca"]
+        assert hasta <= tope_ep, (
+            fila["normalizacion"], hasta, tope_ep,
+            "el panel dibuja más allá de la época que eligió y su título dice "
+            "que no")
     mutado = _toy_run_mutado(tmp_path,
                              'tope = min(fila["pasos"][k], fila["pasoElegido"])',
                              'tope = max(fila["pasos"][k], fila["pasoElegido"])',
@@ -2630,7 +2672,7 @@ def _encabezado_de_creda(registro: dict) -> list[str]:
     refuse. Everything else is CREDA's, verbatim.
     """
     rol = toy_tables.rol_publicado(registro)
-    return ["método", "normalización", "época fuente", "paso que eligió",
+    return ["método", "normalización", "época fuente", "época que eligió",
             f"fuente · {rol}", f"blanco · {rol}", "vigía: fuente conservada",
             f"blanco pico · {rol} (oráculo)"]
 

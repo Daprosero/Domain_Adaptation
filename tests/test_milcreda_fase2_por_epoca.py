@@ -49,7 +49,7 @@ def tiny() -> toy_run.Scale:
     """
     return dataclasses.replace(
         toy_run.PILOT, name="test", epochs_1=2, patience_1=1,
-        min_steps_2=2, patience_2=2, trials_1=1, trials_2=1,
+        epochs_2=toy_run.MIN_EPOCHS_2 + 1, trials_1=1, trials_2=1,
         points_per_domain=810, instances_per_bag=6)
 
 
@@ -169,110 +169,114 @@ def test_the_epoch_length_refuses_when_the_classes_do_not_agree():
 # ============================================== 2. where each number comes from
 
 
-def test_the_minimum_is_derived_from_the_step_floor_and_the_declared_epoch():
-    """`MIN_EPOCHS_2` is DERIVED, the way CREDA derives `MIN_EPOCAS_2`, and the
-    record says what the step-derived number would have been.
+def test_the_minimum_is_declared_and_its_input_is_gone():
+    """`MIN_EPOCHS_2` was DERIVED from `min_steps_2` and is now DECLARED.
 
-    What `min_steps_2 = 40` was buying is a guard before the criterion may
-    choose anything. Forty steps of this programme's own epoch is
-    `ceil(40 / 16) = 3` passes, and both ends of that division are read off the
-    code rather than written here, so moving either moves the minimum.
+    It was `ceil(40 / 16) = 3` passes. That input was retired with the step
+    ceiling on 2026-10-19, so the derivation would now read a number nobody
+    maintains -- which reads as derived and is not. The VALUE did not move: 3
+    is what the derivation gave, and changing it in the same step as declaring
+    it would mix two things.
 
-    No test can distinguish a derivation from a literal that currently equals
-    it. What this closes is the DESFASE -- one end moving without the other --
-    which is the whole of what a derivation buys.
+    The pole is the absence: `min_steps_2` must be GONE from the scale, on
+    both sides. Without that half, reintroducing it on one side alone would
+    pass -- and the two packages drifting apart on this field is exactly what
+    the cross-package pin exists to prevent.
     """
-    expected = max(1, math.ceil(toy_run.FULL.min_steps_2
-                                / toy_run.STEPS_PER_EPOCH_DECLARED))
-    assert toy_run.MIN_EPOCHS_2 == expected, (toy_run.MIN_EPOCHS_2, expected)
     assert toy_run.MIN_EPOCHS_2 == 3, toy_run.MIN_EPOCHS_2
+    assert not hasattr(toy_run.FULL, "min_steps_2")
+    assert not hasattr(creda, "MIN_PASOS_2")
 
     criterion = toy_run.PHASE_TWO_CRITERION
     assert criterion["minEpochs2"] == toy_run.MIN_EPOCHS_2
-    assert criterion["minEpochs2Derivation"].startswith("ceil(")
-    # What the record owes a reader: the number a STEP-derived minimum would
-    # have been, so the two readings sit beside each other instead of one of
-    # them being gone.
-    assert criterion["minEpochs2StepDerivedWouldHaveBeen"] == pytest.approx(
-        toy_run.FULL.min_steps_2 / toy_run.STEPS_PER_EPOCH_DECLARED)
-    assert criterion["minEpochs2StepDerivedWouldHaveBeen"] != (
-        toy_run.MIN_EPOCHS_2), (
-        "the step-derived figure equals the derived one, so the record is not "
-        "distinguishing the rounding it performed")
+    assert criterion["minEpochs2Is"] == "declared"
+    assert "retired" in criterion["minEpochs2Was"]
 
-    # CREDA's own minimum DIFFERS, and that is the material and not a mistake:
-    # its epoch is nine steps and this one's is sixteen. Both sides derived.
-    assert creda.MIN_EPOCAS_2 == max(
-        1, math.ceil(creda.MIN_PASOS_2 / creda.BLOQUES_AL_LOTE_DECLARADO))
+    # CREDA's own minimum DIFFERS and the record PUBLISHES both, which is the
+    # replacement for asserting they are equal. They came from the same
+    # 40-step floor over different passes (16 steps here, 9 there); declaring
+    # them did not reconcile the two numbers, because reconciling them is a
+    # decision about the guard and not about the unit.
+    assert criterion["minEpochs2InCreda"] == creda.MIN_EPOCAS_2
     assert toy_run.MIN_EPOCHS_2 != creda.MIN_EPOCAS_2, (
         toy_run.MIN_EPOCHS_2, creda.MIN_EPOCAS_2)
+    assert "decision about the guard" in criterion["minEpochs2WhyTheyDiffer"]
+    # And the record says the guard BITES, because a guard the criterion lands
+    # on two times in five is deciding rather than guarding.
+    assert "38" in criterion["minEpochs2Bites"]
 
 
-def test_the_patience_is_declared_in_epochs_and_not_derived_from_a_step_count():
-    """`PATIENCE_2_EPOCHS` is the operator's declared 5, identical to CREDA's
-    own declared value, and NOT any derivation of a step patience.
+def test_the_patience_is_retired_on_both_sides_and_phase_one_still_stops():
+    """`PATIENCE_2_EPOCHS` is GONE, and so is CREDA's `PACIENCIA_2_EPOCAS`.
 
-    The reason the ruling exists: the lot is searched in CREDA, so a patience
-    derived from `PACIENCIA_2 = 30` steps would give a different number of
-    epochs per lot and the criterion's resolution would be decided by a
-    hyperparameter that does not know it is deciding it. Declaring it removes
-    that dependency on both sides.
+    This test asserted the opposite until 2026-10-19: that the patience was
+    the operator's declared 5, identical on both sides, and NOT a derivation
+    of a step count. The premise died -- phase 2 has no stopping rule, it runs
+    its `epochs_2` ceiling whole and the criterion chooses the best epoch of
+    the whole run.
 
-    The pole is what makes this more than a restated literal: the derivation it
-    is NOT gives a different number here, so a later session that derives it
-    reddens this instead of quietly halving the criterion's reach.
+    It is inverted rather than deleted. A file without it cannot tell "the
+    patience was retired" from "nobody ever tested it", and what breaks for
+    real is somebody reintroducing it on one side only.
+
+    What the measurement said: over the 90 runs of `Results/Toyset/full`,
+    every one died by patience, NONE reached the ceiling, and 38 chose exactly
+    the first legal step.
     """
-    assert toy_run.PATIENCE_2_EPOCHS == 5
-    assert toy_run.PATIENCE_2_EPOCHS == creda.PACIENCIA_2_EPOCAS, (
-        toy_run.PATIENCE_2_EPOCHS, creda.PACIENCIA_2_EPOCAS)
-    derived_here = max(1, math.ceil(toy_run.FULL.patience_2
-                                    / toy_run.STEPS_PER_EPOCH_DECLARED))
-    assert derived_here != toy_run.PATIENCE_2_EPOCHS, (
-        derived_here, toy_run.PATIENCE_2_EPOCHS,
-        "a patience derived from the step count equals the declared one on "
-        "this programme, so this test cannot tell a declaration from a "
-        "derivation")
-    assert toy_run.PHASE_TWO_CRITERION["patienceEpochs2"] == (
-        toy_run.PATIENCE_2_EPOCHS)
-    assert toy_run.PHASE_TWO_CRITERION["patienceEpochs2Is"] == "declared"
-    assert toy_run.PHASE_TWO_CRITERION["patienceEpochs2DerivedWouldHaveBeen"] == (
-        derived_here)
+    for retired in ("PATIENCE_2_EPOCHS",):
+        assert not hasattr(toy_run, retired), retired
+    for retired in ("PACIENCIA_2_EPOCAS", "PACIENCIA_2"):
+        assert not hasattr(creda, retired), retired
+    assert not hasattr(toy_run.FULL, "patience_2")
+
+    criterion = toy_run.PHASE_TWO_CRITERION
+    assert criterion["patience"] is None
+    assert "NO stopping rule" in criterion["patienceWhy"]
+
+    # THE OTHER HALF, because the absences above read as "neither phase
+    # stops" and that is false. Phase 1 DOES stop, its signal is supervised,
+    # and the record says so rather than leaving one rule to cover both.
+    assert toy_run.FULL.patience_1 == creda.PACIENCIA_1 == 30
+    assert "phase 1 DOES stop" in criterion["phaseOneStillStops"]
 
 
-def test_the_two_step_fields_keep_the_values_the_cross_package_pin_reads():
-    """`patience_2` and `min_steps_2` stopped being the criterion and KEPT
-    their values, which is said out loud rather than quietly moved.
+def test_the_budget_is_an_epoch_ceiling_and_the_record_says_why_it_inverted():
+    """`epochs_2` is an EPOCH ceiling at both scales, and so is CREDA's.
 
-    `tests/test_toy_run.py` pins both against `CREDA.toy_experiment`, and
-    CREDA kept its own two for the same reason. Three things still read them
-    here: the derivation above, the scale stamp every record carries, and that
-    pin.
+    This test asserted the opposite until 2026-10-19: that `steps_2` stayed a
+    STEP ceiling "exactly as `PASOS_2` stayed one in CREDA", on the grounds
+    that every frame schedule and checkpoint grid of this module is indexed in
+    steps. The grounds were backwards. A step ceiling lets the LOT decide how
+    many passes the experiment runs, and in CREDA the lot is SEARCHED --
+    measured there, 200 steps bought 22.2 passes for `lunas` at `LOTE_2=128`
+    and 11.8 for `toroide` and `rollo` at 64, so its global table compared
+    families trained half as long as one another.
+
+    The frames stay indexed in STEPS and that is not an oversight: a frame is
+    a state of the weights, and the weights move once per step.
     """
-    assert toy_run.FULL.min_steps_2 == creda.MIN_PASOS_2 == 40
-    assert toy_run.FULL.patience_2 == creda.PACIENCIA_2 == 30
-    assert toy_run.PHASE_TWO_CRITERION["theTwoStepFieldsAreNoLongerTheCriterion"]
-    assert toy_run.PHASE_TWO_CRITERION["unit"] == "epoch"
+    assert toy_run.FULL.epochs_2 == creda.EPOCAS_2 == 100
+    assert not hasattr(toy_run.FULL, "steps_2")
+    assert not hasattr(creda, "PASOS_2")
 
+    criterion = toy_run.PHASE_TWO_CRITERION
+    assert criterion["budgetUnit"] == "epoch"
+    assert "INVERTS" in criterion["budgetWhy"]
+    assert "SEARCHED" in criterion["budgetWhy"]
+    # The measurement that forced it, carried in the record so a reader meets
+    # it instead of having to find this test.
+    medido = criterion["budgetChangeMeasured"]["inCredaAt200Steps"]
+    assert "22.2" in medido["lunas"] and "11.8" in medido["toroide"]
 
-def test_the_budget_stays_a_step_ceiling_and_the_record_says_so():
-    """`steps_2` is a STEP ceiling at both scales, exactly as `PASOS_2` stayed
-    one in CREDA, and the unread tail that leaves is published.
-
-    Reading the budget as epochs would be a different experiment: every frame
-    schedule and every checkpoint grid of this module is indexed in steps, and
-    `tests/test_toy_run.py` pins `FULL.steps_2` against `creda.PASOS_2`.
-    """
-    assert toy_run.FULL.steps_2 == creda.PASOS_2 == 200
-    assert toy_run.PHASE_TWO_CRITERION["budgetUnit"] == "step"
-    whole = toy_run.FULL.steps_2 // toy_run.STEPS_PER_EPOCH_DECLARED
-    tail = toy_run.FULL.steps_2 - whole * toy_run.STEPS_PER_EPOCH_DECLARED
-    assert (whole, tail) == (12, 8), (whole, tail)
-    published = toy_run.PHASE_TWO_CRITERION["atTheFullScale"]
-    assert published["wholeEpochs"] == whole
-    assert published["stepsWithoutARead"] == tail
-    assert tail > 0, (
-        "the full budget divides the epoch exactly, so the unread tail this "
-        "record publishes cannot be distinguished from a field nobody filled")
+    published = criterion["atTheFullScale"]
+    assert published["epochs2"] == toy_run.FULL.epochs_2
+    assert published["stepsItHolds"] == (toy_run.FULL.epochs_2
+                                         * toy_run.STEPS_PER_EPOCH_DECLARED)
+    # ZERO, and asserted as a number rather than as an absent key: it was 8 at
+    # the step ceiling, and a reader of two artefacts has to see it go to zero
+    # rather than vanish.
+    assert published["stepsWithoutARead"] == 0
+    assert "by construction" in published["note"]
 
 
 def test_the_flags_of_every_run_publish_the_criterion_and_the_series(tiny):
@@ -294,7 +298,7 @@ def test_the_flags_of_every_run_publish_the_criterion_and_the_series(tiny):
     # The two the reader actually acts on, named rather than taken on trust
     # that the whole dict arrived.
     assert flags["phaseTwoCriterion"]["unit"] == "epoch"
-    assert flags["phaseTwoCriterion"]["budgetUnit"] == "step"
+    assert flags["phaseTwoCriterion"]["budgetUnit"] == "epoch"
     assert flags["targetSeries"]["role"] == "test"
 
 
@@ -310,23 +314,15 @@ def test_the_record_publishes_the_asymmetry_between_the_two_epoch_lengths():
     assert asymmetry["stepsPerEpochHere"] == toy_run.STEPS_PER_EPOCH_DECLARED
     assert asymmetry["stepsPerEpochInCreda"] == creda.BLOQUES_AL_LOTE_DECLARADO
     assert asymmetry["stepsPerEpochHere"] != asymmetry["stepsPerEpochInCreda"]
-    assert asymmetry["epochsInTheBudgetHere"] == pytest.approx(
-        toy_run.FULL.steps_2 / toy_run.STEPS_PER_EPOCH_DECLARED)
-    assert asymmetry["epochsInTheBudgetInCreda"] == pytest.approx(
-        creda.PASOS_2 / creda.BLOQUES_AL_LOTE_DECLARADO)
-    assert asymmetry["patienceShareOfTheBudgetHere"] == pytest.approx(
-        toy_run.PATIENCE_2_EPOCHS * toy_run.STEPS_PER_EPOCH_DECLARED
-        / toy_run.FULL.steps_2)
-    assert asymmetry["patienceShareOfTheBudgetInCreda"] == pytest.approx(
-        creda.PACIENCIA_2_EPOCAS * creda.BLOQUES_AL_LOTE_DECLARADO
-        / creda.PASOS_2)
-    # The reading itself, and the direction of it: the patience reaches further
-    # into this budget than into CREDA's.
-    assert (asymmetry["patienceShareOfTheBudgetHere"]
-            > asymmetry["patienceShareOfTheBudgetInCreda"])
-
-
-# ========================================= 3. the criterion, through the loop
+    # The two budgets are now the SAME NUMBER of passes, which is the whole
+    # point of the unit. What a pass COSTS still differs, because the material
+    # differs -- and that difference is material rather than protocol, which
+    # is what the asymmetry block is for.
+    assert asymmetry["epochsInTheBudgetHere"] == toy_run.FULL.epochs_2
+    assert asymmetry["epochsInTheBudgetInCreda"] == creda.EPOCAS_2
+    assert (asymmetry["epochsInTheBudgetHere"]
+            == asymmetry["epochsInTheBudgetInCreda"])
+    assert "material rather than protocol" in asymmetry["reading"]
 
 
 def test_the_criterion_is_read_only_at_the_end_of_an_epoch(familia, tiny,
@@ -343,7 +339,7 @@ def test_the_criterion_is_read_only_at_the_end_of_an_epoch(familia, tiny,
     payload = _prepared(familia, tiny)
     per_epoch = [0.90, 0.80, 0.20, 0.95, 0.60, 0.70, 0.75, 0.78, 0.79]
     legal = per_epoch[toy_run.MIN_EPOCHS_2 - 1:]
-    assert len(per_epoch) >= tiny.steps_2 // toy_run.STEPS_PER_EPOCH_DECLARED
+    assert len(per_epoch) >= tiny.epochs_2
     argmin = per_epoch.index(min(legal))
     argmax = per_epoch.index(max(legal))
     assert argmin != argmax, "the scripted sequence cannot distinguish min from max"
@@ -370,20 +366,38 @@ def test_the_criterion_is_read_only_at_the_end_of_an_epoch(familia, tiny,
     assert phase_two["bestEpoch"] >= toy_run.MIN_EPOCHS_2
 
 
-def test_the_patience_ends_the_run_at_an_epoch_and_before_the_ceiling(
-        familia, tiny, monkeypatch):
-    """`PATIENCE_2_EPOCHS` passes without improving the minimum end the run,
-    and the step it ends on is an epoch end.
+def test_nothing_ends_the_run_short_of_its_ceiling(familia, tiny, monkeypatch):
+    """The run walks `epochs_2` WHOLE, whatever the criterion reads.
 
-    The scripted sequence improves once inside the legal window and never
-    again, so the stop is the only thing that can end this run short of the
-    budget -- and the budget is asserted to be longer than where it stopped,
-    because a run that merely ran out of steps would report the same `steps`.
+    **This test asserted the opposite until 2026-10-19.** It was
+    `test_the_patience_ends_the_run_at_an_epoch_and_before_the_ceiling`, and
+    it scripted a sequence that improves once inside the legal window and
+    never again, so that the patience was the only thing that could end the
+    run short of the budget. The patience is gone; the sequence stays, and
+    what it now proves is that nothing ends the run early.
+
+    It is inverted rather than deleted. Deleting it would leave "the ceiling
+    runs whole" asserted nowhere, and a patience reintroduced by anyone would
+    pass every other test in this file.
+
+    The scripted signal is the WORST case for this claim: it peaks at the
+    guard's first legal epoch and declines from there, which is precisely the
+    shape a patience would cut. Measured on the real artefact, that shape is
+    not hypothetical -- 38 of 90 runs chose exactly the first legal step.
     """
     payload = _prepared(familia, tiny)
     per_epoch = [0.90, 0.80, 0.20, 0.95, 0.96, 0.97, 0.98, 0.99, 0.995]
+    # Descending INSIDE the legal window, so the criterion never improves
+    # after its first legal read and a patience of any length would fire.
+    cef_per_epoch = [0.1, 0.2, 2.9, 0.4, 0.3, 0.2, 0.1, 0.05, 0.01]
+    assert len(cef_per_epoch) >= tiny.epochs_2
+    _ventana = cef_per_epoch[toy_run.MIN_EPOCHS_2 - 1:]
+    assert _ventana[0] == max(_ventana), (
+        "the scripted cef does not peak on the first legal epoch, so a "
+        "patience would not have fired and this test proves nothing")
 
     calls = {"n": 0}
+    cef_calls = {"n": 0}
 
     def scripted(model_, dataset, device):
         epoch = min(calls["n"] // toy_run.STEPS_PER_EPOCH_DECLARED,
@@ -391,17 +405,27 @@ def test_the_patience_ends_the_run_at_an_epoch_and_before_the_ceiling(
         calls["n"] += 1
         return per_epoch[epoch]
 
+    def scripted_cef(model_, device):
+        value = cef_per_epoch[min(cef_calls["n"], len(cef_per_epoch) - 1)]
+        cef_calls["n"] += 1
+        return value
+
     monkeypatch.setattr(toy_run, "watchman", scripted)
+    monkeypatch.setattr(toy_run, "effective_classes", scripted_cef)
     phase_two = _run(payload, familia, tiny)
 
-    best_epoch = phase_two["bestEpoch"]
-    assert best_epoch == toy_run.MIN_EPOCHS_2, best_epoch
-    stopped_epoch = best_epoch + toy_run.PATIENCE_2_EPOCHS
-    assert phase_two["steps"] == stopped_epoch * phase_two["stepsPerEpoch"]
-    assert phase_two["steps"] < tiny.steps_2, (
-        phase_two["steps"], tiny.steps_2,
-        "the run reached the ceiling, so this is not reading the patience")
-    assert phase_two["epochs"] == stopped_epoch
+    # It CHOSE the guard's first legal epoch, as the script forces...
+    assert phase_two["bestEpoch"] == toy_run.MIN_EPOCHS_2, phase_two["bestEpoch"]
+    # ...and then kept running to the ceiling anyway, which is the claim.
+    assert phase_two["epochs"] == tiny.epochs_2, (
+        phase_two["epochs"], tiny.epochs_2)
+    assert phase_two["steps"] == tiny.epochs_2 * phase_two["stepsPerEpoch"]
+    assert phase_two["stepsWithoutARead"] == 0
+    # And the criterion was READ on every one of those epochs, not merely
+    # walked past: a loop that trained without reading would satisfy the
+    # three assertions above.
+    assert cef_calls["n"] == tiny.epochs_2, cef_calls["n"]
+    assert len(phase_two["epochPass"]) == tiny.epochs_2
 
 
 def test_every_epoch_draws_every_training_bag_exactly_once(familia, tiny):
@@ -440,13 +464,13 @@ def test_phase_two_refuses_a_budget_that_holds_fewer_epochs_than_the_minimum(
     that cannot fire. Both declared scales are asserted to be above the floor,
     so the refusal is a guard and not a wall.
     """
-    floor = toy_run.MIN_EPOCHS_2 * toy_run.STEPS_PER_EPOCH_DECLARED
     for scale in (toy_run.FULL, toy_run.PILOT, tiny):
-        assert scale.steps_2 >= floor, (scale.name, scale.steps_2, floor)
+        assert scale.epochs_2 >= toy_run.MIN_EPOCHS_2, (
+            scale.name, scale.epochs_2, toy_run.MIN_EPOCHS_2)
 
     payload = _prepared(familia, tiny)
-    starved = dataclasses.replace(tiny, steps_2=floor - 1)
-    with pytest.raises(ValueError, match="holds"):
+    starved = dataclasses.replace(tiny, epochs_2=toy_run.MIN_EPOCHS_2 - 1)
+    with pytest.raises(ValueError, match="may not choose before"):
         _run(payload, familia, starved)
 
 
@@ -469,9 +493,10 @@ def test_the_cell_record_carries_the_epoch_quantities_the_criterion_reads(
     assert row["phase2BestEpoch"] * row["phase2StepsPerEpoch"] == (
         row["phase2BestStep"])
     assert row["phase2Epochs"] == row["phase2Steps"] // row["phase2StepsPerEpoch"]
-    assert row["phase2StepsWithoutARead"] == (
-        tiny.steps_2 - (tiny.steps_2 // row["phase2StepsPerEpoch"])
-        * row["phase2StepsPerEpoch"])
+    # ZERO by construction with the ceiling in epochs, and asserted as the
+    # number rather than as a derivation of a field that no longer exists.
+    assert row["phase2StepsWithoutARead"] == 0
+    assert row["phase2Steps"] == tiny.epochs_2 * row["phase2StepsPerEpoch"]
     assert len(row["phase2EpochPass"]) == row["phase2Epochs"]
 
 

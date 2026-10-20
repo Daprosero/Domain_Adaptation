@@ -724,7 +724,8 @@ def test_the_loss_panels_are_fixed_to_the_terms_own_zero_to_one_range():
     fig, ax = plt.subplots(1, 2)
     try:
         toy_plots.panel_fase1(ax[0], hist_s, "fase 1", ep_s)
-        toy_plots.panel_fase2(ax[1], _hist_fase2(), 60, "fase 2", 50)
+        toy_plots.panel_fase2(ax[1], _hist_fase2(), 60, "fase 2", 50,
+                              _PASE_A_MANO)
         for a, nombre in ((ax[0], "panel_fase1"), (ax[1], "panel_fase2")):
             assert a.get_yscale() == "linear", (nombre, a.get_yscale())
             assert a.get_ylim() == (0.0, 1.0), (nombre, a.get_ylim())
@@ -895,8 +896,10 @@ def _contam_sintetico(*, rhos=(0.10, 0.30), largos=(3, 4), n=12,
                  for b in (padron or T.BRAZOS_CONTAMINACION)}
         for b in (T.BRAZO_SIN_SOP, T.BRAZO_CON_SOP):
             filas[b] = [dict(acc_te=0.45, split="test", acc_s_te=0.95,
-                             sopesado=(b == brazo), hp2={}, paso_fin=60,
-                             mejor_paso=40, vigia_fin=0.8, pico_te=0.47,
+                             sopesado=(b == brazo), hp2={},
+                             paso_fin=_PASE_A_MANO * T.EPOCAS_2,
+                             mejor_paso=40 * _PASE_A_MANO,
+                             vigia_fin=0.8, pico_te=0.47,
                              tr_e=11.0, tr_d=13.0)]
         if techo is not None:
             # Written by the REAL writer, not by a key this test invents. The
@@ -952,24 +955,33 @@ def test_the_contamination_gif_truncates_every_row_to_the_shortest():
 def test_each_contamination_row_is_labelled_with_its_own_stop_step():
     """Its OWN `mejor_paso`, never a neighbour's or the first row's.
 
-    Measured on `lunas`, the ladder stops at 52, 44, 52 and 102. A label
-    carrying one row's number over another's panels is a figure that says the
-    criterion fired at a step it did not, and nothing raises.
+    Measured on `lunas` under the step ceiling --- the citation is left dated
+    rather than refreshed by eye: it predates 2026-10-19 --- the ladder chose
+    at 52, 44, 52 and 102. A label carrying one row's number over another's
+    panels is a figure that says the criterion chose where it did not, and
+    nothing raises.
+
+    **The label reads EPOCHS and the fixture's steps are not them.** The pass
+    comes from the module's own recovery, never from a literal written here:
+    a 4 copied into this test would keep agreeing with a renderer that had
+    stopped converting at all.
     """
     corta = _figura_sintetica(F=4, mejor_paso=20)
     larga = _figura_sintetica(F=4, mejor_paso=40)
+    pase = toy_plots.pasos_por_epoca_del_cuadro(corta["pasos"])
+    assert pase > 1, (pase, "con pase 1 la época y el paso son el mismo "
+                            "número y este test no distingue cuál imprime")
     a = toy_plots.rotulo_fila_contaminacion((None, 0.10), corta, 1)
     b = toy_plots.rotulo_fila_contaminacion((None, 0.30), larga, 1)
-    assert "paró en el paso 20" in a, a
-    assert "paró en el paso 40" in b, b
-    # The neighbour's stop step, stated exactly, so the assertion cannot pass
-    # on an empty slice: a bare `"40" not in a.split("paró")[1]` does, because
-    # "disparó" contains "paró" and the split lands past the number.
-    assert "paró en el paso 40" not in a, a
-    assert "paró en el paso 20" not in b, b
-    # The frame's own step is on the label too, so the reader can place the
-    # stop relative to what is on screen.
-    assert f"paso {corta['pasos'][1]}" in a, a
+    assert f"eligió la época {20 // pase}" in a, a
+    assert f"eligió la época {40 // pase}" in b, b
+    # The neighbour's chosen epoch, stated exactly, so the assertion cannot
+    # pass on an empty slice.
+    assert f"eligió la época {40 // pase}" not in a, a
+    assert f"eligió la época {20 // pase}" not in b, b
+    # The frame's own epoch is on the label too, so the reader can place the
+    # choice relative to what is on screen.
+    assert f"época {corta['pasos'][1] // pase} de la fase 2" in a, a
     # And the label says whether the criterion has already fired by this frame.
     temprano = toy_plots.rotulo_fila_contaminacion((None, 0.30), larga, 0)
     tarde = toy_plots.rotulo_fila_contaminacion((None, 0.30), larga, 3)
@@ -1166,11 +1178,22 @@ def _cu_techo():
     return [tuple(fila)]
 
 
+#: El pase de los registros escritos a mano: CUATRO pasos por época, nunca
+#: uno. Con uno, el paso y la época serían el mismo número y un test que lee la
+#: columna de la época no podría distinguir cuál de los dos imprime --- que es
+#: exactamente el defecto que esa columna acaba de tener. `paso_fin` se escribe
+#: como `_PASE_A_MANO * EPOCAS_2` porque desde el 2026-10-19 la fase 2 no para
+#: temprano: corre su techo entero, y un fixture con un techo corto describe
+#: una corrida que esta corrida ya no puede producir.
+_PASE_A_MANO = 4
+
+
 def _nf_techo():
     # `tr_e`/`tr_d` DISTINTOS entre si y de todo lo demas: con dos campos
     # iguales un cruce entre ellos pasaria el test sin que nada falle.
-    return dict(acc_te=0.5, hp2=dict(T.HP_2), acc_s_te=0.5, paso_fin=1,
-                mejor_paso=1, vigia_fin=0.5, tr_e=11.0, tr_d=13.0)
+    return dict(acc_te=0.5, hp2=dict(T.HP_2), acc_s_te=0.5,
+                paso_fin=_PASE_A_MANO * T.EPOCAS_2,
+                mejor_paso=_PASE_A_MANO, vigia_fin=0.5, tr_e=11.0, tr_d=13.0)
 
 
 def test_a_ceiling_arm_is_marked_as_one_or_the_table_says_it_is_not():
@@ -1188,8 +1211,24 @@ def test_a_ceiling_arm_is_marked_as_one_or_the_table_says_it_is_not():
     """
     # The arm name comes from the writer too, so a rename cannot leave this
     # test marking a name nobody writes.
-    padron = list(T.BRAZOS_CONTAMINACION)
-    assert T.BRAZO_TECHO in padron, (T.BRAZO_TECHO, padron)
+    #
+    # **The roster stopped carrying a ceiling on 2026-10-19** -- the operator
+    # retired that arm from the contamination section -- so this test ADDS one
+    # instead of reading one out of `BRAZOS_CONTAMINACION`. What it measures is
+    # unchanged and still live: the marking is read off the field the writer
+    # writes and never guessed from the name, and that machinery still runs for
+    # the INTRUDERS section, whose roster declares two ceilings
+    # (`BRAZOS_INTRUSOS`). The one thing it can no longer measure is that the
+    # contamination roster carries one, because it does not.
+    assert T.BRAZO_TECHO not in T.BRAZOS_CONTAMINACION, (
+        T.BRAZOS_CONTAMINACION,
+        "the ceiling came back to the roster: this test is adding an arm the "
+        "sweep already writes, so read it from the roster again")
+    assert any(T.PALABRA_TECHO in b.lower() for b in T.BRAZOS_INTRUSOS), (
+        T.BRAZOS_INTRUSOS,
+        "no declared roster carries a ceiling any more, so the marking this "
+        "test pins is no longer exercised by anything that runs")
+    padron = list(T.BRAZOS_CONTAMINACION) + [T.BRAZO_TECHO]
     marcado = _contam_sintetico(padron=padron, techo=T.BRAZO_TECHO)
     assert toy_plots.brazos_techo(marcado) == {T.BRAZO_TECHO}
     # The join, crossed: the reader finds the field the writer actually wrote,
@@ -1565,10 +1604,32 @@ def test_the_ceiling_mark_reaches_the_saved_json_and_comes_back(
     `test_the_oracle_arm_is_labelled_a_ceiling_in_the_artifact_it_writes`
     pins `_fila_brazo`'s in-memory dict. This is the other half: that the field
     survives `guardar_contaminacion`, lands in the JSON text, loads back, and
-    is read as a ceiling by the side that marks the table. No artifact had ever
-    been written with five arms, so nobody had seen this join hold.
+    is read as a ceiling by the side that marks the table.
+
+    **The sweep stopped producing a ceiling on 2026-10-19** -- the operator
+    retired that arm -- so the ceiling row is ADDED here, after the real sweep
+    and before the real writer. Everything this test exists for stays real: the
+    row is built by `T._fila_brazo` with `PESO_ORACULO`, so the field is the one
+    the writer names and not a key invented here, and it travels through the
+    actual `guardar_contaminacion` / `cargar_contaminacion` pair.
+
+    It is supplied rather than dropped because `guardar_contaminacion` is the
+    ONLY writer in this module -- the intruders section, whose roster still
+    declares two ceilings, goes through it too -- so a test that stopped
+    writing a ceiling would leave that writer's handling of the field covered
+    by nothing.
     """
     CONTAM = barrido_minimo
+    assert T.BRAZO_TECHO not in CONTAM["brazos"], (
+        CONTAM["brazos"],
+        "the sweep writes a ceiling again: read it from the sweep instead of "
+        "adding one here")
+    CONTAM["brazos"] = list(CONTAM["brazos"]) + [T.BRAZO_TECHO]
+    for celda in CONTAM["celdas"].values():
+        plantilla = celda["brazos"][T.BRAZO_CON_SOP]
+        celda["brazos"][T.BRAZO_TECHO] = [
+            T._fila_brazo(_nf_techo(), _cu_techo(), T.PESO_ORACULO)
+            for _ in plantilla]
     assert T.BRAZO_TECHO in CONTAM["brazos"], CONTAM["brazos"]
 
     T.guardar_contaminacion(tmp_path, CONTAM)
@@ -1869,15 +1930,27 @@ def test_the_four_arm_arity_does_not_follow_the_contamination_roster():
     `BRAZOS_CONTAMINACION` and the four-arm declaration must not notice.
     """
     assert len(toy_plots.BRAZOS_CUATRO) == 4, toy_plots.BRAZOS_CUATRO
-    # The roster is STRICTLY larger, which is what makes the two distinguishable
-    # at all. If they were ever the same length this test proves nothing.
-    assert len(T.BRAZOS_CONTAMINACION) > len(toy_plots.BRAZOS_CUATRO), (
-        T.BRAZOS_CONTAMINACION, toy_plots.BRAZOS_CUATRO,
-        "the roster is no longer bigger than the declared treatments, so a "
-        "table deriving one from the other would look identical here")
-    assert toy_plots.BRAZO_TECHO_CUATRO in T.BRAZOS_CONTAMINACION, (
-        "the ceiling left the roster, so inheriting it would no longer be the "
-        "defect this guards")
+
+    # **Las dos pasaron a tener el mismo largo, y por eso la distinguibilidad
+    # se mide abajo, en la MUTACIÓN.** Este test asertaba que el padrón era
+    # ESTRICTAMENTE más grande, con el mensaje «the roster is no longer bigger
+    # than the declared treatments, so a table deriving one from the other
+    # would look identical here» --- y ese mensaje describe el estado de hoy:
+    # el 2026-10-19 el operador retiró el techo del padrón y los dos quedaron
+    # en cuatro. La comparación de largos era un proxy; la mutación de abajo
+    # hace crecer el padrón y comprueba que la aridad NO lo sigue, que es la
+    # propiedad, y esa mutación vale con los largos iguales o distintos.
+    assert toy_plots.BRAZO_TECHO_CUATRO not in T.BRAZOS_CONTAMINACION, (
+        T.BRAZOS_CONTAMINACION,
+        "el techo volvió al padrón: la comparación de largos vuelve a poder "
+        "medir la severación y hay que reponerla")
+    # Y el padrón de INTRUSOS sí sigue siendo más grande y sí lleva techos, así
+    # que la herencia que esto guarda sigue siendo un defecto POSIBLE en el
+    # árbol y no una preocupación histórica.
+    assert len(T.BRAZOS_INTRUSOS) > len(toy_plots.BRAZOS_CUATRO), (
+        T.BRAZOS_INTRUSOS, toy_plots.BRAZOS_CUATRO)
+    assert any(T.PALABRA_TECHO in b.lower() for b in T.BRAZOS_INTRUSOS), (
+        T.BRAZOS_INTRUSOS)
     assert toy_plots.BRAZO_TECHO_CUATRO not in toy_plots.BRAZOS_CUATRO
 
     # The word that marks a ceiling, read from the module that writes it.
@@ -1903,3 +1976,258 @@ def test_the_four_arm_arity_does_not_follow_the_contamination_roster():
     assert len(res["brazos"]) == 4, res["brazos"]
     assert res["gl_friedman"] == 3
     assert "brazo nuevo del barrido" not in res["brazos"]
+
+
+# ============================ 7. las dos tablas de la sección del sopesado
+
+
+def _registro_a_mano(mejor_epoca=25, acc_con=0.70, acc_sin=0.60, n=4,
+                     techo=False):
+    """Un registro con la forma de `_fila_brazo` y valores que yo elijo.
+
+    Construido con `T._fila_brazo` y no con diccionarios escritos a mano: lo
+    que la tabla lee es lo que esa función produce, y un fixture con sus
+    propias claves pasaría los tests mientras la tabla real se rompe.
+
+    **`techo` existe porque el padrón dejó de traer uno.** Hasta el 2026-10-19
+    este fixture escribía la fila del techo SIEMPRE, porque
+    `BRAZOS_CONTAMINACION` la declaraba y la aserción de abajo exigía que el
+    fixture y el padrón coincidieran. Con el brazo retirado esa fila dejaba el
+    fixture con un brazo que el padrón no nombra, y la aserción lo dijo en
+    cuatro tests a la vez. Queda como OPCIÓN y no se borra: los tests que
+    miden que ninguna tabla imprime un techo necesitan un registro que traiga
+    uno, o estarían midiendo que no se imprime lo que nadie escribió.
+    """
+    def filas(acc, peso, paso=0.001):
+        # Un paso DISTINTO por brazo, y no el mismo: con el mismo, las
+        # diferencias pareadas salen todas iguales, el Shapiro se queda sin
+        # varianza y el t es infinito. Un fixture degenerado rompe la tabla por
+        # una razón que la tabla no tiene.
+        salida = []
+        for k in range(n):
+            nf = dict(acc_te=acc + paso * k, hp2=dict(T.HP_2),
+                      acc_s_te=0.85,
+                      paso_fin=_PASE_A_MANO * T.EPOCAS_2,
+                      mejor_paso=(-1 if mejor_epoca < 0
+                                  else mejor_epoca * _PASE_A_MANO),
+                      vigia_fin=0.61, tr_e=11.0, tr_d=13.0)
+            salida.append(T._fila_brazo(nf, _cu_techo(), peso))
+        return salida
+    brazos = {
+        '.predict': [dict(acc_te=0.44 + 0.001 * k, split='test')
+                     for k in range(n)],
+        'AdaBN': [dict(acc_te=0.72 + 0.001 * k, split='test')
+                  for k in range(n)],
+        T.BRAZO_SIN_SOP: filas(acc_sin, T.PESO_APAGADO, paso=0.001),
+        T.BRAZO_CON_SOP: filas(acc_con, T.PESO_DECLARADO, paso=0.004),
+    }
+    assert set(brazos) == set(T.BRAZOS_CONTAMINACION), sorted(brazos)
+    # El techo DESPUÉS de cruzar contra el padrón, nunca antes: así el cruce
+    # mide que el fixture sigue al padrón, y el techo entra como lo que es
+    # ahora --- algo que este archivo agrega, no algo que el barrido escribe.
+    if techo:
+        brazos[T.BRAZO_TECHO] = filas(0.80, T.PESO_ORACULO, paso=0.002)
+    return {'celdas': {('lunas', T.MODO_REUBICADO, 0.0): dict(brazos=brazos)}}
+
+
+def test_la_escalera_del_sopesado_deja_el_techo_afuera():
+    """La decisión del operador del 2026-10-18, y que se DERIVA por resta.
+
+    Lo que hace esto más que una lista: `ESCALERA_SOPESADO` sale de
+    `BRAZOS_CONTAMINACION` quitando el techo, así que un brazo nuevo entra solo
+    y el día que el techo deje de existir esta resta no se queda nombrando algo
+    que no está. Una lista escrita a mano se desincroniza del barrido en
+    silencio.
+    """
+    assert T.BRAZO_TECHO not in toy_plots.ESCALERA_SOPESADO
+    # **El día llegó.** Este test asertaba `== len(BRAZOS_CONTAMINACION) - 1`
+    # mientras el padrón traía exactamente un techo; el 2026-10-19 el operador
+    # retiró el brazo y ese `-1` pasó a afirmar que el padrón todavía trae uno.
+    # Lo que el docstring prometía --- "el día que el techo deje de existir
+    # esta resta no se queda nombrando algo que no está" --- es exactamente lo
+    # que se aserta ahora: la resta no saca nada y no quedó nombrando nada.
+    assert len(toy_plots.ESCALERA_SOPESADO) == len(T.BRAZOS_CONTAMINACION)
+    assert T.BRAZO_TECHO not in T.BRAZOS_CONTAMINACION, (
+        T.BRAZOS_CONTAMINACION,
+        "el techo volvió al padrón: la resta vuelve a tener que sacar uno y "
+        "esta aserción vuelve a ser `- 1`")
+    # Y el orden de la escalera es el del padrón, no uno propio.
+    esperado = [b for b in T.BRAZOS_CONTAMINACION if b != T.BRAZO_TECHO]
+    assert list(toy_plots.ESCALERA_SOPESADO) == esperado
+
+    # Y ninguna de las dos tablas lo imprime, que es la mitad que importa.
+    # El registro tiene que TRAERLO para que esto mida algo: sin `techo=True`
+    # estaría midiendo que no se imprime lo que nadie escribió.
+    reg = _registro_a_mano(techo=True)
+    assert T.BRAZO_TECHO in reg['celdas'][('lunas', T.MODO_REUBICADO, 0.0)]['brazos']
+    for fn in (toy_plots.tabla_sopesado_acc, toy_plots.tabla_sopesado_test):
+        md = fn('lunas', reg, T.MODO_REUBICADO, 0.0).data
+        assert T.PALABRA_TECHO not in md, (fn.__name__, md)
+
+
+def test_el_delta_del_sopesado_es_positivo_cuando_gana_el_sopesado():
+    """El signo, asertado donde se imprime.
+
+    Este archivo ya pagó una vez por un delta invertido: el brazo restado iba
+    en la primera columna, así que un `+0.0819` al lado del piso se leía como
+    que ganaba el piso. Acá el fixture decide quién gana, así que el signo es
+    comprobable y no una convención.
+    """
+    md = toy_plots.tabla_sopesado_test('lunas', _registro_a_mano(acc_con=0.70, acc_sin=0.60),
+                               T.MODO_REUBICADO, 0.0).data
+    # `+0.10` y no `+0.1000`: las medias difieren por semilla a propósito, así
+    # que el delta es `0.10` más la diferencia de los dos pasos.
+    assert '| +0.10' in md, md
+    assert '4/4' in md, md
+
+    # Y al revés, que es la mitad que un solo sentido no prueba.
+    md = toy_plots.tabla_sopesado_test('lunas', _registro_a_mano(acc_con=0.60, acc_sin=0.70),
+                               T.MODO_REUBICADO, 0.0).data
+    assert '| -0.09' in md or '| -0.10' in md, md
+    assert '0/4' in md, md
+
+
+def test_la_tabla_avisa_cuando_el_criterio_no_llego_a_elegir():
+    """`mejor_paso = -1` es una corrida sin modelo elegido, y se dice.
+
+    Con menos de `MIN_EPOCAS_2` épocas el criterio nunca es legal, no se
+    restauran pesos y lo que la corrida publica es el ÚLTIMO modelo. Una tabla
+    que imprimiera ese número bajo el rótulo del paso elegido reportaría la
+    trayectoria final como si fuera la elección del criterio --- que es
+    justamente la columna que esta tabla existe para distinguir. Es el modo de
+    falla de un ensayo corto, y no falla solo.
+    """
+    md = toy_plots.tabla_sopesado_acc('lunas', _registro_a_mano(mejor_epoca=-1),
+                              T.MODO_REUBICADO, 0.0).data
+    assert 'El criterio no eligió' in md, md
+    # Y la COLUMNA no imprime `-1`: el aviso lo nombra en su texto, así que una
+    # búsqueda sobre el markdown entero se dispararía con el aviso mismo.
+    filas = [l for l in md.splitlines() if l.startswith('| **')]
+    assert filas and all('| -1 |' not in l for l in filas), filas
+
+    # Y no avisa cuando sí eligió, que es lo que hace del aviso una señal.
+    md = toy_plots.tabla_sopesado_acc('lunas', _registro_a_mano(mejor_epoca=25),
+                              T.MODO_REUBICADO, 0.0).data
+    assert 'El criterio no eligió' not in md, md
+    assert '| 25 |' in md, md
+
+
+def test_los_brazos_sin_fase_dos_imprimen_guion_y_no_un_cero():
+    """`.predict` y AdaBN no corren fase 2: no tienen paso ni vigía.
+
+    Un cero ahí se leería como que eligieron el paso 0, que es una lectura
+    distinta de "no hay paso que elegir" y la que un lector haría.
+    """
+    md = toy_plots.tabla_sopesado_acc('lunas', _registro_a_mano(),
+                              T.MODO_REUBICADO, 0.0).data
+    fila = next(l for l in md.splitlines() if l.startswith('| **.predict**'))
+    assert fila.count('—') == 3, fila
+
+
+def test_un_escenario_que_el_barrido_no_corrio_se_refuta():
+    """Y no se renderiza vacío, que es como un escenario que nunca corrió se
+    publica con la forma de uno que sí."""
+    reg = _registro_a_mano()
+    with pytest.raises(KeyError, match='no tiene la celda'):
+        toy_plots.tabla_sopesado_acc('toroide', reg, T.MODO_REUBICADO, 0.0)
+    with pytest.raises(KeyError, match='no tiene la celda'):
+        toy_plots.tabla_sopesado_test('lunas', reg, T.MODO_REUBICADO, 0.30)
+
+
+def test_las_dos_tablas_leen_el_barrido_de_verdad(barrido_minimo):
+    """Las dos, sobre el registro que `barrer_contaminacion` produce.
+
+    Los tests de arriba usan un fixture para poder elegir los valores; este usa
+    el barrido real, porque un fixture que coincidiera con la tabla y no con el
+    barrido pasaría los seis igual.
+    """
+    nombre = T.FAMILIAS[0]['nombre']
+    for rho in barrido_minimo['rhos']:
+        acc = toy_plots.tabla_sopesado_acc(nombre, barrido_minimo,
+                                   T.MODO_REUBICADO, rho).data
+        test = toy_plots.tabla_sopesado_test(nombre, barrido_minimo,
+                                     T.MODO_REUBICADO, rho).data
+        for etq in toy_plots.ESCALERA_SOPESADO:
+            assert etq in acc, (rho, etq)
+        assert T.POS_CONTAMINACION in acc
+        assert 'con sopesado' in test and 'sin sopesado' in test
+        assert T.PALABRA_TECHO not in acc and T.PALABRA_TECHO not in test
+
+
+def test_la_fase_dos_se_recibe_o_se_busca_y_el_registro_dice_cual():
+    """`HP2` saltea la búsqueda, y la celda lo registra en vez de afirmarla.
+
+    Decisión del operador del 2026-10-18: los HP de fase 2 del nivel limpio se
+    aplican a todos los `rho` en vez de buscar uno por escenario. Lo que ahorra
+    está medido --- la búsqueda por escenario era el 76% del flujo del toyset
+    --- y lo que cuesta es que los HP quedan elegidos sobre el limpio y
+    aplicados fuera de muestra a los contaminados.
+
+    **Lo que esto asierta es que el registro no mienta sobre su procedencia.**
+    `busquedas` cuenta las que corrieron, y es el único campo que lo dice: cero
+    significa que los HP llegaron ya elegidos. Dejar `busquedas = 1` con los HP
+    recibidos afirmaría una búsqueda que nadie corrió, y esa es justo la
+    afirmación que un lector usa para creerle a la celda.
+
+    **Y se asierta SOBRE EL DISCO y no sólo en memoria.** Hubo un segundo
+    campo, `hp2_inyectado`, que `guardar_contaminacion` no llevaba al
+    artefacto: existía mientras el proceso vivía y moría al guardar. Un campo
+    de procedencia que no sobrevive a su propio registro es peor que no
+    tenerlo, porque el código lo muestra y el artefacto no. `busquedas` sí
+    viaja, y por eso es el único.
+    """
+    fam = T.FAMILIAS[0]
+    nombre = fam["nombre"]
+    hp1 = dict(T.HP_1)
+
+    recibido = T.barrer_contaminacion(
+        [fam], semillas=[0, 1], rhos=(0.0,), HP1={nombre: hp1},
+        HP2={nombre: dict(T.HP_2)}, al_paso=lambda *_: None)
+    celda = recibido["celdas"][(nombre, T.MODO_REUBICADO, 0.0)]
+    assert celda["busquedas"] == 0, celda["busquedas"]
+    assert celda["hp2"] == {**T.HP_2, **dict(T.HP_2)}, celda["hp2"]
+
+    # Y el default sigue BUSCANDO, que es lo que todo lo publicado corrió: un
+    # default que salteara la búsqueda cambiaría en silencio lo que un barrido
+    # viejo vuelve a correr.
+    buscado = T.barrer_contaminacion(
+        [fam], semillas=[0, 1], rhos=(0.0,), HP1={nombre: hp1}, trials2=1,
+        al_paso=lambda *_: None)
+    celda = buscado["celdas"][(nombre, T.MODO_REUBICADO, 0.0)]
+    assert celda["busquedas"] == 1, celda["busquedas"]
+
+
+def test_la_procedencia_de_la_fase_dos_sobrevive_al_disco(tmp_path):
+    """Sobre el ARTEFACTO y no sobre la memoria, que es donde se rompió.
+
+    El campo que decía la procedencia existió unas horas como `hp2_inyectado`
+    y `guardar_contaminacion` no lo llevaba al disco: el código lo mostraba y
+    el artefacto no lo tenía. Lo encontró una lectura del artefacto después de
+    una corrida de veintidós minutos, no un test --- porque no había ninguno
+    que leyera de vuelta. Este es ese test.
+    """
+    fam = T.FAMILIAS[0]
+    nombre = fam["nombre"]
+    CONTAM = T.barrer_contaminacion(
+        [fam], semillas=[0, 1], rhos=(0.0,), HP1={nombre: dict(T.HP_1)},
+        HP2={nombre: dict(T.HP_2)}, al_paso=lambda *_: None)
+    T.guardar_contaminacion(tmp_path, CONTAM)
+    leido = T.cargar_contaminacion(tmp_path)
+
+    clave = (nombre, T.MODO_REUBICADO, 0.0)
+    assert clave in leido["celdas"], sorted(leido["celdas"])
+    assert leido["celdas"][clave]["busquedas"] == 0, leido["celdas"][clave]["busquedas"]
+    # Y que el valor del disco sea el de la memoria, no un default que coincide.
+    assert (leido["celdas"][clave]["busquedas"]
+            == CONTAM["celdas"][clave]["busquedas"])
+
+
+def test_recibir_la_fase_dos_de_otra_familia_se_refuta():
+    """Buscar para una familia y recibir para otra haría una tabla con dos
+    procedencias bajo un solo rótulo, y el `KeyError` lo dice con nombres."""
+    fam = T.FAMILIAS[0]
+    with pytest.raises(KeyError, match="no trae la familia"):
+        T.barrer_contaminacion(
+            [fam], semillas=[0], rhos=(0.0,),
+            HP1={fam["nombre"]: dict(T.HP_1)},
+            HP2={"otra-familia": dict(T.HP_2)}, al_paso=lambda *_: None)

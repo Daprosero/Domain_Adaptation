@@ -76,11 +76,20 @@ __provenance__ = {
         # `randperm(n)[:LOTE_2]` de cero en cada paso --- muestreo con
         # reemplazo entre pasos, sin pasada y por lo tanto sin epoca --- y la
         # parada temprana decidia POR PASO, sobre un modelo que habia visto un
-        # lote arbitrario. Las cuatro viven en
+        # lote arbitrario. Las cinco viven en
         # `tests/test_creda_fase2_por_epoca.py`.
+        #
+        # La tercera era `the_phase_two_patience_is_declared_in_epochs_and_
+        # not_derived_from_the_lot` y CAMBIO DE SIGNO el 2026-10-19: la fase 2
+        # no tiene paciencia. Se renombra en vez de borrarse, y las dos que
+        # la reemplazan son las dos mitades de la asimetria --- la fase 2 no
+        # para, la fase 1 SI --- porque una sola se lee como "no hay parada en
+        # ninguna fase" y eso seria falso.
         "the_phase_two_epoch_draws_every_training_point_exactly_once",
         "the_phase_two_criterion_is_read_at_the_end_of_an_epoch",
-        "the_phase_two_patience_is_declared_in_epochs_and_not_derived_from_the_lot",
+        "la_paciencia_de_la_fase_dos_esta_retirada_y_no_solo_sin_usar",
+        "la_fase_uno_SI_para_y_eso_es_la_asimetria_declarada",
+        "el_minimo_esta_declarado_y_su_insumo_ya_no_existe",
         "the_target_defines_the_epoch_and_the_source_must_agree",
         # El termino supervisado y el arnes de contaminacion. Cada uno tiene
         # una forma de salir mal que deja todos los numeros con buena cara, y
@@ -110,9 +119,15 @@ __provenance__ = {
         "the_oracle_weight_is_exactly_the_correctness_indicator",
         "no_hyperparameter_search_can_select_the_oracle_arm",
         "the_oracle_arm_is_labelled_a_ceiling_in_the_artifact_it_writes",
-        "all_three_arms_of_a_scenario_receive_the_same_hp2",
+        # Los dos renombrados el 2026-10-19 al retirarse el brazo del techo:
+        # eran `all_three_arms...` y `the_oracle_arm_weights...`, y con dos
+        # brazos el primero nombra dos y el segundo ya no puede cruzar el
+        # indicador del oraculo contra la corrida --- ese cruce lo hace la
+        # seccion de intrusos. El padron de invariantes los encontro solo, que
+        # es para lo que esta.
+        "both_arms_of_a_scenario_receive_the_same_hp2",
         "the_sweep_records_the_premise_it_rests_on",
-        "the_oracle_arm_weights_what_it_says_it_weights",
+        "each_arm_weights_what_it_says_it_weights",
         # La TERCERA construccion: intrusos lejos en el latente. Las dos
         # anteriores volvieron nulas y los dos nulos estan explicados por
         # medicion --- ver `MODO_INTRUSOS` --- de modo que esta no es una
@@ -279,19 +294,31 @@ SEMILLA, CLASES, DIM, LOTE = 0, 3, 16, 128
 # validacion de la fuente, y 60 estaba midiendo una fuente sin converger --
 # medido, eso movia el blanco hasta +0.26.
 #
-# `PASOS_2` es un TECHO EN PASOS, y eso es una decision y no una herencia: la
-# rejilla de puntos de control (`CUADROS`, `CTRL`) y la de gradiente
-# (`PASOS_GRAD`) son indices de PASO, y `tests/test_toy_run.py` fija
-# `toy_run.FULL.steps_2 == PASOS_2`. Leerlo como epocas serian 1600+ pasos al
-# lote declarado, que es otro experimento.
+# `EPOCAS_2` es un TECHO EN EPOCAS, y esta linea INVIERTE lo que decia. Decia:
+# "`PASOS_2` es un TECHO EN PASOS, y eso es una decision y no una herencia",
+# con el argumento de que las rejillas (`CUADROS`, `CTRL`, `PASOS_GRAD`) son
+# indices de PASO. El argumento estaba al reves. Un techo en pasos deja que
+# `LOTE_2` --- que SE BUSCA --- decida cuantas pasadas corre el experimento, y
+# eso esta MEDIDO sobre el artefacto del 2026-10-19 con `PASOS_2 = 200`:
 #
-# Lo que esta linea decia antes y era FALSO: "la fase 2 si corre sus 200 pasos
-# enteros, porque para ELLA no hay criterio legitimo". La fase 2 tiene parada
-# temprana --- hoy `MIN_EPOCAS_2`/`PACIENCIA_2_EPOCAS`, antes `MIN_PASOS_2`/
-# `PACIENCIA_2` --- y el artefacto publicado ya lo desmentia: sobre las 90
-# corridas de las nueve celdas, `paso_fin` tiene piso 70 y llega a 200 en una
-# minoria. Era una frase que sobrevivio a su mecanismo.
-EPOCAS_1, LR_1, LR_2, PASOS_2, K = 200, 1e-2, 1e-3, 200, 400
+#     lunas    LOTE_2=128 ->  9 pasos/epoca -> 22.2 pasadas
+#     toroide  LOTE_2= 64 -> 17 pasos/epoca -> 11.8 pasadas
+#     rollo    LOTE_2= 64 -> 17 pasos/epoca -> 11.8 pasadas
+#
+# La tabla global comparaba tres familias entrenadas la mitad de tiempo unas
+# que otras y nada lo decia. El techo en epocas lo cierra: cien pasadas son
+# cien pasadas al lote que sea.
+#
+# El precio es que las tres rejillas DEJAN DE SER constantes en pasos --- se
+# declaran en epocas y se convierten a paso adentro de la corrida, contra el
+# largo de la pasada que esa corrida tiene. Es la consecuencia honesta de que
+# el largo de la pasada dependa de un hiperparametro buscado.
+#
+# `EPOCAS_1` baja de 200 a 100 con este cambio, y es la decision del operador.
+# Medido: en el artefacto de MIL 0 de 90 corridas eligieron una epoca arriba de
+# 100 y el maximo fue 33, asi que ahi no cuesta nada; en CREDA si cuesta, lunas
+# elige la 168 y la 119 en 2 de 5 semillas y con este techo quedan truncadas.
+EPOCAS_1, LR_1, LR_2, EPOCAS_2, K = 100, 1e-2, 1e-3, 100, 400
 
 # UNA sola capa oculta en vez de dos. El cuaderno de una capa existe para
 # preguntar si el termino de fuente puede suplir la capacidad que la red pierde,
@@ -299,7 +326,21 @@ EPOCAS_1, LR_1, LR_2, PASOS_2, K = 200, 1e-2, 1e-3, 200, 400
 # DESPUES de la primera oculta, que es el mismo lugar que en la red completa:
 # con cero ocultas no habria donde ponerla y el eje que se compara desapareceria.
 UNA_CAPA = True
-CUADROS = list(range(0, PASOS_2 + 1, 10))
+#: La rejilla de puntos de control, EN EPOCAS. Eran `range(0, PASOS_2+1, 10)`
+#: --- 21 puntos sobre 200 pasos --- y son 21 puntos sobre 100 epocas: el mismo
+#: conteo, otra unidad. `corrida` la convierte a paso contra su propio
+#: `pasos_por_epoca`, que es lo que hace que dos corridas con `LOTE_2` distinto
+#: midan en los mismos sitios del entrenamiento y no en los mismos pasos.
+CUADROS = list(range(0, EPOCAS_2 + 1, 5))
+
+#: Cuantos lotes del blanco se empujan por AdaBN para que sus estadisticas de
+#: corrida converjan. Leia `PASOS_2` y eso era `PASOS_2` haciendo dos trabajos
+#: que nunca fueron la misma cantidad: el largo del experimento y el
+#: presupuesto que un BatchNorm necesita para reestimar media y varianza. Al
+#: separarlas conserva el valor que tenia --- 200 lotes --- en vez de heredar
+#: un techo en epocas que lo habria multiplicado por cuatro y medio sin que
+#: nadie lo pidiera.
+PASOS_ADABN = 200
 # Los campos del registro por punto de control, en orden:
 #   paso, proyeccion del blanco, acc VALID, acc full, prediccion, acc fuente,
 #   U, acc TEST
@@ -367,16 +408,16 @@ CAMPOS_HT = 6
 #: `PACIENCIA_1` es de la fase 1 y es EN EPOCAS desde siempre: la fase 1
 #: siempre recorrio una pasada.
 #:
-#: `PACIENCIA_2` y `MIN_PASOS_2` eran el criterio de la fase 2 EN PASOS y YA NO
-#: LO SON --- lo es el par en epocas, declarado junto a `FRAC_TRAIN` mas abajo
-#: porque se deriva de el. Conservan su valor y eso es deliberado, no un olvido:
-#: `tests/test_toy_run.py` fija `toy_run.FULL.patience_2 == PACIENCIA_2` y
-#: `min_steps_2 == MIN_PASOS_2`, y el criterio de `MIL_CREDA_Benchmark` todavia
-#: lee PASOS (`toy_run.py`, `if step + 1 >= scale.min_steps_2`) y es de otro
-#: tramo. Mover cualquiera de los dos valores desde aca restataria ese banco en
-#: silencio. Siguen leidos por tres sitios: `banderas()`, esa escala, y la
-#: derivacion de `MIN_EPOCAS_2`.
-PACIENCIA_1, PACIENCIA_2, MIN_PASOS_2 = 30, 30, 40
+#: `PACIENCIA_2` y `MIN_PASOS_2` se RETIRARON el 2026-10-19 y no solo dejaron
+#: de ser el criterio. Sobrevivian por una razon que ya no existe: fijaban el
+#: banco de `MIL_CREDA_Benchmark`, cuyo criterio todavia leia PASOS. Ese banco
+#: pasó a epocas en el mismo cambio, asi que lo que los conservaba desapareció.
+#:
+#: `PACIENCIA_2` no tiene sucesor: la fase 2 NO tiene parada temprana desde el
+#: 2026-10-19 --- corre su techo entero y el criterio elige la mejor epoca de
+#: toda la corrida. `MIN_PASOS_2` si lo tiene, `MIN_EPOCAS_2`, que ya no se
+#: deriva de el porque su insumo se fue.
+PACIENCIA_1 = 30
 
 #: Los hiperparametros que la busqueda de cada fase puede mover, con el valor de
 #: hoy. `corrida` y `train_source_ce` los reciben; nada los lee de un global, o
@@ -443,7 +484,15 @@ HP_2 = dict(LR_2=1e-3, WD_2=0.0, LOTE_2=128,
             # empezar con CON QUE PENDIENTE, y la que se prueba es la
             # primera. Si el retardo no compra nada, no hay pendiente que
             # lo salve.
-            PASO_W=0,
+            #
+            # EN EPOCAS desde el 2026-10-19. Era `EPOCA_W`, un indice de PASO
+            # comparado contra el del bucle, y eso lo dejaba denominado en la
+            # unidad que el techo acababa de abandonar: un retardo de 20 pasos
+            # es medio experimento a `LOTE_2=256` y una decima a `LOTE_2=32`.
+            # El default `0` no mueve nada --- antes de la epoca 0 no hay nada
+            # --- asi que lo que cambia es el significado de un retardo
+            # DECLARADO, que ahora son pasadas.
+            EPOCA_W=0,
             # LA ENTREGA: `class_mixing = 0` (marginal puro) antes de este
             # paso, `1.0` (condicional pura) desde el. Nunca una mezcla: los
             # dos extremos de la familia convexa y nada en el medio.
@@ -457,9 +506,11 @@ HP_2 = dict(LR_2=1e-3, WD_2=0.0, LOTE_2=128,
             #
             # `0` es el default y es lo de hoy bit a bit: el modulo tenia
             # `cr.class_mixing = 1.0` clavado, asi que el marginal no se usaba
-            # nunca. Un `PASO_COND` que la corrida no alcanza es marginal puro
+            # nunca. Un `EPOCA_COND` que la corrida no alcanza es marginal puro
             # de punta a punta, y eso es declarable a proposito.
-            PASO_COND=0)
+            #
+            # EN EPOCAS, por lo mismo que `EPOCA_W`. Era `EPOCA_COND`.
+            EPOCA_COND=0)
 
 #: El unico trabajo de esta instancia es prestar su heuristico de ancho de
 #: banda. Existe para que el sigma que `corrida` congela sea EL MISMO
@@ -685,26 +736,31 @@ BLOQUES_AL_LOTE_DECLARADO = -(-int(FRAC_TRAIN * N_POR_DOMINIO) // LOTE)
 #: distinta y se dice cual es cual, porque redondear una hacia la otra seria
 #: inventar un numero y presentarlo como derivado.
 #:
-#: `MIN_EPOCAS_2` SE DERIVA de lo que `MIN_PASOS_2 = 40` compraba: una guarda
-#: antes de que el criterio pueda elegir. Cuarenta pasos al lote declarado son
-#: `ceil(40 / 9) = 5` epocas. Medido, esa guarda MUERDE: en el artefacto
-#: publicado `mejor_paso == MIN_PASOS_2` en 5 de las 9 celdas, o sea que el
-#: minimo del vigia cae a menudo en el primer punto legal.
-MIN_EPOCAS_2 = max(1, -(-MIN_PASOS_2 // BLOQUES_AL_LOTE_DECLARADO))
-
-#: `PACIENCIA_2_EPOCAS` esta DECLARADA y NO derivada, y es la decision del
-#: operador: «que mire las 5 epocas y ya». El motivo es que el lote SE BUSCA
-#: (`LOTES_2_BUSCADOS`): una paciencia derivada de `PACIENCIA_2` pasos daria 1,
-#: 2, 4 o 6 epocas segun el lote, asi que la RESOLUCION del criterio quedaria
-#: decidida por un hiperparametro que no sabe que la esta decidiendo.
-#: Declararla la saca de esa dependencia del todo.
+#: `MIN_EPOCAS_2` esta DECLARADO en 5 y ya no se deriva. Se derivaba de
+#: `MIN_PASOS_2 = 40` --- `ceil(40 / 9) = 5` epocas al lote declarado --- y ese
+#: insumo se retiro arriba, asi que la derivacion habria quedado leyendo un
+#: numero que nadie mantiene. El VALOR no se movio: 5 es lo que la derivacion
+#: daba, y cambiarlo en el mismo paso que se declara mezclaria dos cosas.
 #:
-#: Y la asimetria que esto deja es INTENCIONAL, no un defecto a tapar: el techo
-#: esta en pasos y el criterio en epocas, asi que a `LOTE_2=32` hay 5 epocas
-#: enteras en el techo y una paciencia de 5 las corre todas, mientras a
-#: `LOTE_2=256` hay 40 y puede cortar temprano. Es la consecuencia honesta de
-#: que las dos unidades se encuentren, y queda dicha en vez de maquillada.
-PACIENCIA_2_EPOCAS = 5
+#: Medido, esta guarda MUERDE y hay que decirlo cada vez: en el artefacto
+#: publicado `mejor_paso == MIN_PASOS_2` en 5 de las 9 celdas, y en el de MIL
+#: 38 de 90 corridas eligieron EXACTAMENTE el primer paso legal. Una guarda que
+#: el criterio elige el 42% de las veces no esta guardando, esta decidiendo.
+MIN_EPOCAS_2 = 5
+
+#: `PACIENCIA_2_EPOCAS` SE RETIRO el 2026-10-19 y no tiene sucesor. La fase 2
+#: no tiene parada temprana: corre su techo entero y el criterio elige la mejor
+#: epoca de toda la corrida.
+#:
+#: Siguio declarada unos dias despues de que el `break` se fuera, y el registro
+#: publicaba `paciencia_epocas=5` sin que nada parara por eso --- una paciencia
+#: que no detiene nada, leida por quien abriera el artefacto. Retirarla es lo
+#: que vuelve imposible ese malentendido; conservar el numero "por si acaso"
+#: era mantener viva la unica prueba de un mecanismo muerto.
+#:
+#: La asimetria que su docstring declaraba INTENCIONAL --- techo en pasos,
+#: criterio en epocas --- tambien se fue, porque el techo ya esta en epocas y
+#: las dos unidades dejaron de encontrarse.
 
 
 def pasos_de_una_epoca(n_fuente, n_blanco, lote):
@@ -766,8 +822,36 @@ def pasada_en_lotes(n, lote, generator):
 #: `cef` entro AL FINAL el 2026-10-16, no insertada: es la senal que el
 #: criterio lee, y la bitacora por epoca es el unico sitio donde se puede
 #: RELEER la eleccion sin volver a correr.
+#: Una fila por EPOCA de la fase 2, y desde el 2026-10-19 lleva TODA senal
+#: candidata a criterio --- no solo la que gobierna hoy.
+#:
+#: **Por que existe asi.** Elegir que senal gobierna la busqueda de HP o la
+#: seleccion de epoca es una decision que se toma COMPARANDO senales, y hasta
+#: hoy el registro guardaba una sola: `cef`. Cada candidata costaba una corrida
+#: entera, de modo que la pregunta "cual es mejor" se contestaba a ciegas o no
+#: se contestaba. Con las seis aca, cualquier regla futura se evalua por replay
+#: sobre lo ya corrido, en segundos.
+#:
+#: Las cuatro SIN ETIQUETAS del blanco, que son las elegibles como criterio:
+#: `cef` (cuantas clases usa el ruteo), `u_t` (la incertidumbre media del
+#: posterior), `re_val` (el termino de Renyi sobre validacion) y `vigia` (el
+#: acierto de la validacion de la FUENTE bajo el encoder del blanco).
+#:
+#: Las dos de ORACULO, que leen `y_t` y por eso NO pueden gobernar nada:
+#: `acc_va` y `acc_te`. Van igual, porque sin ellas no hay contra que medir a
+#: las otras cuatro --- son el techo de la comparacion, y se llaman asi.
+#:
+#: Y `deriva_bn`, que no es una candidata sino una SOSPECHA a verificar: la
+#: norma de cuanto se movieron los buffers de BatchNorm. Las correlaciones
+#: medidas el 2026-10-19 se INVIERTEN en `lunas|batchnorm` (+0.903 para el
+#: Renyi) y en `toroide|batchnorm` (+0.886 para el vigia), y son casi perfectas
+#: donde no hay normalizacion (-0.997). La hipotesis es que esas dos senales
+#: miden en parte el movimiento de los buffers y no la transferencia; esta
+#: columna es lo que la vuelve checkable.
 CAMPOS_P2_NOMBRES = ('epoca', 'pasos', 'distintos_s', 'distintos_t',
-                     'suma_s', 'suma_t', 'cef')
+                     'suma_s', 'suma_t', 'cef',
+                     'u_t', 're_val', 'vigia',
+                     'acc_va', 'acc_te', 'deriva_bn')
 CAMPOS_P2 = len(CAMPOS_P2_NOMBRES)
 
 
@@ -912,6 +996,41 @@ RHOS = (0.00, 0.10, 0.20, 0.30)
 #: porque es la escalera declarada y porque las pruebas leen sus cuatro niveles
 #: para comprobar el conteo de indices.
 RHO_UNICO = max(RHOS)
+
+#: La escalera que la SECCION DE CONTAMINACION corre, decidida por el operador
+#: el 2026-10-19: UN nivel de ruido, el mas alto de los declarados, y SIN el
+#: cero.
+#:
+#: **El cero salio porque es la seccion 1.** CREDA sin danar nada ya se mide
+#: ahi, sobre la misma `POS_CONTAMINACION`. El comentario que lo defendia en
+#: `barrer_contaminacion` decia que la fila limpia de la seccion 1 no servia de
+#: reemplazo "porque la contaminacion busca fase 2 por escenario, asi que
+#: empalmarla mezclaria dos regimenes de HP", y esa premisa se apago el
+#: 2026-10-18: la fase 2 se RECIBE del nivel limpio (`busquedas == 0`,
+#: `hp2_inyectado == True`), asi que los dos lados corren los mismos HP sobre
+#: la misma posicion. No hay dos regimenes que mezclar.
+#:
+#: **`RHOS` no se toca y por eso esto es una constante aparte.** La escalera
+#: declarada quedo fijada en `odd/tasks/toyset-tests-estadisticos-y-ruido.md`
+#: antes de implementar, con su razon escrita: mover la escalera al ver la
+#: curva es elegir el nivel que da el numero que se queria. Esto no la mueve
+#: --- 0.30 es uno de sus escalones --- dice CUALES corre esta seccion, que es
+#: otra cosa y es revisable.
+#:
+#: Lo leen los DOS lados: el default de `barrer_contaminacion` y las FILAS de
+#: las tablas en `toy_plots`. Si solo lo leyera el barrido, las tablas armarian
+#: cuatro filas desde `RHOS` y tres dirian «el barrido no corrio este nivel»
+#: --- cierto, y ruido en un reporte de un nivel.
+#:
+#: Lo que `RHOS` sigue sosteniendo: la negativa ante un nivel que el artefacto
+#: trae y la escalera NO declara, y el conteo de indices que leen las pruebas.
+#: Un nivel inventado sigue siendo una negativa.
+ESCALERA_CONTAMINACION = (RHO_UNICO,)
+assert all(float(r) in {float(x) for x in RHOS}
+           for r in ESCALERA_CONTAMINACION), (ESCALERA_CONTAMINACION, RHOS)
+assert 0.0 not in {float(r) for r in ESCALERA_CONTAMINACION}, (
+    ESCALERA_CONTAMINACION,
+    'el cero volvio: es la seccion 1, y aca seria la misma celda dos veces')
 
 #: Una escalera de UN escalon, para el ENSAYO a escala chica.
 #:
@@ -1163,7 +1282,7 @@ def ec33_por_clase(cr, f_s, y_s, f_t, g_t):
     `_marginal_score`, que suma tres entropias mas que no son de ninguna
     clase, y la captura dejaria de ser tres por clase. Se restaura en el
     `finally` porque el bucle de la fase 2 lo reescribe en cada paso a partir
-    de `PASO_COND`: un valor que quedara pegado cambiaria el TERMINO que el
+    de `EPOCA_COND`: un valor que quedara pegado cambiaria el TERMINO que el
     paso siguiente optimiza, o sea la medicion perturbaria lo que mide.
 
     **Lo que mide del sopesado es lo que el brazo configuro.** `target_weights`
@@ -1171,7 +1290,7 @@ def ec33_por_clase(cr, f_s, y_s, f_t, g_t):
     brazo los tiene prendidos y `h_t` es la entropia del bloque SOPESADO; con
     `use_entropy_weighting=False` es la del bloque crudo, que es lo que ese
     brazo le da al termino. Lo que NO replica es el RETARDO por paso
-    (`PASO_W`), que vive en el bucle: antes de esa marca el termino multiplica
+    (`EPOCA_W`), que vive en el bucle: antes de esa marca el termino multiplica
     por unos y esta lectura no, porque es una serie de diagnostico de la
     ecuacion y no una reconstruccion del paso.
 
@@ -2143,10 +2262,18 @@ def train_source_ce(encoder, head, x, y, xv, yv, *, epochs, batch_size,
             _r = (epoca, ce_ep/n_ep, ce_val, a_val)
             assert len(_r) == CAMPOS_HS, (len(_r), CAMPOS_HS)
             hist.append(_r)
-        # El BREAK de verdad. Antes corria las `epochs` enteras y solo recordaba
-        # la mejor, asi que la parada temprana no ahorraba un segundo: medido,
-        # rollo elige la epoca 14-37 de 200 y tiraba 163-186 epocas. Sobre
-        # cientos de corridas de busqueda eso es la mayor parte del costo.
+        # **La parada temprana de la FASE 1 se queda, y la razon es que esta
+        # fase SI tiene etiquetas.** La senal es el acierto en la validacion de
+        # la FUENTE, que es supervisada: si deja de mejorar durante `paciencia`
+        # epocas, seguir no agrega informacion y sobreajusta. Esa es la
+        # diferencia con la fase 2, que no para: alla la senal no tiene
+        # etiquetas y cortar la corrida le tapa epocas al criterio.
+        #
+        # Se retiro por unos minutos el 2026-10-19, leyendo «en todas las fases
+        # usa el criterio del checkpoint» como «ninguna fase para». El operador
+        # lo corrigio en el mismo intercambio: «en la primera fase el criterio
+        # de parada es una paciencia con validation data, para eso estan las
+        # etiquetas de source».
         if epoca - mejor_ep >= paciencia:
             break
     # Se vuelve a la mejor epoca. El assert existe porque un state_dict que no
@@ -2418,7 +2545,11 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
     else:
         w_intrusos, no_es_intruso = None, None
     sem = SEMILLA if semilla is None else semilla
-    cuad = CUADROS if cuadros is None else cuadros
+    # EN EPOCAS. `cuad`, la rejilla en PASOS que el bucle compara, se deriva
+    # mas abajo contra el `pasos_por_epoca` de ESTA corrida: es lo que hace que
+    # dos corridas con `LOTE_2` distinto midan en los mismos sitios del
+    # entrenamiento y no en los mismos pasos.
+    cuad_ep = CUADROS if cuadros is None else cuadros
     # Refutada y no ignorada. Un `hp2` con la llave retirada viene de un
     # `barrido.json` anterior al sigma congelado, y esos HP de fase 2 son
     # INVALIDOS: se eligieron contra un ancho de banda movil y agrupado
@@ -2525,10 +2656,10 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
     # perfecto sin que nada fallara.
     assert cr.use_entropy_weighting is sopesado, (
         cr.use_entropy_weighting, sopesado)
-    # `class_mixing` ya no se clava: lo fija `PASO_COND` en cada paso, mas
+    # `class_mixing` ya no se clava: lo fija `EPOCA_COND` en cada paso, mas
     # abajo. Se arranca en el valor que el paso 0 va a querer para que nada
     # lea un default que el bucle todavia no escribio.
-    cr.class_mixing = 0.0 if h2['PASO_COND'] > 0 else 1.0
+    cr.class_mixing = 0.0 if h2['EPOCA_COND'] > 0 else 1.0
     params = list(enc_t.parameters())
     if mover_fuente: params += list(enc.parameters()) + list(cab.parameters())
     opt = torch.optim.Adam(params, lr=h2['LR_2'], weight_decay=h2['WD_2'])
@@ -2622,11 +2753,11 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
     # que mide. La lectura necesita `class_mixing = 1.0` --- la Ec. 33 es el
     # termino POR CLASE, y por debajo de 1 `forward` suma ademas el bloque
     # marginal, que no es de ninguna clase --- y el bucle fija `class_mixing`
-    # en cada paso desde `PASO_COND`. Hacerlo sobre la instancia del
+    # en cada paso desde `EPOCA_COND`. Hacerlo sobre la instancia del
     # entrenamiento y restaurarlo deja la corrida correcta pero su REGISTRO
     # falso: `tests/test_toy_entrega_marginal.py` espia `CREDALoss.forward`
     # por instancia y afirma que el termino del bucle es marginal PURO antes
-    # de `PASO_COND` y condicional PURO despues. MEDIDO: con la instancia
+    # de `EPOCA_COND` y condicional PURO despues. MEDIDO: con la instancia
     # compartida esa prueba se pone roja en dos de sus tests, porque la
     # lectura del punto de control aparece como una llamada del bucle con la
     # mezcla del otro extremo. La corrida publicaba los mismos numeros y la
@@ -2647,7 +2778,9 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
 
     assert _config_del_termino(cr_ec33) == _config_del_termino(cr), (
         _config_del_termino(cr_ec33), _config_del_termino(cr))
-    PASOS_GRAD = (20, PASOS_2//2, PASOS_2 - 20)
+    # Las tres epocas donde se lee el gradiente: al 10%, al 50% y al 90% del
+    # techo, que es la misma forma que tenia en pasos (20, 100, 180 sobre 200).
+    EPOCAS_GRAD = (EPOCAS_2//10, EPOCAS_2//2, EPOCAS_2 - EPOCAS_2//10)
     # Estado de la parada temprana de fase 2. La senal es el MAXIMO DE `cef`
     # --- `clases_efectivas`, el numero efectivo de clases en el RUTEO del
     # blanco: `exp(H(histograma de argmax))`, en `[1, CLASES]`. Cero y_t: es el
@@ -2747,7 +2880,7 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
     # `mejor_paso` se quedaria en `-1`, no se guardarian pesos, y la corrida
     # publicaria el ULTIMO modelo como si fuera el elegido.
     mejor_cef = float('-inf')
-    mejor_wt, paso_fin = None, PASOS_2
+    mejor_wt = None
     # LA PASADA DE LA FASE 2. El blanco define la epoca y la fuente coincide;
     # `pasos_de_una_epoca` se niega si alguna vez no coinciden.
     n_s2, n_t2 = len(D['Xs_tr']), len(D['Xt_tr'])
@@ -2761,15 +2894,19 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
     assert min(_restos) >= 2, (
         n_t2, h2['LOTE_2'], _restos,
         'el bloque parcial de la pasada deja menos de dos puntos')
-    # Cuantos pasos del techo NO reciben lectura del criterio: el techo esta en
-    # pasos y el criterio en epocas, asi que la ultima epoca puede quedar
-    # incompleta. A lote 128 son 200 - 22*9 = 2 pasos, que se ENTRENAN y no se
-    # leen. Queda en el registro para que nadie lo descubra midiendo.
-    pasos_sin_leer = PASOS_2 - (PASOS_2 // pasos_por_epoca) * pasos_por_epoca
+    # EL TECHO, derivado: `EPOCAS_2` pasadas enteras al largo de pasada de ESTA
+    # corrida. `pasos_sin_leer` desaparecio con el techo en pasos --- existia
+    # porque un techo en pasos deja la ultima epoca incompleta, y con el techo
+    # en epocas no hay paso que se entrene sin recibir lectura del criterio.
+    pasos_techo = EPOCAS_2 * pasos_por_epoca
+    paso_fin = pasos_techo
+    # Las dos rejillas, de epoca a paso, contra la pasada de esta corrida.
+    cuad = tuple(e * pasos_por_epoca for e in cuad_ep)
+    pasos_grad = tuple(e * pasos_por_epoca for e in EPOCAS_GRAD)
     lotes_s = lotes_t = None
     pasada_2, mejor_epoca = [], 0
     _vis_s, _vis_t, _sum_s, _sum_t = set(), set(), 0, 0
-    for paso in range(PASOS_2 + 1):
+    for paso in range(pasos_techo + 1):
         if paso in cuad:
             enc.eval(); cab.eval(); enc_t.eval()
             with torch.no_grad():
@@ -2813,13 +2950,14 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
                     # que este peso es constante en el tiempo y los otros no.
                     w_usado_cu.append(w_intrusos.copy())
                 elif peso == PESO_DECLARADO:
-                    # Antes de `PASO_W` el brazo multiplico por UNOS, y el
+                    # Antes de `EPOCA_W` el brazo multiplico por UNOS, y el
                     # registro publica lo que uso y no lo que calculo: si
                     # publicara el declarado, la figura mostraria un sopesado
                     # que el termino nunca aplico.
                     w_usado_cu.append(
                         np.ones(len(w_cu[-1]), dtype=np.float32)
-                        if paso < h2['PASO_W'] else w_cu[-1].copy())
+                        if paso // pasos_por_epoca < h2['EPOCA_W']
+                        else w_cu[-1].copy())
                 elif peso == PESO_BARAJADO:
                     # Los mismos valores, otra asignacion. El registro
                     # publica lo que el brazo USO, que aca es la
@@ -2898,7 +3036,7 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
                 diag.append((paso, float((a0.mean(0) - b0.mean(0)).norm())/sg,
                              kk(a0, b0)/kk(a0, a0)))
             enc.train(); cab.train(); enc_t.train()
-        if paso == PASOS_2: break
+        if paso == pasos_techo: break
         # Si la fuente no se mueve, va en eval(): en train() un BatchNorm
         # reestima running_mean/running_var en el FORWARD, sin gradiente, y
         # entonces el encoder queda congelado en pesos y moviendose en
@@ -3100,15 +3238,15 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
         # asignacion estable que el entrenamiento podria aprovechar, y lo
         # que el control tiene que destruir es justamente la
         # correspondencia entre punto y peso.
-        # El retardo: antes de `PASO_W` el termino multiplica por unos, sea
+        # El retardo: antes de `EPOCA_W` el termino multiplica por unos, sea
         # cual sea el brazo. Se implementa pasando `target_weights` explicito
         # en vez de apagar `use_entropy_weighting`, porque esa bandera se fija
         # al construir el loss y el retardo es por PASO.
         # La ENTREGA, antes del sopesado porque decide QUE termino corre: el
         # marginal mientras las pseudoetiquetas no valgan nada, la condicional
         # despues. Los dos extremos, nunca una mezcla.
-        cr.class_mixing = 0.0 if paso < h2['PASO_COND'] else 1.0
-        _retardado = paso < h2['PASO_W']
+        cr.class_mixing = 0.0 if epoca < h2['EPOCA_COND'] else 1.0
+        _retardado = epoca < h2['EPOCA_W']
         w_iny = None
         if _retardado and sopesado:
             w_iny = torch.ones(len(f_t))
@@ -3122,7 +3260,7 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
         # La fuente aporta su CE y nada mas; el blanco entra solo por el
         # termino de Renyi. No hay termino de fuente: se retiraron los tres.
         term = t_ce + t_re
-        if mover_fuente and paso in PASOS_GRAD:
+        if mover_fuente and paso in pasos_grad:
             # Con que fuerza cada termino tira del encoder FUENTE. La pregunta no
             # se contesta con los pesos nominales: las magnitudes de gradiente
             # podrian compensarlos, asi que hay que medirlas.
@@ -3155,11 +3293,16 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
                float(term.detach()), re_val, vigia)
         assert len(_rt) == CAMPOS_HT, (len(_rt), CAMPOS_HT)
         hist_t.append(_rt)
-        # LA PARADA TEMPRANA DE FASE 2, AL FINAL DE CADA EPOCA. Declarada:
-        # `PACIENCIA_2_EPOCAS` epocas sin mejorar el minimo del vigia, con
-        # `MIN_EPOCAS_2` de guarda. Guarda los PESOS del mejor y los restaura
-        # al salir --- quedarse con los ultimos y solo reportar la epoca seria
-        # el mismo defecto que la fase 1 ya tenia.
+        # LA SELECCION DE LA FASE 2, AL FINAL DE CADA EPOCA: el MAXIMO de
+        # `cef`, con `MIN_EPOCAS_2` de guarda y sin paciencia --- la fase 2
+        # corre su techo entero. Guarda los PESOS del mejor y los restaura al
+        # salir --- quedarse con los ultimos y solo reportar la epoca seria el
+        # mismo defecto que la fase 1 ya tenia.
+        #
+        # Decia «la parada temprana de fase 2 (...) `PACIENCIA_2_EPOCAS` epocas
+        # sin mejorar el MINIMO DEL VIGIA», y las dos mitades de esa frase
+        # habian muerto: no hay paciencia y la senal es `cef`. El vigia se
+        # sigue midiendo y no elige nada.
         #
         # Se lee AL FINAL DE LA EPOCA y en ningun otro momento, que es la otra
         # mitad del arreglo. Antes se leia por PASO, o sea sobre un modelo que
@@ -3176,12 +3319,29 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
             # lote, asi que el histograma seria de un modelo que nadie reporta.
             # `no_grad()` solo no alcanza --- apaga el gradiente, no BatchNorm
             # --- y es el mismo defecto que `acc_s1` ya tuvo.
+            # Las seis senales y la sospecha, en el MISMO `eval()` y el mismo
+            # `no_grad()` que la del criterio: medirlas en otro momento las
+            # haria de otro modelo, y la comparacion entre ellas es el unico
+            # motivo por el que existen juntas.
+            #
+            # `u_t` sale de los MISMOS logits que `cef`, asi que no cuesta un
+            # forward mas. `acc_va` y `acc_te` si cuestan uno cada una, y es lo
+            # que se paga por tener techo contra el que medir.
             enc_t.eval()
             with torch.no_grad():
-                cef = clases_efectivas(cab(enc_t(D['Xt_tr'])).argmax(1))
+                _lg_t = cab(enc_t(D['Xt_tr']))
+                cef = clases_efectivas(_lg_t.argmax(1))
+                _u_t = float(incertidumbre_declarada(_lg_t).mean())
+                _acc_va = float((cab(enc_t(D['Xt_va'])).argmax(1)
+                                 == D['yt_va']).float().mean())
+                _acc_te = float((cab(enc_t(D['Xt_te'])).argmax(1)
+                                 == D['yt_te']).float().mean())
+                _deriva = float((_bufs(enc_t) - buf_s0).norm())
             enc_t.train()
             _fila_p2 = (epoca, pasos_por_epoca, len(_vis_s), len(_vis_t),
-                        _sum_s, _sum_t, cef)
+                        _sum_s, _sum_t, cef,
+                        _u_t, re_val, vigia,
+                        _acc_va, _acc_te, _deriva)
             assert len(_fila_p2) == CAMPOS_P2, (len(_fila_p2), CAMPOS_P2)
             pasada_2.append(_fila_p2)
             assert len(_vis_t) == n_t2 and _sum_t == n_t2, (
@@ -3219,10 +3379,18 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
                     mejor_paso, mejor_epoca = paso + 1, epoca + 1
                     mejor_wt = {k: v.detach().clone()
                                 for k, v in enc_t.state_dict().items()}
-                elif (mejor_epoca >= 1
-                      and (epoca + 1) - mejor_epoca >= PACIENCIA_2_EPOCAS):
-                    paso_fin = paso + 1
-                    break
+                # **Y NO hay `elif` que corte, desde el 2026-10-19.** Habia
+                # una parada por `PACIENCIA_2_EPOCAS` epocas sin un nuevo
+                # maximo, y hacia lo mismo que la de la fase 1: medido sobre el
+                # artefacto del 2026-10-18, con 22 epocas disponibles
+                # (`PASOS_2 = 200` a 9 bloques) lunas elegia la epoca 5 --- la
+                # PRIMERA legal --- en cuatro de las primeras seis semillas, y
+                # la corrida moria en la 10. Doce epocas nunca corrian, y el
+                # criterio elegia entre seis puntos de veintidos.
+                #
+                # Lo acordado es que se corra el techo completo y el criterio
+                # elija la mejor epoca de TODA la corrida. `paso_fin` queda en
+                # `pasos_techo`, que es donde lo deja su inicializacion.
 
     # eval() ANTES de medir, no solo no_grad(): no_grad apaga el gradiente y no
     # apaga BatchNorm. En train() un BatchNorm normaliza por el lote que recibe
@@ -3286,10 +3454,11 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
         _k = torch.exp(-_d2 / (2.0 * sigma_fijo ** 2))
         _fuera = ~torch.eye(_k.shape[0], dtype=bool)
         k_t_saturada = float((_k[_fuera] < 1e-6).float().mean())
-    # `epoca_fin` son las epocas COMPLETAS que corrieron, y coincide con
-    # `paso_fin // pasos_por_epoca` en los dos casos: si el criterio corto, en
-    # el final de la epoca `mejor_epoca + PACIENCIA_2_EPOCAS`; si no corto,
-    # porque el techo en pasos admite exactamente esas epocas enteras.
+    # `epoca_fin` son las epocas COMPLETAS que corrieron, y con el techo en
+    # epocas son `EPOCAS_2` siempre: no hay paciencia que corte y no hay cola
+    # de pasos que se entrenen sin lectura. La igualdad con
+    # `paso_fin // pasos_por_epoca` sobrevive al cambio y se sigue asertando,
+    # que es lo que haria ruido si alguna vez volviera una parada.
     epoca_fin = len(pasada_2)
     assert epoca_fin == paso_fin // pasos_por_epoca, (
         epoca_fin, paso_fin, pasos_por_epoca)
@@ -3323,9 +3492,11 @@ def corrida(fam, D, pos, semilla=None, cuadros=None, balance=True,
                 bloques_s=-(-n_s2 // h2['LOTE_2']),
                 bloques_t=-(-n_t2 // h2['LOTE_2']),
                 min_epocas_2=MIN_EPOCAS_2,
-                paciencia_epocas=PACIENCIA_2_EPOCAS,
+                # `paciencia_epocas` y `pasos_sin_leer` SE FUERON del registro
+                # con sus mecanismos: no hay paciencia que publicar y no hay
+                # paso del techo que se entrene sin lectura.
+                epocas_2=EPOCAS_2, pasos_techo=pasos_techo,
                 mejor_epoca=mejor_epoca, epoca_fin=epoca_fin,
-                pasos_sin_leer=pasos_sin_leer,
                 pasada_2=pasada_2,
                 cond_s=cond_s, dim=dim_ef, disp_s=disp_s, disp_t=disp_t,
                 tr_e=tr_e, tr_d=tr_d, hist_s=hist_s, hist_t=hist_t, PS_t=PS_t,
@@ -3454,7 +3625,10 @@ CLV_UNICA = TABLA[0][3]
 # mismo concepto, uno vivo y uno muerto, y el rotulo tomo el muerto. Hoy
 # `barrer_tablas` EXIGE las semillas: un default que puede mentir es peor que
 # una llamada que falta un argumento.
-CTRL = list(range(0, PASOS_2 + 1, 20))
+#: La rejilla del barrido, EN EPOCAS, por la misma razon que `CUADROS`. Eran
+#: `range(0, PASOS_2+1, 20)` --- 11 puntos sobre 200 pasos --- y son 11 puntos
+#: sobre 100 epocas.
+CTRL = list(range(0, EPOCAS_2 + 1, 10))
 
 def adabn(fam, D, semilla, hp1=None):
     # El paso 1 igual que todos, y despues SOLO forwards. No hay optimizador:
@@ -3479,7 +3653,7 @@ def adabn(fam, D, semilla, hp1=None):
     bufs0 = torch.cat([b.detach().reshape(-1).clone() for b in enc_t.buffers()
                        if b.dtype.is_floating_point])
     with torch.no_grad():
-        for _ in range(PASOS_2):
+        for _ in range(PASOS_ADABN):
             jj = torch.randperm(len(D['Xt_tr']), generator=gen)[:LOTE]
             enc_t(D['Xt_tr'][jj])
     enc_t.eval()
@@ -3507,7 +3681,7 @@ def adabn(fam, D, semilla, hp1=None):
 def banderas():
     return dict(
         UNA_CAPA=UNA_CAPA, DIM=DIM, CLASES=CLASES, LOTE=LOTE, SEMILLA=SEMILLA,
-        EPOCAS_1=EPOCAS_1, PASOS_2=PASOS_2, LR_1=LR_1, LR_2=LR_2,
+        EPOCAS_1=EPOCAS_1, EPOCAS_2=EPOCAS_2, LR_1=LR_1, LR_2=LR_2,
         # Para que el rotulo de una figura no pueda afirmar un alcance que ya
         # no existe. El valor es una frase y no una llave porque no hay nada
         # que elegir: es como se calcula.
@@ -3521,12 +3695,37 @@ def banderas():
         TRIALS_1=TRIALS_1, TRIALS_2=TRIALS_2,
         TRASLADO_REL=TRASLADO_REL, ANGULO_SIGMA_GRADOS=ANGULO_SIGMA,
         FRAC_TRAIN=FRAC_TRAIN, FRAC_VALID=FRAC_VALID,
-        PACIENCIA_1=PACIENCIA_1, PACIENCIA_2=PACIENCIA_2,
-        MIN_PASOS_2=MIN_PASOS_2,
-        # EL CRITERIO DE LA FASE 2 Y SU CONVERSION, publicados para que se
-        # puedan LEER del artefacto y no haya que abrir el codigo. Los dos
-        # pasos de arriba quedan al lado y no se borran: son la procedencia de
-        # `MIN_EPOCAS_2` y lo que la escala de `MIL_CREDA_Benchmark` lee.
+        # UNA FASE PARA Y LA OTRA NO, y estas dos banderas existen para que no
+        # haya que adivinar cual. Lo que decian hasta el 2026-10-19 era FALSO en
+        # su mitad: «las dos fases corren su techo completo». La fase 1 SI tiene
+        # parada --- `PACIENCIA_1` epocas sin mejorar la exactitud de validacion
+        # de la fuente --- y la frase sobrevivio a una correccion del operador
+        # el mismo dia en que la paciencia de la fase 1 volvio al codigo.
+        PARADA_TEMPRANA='fase 1 SI: paciencia de PACIENCIA_1 epocas sobre la '
+                        'exactitud de validacion de la FUENTE, que es '
+                        'supervisada. Fase 2 NO: corre su techo entero y el '
+                        'criterio elige la mejor epoca de TODA la corrida',
+        PARADA_TEMPRANA_CAMBIO='2026-10-19: la fase 2 tenia parada por '
+                               'paciencia y se le quito. Medido sobre el '
+                               'artefacto del 2026-10-18, con 22 epocas '
+                               'disponibles lunas elegia la epoca 5 --- la '
+                               'primera legal --- en 4 de 6 semillas y moria '
+                               'en la 10: el criterio elegia entre 6 puntos '
+                               'de 22. La de la fase 1 se quito por error en '
+                               'el mismo cambio y el operador la restauro: '
+                               'para eso estan las etiquetas de la fuente',
+        PACIENCIA_1=PACIENCIA_1,
+        # EL TECHO DE LAS DOS FASES, EN LA MISMA UNIDAD, que es lo que antes no
+        # se podia leer: `EPOCAS_1` estaba en epocas y `PASOS_2` en pasos, y el
+        # artefacto no decia cuantas pasadas habia corrido la fase 2 sin que el
+        # lector derivara `PASOS_2 / BLOQUES_AL_LOTE_DECLARADO` a mano --- y lo
+        # habria derivado con el lote DECLARADO, no con el buscado, o sea mal.
+        TECHO_EN='epocas, las dos fases',
+        TECHO_CAMBIO='2026-10-19: el techo de la fase 2 estaba en PASOS (200). '
+                     'Medido sobre el artefacto de ese dia, eso le daba 22.2 '
+                     'pasadas a lunas (LOTE_2=128) y 11.8 a toroide y rollo '
+                     '(LOTE_2=64): la tabla global comparaba familias '
+                     'entrenadas la mitad de tiempo unas que otras',
         CRITERIO_2_EN='epocas',
         # LA SENAL Y SU DIRECCION, que `CRITERIO_2_EN` no decia: esa bandera
         # dice la UNIDAD del criterio y no QUE cantidad lee ni hacia donde.
@@ -3542,12 +3741,13 @@ def banderas():
                           'probadas (0.6410 global) y cef la mejor sin '
                           'etiquetas (0.7505), con el oraculo en 0.7951',
         MIN_EPOCAS_2=MIN_EPOCAS_2,
-        PACIENCIA_2_EPOCAS=PACIENCIA_2_EPOCAS,
-        PACIENCIA_2_EPOCAS_ES='declarada por el operador, no derivada del '
-                              'lote: el lote se busca',
-        MIN_EPOCAS_2_ES=f'derivada: ceil(MIN_PASOS_2 / '
-                        f'BLOQUES_AL_LOTE_DECLARADO) = '
-                        f'ceil({MIN_PASOS_2} / {BLOQUES_AL_LOTE_DECLARADO})',
+        MIN_EPOCAS_2_ES='declarada en 5. Se derivaba de MIN_PASOS_2=40 '
+                        '(ceil(40/9)) y ese insumo se retiro con el techo en '
+                        'pasos; el valor no se movio',
+        MIN_EPOCAS_2_MUERDE='medido: mejor_paso == MIN_PASOS_2 en 5 de 9 '
+                            'celdas de CREDA y en 38 de 90 corridas de MIL, '
+                            'o sea que el criterio elige el primer punto '
+                            'legal el 42% de las veces',
         BLOQUES_AL_LOTE_DECLARADO=BLOQUES_AL_LOTE_DECLARADO,
         LOTES_2_BUSCADOS=list(LOTES_2_BUSCADOS),
         RUIDO_REL=RUIDO_REL, N_POR_DOMINIO=N_POR_DOMINIO,
@@ -4103,9 +4303,9 @@ def buscar_hp2(fam, hp1, trials=None, semillas=None, al_paso=print,
         # No estan en `research-concept-r29.md`, y sobre un UNICO termino con
         # gradiente un coeficiente no balancea nada --- medido inerte en cuatro
         # ordenes porque Adam lo absorbe, y redundante con `LR_2`.
-        res, vig, tes, porarq = [], [], [], {}
+        res, vig, tes, cefs, porarq = [], [], [], [], {}
         for pos in posiciones:
-            v_p, t_p, r_p = [], [], []
+            v_p, t_p, r_p, c_p = [], [], [], []
             for s in semillas:
                 e0, c0, hi, ep = cache[(pos, s)]
                 f1 = (copy.deepcopy(e0), copy.deepcopy(c0), hi, ep)
@@ -4113,9 +4313,9 @@ def buscar_hp2(fam, hp1, trials=None, semillas=None, al_paso=print,
                                  mover_fuente=False, cuadros=CTRL, hp2=h2,
                                  hp1=hp1, fase1=f1, peso=peso)
                 res.append(nf['mejor_re']); vig.append(nf['mejor_vg'])
-                tes.append(nf['acc_te'])
+                tes.append(nf['acc_te']); cefs.append(nf['mejor_cef'])
                 v_p.append(nf['mejor_vg']); t_p.append(nf['acc_te'])
-                r_p.append(nf['mejor_re'])
+                r_p.append(nf['mejor_re']); c_p.append(nf['mejor_cef'])
             # El desglose POR ARQUITECTURA. El objetivo promedia las tres, y sus
             # vigias no estan en la misma escala --- medido en la corrida final,
             # el rango entre arquitecturas va de 0.0497 en lunas a 0.1485 en
@@ -4126,7 +4326,7 @@ def buscar_hp2(fam, hp1, trials=None, semillas=None, al_paso=print,
             # un vigia normalizado por arquitectura antes de promediar, habrian
             # elegido mejor. Se guarda; no cambia el objetivo.
             porarq[pos] = dict(vg=float(np.mean(v_p)), te=float(np.mean(t_p)),
-                               re=float(np.mean(r_p)))
+                               re=float(np.mean(r_p)), cef=float(np.mean(c_p)))
         # Los tres se GUARDAN; solo uno se DEVUELVE. El acierto en test va al
         # registro para poder medir DESPUES cual de los dos escalares sin
         # etiquetas habria ordenado mejor los trials --- esa medicion usa y_t y
@@ -4142,12 +4342,34 @@ def buscar_hp2(fam, hp1, trials=None, semillas=None, al_paso=print,
         # oraculo en 0.6856. En toroide el vigia elige EXACTO la mejor de las 25
         # (0.8399) y el Renyi una que da 0.6069.
         #
-        # Es la MISMA cantidad que la senal de parada, y eso es coherente y no
-        # casualidad: las dos preguntas son 'cuanto se adapto', una en el tiempo
-        # y otra entre configuraciones.
-        _obj = float(np.mean(vig))
+        # **Y DESDE EL 2026-10-19 EL OBJETIVO ES `cef`, A MAXIMIZAR.** Todo el
+        # parrafo de arriba se conserva porque es la medicion que eligio el
+        # vigia SOBRE EL RENYI, y sigue valiendo: el vigia ordena mejor que el
+        # Renyi. Lo que no se habia comparado es el vigia contra `cef`, que es
+        # la senal que la SELECCION DE EPOCA usa --- y tener dos criterios para
+        # dos decisiones del mismo experimento era la incoherencia.
+        #
+        # Lo que decidio el cambio, medido el 2026-10-19:
+        #
+        #   - eligiendo la EPOCA, `cef` gana el promedio (0.6478) Y la peor
+        #     celda (0.5267) a las otras tres senales sin etiquetas, y queda a
+        #     0.010 del oraculo.
+        #   - DENTRO de la trayectoria `r(cef, acc_te)` va de +0.68 a +0.95 en
+        #     las nueve celdas; el vigia da -0.151 de media con BatchNorm y se
+        #     INVIERTE en lunas|batchnorm (+0.179).
+        #   - eligiendo HP, el vigia es ciego en lunas: sobre sus 25 trials el
+        #     elegido quedo apenas sobre la mediana y ONCE eran mejores, con
+        #     `r(vigia, te)` = -0.232 contra -0.958 en toroide.
+        #
+        # **Lo que NO esta medido, y se dice: que `cef` ordene mejor los
+        # TRIALS.** Las correlaciones de arriba son dentro de una trayectoria y
+        # entre configuraciones son otra pregunta. Por eso los cuatro escalares
+        # se guardan por trial: la comparacion que falta sale por replay de la
+        # proxima corrida, sin volver a correr.
+        _obj = float(np.mean(cefs))
         trial.set_user_attr('mejor_re', float(np.mean(res)))
-        trial.set_user_attr('mejor_vg', _obj)
+        trial.set_user_attr('mejor_vg', float(np.mean(vig)))
+        trial.set_user_attr('mejor_cef', _obj)
         trial.set_user_attr('acc_te', float(np.mean(tes)))
         trial.set_user_attr('por_arq', porarq)
         return _obj
@@ -4156,27 +4378,36 @@ def buscar_hp2(fam, hp1, trials=None, semillas=None, al_paso=print,
     # se calcula al FINAL del trial, asi que nunca hay un valor intermedio que
     # reportar con `trial.report`, y sin eso `should_prune` no se consulta. Un
     # pruner que no puede podar se lee como un ahorro de tiempo que no existe.
-    est = opt.create_study(direction='minimize',
+    # `maximize`, porque el objetivo es `cef` y mas clases efectivas es mejor.
+    # Era `minimize` con el vigia; invertir la direccion y olvidar el `min` de
+    # abajo daria el PEOR trial con todo verde.
+    est = opt.create_study(direction='maximize',
                            sampler=opt.samplers.TPESampler(seed=0))
     est.optimize(objetivo, n_trials=trials)
     hechos = [t for t in est.trials if t.value is not None]
-    mejor = min(hechos, key=lambda t: t.value)
+    mejor = max(hechos, key=lambda t: t.value)
     al_paso(f"    {fam['nombre']:8s} fase 2: {len(hechos)} trials, "
-            f"vigía {mejor.value:.4f} (el objetivo), "
+            f"cef {mejor.value:.4f} (el objetivo), "
+            f"vigía {mejor.user_attrs['mejor_vg']:.4f}, "
             f"Rényi de valid {mejor.user_attrs['mejor_re']:.4f}")
     # La tabla completa de trials: los dos escalares sin etiquetas y el test de
     # cada uno. Es lo que contesta 'cual de los dos habria elegido mejor HP', y
     # antes no se guardaba --- solo el ganador.
     tabla = [dict(mejor_re=float(t.user_attrs['mejor_re']),
                   mejor_vg=float(t.user_attrs['mejor_vg']),
+                  mejor_cef=float(t.user_attrs['mejor_cef']),
                   acc_te=float(t.user_attrs['acc_te']),
                   por_arq=t.user_attrs['por_arq'],
                   params={k: (float(v) if isinstance(v, float) else v)
                           for k, v in t.params.items()})
              for t in hechos]
+    # `objetivo` dice cual se DEVOLVIO, y los tres se publican al lado: sin eso
+    # un registro viejo y uno nuevo se leen igual y nadie sabe cual escalar
+    # eligio esos HP.
     return dict(mejor.params), dict(
-        trials=len(hechos), objetivo='min(vigia)',
-        mejor_vigia=float(mejor.value),
+        trials=len(hechos), objetivo='max(cef)',
+        mejor_cef=float(mejor.value),
+        mejor_vigia=float(mejor.user_attrs['mejor_vg']),
         mejor_renyi=float(mejor.user_attrs['mejor_re']), por_trial=tabla)
 
 
@@ -4232,18 +4463,43 @@ PALABRA_TECHO = 'techo'
 BRAZO_TECHO = f'CREDA {PALABRA_TECHO} de oráculo'
 assert PALABRA_TECHO in BRAZO_TECHO.lower(), BRAZO_TECHO
 
-#: Los cinco, EN ORDEN de intervencion: el piso sin tocar nada, despues solo
-#: los buffers, despues el regularizador con peso uno, despues el peso de la
-#: formulacion, y al final el techo que lee las etiquetas.
-BRAZOS_CONTAMINACION = ('.predict', 'AdaBN', BRAZO_SIN_SOP, BRAZO_CON_SOP,
-                        BRAZO_TECHO)
+#: Los cuatro, EN ORDEN de intervencion: el piso sin tocar nada, despues solo
+#: los buffers, despues el regularizador con peso uno, y al final el peso de la
+#: formulacion.
+#:
+#: **Eran cinco y el quinto era `BRAZO_TECHO`, retirado de ESTA seccion el
+#: 2026-10-19 por decision del operador.** No se borro el nombre: `BRAZO_TECHO`
+#: sigue declarado arriba, lo sigue usando la seccion de INTRUSOS, y un lector
+#: que no lo encontrara en ningun lado no podria distinguir «se retiro» de
+#: «nunca existio».
+#:
+#: Lo que lo retiro fue una medicion, no una preferencia: con el techo en
+#: EPOCAS el brazo corre 3400 pasos en lunas en vez de los 200 del techo viejo,
+#: y en `reubicado` con rho=0.30 el oraculo dejo UN punto correctamente ruteado
+#: en un lote de 32 --- `MIN_ORACULO` es 2, y la corrida PARA, que es lo que esa
+#: guarda esta declarada para hacer. Con el brazo afuera la guarda es
+#: inalcanzable POR ESTA VIA; sigue alcanzable por `PESO_COMPUERTA`, que es
+#: buscable, y por los brazos de intrusos, asi que no queda una guarda que no
+#: puede dispararse.
+#:
+#: Lo que la seccion PIERDE con esto, dicho donde se decidio y no en otro
+#: archivo: ya no hay referencia SUPERIOR. Se puede decir si el sopesado gana o
+#: pierde contra no sopesar, y no cuanto de lo alcanzable quedo sobre la mesa.
+#: `toy_plots.tabla_contaminacion` lo publica solo --- su rama de techo ausente
+#: imprime «el registro no trae ningun techo» en el pie de la tabla --- asi que
+#: ninguna tabla afirma un techo que no corrio.
+BRAZOS_CONTAMINACION = ('.predict', 'AdaBN', BRAZO_SIN_SOP, BRAZO_CON_SOP)
 
-#: Los tres brazos de CREDA de un escenario, y el peso de cada uno. UNA lista,
+#: Los dos brazos de CREDA de un escenario, y el peso de cada uno. UNA lista,
 #: porque el barrido la recorre para correr y el registro la recorre para
 #: rotular: dos listas a mano en este archivo ya divergieron una vez.
+#:
+#: Eran tres. Cortar esta sola y dejar `BRAZOS_CONTAMINACION` con cinco ya se
+#: midio: el barrido se niega con `{'CREDA techo de oráculo': 0}`, porque el
+#: padron pide una lectura que nadie produjo. Las dos se tocan juntas o
+#: ninguna.
 BRAZOS_POR_PESO = ((BRAZO_SIN_SOP, PESO_APAGADO),
-                   (BRAZO_CON_SOP, PESO_DECLARADO),
-                   (BRAZO_TECHO, PESO_ORACULO))
+                   (BRAZO_CON_SOP, PESO_DECLARADO))
 assert all(b in BRAZOS_CONTAMINACION for b, _ in BRAZOS_POR_PESO), (
     BRAZOS_POR_PESO, BRAZOS_CONTAMINACION)
 
@@ -4301,12 +4557,31 @@ assert all(b in BRAZOS_INTRUSOS for b, _ in BRAZOS_POR_PESO_INTRUSOS), (
 #: lado --- la misma forma que las demas exenciones de este arbol, y por la
 #: misma razon: un nombre pelado en una exencion y un olvido se leen igual.
 #:
-#: Los tres son INSTRUMENTOS de diagnostico y no brazos de una seccion. Los
-#: corren los scripts que diagnostican, llamando a `corrida` con `peso=`
-#: directamente, y meterlos en un barrido declarado lo ensancha: mas computo y
-#: columnas que la seccion no reporta. Eso ya paso una vez y lo encontro la
-#: suite.
+#: Tres de los cuatro son INSTRUMENTOS de diagnostico y no brazos de una
+#: seccion. Los corren los scripts que diagnostican, llamando a `corrida` con
+#: `peso=` directamente, y meterlos en un barrido declarado lo ensancha: mas
+#: computo y columnas que la seccion no reporta. Eso ya paso una vez y lo
+#: encontro la suite.
+#:
+#: El cuarto, `PESO_ORACULO`, entro aca el 2026-10-19 y por otra razon: TENIA
+#: brazo y se lo retiraron. Esta exencion es lo que esa retirada le debe a la
+#: cobertura de abajo --- sin ella `oraculo` seria un peso sin brazo y sin
+#: exencion, que es como un modo se queda roto en silencio, y el import se
+#: niega. Lo encontro esa misma asercion al cortar los padrones.
 PESOS_SIN_BRAZO = {
+    PESO_ORACULO: (
+        'el techo que lee y_t, RETIRADO de la seccion de contaminacion el '
+        '2026-10-19 por decision del operador. Lo retiro una medicion: con el '
+        'techo de la fase 2 en EPOCAS el brazo corre 3400 pasos en lunas en '
+        'vez de los 200 del techo viejo, y en `reubicado` con rho=0.30 el '
+        'oraculo dejo UN punto correctamente ruteado en un lote de 32 --- '
+        'MIN_ORACULO es 2 y la corrida PARA, que es lo que esa guarda esta '
+        'declarada para hacer. Que SOBREVIVA es otra definicion del brazo '
+        '--- seleccionar sobre el pool entero del blanco y no sobre el lote, '
+        'o mover MIN_ORACULO --- y eso es una afirmacion del paper, asi que '
+        'no se decide en este archivo. Sigue corriendose como diagnostico, '
+        'llamando a `corrida` con `peso=PESO_ORACULO`, que es lo que hace la '
+        'seccion de intrusos con sus propios techos'),
     PESO_COMPUERTA: (
         'la señal declarada aplicada como {0,1}. Existe para contestar si el '
         'peso elige o solo tiene pesos, y esa pregunta se contesta con un '
@@ -4423,19 +4698,29 @@ def _resumen_w(w_cu, idx, yt, k=-1):
 
 def barrer_contaminacion(familias=None, *, semillas, rhos=None, HP1=None,
                          trials1=None, trials2=None, al_paso=print,
-                         semillas_busqueda=None, modo=MODO_REUBICADO):
-    """Un escenario por `(familia, rho)`, CINCO brazos cada uno.
+                         semillas_busqueda=None, modo=MODO_REUBICADO,
+                         HP2=None):
+    """Un escenario por `(familia, rho)`, CUATRO brazos cada uno.
 
-    **Tres de los cinco son CREDA y difieren solo en el peso del bloque del
-    blanco**: `apagado`, `declarado` y `oraculo`. Los otros dos son el piso sin
-    tocar nada y AdaBN. El tercero de CREDA lee `y_t` y es un TECHO, no un
-    metodo; ver `pesos_oraculo` y `BRAZO_TECHO`.
+    **Dos de los cuatro son CREDA y difieren solo en el peso del bloque del
+    blanco**: `apagado` y `declarado`. Los otros dos son el piso sin tocar nada
+    y AdaBN.
 
-    Que esten los tres es lo que hace informativo al experimento sea cual sea
-    el desenlace: `oraculo - apagado` dice cuanto hay para ganar sopesando y
-    `declarado - apagado` cuanto de eso captura el estimador de entropia. Con
-    dos brazos, un resultado nulo no distinguia 'el sopesado no sirve' de 'no
-    habia nada que ganar aca'.
+    **Eran cinco y el quinto era el techo de oraculo, retirado el 2026-10-19
+    por decision del operador.** Lo que este parrafo decia, y lo que se pierde
+    con eso, textual: "Que esten los tres es lo que hace informativo al
+    experimento sea cual sea el desenlace: `oraculo - apagado` dice cuanto hay
+    para ganar sopesando y `declarado - apagado` cuanto de eso captura el
+    estimador de entropia. Con dos brazos, un resultado nulo no distinguia 'el
+    sopesado no sirve' de 'no habia nada que ganar aca'."
+
+    Esa distincion ya no se puede hacer aqui, y queda escrita en vez de
+    borrada: con dos brazos la seccion contesta si el sopesado gana o pierde
+    contra no sopesar, y no cuanto de lo alcanzable quedo sobre la mesa. La
+    medicion que lo retiro esta en la declaracion de `BRAZOS_CONTAMINACION`.
+    `toy_plots.tabla_contaminacion` lo publica sola: su rama de techo ausente
+    imprime «el registro no trae ningun techo» en el pie, asi que ninguna tabla
+    afirma un techo que no corrio.
 
     **UNA busqueda de fase 2 por escenario, corrida una sola vez y compartida
     por los TRES brazos de peso.** No por brazo y no reusada del nivel limpio:
@@ -4473,21 +4758,29 @@ def barrer_contaminacion(familias=None, *, semillas, rhos=None, HP1=None,
     assert semillas, 'barrer_contaminacion necesita las semillas, sin default'
     assert modo in MODOS_CONTAMINACION, (modo, MODOS_CONTAMINACION)
     SEM = list(semillas)
-    LADDER = list(RHOS if rhos is None else rhos)
+    # El default es `ESCALERA_CONTAMINACION` y no `RHOS`: el cuaderno no pasa
+    # `rhos` a proposito, para que lo que corra sea lo que el modulo declara.
+    LADDER = list(ESCALERA_CONTAMINACION if rhos is None else rhos)
     assert LADDER, 'la escalera no puede estar vacia'
-    # Cada escalon tiene que ser uno de los DECLARADOS.
+    # Cada escalon tiene que ser uno de los DECLARADOS en `RHOS`, que sigue
+    # siendo el juez de que un escalon exista aunque no sea el que se corre.
     #
-    # El cero vuelve a correr desde el 2026-10-11: la seccion 2 del cuaderno
-    # compara con y sin sopesado POR NIVEL, y sin la fila limpia no hay contra
-    # que afirmar que el ruido hizo dano. La fila limpia de la seccion 1 no
-    # sirve de reemplazo --- la contaminacion busca fase 2 por escenario, asi
-    # que empalmarla mezclaria dos regimenes de HP en una tabla.
+    # **El cero salio el 2026-10-19 y la razon que lo defendia estaba muerta.**
+    # Decia: "El cero vuelve a correr desde el 2026-10-11 ... la fila limpia de
+    # la seccion 1 no sirve de reemplazo --- la contaminacion busca fase 2 por
+    # escenario, asi que empalmarla mezclaria dos regimenes de HP en una
+    # tabla." La busqueda por escenario se apago el 2026-10-18: ahora
+    # `busquedas == 0` y `hp2_inyectado == True`, los HP se reciben del nivel
+    # limpio, y los dos lados corren los mismos sobre la misma posicion. Sin
+    # dos regimenes, el cero de aca ES la celda de la seccion 1, y el operador
+    # lo decidio asi: "sin la base limpia, eso ya es la seccion 1".
     #
     # Lo que el cero probaba ADEMAS --- que el arnes no mueve nada por su
     # cuenta --- sigue probandose donde corresponde, en
     # `tests/test_toy_frontera.py::test_a_zero_fraction_is_a_no_op_for_both_modes`,
     # bit a bit y por identidad de objeto, porque eso una celda de computo no
-    # lo demuestra.
+    # lo demuestra. Pasar `rhos=(0.0, ...)` a mano sigue siendo legal: lo que
+    # cambio es el DEFAULT, no lo que la funcion acepta.
     assert all(float(r) in set(float(x) for x in RHOS) for r in LADDER), (
         LADDER, RHOS, 'un escalon que no esta declarado en RHOS')
     assert len(set(float(r) for r in LADDER)) == len(LADDER), (
@@ -4533,12 +4826,46 @@ def barrer_contaminacion(familias=None, *, semillas, rhos=None, HP1=None,
             s: fase1_congelada(fam, limpios[s], POS_CONTAMINACION, s, hp1)
             for s in SEM}
         for rho in LADDER:
-            al_paso(f'  {nombre} {chr(183)} {modo} {chr(183)} rho={rho:.2f} '
-                    f'{chr(183)} busqueda de fase 2 (UNA, para los tres brazos)')
-            hp2, _r2 = buscar_hp2(fam, hp1, trials=trials2, semillas=busq,
-                                  al_paso=al_paso, rho=rho, modo=modo,
-                                  pos_filas=[POS_CONTAMINACION],
-                                  peso=PESO_DECLARADO)
+            # **La fase 2 se BUSCA por escenario, o se RECIBE ya elegida.**
+            # `HP2` es la segunda via y la decidio el operador el 2026-10-18:
+            # los HP del nivel limpio se aplican a todos los `rho` en vez de
+            # buscar uno por escenario. Lo que compra, medido: la busqueda por
+            # escenario son 58 de los 76 minutos del flujo --- dos modos por
+            # tres familias por cuatro rho por `TRIALS_2` trials a 5.80 s cada
+            # uno --- y los brazos que el experimento compara son 6.
+            #
+            # Lo que cuesta, dicho porque cambia lo que la celda afirma: los HP
+            # quedan elegidos SOBRE EL NIVEL LIMPIO y aplicados fuera de
+            # muestra a los contaminados. Eso saca la busqueda de la
+            # comparacion --- los dos brazos de sopesado comparten los HP en
+            # todos los niveles y no solo dentro de cada uno --- y a cambio
+            # ningun escenario contaminado tiene HP elegidos para el.
+            #
+            # No se defaultea: sin `HP2` busca, que es lo que todo lo publicado
+            # corrio. Un default que saltara la busqueda cambiaria en silencio
+            # lo que un barrido viejo vuelve a correr.
+            if HP2 is None:
+                al_paso(f'  {nombre} {chr(183)} {modo} {chr(183)} rho={rho:.2f} '
+                        f'{chr(183)} busqueda de fase 2 (UNA, para los tres brazos)')
+                hp2, _r2 = buscar_hp2(fam, hp1, trials=trials2, semillas=busq,
+                                      al_paso=al_paso, rho=rho, modo=modo,
+                                      pos_filas=[POS_CONTAMINACION],
+                                      peso=PESO_DECLARADO)
+                busquedas = 1
+            else:
+                # Por FAMILIA y no una sola config para las tres: cada familia
+                # tiene su propia fase 2 elegida, y aplicarle a rollo los HP de
+                # lunas seria un tercer cambio que nadie pidio.
+                if nombre not in HP2:
+                    raise KeyError(
+                        f'HP2 no trae la familia {nombre!r}; trae '
+                        f'{sorted(HP2)!r}. Buscar para una familia y recibir '
+                        f'para otra haria una tabla con dos procedencias bajo '
+                        f'un solo rotulo.')
+                hp2, _r2 = dict(HP2[nombre]), None
+                busquedas = 0
+                al_paso(f'  {nombre} {chr(183)} {modo} {chr(183)} rho={rho:.2f} '
+                        f'{chr(183)} fase 2 RECIBIDA, sin busqueda')
             # Lo EFECTIVO, no lo elegido: `corrida` fusiona lo que recibe sobre
             # `HP_2`, asi que `TECHO` --- que no se busca, va clavado en 1.0 y
             # esta medido inerte en cuatro ordenes --- forma parte de lo que la
@@ -4649,7 +4976,19 @@ def barrer_contaminacion(familias=None, *, semillas, rhos=None, HP1=None,
             assert set(premisa) == set(SEM), (list(premisa), SEM)
             CONTAM['celdas'][(nombre, modo, float(rho))] = dict(
                 hp2=dict(hp2_efectivo), hp2_elegido=dict(hp2),
-                busquedas=1, brazos=brazos, indices=indices,
+                # `busquedas` cuenta las que CORRIERON, y es el UNICO campo de
+                # la procedencia: cero dice que los HP llegaron ya elegidos.
+                # Dejar `busquedas=1` con los HP recibidos afirmaria una
+                # busqueda que nadie corrio, y esa es justo la afirmacion que un
+                # lector usa para creerle a la celda.
+                #
+                # Hubo un segundo campo, `hp2_inyectado`, por unas horas del
+                # 2026-10-18. Se retiro por dos razones que se suman: decia lo
+                # mismo que `busquedas == 0`, y `guardar_contaminacion` no lo
+                # llevaba al disco --- asi que existia en memoria y moria al
+                # guardar, que es la peor forma de un campo de procedencia.
+                busquedas=busquedas,
+                brazos=brazos, indices=indices,
                 w_resumen=resumen, w_usado=usado, premisa_w=premisa,
                 figuras=figuras,
                 # `figura` singular se conserva como ALIAS del brazo con
