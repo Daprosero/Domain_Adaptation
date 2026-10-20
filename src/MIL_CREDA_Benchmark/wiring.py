@@ -463,24 +463,77 @@ class Arm(nn.Module):
     def select(self, H: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
         """The instances of ONE bag this arm is allowed to look at: (m, d) -> (k, d).
 
-        Every declared arm keeps every instance of a bag: the selection arms
-        (`SU`, `SA`, `SK`) that once budgeted this down to `SELECT_K` are
-        removed, and no arm this package declares sets `spec["selection"]` to
-        anything but `None`. The method stays -- selection happens here and
-        nowhere else, so the kernels, the attention, the bag representation and
-        the decision at evaluation would all see the same instances if a future
-        arm declared a rule again -- but the budgeted rules themselves
-        (`"regular"`, `"arbitrary"`, `"topk"`) are gone along with `SELECT_K`
-        and `SELECTION_SEED`, which no longer exist in `config`.
+        **Selection happens HERE and nowhere else**, which is the property the
+        whole comparison rests on: the kernels, the attention, the bag
+        representation and the decision at evaluation all see the same
+        instances, so a difference between two rules is the CHOICE and never
+        two halves of the model disagreeing about which bag they hold.
+
+        The three rules were removed on 2026-10-12 with the `SU`/`SA`/`SK` arms
+        and restored on 2026-10-20 for the aggregation section, which asks
+        whether the attention knows which instances matter. The seam itself
+        never left, so this is a declaration and not a rewiring.
+
+        - `topk` keeps the `k` instances the arm's OWN weights rank highest.
+        - `arbitrary` keeps `k` at random. It is the control: at the same `k`,
+          `topk` has to beat it or the attention is scoring nothing.
+        - `regular` keeps `k` evenly spaced, which separates "top-k wins" from
+          "fewer instances already helps".
+
+        `None` keeps the whole bag and is what every arm declared before this
+        date does. The budget is the arm's own `selectK`; it is declared before
+        the run at 5, 10 and 15 of 30, and all three are reported.
         """
         rule = self.spec["selection"]
-        if rule is not None:
+        if rule is None:
+            return H
+        budget = self.spec.get("selectK")
+        if not isinstance(budget, int) or budget <= 0:
             raise ValueError(
-                f"unknown selection rule {rule!r}: every declared arm keeps "
-                "every instance of a bag; the budgeted rules were removed "
-                "with the selection arms"
-            )
-        return H
+                f"the selection rule {rule!r} needs a positive integer "
+                f"`selectK`, and this arm declares {budget!r}")
+        m = int(H.shape[0])
+        if budget >= m:
+            # Not a silent no-op: a budget at or above the bag size means the
+            # comparison this arm exists for is not running, and reading the
+            # same number under three rules would read as three agreeing
+            # measurements of one thing.
+            raise ValueError(
+                f"`selectK` is {budget} and the bag holds {m} instances, so "
+                "this rule selects nothing and the three rules would be "
+                "byte-identical")
+        if rule == "topk":
+            # The arm's OWN weights, which is the whole question: if the
+            # attention scores anything, its best `k` has to beat `k` at
+            # random. `weights_for` is called rather than reimplemented, so
+            # the ranking is the one the bag representation would have used.
+            order = torch.argsort(self.weights_for(H, sigma).reshape(-1),
+                                  descending=True)
+            keep = order[:budget]
+        elif rule == "arbitrary":
+            # The control. Its generator is derived from the bag's own
+            # contents and never from a global seed, so two bags of one batch
+            # draw differently while the same bag draws the same instances
+            # every time it is seen -- a draw that moved between steps would
+            # add a second difference to every comparison that reads it.
+            seed = int(torch.sum(H.detach().reshape(-1)[:8].double() * 1e6)) % (2**31)
+            generator = torch.Generator(device="cpu").manual_seed(seed)
+            keep = torch.randperm(m, generator=generator)[:budget].to(H.device)
+        elif rule == "regular":
+            # Evenly spaced over the bag's own order: the third foot that
+            # separates "top-k wins" from "fewer instances already helps".
+            step = m / budget
+            keep = torch.tensor([int(i * step) for i in range(budget)],
+                                device=H.device, dtype=torch.long)
+        else:
+            raise ValueError(
+                f"unknown selection rule {rule!r}: the declared rules are "
+                "`topk`, `arbitrary` and `regular`, or None to keep the bag")
+        # Sorted, so the kept instances arrive in the bag's own order whichever
+        # rule chose them. Unsorted, `topk` would hand the kernels a
+        # permutation the other two never produce, and a difference between
+        # rules could be the ORDER rather than the choice.
+        return H[torch.sort(keep).values]
 
     def bags_of(self, embeddings: torch.Tensor, sigma: float | torch.Tensor) -> list[tuple]:
         """Every bag as the (instances, weights) pair the rest of the file consumes.
@@ -779,6 +832,19 @@ class Arm(nn.Module):
         # charges `1` per abandoned class, which has no gradient and is not
         # meant to: it makes the collapse visible in the value.
         global_term = global_loss(class_losses, source_counts)
+        # **The gate the ablation needs, symmetric to `local` below.** An arm
+        # that declares `global: False` computes Eq. (37) and then drops it,
+        # rather than skipping the class loop: the loop is also what fills
+        # `self._diagnostics`, so skipping it would leave a local-only arm
+        # reporting `nan` for every kernel reading and the ablation could not
+        # be compared against the arms that do report them.
+        #
+        # `spec.get` and not `spec[...]`: every arm declared before 2026-10-20
+        # carries no `global` key and must keep computing it, which is what
+        # every number measured so far ran under. A missing key is the old
+        # behaviour, never an absent term.
+        if not self.spec.get("global", True):
+            global_term = torch.zeros_like(global_term)
         local_term = torch.zeros_like(global_term)
 
         if self.spec["local"]:

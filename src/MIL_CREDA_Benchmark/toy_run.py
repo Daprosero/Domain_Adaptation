@@ -863,6 +863,83 @@ TOY_ARM_IDS = tuple(arm["id"] for arm in TOY_ARMS)
 #: retired rung, is gone rather than left pointing at this one.
 TOY_ADAPTED = TOY_ARM_IDS[-1]
 
+# --------------------------------------------- the rosters the later sections run
+#
+# **These are SEPARATE rosters and are never appended to `TOY_ARMS`.** That
+# tuple's last entry is `TOY_ADAPTED`, which `run_cell` trains phase 1 on and
+# every other reading shares, so appending here would silently move what
+# section 1 measures. Section 1 keeps exactly one arm; the sections below
+# declare their own and read section 1's hyperparameters.
+
+#: Section 5's ablation: each term alone, and the two together. `.predict` is
+#: not here because it is not an arm -- it is the same run read at its step-0
+#: checkpoint and `run_cell` already measures it, so declaring it would buy a
+#: second sweep of a number this package already has.
+#:
+#: `global` is the gate added to `wiring.Arm._milcreda_term` on 2026-10-20,
+#: symmetric to the `local` one that was already there. `BRAZO_AMBOS` carries
+#: both flags explicitly rather than relying on the default, so the three rows
+#: of the table are read the same way and nobody has to know which key has a
+#: default to know what the third row computes.
+BRAZO_SOLO_GLOBAL = "TG"
+BRAZO_SOLO_LOCAL = "TL"
+BRAZO_AMBOS = "TGL"
+
+ABLACION = tuple(
+    {**TOY_ARMS[0], "id": ident, "name": nombre, "label": etiqueta,
+     "global": tiene_global, "local": tiene_local, "why": porque}
+    for ident, nombre, etiqueta, tiene_global, tiene_local, porque in (
+        (BRAZO_SOLO_GLOBAL, "Toy-MIL-CREDA (global only)",
+         "global only, Eqs. 32-37", True, False,
+         "what the global term buys on its own: the conditional geometry "
+         "aligned class by class, with every source bag of a class still "
+         "interchangeable"),
+        (BRAZO_SOLO_LOCAL, "Toy-MIL-CREDA (local only)",
+         "local only, Eqs. 30-31 and 38", False, True,
+         "the arm that did not exist before 2026-10-20. Without it the "
+         "ablation could say what the local term ADDS to the global one and "
+         "never what it does alone, which is the reading that separates a "
+         "term that aligns subjects from a term that only sharpens a "
+         "geometry something else already aligned"),
+        (BRAZO_AMBOS, "Toy-MIL-CREDA (global + local)",
+         "both terms, both coefficients 1", True, True,
+         "the method as Eq. (39) declares it, and the same computation "
+         "`TOY_ARMS`'s own arm runs -- repeated here so the ablation's three "
+         "rows come from one roster rather than two"),
+    )
+)
+
+#: Section 3's first axis. Not redeclared here: `wiring.MECHANISMS` implements
+#: all five and this module reads that tuple, so a mechanism added there cannot
+#: go missing from the section that compares them.
+MECANISMOS = wiring.MECHANISMS
+
+#: Section 3's second axis, and its budget. **Declared BEFORE the run and all
+#: three reported, never the best**: a `k` chosen after seeing the result
+#: chooses the number that gives the answer that was wanted. Thirty instances
+#: per bag, so these keep a sixth, a third and a half.
+PRESUPUESTOS_K = (5, 10, 15)
+
+#: The rules, in the order the table reads them. `None` is first because it is
+#: the reference the other three are a budget of.
+#:
+#: The comparison that carries the section is `topk` against `arbitrary` AT THE
+#: SAME `k`: if the attention scores anything, keeping its best `k` has to beat
+#: keeping `k` at random. `regular` is the third foot -- without it, a `topk`
+#: that wins could be winning because fewer instances already helps.
+SELECCIONES = (None, "topk", "arbitrary", "regular")
+
+assert set(SELECCIONES) - {None} == {"topk", "arbitrary", "regular"}, SELECCIONES
+assert all(0 < k < FULL.instances_per_bag for k in PRESUPUESTOS_K), (
+    PRESUPUESTOS_K, FULL.instances_per_bag,
+    "a budget at or above the bag size selects nothing and the three rules "
+    "would be byte-identical, which `Arm.select` refuses")
+assert {a["id"] for a in ABLACION} == {BRAZO_SOLO_GLOBAL, BRAZO_SOLO_LOCAL,
+                                       BRAZO_AMBOS}, ABLACION
+assert any(a["global"] and a["local"] for a in ABLACION), (
+    "the ablation lost the arm that runs both terms, so its two single-term "
+    "rows have nothing to be compared against")
+
 #: What `spec["weighting"] = True` actually switches ON, measured against
 #: `wiring.Arm._milcreda_term` rather than assumed from the key's name. The
 #: flag gates TWO distinct mechanisms, and a reader who took "sopesado" to mean
