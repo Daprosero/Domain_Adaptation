@@ -46,21 +46,24 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from CREDA import toy_experiment as T
 
 
-#: El lote de los tests y el techo de pasos. `LOTE_2 = 256` sobre un train de
+#: El lote de los tests y el techo en EPOCAS. `LOTE_2 = 256` sobre un train de
 #: 1080 da 5 bloques --- cuatro de 256 y uno de 56 --- asi que el ULTIMO
-#: bloque es parcial y la propiedad de pasada se mide con el caso difficil y
-#: no con uno que divide justo. Con 5 pasos por epoca, 40 pasos son 8 epocas
-#: completas, suficiente para pasar `MIN_EPOCAS_2` y que el criterio elija.
-LOTE_TEST, PASOS_TEST = 256, 40
+#: bloque es parcial y la propiedad de pasada se mide con el caso dificil y no
+#: con uno que divide justo. Ocho epocas pasan `MIN_EPOCAS_2 = 5` y dejan tres
+#: puntos elegibles, que es lo minimo para que elegir signifique algo.
+#:
+#: Era `PASOS_TEST = 40` --- 8 epocas a 5 pasos --- y ahora es el numero de
+#: epocas directo: la cuenta que el test hacia a mano la hace el techo.
+LOTE_TEST, EPOCAS_TEST = 256, 8
 
 
-def _corre(*, lote=LOTE_TEST, pasos=PASOS_TEST, sem=0, fam=None):
-    """Una corrida corta. `PASOS_2` es un GLOBAL que `corrida` lee directo."""
+def _corre(*, lote=LOTE_TEST, epocas=EPOCAS_TEST, sem=0, fam=None):
+    """Una corrida corta. `EPOCAS_2` es un GLOBAL que `corrida` lee directo."""
     fam = T.FAMILIAS[0] if fam is None else fam
     D = T.datos_semilla(fam, sem)
     h1 = dict(T.HP_1); h1['DIM'] = 8
     h2 = {**T.HP_2, 'LOTE_2': lote}
-    with mock.patch.object(T, 'PASOS_2', pasos):
+    with mock.patch.object(T, 'EPOCAS_2', epocas):
         out = T.corrida(fam, D, 'ninguna', semilla=sem, mover_fuente=False,
                         cuadros=(0,), hp1=h1, hp2=h2)
     return D, out[4]
@@ -146,13 +149,14 @@ class ElFinalDeLaEpoca(unittest.TestCase):
 
         self.assertEqual(nf['mejor_paso'] % k, 0, (nf['mejor_paso'], k))
         self.assertEqual(nf['mejor_epoca'], nf['mejor_paso'] // k)
-        # `epoca_fin` son las epocas COMPLETAS que corrieron, y la igualdad
-        # vale en los dos casos: si el criterio corto, `paso_fin` es el final
-        # de una epoca; si no corto, `paso_fin` es el techo en PASOS y la
-        # division entera cuenta las epocas enteras que cupieron.
+        # `epoca_fin` son las epocas COMPLETAS que corrieron, y con el techo
+        # en epocas son TODAS: no hay paciencia que corte y no hay cola de
+        # pasos que se entrene sin lectura. La rama «si corto temprano» se fue
+        # con la paciencia, y lo que la reemplaza es mas fuerte.
         self.assertEqual(nf['epoca_fin'], nf['paso_fin'] // k)
-        if nf['paso_fin'] < PASOS_TEST:
-            self.assertEqual(nf['paso_fin'] % k, 0, (nf['paso_fin'], k))
+        self.assertEqual(nf['epoca_fin'], EPOCAS_TEST, nf['epoca_fin'])
+        self.assertEqual(nf['paso_fin'], EPOCAS_TEST * k)
+        self.assertEqual(nf['paso_fin'], nf['pasos_techo'])
 
     def test_el_criterio_no_elige_antes_del_minimo_declarado(self):
         """`MIN_EPOCAS_2` es una guarda en epocas, y se mide que muerde."""
@@ -162,70 +166,72 @@ class ElFinalDeLaEpoca(unittest.TestCase):
         self.assertEqual(nf['min_epocas_2'], T.MIN_EPOCAS_2)
 
 
-class LaPacienciaDeclarada(unittest.TestCase):
+class LaPacienciaRetirada(unittest.TestCase):
+    """Era `LaPacienciaDeclarada` y la clase entera cambio de signo.
 
-    def test_the_phase_two_patience_is_declared_in_epochs_and_not_derived_from_the_lot(self):
-        """La decision del operador, y el test que la protege de una 'mejora'.
+    Sus tres tests afirmaban que `PACIENCIA_2_EPOCAS` estaba declarada y no
+    derivada, que `MIN_EPOCAS_2` SI se derivaba de `MIN_PASOS_2`, y que los dos
+    campos viejos en pasos conservaban su valor porque el banco de
+    `MIL_CREDA_Benchmark` los leia. Las tres premisas se fueron el 2026-10-19:
+    la fase 2 no tiene paciencia, el minimo esta declarado porque su insumo se
+    retiro, y el banco paso a epocas en el mismo cambio.
 
-        La paciencia esta DECLARADA en epocas. Derivarla de `PACIENCIA_2`
-        pasos la haria heredar el lote, y el lote SE BUSCA
-        (`buscar_hp2` recorre [32, 64, 128, 256]), asi que la resolucion del
-        criterio quedaria decidida por un hiperparametro que no sabe que la
-        decide.
+    Se invierte en vez de borrarse. Un archivo sin estos tests no distingue
+    «la paciencia se retiro» de «nadie la probo nunca», y lo que se rompe de
+    verdad es que alguien la reintroduzca de un lado solo.
+    """
 
-        Se afirma la NEGATIVA sobre toda la rejilla: en los cuatro lotes que la
-        busqueda puede elegir, el valor declarado DIFIERE del que una
-        derivacion daria. Asi un refactor que la 'derive' se pone rojo en vez
-        de cambiar el criterio en silencio.
+    def test_la_paciencia_de_la_fase_dos_esta_retirada_y_no_solo_sin_usar(self):
+        """No existe la constante, no viaja en las banderas, no para nada.
+
+        Las tres cosas, porque una constante que sobrevive a su mecanismo es
+        exactamente como volvio la ultima vez: quedo declarada, el registro
+        publicaba `paciencia_epocas=5`, y nada paraba por eso.
         """
-        n = int(T.FRAC_TRAIN * T.N_POR_DOMINIO)
-        derivados = {}
-        for lote in T.LOTES_2_BUSCADOS:
-            k = T.pasos_de_una_epoca(n, n, lote)
-            derivados[lote] = max(1, math.ceil(T.PACIENCIA_2 / k))
-            self.assertNotEqual(
-                T.PACIENCIA_2_EPOCAS, derivados[lote],
-                (lote, k, 'la paciencia declarada coincide con la derivada, '
-                          'asi que este test no distingue las dos'))
-        self.assertEqual(sorted(derivados.values()), [1, 2, 4, 6], derivados)
-        self.assertEqual(T.PACIENCIA_2_EPOCAS, 5)
+        self.assertFalse(hasattr(T, 'PACIENCIA_2_EPOCAS'))
+        self.assertFalse(hasattr(T, 'PACIENCIA_2'))
+        b = T.banderas()
+        self.assertNotIn('PACIENCIA_2_EPOCAS', b)
+        self.assertNotIn('PACIENCIA_2', b)
+        _, nf = _corre()
+        self.assertNotIn('paciencia_epocas', nf)
+        # Y la afirmacion positiva: la corrida llego al techo. Sin esto, un
+        # modulo que parara por otra razon pasaria estas ausencias.
+        self.assertEqual(nf['epoca_fin'], EPOCAS_TEST)
 
-    def test_el_minimo_si_es_derivado_y_ningun_literal_lo_satisface(self):
-        """La otra mitad: el minimo SE DERIVA de lo que `MIN_PASOS_2` compraba.
+    def test_la_fase_uno_SI_para_y_eso_es_la_asimetria_declarada(self):
+        """La otra mitad, porque la ausencia de arriba se lee como «no hay
+        parada en ninguna fase» y eso seria falso.
 
-        `MIN_PASOS_2 = 40` pasos al lote DECLARADO del modulo (`LOTE`), sobre
-        el train declarado. Se afirma contra la CUENTA y no contra el numero,
-        asi que mover `MIN_PASOS_2` o `LOTE` sin llevar el cambio a
-        `MIN_EPOCAS_2` se pone rojo.
-
-        **Lo que este test NO puede probar, dicho en vez de insinuado**: no
-        distingue la derivacion de un literal que hoy valga lo mismo. Ninguna
-        prueba puede --- `5` y `ceil(40/9)` son el mismo objeto una vez
-        importados. Lo que cierra es el DESFASE, que es la forma en que esto
-        se rompe de verdad: alguien mueve una punta y no la otra.
+        `PACIENCIA_1` existe, vale 30 y gobierna el final de la fase 1: su
+        senal es la exactitud de validacion de la FUENTE, que es supervisada.
+        La bandera lo dice en vez de dejar que un lector lo infiera de que
+        `PACIENCIA_1` exista.
         """
-        n = int(T.FRAC_TRAIN * T.N_POR_DOMINIO)
-        k = T.pasos_de_una_epoca(n, n, T.LOTE)
-        self.assertEqual(T.MIN_EPOCAS_2, max(1, math.ceil(T.MIN_PASOS_2 / k)))
-        self.assertEqual(T.BLOQUES_AL_LOTE_DECLARADO, k)
-        # El polo: que la cuenta no sea trivial. Con `k == 1` la derivacion
-        # devolveria `MIN_PASOS_2` y la conversion no convertiria nada.
-        self.assertGreater(k, 1, k)
-        self.assertNotEqual(T.MIN_EPOCAS_2, T.MIN_PASOS_2)
+        self.assertEqual(T.PACIENCIA_1, 30)
+        b = T.banderas()
+        self.assertEqual(b['PACIENCIA_1'], T.PACIENCIA_1)
+        self.assertIn('fase 1 SI', b['PARADA_TEMPRANA'])
+        self.assertIn('Fase 2 NO', b['PARADA_TEMPRANA'])
 
-    def test_los_dos_pasos_viejos_siguen_valiendo_lo_que_el_banco_lee(self):
-        """El empalme entre paquetes, afirmado aca para que no se mueva solo.
+    def test_el_minimo_esta_declarado_y_su_insumo_ya_no_existe(self):
+        """`MIN_EPOCAS_2` se derivaba de `MIN_PASOS_2` y ahora esta declarado.
 
-        `MIN_PASOS_2` y `PACIENCIA_2` dejaron de ser el criterio de la fase 2 y
-        NO cambiaron de valor, porque `tests/test_toy_run.py` los compara
-        contra la escala de `MIL_CREDA_Benchmark`, cuyo criterio todavia lee
-        pasos y es de otro tramo. Mover cualquiera de los dos lados desde aca
-        restateria ese banco en silencio.
+        El VALOR no se movio --- 5 es lo que `ceil(40/9)` daba --- y eso es
+        deliberado: declararlo y cambiarlo en el mismo paso mezclaria dos
+        cosas. Lo que se afirma es que el insumo se fue, porque una derivacion
+        que lee un numero que nadie mantiene se lee como derivada y no lo es.
         """
-        self.assertEqual(T.MIN_PASOS_2, 40)
-        self.assertEqual(T.PACIENCIA_2, 30)
-        self.assertEqual(T.banderas()['MIN_PASOS_2'], T.MIN_PASOS_2)
-        self.assertEqual(T.banderas()['PACIENCIA_2'], T.PACIENCIA_2)
+        self.assertEqual(T.MIN_EPOCAS_2, 5)
+        self.assertFalse(hasattr(T, 'MIN_PASOS_2'))
+        b = T.banderas()
+        self.assertEqual(b['MIN_EPOCAS_2'], T.MIN_EPOCAS_2)
+        self.assertIn('declarada', b['MIN_EPOCAS_2_ES'])
+        self.assertNotIn('MIN_PASOS_2', b)
+        # Y la guarda MUERDE, que es lo unico que vuelve a este numero
+        # interesante: la bandera publica la medicion en vez de afirmar que
+        # es una guarda y nada mas.
+        self.assertIn('42%', b['MIN_EPOCAS_2_MUERDE'])
 
 
 class ElBlancoDefineLaEpoca(unittest.TestCase):
@@ -284,11 +290,15 @@ class ElRegistro(unittest.TestCase):
         """
         _, nf = _corre()
         esperados = ('pasos_por_epoca', 'epoca_definida_por', 'bloques_s',
-                     'bloques_t', 'min_epocas_2', 'paciencia_epocas',
-                     'mejor_epoca', 'epoca_fin', 'pasos_sin_leer',
-                     'pasada_2')
+                     'bloques_t', 'min_epocas_2', 'epocas_2', 'pasos_techo',
+                     'mejor_epoca', 'epoca_fin', 'pasada_2')
         faltan = [k for k in esperados if k not in nf]
         self.assertEqual(faltan, [], faltan)
+        # Y la otra mitad del roster: los dos campos que SE FUERON con sus
+        # mecanismos. Sin esto, reintroducir uno pasaria verde --- el roster
+        # de arriba solo atrapa los que faltan, nunca los que sobran.
+        sobran = [k for k in ('paciencia_epocas', 'pasos_sin_leer') if k in nf]
+        self.assertEqual(sobran, [], sobran)
 
         self.assertEqual(T.CAMPOS_P2, len(T.CAMPOS_P2_NOMBRES))
         for fila in nf['pasada_2']:
@@ -297,12 +307,23 @@ class ElRegistro(unittest.TestCase):
     def test_las_banderas_publican_la_conversion(self):
         """La conversion tiene que poder LEERSE del artefacto, no del codigo."""
         b = T.banderas()
-        for k in ('MIN_EPOCAS_2', 'PACIENCIA_2_EPOCAS', 'CRITERIO_2_EN',
+        for k in ('MIN_EPOCAS_2', 'CRITERIO_2_EN', 'CRITERIO_2_SENAL',
+                  'CRITERIO_2_DIRECCION', 'TECHO_EN', 'EPOCAS_1', 'EPOCAS_2',
                   'BLOQUES_AL_LOTE_DECLARADO', 'N_POR_DOMINIO'):
             self.assertIn(k, b)
         self.assertEqual(b['CRITERIO_2_EN'], 'epocas')
+        self.assertEqual(b['CRITERIO_2_SENAL'], 'cef')
+        self.assertEqual(b['CRITERIO_2_DIRECCION'], 'maximo')
         self.assertEqual(b['MIN_EPOCAS_2'], T.MIN_EPOCAS_2)
-        self.assertEqual(b['PACIENCIA_2_EPOCAS'], T.PACIENCIA_2_EPOCAS)
+        # EL TECHO, en la misma unidad en las dos fases, que es lo que el
+        # artefacto no podia decir: `EPOCAS_1` estaba en epocas y `PASOS_2` en
+        # pasos, asi que un lector no sabia cuantas pasadas habia corrido la
+        # fase 2 sin derivarlo a mano --- y lo habria derivado con el lote
+        # DECLARADO en vez del buscado, o sea mal.
+        self.assertIn('epocas', b['TECHO_EN'])
+        self.assertEqual(b['EPOCAS_1'], T.EPOCAS_1)
+        self.assertEqual(b['EPOCAS_2'], T.EPOCAS_2)
+        self.assertNotIn('PASOS_2', b)
 
 
 if __name__ == '__main__':

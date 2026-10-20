@@ -295,14 +295,14 @@ class LaSerieQueCorridaPublica(unittest.TestCase):
         del entrenamiento y restaurarlo deja los numeros intactos y el
         REGISTRO falso: `tests/test_toy_entrega_marginal.py` espia
         `CREDALoss.forward` por instancia y afirma que el termino del bucle es
-        marginal PURO antes de `PASO_COND`. Medido, la instancia compartida
+        marginal PURO antes de `EPOCA_COND`. Medido, la instancia compartida
         pone dos de sus tests en rojo. Este test lo atrapa desde este lado,
         asi que el defecto no puede volver arreglando aquel archivo: con
-        `PASO_COND` inalcanzable, la instancia del bucle tiene que ver SOLO
+        `EPOCA_COND` inalcanzable, la instancia del bucle tiene que ver SOLO
         `0.0`, y la mezcla `1.0` tiene que existir en OTRA.
         """
         h1, h2 = _hp()
-        h2['PASO_COND'] = 10 ** 6
+        h2['EPOCA_COND'] = 10 ** 6
         D = T.datos_semilla(_FAM, _SEM)
         por_id = {}
         propio = CREDALoss.forward
@@ -313,7 +313,7 @@ class LaSerieQueCorridaPublica(unittest.TestCase):
 
         CREDALoss.forward = espia
         try:
-            with mock.patch.object(T, 'PASOS_2', 14):
+            with mock.patch.object(T, 'EPOCAS_2', 2):
                 T.corrida(_FAM, D, _POS, semilla=_SEM, mover_fuente=False,
                           cuadros=(0,), hp1=h1, hp2=h2)
         finally:
@@ -323,7 +323,7 @@ class LaSerieQueCorridaPublica(unittest.TestCase):
         bucle = max(por_id.values(), key=len)
         self.assertEqual(set(bucle), {0.0},
                          f'la instancia del bucle vio {sorted(set(bucle))} '
-                         f'con PASO_COND inalcanzable')
+                         f'con EPOCA_COND inalcanzable')
         otras = [v for v in por_id.values() if v is not bucle]
         self.assertTrue(any(1.0 in v for v in otras),
                         'ninguna otra instancia leyo con la mezcla en 1.0')
@@ -335,7 +335,8 @@ class LaSerieQueCorridaPublica(unittest.TestCase):
         en una corrida de 200 epocas, porque el termino se evalua en cada paso
         y otra vez sobre valid. Este test cuenta las lecturas de la Ec. 33 y
         exige una por punto de control: si el registro se corriera al cuerpo
-        del paso, el conteo saltaria a `PASOS_2 + 1`.
+        del paso, el conteo saltaria al numero de PASOS que el techo tiene,
+        o sea `EPOCAS_2 * pasos_por_epoca + 1`.
         """
         h1, h2 = _hp()
         D = T.datos_semilla(_FAM, _SEM)

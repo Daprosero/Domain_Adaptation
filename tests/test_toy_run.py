@@ -119,8 +119,11 @@ def tiny() -> toy_run.Scale:
     costs instead is bounded by `instances_per_bag`, which this fixture does
     lower.
     """
+    # `epochs_2` is MIN_EPOCHS_2 + 1, the same floor `PILOT` derives: enough
+    # passes for the criterion to become legal and then choose. Below it
+    # `adapt_phase_two` refuses, which is what the pilot's own paragraph says.
     return dataclasses.replace(toy_run.PILOT, name="test", epochs_1=2,
-                               min_steps_2=2, patience_2=2, patience_1=1,
+                               epochs_2=toy_run.MIN_EPOCHS_2 + 1, patience_1=1,
                                trials_1=1, trials_2=1, points_per_domain=810,
                                instances_per_bag=6)
 
@@ -293,68 +296,109 @@ def test_the_call_site_hands_the_watchman_the_source_valid_role(familia, tiny,
     assert not torch.equal(handed, on_target)
 
 
-def test_the_watchman_is_minimized_and_its_argmax_is_not_the_step_chosen(
+def test_cef_is_maximized_and_its_argmin_is_not_the_epoch_chosen(
         familia, tiny, monkeypatch):
-    """Phase 2 keeps the PASS where the watchman is SMALLEST.
+    """Phase 2 keeps the PASS where `cef` is LARGEST.
 
-    The fixture scripts the watchman's own sequence so the argmin, the argmax and
-    the last pass are three DIFFERENT passes -- asserted before the run, because a
-    sequence whose argmin and argmax coincide could not tell a minimization from
-    a maximization. Flip the comparison in `adapt_phase_two` and `bestStep`
-    becomes the argmax: red.
+    The fixture scripts `cef`'s own sequence so the argmax, the argmin and the
+    last pass are three DIFFERENT passes -- asserted before the run, because a
+    sequence whose argmax and argmin coincide could not tell a maximization
+    from a minimization. Flip the comparison in `adapt_phase_two` and
+    `bestEpoch` becomes the argmin: red.
 
-    **Scripted per PASS and no longer per step**, because the criterion is read
-    once at the end of each complete pass of the training role; the cadence
-    itself is `tests/test_milcreda_fase2_por_epoca.py`'s claim and this one is
-    about which extreme is kept.
+    **It was the watchman's MINIMUM until 2026-10-19**, and this test is the
+    inversion rather than a new one: the scripted sequence is the same, the
+    guard is the same, and what changed is which extreme is kept and which
+    function is scripted. The watchman is still read every epoch and is
+    asserted NOT to have chosen.
+
+    `epochs_2` is raised locally so the nine scripted passes all run: the
+    fixture's own ceiling is `MIN_EPOCHS_2 + 1`, which is the floor at which
+    the criterion can choose at all and leaves no room for three distinct
+    extremes.
     """
-    payload = _prepared(familia, tiny)
+    scale = dataclasses.replace(tiny, epochs_2=9)
+    payload = _prepared(familia, scale)
     model = payload["model"]
     per_epoch = [0.9, 0.8, 0.2, 0.95, 0.6, 0.7, 0.75, 0.78, 0.79]
     # `MIN_EPOCHS_2` passes of guard, so the earlier entries are outside the
     # window by construction and the three extremes below all sit inside it.
     window = per_epoch[toy_run.MIN_EPOCHS_2 - 1:]
-    assert len(per_epoch) >= tiny.steps_2 // toy_run.STEPS_PER_EPOCH_DECLARED
+    assert len(per_epoch) >= scale.epochs_2
     argmin = per_epoch.index(min(window))
     argmax = per_epoch.index(max(window))
-    assert argmin != argmax, "the scripted sequence cannot distinguish min from max"
-    assert argmin != len(per_epoch) - 1, "the argmin is the last pass; useless"
+    assert argmin != argmax, "the scripted sequence cannot distinguish max from min"
+    assert argmax != len(per_epoch) - 1, "the argmax is the last pass; useless"
 
     calls = {"n": 0}
 
-    def scripted_watchman(model_, dataset, device):
-        epoch = min(calls["n"] // toy_run.STEPS_PER_EPOCH_DECLARED,
-                    len(per_epoch) - 1)
+    def scripted_cef(model_, device):
+        value = per_epoch[min(calls["n"], len(per_epoch) - 1)]
         calls["n"] += 1
-        return per_epoch[epoch]
+        return value
 
-    monkeypatch.setattr(toy_run, "watchman", scripted_watchman)
-    with toy_run.material_bound(familia, tiny, "mlp"):
+    monkeypatch.setattr(toy_run, "effective_classes", scripted_cef)
+    with toy_run.material_bound(familia, scale, "mlp"):
         generator = torch.Generator().manual_seed(1)
         phase_two = toy_run.adapt_phase_two(model, payload["source_train"],
                                             payload["source_valid"], DEVICE,
-                                            tiny, payload["hyper"], generator)
-    assert calls["n"] > 0, "the scripted watchman was never called"
-    assert phase_two["bestWatchman"] == min(window)
-    assert phase_two["bestEpoch"] == argmin + 1
-    assert phase_two["bestStep"] == (argmin + 1) * phase_two["stepsPerEpoch"]
-    assert phase_two["bestEpoch"] != argmax + 1
+                                            scale, payload["hyper"], generator)
+    assert calls["n"] > 0, "the scripted cef was never called"
+    assert calls["n"] == scale.epochs_2, (
+        calls["n"], scale.epochs_2,
+        "cef is read once per pass, so the call count is the epoch count")
+    assert phase_two["bestCef"] == max(window)
+    assert phase_two["bestEpoch"] == argmax + 1
+    assert phase_two["bestStep"] == (argmax + 1) * phase_two["stepsPerEpoch"]
+    assert phase_two["bestEpoch"] != argmin + 1
+    # And the watchman chose NOTHING: it is read every epoch and recorded, so
+    # the row of the chosen epoch carries it, but the epoch chosen is cef's.
+    vigias = [row["watchman"] for row in phase_two["epochPass"]]
+    assert len(vigias) == scale.epochs_2 and all(v is not None for v in vigias)
+    assert phase_two["bestWatchman"] == vigias[argmax]
 
 
 def test_phase_two_restores_the_weights_of_the_best_step_and_not_the_last(
         familia, tiny, monkeypatch):
-    """The state at exit is the state at the argmin, not the state at the end.
+    """The state at exit is the state at `cef`'s argmax, not the state at the end.
 
     The scripted watchman snapshots theta_t at every step, so the test can
     compare the exit state against the step it should have kept AND against the
-    step it must not have kept. Both are needed: equality with the argmin alone
-    would pass on a run where theta_t never moved.
+    step it must not have kept. Both are needed: equality with the chosen step
+    alone would pass on a run where theta_t never moved.
+
+    **`cef` is scripted here too, and that is what makes the test a test.**
+    Until 2026-10-19 the criterion was the watchman and scripting it fixed the
+    chosen epoch; with `cef` deciding, a watchman-only script left the choice
+    to the REAL `cef` over the fixture's `MIN_EPOCHS_2 + 1` passes -- so the
+    only epochs it could choose were the guard's first and the LAST, and on the
+    last one `kept` and `last_step` are the same snapshot and the control above
+    dies with a message about theta_t not moving. It passed because `cef`
+    happened to peak on the earlier of the two.
+
+    So the sequence below has its argmax strictly inside the window and
+    strictly before the end, asserted rather than assumed, and `epochs_2` is
+    raised locally so all of it runs.
     """
-    payload = _prepared(familia, tiny)
+    scale = dataclasses.replace(tiny, epochs_2=9)
+    payload = _prepared(familia, scale)
     model = payload["model"]
     per_epoch = [0.9, 0.8, 0.2, 0.95, 0.6, 0.7, 0.75, 0.78, 0.79]
+    cef_per_epoch = [0.1, 0.2, 0.3, 2.9, 0.4, 0.5, 0.6, 0.7, 0.8]
+    _ventana = cef_per_epoch[toy_run.MIN_EPOCHS_2 - 1:]
+    _argmax = cef_per_epoch.index(max(_ventana))
+    assert _argmax >= toy_run.MIN_EPOCHS_2 - 1, _argmax
+    assert _argmax != len(cef_per_epoch) - 1, (
+        "the argmax is the last pass, so `kept` and `last_step` would be the "
+        "same snapshot and the control below could not fail")
     snapshots: list[torch.Tensor] = []
     calls = {"n": 0}
+    cef_calls = {"n": 0}
+
+    def scripted_cef(model_, device):
+        value = cef_per_epoch[min(cef_calls["n"], len(cef_per_epoch) - 1)]
+        cef_calls["n"] += 1
+        return value
 
     def scripted_watchman(model_, dataset, device):
         snapshots.append(toy_run._parameter_vector(model_.target_encoder).clone())
@@ -364,14 +408,17 @@ def test_phase_two_restores_the_weights_of_the_best_step_and_not_the_last(
         return per_epoch[epoch]
 
     monkeypatch.setattr(toy_run, "watchman", scripted_watchman)
-    with toy_run.material_bound(familia, tiny, "mlp"):
+    monkeypatch.setattr(toy_run, "effective_classes", scripted_cef)
+    with toy_run.material_bound(familia, scale, "mlp"):
         generator = torch.Generator().manual_seed(1)
         phase_two = toy_run.adapt_phase_two(model, payload["source_train"],
                                             payload["source_valid"], DEVICE,
-                                            tiny, payload["hyper"], generator)
+                                            scale, payload["hyper"], generator)
         final = toy_run._parameter_vector(model.target_encoder).clone()
 
     best = phase_two["bestStep"]
+    assert phase_two["bestEpoch"] == _argmax + 1, (
+        phase_two["bestEpoch"], _argmax + 1)
     assert best >= toy_run.MIN_EPOCHS_2 * phase_two["stepsPerEpoch"]
     # `adapt_phase_two` reads the watchman once per step AND once more after the
     # restore, so the snapshot list is one longer than the run: the last STEP's
@@ -539,12 +586,32 @@ def test_the_full_scale_is_credas_own():
     from CREDA import toy_experiment as creda
 
     assert toy_run.FULL.epochs_1 == creda.EPOCAS_1
-    assert toy_run.FULL.steps_2 == creda.PASOS_2
+    # THE TWO CEILINGS, IN THE SAME UNIT, which is what this pin could not
+    # assert before 2026-10-19: it read `FULL.steps_2 == creda.PASOS_2`, two
+    # STEP ceilings, and two equal step budgets buy DIFFERENT numbers of passes
+    # whenever the two passes differ -- which they do, 16 steps here against
+    # CREDA's 9, and in CREDA the lot is searched so its own three families
+    # bought 22.2, 11.8 and 11.8. Equal epochs is the tie that means something.
+    assert toy_run.FULL.epochs_2 == creda.EPOCAS_2
     assert toy_run.FULL.lr_1 == creda.LR_1
     assert toy_run.FULL.lr_2 == creda.LR_2
     assert toy_run.FULL.patience_1 == creda.PACIENCIA_1
-    assert toy_run.FULL.patience_2 == creda.PACIENCIA_2
-    assert toy_run.FULL.min_steps_2 == creda.MIN_PASOS_2
+    # `patience_2` and `min_steps_2` are GONE from the scale, with
+    # `PACIENCIA_2` and `MIN_PASOS_2` on CREDA's side. Asserted as absences so
+    # that reintroducing either on one side alone reddens here rather than
+    # quietly restating a criterion the other side no longer has.
+    for retirado in ("patience_2", "min_steps_2", "steps_2"):
+        assert not hasattr(toy_run.FULL, retirado), retirado
+    for retirado in ("PACIENCIA_2", "MIN_PASOS_2", "PASOS_2",
+                     "PACIENCIA_2_EPOCAS"):
+        assert not hasattr(creda, retirado), retirado
+    # The guard is DECLARED on both sides and the two values DIFFER. What is
+    # pinned is that each is declared in epochs and that both travel in the
+    # record; equalizing them is a decision about the guard, not about the
+    # unit, and this pin does not take it.
+    assert toy_run.MIN_EPOCHS_2 == 3 and creda.MIN_EPOCAS_2 == 5
+    assert (toy_run.PHASE_TWO_CRITERION["minEpochs2InCreda"]
+            == creda.MIN_EPOCAS_2)
     assert list(toy_run.FULL.search_seeds) == list(creda.SEMILLAS_BUSQUEDA)
     assert list(toy_run.FULL.report_seeds) == list(creda.SEMILLAS_REPORTE)
     assert toy_run.FULL.trials_1 == creda.TRIALS_1
@@ -981,9 +1048,20 @@ def test_the_frozen_sigma_is_immune_to_anything_injected_into_the_target(
     # bit, while the global contribution differs on every one of them -- which
     # is the control that the disturbance reached the step and the equality is
     # not two runs doing nothing.
-    assert dirty_row["phase2Steps"] != clean_row["phase2Steps"], (
-        "the two runs stopped on the same step, so the per-step reading below "
-        "is not distinguishing itself from the cell mean it replaced")
+    # **INVERTED on 2026-10-19, and the inversion is the finding.** It demanded
+    # `phase2Steps` DIFFER between the two runs, and that was reading the
+    # PATIENCE: the two runs stopped at different steps because the stop
+    # depended on the target, which the disturbance moved. With the patience
+    # gone both runs walk `epochs_2` whole, so equal step counts are now
+    # guaranteed by construction and a difference would mean the ceiling is not
+    # being honoured. What the disturbance moves instead is the epoch CHOSEN,
+    # which the assertion above already reads.
+    assert dirty_row["phase2Steps"] == clean_row["phase2Steps"], (
+        dirty_row["phase2Steps"], clean_row["phase2Steps"],
+        "phase 2 has no stop, so both runs must walk the same ceiling")
+    assert (dirty_row["phase2Steps"]
+            == tiny.epochs_2 * toy_run.STEPS_PER_EPOCH_DECLARED), (
+        dirty_row["phase2Steps"], tiny.epochs_2)
     limpia = _curva_de_fase_dos(familia, tiny)
     sucia = _curva_de_fase_dos(disturbed, tiny)
     comunes = min(len(limpia), len(sucia))
@@ -3034,7 +3112,7 @@ def test_the_record_says_the_term_is_conditional_by_construction(tiny):
     chosen -- there is no knob.
 
     CREDA has `class_mixing`: `0.0` is the pure marginal, `1.0` the pure
-    conditional, and `PASO_COND` switches between the two extremes at a declared
+    conditional, and `EPOCA_COND` switches between the two extremes at a declared
     step. A table that printed `1.0` for this package beside CREDA's would be
     saying "this run chose the conditional end", which is wrong in the way that
     matters: here the conditional character is not a setting at all, it comes
@@ -3093,8 +3171,9 @@ def test_the_retired_transmission_is_declared_rather_than_silently_absent(cell,
     assert flags["syncRetired"]["constant"] == "config.SOURCE_TO_TARGET_SYNC_STEPS"
     assert flags["syncRetired"]["value"] == config.SOURCE_TO_TARGET_SYNC_STEPS
     assert "below the floor" in flags["syncRetired"]["declaredRisk"]
-    assert flags["criteria"]["phase2Stop"] == "min(watchman)"
-    assert flags["criteria"]["phase2Search"] == "min(watchman)"
+    assert flags["criteria"]["phase2Stop"].startswith("none:")
+    assert flags["criteria"]["phase2Select"].startswith("max(cef)")
+    assert flags["criteria"]["phase2Search"] == "max(cef)"
 
 
 def test_every_normalization_creda_draws_has_a_backbone_here(cell):
@@ -3951,7 +4030,7 @@ def test_no_ramp_is_evaluated_anywhere_on_this_path(familia, tiny, monkeypatch):
     assert len(calls) == 1, calls
 
     # And what the ramp would have done, so "no ramp" is a difference.
-    steps = tiny.steps_2
+    steps = tiny.epochs_2 * toy_run.STEPS_PER_EPOCH_DECLARED
     curve = [real_ramp(step, steps, "milcreda",
                        delta=float(config.RAMP_DELTA), ceiling=1.0)
              for step in range(steps)]
@@ -4252,8 +4331,12 @@ def test_the_frame_schedule_is_the_stride_with_the_first_and_last_always_in():
     the stride and one that stopped between two. Both have to carry the last
     step; only the second has to ADD it.
     """
-    for declarados in (12, 40, 200):
-        escala = dataclasses.replace(toy_run.PILOT, steps_2=declarados)
+    # The grid is in EPOCHS now, and `declarados` below is the STEP count they
+    # hold: `frame_steps` indexes frames in steps and always did -- a frame is
+    # a state of the weights and the weights move once per step.
+    for epocas in (1, 3, 13):
+        escala = dataclasses.replace(toy_run.PILOT, epochs_2=epocas)
+        declarados = epocas * toy_run.STEPS_PER_EPOCH_DECLARED
         zancada = toy_run.frame_stride(escala)
         for corridos in (0, 1, zancada, zancada + 1, declarados):
             pasos = toy_run.frame_steps(escala, corridos)
@@ -4267,34 +4350,98 @@ def test_the_frame_schedule_is_the_stride_with_the_first_and_last_always_in():
 
 
 def test_the_stride_follows_the_declared_frame_count_and_not_a_literal(tmp_path):
-    """Double the frame count the module declares and the stride halves.
+    """Double the frame count the module declares and the grid halves.
 
-    The control is the whole test: CREDA's own stride of 10 over 200 steps is
-    what `TRAJECTORY_FRAMES = 20` reproduces, and a `10` written as a literal
-    would reproduce it too, at the full scale, while leaving the pilot's own
-    budget animating at the wrong cadence. So the declaration is moved and the
-    derived value has to move with it.
+    The control is the whole test: the grid is the CEILING IN EPOCHS over the
+    declared frame count, and a LITERAL would reproduce today's value while
+    leaving any other ceiling animating at the wrong cadence. So the
+    declaration is moved and the derived value has to move with it.
+
+    Every expected value is DERIVED here and not written down, because both
+    the ceiling and its UNIT moved: the ceiling was 200 steps, became
+    `epochs_2` whole passes on 2026-10-19, and the grid itself was re-declared
+    in epochs. A literal 10 would have had to be edited to 80 and then to 5,
+    which is the same defect this test exists to catch, two scales along.
+
+    The two frame counts at the end are the only literals, and they are the
+    measured consequence the change was made for rather than an input.
     """
+    # The grid is declared in EPOCHS and the step count is derived from it,
+    # which is the direction the two assertions below read in that order.
+    assert toy_run.frame_epochs(toy_run.FULL) == (
+        toy_run.FULL.epochs_2 // toy_run.TRAJECTORY_FRAMES), (
+        toy_run.frame_epochs(toy_run.FULL), toy_run.FULL.epochs_2,
+        toy_run.TRAJECTORY_FRAMES)
     vivo = toy_run.frame_stride(toy_run.FULL)
-    assert vivo == 10, vivo
+    assert vivo == (toy_run.frame_epochs(toy_run.FULL)
+                    * toy_run.STEPS_PER_EPOCH_DECLARED), (
+        vivo, toy_run.frame_epochs(toy_run.FULL),
+        toy_run.STEPS_PER_EPOCH_DECLARED)
 
     mutado = _mutated_toy_run(tmp_path, "TRAJECTORY_FRAMES = 20",
                               "TRAJECTORY_FRAMES = 40", "toy_run_frames_40")
     assert mutado.TRAJECTORY_FRAMES == 40
-    assert mutado.frame_stride(mutado.FULL) == 5, mutado.frame_stride(mutado.FULL)
+    assert mutado.frame_epochs(mutado.FULL) == mutado.FULL.epochs_2 // 40, (
+        mutado.frame_epochs(mutado.FULL), mutado.FULL.epochs_2)
     assert mutado.frame_stride(mutado.FULL) != vivo
 
-    # And the pilot's own stride follows the SAME declaration, read as two
-    # relative poles rather than as a literal: it is below the full scale's,
-    # because its budget is shorter, and doubling the declared frame count
-    # lowers it again. It read `== 1` while the pilot declared twelve steps --
-    # fewer than `TRAJECTORY_FRAMES` -- and with the criterion in passes that
-    # budget is 152, so a literal there would have been a number this test
-    # happened to meet at one budget and no other.
-    pilot_stride = toy_run.frame_stride(toy_run.PILOT)
-    assert 1 < pilot_stride < vivo, (pilot_stride, vivo)
-    assert mutado.frame_stride(mutado.PILOT) < pilot_stride, (
-        mutado.frame_stride(mutado.PILOT), pilot_stride)
+    # **Which unit is DECLARED, proven by moving the other one.** Change the
+    # pass length and the stride in STEPS moves while the stride in EPOCHS does
+    # not: that is the whole content of "the grid is declared in epochs", and
+    # without this pole the two assertions above would read identically if the
+    # derivation ran the other way round.
+    otra_pasada = _mutated_toy_run(
+        tmp_path,
+        'STEPS_PER_EPOCH_DECLARED = FULL.realized_split()["bagsPerClass"]["train"]',
+        'STEPS_PER_EPOCH_DECLARED = FULL.realized_split()["bagsPerClass"]["valid"]',
+        "toy_run_otra_pasada")
+    assert otra_pasada.STEPS_PER_EPOCH_DECLARED != (
+        toy_run.STEPS_PER_EPOCH_DECLARED), (
+        "la mutación no cambió la pasada: este test no estaría midiendo en qué "
+        "unidad se declara la rejilla")
+    assert otra_pasada.frame_epochs(otra_pasada.FULL) == (
+        toy_run.frame_epochs(toy_run.FULL)), (
+        otra_pasada.frame_epochs(otra_pasada.FULL),
+        toy_run.frame_epochs(toy_run.FULL))
+    assert otra_pasada.frame_stride(otra_pasada.FULL) != vivo, (
+        otra_pasada.frame_stride(otra_pasada.FULL), vivo)
+
+    # **The pilot sits ON the floor, and that is the declaration rather than a
+    # shortfall.** Its ceiling is fewer epochs than `TRAJECTORY_FRAMES`, so no
+    # whole-epoch stride reaches the declared count and the floor of one epoch
+    # takes over. The previous version asserted the pilot's stride FELL when
+    # the count doubled; at a floor it cannot, and asserting it would be
+    # asserting the mechanism instead of the data.
+    assert toy_run.PILOT.epochs_2 // toy_run.TRAJECTORY_FRAMES == 0, (
+        "el piloto ya no está bajo el piso: este test mide que el piso es lo "
+        "que manda ahí, y con otro techo habría que medir otra cosa")
+    assert toy_run.frame_epochs(toy_run.PILOT) == 1
+    assert toy_run.frame_stride(toy_run.PILOT) == (
+        toy_run.STEPS_PER_EPOCH_DECLARED)
+    assert mutado.frame_epochs(mutado.PILOT) == 1, (
+        mutado.frame_epochs(mutado.PILOT))
+
+    # And the floor is REACHABLE rather than frozen: a declared count BELOW the
+    # pilot's own ceiling lifts it off the floor. Without this the two
+    # assertions above would hold just as well on a pilot whose stride could
+    # never move at all.
+    # Two spaces: the mutator requires the same byte length, because that is
+    # what makes its md5 check the thing that measures the mutation arrived.
+    pocos = _mutated_toy_run(tmp_path, "TRAJECTORY_FRAMES = 20",
+                             "TRAJECTORY_FRAMES =  2", "toy_run_frames_2")
+    assert pocos.frame_epochs(pocos.PILOT) == pocos.PILOT.epochs_2 // 2
+    assert pocos.frame_epochs(pocos.PILOT) > toy_run.frame_epochs(
+        toy_run.PILOT), (pocos.frame_epochs(pocos.PILOT),
+                         toy_run.frame_epochs(toy_run.PILOT))
+
+    # What the change BOUGHT, which is why it was made: the full scale draws
+    # the declared count and the pilot draws a fifth of it.
+    assert len(toy_run.frame_steps(
+        toy_run.FULL,
+        toy_run.FULL.epochs_2 * toy_run.STEPS_PER_EPOCH_DECLARED)) == 21
+    assert len(toy_run.frame_steps(
+        toy_run.PILOT,
+        toy_run.PILOT.epochs_2 * toy_run.STEPS_PER_EPOCH_DECLARED)) == 5
 
 
 def test_a_schedule_that_dropped_the_first_frame_is_caught(tmp_path):
@@ -4306,7 +4453,7 @@ def test_a_schedule_that_dropped_the_first_frame_is_caught(tmp_path):
     """
     mutado = _mutated_toy_run(tmp_path, "steps = {0, applied}",
                               "steps = {9, applied}", "toy_run_sin_cuadro_cero")
-    escala = dataclasses.replace(toy_run.PILOT, steps_2=12)
+    escala = dataclasses.replace(toy_run.PILOT, epochs_2=1)
     assert toy_run.frame_steps(escala, 11)[0] == 0
     assert mutado.frame_steps(escala, 11)[0] != 0, (
         "la mutación no cambió el primer cuadro: este test no estaría midiendo "

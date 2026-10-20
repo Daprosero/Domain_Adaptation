@@ -299,7 +299,19 @@ def test_the_oracle_arm_is_labelled_a_ceiling_in_the_artifact_it_writes():
     """
     assert T.PALABRA_TECHO, T.PALABRA_TECHO
     assert T.PALABRA_TECHO in T.BRAZO_TECHO.lower(), T.BRAZO_TECHO
-    assert T.BRAZO_TECHO in T.BRAZOS_CONTAMINACION, T.BRAZOS_CONTAMINACION
+    # El padrón dejó de traerlo el 2026-10-19: el operador retiró el brazo de
+    # la sección de contaminación. Lo que este test fija sigue vivo --- la
+    # palabra está en el nombre Y en una clave, y `_fila_brazo` la escribe ---
+    # y lo sigue ejercitando la sección de INTRUSOS, cuyo padrón declara dos
+    # techos. Lo único que dejó de ser cierto es que ESTE padrón traiga uno.
+    assert T.BRAZO_TECHO not in T.BRAZOS_CONTAMINACION, (
+        T.BRAZOS_CONTAMINACION,
+        "el techo volvió al padrón de contaminación: esta aserción vuelve a "
+        "ser `in`")
+    assert any(T.PALABRA_TECHO in b.lower() for b in T.BRAZOS_INTRUSOS), (
+        T.BRAZOS_INTRUSOS,
+        "ningún padrón declarado lleva un techo, así que la palabra que esto "
+        "fija no marca nada que corra")
     for otro in (T.BRAZO_SIN_SOP, T.BRAZO_CON_SOP, ".predict", "AdaBN"):
         assert T.PALABRA_TECHO not in otro.lower(), (
             otro, "a method arm carries the ceiling word, so the word no "
@@ -367,8 +379,14 @@ def barrido_frontera():
         al_paso=lambda *_: None)
 
 
-def test_all_three_arms_of_a_scenario_receive_the_same_hp2(barrido_frontera):
-    """One search per scenario, shared by all three weights.
+def test_both_arms_of_a_scenario_receive_the_same_hp2(barrido_frontera):
+    """One search per scenario, shared by both weights.
+
+    It read THREE until 2026-10-19, when the operator retired the oracle
+    ceiling from this section. The claim did not change -- one search per
+    scenario, shared -- only how many arms there are to share it. The
+    three-and-more version still runs over a roster that has them, in
+    `tests/test_toy_intrusos.py::test_all_three_intrusion_arms_of_a_scenario_receive_the_same_hp2`.
 
     Searching per arm would make it "best of `w` on" against "best of `w` off"
     -- a different claim, with the search-versus-term confound back in. Read off
@@ -379,22 +397,25 @@ def test_all_three_arms_of_a_scenario_receive_the_same_hp2(barrido_frontera):
     nombre = T.FAMILIAS[0]["nombre"]
     assert CONTAM["perturbaciones"] == [T.MODO_FRONTERA], CONTAM["perturbaciones"]
     assert CONTAM["rhos"] == [float(r) for r in T.ESCALERA_UNICA], CONTAM["rhos"]
-    tres = (T.BRAZO_SIN_SOP, T.BRAZO_CON_SOP, T.BRAZO_TECHO)
+    dos = (T.BRAZO_SIN_SOP, T.BRAZO_CON_SOP)
+    assert set(dos) == {b for b, _ in T.BRAZOS_POR_PESO}, (
+        dos, T.BRAZOS_POR_PESO,
+        "los brazos declarados cambiaron y este test sigue nombrando dos a "
+        "mano")
     for rho in CONTAM["rhos"]:
         celda = _celda_del_barrido(CONTAM, nombre, rho)
         buscado = celda["hp2"]
         assert buscado, (nombre, rho, "the scenario recorded no phase-2 search")
         assert celda["busquedas"] == 1, celda["busquedas"]
-        filas = [celda["brazos"][b] for b in tres]
+        filas = [celda["brazos"][b] for b in dos]
         assert {len(f) for f in filas} == {2}, [len(f) for f in filas]
-        for trio in zip(*filas):
-            for fila in trio:
+        for par in zip(*filas):
+            for fila in par:
                 assert fila["hp2"] == buscado, (rho, fila["hp2"], buscado)
-        # And the three really are three different arms.
-        pesos = {b: {f["peso"] for f in celda["brazos"][b]} for b in tres}
+        # And the two really are two different arms.
+        pesos = {b: {f["peso"] for f in celda["brazos"][b]} for b in dos}
         assert pesos == {T.BRAZO_SIN_SOP: {T.PESO_APAGADO},
-                         T.BRAZO_CON_SOP: {T.PESO_DECLARADO},
-                         T.BRAZO_TECHO: {T.PESO_ORACULO}}, pesos
+                         T.BRAZO_CON_SOP: {T.PESO_DECLARADO}}, pesos
         largos = {b: len(v) for b, v in celda["brazos"].items()}
         assert set(largos.values()) == {2}, largos
 
@@ -419,24 +440,35 @@ def test_the_sweep_records_the_premise_it_rests_on(barrido_frontera):
             assert delta <= -T.MARGEN_FRONTERA, (s, c, delta)
 
 
-def test_the_oracle_arm_weights_what_it_says_it_weights(barrido_frontera):
-    """The ceiling's recorded weights are the indicator, in the real sweep.
+def test_each_arm_weights_what_it_says_it_weights(barrido_frontera):
+    """Each arm's recorded weights are what its weight claims, in the real sweep.
 
-    The unit test above pins the function; this crosses the join into the run,
-    which is the only thing that says the function is what the arm used.
+    The unit tests pin the functions; this crosses the join into the run, which
+    is the only thing that says the function is what the arm used.
+
+    **The ceiling's half of this left on 2026-10-19**, when the operator
+    retired the oracle arm from this section: a run that does not run the arm
+    records no `w_usado` for it, so the crossing cannot be made here any more.
+    The crossing itself is NOT lost --- `tests/test_toy_intrusos.py` makes it
+    for the intruder ceiling, reading `w_usado_cu` off a real sweep at
+    `test_a_zero_intrusion_is_a_no_op_and_so_is_its_oracle_arm` and
+    `test_the_intruder_count_per_class_is_the_declared_rounding` --- and what
+    was dropped here is the SECTION, not the property.
+
+    What stays is the half the retirement did not touch, and it is the half
+    this section's own question rests on: the arm with the weighting off
+    weights by one, and the declared weight is not binary.
     """
     CONTAM = barrido_frontera
     nombre = T.FAMILIAS[0]["nombre"]
     for rho in CONTAM["rhos"]:
         celda = _celda_del_barrido(CONTAM, nombre, rho)
         usados = celda["w_usado"]
-        assert set(usados) == {T.BRAZO_SIN_SOP, T.BRAZO_CON_SOP,
-                               T.BRAZO_TECHO}, list(usados)
-        for fila in usados[T.BRAZO_TECHO]:
-            assert set(fila["valores"]) <= {0.0, 1.0}, fila
-            assert 0.0 in fila["valores"] and 1.0 in fila["valores"], (
-                fila, "the oracle weight is constant, so it is not an "
-                "indicator of anything")
+        assert set(usados) == {T.BRAZO_SIN_SOP, T.BRAZO_CON_SOP}, list(usados)
+        assert T.BRAZO_TECHO not in usados, (
+            list(usados),
+            "el barrido volvió a registrar el techo: hay que reponer la mitad "
+            "que cruzaba el indicador contra la corrida")
         for fila in usados[T.BRAZO_SIN_SOP]:
             assert set(fila["valores"]) == {1.0}, (
                 fila, "the arm with the weighting off did not weight by one")

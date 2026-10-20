@@ -185,6 +185,12 @@ _JITTER = np.array([0.000, 0.003, 0.007, 0.012])
 assert len(_JITTER) == len(SEMILLAS) and len(set(_JITTER)) == len(_JITTER)
 
 
+#: El pase de los registros escritos a mano: CUATRO pasos por época, nunca uno.
+#: Con uno, el paso y la época serían el mismo número y un test que lee la
+#: columna de la época no podría distinguir cuál de los dos imprime.
+_PASE_A_MANO = 4
+
+
 def _filas_creda(*, acc, tr_e, tr_d, peso, pico):
     """One CREDA arm's per-seed rows, every field a DISTINCT value.
 
@@ -197,7 +203,13 @@ def _filas_creda(*, acc, tr_e, tr_d, peso, pico):
                  sopesado=bool(peso == T.PESO_DECLARADO),
                  techo_no_es_metodo=bool(peso in T.PESOS_TECHO),
                  hp2={"LR_2": 1e-3}, acc_s_te=float(0.95 - j),
-                 paso_fin=60, mejor_paso=40 + int(1000 * j),
+                 # El techo entero y un `mejor_paso` que cae en frontera de
+                 # época: desde el 2026-10-19 la fase 2 no para temprano, y la
+                 # tabla deriva la época dividiendo por el pase que este techo
+                 # declara. Un techo corto describe una corrida que ya no
+                 # existe, y la derivación lo dice en vez de inventar un pase.
+                 paso_fin=_PASE_A_MANO * T.EPOCAS_2,
+                 mejor_paso=_PASE_A_MANO * (40 + int(1000 * j)),
                  vigia_fin=float(0.80 - j),
                  tr_e=float(tr_e + j), tr_d=float(tr_d - j),
                  pico_te=float(pico + j))
@@ -261,8 +273,14 @@ def _contam(*, nombres=TOYSETS, rhos=NIVELES, techo=None, perturbacion=PERT,
                 con=(base_acc + d_acc, base_e + d_e, base_d + d_d),
                 techo=None if techo is None else base_acc + techo)
     padron = list(padron if padron is not None else
-                  (T.BRAZOS_CONTAMINACION if techo is not None
-                   else T.BRAZOS_CONTAMINACION[:-1]))
+                  # El padrón MÁS el techo cuando se pide, y el padrón pelado
+                  # cuando no. Decía `BRAZOS_CONTAMINACION[:-1]` para quitarlo,
+                  # que daba por sentado que el techo era el último del padrón;
+                  # el 2026-10-19 el operador lo retiró y ese `[:-1]` empezó a
+                  # quitar `CREDA con sopesado`, que es el brazo del eje de la
+                  # sección. El nombre se escribe, no se recorta por posición.
+                  (tuple(T.BRAZOS_CONTAMINACION) + (T.BRAZO_TECHO,)
+                   if techo is not None else tuple(T.BRAZOS_CONTAMINACION)))
     return dict(rhos=[float(r) for r in rhos], semillas=list(SEMILLAS),
                 pos=T.POS_CONTAMINACION, brazos=padron,
                 perturbaciones=[perturbacion], hp1={}, hp2={}, celdas=celdas)
@@ -384,7 +402,8 @@ def test_the_extracted_input_panel_leaves_the_two_column_figure_pixel_identical(
             a.set_xticklabels([]); a.set_yticklabels([]); a.set_zticklabels([])
         replica.suptitle(
             f"lunas: el dato de entrada, semilla {sem}, "
-            f"en el paso que la parada eligió (paso {int(f['pasos'][k])})",
+            f"en la época que el criterio eligió (época "
+            f"{int(f['pasos'][k]) // toy_plots.pasos_por_epoca_del_cuadro(f['pasos'])})",
             fontsize=12)
         replica.tight_layout()
         esperada = tmp_path / "replica.png"
@@ -522,30 +541,73 @@ def _todas_las_tablas(CONTAM):
     }
 
 
-def test_every_section_two_ladder_table_carries_the_zero_rung():
-    """`rho = 0.00` has a row in all four, EVEN when the sweep skipped it.
+def test_a_declared_rung_the_sweep_skipped_is_printed_as_absent():
+    """A level the DECLARED ladder names and the artifact lacks prints as absent.
 
-    The zero is the level that says the perturbation harness moved nothing on
-    its own. Without it a table has nothing to compare the damage against, and
-    a table whose smallest level is 0.10 looks exactly like one whose smallest
-    level is zero. So the rows come from the DECLARED ladder and a level the
-    artifact does not carry is printed as measured-absent rather than dropped.
+    **This was `..._carries_the_zero_rung` until 2026-10-19.** It read: "`rho =
+    0.00` has a row in all four, EVEN when the sweep skipped it. The zero is
+    the level that says the perturbation harness moved nothing on its own.
+    Without it a table has nothing to compare the damage against." The operator
+    took the zero out of this section that day --- "sin la base limpia, eso ya
+    es la sección 1" --- so the zero half of this claim is retired, and said
+    rather than deleted.
+
+    The MECHANISM it pinned is untouched and is what this measures now: the
+    rows come from the declared ladder, not from what the artifact happens to
+    carry, so a declared level nobody ran is printed as measured-absent instead
+    of vanishing. That is what keeps a table of one rung from looking like a
+    table of four.
     """
-    # A sweep that ran only the top rung, which is the shape on disk today.
-    CONTAM = _contam(nombres=("lunas",), rhos=(0.30,))
-    assert 0.00 not in {float(k[-1]) for k in CONTAM["celdas"]}, (
-        "the fixture already has the zero rung, so dropping it cannot be seen")
-    for cual, md in _todas_las_tablas(CONTAM).items():
-        assert "0.00" in md, (cual, "no zero rung in the table")
-        # And it is named as NOT MEASURED rather than filled in with something.
-        assert "no corrió" in md or "no corrio" in md, (
-            cual, "the missing rung is not declared missing")
+    # La decisión, en sus dos mitades: el cero sigue declarado en `RHOS` --- lo
+    # lee el resto del árbol --- y no está en la escalera de esta sección.
+    assert 0.0 in {float(r) for r in T.RHOS}, T.RHOS
+    assert 0.0 not in {float(r) for r in T.ESCALERA_CONTAMINACION}, (
+        T.ESCALERA_CONTAMINACION,
+        "el cero volvió a esta sección: la mitad retirada de este test vuelve "
+        "a ser medible y hay que reponerla")
 
-    # And when the sweep DID run it, every declared level has a row.
-    completo = _contam(nombres=("lunas",), rhos=T.RHOS)
-    for cual, md in _todas_las_tablas(completo).items():
-        for r in T.RHOS:
-            assert f"{r:.2f}" in md, (cual, r)
+    # **Ver la ausencia necesita una escalera declarada de DOS escalones, con
+    # uno corrido y uno no.** Con la de la sección --- un escalón --- un
+    # artefacto que no lo trae deja la tabla sin NINGUNA fila medida, y el
+    # renderizador se niega ahí con «no hay celdas de las que leer las
+    # semillas», que es otra guarda y es correcta. Así que se declara una de
+    # dos: la propiedad es del renderizador y no del número de escalones que la
+    # sección corra hoy.
+    #
+    # Se parchea `toy_plots` y no `T`: el renderizador la importó por nombre,
+    # así que mover la del módulo no lo tocaría --- y ése es justo el error que
+    # haría pasar este test sin medir nada.
+    declarada = tuple(T.ESCALERA_CONTAMINACION) + (
+        sorted({float(r) for r in T.RHOS}
+               - {float(r) for r in T.ESCALERA_CONTAMINACION})[-1],)
+    assert len(declarada) == 2, declarada
+    previa = toy_plots.ESCALERA_CONTAMINACION
+    toy_plots.ESCALERA_CONTAMINACION = declarada
+    try:
+        # El barrido corrió UNO de los dos declarados.
+        CONTAM = _contam(nombres=("lunas",),
+                         rhos=(float(T.ESCALERA_CONTAMINACION[0]),))
+        corridos = {float(k[-1]) for k in CONTAM["celdas"]}
+        faltan = [r for r in declarada if float(r) not in corridos]
+        assert len(faltan) == 1, (declarada, corridos,
+                                 "el fixture corrió los dos o ninguno, así "
+                                 "que la ausencia no se puede ver")
+        for cual, md in _todas_las_tablas(CONTAM).items():
+            for r in declarada:
+                assert f"{float(r):.2f}" in md, (
+                    cual, r, "falta la fila de un escalón declarado")
+            assert "no corrió" in md or "no corrio" in md, (
+                cual, "the missing rung is not declared missing")
+
+        # Y cuando el barrido corrió los dos, ninguna fila dice que falte.
+        completo = _contam(nombres=("lunas",), rhos=declarada)
+        for cual, md in _todas_las_tablas(completo).items():
+            for r in declarada:
+                assert f"{float(r):.2f}" in md, (cual, r)
+            assert "no corrió" not in md and "no corrio" not in md, (
+                cual, "la tabla declara ausente un nivel que sí corrió")
+    finally:
+        toy_plots.ESCALERA_CONTAMINACION = previa
 
 
 # ================================================ 4. the clustering table
@@ -686,22 +748,36 @@ def test_the_weighting_family_is_corrected_within_one_level_and_never_across_the
     is the denominator that changes --- which is the quietest way a number can
     be wrong.
     """
-    CONTAM = _contam(nombres=("lunas",), rhos=NIVELES)
-    res = toy_plots.comparar_sopesado_escalera(
-        "lunas", CONTAM, _banderas(), "acc_te", perturbacion=PERT)
-    medidos = [n for n in res["niveles"] if n["fila"] is not None]
-    assert len(medidos) == len(NIVELES), [n["rho"] for n in res["niveles"]]
-    for n in medidos:
-        assert n["fila"]["familia_de"] == 1, n
-        assert n["fila"]["holm"] == pytest.approx(n["fila"]["wilcoxon"]), n
-    # The pooled row has `n` pairs, not `n * levels`.
-    assert res["general"]["n"] == len(SEMILLAS), res["general"]["n"]
-    assert res["n"] == len(SEMILLAS), res["n"]
-    md = toy_plots.tabla_sopesado_escalera(
-        "lunas", CONTAM, _banderas(), perturbacion=PERT).data
-    assert "escalera" in md, "the table does not say what it does NOT correct over"
-    assert str(len(SEMILLAS) * len(NIVELES)) in md, (
-        "the table does not name the pseudo-replicated count it refuses")
+    # **La escalera de la sección pasó a UN escalón el 2026-10-19, y con uno
+    # «dentro de un nivel» y «a lo largo de la escalera» son lo mismo: no hay
+    # a lo largo.** Así que este test DECLARA una escalera de varios para
+    # medir la propiedad, que es del renderizador y no del número de escalones
+    # que la sección corra hoy. Se parchea `toy_plots` y no `T`: el
+    # renderizador la importó por nombre, así que mover la del módulo no lo
+    # tocaría --- y ese es justo el error que haría pasar este test sin medir.
+    assert len(NIVELES) > 1, NIVELES
+    previa = toy_plots.ESCALERA_CONTAMINACION
+    toy_plots.ESCALERA_CONTAMINACION = tuple(NIVELES)
+    try:
+        CONTAM = _contam(nombres=("lunas",), rhos=NIVELES)
+        res = toy_plots.comparar_sopesado_escalera(
+            "lunas", CONTAM, _banderas(), "acc_te", perturbacion=PERT)
+        medidos = [n for n in res["niveles"] if n["fila"] is not None]
+        assert len(medidos) == len(NIVELES), [n["rho"] for n in res["niveles"]]
+        for n in medidos:
+            assert n["fila"]["familia_de"] == 1, n
+            assert n["fila"]["holm"] == pytest.approx(n["fila"]["wilcoxon"]), n
+        # The pooled row has `n` pairs, not `n * levels`.
+        assert res["general"]["n"] == len(SEMILLAS), res["general"]["n"]
+        assert res["n"] == len(SEMILLAS), res["n"]
+        md = toy_plots.tabla_sopesado_escalera(
+            "lunas", CONTAM, _banderas(), perturbacion=PERT).data
+        assert "escalera" in md, (
+            "the table does not say what it does NOT correct over")
+        assert str(len(SEMILLAS) * len(NIVELES)) in md, (
+            "the table does not name the pseudo-replicated count it refuses")
+    finally:
+        toy_plots.ESCALERA_CONTAMINACION = previa
 
 
 def test_the_weighted_and_unweighted_arms_are_read_from_the_recorded_weight():

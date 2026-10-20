@@ -87,29 +87,41 @@ The apparatus, and what it was measured against
    Eq. (39) at a FIXED coefficient of 1, move theta_t and nothing else. No ramp
    is evaluated on this path: see `FIXED_COEFFICIENT`.
 
-2. **One criterion for the phase-2 stop and for the phase-2 search: the
-   watchman, MINIMIZED.** `watchman` is CREDA's `vigia` in this benchmark's own
-   unit: the head composed with the TARGET encoder, read over the SOURCE
-   validation role, scored against the SOURCE labels. Zero target labels. Its
-   argmax falls trivially at step 0 -- theta_t starts as theta_s -- so the
-   informative extreme is the argmin, and both the stopping rule and
-   `search_phase_two` minimize it.
+2. **One criterion for the phase-2 selection and for the phase-2 search:
+   `cef`, MAXIMIZED.** `effective_classes` is CREDA's `cef` in this
+   benchmark's own unit: `exp(H(p))` with `p` the histogram of the bag-level
+   argmax over the target TRAIN role, in `[1, classes]`. Zero target labels --
+   it is the histogram of the model's OWN predictions. Both the epoch selection
+   and `search_phase_two` maximize it.
+
+   It was the watchman, MINIMIZED, until 2026-10-19, and the watchman is still
+   computed and recorded at every epoch -- it just chooses nothing. Keeping it
+   is what makes "which of the two would have ordered this better" answerable
+   from the artefact instead of being a question nobody can go back and ask.
+   Measured in CREDA over 90 cells the watchman was the worst rule tried and
+   ordered the trials BACKWARDS in two of three families.
 
 3. **Phase 2 restores the best weights on exit, and the criterion is read once
-   per PASS of the training role** -- `MIN_EPOCHS_2` passes of guard, then
-   `PATIENCE_2_EPOCHS` passes without improving the minimum. CREDA's own reason
-   for restoring, quoted: "quedarse con los ultimos y solo reportar el paso
-   seria el mismo defecto que la fase 1 ya tenia."
+   per PASS of the training role** -- `MIN_EPOCHS_2` passes of guard and then
+   every pass to the ceiling. CREDA's own reason for restoring, quoted:
+   "quedarse con los ultimos y solo reportar el paso seria el mismo defecto que
+   la fase 1 ya tenia."
 
-   It read every STEP until this cut, which is the defect that closed: there
-   was a pass -- `harness.balanced_batches` keeps a shuffled queue per class
-   and refills it when it empties -- and the criterion did not look at it, so
-   the stop was decided on whichever batch the step happened to draw. The
-   SAMPLING needed no change; only the criterion. `PHASE_TWO_CRITERION` says
-   where each of its two numbers comes from, which of them is derived, that the
-   budget stays a step ceiling, and what the asymmetry against CREDA's own
-   nine-step pass costs. The two step fields keep their values and stopped
-   being the criterion.
+   **There is no patience and no stop: phase 2 runs `epochs_2` whole.** There
+   was a stop at `PATIENCE_2_EPOCHS` passes without a new best, and it is what
+   the artefact of `Results/Toyset/full` was actually measuring: all 90 runs
+   died by patience, NONE reached the ceiling, and 38 chose EXACTLY the first
+   legal step. Phase 1 still stops -- its signal is supervised -- and the two
+   phases differing is declared rather than covered by one sentence.
+
+   The criterion read every STEP until an earlier cut, which is a separate
+   defect that closed: there was a pass -- `harness.balanced_batches` keeps a
+   shuffled queue per class and refills it when it empties -- and the criterion
+   did not look at it, so the stop was decided on whichever batch the step
+   happened to draw. The SAMPLING needed no change; only the criterion.
+   `PHASE_TWO_CRITERION` says where every number comes from, which of them are
+   declared, that the budget is now in EPOCHS, and what the asymmetry against
+   CREDA's own nine-step pass costs.
 
 4. **`config.SOURCE_TO_TARGET_SYNC_STEPS` is retired on this path.** Two phases
    means the source freezes and nothing transmits after the one copy. The
@@ -146,16 +158,16 @@ exactly the fields a reduction may touch, and `tests/test_toy_run.py` asserts
 every other field is equal between the two. Every record this module writes
 carries `Scale.stamp()`, so a pilot number can never travel as a result.
 
-`patience_1`, `patience_2` and `min_steps_2` are in `REPETITION_FIELDS` and that
-is a decision worth naming: they are counts of epochs and steps, so they are
-lengths. `patience_1` is still phase 1's own criterion; the other two stopped
-being phase 2's when it moved to passes, and they keep their values because
-three things still read them (`PHASE_TWO_CRITERION` names all three).
+`epochs_1`, `epochs_2` and `patience_1` are the lengths in `REPETITION_FIELDS`,
+and `patience_1` is the only criterion among them: it is phase 1's own stop,
+over SOURCE valid accuracy. `patience_2` and `min_steps_2` left the scale on
+2026-10-19 with the step ceiling -- what they were worth is in
+`PHASE_TWO_CRITERION`.
 
-**And `steps_2` stopped being a reduction the pilot can take freely**, which is
-the cost of the criterion being in passes. A pass is `STEPS_PER_EPOCH_DECLARED`
-steps at EVERY scale -- the bag programme is not a repetition field -- so the
-pilot's own twelve steps were below one whole pass and the criterion could never
+**And `epochs_2` stopped being a reduction the pilot can take freely**, which is
+the cost of the criterion being in passes. The pilot's floor is now
+`MIN_EPOCHS_2 + 1` passes -- enough for the criterion to become legal and then
+choose -- and below it the criterion could never
 have chosen: `adapt_phase_two` refuses a budget below `MIN_EPOCHS_2` passes
 rather than running something that silently never restores. `PILOT`'s own
 docstring derives the 152 it carries instead, and says what the cheaper
@@ -197,7 +209,7 @@ import functools
 import json
 import math
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields as _campos_de
 from pathlib import Path
 
 import numpy as np
@@ -216,7 +228,7 @@ from MIL_CREDA_Benchmark import (bags, config, harness, latent, toy, toy_bags,
 #: else `Scale` carries has to be equal between `FULL` and `PILOT` or the pilot
 #: is a different program and proves nothing about the one that matters.
 REPETITION_FIELDS = frozenset({
-    "epochs_1", "steps_2", "patience_1", "patience_2", "min_steps_2",
+    "epochs_1", "epochs_2", "patience_1",
     "search_seeds", "report_seeds", "trials_1", "trials_2",
     "points_per_domain",
 })
@@ -232,13 +244,17 @@ class Scale:
     """
 
     name: str
-    #: Lengths. `epochs_1` is a CEILING on phase 1, not a length: the stopping
-    #: rule ends it earlier, exactly as `EPOCAS_1` is a ceiling in CREDA.
+    #: Lengths, BOTH IN EPOCHS since 2026-10-19. `epochs_1` is a CEILING on
+    #: phase 1, not a length: the stopping rule ends it earlier, exactly as
+    #: `EPOCAS_1` is a ceiling in CREDA. `epochs_2` IS the length -- phase 2
+    #: has no stopping rule, so it runs its ceiling whole.
+    #:
+    #: `steps_2` was a STEP ceiling and it is gone, with `patience_2` and
+    #: `min_steps_2`. What a step ceiling did is let the lot decide how many
+    #: passes the experiment runs, which is measured in `PHASE_TWO_CRITERION`.
     epochs_1: int
-    steps_2: int
+    epochs_2: int
     patience_1: int
-    patience_2: int
-    min_steps_2: int
     #: Repetitions. The search seeds are DISJOINT from the report seeds: a
     #: hyperparameter chosen on the seeds that get published is a hyperparameter
     #: fitted to them.
@@ -377,8 +393,8 @@ class Scale:
         }
 
 
-#: CREDA's own scale, read off `CREDA.toy_experiment`: `EPOCAS_1`, `PASOS_2`,
-#: `LR_1`, `LR_2`, `PACIENCIA_1`, `PACIENCIA_2`, `MIN_PASOS_2`,
+#: CREDA's own scale, read off `CREDA.toy_experiment`: `EPOCAS_1`, `EPOCAS_2`,
+#: `LR_1`, `LR_2`, `PACIENCIA_1`,
 #: `SEMILLAS_BUSQUEDA`, `SEMILLAS_REPORTE`, `TRIALS_1`, `TRIALS_2`,
 #: `FRAC_TRAIN`, `FRAC_VALID`. Declared, not run: nothing here releases it.
 #:
@@ -399,17 +415,16 @@ class Scale:
 #: read here, and the density is the strongest tie that survives the cut.
 FULL = Scale(
     name="full",
-    epochs_1=200, steps_2=200,
-    patience_1=30, patience_2=30, min_steps_2=40,
+    epochs_1=100, epochs_2=100,
+    patience_1=30,
     search_seeds=(100, 101, 102), report_seeds=tuple(range(10)),
     trials_1=25, trials_2=25,
     points_per_domain=4050,
 )
 
 #: The same programme, short enough to be wrong in minutes. What makes the
-#: restore path run here is no longer `min_steps_2` -- that stopped being
-#: phase 2's criterion -- but `steps_2` holding enough whole passes for the
-#: criterion to choose; the paragraph on it below derives the number.
+#: restore path run here is `epochs_2` holding enough passes for the criterion
+#: to choose; the paragraph on it below derives the number.
 #:
 #: **`points_per_domain` is 2835 and the declared bag size is what forced it.**
 #: 81 bags of 30 instances need 2430 instances per domain, and the bands are
@@ -435,34 +450,27 @@ FULL = Scale(
 #: was not: at 360 points its bags held 26 to 36 instances against the full
 #: scale's 138 to 150, so the two differed in the one thing nothing declared.
 #:
-#: **`steps_2` is 152 and not 12, and the number is DERIVED rather than
-#: chosen.** The phase-2 criterion reads once per PASS of the training role
-#: (`PHASE_TWO_CRITERION`), and a pass of this programme is
-#: `STEPS_PER_EPOCH_DECLARED` steps at EVERY scale -- the bag programme is not
-#: a repetition field, so 48 training bags at one bag per class per step is 16
-#: steps here, at the pilot and at the full scale alike. Twelve steps is less
-#: than ONE pass, so a pilot kept at that budget would rehearse a criterion
-#: that can never choose and a restore that never happens; `adapt_phase_two`
-#: refuses it rather than running something that silently never restores.
+#: **`epochs_2` is 4 and the number is DERIVED rather than chosen.** The
+#: phase-2 criterion reads once per PASS of the training role
+#: (`PHASE_TWO_CRITERION`), so the pilot needs enough passes for the criterion
+#: to become legal and then choose: `MIN_EPOCHS_2 + 1`. Below that the pilot
+#: would rehearse a criterion that can never choose and a restore that never
+#: happens, and `adapt_phase_two` refuses it rather than running something that
+#: silently never restores.
 #:
-#: What 152 is: `MIN_EPOCHS_2 + PATIENCE_2_EPOCHS + 1` whole passes -- the
-#: floor at which the stop can end the run STRICTLY before the ceiling, so the
-#: pilot rehearses all three branches the campaign's criterion has (cannot
-#: choose yet, chose, stopped) -- plus the identical eight-step unread tail the
-#: full scale carries (`200 - 12*16 = 8`, `152 - 9*16 = 8`), so the pilot
-#: rehearses that too instead of dividing the pass exactly and reporting a
-#: zero the full run never reports.
+#: It used to be `MIN_EPOCHS_2 + PATIENCE_2_EPOCHS + 1` passes expressed as 152
+#: steps, because the run had a THIRD branch -- stopped by patience -- that the
+#: pilot had to rehearse. That branch no longer exists: phase 2 runs its
+#: ceiling whole. So the pilot got cheaper by removing a rehearsal of something
+#: that cannot happen, not by lowering a bar.
 #:
-#: What it costs, measured and not estimated: the pilot's phase-2 step ceiling
-#: goes from 324 to 4104 over its 27 phase-2 runs. A cheaper pilot is
-#: available at `MIN_EPOCHS_2 * STEPS_PER_EPOCH_DECLARED` = 48, which chooses
-#: and restores but can never reach the stop; which of the two the pilot should
-#: be is a decision about the rehearsal and is recorded here rather than taken
-#: in silence.
+#: The eight-step unread tail it also rehearsed is gone for the same reason:
+#: with the ceiling in epochs there is no step of the budget that is trained
+#: and never read.
 PILOT = Scale(
     name="pilot",
-    epochs_1=6, steps_2=152,
-    patience_1=3, patience_2=3, min_steps_2=3,
+    epochs_1=6, epochs_2=4,
+    patience_1=3,
     search_seeds=(100,), report_seeds=(0,),
     trials_1=2, trials_2=2,
     points_per_domain=2835,
@@ -528,27 +536,21 @@ def steps_of_one_epoch(targets) -> int:
 #: one.
 STEPS_PER_EPOCH_DECLARED = FULL.realized_split()["bagsPerClass"]["train"]
 
-#: THE MINIMUM, DERIVED. What `min_steps_2 = 40` was buying is a guard before
-#: the criterion may choose anything, and 40 steps of this programme's pass is
-#: `ceil(40 / 16) = 3` of them. Both ends of that division are read off the
-#: code, so moving either moves this.
+#: THE MINIMUM, DECLARED. It was DERIVED from `min_steps_2 = 40` -- 40 steps of
+#: this programme's pass is `ceil(40 / 16) = 3` of them -- and that input was
+#: retired with the step ceiling, so the derivation would now read a number
+#: nobody maintains. The VALUE did not move: 3 is what the derivation gave.
 #:
-#: The step-derived figure it rounds from -- 2.5 passes -- is published beside
-#: it in `PHASE_TWO_CRITERION`, because a derivation whose input is gone reads
-#: as a literal.
-MIN_EPOCHS_2 = max(1, -(-FULL.min_steps_2 // STEPS_PER_EPOCH_DECLARED))
-
-#: THE PATIENCE, DECLARED, and the operator's ruling: five passes. NOT derived
-#: from `patience_2 = 30` steps, which on this programme would give
-#: `ceil(30 / 16) = 2`.
+#: **It does not equal CREDA's 5, and that is deliberate rather than an
+#: oversight.** Both were derived from the same 40-step floor over different
+#: passes (16 steps here, 9 there), and declaring them did not reconcile the
+#: two numbers, because reconciling them is a decision about the guard and not
+#: about the unit. The cross-package pin asserts both are declared in epochs
+#: and publishes both values; it does not assert they are equal.
 #:
-#: The reason the ruling exists is that a derived patience inherits whatever
-#: the lot happens to be, and the lot is searched in CREDA -- so the criterion's
-#: resolution would be decided by a hyperparameter that does not know it is
-#: deciding it. Declaring it removes that dependency on both sides, and the
-#: asymmetry it leaves between the two protocols is INTENTIONAL and measured:
-#: see `asymmetryAgainstCreda` below.
-PATIENCE_2_EPOCHS = 5
+#: Measured, this guard DECIDES rather than guards: over the 90 runs of
+#: `Results/Toyset/full`, 38 chose EXACTLY the first legal step -- 42%.
+MIN_EPOCHS_2 = 3
 
 
 def _criterion_block() -> dict:
@@ -560,14 +562,22 @@ def _criterion_block() -> dict:
     """
     from CREDA import toy_experiment as creda
 
-    whole = FULL.steps_2 // STEPS_PER_EPOCH_DECLARED
-    tail = FULL.steps_2 - whole * STEPS_PER_EPOCH_DECLARED
     creda_epoch = creda.BLOQUES_AL_LOTE_DECLARADO
     return {
         "unit": "epoch",
-        "what": ("the watchman's MINIMUM, read once at the END of each "
-                 "complete pass of the source training role instead of once "
-                 "per step"),
+        "what": ("the MAXIMUM of `cef` -- the effective number of classes the "
+                 "target routing uses -- read once at the END of each "
+                 "complete pass of the source training role"),
+        "signal": "cef",
+        "signalIs": ("exp(H(histogram of argmax over the target TRAIN role)), "
+                     "in [1, classes]. It reads no target label: it is the "
+                     "histogram of the model's own predictions"),
+        "direction": "maximum",
+        "signalChange": (
+            "2026-10-19: it was the MINIMUM of the watchman. Measured over "
+            "CREDA's 90 cells the watchman was the worst rule tried and cef "
+            "the best label-free one; here the watchman is kept as a RECORDED "
+            "reading so the two orderings stay comparable"),
         "stepsPerEpochDeclared": STEPS_PER_EPOCH_DECLARED,
         "stepsPerEpochDeclaredDerivation": (
             "Scale.realized_split()['bagsPerClass']['train'], because "
@@ -575,41 +585,65 @@ def _criterion_block() -> dict:
             "and refills each class's queue independently"),
         "epochDefinedBy": "the source training role",
         "minEpochs2": MIN_EPOCHS_2,
-        "minEpochs2Derivation": (
-            f"ceil(FULL.min_steps_2 / STEPS_PER_EPOCH_DECLARED) = "
-            f"ceil({FULL.min_steps_2} / {STEPS_PER_EPOCH_DECLARED})"),
-        "minEpochs2StepDerivedWouldHaveBeen":
-            FULL.min_steps_2 / STEPS_PER_EPOCH_DECLARED,
-        "patienceEpochs2": PATIENCE_2_EPOCHS,
-        "patienceEpochs2Is": "declared",
-        "patienceEpochs2Why": (
-            "the operator's ruling. A patience derived from a step count "
-            "inherits the lot, and where the lot is searched the criterion's "
-            "resolution would be decided by a hyperparameter that does not "
-            "know it is deciding it"),
-        "patienceEpochs2DerivedWouldHaveBeen":
-            max(1, -(-FULL.patience_2 // STEPS_PER_EPOCH_DECLARED)),
-        "budgetUnit": "step",
+        "minEpochs2Is": "declared",
+        "minEpochs2Was": (
+            "derived as ceil(min_steps_2 / STEPS_PER_EPOCH_DECLARED) = "
+            "ceil(40 / 16); that input was retired with the step ceiling and "
+            "the value did not move"),
+        "minEpochs2InCreda": creda.MIN_EPOCAS_2,
+        "minEpochs2WhyTheyDiffer": (
+            "both were derived from the same 40-step floor over different "
+            f"passes ({STEPS_PER_EPOCH_DECLARED} steps here, {creda_epoch} "
+            "there). Declaring them did not reconcile the numbers, because "
+            "that is a decision about the guard and not about the unit"),
+        "minEpochs2Bites": (
+            "measured: over the 90 runs of Results/Toyset/full, 38 chose "
+            "EXACTLY the first legal step (42%), and in CREDA mejor_paso == "
+            "MIN_PASOS_2 in 5 of 9 cells. A guard the criterion lands on two "
+            "times in five is deciding, not guarding"),
+        "patience": None,
+        "patienceWhy": (
+            "phase 2 has NO stopping rule since 2026-10-19: it runs its "
+            "ceiling whole and the criterion chooses the best epoch of the "
+            "WHOLE run. PATIENCE_2_EPOCHS = 5 was retired rather than kept at "
+            "its value, because a patience published beside a run that never "
+            "stops reads as a mechanism"),
+        "phaseOneStillStops": (
+            "phase 1 DOES stop: patience_1 epochs without improving SOURCE "
+            "valid accuracy, which is supervised. The two phases differ here "
+            "and the record says so rather than leaving one rule to cover both"),
+        "budgetUnit": "epoch",
         "budgetWhy": (
-            "steps_2 stays a STEP ceiling, as PASOS_2 did in CREDA: every "
-            "frame schedule and checkpoint grid of this module is indexed in "
-            "steps, and tests/test_toy_run.py pins FULL.steps_2 against "
-            "creda.PASOS_2. Read as epochs it would be a different experiment"),
-        "atTheFullScale": {
-            "steps2": FULL.steps_2,
-            "wholeEpochs": whole,
-            "stepsWithoutARead": tail,
-            "note": (f"the last {tail} steps of the ceiling are TRAINED and "
-                     f"give the criterion no read, because {FULL.steps_2} is "
-                     f"not a multiple of {STEPS_PER_EPOCH_DECLARED}"),
+            "epochs_2 is an EPOCH ceiling since 2026-10-19, which INVERTS what "
+            "this field said. It said `steps_2 stays a STEP ceiling, as "
+            "PASOS_2 did in CREDA`, on the grounds that every frame schedule "
+            "and checkpoint grid of this module is indexed in steps. The "
+            "grounds were backwards: a step ceiling lets the lot decide how "
+            "many passes the experiment runs, and in CREDA the lot is SEARCHED"),
+        "budgetChangeMeasured": {
+            "inCredaAt200Steps": {
+                "lunas": "LOTE_2=128 -> 9 steps/epoch -> 22.2 passes",
+                "toroide": "LOTE_2=64 -> 17 steps/epoch -> 11.8 passes",
+                "rollo": "LOTE_2=64 -> 17 steps/epoch -> 11.8 passes",
+            },
+            "reading": ("CREDA's global table compared three families trained "
+                        "half as long as one another and nothing said so"),
+            "hereAt200Steps": FULL.epochs_2 and 200 / STEPS_PER_EPOCH_DECLARED,
+            "hereNote": ("this programme's lot is NOT searched -- "
+                         "harness.balanced_batches takes no lot argument -- so "
+                         "the step ceiling never varied the pass count HERE. "
+                         "The unit changed anyway, because the pin holds the "
+                         "two protocols to one unit and a benchmark that "
+                         "measured in another would not be the control"),
         },
-        "theTwoStepFieldsAreNoLongerTheCriterion": (
-            "patience_2 and min_steps_2 keep their values (30, 40) and stopped "
-            "being the phase-2 criterion. Three things still read them: the "
-            "derivation of MIN_EPOCHS_2 above, the scale stamp every record "
-            "carries, and the cross-package pin in tests/test_toy_run.py "
-            "against creda.PACIENCIA_2/MIN_PASOS_2. Moving either value from "
-            "here would have reddened that pin or silently restated CREDA"),
+        "atTheFullScale": {
+            "epochs2": FULL.epochs_2,
+            "stepsItHolds": FULL.epochs_2 * STEPS_PER_EPOCH_DECLARED,
+            "stepsWithoutARead": 0,
+            "note": ("zero by construction: with the ceiling in epochs there "
+                     "is no step of the budget that is trained and never read. "
+                     "At the step ceiling this was 8"),
+        },
         "asymmetryAgainstCreda": {
             "stepsPerEpochHere": STEPS_PER_EPOCH_DECLARED,
             "stepsPerEpochInCreda": creda_epoch,
@@ -620,18 +654,13 @@ def _criterion_block() -> dict:
                 f"{creda_epoch} ({int(creda.FRAC_TRAIN * creda.N_POR_DOMINIO)} "
                 f"training points at lot {creda.LOTE}). It comes from the "
                 f"material, not from a choice"),
-            "epochsInTheBudgetHere": FULL.steps_2 / STEPS_PER_EPOCH_DECLARED,
-            "epochsInTheBudgetInCreda": creda.PASOS_2 / creda_epoch,
-            "patienceShareOfTheBudgetHere":
-                PATIENCE_2_EPOCHS * STEPS_PER_EPOCH_DECLARED / FULL.steps_2,
-            "patienceShareOfTheBudgetInCreda":
-                creda.PACIENCIA_2_EPOCAS * creda_epoch / creda.PASOS_2,
+            "epochsInTheBudgetHere": FULL.epochs_2,
+            "epochsInTheBudgetInCreda": creda.EPOCAS_2,
             "reading": (
-                "one declared patience of five passes reaches further into "
-                "this budget than into CREDA's, because the pass is longer "
-                "here. The two minimums differ for the same reason: "
-                f"{MIN_EPOCHS_2} here against {creda.MIN_EPOCAS_2} there, both "
-                "derived from the same 40-step floor over different passes"),
+                "the two budgets are now the SAME NUMBER of passes, which is "
+                "the whole point of the unit: what a pass costs still differs "
+                "because the material differs, and that difference is "
+                "material rather than protocol"),
         },
     }
 
@@ -2154,6 +2183,58 @@ def watchman(model: wiring.Arm, source_valid, device: torch.device) -> float:
     return value
 
 
+def effective_classes(model: wiring.Arm, device: torch.device) -> float:
+    """CREDA's `cef`: the EFFECTIVE number of classes in the target's routing.
+
+    `exp(H(p))`, with `p` the normalized histogram of the bag-level `argmax`
+    over the target TRAIN role and `H` natural. It is `1` when every target bag
+    lands in ONE class -- the collapse -- and `classes` when it spreads evenly,
+    so it lives in `[1, classes]`.
+
+    **The histogram is taken over `classes` FIXED bins and not over the classes
+    present.** Counting only the present ones would make a collapse to one
+    class and a perfect split between the two that remain give numbers that
+    cannot be compared across epochs, which is exactly the comparison the
+    criterion makes.
+
+    **It reads NO target label, and that is what qualifies it as a criterion.**
+    It is the histogram of the model's OWN predictions. `oracle_target_reading`
+    below reads `y_t` and is recorded for the oracle column alone.
+
+    The role is `model.target` -- the pool `build_arm` fills from
+    `target.train_idx` -- which is the same material phase 2 trains on, already
+    on the device. The per-step draw is a SAMPLE of it
+    (`config.BAGS_PER_STEP` bags with replacement across steps), so a histogram
+    taken from a step's draw would not be comparable between epochs; this walks
+    the whole role.
+
+    Read in `eval` and restored with `set_phase_two_modes`, for the reason
+    `watchman` and `oracle_target_reading` do it: `no_grad` stops the gradient
+    and does NOT stop a BatchNorm from re-estimating its running statistics in
+    the forward, so a reading taken in `train` would move the very buffers
+    `sourceBuffersMoved` reports on.
+    """
+    positions = torch.arange(model.target.members.shape[0],
+                             device=model.target.members.device)
+    model.eval()
+    counts = torch.zeros(model.classes, dtype=torch.long)
+    with torch.no_grad():
+        for start in range(0, int(positions.numel()), config.BAGS_PER_STEP):
+            chunk = positions[start:start + config.BAGS_PER_STEP]
+            routed = model.score_target(model.target.take(chunk)).argmax(dim=1)
+            counts += torch.bincount(routed.cpu(), minlength=model.classes)
+    set_phase_two_modes(model)
+    total = int(counts.sum())
+    assert total == int(positions.numel()), (total, int(positions.numel()),
+                                             "a bag was routed twice or not at all")
+    assert total > 0, "an empty routing has no effective number of classes"
+    assert len(counts) == model.classes, (
+        len(counts), model.classes, "the routing named a class out of range")
+    share = counts.double() / float(total)
+    nonzero = share[share > 0.0]
+    return float(torch.exp(-(nonzero * nonzero.log()).sum()))
+
+
 def oracle_target_reading(model: wiring.Arm, target_eval,
                           device: torch.device) -> float:
     """The ORACLE: the head through the target encoder, over the target's own
@@ -2347,11 +2428,12 @@ def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
     The floor (`B`) has no theta_t, so it has no phase 2: it returns zero steps
     and its reading is the frozen phase-1 model, which is what makes it a floor.
 
-    **The stop is the watchman's MINIMUM, read once at the END of each complete
-    PASS of the source training role** -- `MIN_EPOCHS_2` passes of guard, then
-    `PATIENCE_2_EPOCHS` passes without improving it. `PHASE_TWO_CRITERION` says
-    where each of those two numbers comes from and which of them is derived.
-    The weights of the best pass are restored on exit.
+    **The selection is `cef`'s MAXIMUM, read once at the END of each complete
+    PASS of the source training role** -- `MIN_EPOCHS_2` passes of guard and
+    then every pass to the ceiling. There is NO stop: phase 2 runs `epochs_2`
+    whole and the criterion chooses the best epoch of the WHOLE run. The
+    weights of that pass are restored on exit. `PHASE_TWO_CRITERION` says where
+    every number comes from and which of them are declared.
 
     It used to read every STEP, which is the defect this closes: there was a
     pass (`harness.balanced_batches` keeps a shuffled queue per class and
@@ -2359,11 +2441,20 @@ def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
     stop was decided on whichever batch the step happened to draw. The
     SAMPLING needed no change at all -- only the criterion.
 
-    **The budget stays a STEP ceiling** (`scale.steps_2`), as `PASOS_2` stayed
-    one in CREDA: every frame schedule and checkpoint grid here is indexed in
-    steps. The two units therefore meet, and the leftover is PUBLISHED rather
-    than discovered -- `stepsWithoutARead` is the tail of steps that are
-    trained and give the criterion no read, 8 of the full scale's 200.
+    **The budget is an EPOCH ceiling** (`scale.epochs_2`), which INVERTS what
+    this paragraph said. It said the budget stays a STEP ceiling "as `PASOS_2`
+    stayed one in CREDA", on the grounds that every frame schedule and
+    checkpoint grid here is indexed in steps. The grounds were backwards: a
+    step ceiling lets the LOT decide how many passes the experiment runs, and
+    in CREDA the lot is searched -- measured there, 200 steps bought 22.2
+    passes for `lunas` and 11.8 for `toroide` and `rollo`, so its global table
+    compared families trained half as long as one another.
+
+    The frames stay indexed in steps and that is deliberate: a frame is a state
+    of the weights and the weights move once per step. What went to epochs is
+    the CEILING. `stepsWithoutARead` is now zero by construction and is kept as
+    a field rather than deleted, because a reader of two artefacts has to see
+    it go to zero rather than vanish.
 
     `target_eval` is the target's own TEST role and is optional. Handed in, the
     run records `TARGET_SERIES_FIELD`: one oracle reading per step, for the
@@ -2431,7 +2522,6 @@ def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
         lr=hyper.get("lr2") or scale.lr_2,
         weight_decay=hyper.get("weightDecay2", 0.0),
     )
-    steps_total = scale.steps_2
     # The pass, measured off the role this run was handed rather than taken
     # from the declared anchor, and then CROSSED against it: the anchor is what
     # `MIN_EPOCHS_2` was derived from, so a run whose own pass is a different
@@ -2446,25 +2536,37 @@ def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
             f"MIN_EPOCHS_2 = {MIN_EPOCHS_2} was derived from; re-deriving the "
             "criterion for a different bag programme is a decision about the "
             "experiment and is not taken here")
-    whole_epochs = steps_total // steps_per_epoch
+    # THE CEILING, DERIVED: `epochs_2` whole passes at this run's own pass
+    # length. It was `scale.steps_2`, a step ceiling, and the inversion is in
+    # `PHASE_TWO_CRITERION`: a step ceiling lets the lot decide how many passes
+    # the experiment runs.
+    whole_epochs = scale.epochs_2
+    steps_total = whole_epochs * steps_per_epoch
     if whole_epochs < MIN_EPOCHS_2:
         raise ValueError(
-            f"steps_2 = {steps_total} holds {whole_epochs} whole passes of "
-            f"{steps_per_epoch} steps and the criterion may not choose before "
-            f"{MIN_EPOCHS_2}, so nothing would ever be restored and the run "
-            "would report bestStep = -1 with no criterion read at all; raise "
-            f"steps_2 to at least {MIN_EPOCHS_2 * steps_per_epoch}")
-    # Published rather than discovered by measuring: the budget is a step
-    # ceiling and the criterion is in passes, so the two meet and a tail is
-    # left over. Those steps are TRAINED and give the criterion no read.
-    steps_without_a_read = steps_total - whole_epochs * steps_per_epoch
+            f"epochs_2 = {whole_epochs} and the criterion may not choose "
+            f"before {MIN_EPOCHS_2}, so nothing would ever be restored and "
+            "the run would report bestStep = -1 with no criterion read at "
+            f"all; raise epochs_2 to at least {MIN_EPOCHS_2}")
+    # Zero BY CONSTRUCTION, and kept as a field rather than deleted: it was a
+    # real number at the step ceiling (8 at the full scale) and a reader of two
+    # artefacts has to be able to see it go to zero rather than vanish.
+    steps_without_a_read = 0
     started = time.perf_counter()
     history: list[tuple] = []
     curve: list[dict] = []
     epoch_pass: list[dict] = []
     oracle: list[float] | None = [] if target_eval is not None else None
     drawn_this_epoch: list[int] = []
-    best, best_step, best_epoch, best_state = math.inf, -1, -1, None
+    #: The steps of the epoch being walked, as (objective, adaptation,
+    #: targetConfidenceMean, activeClasses), so the per-epoch row can average
+    #: the readings `training_step` returns. Cleared with `drawn_this_epoch`.
+    _this_epoch: list[tuple] = []
+    # The criterion seeks a MAXIMUM of `cef`, so this starts at `-inf`.
+    # Starting it at `inf` would let no epoch ever beat it: `best_step` would
+    # stay at -1, no weights would be kept, and the run would publish the LAST
+    # model as though it had been chosen.
+    best, best_step, best_epoch, best_state = -math.inf, -1, -1, None
     stopped_at = steps_total
 
     stride = frame_stride(scale)
@@ -2525,6 +2627,13 @@ def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
             "activeClasses": record["activeClasses"],
             "watchman": value,
         })
+        # The readings the per-epoch row averages, taken from `record` and NOT
+        # from `curve[-1]`: the curve row carries what the FIGURE draws, and
+        # `targetConfidenceMean` is a diagnostic that never entered it.
+        _this_epoch.append((float(objective.detach()),
+                            record["adaptation"],
+                            record["targetConfidenceMean"],
+                            record["activeClasses"]))
         if oracle is not None:
             # The oracle, every step, over the TEST role. Recorded here and
             # nowhere else: a reading taken afterwards could not exist, since
@@ -2548,18 +2657,43 @@ def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
         assert total == distinct == len(source_train.targets), (
             epoch + 1, total, distinct, len(source_train.targets),
             "a pass did not draw every training bag exactly once")
+        # THE PER-EPOCH ROW, which is where the criterion is read and
+        # therefore the only grain at which "why did it choose this epoch" is
+        # answerable. Everything beyond the pass property is the EPOCH MEAN of
+        # a reading `training_step` already returns -- nothing new is computed
+        # here and nothing new reads a target label. CREDA's own row carries
+        # the same shape for the same reason.
+        _n = max(1, len(_this_epoch))
+        _mean = lambda j: sum(r[j] for r in _this_epoch) / _n
         epoch_pass.append({"epoch": epoch + 1, "steps": steps_per_epoch,
+                           "objective": _mean(0),
+                           "adaptation": _mean(1),
+                           # `u_t` in CREDA's row is this reading's complement:
+                           # `targetConfidenceMean` is the mean of Eq. (24)'s
+                           # own `w_t` over the bags the epoch drew.
+                           "targetConfidenceMean": _mean(2),
+                           "activeClasses": _mean(3),
                            "distinct": distinct, "total": total})
         drawn_this_epoch = []
-        if epoch + 1 >= MIN_EPOCHS_2:
-            if value < best:
-                best, best_step, best_epoch = value, step + 1, epoch + 1
-                best_state = {k: v.detach().clone()
-                              for k, v in model.target_encoder.state_dict().items()}
-            elif (best_epoch >= 1
-                  and (epoch + 1) - best_epoch >= PATIENCE_2_EPOCHS):
-                stopped_at = step + 1
-                break
+        _this_epoch = []
+        # THE CRITERION: the MAXIMUM of `cef`, read here and nowhere else.
+        # `value` above is the watchman and it is RECORDED and never read by
+        # the criterion, so which of the two would have ordered the epochs
+        # better stays answerable from the artefact afterwards.
+        cef = effective_classes(model, device)
+        epoch_pass[-1]["cef"] = cef
+        epoch_pass[-1]["watchman"] = value
+        if epoch + 1 >= MIN_EPOCHS_2 and cef > best:
+            best, best_step, best_epoch = cef, step + 1, epoch + 1
+            best_state = {k: v.detach().clone()
+                          for k, v in model.target_encoder.state_dict().items()}
+        # **And there is NO `elif` that stops, since 2026-10-19.** There was a
+        # stop at `PATIENCE_2_EPOCHS` passes without a new best, and it did the
+        # same thing CREDA's did: measured over the 90 runs of
+        # `Results/Toyset/full`, every one of them died by patience, NONE
+        # reached the ceiling, and 38 chose EXACTLY the first legal step. What
+        # is agreed is that the ceiling runs whole and the criterion chooses
+        # the best epoch of the WHOLE run.
 
     # The last state the loop actually reached, if the stride did not already
     # land on it. Early stopping ends a run wherever it ends -- at the pilot's
@@ -2587,7 +2721,13 @@ def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
     return {"steps": stopped_at, "bestStep": best_step,
             "secondsPerStep": ((time.perf_counter() - started) / len(history)
                                if history else float("nan")),
-            "bestWatchman": None if best is math.inf else best,
+            # `bestCef` is what the criterion CHOSE on; the three watchman
+            # readings beside it are recorded and chose nothing. Before
+            # 2026-10-19 `bestWatchman` was both at once, which is why it is
+            # split rather than renamed.
+            "bestCef": None if best == -math.inf else best,
+            "bestWatchman": (epoch_pass[best_epoch - 1]["watchman"]
+                             if best_epoch >= 1 else None),
             "finalWatchman": history[-1][4] if history else None,
             "restoredWatchman": restored,
             "history": history, "curve": curve, "trajectory": trajectory,
@@ -2861,26 +3001,73 @@ TRAJECTORY_HISTORY_FIELDS = ("step", "supervised", "adaptation",
 
 #: How many frames the animation AIMS at, from which the stride follows. It is a
 #: programme constant and equal at both scales -- the stride is not, because
-#: `steps_2` is a repetition field and lowering it is the whole of what makes a
+#: `epochs_2` is a repetition field and lowering it is the whole of what makes a
 #: pilot a pilot.
 #:
 #: **Twenty is CREDA's own, read off its declaration rather than chosen here.**
-#: `CREDA.toy_experiment.CUADROS` is `range(0, PASOS_2 + 1, 10)` over 200 steps:
-#: a stride of 10 and twenty-one frames. Declaring the frame count instead of
-#: the stride is what makes the pilot animate at all -- at 12 steps a literal
-#: stride of 10 would leave two frames, so the pilot would be rehearsing a
-#: picture the full run does not draw.
+#: `CREDA.toy_experiment.CUADROS` is `range(0, EPOCAS_2 + 1, 5)` over 100
+#: epochs: a stride of 5 epochs and twenty-one frames. It was cited here as
+#: `range(0, PASOS_2 + 1, 10)` over 200 steps, which is the retired step
+#: ceiling; the frame COUNT did not move with that change and the unit did.
+#:
+#: **At the full scale the count is honoured exactly and at the pilot it is
+#: not, and that is the declaration.** The grid is a whole number of EPOCHS
+#: (`frame_epochs`), so the count it can reach is bounded by `epochs_2`: at 100
+#: epochs the stride is 5 and the twenty-one frames land; at the pilot's 4
+#: epochs no whole-epoch stride reaches twenty, and the floor of one epoch
+#: gives five. That is not a shortfall to repair -- it is what makes the pilot
+#: fast, which is the whole of what a pilot is for. MEASURED at the pilot: five
+#: frames a handle against the twenty-three a step grid gave, so 4.6x fewer
+#: `bag_positions` calls, 4.6x fewer bytes (26,730 against 122,958 at 16 output
+#: dimensions) and 4.6x fewer panels to draw -- 45 against 207 over its nine
+#: handles, at about half a second each.
+#:
+#: What the count still protects is the floor: a literal stride copied from
+#: CREDA would be 5 epochs, which at the pilot's 4 would leave TWO frames, and
+#: two frames and twenty read as the same object until somebody says.
 TRAJECTORY_FRAMES = 20
 
 
-def frame_stride(scale: Scale) -> int:
-    """Every k-th phase-2 step is a frame, and this is k.
+def frame_epochs(scale: Scale) -> int:
+    """Every k-th phase-2 EPOCH is a frame, and this is k. The declared unit.
 
-    Derived from the scale's own `steps_2` so the frame count stays near
-    `TRAJECTORY_FRAMES` at both scales instead of near it at one of them. The
-    floor of 1 is what the pilot runs at: with 12 steps every step is a frame.
+    The grid is declared here in epochs and converted to steps by
+    `frame_stride`, which is the same direction `CREDA.toy_experiment.corrida`
+    runs: `CUADROS` is epochs and `cuad = tuple(e * pasos_por_epoca for e in
+    cuad_ep)`.
+
+    The floor of one epoch is what the pilot runs at: at 4 epochs no
+    whole-epoch stride reaches `TRAJECTORY_FRAMES`, so it takes every epoch and
+    draws five frames.
     """
-    return max(1, int(scale.steps_2) // TRAJECTORY_FRAMES)
+    return max(1, int(scale.epochs_2) // TRAJECTORY_FRAMES)
+
+
+def frame_stride(scale: Scale) -> int:
+    """Every k-th phase-2 step is a frame, and this is k. DERIVED, not declared.
+
+    `frame_epochs` whole passes at the declared pass length. The loop walks
+    steps -- the weights move once per step and a frame is a state of the
+    weights -- so the schedule has to arrive in steps; what changed is which
+    unit it is DECLARED in, and the step count is now the derived one.
+
+    **Why this one is derived from a pass that cannot vary, when CREDA's
+    `pasos_por_epoca` is computed per run.** Not because a frame is a state of
+    the weights -- that is equally true in CREDA and distinguishes nothing. It
+    is because this programme's pass is `STEPS_PER_EPOCH_DECLARED` and
+    `adapt_phase_two` REFUSES a run whose own pass differs, so epoch and step
+    are the same index divided by a constant and a grid in either unit measures
+    the same moment. In CREDA the pass is derived from `LOTE_2`, which is
+    SEARCHED -- 16, 8 and 4 steps for lots of 32, 64 and 128 -- so there a step
+    grid measures three trials at three different points of their training, and
+    that is what forced its grids into epochs.
+
+    At the full scale this returns exactly what the step-declared version
+    returned -- 5 epochs is 80 steps, so the twenty-one frames land on the same
+    steps, byte for byte. At the pilot it does not: 23 frames become 5, which
+    is measured in `TRAJECTORY_FRAMES` and is the point of the change.
+    """
+    return frame_epochs(scale) * STEPS_PER_EPOCH_DECLARED
 
 
 def frame_steps(scale: Scale, applied: int) -> tuple[int, ...]:
@@ -2890,14 +3077,23 @@ def frame_steps(scale: Scale, applied: int) -> tuple[int, ...]:
     convenience.** Zero is the one moment `theta_t` is bit-identical to
     `theta_s` -- the step-0 checkpoint `.predict` is read from -- so an animation
     that began at the first strided step would open on a target that had already
-    moved and nothing in the picture would say so. The last is in because early
-    stopping ends a run wherever it ends: with a stride of 10 and a run that
+    moved and nothing in the picture would say so.
+
+    **The last is now a no-op by construction, and it is kept rather than
+    deleted.** Its reason was early stopping: with a stride of 10 and a run that
     stopped at 47, the final frame would otherwise be step 40 and the figure
-    would animate up to a state the run moved past.
+    would animate up to a state the run moved past. Phase 2 has had no early
+    stop since 2026-10-19 -- it runs its ceiling whole -- so `applied` is the
+    ceiling, and the ceiling is `frame_epochs * TRAJECTORY_FRAMES` passes at
+    most, which the strided range already lands on exactly: 1600 at the full
+    scale with a stride of 80, 64 at the pilot with a stride of 16. The union is
+    kept because it costs a set operation and it is what holds the schedule
+    correct if a run is ever cut short again, the same reason
+    `stepsWithoutARead` is kept at zero rather than removed.
 
     Derived here and not inside the loop that records, so the schedule a run
     FOLLOWED can be re-derived from the two numbers the record already carries
-    (`scale.steps_2` and `phase2Steps`) and compared with the steps the frames
+    (`scale.epochs_2` and `phase2Steps`) and compared with the steps the frames
     actually claim.
     """
     applied = int(applied)
@@ -3300,6 +3496,10 @@ def run_cell(familia: toy_bags.Familia, normalization: str, seed: int,
                 # a reader of `barrido.json` can check the frame schedule
                 # against the steps the run applied without opening the `.npz`.
                 "frameStride": frame_stride(scale),
+                # The DECLARED unit beside the derived one. A reader of two
+                # artefacts has to see the grid change unit rather than find
+                # `frameStride` holding a different number for no stated reason.
+                "frameEpochs": frame_epochs(scale),
                 "trajectoryFrames": len(phase_two["trajectory"]),
                 "phase1Epochs": phase_one["epochs"],
                 "phase1BestEpoch": phase_one["bestEpoch"],
@@ -3325,6 +3525,12 @@ def run_cell(familia: toy_bags.Familia, normalization: str, seed: int,
                 # maximum of, and it enters no criterion -- see
                 # `TARGET_SERIES`.
                 TARGET_SERIES_FIELD: phase_two[TARGET_SERIES_FIELD],
+                # THE CRITERION'S OWN VALUE, which the cell record did not
+                # carry: the three watchman readings below were the only ones
+                # here while the watchman WAS the criterion, and after
+                # 2026-10-19 that left the artefact publishing three readings
+                # of something that chooses nothing and none of what does.
+                "cefBest": phase_two["bestCef"],
                 "watchmanBest": phase_two["bestWatchman"],
                 "watchmanFinal": phase_two["finalWatchman"],
                 "watchmanRestored": phase_two["restoredWatchman"],
@@ -3599,7 +3805,7 @@ def search_phase_two(familia_by_seed: dict, hyper1: dict, scale: Scale,
         hyper["weightDecay2"] = trial.suggest_float(
             "weightDecay2", *PHASE_TWO_OPTIMIZER_RANGES["weightDecay2"],
             log=True)
-        watchmen, targets = [], []
+        cefs, watchmen, targets = [], [], []
         for (normalization, seed), (material, shared, sigma) in frozen.items():
             familia = familia_by_seed[seed]
             backbone = NORMALIZATIONS[normalization]
@@ -3625,22 +3831,39 @@ def search_phase_two(familia_by_seed: dict, hyper1: dict, scale: Scale,
                 # the trials better is a question the artefact has to be able to
                 # answer, and it cannot if only the winner was kept.
                 targets.append(harness.target_accuracy(model, target_eval, device))
+            cefs.append(phase_two["bestCef"])
             watchmen.append(phase_two["bestWatchman"])
         trial.set_user_attr("targetAccuracy", float(np.mean(targets)))
-        return float(np.mean(watchmen))
+        # Recorded and never read by the search, for the same reason the run
+        # records it: which of the two readings would have ordered the TRIALS
+        # better is a question the artefact has to be able to answer, and it
+        # cannot if only the winner's was kept.
+        trial.set_user_attr("watchman", float(np.mean(watchmen)))
+        return float(np.mean(cefs))
 
-    study = optuna.create_study(direction="minimize",
+    study = optuna.create_study(direction="maximize",
                                 sampler=optuna.samplers.TPESampler(seed=0))
     study.optimize(objective, n_trials=scale.trials_2)
     done = [t for t in study.trials if t.value is not None]
     if not done:
         raise RuntimeError("the phase-2 search completed no trial")
-    winner = min(done, key=lambda t: t.value)
+    winner = max(done, key=lambda t: t.value)
     report(f"    {familia_by_seed[scale.search_seeds[0]].nombre:8s} phase 2: "
-           f"{len(done)} trials, min(watchman) {winner.value:.4f}")
+           f"{len(done)} trials, max(cef) {winner.value:.4f}")
     return dict(winner.params), {
-        "trials": len(done), "bestWatchman": float(winner.value),
-        "criterion": "min(watchman)",
+        "trials": len(done), "bestCef": float(winner.value),
+        "bestWatchman": float(winner.user_attrs["watchman"]),
+        "criterion": "max(cef)",
+        # The search and the EPOCH SELECTION used to read different numbers:
+        # the search minimized the watchman while the selection maximized cef.
+        # A search that optimized something the stop does not read is choosing
+        # a configuration for a rule that reads another quantity.
+        "criterionChange": (
+            "2026-10-19: it was min(watchman), and the stop already read "
+            "max(cef). Measured in CREDA, the watchman ordered the trials "
+            "BACKWARDS in two of three families -- r(watchman, test) = -0.232 "
+            "in lunas against r(cef, test) = +0.916 -- so the search was "
+            "picking against the criterion"),
         # The bandwidth every trial of this search ran at, per
         # (normalization, seed): CREDA's frozen statistic times whatever
         # multiplier phase 1 chose. Recorded because a reader comparing this
@@ -3654,7 +3877,8 @@ def search_phase_two(familia_by_seed: dict, hyper1: dict, scale: Scale,
             "sigmaMultiplier", SIGMA_MULTIPLIER_NEUTRAL)),
         "retired": {name: entry["was"] for name, entry in RETIRED_RANGES.items()},
         "fixedCoefficient": FIXED_COEFFICIENT,
-        "perTrial": [{"params": dict(t.params), "watchman": float(t.value),
+        "perTrial": [{"params": dict(t.params), "cef": float(t.value),
+                      "watchman": float(t.user_attrs["watchman"]),
                       "targetAccuracy": t.user_attrs["targetAccuracy"]}
                      for t in done],
         "scale": scale.stamp(),
@@ -3841,7 +4065,12 @@ def work_counts(scale: Scale, families: int) -> dict:
             "arms": arms,
             "phase1Trainings": phase_one, "phase2Runs": phase_two,
             "phase1EpochCeiling": phase_one * scale.epochs_1,
-            "phase2StepCeiling": phase_two * scale.steps_2}
+            "phase2EpochCeiling": phase_two * scale.epochs_2,
+            # Kept beside the epoch figure because `secondsPerPhase2Step` is
+            # what the forecast multiplies, and a forecast that multiplied
+            # epochs by a per-step rate would be wrong by the pass length.
+            "phase2StepCeiling": (phase_two * scale.epochs_2
+                                  * STEPS_PER_EPOCH_DECLARED)}
 
 
 def cost_report(rates: list[dict], scale: Scale, elapsed: float,
@@ -4123,12 +4352,19 @@ def flags(scale: Scale, device: torch.device, families: tuple[str, ...],
                         "retired": sorted(RETIRED_RANGES),
                         "why": PHASE_ONE_SPLIT_REASON},
         "phase1NotSearched": PHASE_ONE_NOT_SEARCHED,
-        "criteria": {"phase1Stop": "max(sourceValidAccuracy)",
+        "criteria": {"phase1Stop": "patience_1 epochs without improving "
+                                   "max(sourceValidAccuracy)",
                      "phase1Search": "max(sourceValidAccuracy), ties by validLoss",
-                     "phase2Stop": "min(watchman)",
-                     "phase2Search": "min(watchman)"},
+                     "phase2Stop": "none: phase 2 runs its epochs_2 ceiling "
+                                   "whole",
+                     "phase2Select": "max(cef) over the WHOLE run",
+                     "phase2Search": "max(cef)"},
+        "cef": ("exp(H(histogram of the bag argmax over the target TRAIN "
+                "role)), in [1, classes]; zero target labels; maximized; it "
+                "is what the epoch selection and the phase-2 search both read"),
         "watchman": ("head o target-encoder over the SOURCE valid role against "
-                     "SOURCE labels; zero target labels; minimized"),
+                     "SOURCE labels; zero target labels; RECORDED and no "
+                     "longer read by any criterion since 2026-10-19"),
         "syncRetired": {
             "constant": "config.SOURCE_TO_TARGET_SYNC_STEPS",
             "value": config.SOURCE_TO_TARGET_SYNC_STEPS,
@@ -4288,6 +4524,48 @@ def _flat_scalars(record: dict) -> dict:
     return out
 
 
+#: What an artefact whose scale stamp is from another protocol raises, so the
+#: callers that can do something about it (a test fixture that would rather
+#: skip) can tell it from an ordinary read failure.
+class ArtefactoDeOtroProtocolo(RuntimeError):
+    """The stored artefact was measured under a `Scale` this module no longer
+    declares, so its numbers describe a different experiment."""
+
+
+def _refuse_a_foreign_stamp(origen: Path, stamp: dict) -> None:
+    """Refuse an artefact whose scale stamp does not name this module's own
+    `Scale` fields.
+
+    **Derived from `Scale` itself and never from a list written here**, so the
+    next time a field is added or retired this keeps working instead of
+    checking for the previous change.
+
+    It exists because of the shape of the failure it replaces. On 2026-10-19
+    `steps_2` became `epochs_2`, and the pilot artefact on disk kept the old
+    stamp: nothing refused it, `cargar` returned it, and nine renderers died
+    later with `KeyError: 'epochs_2'` deep inside a `suptitle` -- a message
+    that names neither the artefact nor the protocol nor what to do. The
+    fixture that reads it already skips when the artefact is MISSING and told
+    the reader to regenerate it; it had no way to tell that one was STALE.
+
+    Refusing here and not in the fixture is the point: a renderer, a notebook
+    and a test all read through this function, and a guard that lived in one of
+    them would leave the other two dying the old way.
+    """
+    faltan = sorted({f.name for f in _campos_de(Scale)} - set(stamp))
+    if not faltan:
+        return
+    sobran = sorted(set(stamp) - {f.name for f in _campos_de(Scale)}
+                    - {"isPilot", "realizedSplit"})
+    raise ArtefactoDeOtroProtocolo(
+        f"the artefact in {origen} carries a scale stamp this module does not "
+        f"declare: it is missing {faltan}"
+        + (f" and carries {sobran}, which this Scale retired" if sobran else "")
+        + ". Its numbers were measured under another protocol, so reading them "
+        "as this one's would compare two experiments. Regenerate it with "
+        "MIL-CREDA/Notebooks/Toyset_Generator.ipynb at this scale")
+
+
 def cargar(origen) -> dict:
     """Read back what `guardar` wrote, from the real files.
 
@@ -4295,10 +4573,16 @@ def cargar(origen) -> dict:
     `guardar` wrote, and `tests/test_toy_run.py` crosses that join by running
     `guardar` to disk and asking `cargar` what it sees -- never by writing a
     fixture and reading it, which verifies both halves and never the connection.
+
+    It REFUSES an artefact whose scale stamp is from another protocol --- see
+    `_refuse_a_foreign_stamp`, which is where the reason lives.
     """
     origen = Path(origen)
     flags_ = json.loads((origen / "banderas.json").read_text(encoding="utf-8"))
     barrido = json.loads((origen / "barrido.json").read_text(encoding="utf-8"))
+    # BEFORE anything is decoded: a foreign stamp means every number below it
+    # describes another experiment, so there is nothing worth reading.
+    _refuse_a_foreign_stamp(origen, barrido["escala"])
     families: dict[str, dict] = {}
     for name in flags_["families"]:
         ruta = origen / f"{name}.npz"
@@ -4530,8 +4814,23 @@ COL_PRED = "embedding " + chr(183) + " color = PREDICCIÓN"
 #: one used to read «hasta este cuadro», which was this panel describing a
 #: ceiling of its own; it now says what CREDA's says because the panel now stops
 #: where CREDA's stops.
+#:
+#: And the second one said «hasta el PASO que eligió» until 2026-10-19, when
+#: the criterion moved to epochs on both sides: what it chooses is an epoch, so
+#: the title names an epoch.
+#:
+#: **That day this note argued the x axis could stay «paso de la fase 2» --
+#: «not a contradiction, and CREDA's shape too, the criterion picks a pass and
+#: the curve is drawn against the updates inside it». Retired by the operator
+#: on 2026-10-19: everything is in epochs, which was already decided.** The
+#: argument was wrong on its own terms, and the measurement says where: in
+#: steps the three families' panels run 0-3400, 0-3400 and 0-900, because
+#: `LOTE_2` is searched per family, so the same abscissa means three different
+#: amounts of training and the three figures cannot be read side by side. In
+#: epochs all three run 0-100. A title in one unit over an axis in another was
+#: the smaller half of the defect.
 COL_PHASE_ONE = "fase 1 " + chr(183) + " hasta la época que eligió"
-COL_PHASE_TWO = "fase 2 " + chr(183) + " hasta el paso que eligió"
+COL_PHASE_TWO = "fase 2 " + chr(183) + " hasta la época que eligió"
 
 #: The four columns of a frame, in the order CREDA declares them. A tuple and
 #: not a literal `4` anywhere below: a column added or dropped moves the grid's
@@ -4550,12 +4849,15 @@ GRID_COLUMNS = (COL_REAL, COL_PRED, COL_PHASE_ONE, COL_PHASE_TWO)
 #: 2,754 to 20,898 bytes depending on what the search chose, and only the frame
 #: COUNT moves with the scale.
 #:
-#: **Measured on the pilot of 2026-10-15, at the declared 81 bags with the
-#: search choosing 64 output dimensions**: the three `.npz` files hold 2,219,547
-#: bytes in total over NINE cell handles, at 7 to 13 frames each. The prior
-#: reading, kept as the prior reading: at twelve bags per class and a fixed 16
-#: dimensions the same files went from 68,000 bytes to 166,771 over six handles
-#: at 7 frames each.
+#: **Measured on the pilot of 2026-10-19, at the declared 81 bags with the
+#: search choosing 64 output dimensions**: the three `.npz` files hold 1,470,858
+#: bytes in total over NINE cell handles, at 5 frames each -- the epoch grid's
+#: own count at this ceiling -- and 1,523,790 bytes of positions in memory
+#: before compression. Both prior readings, kept as prior readings: on
+#: 2026-10-15, under the retired 152-step ceiling and its stride of 7, the same
+#: files held 2,219,547 bytes over the same nine handles at 7 to 13 frames
+#: each; and before that, at twelve bags per class and a fixed 16 dimensions,
+#: they went from 68,000 bytes to 166,771 over six handles at 7 frames each.
 #:
 #: The 13x growth is three things at once and none of them is a surprise: 81
 #: bags against 36, 64 dimensions against 16, and nine handles against six.
@@ -4566,32 +4868,63 @@ GRID_COLUMNS = (COL_REAL, COL_PRED, COL_PHASE_ONE, COL_PHASE_TWO)
 #: loud rather than left to be discovered.
 #:
 #: Projected to the full scale with the identical arithmetic: `frame_stride`
-#: gives 10 over 200 steps, so 21 frames a handle, and the full scale declares
-#: 10 report seeds over 2 normalizations and 3 families, so 60 handles --
-#: 2,993,760 bytes of trajectory uncompressed, before `savez_compressed` touches
-#: it.
+#: gives 80 steps over the 1,600 the ceiling holds -- 5 epochs, which is the
+#: unit it is now declared in -- so 21 frames a handle, and the full scale
+#: declares 10 report seeds over 3 normalizations and 3 families, so 90 handles
+#: -- 10,103,940 bytes of trajectory uncompressed at 16 output dimensions,
+#: before `savez_compressed` touches it.
+#:
+#: **All three inputs of that line were stale and are re-derived rather than
+#: patched.** It read `frame_stride` as 10 over 200 steps, which is the retired
+#: step ceiling; it counted 2 normalizations where `NORMALIZATIONS` declares 3,
+#: so 60 handles where the measured pilot already showed NINE at one report
+#: seed (3 families x 3 normalizations); and its byte figure was on the prior
+#: 36-bag basis this same comment says was superseded by 81. The prior numbers
+#: are kept above as the prior reading, which is the only place they belong.
 #:
 #: **That is the number, and it is why the stride is declared rather than left
-#: at every step.** Without a stride the full scale would store 201 frames a
-#: handle -- 28,654,560 bytes, nearly ten times as much -- and would render 201
-#: two-row, four-column frames per family, which is the cost that matters more
-#: than the bytes: one frame of this grid takes about half a second to draw.
+#: at every step.** Without a stride the full scale would store 1,601 frames a
+#: handle -- 770,305,140 bytes, seventy-six times as much -- and would render
+#: 1,601 two-row, four-column frames per family, which is the cost that matters
+#: more than the bytes: one frame of this grid takes about half a second to
+#: draw.
+#:
+#: **At the pilot the epoch grid is what makes it a pilot, MEASURED**: a stride
+#: of one epoch is 16 steps over a 64-step ceiling, so 5 frames a handle
+#: against the 23 the step grid gave -- 4.6x fewer `bag_positions` calls, 4.6x
+#: fewer bytes (26,730 against 122,958 at 16 dimensions) and 45 panels to draw
+#: against 207 over its nine handles. The full scale is untouched by that
+#: change: 5 epochs is 80 steps, so the same 21 frames land on the same steps.
 #:
 #: The generator notebook prints these for the run in front of the reader rather
 #: than quoting this constant, which is what keeps the two from drifting apart.
 TRAJECTORY_COST = {
     "bytesPerFrame": "bags * dims * 4 + bags * 2 = 5,346 at 81 bags and 16 dims",
-    "measuredPilotArtefactBytes": 2219547,
+    "measuredPilotArtefactBytes": 1470858,
+    "measuredPilotLatentBytesInMemory": 1523790,
+    "measuredPilotArtefactBytesUnderTheRetiredStepCeiling": 2219547,
     "measuredPilotArtefactBytesAtTheTwelveBagCut": 166771,
     "measuredPilotArtefactBytesBeforeTheTrajectory": 68000,
-    "pilotFrames": [7, 9, 10, 12, 13],
+    "pilotFrames": [5],
+    "pilotFramesUnderTheRetiredStepCeiling": [7, 9, 10, 12, 13],
     "pilotHandles": 9,
     "pilotOutputDim": 64,
     "projectedFullFrames": 21,
-    "projectedFullHandles": 60,
-    "projectedFullTrajectoryBytes": 2993760,
-    "withoutStrideFullFrames": 201,
-    "withoutStrideFullTrajectoryBytes": 28654560,
+    "projectedFullHandles": 90,
+    "projectedFullTrajectoryBytes": 10103940,
+    "withoutStrideFullFrames": 1601,
+    "withoutStrideFullTrajectoryBytes": 770305140,
+    # What the epoch grid buys at the PILOT, which is the whole reason it is
+    # declared in epochs: the full scale is untouched (5 epochs is 80 steps,
+    # the same 21 frames on the same steps) and the pilot runs 4.6x lighter.
+    "pilotFramesUnderTheStepGrid": 23,
+    "pilotFramesUnderTheEpochGrid": 5,
+    "pilotTrajectoryBytesUnderTheStepGrid": 122958,
+    "pilotTrajectoryBytesUnderTheEpochGrid": 26730,
+    "theStaleProjectedFullHandles": 60,
+    "theStaleProjectedFullHandlesWhy":
+        "it counted 2 normalizations where NORMALIZATIONS declares 3, and the "
+        "measured pilot already showed 9 handles at one report seed",
 }
 
 
@@ -4706,6 +5039,22 @@ def _fila_animada(registro: dict, familia: str, normalizacion: str) -> dict:
         "histFase2": np.asarray(miembros["phaseTwoHistory"], dtype=float),
         "pasoElegido": int(celda["phase2BestStep"]),
         "pasosCorridos": int(celda["phase2Steps"]),
+        # **The three the panel DRAWS with, and they are epochs.** The step
+        # fields above stay because they index the history array -- a row of
+        # `histFase2` is one step and nothing else -- but no step reaches the
+        # reader: the axis, its limit, the chosen marker and the row label are
+        # all epochs, which is what this package reports in.
+        #
+        # The epoch is READ, never divided here. `phase2BestEpoch` is the epoch
+        # the criterion chose and `phase2Epochs` the ceiling it ran, both
+        # written by the run that knows which pass it had. Dividing
+        # `phase2BestStep` at the draw site would recompute, from a constant
+        # declared somewhere else, a number the record already carries -- and
+        # would keep agreeing with it right up until a run whose pass differs,
+        # which is the day it would matter.
+        "epocaElegidaFase2": int(celda["phase2BestEpoch"]),
+        "epocasCorridas": int(celda["phase2Epochs"]),
+        "pasosPorEpoca": int(celda["phase2StepsPerEpoch"]),
         "zancada": int(celda["frameStride"]),
         "fuenteQuieta": float(celda["latentSourceMoved"]),
         "aciertoBlanco": float(celda["targetAccuracy"]),
@@ -4977,7 +5326,19 @@ def _panel_fase2(a, fila: dict, k: int, tope_y: float) -> None:
     # and their legend are built the same way at every frame.
     serie = lambda campo: (filas[:, nombres[campo]] if filas.size
                            else np.empty(0, dtype=float))
-    s = (filas[:, nombres["step"]] + 1 if filas.size
+    # **The abscissa is the EPOCH, and the step only gets it there.** A row of
+    # `histFase2` is one optimizer step -- that is what the array is -- so the
+    # epoch of a row is its step divided by the pass this cell ran, read from
+    # the record and never assumed. `+ 1` first, as before: row zero is the
+    # state AFTER the first step, not before it, so the curve starts inside
+    # the first epoch rather than at a zero it never occupied.
+    #
+    # Dividing here and not at the source is deliberate: the slice above is by
+    # STEP (`tope`), because that is the array's own index, and converting the
+    # column before slicing would make the filter compare an epoch against a
+    # step and silently keep the wrong rows.
+    por_epoca = max(fila["pasosPorEpoca"], 1)
+    s = ((filas[:, nombres["step"]] + 1) / por_epoca if filas.size
          else np.empty(0, dtype=float))
     a.plot(s, serie("adaptation"), color="#2ca02c", lw=2.0,
            label="adaptación (Ec. 39, coef. 1)")
@@ -4985,14 +5346,14 @@ def _panel_fase2(a, fila: dict, k: int, tope_y: float) -> None:
            ls="--", label="parte global (Ecs. 32-37)")
     a.plot(s, serie("contributionLocal"), color="#d62728", lw=1.4,
            ls=":", label="parte local (Ecs. 30-31, 38)")
-    a.set_xlim(0, max(fila["pasosCorridos"], 1))
+    a.set_xlim(0, max(fila["epocasCorridas"], 1))
     # The SAME limit in every row, handed in rather than computed here: a panel
     # that derived its own would derive it from its own row and the three would
     # stop being comparable, which is the whole point of the shared axis.
     a.set_ylim(0.0, tope_y)
     a.grid(alpha=0.25)
     a.tick_params(labelsize=8)
-    a.set_xlabel("paso de la fase 2", fontsize=9)
+    a.set_xlabel("época de la fase 2", fontsize=9)
     a.legend(loc="upper right", fontsize=7.5, framealpha=0.9)
     # One line, as CREDA's is. The second line said which step this frame stands
     # at and which one the run chose; the step is in the suptitle, the chosen
@@ -5005,9 +5366,15 @@ def _panel_fase2(a, fila: dict, k: int, tope_y: float) -> None:
     b.tick_params(labelsize=7, colors="#8c564b")
     b.set_ylabel("vigía: fuente conservada por theta_t (el que PARA)",
                  fontsize=7.5, color="#8c564b")
+    # **The guard is in steps and the line is in epochs, on purpose.** `tope`
+    # is this frame's own step ceiling, so asking whether the choice has
+    # happened yet is a question about steps; where to draw it is a question
+    # about the axis, which is epochs. Collapsing the two would compare an
+    # epoch with a step and the marker would appear frames too early.
     elegido = fila["pasoElegido"]
     if 0 < elegido <= tope:
-        b.axvline(elegido, color="#8c564b", lw=0.9, alpha=0.5)
+        b.axvline(fila["epocaElegidaFase2"], color="#8c564b", lw=0.9,
+                  alpha=0.5)
 
 
 def figura_del_cuadro(registro: dict, familia: str, filas: list, k: int):
@@ -5058,7 +5425,15 @@ def figura_del_cuadro(registro: dict, familia: str, filas: list, k: int):
         # silent case and is silent here too.
         if not fila["cajaCuadrada"]:
             etiqueta += f"\n(ejes {fila['razonDeAspecto']:.0f}:1, no cuadrados)"
-        etiqueta += f"\nparó en el paso {fila['pasoElegido']}"
+        # **«eligió», not «paró», and an EPOCH.** The sentence said «paró en el
+        # paso N» because it was copied from a run that stopped: phase 2 had a
+        # patience and the number was where it tripped. Since 2026-10-19 phase
+        # 2 has no early stop -- it runs its ceiling whole and the criterion
+        # PICKS a point inside it -- so «paró» names an event that no longer
+        # happens, over a unit this package no longer reports in. Both halves
+        # moved together, and CREDA's row label moved with them, because these
+        # two figures are read side by side.
+        etiqueta += f"\neligió la época {fila['epocaElegidaFase2']}"
         ax[r, 0].set_ylabel(etiqueta, fontsize=11.5, labelpad=10,
                             linespacing=1.4)
     quietas = max(fila["fuenteQuieta"] for fila in filas)
@@ -5076,7 +5451,8 @@ def figura_del_cuadro(registro: dict, familia: str, filas: list, k: int):
     # every common frame.
     fig.suptitle(
         f"{familia} {chr(183)} fuente y cabeza QUIETAS {chr(183)} "
-        f"paso {filas[0]['pasos'][k]} de {registro['scale']['steps_2']} "
+        f"época {filas[0]['pasos'][k] // STEPS_PER_EPOCH_DECLARED} de "
+        f"{registro['scale']['epochs_2']} "
         f"{chr(183)} azar {toy_tables.azar(registro):.3f}",
         fontsize=13, y=0.985)
     # **One line, which is the shape of CREDA's.** Its footer names the markers,

@@ -67,23 +67,41 @@ _POS = 'ninguna'
 _SEM = 0
 
 #: `DIM` y `LOTE_2` ELEGIDOS, y la eleccion es la medicion de abajo y no un
-#: gusto. La primera version uso `DIM=8` con el `LOTE_2` por default y la celda
-#: salia DEGENERADA para el test del restaurado: paraba en el techo
-#: (`paso_fin = 200`) con `mejor_paso = 198`, y el acierto de test en 198 y en
-#: 200 era el MISMO numero --- 0.441667 en los dos. O sea que el test pasaba
-#: igual si la restauracion no existiera, que es la unica cosa que ese test
-#: existe para atrapar. Medido sobre ocho configuraciones el 2026-10-16, esta
-#: es la que lo hace morder: `paso_fin = 135` (para TEMPRANO, asi que el camino
-#: de la paciencia tambien corre), `mejor_paso = 90`, y el acierto de test en
-#: 90 es 0.425000 contra 0.427778 en el ultimo punto. La diferencia es chica y
-#: eso no la debilita: el test es de IGUALDAD BIT A BIT, asi que 2.8e-03 lo
-#: separa tanto como 0.5.
+#: gusto. El test del restaurado necesita que el acierto de test en la epoca
+#: ELEGIDA difiera del de la ULTIMA: si coincidieran, la igualdad bit a bit
+#: pasaria tambien sin restauracion --- la fixture seria igual al mutante y el
+#: test estaria verde sin medir nada.
+#:
+#: **Re-medido el 2026-10-19 al techo en EPOCAS**, porque la configuracion
+#: anterior (`DIM=16`, `LOTE_2=128`) se volvio DEGENERADA con el cambio: sin
+#: paciencia la corrida llega a la epoca 100 y `cef` elige justamente la 100,
+#: asi que elegida y ultima son el MISMO punto (0.5055556 en las dos). El
+#: guard del propio test lo atrapo y dice que hay que cambiar de celda y no
+#: aflojar la asercion; esto es eso.
+#:
+#: Barrido de 18 configuraciones sobre `lunas`, semilla 0 (pos x DIM x LOTE_2).
+#: Tres eligieron la epoca 100 y quedaron degeneradas --- `ninguna/16/128`,
+#: `ninguna/32/128`, `layernorm/16/128`. La elegida:
+#:
+#:     pos=ninguna  DIM=32  LOTE_2=64
+#:     mejor_epoca = 85 de 100, acc_te 0.641667 contra 0.725000 en la ultima
+#:
+#: El margen es 0.083 y la direccion es NEGATIVA --- la epoca elegida acierta
+#: MENOS que la ultima en esta celda --- y eso no debilita nada: el test es de
+#: IGUALDAD BIT A BIT contra el restaurado, asi que lo unico que necesita es
+#: que los dos numeros no sean el mismo.
+#:
+#: Y una lectura del barrido que no es de este test pero sale de su medicion:
+#: con `batchnorm` el criterio SALVA la corrida (elige entre la epoca 5 y la
+#: 14, con 0.63 contra 0.34 al final), mientras `ninguna` y `layernorm` eligen
+#: entre la 48 y la 100 con margenes chicos. La seleccion por epoca hace
+#: trabajo muy distinto segun la normalizacion.
 #:
 #: No salen del artefacto a proposito. `CREDA/Results/tesis/toyset/barrido.json`
 #: existe en este disco y esta SIN RASTREAR, asi que un clon no lo tiene y un
 #: test que lo leyera seria rojo ahi por una razon que no es la suya.
-_DIM = 16
-_LOTE_2 = 128
+_DIM = 32
+_LOTE_2 = 64
 
 
 def _hp():
@@ -121,8 +139,13 @@ class _UnaCorridaCompartida:
             # La rejilla PUBLICADA, la que `barrer_tablas` pasa.
             _, cu_c, _, br_c, nf_c = T.corrida(_FAM, D, pos,
                                                cuadros=T.CTRL, **comun)
-            # Y la densa, un punto por paso, que es la que el probe necesita.
-            denso = list(range(0, T.PASOS_2 + 1))
+            # Y la densa, un punto por EPOCA, que es la que el probe
+            # necesita. Era un punto por PASO; con `cuadros` en epocas la
+            # resolucion mas fina de la rejilla es la pasada, y eso ALCANZA
+            # para lo que el probe hace: `mejor_paso` es siempre multiplo de
+            # `pasos_por_epoca`, asi que una rejilla por epoca SIEMPRE lo
+            # contiene --- la vieja, cada 10 pasos, podia no contenerlo.
+            denso = list(range(0, T.EPOCAS_2 + 1))
             _, cu_d, _, br_d, nf_d = T.corrida(_FAM, D, pos,
                                                cuadros=denso, **comun)
             cls._cache[pos] = (cu_c, br_c, nf_c, cu_d, br_d, nf_d)
@@ -443,29 +466,33 @@ class LaRejillaDensaNoMueveLoPublicado(unittest.TestCase):
                          'el bloque de puntos de control esta consumiendo '
                          'aleatoriedad o moviendo buffers')
 
-    def test_la_rejilla_densa_trae_un_punto_por_paso(self):
+    def test_la_rejilla_densa_trae_un_punto_por_epoca(self):
         """Y la publicada no. Si las dos trajeran lo mismo, el test de arriba
         compararia una corrida contra si misma y pasaria sin medir nada.
 
-        El largo es `paso_fin` o `paso_fin + 1`, y las dos cuentas son
-        correctas: el bloque de control corre ARRIBA de la iteracion, asi que
-        el paso `PASOS_2` recibe su punto y despues el bucle corta --- una
-        corrida que llega al techo trae el punto del techo. Una que para
-        temprano corta DESPUES del paso, antes del control siguiente, y trae
-        `paso_fin`. Medido: esta celda con `DIM=8` no para temprano
-        (`paso_fin = 200 = PASOS_2`) y trae 201 puntos. La primera version de
-        este test afirmaba `paso_fin` a secas y se vio fallar con `201 != 200`:
-        la cuenta mala era la del test.
+        **Era un punto por PASO y ahora es uno por EPOCA**, porque `cuadros`
+        se declara en epocas desde el 2026-10-19 y la pasada es su resolucion
+        mas fina. No pierde nada de lo que el probe necesita: `mejor_paso` es
+        siempre multiplo de `pasos_por_epoca`, asi que esta rejilla SIEMPRE
+        contiene el punto elegido --- la publicada, cada 10 epocas, puede no
+        contenerlo, y de eso vive el test de arriba.
+
+        La fase 2 no para temprano, asi que el largo es `epoca_fin + 1`: el
+        bloque de control corre ARRIBA de la iteracion, el paso del techo
+        recibe su punto y despues el bucle corta.
         """
         _, _, nf_c, cu_d, _, nf_d = _UnaCorridaCompartida.par()
         cu_c = _UnaCorridaCompartida.par()[0]
-        fin = int(nf_d['paso_fin'])
+        fin = int(nf_d['epoca_fin'])
         self.assertIn(len(cu_d), (fin, fin + 1),
                       f'la rejilla densa dio {len(cu_d)} puntos para '
-                      f'paso_fin={fin}')
-        # Lo que el probe necesita de verdad: el paso `p` esta en el indice `p`.
-        self.assertEqual([int(r[0]) for r in cu_d], list(range(len(cu_d))),
-                         'la rejilla densa no esta indexada por paso')
+                      f'epoca_fin={fin}')
+        # Lo que el probe necesita de verdad: la epoca `e` esta en el indice
+        # `e`, o sea que su PASO es `e * pasos_por_epoca`.
+        ppe = int(nf_d['pasos_por_epoca'])
+        self.assertEqual([int(r[0]) for r in cu_d],
+                         [e * ppe for e in range(len(cu_d))],
+                         'la rejilla densa no esta indexada por epoca')
         self.assertLess(len(cu_c), len(cu_d),
                         'las dos rejillas tienen el mismo largo, asi que el '
                         'test de identidad no esta comparando dos rejillas')

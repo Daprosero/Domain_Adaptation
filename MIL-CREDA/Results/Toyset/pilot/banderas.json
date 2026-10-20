@@ -52,35 +52,48 @@
   },
   "phaseTwoCriterion": {
     "unit": "epoch",
-    "what": "the watchman's MINIMUM, read once at the END of each complete pass of the source training role instead of once per step",
+    "what": "the MAXIMUM of `cef` -- the effective number of classes the target routing uses -- read once at the END of each complete pass of the source training role",
+    "signal": "cef",
+    "signalIs": "exp(H(histogram of argmax over the target TRAIN role)), in [1, classes]. It reads no target label: it is the histogram of the model's own predictions",
+    "direction": "maximum",
+    "signalChange": "2026-10-19: it was the MINIMUM of the watchman. Measured over CREDA's 90 cells the watchman was the worst rule tried and cef the best label-free one; here the watchman is kept as a RECORDED reading so the two orderings stay comparable",
     "stepsPerEpochDeclared": 16,
     "stepsPerEpochDeclaredDerivation": "Scale.realized_split()['bagsPerClass']['train'], because harness.balanced_batches yields one bag of every class per step and refills each class's queue independently",
     "epochDefinedBy": "the source training role",
     "minEpochs2": 3,
-    "minEpochs2Derivation": "ceil(FULL.min_steps_2 / STEPS_PER_EPOCH_DECLARED) = ceil(40 / 16)",
-    "minEpochs2StepDerivedWouldHaveBeen": 2.5,
-    "patienceEpochs2": 5,
-    "patienceEpochs2Is": "declared",
-    "patienceEpochs2Why": "the operator's ruling. A patience derived from a step count inherits the lot, and where the lot is searched the criterion's resolution would be decided by a hyperparameter that does not know it is deciding it",
-    "patienceEpochs2DerivedWouldHaveBeen": 2,
-    "budgetUnit": "step",
-    "budgetWhy": "steps_2 stays a STEP ceiling, as PASOS_2 did in CREDA: every frame schedule and checkpoint grid of this module is indexed in steps, and tests/test_toy_run.py pins FULL.steps_2 against creda.PASOS_2. Read as epochs it would be a different experiment",
-    "atTheFullScale": {
-      "steps2": 200,
-      "wholeEpochs": 12,
-      "stepsWithoutARead": 8,
-      "note": "the last 8 steps of the ceiling are TRAINED and give the criterion no read, because 200 is not a multiple of 16"
+    "minEpochs2Is": "declared",
+    "minEpochs2Was": "derived as ceil(min_steps_2 / STEPS_PER_EPOCH_DECLARED) = ceil(40 / 16); that input was retired with the step ceiling and the value did not move",
+    "minEpochs2InCreda": 5,
+    "minEpochs2WhyTheyDiffer": "both were derived from the same 40-step floor over different passes (16 steps here, 9 there). Declaring them did not reconcile the numbers, because that is a decision about the guard and not about the unit",
+    "minEpochs2Bites": "measured: over the 90 runs of Results/Toyset/full, 38 chose EXACTLY the first legal step (42%), and in CREDA mejor_paso == MIN_PASOS_2 in 5 of 9 cells. A guard the criterion lands on two times in five is deciding, not guarding",
+    "patience": null,
+    "patienceWhy": "phase 2 has NO stopping rule since 2026-10-19: it runs its ceiling whole and the criterion chooses the best epoch of the WHOLE run. PATIENCE_2_EPOCHS = 5 was retired rather than kept at its value, because a patience published beside a run that never stops reads as a mechanism",
+    "phaseOneStillStops": "phase 1 DOES stop: patience_1 epochs without improving SOURCE valid accuracy, which is supervised. The two phases differ here and the record says so rather than leaving one rule to cover both",
+    "budgetUnit": "epoch",
+    "budgetWhy": "epochs_2 is an EPOCH ceiling since 2026-10-19, which INVERTS what this field said. It said `steps_2 stays a STEP ceiling, as PASOS_2 did in CREDA`, on the grounds that every frame schedule and checkpoint grid of this module is indexed in steps. The grounds were backwards: a step ceiling lets the lot decide how many passes the experiment runs, and in CREDA the lot is SEARCHED",
+    "budgetChangeMeasured": {
+      "inCredaAt200Steps": {
+        "lunas": "LOTE_2=128 -> 9 steps/epoch -> 22.2 passes",
+        "toroide": "LOTE_2=64 -> 17 steps/epoch -> 11.8 passes",
+        "rollo": "LOTE_2=64 -> 17 steps/epoch -> 11.8 passes"
+      },
+      "reading": "CREDA's global table compared three families trained half as long as one another and nothing said so",
+      "hereAt200Steps": 12.5,
+      "hereNote": "this programme's lot is NOT searched -- harness.balanced_batches takes no lot argument -- so the step ceiling never varied the pass count HERE. The unit changed anyway, because the pin holds the two protocols to one unit and a benchmark that measured in another would not be the control"
     },
-    "theTwoStepFieldsAreNoLongerTheCriterion": "patience_2 and min_steps_2 keep their values (30, 40) and stopped being the phase-2 criterion. Three things still read them: the derivation of MIN_EPOCHS_2 above, the scale stamp every record carries, and the cross-package pin in tests/test_toy_run.py against creda.PACIENCIA_2/MIN_PASOS_2. Moving either value from here would have reddened that pin or silently restated CREDA",
+    "atTheFullScale": {
+      "epochs2": 100,
+      "stepsItHolds": 1600,
+      "stepsWithoutARead": 0,
+      "note": "zero by construction: with the ceiling in epochs there is no step of the budget that is trained and never read. At the step ceiling this was 8"
+    },
     "asymmetryAgainstCreda": {
       "stepsPerEpochHere": 16,
       "stepsPerEpochInCreda": 9,
       "whyTheyDiffer": "this programme's pass is 16 steps (48 training bags at 3 per lot) and CREDA's is 9 (1080 training points at lot 128). It comes from the material, not from a choice",
-      "epochsInTheBudgetHere": 12.5,
-      "epochsInTheBudgetInCreda": 22.22222222222222,
-      "patienceShareOfTheBudgetHere": 0.4,
-      "patienceShareOfTheBudgetInCreda": 0.225,
-      "reading": "one declared patience of five passes reaches further into this budget than into CREDA's, because the pass is longer here. The two minimums differ for the same reason: 3 here against 5 there, both derived from the same 40-step floor over different passes"
+      "epochsInTheBudgetHere": 100,
+      "epochsInTheBudgetInCreda": 100,
+      "reading": "the two budgets are now the SAME NUMBER of passes, which is the whole point of the unit: what a pass costs still differs because the material differs, and that difference is material rather than protocol"
     }
   },
   "targetSeries": {
@@ -97,10 +110,8 @@
   "scale": {
     "name": "pilot",
     "epochs_1": 6,
-    "steps_2": 152,
+    "epochs_2": 4,
     "patience_1": 3,
-    "patience_2": 3,
-    "min_steps_2": 3,
     "search_seeds": [
       100
     ],
@@ -136,7 +147,7 @@
       }
     }
   },
-  "revision": "research-concept-r29.md",
+  "revision": "research-concept-r34.md",
   "device": "mps",
   "families": [
     "lunas",
@@ -198,14 +209,14 @@
     },
     "weightingGates": {
       "eq26D": "Eq. (26)'s `D` inside the kernel blocks: with the flag on -- which is this arm -- `conditional.weighted_blocks` forms `K~_c^t = D K_c^t D` and `K~_c^{st} = K_c^{st} D` from Eq. (25)'s diagonal of target confidences. With it off those two blocks would enter the mixture RAW, which is `D = I` -- `wiring.py`'s own `K_st_w, K_t_w = K_st_c, K_t_c` branch, which this arm does not take.",
-      "eq37Omega": "Eq. (37)'s `omega_c` in the aggregation over active classes: with the flag on -- which is this arm -- `global_loss` is given `confidence_weights(routed_confidences)`, which is SUB-convex and so lets the ABSOLUTE confidence level gate the term from outside the score. With it off, `global_loss` would be called with its weights argument absent and its uniform `1/|C_act|` default would run -- still a member of Eq. (37)'s family, and no longer a gate. On this toyset the gate is what `WEIGHTING_COST` measures, per cell and not once: where the routed confidences are low the sub-convex weights divide the term, and where they are not the gate is open and the term passes essentially unchanged.",
+      "eq37Omega": "Eq. (37)'s aggregation does NOT read this axis, and has not since r32. `global_loss` is given `n_c^s / N_s`, the observed SOURCE proportions, on every arm -- the flag cannot reach them. Until then the weights were `omega_c = q_c / sum_c' n_c'^t`, built from the same `w_j^t` as Eq. (26)'s `D`, so this call sat behind the flag and the shortfall of a SUB-convex sum let the absolute confidence level gate the term from outside the score. r32 removed that: a weight the model itself determines can be lowered instead of earned. So `WEIGHTING_COST` now measures Eq. (26)'s `D` alone, which is what this axis has always meant, and `weightingCostOmegaSum` is `nan` on every row written from 2026-10-18 on.",
       "whyBothBehindOneFlag": "deliberate, and not this module's decision: a previous stretch hung Eq. (37)'s weights behind the same flag so the digit ladder's E->F rung would isolate ONE mechanism -- the confidence reading, wherever it enters -- rather than half of one. Both weights are built from the same `w_j^t` of Eq. (24).",
       "notGated": "Eq. (38)'s own confidence weighting, in the LOCAL term's aggregation: `local_loss(distances, w_t, EPSILON_LOCAL)` weights each bag's `l_loc,j` by that bag's `w_j^t` and is NOT behind this flag -- it is behind `spec[\"local\"]`. It therefore ran even while this arm declared `weighting: False`, which is why that declaration never meant `sin sopesado` in any complete sense and is part of why the mis-reading was worth recording. With the flag now true, all three confidence readings are live together."
     },
     "weightingCost": {
       "what": "Eq. (37)'s sub-convex `omega_c` divides the global term when the routed confidences are low, and leaves it essentially alone when they are not. Which of the two happens is per cell and not a property of the toyset: measured on the pilot of 2026-10 at TWELVE bags per class, the ratio ran 0.0398 to 1.0411 over the six cells, and the one above 1 was the cell whose sum(omega) came back at 0.9994. An earlier wording said the confidences are low 'here', full stop, which that twelve-bag pilot contradicts on one cell in six. The declared cut is now 27 bags per class, so those two bounds are the PRIOR reading and the pilot that re-measures them is the one that replaces them",
       "whyItMatters": "a searched ceiling could absorb a 37x division -- config.CEILING_RANGE spans four orders -- but this path fixes both coefficients at 1 (`FIXED_COEFFICIENT`), so it cannot be absorbed and the global term's share in the tables carries the factor",
-      "measuredBy": "MIL_CREDA_Benchmark.toy_run.weighting_cost, called by run_cell once per cell; every row carries weightingCostRatio, weightingCostOmegaSum and weightingCostGlobalUnweighted",
+      "measuredBy": "MIL_CREDA_Benchmark.toy_run.weighting_cost, called by run_cell once per cell; every row carries weightingCostRatio, weightingCostOmegaSum and weightingCostGlobalUnweighted. From 2026-10-18 the ratio is Eq. (26)'s `D` alone and omegaSum is nan: r32 took the confidences out of Eq. (37)'s weights",
       "priorMeasurement": {
         "ratioRange": [
           0.027,
@@ -384,12 +395,14 @@
     "LOTE_1": "CREDA sweeps `[32, 64, 128, 256]` POINTS per step; the unit here is the BAG and there is no lot to choose. `harness.balanced_batches` yields exactly one bag per class per step -- it takes no lot argument and reads no `config.BAGS_PER_STEP` -- so the training lot in bags IS the class count. `config.BAGS_PER_STEP` divides the role length to get the STEP COUNT of an epoch, which is an epoch length and not a lot, so searching it would search a repetition field wearing another name. Making the lot searchable means giving `balanced_batches` a per-class count, which is the DIGIT benchmark's own batching and outside this toyset's surface. A range derived from the realized train count would be `(3, 6, 12, 24, 48)` -- one bag per class doubling to the whole 48-bag training role -- and it is written here rather than searched because nothing can consume it yet"
   },
   "criteria": {
-    "phase1Stop": "max(sourceValidAccuracy)",
+    "phase1Stop": "patience_1 epochs without improving max(sourceValidAccuracy)",
     "phase1Search": "max(sourceValidAccuracy), ties by validLoss",
-    "phase2Stop": "min(watchman)",
-    "phase2Search": "min(watchman)"
+    "phase2Stop": "none: phase 2 runs its epochs_2 ceiling whole",
+    "phase2Select": "max(cef) over the WHOLE run",
+    "phase2Search": "max(cef)"
   },
-  "watchman": "head o target-encoder over the SOURCE valid role against SOURCE labels; zero target labels; minimized",
+  "cef": "exp(H(histogram of the bag argmax over the target TRAIN role)), in [1, classes]; zero target labels; maximized; it is what the epoch selection and the phase-2 search both read",
+  "watchman": "head o target-encoder over the SOURCE valid role against SOURCE labels; zero target labels; RECORDED and no longer read by any criterion since 2026-10-19",
   "syncRetired": {
     "constant": "config.SOURCE_TO_TARGET_SYNC_STEPS",
     "value": 7,
@@ -399,10 +412,10 @@
   },
   "cost": {
     "cells": 9,
-    "secondsPerPhase1Epoch": 0.18477197132446302,
-    "secondsPerPhase2Step": 0.13470154349464372,
-    "secondsPerCell": 47.19464894444294,
-    "sweepSeconds": 424.75184049998643,
+    "secondsPerPhase1Epoch": 0.09965733287410533,
+    "secondsPerPhase2Step": 0.06208191160414521,
+    "secondsPerCell": 14.94526224544461,
+    "sweepSeconds": 134.5073602090015,
     "measuredAt": "pilot",
     "workHere": {
       "families": 3,
@@ -413,7 +426,8 @@
       "phase1Trainings": 36,
       "phase2Runs": 27,
       "phase1EpochCeiling": 216,
-      "phase2StepCeiling": 4104
+      "phase2EpochCeiling": 108,
+      "phase2StepCeiling": 1728
     },
     "workAtFullScale": {
       "families": 3,
@@ -423,20 +437,19 @@
       "arms": 1,
       "phase1Trainings": 792,
       "phase2Runs": 765,
-      "phase1EpochCeiling": 158400,
-      "phase2StepCeiling": 153000
+      "phase1EpochCeiling": 79200,
+      "phase2EpochCeiling": 76500,
+      "phase2StepCeiling": 1224000
     },
     "instanceScale": 1.0,
-    "forecastFullSeconds": 49877.216412475434,
-    "forecastFullHours": 13.854782336798731,
+    "forecastFullSeconds": 83881.12056710287,
+    "forecastFullHours": 23.300311268639685,
     "caveat": "an upper bound, not a measurement: both early stops end a phase before its declared length, so the epoch and step counts are ceilings, and the per-epoch cost is scaled linearly in instances per bag, which is an assumption about the encoder and not a measurement of it",
     "scale": {
       "name": "pilot",
       "epochs_1": 6,
-      "steps_2": 152,
+      "epochs_2": 4,
       "patience_1": 3,
-      "patience_2": 3,
-      "min_steps_2": 3,
       "search_seeds": [
         100
       ],
