@@ -4101,7 +4101,7 @@ def test_the_refusal_is_not_one_choke_point_but_every_entry_taking_a_hyper_dict(
     own from a notebook and from the two searches.
     """
     guarded = ("build_arm", "train_phase_one", "adapt_phase_two", "run_cell",
-               "material_bound")
+               "material_bound", "_celda_de_un_brazo")
     for name in guarded:
         source = inspect.getsource(getattr(toy_run, name))
         assert "refuse_retired_hyper(hyper)" in source, name
@@ -4118,6 +4118,13 @@ def test_the_refusal_is_not_one_choke_point_but_every_entry_taking_a_hyper_dict(
     # `material_bound` joined `guarded` when `dim` became searchable: it is a
     # public entry, it now READS the hyper dict, and a guard it skipped would
     # be the one hole the derivation below exists to make visible.
+    #
+    # `_celda_de_un_brazo` joined it on 2026-10-20 with section 3. It is private
+    # and it only forwards to `run_cell`, so it looks like `_resolved_sigma`'s
+    # exemption and is NOT given one: the rule here is that every entry taking a
+    # hyper dict refuses at its own door, and a forwarder that does not look
+    # leaves the refusal to an implementation detail of the forwarder. It calls
+    # the guard, so it belongs in the list above rather than in the exemptions.
     takes_hyper = {
         name for name, value in vars(toy_run).items()
         if inspect.isfunction(value)

@@ -106,6 +106,72 @@ def cuaderno() -> dict:
     return json.loads(CUADERNO.read_text(encoding="utf-8"))
 
 
+#: Las secciones que dibujan UN gif por familia, y por que las otras dos no.
+#:
+#: La 2 camina tres bolsas construidas y lee `w`; la 4 camina una bolsa del
+#: blanco y lee `pi`. La 5 NO tiene figura --- ruling del operador del
+#: 2026-10-20, "este solo dejaria las tablas de ablacion... y un test" --- y la
+#: de la 3 nadie la decidio todavia. Declarado aca y no contado del cuaderno:
+#: una cuenta tomada del documento no puede decir que al documento le falta un
+#: bloque, que es lo unico que estos dos tests existen para decir.
+SECCIONES_CON_GIF = (2, 4)
+
+#: Las cuatro secciones que siguen a la 1, con el titulo que el documento les
+#: da. Escritas y no leidas del cuaderno, por la razon de `SECCIONES_CON_GIF`:
+#: una lista tomada del documento no puede decir que al documento le falta una
+#: seccion, que es lo que el arbol de encabezados existe para decir.
+SECCIONES_DEL_TOYSET = (
+    (2, "el sopesado bajo contaminaci\u00f3n"),
+    (3, "\u00bfes la agregaci\u00f3n la mejor?"),
+    (4, "a qu\u00e9 bolsas se peg\u00f3"),
+    (5, "la ablaci\u00f3n"),
+)
+
+#: El encabezado donde ARRANCAN las secciones 2 a 5 del cuaderno de figuras.
+#: Todo lo de arriba es la seccion 1, que es la que tiene que tener la forma
+#: del documento de CREDA.
+CORTE_DE_LAS_SECCIONES = "## Lo que las secciones 2 a 5 dejaron"
+
+
+@pytest.fixture(scope="module")
+def cuaderno_seccion_uno(cuaderno) -> dict:
+    """El cuaderno HASTA donde empiezan las secciones 2 a 5.
+
+    **Por que existe este corte.** Los tests de forma de este archivo comparan
+    bloque por bloque contra el cuaderno de CREDA, y lo que miden es la forma
+    de la SECCION 1: tres bloques de familia, cada uno con su figura, su tabla
+    y sus dos tests declarados. Cuando el documento crecio con las secciones 2
+    a 5 --- que repiten `### <familia> --- la figura` y `### <familia> --- la
+    tabla` por seccion, porque esa ES la forma de CREDA --- esos tests
+    empezaron a contar las cuatro copias y a fallar sobre un documento
+    correcto.
+
+    Acotarlos no afloja nada: cada uno sigue exigiendo exactamente lo que
+    exigia, sobre el tramo del que lo exigia. Lo que las secciones 2 a 5 deben
+    tener lo exige `test_the_four_sections_repeat_credas_block_shape`, abajo,
+    que sin este corte no se podria haber escrito --- un solo test sobre el
+    documento entero no puede decir cual bloque pertenece a cual seccion.
+    """
+    titulos = _titulos(cuaderno)
+    assert CORTE_DE_LAS_SECCIONES in titulos, (
+        f"el cuaderno no trae «{CORTE_DE_LAS_SECCIONES}», asi que este corte "
+        "no sabe donde termina la seccion 1; si el encabezado cambio de "
+        "texto, este corte corta en el lugar equivocado en silencio")
+    hasta = next(i for i, celda in enumerate(cuaderno["cells"])
+                 if celda["cell_type"] == "markdown"
+                 and CORTE_DE_LAS_SECCIONES in "".join(celda["source"]))
+    return {**cuaderno, "cells": cuaderno["cells"][:hasta]}
+
+
+@pytest.fixture(scope="module")
+def cuaderno_secciones_dos_a_cinco(cuaderno) -> dict:
+    """El tramo de las secciones 2 a 5, el complemento exacto del de arriba."""
+    hasta = next(i for i, celda in enumerate(cuaderno["cells"])
+                 if celda["cell_type"] == "markdown"
+                 and CORTE_DE_LAS_SECCIONES in "".join(celda["source"]))
+    return {**cuaderno, "cells": cuaderno["cells"][hasta:]}
+
+
 @pytest.fixture(scope="module")
 def cuaderno_de_creda() -> dict:
     """CREDA's own executed plot notebook: the shape this one has to have.
@@ -324,7 +390,7 @@ def test_the_family_blocks_show_what_credas_family_blocks_show(
 
 
 def test_the_figure_cell_shows_one_image_and_prints_nothing(
-        cuaderno, cuaderno_de_creda, registro):
+        cuaderno_seccion_uno, cuaderno_de_creda, registro):
     """Per CELL, which the per-heading test above cannot answer.
 
     A heading whose two cells summed to CREDA's counts would pass that one, and
@@ -337,14 +403,14 @@ def test_the_figure_cell_shows_one_image_and_prints_nothing(
     plantilla = _plantilla_de_bloque(cuaderno_de_creda, familias)
     sufijo = _sufijo_con(plantilla, ("image/gif",), "la figura")
     for familia in familias:
-        mimes = _mimes_de(_celda_unica_bajo(cuaderno, f"{familia} {sufijo}"))
+        mimes = _mimes_de(_celda_unica_bajo(cuaderno_seccion_uno, f"{familia} {sufijo}"))
         assert mimes == ["image/gif"], (
             f"la celda de la figura de {familia} emitió {mimes} y la de CREDA "
             "emite la imagen y nada más")
 
 
 def test_the_family_table_cell_shows_exactly_one_table(
-        cuaderno, cuaderno_de_creda, registro):
+        cuaderno_seccion_uno, cuaderno_de_creda, registro):
     """One markdown under `— la tabla`, which is what CREDA's cell emits.
 
     The second one was the computed conclusion. Phase 1's `valid` -> `test` pair
@@ -357,14 +423,14 @@ def test_the_family_table_cell_shows_exactly_one_table(
     plantilla = _plantilla_de_bloque(cuaderno_de_creda, familias)
     sufijo = _sufijo_con(plantilla, ("text/markdown",), "la tabla")
     for familia in familias:
-        mimes = _mimes_de(_celda_unica_bajo(cuaderno, f"{familia} {sufijo}"))
+        mimes = _mimes_de(_celda_unica_bajo(cuaderno_seccion_uno, f"{familia} {sufijo}"))
         assert mimes == ["text/markdown"], (
             f"la celda de la tabla de {familia} emitió {mimes} y la de CREDA "
             "emite una tabla sola")
 
 
 def test_the_declared_tests_cell_shows_exactly_two_tables(
-        cuaderno, cuaderno_de_creda, registro):
+        cuaderno_seccion_uno, cuaderno_de_creda, registro):
     """Two markdowns under `— los tests declarados`, and CREDA's count says two.
 
     They are its `tabla_sin_contra_con` and its `tabla_tres_brazos`. The third
@@ -375,7 +441,7 @@ def test_the_declared_tests_cell_shows_exactly_two_tables(
     sufijo = _sufijo_con(plantilla, ("text/markdown", "text/markdown"),
                          "los tests declarados")
     for familia in familias:
-        mimes = _mimes_de(_celda_unica_bajo(cuaderno, f"{familia} {sufijo}"))
+        mimes = _mimes_de(_celda_unica_bajo(cuaderno_seccion_uno, f"{familia} {sufijo}"))
         assert mimes == ["text/markdown", "text/markdown"], (
             f"la celda de los tests de {familia} emitió {mimes} y la de CREDA "
             "emite las dos tablas y nada más")
@@ -1482,6 +1548,21 @@ def test_the_notebooks_heading_tree_is_the_one_grouped_by_toyset(
                      f"### {familia} — la tabla",
                      f"### {familia} — los tests declarados"]
     esperado.append("## El sopesado, por construcción")
+    # --- y las cuatro secciones, con la MISMA forma de bloque de CREDA
+    #
+    # Repiten `### <familia> --- la figura` y `--- la tabla` porque esa ES la
+    # forma del documento de al lado, no por descuido. Lo que cambia entre
+    # secciones es cuales de los tres subtitulos lleva cada una: las que
+    # `SECCIONES_CON_GIF` declara llevan figura y las otras dos no --- la 5 por
+    # ruling del operador y la 3 porque su figura no se decidio.
+    esperado.append("## Lo que las secciones 2 a 5 dejaron")
+    for numero, titulo in SECCIONES_DEL_TOYSET:
+        esperado.append(f"## Secci\u00f3n {numero} \u2014 {titulo}")
+        for familia in familias:
+            if numero in SECCIONES_CON_GIF:
+                esperado.append(f"### {familia} \u2014 la figura")
+            esperado += [f"### {familia} \u2014 la tabla",
+                         f"### {familia} \u2014 los tests declarados"]
     assert _titulos(cuaderno) == esperado
 
 
@@ -1793,11 +1874,18 @@ def test_the_figure_cells_emitted_an_image_and_not_a_description(cuaderno,
     # Una por familia más la de los datos, derivado del registro y no escrito:
     # un cuaderno que perdiera un bloque entero pasaría una cuenta escrita a
     # mano sin que nada lo dijera.
-    esperadas = len(toy_tables.familias(registro)) + 1
+    #
+    # Más una por familia por cada sección que declara gif: la 2 y la 4. La 5
+    # no tiene figura por ruling, y la de la 3 nadie la decidió --- ver
+    # `SECCIONES_CON_GIF`, donde está escrito, porque contarlas del cuaderno
+    # haría que un bloque perdido pasara sin que nada lo dijera.
+    cuantas = len(toy_tables.familias(registro))
+    esperadas = cuantas + 1 + len(SECCIONES_CON_GIF) * cuantas
     assert len(mostradas) == esperadas, (
         f"el cuaderno trae {len(mostradas)} celdas que dibujan y el registro "
-        f"declara {len(toy_tables.familias(registro))} familias, así que "
-        f"tendrían que ser {esperadas} (una por familia más la de los datos)")
+        f"declara {cuantas} familias, así que tendrían que ser {esperadas}: "
+        f"una por familia más la de los datos, más una por familia por cada "
+        f"sección de {list(SECCIONES_CON_GIF)}")
     malas = [indice for indice, imagenes, descrito in mostradas
              if imagenes != 1 or descrito]
     assert malas == [], (
@@ -2639,8 +2727,14 @@ def test_the_notebook_shows_the_animated_grid_inline_and_archives_it(cuaderno,
     codigo = _codigo(cuaderno)
     for familia in toy_tables.familias(registro):
         assert f'toy_run.animar_familia(REGISTRO, "{familia}", FIGURAS)' in codigo, familia
-    assert codigo.count("display(Image(filename=") == len(
-        toy_tables.familias(registro))
+    # Una por familia por cada sección que muestra gif: la 1, y las que
+    # `SECCIONES_CON_GIF` declara.
+    cuantas = len(toy_tables.familias(registro))
+    esperadas = cuantas * (1 + len(SECCIONES_CON_GIF))
+    assert codigo.count("display(Image(filename=") == esperadas, (
+        f"el cuaderno muestra {codigo.count('display(Image(filename=')} gifs y "
+        f"tendría que mostrar {esperadas}: uno por familia en la sección 1, "
+        f"más uno por familia por cada sección de {list(SECCIONES_CON_GIF)}")
 
 
 def test_the_notebook_renders_the_intervention_ladder_for_every_family(

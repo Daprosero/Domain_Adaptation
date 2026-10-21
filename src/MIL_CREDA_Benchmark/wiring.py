@@ -481,8 +481,12 @@ class Arm(nn.Module):
           "fewer instances already helps".
 
         `None` keeps the whole bag and is what every arm declared before this
-        date does. The budget is the arm's own `selectK`; it is declared before
-        the run at 5, 10 and 15 of 30, and all three are reported.
+        date does. The budget is the arm's own `selectK`, declared before the
+        run and never chosen after seeing a result; which budgets those are is
+        the toyset's call and not this file's -- see `toy_run.PRESUPUESTOS_K`,
+        which went from three budgets to one on 2026-10-20 and says why. This
+        method reads whatever the arm declares and refuses a budget that
+        selects nothing.
         """
         rule = self.spec["selection"]
         if rule is None:
@@ -516,7 +520,16 @@ class Arm(nn.Module):
             # draw differently while the same bag draws the same instances
             # every time it is seen -- a draw that moved between steps would
             # add a second difference to every comparison that reads it.
-            seed = int(torch.sum(H.detach().reshape(-1)[:8].double() * 1e6)) % (2**31)
+            # `.cpu()` ANTES de `.double()`, y no es cosmetico: MPS no
+            # soporta float64 y `.double()` sobre un tensor suyo levanta
+            # `TypeError: Cannot convert a MPS Tensor to float64 dtype`.
+            # Medido el 2026-10-20, la primera vez que la seccion 3 corrio
+            # este brazo en un Mac. El valor es el MISMO que una corrida en
+            # CPU producia --- la suma en float64 de los mismos ocho numeros
+            # ---, asi que esto no mueve ningun sorteo ya medido: lo unico que
+            # cambia es que el brazo ahora alcanza a correr en MPS.
+            seed = int(torch.sum(
+                H.detach().reshape(-1)[:8].cpu().double() * 1e6)) % (2**31)
             generator = torch.Generator(device="cpu").manual_seed(seed)
             keep = torch.randperm(m, generator=generator)[:budget].to(H.device)
         elif rule == "regular":

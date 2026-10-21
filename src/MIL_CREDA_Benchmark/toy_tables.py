@@ -125,6 +125,7 @@ over the declared families without being told.
 from __future__ import annotations
 
 import inspect
+import math
 import statistics
 from dataclasses import dataclass, field
 
@@ -1959,6 +1960,536 @@ def _expandido(declaradas: dict, registro: dict) -> dict:
         else:
             salida[nombre] = llamada(registro)
     return salida
+
+
+# ===========================================================================
+# Las secciones 2 a 5: DOS renderizadores, no nueve
+# ---------------------------------------------------------------------------
+# Las cuatro secciones imprimen la misma pareja de cuadros --- acierto por
+# brazo, y los pares declarados con su correccion --- y lo que cambia entre
+# ellas es QUE brazos y QUE pares, que es una declaracion y no un dibujo. Dos
+# renderizadores parametrizados y no nueve copias, por la regla que este
+# archivo ya sostiene en `_bloque`: dos escritores del mismo cuadro divergen y
+# el signo se lee en el que nadie reviso.
+#
+# El nombre es `tabla_` y no `render_`: `renderizadores()` deriva su padron del
+# prefijo `render_` y le pasa a cada uno el registro de la SECCION 1. Estas
+# leen el artefacto de su propia seccion, asi que entrar a ese padron las haria
+# llamar con el objeto equivocado.
+#
+# `_par_medido`, `_holm` y `_rangos_medios` son los mismos que la seccion 1
+# usa. Nada estadistico se escribe de nuevo aca.
+# ===========================================================================
+
+#: La marca de una fila que NO compite: el piso de la seccion 5 y el techo de
+#: oraculo de CREDA llevan la misma, por la misma razon --- una fila de un piso
+#: al lado de las de los metodos se lee como un metodo mas, y es la fila
+#: IMPRESA la que alguien lee.
+MARCA_FUERA_DE_FAMILIA = "⌁"
+
+#: Lo que se imprime donde una celda no tiene valor. CREDA usa la raya larga.
+NADA = "—"
+
+
+def _filas_por_brazo(barrido: dict, familia: str,
+                     solo: tuple | None = None) -> dict:
+    """Las filas de cada brazo de UNA familia, en el orden en que el barrido
+    declara los brazos y ordenadas por semilla adentro de cada uno.
+
+    Se niega sobre una familia que el barrido no corrio, en vez de devolver un
+    diccionario vacio: una tabla de cero filas se escribe sin fallar y despues
+    se lee como "ningun brazo gano".
+    """
+    celdas = barrido.get("celdas") or {}
+    presentes = {f.get("family") for f in celdas.values()}
+    if familia not in presentes:
+        raise KeyError(
+            f"el artefacto de la seccion {barrido.get('seccion')} no trae "
+            f"filas de {familia!r}; trae {sorted(x for x in presentes if x)}")
+    salida: dict = {}
+    # `solo` restringe a un padron DECLARADO por el que llama, en su orden. La
+    # seccion 3 lo necesita: sus dos ejes dejan sus brazos en el mismo
+    # artefacto, y una tabla de mecanismos que tomara todos imprimiria tambien
+    # las diez filas de seleccion.
+    declarados = (list(solo) if solo is not None
+                  else (barrido.get("brazos") or sorted(
+                      {f["arm"] for f in celdas.values() if "arm" in f})))
+    for brazo in declarados:
+        filas = [f for f in celdas.values()
+                 if f.get("family") == familia and f.get("arm") == brazo]
+        if filas:
+            salida[brazo] = sorted(filas, key=lambda f: int(f["seed"]))
+    if not salida:
+        raise KeyError(
+            f"ningun brazo de {familia!r} dejo filas en la seccion "
+            f"{barrido.get('seccion')}")
+    return salida
+
+
+def _rotulo(barrido: dict, brazo: str) -> str:
+    """La etiqueta que el BARRIDO publico para ese brazo, o su id.
+
+    El id es la caida honesta: un artefacto viejo no trae `rotulos`, y escribir
+    `W-con` es peor que una frase pero no es una frase inventada.
+    """
+    return (barrido.get("rotulos") or {}).get(brazo, brazo)
+
+
+def _serie_de(filas: list, campo: str) -> list:
+    return [float(f[campo]) for f in filas]
+
+
+def tabla_acc(barrido: dict, familia: str, titulo: str,
+              piso: str | None = None, solo: tuple | None = None) -> str:
+    """El cuadro de acierto de una seccion: las CINCO columnas de CREDA.
+
+    `metodo`, la EPOCA que eligio, acierto de la fuente, acierto del blanco y
+    centinela final. Nunca un paso: la unidad de este paquete es la epoca y eso
+    esta decidido.
+
+    `piso` nombra un campo de la fila que se imprime como una fila PROPIA
+    marcada --- el `.predict` de la seccion 5 --- en vez de como un brazo. Es
+    el trato exacto que CREDA le da a su techo de oraculo, por su razon: una
+    lectura que no es un tratamiento, puesta entre los tratamientos, se lee
+    como uno mas.
+    """
+    por_brazo = _filas_por_brazo(barrido, familia, solo)
+    columnas = [
+        Columna("método", lambda f: f["metodo"], ("arm",)),
+        Columna("época", lambda f: f["epoca"], ("phase2BestEpoch",)),
+        Columna("fuente", lambda f: f["fuente"], ("sourceAccuracy",)),
+        Columna("blanco", lambda f: f["blanco"], ("targetAccuracy",)),
+        Columna("centinela", lambda f: f["centinela"], ("cefBest",)),
+    ]
+    filas = []
+    if piso is not None:
+        # El piso sale de CUALQUIER brazo: es el checkpoint del paso 0 de la
+        # misma corrida, asi que todos los brazos de una celda lo comparten.
+        # Se toma del primero declarado y no de un promedio entre brazos, que
+        # promediaria el mismo numero consigo mismo.
+        primero = next(iter(por_brazo.values()))
+        filas.append({
+            "metodo": f"`.predict` {MARCA_FUERA_DE_FAMILIA}",
+            "epoca": "0", "fuente": NADA,
+            "blanco": _media_desvio(_serie_de(primero, piso)),
+            "centinela": NADA,
+        })
+    for brazo, suyas in por_brazo.items():
+        filas.append({
+            "metodo": _rotulo(barrido, brazo),
+            "epoca": (_mediana_entera(
+                [int(f["phase2BestEpoch"]) for f in suyas])
+                if all("phase2BestEpoch" in f for f in suyas) else NADA),
+            "fuente": _media_desvio(_serie_de(suyas, "sourceAccuracy")),
+            "blanco": _media_desvio(_serie_de(suyas, "targetAccuracy")),
+            "centinela": _media_desvio(_serie_de(suyas, "cefBest")),
+        })
+    n = len(next(iter(por_brazo.values())))
+    pie = (f"{n} semillas · media ± desvío · la época es la MEDIANA de las que "
+           f"cada semilla eligió")
+    if piso is not None:
+        pie += (f" · {MARCA_FUERA_DE_FAMILIA} `.predict` no es un brazo: es la "
+                "misma corrida leída en su checkpoint de la época 0, así que "
+                "no tiene época elegida ni centinela propio")
+    return f"**{titulo}**\n\n" + _tabla(columnas, filas) + "\n\n" + pie
+
+
+def tabla_test(barrido: dict, familia: str, pares: list, nota_familia: str,
+               titulo: str, sin_test: list | None = None,
+               rangos: bool = True, solo: tuple | None = None) -> str:
+    """El cuadro de test de una seccion: las SIETE columnas de CREDA.
+
+    `gana si D>0`, `contra`, `D = 1a - 2a`, `IC95 de D`, `p (Wilcoxon)`,
+    `p Holm (familia de N)`, `gana`. La primera columna se llama asi DENTRO de
+    la tabla y no solo en este docstring: el signo se lee donde se imprime, y
+    donde se leyo al reves fue ahi.
+
+    `pares` es la familia DECLARADA, y `m` se cuenta de la declaracion y nunca
+    de cuantos pares el padron admita. `sin_test` son los pares declarados que
+    se reportan SIN p --- el piso de la seccion 5 --- y van despues de la
+    familia corregida, porque ese lugar es la mitad de lo que la fila dice.
+
+    `nota_familia` dice contra que NO se corrige, que es la mitad de la
+    afirmacion que un lector no puede deducir de la tabla.
+    """
+    por_brazo = _filas_por_brazo(barrido, familia, solo)
+    sin_test = list(sin_test or [])
+
+    def _campo(brazo: str, campo: str) -> list:
+        if brazo not in por_brazo:
+            raise KeyError(
+                f"el par nombra el brazo {brazo!r} y la familia {familia!r} no "
+                f"lo corrio; corrio {sorted(por_brazo)}")
+        return _serie_de(por_brazo[brazo], campo)
+
+    medidos = [_par_medido(_rotulo(barrido, a), _rotulo(barrido, b),
+                           _campo(a, "targetAccuracy"),
+                           _campo(b, "targetAccuracy"))
+               for a, b in pares]
+    for fila, ajustada in zip(medidos, _holm([f["p"] for f in medidos])):
+        fila["holm"] = ajustada
+
+    columnas = [
+        Columna("gana si Δ>0", lambda f: f["primero"], ("arm",)),
+        Columna("contra", lambda f: f["segundo"], ("arm",)),
+        Columna("Δ = 1ª − 2ª", lambda f: f"{f['delta']:+.4f}",
+                ("targetAccuracy",)),
+        Columna("IC95 de Δ", lambda f: f["ic_texto"], ("targetAccuracy",)),
+        Columna("p (Wilcoxon)", lambda f: f["p_texto"], ("targetAccuracy",)),
+        Columna("gana", lambda f: f["gana_texto"], ("targetAccuracy",)),
+    ]
+    # **Con UN par no hay columna de Holm, y no es que valga lo mismo.** Holm
+    # sobre una familia de uno devuelve la p sin tocar, asi que una columna
+    # repetiria la de al lado y se leeria como una correccion que no existe.
+    # Lo que la seccion dice es que no hay familia sobre la que corregir, y una
+    # columna ausente lo dice mejor que dos columnas iguales.
+    if len(pares) > 1:
+        columnas.insert(5, Columna(
+            f"p Holm (familia de {len(pares)})", lambda f: f["holm_texto"],
+            ("targetAccuracy",)))
+
+    def _pintar(fila: dict, sufijo: str = "") -> dict:
+        ic = fila.get("ic")
+        return {
+            "primero": fila["primero"] + sufijo,
+            "segundo": fila["segundo"],
+            "delta": fila["delta"],
+            "ic_texto": (NADA if ic is None
+                         else f"[{ic[0]:+.4f}, {ic[1]:+.4f}]"),
+            "p_texto": NADA if fila.get("p") is None else _num(fila["p"]),
+            "holm_texto": (NADA if fila.get("holm") is None
+                           else _num(fila["holm"])),
+            "gana_texto": f"{fila['gana']}/{fila['n']}",
+        }
+
+    filas = [_pintar(f) for f in medidos]
+    # Los pares DECLARADOS que se reportan SIN test. Cada uno es
+    # `(brazo, campo, rotulo)`: el acierto del brazo contra OTRO CAMPO DE SUS
+    # PROPIAS FILAS --- `predictTargetAccuracy`, el checkpoint de la epoca 0 de
+    # esa misma corrida --- asi que el par es pareado por construccion y no hay
+    # un segundo brazo que alinear. Van DESPUES de la familia corregida: arriba
+    # esta lo que Holm corrigio y abajo lo declarado-y-no-testeado, que no es
+    # ninguno de los dos.
+    for brazo, campo, rotulo in sin_test:
+        crudo = _par_medido(_rotulo(barrido, brazo), rotulo,
+                            _campo(brazo, "targetAccuracy"),
+                            _campo(brazo, campo))
+        pintado = _pintar(
+            crudo, f" *(declarado, sin test)*")
+        pintado["segundo"] = f"{rotulo} {MARCA_FUERA_DE_FAMILIA}"
+        pintado["p_texto"] = NADA
+        pintado["holm_texto"] = NADA
+        filas.append(pintado)
+
+    pie = ("`Δ = (columna «gana si Δ>0») − (columna «contra»)`, así que "
+           "**Δ>0 quiere decir que gana el PRIMERO de los dos nombrados** · "
+           "el orden del par es fijo y no sigue al ganador · " + nota_familia)
+    if rangos and len(por_brazo) >= 3:
+        bloques = len(next(iter(por_brazo.values())))
+        # **El signo se invierte ANTES de rankear, y es lo unico delicado de
+        # este pie.** `rankdata` ordena de menor a mayor, y lo que se rankea es
+        # el ACIERTO, donde mayor es mejor. Sin invertir, el rango 1 se lo
+        # llevaria el peor brazo y el pie diria lo contrario de lo que dice.
+        # Invertido, el rango BAJO es el mejor, que es como se lee un Friedman.
+        invertidos = _rangos_medios(
+            {b: [-x for x in _serie_de(f, "targetAccuracy")]
+             for b, f in por_brazo.items()}, bloques)
+        pie = ("rangos de Friedman (BAJO es mejor): "
+               + " · ".join(f"`{_rotulo(barrido, b)}` {r:.2f}"
+                            for b, r in invertidos.items())
+               + "\n\n" + pie)
+    motivos = sorted({f["razon"] for f in medidos if f.get("razon")})
+    if motivos:
+        pie += "\n\n" + "\n\n".join(motivos)
+    return f"**{titulo}**\n\n" + _tabla(columnas, filas) + "\n\n" + pie
+
+
+# --------------------------------------------- las cuatro secciones, declaradas
+#
+# Cada una nombra SUS brazos y SU familia de pares, y nada mas. La aritmetica
+# es la de los dos renderizadores de arriba; lo que vive aca es la declaracion.
+
+def tabla_sopesado_acc(barrido: dict, familia: str) -> str:
+    """Seccion 2: acierto con y sin sopesado, bajo contaminacion.
+
+    Sin base limpia --- "sin la base limpia, eso ya es la seccion 1" --- y sin
+    fila de AdaBN, que es el ruling del operador del 2026-10-20: AdaBN solo
+    existe donde hay buffers que reestimar y esta seccion corre sobre la MEJOR
+    arquitectura, que no es necesariamente BatchNorm. Una fila que a veces no
+    existe no es una fila.
+    """
+    return tabla_acc(
+        barrido, familia,
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        f"contaminación {barrido.get('modo')} ρ = "
+        f"{float(barrido.get('rho', 0)):.2f} · el sopesado")
+
+
+def tabla_sopesado_test(barrido: dict, familia: str) -> str:
+    """Seccion 2: UN par declarado, `con sopesado - sin sopesado`.
+
+    Un par, asi que NO hay Holm: no hay familia sobre la que repartir.
+    """
+    brazos = list(barrido.get("brazos") or ())
+    if len(brazos) != 2:
+        raise ValueError(
+            f"la seccion 2 declara dos brazos y el artefacto trae {brazos}")
+    sin, con = brazos
+    return tabla_test(
+        barrido, familia, [(con, sin)],
+        "un solo par declarado, así que no hay familia sobre la que corregir "
+        "y no hay columna de Holm",
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        f"ρ = {float(barrido.get('rho', 0)):.2f} · test, sólo reporte",
+        rangos=False)
+
+
+def _brazos_de_mecanismo(barrido: dict, familia: str) -> list:
+    """Los brazos del PRIMER eje de la seccion 3, en el orden en que el
+    artefacto declara los mecanismos."""
+    celdas = barrido.get("celdas") or {}
+    por_mecanismo = {}
+    # Por el EJE que la fila declara, nunca por `selection is None`: el brazo
+    # `todas` de la etapa dos tambien lo lleva en `None`, y filtrar por eso se
+    # comia una fila de la otra etapa.
+    for f in celdas.values():
+        if f.get("family") == familia and f.get("eje") == "mecanismo":
+            por_mecanismo[f["mechanism"]] = f["arm"]
+    return [por_mecanismo[m] for m in barrido.get("mecanismos", ())
+            if m in por_mecanismo]
+
+
+def _brazos_de_seleccion(barrido: dict, familia: str) -> dict:
+    """Los brazos del SEGUNDO eje, por regla de seleccion."""
+    celdas = barrido.get("celdas") or {}
+    return {f["selection"]: f["arm"] for f in celdas.values()
+            if f.get("family") == familia and f.get("eje") == "seleccion"
+            and f.get("selection")}
+
+
+def tabla_mecanismos_acc(barrido: dict, familia: str) -> str:
+    """Seccion 3, primer eje: los cinco mecanismos sobre TODAS las instancias."""
+    return tabla_acc(
+        barrido, familia,
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        "la agregación, todas las instancias",
+        solo=tuple(_brazos_de_mecanismo(barrido, familia)))
+
+
+def tabla_mecanismos_test(barrido: dict, familia: str) -> str:
+    """Seccion 3, primer eje: `ours` contra cada uno de los otros cuatro.
+
+    **El orden es el que `mecanismos` declara y NUNCA el efecto medido.** El
+    primer borrador de esta tabla ordenaba por tamano del efecto, que es
+    exactamente lo que CREDA prohibe: un signo que siempre sale positivo no
+    dice nada. Los diez pares entre los cinco existen y NO son la familia.
+    """
+    brazos = _brazos_de_mecanismo(barrido, familia)
+    if not brazos:
+        raise KeyError(f"la seccion 3 no trae brazos de mecanismo de {familia!r}")
+    propio, otros = brazos[0], brazos[1:]
+    return tabla_test(
+        barrido, familia, [(propio, otro) for otro in otros],
+        f"Holm dentro de los {len(otros)} pares de este toyset, no sobre los "
+        "diez que los cinco mecanismos admiten: la familia se declara antes de "
+        "correr y se cuenta de la declaración",
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        "la agregación · test, sólo reporte",
+        solo=tuple(brazos))
+
+
+def tabla_seleccion_acc(barrido: dict, familia: str) -> str:
+    """Seccion 3, segundo eje: las reglas de seleccion a UN presupuesto."""
+    reglas = _brazos_de_seleccion(barrido, familia)
+    ks = barrido.get("presupuestosK") or []
+    return tabla_acc(
+        barrido, familia,
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        f"la selección, k = {', '.join(str(k) for k in ks)}",
+        solo=tuple(reglas[r] for r in ("topk", "arbitrary", "regular")
+                   if r in reglas))
+
+
+def tabla_seleccion_test(barrido: dict, familia: str) -> str:
+    """Seccion 3, segundo eje: los TRES pares entre reglas.
+
+    `topk` vs `arbitrary` es la pregunta de la seccion; `topk` vs `regular` es
+    el control mas duro, porque `regular` no lleva ruido de sorteo; `regular`
+    vs `arbitrary` es el unico par SIN atencion adentro, y mide varianza de
+    sorteo en vez de cobertura.
+    """
+    reglas = _brazos_de_seleccion(barrido, familia)
+    faltan = [r for r in ("topk", "arbitrary", "regular") if r not in reglas]
+    if faltan:
+        raise KeyError(
+            f"la seccion 3 no trae las reglas {faltan} de {familia!r}; trae "
+            f"{sorted(reglas)}")
+    pares = [(reglas["topk"], reglas["arbitrary"]),
+             (reglas["topk"], reglas["regular"]),
+             (reglas["regular"], reglas["arbitrary"])]
+    return tabla_test(
+        barrido, familia, pares,
+        "Holm dentro de los 3 pares entre reglas · a m=3 el umbral más "
+        "pequeño es 0.0167, así que un efecto a p=0.0195 NO sobrevive",
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        "la selección · test, sólo reporte",
+        solo=tuple(reglas[r] for r in ("topk", "arbitrary", "regular")))
+
+
+def tabla_correspondencia(barrido: dict, familia: str) -> str:
+    """Seccion 4: a que bolsas de la fuente se pego cada bolsa del blanco.
+
+    Agrupada por la clase VERDADERA de la bolsa del blanco y sobre TODAS las
+    bolsas del rol: un grupo escogido despues de ver la masa es el grupo que da
+    la respuesta que queriamos.
+
+    **No hay columna de "masa a su clase".** `sum_{i in c} pi_ji = g_{j,c}`
+    exacto, asi que esa columna seria el posterior de la cabeza con otro nombre
+    --- el numero que la tabla de acierto ya reporta --- y no dice nada de QUE
+    sujeto. Lo que lo dice es `pi_{ji|c}` sobre el socio, el reparto ADENTRO de
+    la clase entre sus sujetos. El azar de cada columna va al lado, derivado de
+    los conteos de este rol y nunca escrito a mano.
+    """
+    por_brazo = _filas_por_brazo(barrido, familia)
+    cuantas = int(barrido.get("cuantasDeMasMasa", 5))
+    clases = sorted({c for filas in por_brazo.values() for f in filas
+                     for c in (f.get("deClase") or {})}, key=int)
+    columnas = [
+        Columna("brazo", lambda f: f["brazo"], ("arm",)),
+        Columna("clase del blanco", lambda f: f["clase"], ("deClase",)),
+        Columna("bolsas", lambda f: f["bolsas"], ("bolsasDelRol",)),
+    ]
+    for c in clases:
+        columnas.append(Columna(f"de clase {c}",
+                                (lambda c: lambda f: f["conteo"][c])(c),
+                                ("deClase",)))
+    columnas += [
+        Columna(f"de su clase (azar)", lambda f: f["suya"],
+                ("deSuClase", "azarDeSuClase")),
+        # **Sin la barra vertical en el titulo.** `pi_{ji|c}` lleva un `|`
+        # literal, y adentro de una celda de markdown eso PARTE la celda: la
+        # tabla sale con una columna de mas y el cuaderno de CREDA y este
+        # dejan de escribir la celda igual --- que es lo que
+        # `test_the_one_builder_spells_a_cell_the_way_credas_does` mide. La
+        # notacion completa va en el pie, donde una barra no parte nada.
+        Columna("π al socio, dentro de su clase (azar)", lambda f: f["socio"],
+                ("piSocio", "azarPiSocio")),
+        Columna("juzgables", lambda f: f["juzgables"], ("bolsasJuzgables",)),
+    ]
+    filas = []
+    for brazo, suyas in por_brazo.items():
+        for c in clases:
+            conteo = {d: _media_desvio(
+                [float(f["deClase"][c][int(d)]) for f in suyas], 2)
+                for d in clases}
+            suya = statistics.fmean([float(f["deSuClase"][c]) for f in suyas])
+            azar_suya = statistics.fmean(
+                [float(f["azarDeSuClase"][c]) for f in suyas])
+            socios = [float(f["piSocio"][c]) for f in suyas
+                      if not math.isnan(float(f["piSocio"][c]))]
+            azar_socio = statistics.fmean(
+                [float(f["azarPiSocio"][c]) for f in suyas])
+            filas.append({
+                "brazo": _rotulo(barrido, brazo),
+                "clase": c,
+                "bolsas": str(int(statistics.fmean(
+                    [float(f["bolsasDelRol"][c]) for f in suyas]))),
+                "conteo": conteo,
+                "suya": f"**{suya:.2f}** ({azar_suya:.2f})",
+                "socio": (NADA if not socios
+                          else f"**{statistics.fmean(socios):.4f}** "
+                               f"({azar_socio:.4f})"),
+                "juzgables": str(int(statistics.fmean(
+                    [float(f["bolsasJuzgables"][c]) for f in suyas]))),
+            })
+    n = len(next(iter(por_brazo.values())))
+    pie = (f"{n} semillas · de las **{cuantas} bolsas de la fuente de MÁS "
+           f"MASA** de cada bolsa del blanco, cuántas son de cada clase · "
+           f"entre paréntesis el piso de AZAR de esa columna · «de su clase» "
+           f"sube si el término resuelve la CLASE, `π_{{ji|c}}` al socio sube "
+           f"si resuelve el SUJETO, y las dos son lecturas distintas")
+    residuos = [float(f["residuoIdentidad"]) for filas in por_brazo.values()
+                for f in filas]
+    pie += (f"\n\nresiduo máximo de la identidad `Σ_{{i∈c}} π_ji = g_{{j,c}}`: "
+            f"{max(residuos):.2e} · si no fuera ~0, el denominador de "
+            f"`π_{{ji|c}}` no sería la masa de la clase")
+    return (f"**{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+            f"a qué bolsas se pegó**\n\n" + _tabla(columnas, filas)
+            + "\n\n" + pie)
+
+
+def tabla_correspondencia_acc(barrido: dict, familia: str) -> str:
+    """Seccion 4: el acierto de los dos brazos de la correspondencia."""
+    return tabla_acc(
+        barrido, familia,
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        "el término local")
+
+
+def tabla_correspondencia_test(barrido: dict, familia: str) -> str:
+    """Seccion 4: UN par declarado, `con local - sin local`."""
+    brazos = list(barrido.get("brazos") or ())
+    if len(brazos) != 2:
+        raise ValueError(
+            f"la seccion 4 declara dos brazos y el artefacto trae {brazos}")
+    sin, con = brazos
+    return tabla_test(
+        barrido, familia, [(con, sin)],
+        "un solo par declarado, así que no hay familia sobre la que corregir "
+        "y no hay columna de Holm · la regla de esta sección pide las DOS "
+        "condiciones: que la masa se mueva Y que el acierto no pierda",
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        "test, sólo reporte",
+        rangos=False)
+
+
+def tabla_ablacion_acc(barrido: dict, familia: str) -> str:
+    """Seccion 5: los tres brazos y el piso.
+
+    `.predict` sale del checkpoint de la epoca 0 de la MISMA corrida, asi que
+    no cuesta una segunda barrida y no es un brazo.
+    """
+    return tabla_acc(
+        barrido, familia,
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · la ablación",
+        piso="predictTargetAccuracy")
+
+
+def tabla_ablacion_test(barrido: dict, familia: str) -> str:
+    """Seccion 5: los TRES pares entre terminos, y el piso sin test.
+
+    **`.predict` NO es un tratamiento ni entra en Holm**, y no es una
+    invencion: es el espejo exacto de como CREDA trata su techo de oraculo ---
+    fila propia marcada con su NIVEL, mas un par DECLARADO REPORTADO SIN TEST.
+    La razon es la misma que `toy_plots` escribe para el techo: la escalera
+    `.predict -> metodo` YA es la seccion 1, asi que testearla aca vuelve a
+    testear una hipotesis de la que otra seccion es duena.
+    """
+    brazos = list(barrido.get("brazos") or ())
+    faltan = [b for b in ("TG", "TL", "TGL") if b not in brazos]
+    if faltan:
+        raise KeyError(
+            f"la seccion 5 declara TG, TL y TGL y faltan {faltan}; trae {brazos}")
+    return tabla_test(
+        barrido, familia,
+        [("TGL", "TG"), ("TGL", "TL"), ("TG", "TL")],
+        "Holm dentro de los 3 pares entre TÉRMINOS · `.predict` no es un "
+        "tratamiento y no entra en la familia: la escalera `.predict → método` "
+        "ya es la sección 1",
+        f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
+        "la ablación · test, sólo reporte",
+        sin_test=[("TGL", "predictTargetAccuracy", "`.predict`")],
+        solo=("TG", "TL", "TGL"))
+
+
+def _rotulo_norma_de(barrido: dict, familia: str) -> str:
+    """La arquitectura sobre la que corrio esta familia, del artefacto.
+
+    Del artefacto y no de una constante: cual gano es una lectura de la seccion
+    1 y cambia con la corrida.
+    """
+    norma = (barrido.get("arquitecturas") or {}).get(familia)
+    return _rotulo_norma(norma) if norma else "?"
 
 
 def renderizadores() -> dict:
