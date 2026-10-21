@@ -52,7 +52,8 @@ CUADERNO = RAIZ / "MIL-CREDA" / "Notebooks" / "Toyset_Plot.ipynb"
 #: gráficas no llama ninguna: lee. Derivado de una condición y no de una lista
 #: elegida sería mejor, pero «qué función entrena» no es una propiedad que el
 #: módulo declare, así que se nombran y el test de abajo dice por qué.
-NADA_DE_ESTO_CORRE = ("sweep", "run_cell", "search_phase_one", "search_phase_two",
+NADA_DE_ESTO_CORRE = ("sweep", "barrido_repartido", "run_cell",
+                      "search_phase_one", "search_phase_two",
                       "train_phase_one", "adapt_phase_two", "guardar",
                       "build_family", "build_arm", "weighting_cost")
 

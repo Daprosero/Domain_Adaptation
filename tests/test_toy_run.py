@@ -22,6 +22,8 @@ import dataclasses
 import inspect
 import json
 import math
+import pathlib
+import re
 
 import numpy as np
 import pytest
@@ -4740,3 +4742,290 @@ def test_adabn_leaves_the_model_it_was_given_bit_identical(familia, tiny):
         assert lectura["accuracy"] is not None
         for nombre, b in modelo.target_encoder.named_buffers():
             assert torch.equal(b, antes[nombre]), nombre
+
+
+# ===================================================================
+#   fusionar: el reparto por familia, y que la junta cierre
+# ===================================================================
+#
+# El reparto existe porque el proceso es la unica granularidad en la que el
+# trabajo del toyset supera el costo de partirlo --- la GPU pierde 11.6x, cuatro
+# hilos pierden 1.12x, tres procesos ganan 2.48x. Lo que estos tests cuidan no
+# es la velocidad: es que repartir no cambie ningun numero del experimento.
+
+#: Un campo es del RELOJ si su nombre lo dice. La concurrencia cambia estos por
+#: definicion y nadie afirma que sean reproducibles; `forecastFull*` entra
+#: porque sale de los ritmos medidos, no de un resultado.
+_DEL_RELOJ = re.compile(
+    r"Seconds|Elapsed|PerPhase1Epoch|PerPhase2Step|forecastFull|^/rates|elapsed",
+    re.IGNORECASE)
+
+
+def _aplanado(x, ruta=""):
+    """Todo el barrido como pares (ruta, valor) comparables uno a uno.
+
+    Un `assert a == b` sobre dos barridos enteros dice que difieren y nunca
+    donde, y el barrido tiene diez mil campos. Esto los compara por ruta para
+    que una falla nombre el campo.
+    """
+    if isinstance(x, dict):
+        for k in sorted(x, key=str):
+            yield from _aplanado(x[k], f"{ruta}/{k}")
+    elif isinstance(x, (list, tuple)):
+        for i, v in enumerate(x):
+            yield from _aplanado(v, f"{ruta}[{i}]")
+    elif isinstance(x, np.ndarray):
+        yield ruta, ("arr", tuple(x.shape), float(np.nansum(x)))
+    else:
+        yield ruta, x
+
+
+def _difieren(a: dict, b: dict) -> list[str]:
+    plano_a, plano_b = dict(_aplanado(a)), dict(_aplanado(b))
+    assert set(plano_a) == set(plano_b), (
+        "los dos barridos no tienen las mismas claves: "
+        f"solo en el primero {sorted(set(plano_a) - set(plano_b))[:6]}, "
+        f"solo en el segundo {sorted(set(plano_b) - set(plano_a))[:6]}")
+    return [k for k in sorted(plano_a)
+            if plano_a[k] != plano_b[k]
+            and not (isinstance(plano_a[k], float) and isinstance(plano_b[k], float)
+                     and math.isnan(plano_a[k]) and math.isnan(plano_b[k]))]
+
+
+@pytest.fixture(scope="module")
+def dos_familias(tiny):
+    """Un barrido de dos familias juntas, y las mismas dos por separado."""
+    familias = ("lunas", "toroide")
+    juntas = toy_run.sweep(tiny, DEVICE, familias, report=toy_run._callado)
+    sueltas = [toy_run.sweep(tiny, DEVICE, (f,), report=toy_run._callado)
+               for f in familias]
+    return familias, juntas, sueltas
+
+
+def test_fusionar_cruza_la_junta(tiny, dos_familias):
+    """Repartir por familia no cambia ningun numero del experimento.
+
+    **Esta es la unica razon por la que el reparto es admisible**, y es una
+    medicion sobre el codigo real y no el argumento de que cada familia tiene su
+    propio estudio de `optuna` con semilla fija. Ese argumento es lo que hizo
+    que valiera la pena medir; esto es lo que lo cierra.
+    """
+    _, juntas, sueltas = dos_familias
+    fundido = toy_run.fusionar(sueltas, tiny, DEVICE, elapsed=1.0)
+
+    difieren = _difieren(juntas, fundido)
+    del_experimento = [k for k in difieren if not _DEL_RELOJ.search(k)]
+    assert not del_experimento, (
+        "repartir cambio campos que no son del reloj, asi que el reparto no es "
+        f"neutral: {del_experimento[:12]}")
+
+    # Y que el predicado no sea "todo": si no quedara ningun campo FUERA del
+    # reloj, este test pasaria sin comparar nada. Es el mismo defecto que
+    # `trivialAssertions` persigue.
+    plano = dict(_aplanado(juntas))
+    fuera = [k for k in plano if not _DEL_RELOJ.search(k)]
+    assert len(fuera) > 100, (
+        f"solo {len(fuera)} campos quedan fuera del reloj, asi que este test "
+        "no esta comparando el experimento")
+
+
+def test_fusionar_une_las_claves_de_cada_familia(tiny, dos_familias):
+    familias, juntas, sueltas = dos_familias
+    fundido = toy_run.fusionar(sueltas, tiny, DEVICE, elapsed=1.0)
+    for llave in ("cells", "rows", "hp1", "hp2", "records1", "records2",
+                  "perFamily"):
+        assert set(fundido[llave]) == set(juntas[llave]), llave
+    assert len(fundido["rates"]) == len(juntas["rates"])
+    assert fundido["cost"]["cells"] == juntas["cost"]["cells"]
+    assert tuple(fundido["flags"]["families"]) == familias
+
+
+@pytest.fixture(scope="module")
+def tres_sueltas(tiny, dos_familias):
+    """Las tres familias por separado.
+
+    TRES y no dos, y la razon es una mutacion que sobrevivio: con dos familias
+    toda permutacion es el orden de `DURAS` o su inversa, asi que un `fusionar`
+    que ordenara al reves habria pasado el test de orden. El insumo ya era
+    igual al mutante.
+    """
+    _, _, sueltas = dos_familias
+    rollo = toy_run.sweep(tiny, DEVICE, ("rollo",), report=toy_run._callado)
+    return [*sueltas, rollo]
+
+
+def test_fusionar_declara_el_orden_de_duras(tiny, tres_sueltas):
+    """El orden de las familias es una declaracion, no la cronica de quien
+    termino primero: dos corridas iguales tienen que escribir lo mismo.
+
+    El orden de llegada que se le pasa esta elegido para que ni el, ni su
+    inversa, sean el orden declarado --- es lo unico que hace que este test
+    distinga `fusionar` de un `fusionar` que ordenara por llegada.
+    """
+    declarado = [n for n, _ in toy_run.DURAS]
+    por_nombre = {b["flags"]["families"][0]: b for b in tres_sueltas}
+    llegada = ["toroide", "rollo", "lunas"]
+    assert llegada != declarado and llegada[::-1] != declarado, (
+        "el orden de llegada elegido coincide con el declarado o con su "
+        "inversa, asi que este test no distingue nada")
+
+    fundido = toy_run.fusionar([por_nombre[n] for n in llegada], tiny, DEVICE,
+                               elapsed=1.0)
+    assert list(fundido["flags"]["families"]) == declarado
+
+
+def test_fusionar_usa_el_reloj_que_le_pasan_y_no_la_suma(tiny, dos_familias):
+    """Los procesos corrieron a la vez, asi que sumar sus tiempos informaria un
+    costo que nadie pago."""
+    _, _, sueltas = dos_familias
+    suma = sum(b["cost"]["sweepSeconds"] for b in sueltas)
+    fundido = toy_run.fusionar(sueltas, tiny, DEVICE, elapsed=3.0)
+    assert fundido["cost"]["sweepSeconds"] == 3.0
+    assert fundido["flags"]["cost"]["sweepSeconds"] == 3.0
+    assert suma > 3.0, (
+        "los sub-barridos corrieron en menos de 3s cada uno, asi que este test "
+        "no distingue el reloj pasado de la suma")
+
+
+def test_fusionar_rechaza_un_sello_de_otra_escala(tiny, dos_familias):
+    _, _, sueltas = dos_familias
+    otra = copy.deepcopy(sueltas)
+    otra[1]["scale"] = {**otra[1]["scale"], "epochs_1": 999}
+    with pytest.raises(ValueError, match="sello de escala"):
+        toy_run.fusionar(otra, tiny, DEVICE, elapsed=1.0)
+
+
+def test_fusionar_rechaza_dos_dispositivos(tiny, dos_familias):
+    """El dispositivo mueve el resultado, asi que una union de dos
+    dispositivos no es una corrida."""
+    _, _, sueltas = dos_familias
+    otra = copy.deepcopy(sueltas)
+    otra[1]["flags"] = {**otra[1]["flags"], "device": "mps"}
+    with pytest.raises(ValueError, match="dispositivo mueve el resultado"):
+        toy_run.fusionar(otra, tiny, DEVICE, elapsed=1.0)
+
+
+def test_fusionar_rechaza_una_familia_repetida(tiny, dos_familias):
+    _, _, sueltas = dos_familias
+    with pytest.raises(ValueError, match="viene en dos barridos"):
+        toy_run.fusionar([sueltas[0], copy.deepcopy(sueltas[0])], tiny, DEVICE,
+                         elapsed=1.0)
+
+
+def test_fusionar_rechaza_un_barrido_sin_rates(tiny, dos_familias):
+    """Sin `rates` no hay con que reconstruir `cost` ni `flags` sobre la
+    union, y una media de medias no es la media de la concatenacion."""
+    _, _, sueltas = dos_familias
+    otra = copy.deepcopy(sueltas)
+    del otra[1]["rates"]
+    with pytest.raises(ValueError, match="no trae 'rates'"):
+        toy_run.fusionar(otra, tiny, DEVICE, elapsed=1.0)
+
+
+def test_fusionar_rechaza_la_lista_vacia(tiny):
+    with pytest.raises(ValueError, match="ningun barrido"):
+        toy_run.fusionar([], tiny, DEVICE, elapsed=1.0)
+
+
+def test_sweep_devuelve_rates_para_que_fusionar_pueda_reconstruir(dos_familias):
+    """`rates` es una clave del retorno de `sweep` y no un detalle interno:
+    `fusionar` no puede reconstruir `cost` sin ella, y el refuse lo dice."""
+    _, juntas, _ = dos_familias
+    assert "rates" in juntas
+    assert len(juntas["rates"]) == juntas["cost"]["cells"]
+    for r in juntas["rates"]:
+        assert set(r) >= {"secondsPerPhase1Epoch", "secondsPerPhase2Step"}
+
+
+def test_barrido_repartido_pasa_por_el_pool_y_da_lo_mismo(tiny, dos_familias):
+    """Un proceso hijo devuelve el barrido entero --- arreglos de numpy
+    incluidos --- y `barrido_repartido` lo fusiona.
+
+    Una familia sola y no las tres: lo que esto prueba es el cableado del pool
+    y el cruce del limite del proceso, que no depende de cuantas familias haya.
+    La neutralidad ya la mide `test_fusionar_cruza_la_junta`.
+    """
+    _, _, sueltas = dos_familias
+    repartido = toy_run.barrido_repartido(tiny, DEVICE, ("lunas",),
+                                          report=toy_run._callado)
+    del_experimento = [k for k in _difieren(sueltas[0], repartido)
+                       if not _DEL_RELOJ.search(k)]
+    assert not del_experimento, del_experimento[:12]
+    assert repartido["perFamily"]["lunas"]["latent"], (
+        "el hijo no devolvio el espacio latente, que son los arreglos de numpy "
+        "que cruzan el limite del proceso")
+
+
+# ===================================================================
+#   el dispositivo del toyset: que lo resuelva quien lo midio
+# ===================================================================
+#
+# El 2026-10-21 el toyset dejo de usar `harness.resolve_device` --- cuyo orden
+# `cuda > mps > cpu` es el correcto para el banco de digitos y el equivocado
+# aca, donde un paso empuja 90 puntos por un MLP de dimension 8 --- y resuelve
+# por `dispositivo_del_toyset`, que devuelve `cpu`. Lo que estos dos tests
+# cuidan no es la velocidad: el dispositivo MUEVE el `targetAccuracy` (el mismo
+# brazo dio 0.5556 / 0.3333 / 0.6111 / 0.5000 en cuatro dispositivos), asi que
+# un dispositivo cambiado por accidente no se lee como un error, se lee como
+# otro resultado.
+
+
+def _llamadas_a(fuente: str, punto: str, atributo: str) -> list[int]:
+    """Las LINEAS donde `punto.atributo(...)` se llama de verdad.
+
+    Con `ast` y no contando la cadena: el nombre viejo sigue --- y tiene que
+    seguir --- nombrado en el docstring de `dispositivo_del_toyset`, que es
+    donde se explica por que el banco de digitos lo quiere y el toyset no. Un
+    conteo de subcadenas no distingue una explicacion de una llamada, asi que
+    reprobaria el archivo por documentarse.
+    """
+    import ast
+    arbol = ast.parse(fuente)
+    return [n.lineno for n in ast.walk(arbol)
+            if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute)
+            and n.func.attr == atributo
+            and isinstance(n.func.value, ast.Name)
+            and n.func.value.id == punto]
+
+
+def test_el_toyset_resuelve_su_dispositivo_por_el_suyo():
+    """Ninguna funcion de `toy_run` llama `harness.resolve_device`."""
+    fuente = pathlib.Path(toy_run.__file__).read_text(encoding="utf-8")
+    llamadas = _llamadas_a(fuente, "harness", "resolve_device")
+    assert llamadas == [], (
+        f"`toy_run` llama `harness.resolve_device` en las lineas {llamadas}: "
+        "ese orden pone el acelerador primero, que es correcto para el banco "
+        "de digitos y 11.6x mas lento aca --- y cambia el resultado")
+    assert toy_run.dispositivo_del_toyset() == torch.device("cpu")
+    # Y que el nombre viejo siga EXPLICADO: si desaparece del archivo, la
+    # proxima sesion no tiene donde leer por que no se usa.
+    assert "harness.resolve_device" in fuente, (
+        "se fue hasta la explicacion de por que el toyset no usa "
+        "`harness.resolve_device`, y sin ella el cambio parece un capricho")
+
+
+def test_el_cuaderno_generador_no_entrega_el_dispositivo_del_banco():
+    """El cuaderno no puede pasarle a `sweep` un dispositivo del banco.
+
+    **Este es el defecto que nada pescaba.** Los seis sitios de `toy_run` que
+    resuelven el dispositivo lo hacen cuando `device is None`; el cuaderno lo
+    pasaba EXPLICITO, desde `harness.resolve_device()`, asi que los seis
+    quedaban inertes y la corrida entera habria ido por MPS --- 5.42 h se
+    vuelven ~71 h, con otros numeros. Cambiar el default de un parametro no
+    alcanza cuando el llamador lo pasa; lo que hay que medir es QUIEN llama.
+    """
+    cuaderno = json.loads(
+        (pathlib.Path(toy_run.__file__).resolve().parents[2]
+         / "MIL-CREDA" / "Notebooks" / "Toyset_Generator.ipynb")
+        .read_text(encoding="utf-8"))
+    codigo = "\n".join("".join(c["source"]) for c in cuaderno["cells"]
+                       if c["cell_type"] == "code")
+
+    assert _llamadas_a(codigo, "harness", "resolve_device") == [], (
+        "el cuaderno generador resuelve el dispositivo con "
+        "`harness.resolve_device`, y lo pasa explicito, asi que los seis "
+        "sitios de `toy_run` no se alcanzan")
+    assert _llamadas_a(codigo, "toy_run", "dispositivo_del_toyset"), (
+        "el cuaderno no nombra `toy_run.dispositivo_del_toyset`, asi que no "
+        "hay nada que diga en que dispositivo corre lo que escribe")
