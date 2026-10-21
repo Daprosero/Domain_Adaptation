@@ -157,14 +157,15 @@
       "weightingCostRatio": 1.0,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.5832107067108154,
+      "weightingCostNote": null,
       "parameters": 15235,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 0.4191012382507324,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.08786192366642354,
-      "secondsPerPhase2Step": 0.055612910156241924,
+      "secondsPerPhase1Epoch": 0.12313909716613125,
+      "secondsPerPhase2Step": 0.09744747851573266,
       "sigma": {
         "scales": {
           "withinBag": 0.12574854493141174,
@@ -346,7 +347,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 5.13868470899979
+      "cellElapsedSeconds": 8.525961583000026
     },
     "lunas|batchnorm|TGL|0": {
       "family": "lunas",
@@ -505,14 +506,15 @@
       "weightingCostRatio": 1.0,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.6510403752326965,
+      "weightingCostNote": null,
       "parameters": 15491,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 3.7023191452026367,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.09690183339989744,
-      "secondsPerPhase2Step": 0.06048490493748204,
+      "secondsPerPhase1Epoch": 0.1360962332022609,
+      "secondsPerPhase2Step": 0.12749590103135233,
       "sigma": {
         "scales": {
           "withinBag": 2.0712084770202637,
@@ -694,7 +696,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 5.44770520900056
+      "cellElapsedSeconds": 10.391438709004433
     },
     "lunas|layernorm|TGL|0": {
       "family": "lunas",
@@ -853,14 +855,15 @@
       "weightingCostRatio": 0.9789177101011908,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.8644929528236389,
+      "weightingCostNote": null,
       "parameters": 15491,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 0.25872164964675903,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.0966872778335528,
-      "secondsPerPhase2Step": 0.0603466933593495,
+      "secondsPerPhase1Epoch": 0.13694459033285966,
+      "secondsPerPhase2Step": 0.13309948828123197,
       "sigma": {
         "scales": {
           "withinBag": 0.5868019461631775,
@@ -1042,7 +1045,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 5.500847250001243
+      "cellElapsedSeconds": 11.01935233399854
     },
     "toroide|ninguna|TGL|0": {
       "family": "toroide",
@@ -1201,14 +1204,15 @@
       "weightingCostRatio": 1.0000000604536625,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.9859558939933777,
+      "weightingCostNote": null,
       "parameters": 15235,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 3.4448390007019043,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.08868017366694403,
-      "secondsPerPhase2Step": 0.05582911459373463,
+      "secondsPerPhase1Epoch": 0.12486823599950488,
+      "secondsPerPhase2Step": 0.10797721874996569,
       "sigma": {
         "scales": {
           "withinBag": 0.7902472615242004,
@@ -1390,7 +1394,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 5.17413233300249
+      "cellElapsedSeconds": 9.090502874998492
     },
     "toroide|batchnorm|TGL|0": {
       "family": "toroide",
@@ -1549,14 +1553,15 @@
       "weightingCostRatio": 0.9999998759232935,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.4803854525089264,
+      "weightingCostNote": null,
       "parameters": 15491,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 3.799907684326172,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.13924053320006352,
-      "secondsPerPhase2Step": 0.07383894987498252,
+      "secondsPerPhase1Epoch": 0.13769714999943972,
+      "secondsPerPhase2Step": 0.10986033071867496,
       "sigma": {
         "scales": {
           "withinBag": 3.011397123336792,
@@ -1738,7 +1743,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 6.597416583001177
+      "cellElapsedSeconds": 9.160341458002222
     },
     "toroide|layernorm|TGL|0": {
       "family": "toroide",
@@ -1897,14 +1902,15 @@
       "weightingCostRatio": 1.0002982514525083,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.8783273696899414,
+      "weightingCostNote": null,
       "parameters": 15491,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 1.883315086364746,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.10113904866678543,
-      "secondsPerPhase2Step": 0.06223691470307813,
+      "secondsPerPhase1Epoch": 0.11333501383342082,
+      "secondsPerPhase2Step": 0.08225711848422179,
       "sigma": {
         "scales": {
           "withinBag": 0.9658084511756897,
@@ -2086,7 +2092,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 5.665736499999184
+      "cellElapsedSeconds": 7.166958542002249
     },
     "rollo|ninguna|TGL|0": {
       "family": "rollo",
@@ -2245,14 +2251,15 @@
       "weightingCostRatio": 1.0000001207972158,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.986854612827301,
+      "weightingCostNote": null,
       "parameters": 15235,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 13.088335037231445,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.09097786799975438,
-      "secondsPerPhase2Step": 0.06984194271871047,
+      "secondsPerPhase1Epoch": 0.08354497216593397,
+      "secondsPerPhase2Step": 0.05713608332803233,
       "sigma": {
         "scales": {
           "withinBag": 1.750533938407898,
@@ -2434,7 +2441,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 6.061858375000156
+      "cellElapsedSeconds": 5.2079226250061765
     },
     "rollo|batchnorm|TGL|0": {
       "family": "rollo",
@@ -2593,14 +2600,15 @@
       "weightingCostRatio": 0.9596113879515573,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.8633540272712708,
+      "weightingCostNote": null,
       "parameters": 15491,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 3.2562613487243652,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.10054194160038606,
-      "secondsPerPhase2Step": 0.0637723945312132,
+      "secondsPerPhase1Epoch": 0.09324830000114162,
+      "secondsPerPhase2Step": 0.05737171874989144,
       "sigma": {
         "scales": {
           "withinBag": 2.408033847808838,
@@ -2782,7 +2790,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 5.858985207996739
+      "cellElapsedSeconds": 5.20174741599476
     },
     "rollo|layernorm|TGL|0": {
       "family": "rollo",
@@ -2941,14 +2949,15 @@
       "weightingCostRatio": 0.9989488111035343,
       "weightingCostOmegaSum": NaN,
       "weightingCostGlobalUnweighted": 0.6209449768066406,
+      "weightingCostNote": null,
       "parameters": 15491,
       "sourceMoved": 0.0,
       "sourceBuffersMoved": 0.0,
       "latentSourceMoved": 0.0,
       "latentTargetMoved": 0.7190713286399841,
       "phase2Note": null,
-      "secondsPerPhase1Epoch": 0.09488539583314075,
-      "secondsPerPhase2Step": 0.05677337956251449,
+      "secondsPerPhase1Epoch": 0.09219483333436074,
+      "secondsPerPhase2Step": 0.05354789907801205,
       "sigma": {
         "scales": {
           "withinBag": 0.8374813199043274,
@@ -3130,7 +3139,7 @@
           }
         }
       },
-      "cellElapsedSeconds": 5.293028542000684
+      "cellElapsedSeconds": 4.994876249998924
     }
   },
   "filas": {
@@ -4562,10 +4571,10 @@
   },
   "costo": {
     "cells": 9,
-    "secondsPerPhase1Epoch": 0.09965733287410533,
-    "secondsPerPhase2Step": 0.06208191160414521,
-    "secondsPerCell": 14.94526224544461,
-    "sweepSeconds": 134.5073602090015,
+    "secondsPerPhase1Epoch": 0.1156742695594504,
+    "secondsPerPhase2Step": 0.09179924854856836,
+    "secondsPerCell": 19.30808803699943,
+    "sweepSeconds": 173.77279233299487,
     "measuredAt": "pilot",
     "workHere": {
       "families": 3,
@@ -4592,8 +4601,8 @@
       "phase2StepCeiling": 1224000
     },
     "instanceScale": 1.0,
-    "forecastFullSeconds": 83881.12056710287,
-    "forecastFullHours": 23.300311268639685,
+    "forecastFullSeconds": 121523.68237255614,
+    "forecastFullHours": 33.75657843682115,
     "caveat": "an upper bound, not a measurement: both early stops end a phase before its declared length, so the epoch and step counts are ceilings, and the per-epoch cost is scaled linearly in instances per bag, which is an assumption about the encoder and not a measurement of it",
     "scale": {
       "name": "pilot",

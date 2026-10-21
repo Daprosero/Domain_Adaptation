@@ -1,0 +1,3389 @@
+{
+  "seccion": 3,
+  "celdas": {
+    "lunas|batchnorm|M-ours|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-ours",
+      "eje": "mecanismo",
+      "mechanism": "ours",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.6666666666666666,
+      "cefBest": 2.8592854510668007,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9968460639938712,
+      "contributionLocal": 0.19311234506312758,
+      "parameters": 15491,
+      "elapsedSeconds": 5.395131167009822,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|M-abmil-published|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-abmil-published",
+      "eje": "mecanismo",
+      "mechanism": "abmil-published",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.7222222222222222,
+      "sourceAccuracy": 0.6666666666666666,
+      "cefBest": 2.8371663317465234,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9964968590065837,
+      "contributionLocal": 0.19834179675672203,
+      "parameters": 23939,
+      "elapsedSeconds": 4.524653375003254,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|M-abmil-gated|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-abmil-gated",
+      "eje": "mecanismo",
+      "mechanism": "abmil-gated",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.6666666666666666,
+      "cefBest": 2.9648424366121064,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9964153738692403,
+      "contributionLocal": 0.19244850520044565,
+      "parameters": 32003,
+      "elapsedSeconds": 4.8616597919899505,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|M-max|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-max",
+      "eje": "mecanismo",
+      "mechanism": "max",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.6111111111111112,
+      "sourceAccuracy": 0.6111111111111112,
+      "cefBest": 2.9733913577516313,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9956880705431104,
+      "contributionLocal": 0.8875739108771086,
+      "parameters": 15491,
+      "elapsedSeconds": 5.351327541997307,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|M-mean|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-mean",
+      "eje": "mecanismo",
+      "mechanism": "mean",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.6666666666666666,
+      "cefBest": 2.937492502324356,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9968207152560353,
+      "contributionLocal": 0.188764046295546,
+      "parameters": 15491,
+      "elapsedSeconds": 3.9936435830022674,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|S-ours-todas|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-ours-todas",
+      "eje": "seleccion",
+      "mechanism": "ours",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.6666666666666666,
+      "cefBest": 2.8592854510668007,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9968460639938712,
+      "contributionLocal": 0.19311234506312758,
+      "parameters": 15491,
+      "elapsedSeconds": 5.326962624996668,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|S-ours-topk-10|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-ours-topk-10",
+      "eje": "seleccion",
+      "mechanism": "ours",
+      "selection": "topk",
+      "selectK": 10,
+      "targetAccuracy": 0.7222222222222222,
+      "sourceAccuracy": 0.7222222222222222,
+      "cefBest": 2.6547605657386795,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9971682820469141,
+      "contributionLocal": 0.3308365761768073,
+      "parameters": 15491,
+      "elapsedSeconds": 6.663119874996482,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|S-ours-arbitrary-10|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-ours-arbitrary-10",
+      "eje": "seleccion",
+      "mechanism": "ours",
+      "selection": "arbitrary",
+      "selectK": 10,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.7222222222222222,
+      "cefBest": 2.7697952009992193,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 4,
+      "contributionGlobal": 0.9980044066905975,
+      "contributionLocal": 0.19164572143927217,
+      "parameters": 15491,
+      "elapsedSeconds": 7.196905415999936,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|S-ours-regular-10|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-ours-regular-10",
+      "eje": "seleccion",
+      "mechanism": "ours",
+      "selection": "regular",
+      "selectK": 10,
+      "targetAccuracy": 0.7222222222222222,
+      "sourceAccuracy": 0.6111111111111112,
+      "cefBest": 2.920427746597138,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9966831244528294,
+      "contributionLocal": 0.24513605795800686,
+      "parameters": 15491,
+      "elapsedSeconds": 6.4275568750017555,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|M-ours|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-ours",
+      "eje": "mecanismo",
+      "mechanism": "ours",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.947736319660434,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.8242722828872502,
+      "contributionLocal": 0.18320645263884217,
+      "parameters": 15491,
+      "elapsedSeconds": 5.2527426250017015,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|M-abmil-published|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-abmil-published",
+      "eje": "mecanismo",
+      "mechanism": "abmil-published",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 1.0,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9648424366121064,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.8726692968048155,
+      "contributionLocal": 0.2648653140058741,
+      "parameters": 23939,
+      "elapsedSeconds": 4.7036384160019225,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|M-abmil-gated|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-abmil-gated",
+      "eje": "mecanismo",
+      "mechanism": "abmil-gated",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.9648424366121064,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.8170400611124933,
+      "contributionLocal": 0.21891976206097752,
+      "parameters": 32003,
+      "elapsedSeconds": 4.72061562500312,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|M-max|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-max",
+      "eje": "mecanismo",
+      "mechanism": "max",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.8888888888888888,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.988036564757356,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9706499138846993,
+      "contributionLocal": 0.8590491432696581,
+      "parameters": 15491,
+      "elapsedSeconds": 5.178813040998648,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|M-mean|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-mean",
+      "eje": "mecanismo",
+      "mechanism": "mean",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.947736319660434,
+      "phase1ValidAccuracy": 0.9333333333333333,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.8208495676517487,
+      "contributionLocal": 0.1791551144560799,
+      "parameters": 15491,
+      "elapsedSeconds": 3.817596583001432,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|S-abmil-published-todas|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-abmil-published-todas",
+      "eje": "seleccion",
+      "mechanism": "abmil-published",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 1.0,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9648424366121064,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.8726692968048155,
+      "contributionLocal": 0.2648653140058741,
+      "parameters": 23939,
+      "elapsedSeconds": 4.62517983399448,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|S-abmil-published-topk-10|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-abmil-published-topk-10",
+      "eje": "seleccion",
+      "mechanism": "abmil-published",
+      "selection": "topk",
+      "selectK": 10,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.9648424366121064,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.8621692024171352,
+      "contributionLocal": 0.43462253105826676,
+      "parameters": 23939,
+      "elapsedSeconds": 5.394705375001649,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|S-abmil-published-arbitrary-10|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-abmil-published-arbitrary-10",
+      "eje": "seleccion",
+      "mechanism": "abmil-published",
+      "selection": "arbitrary",
+      "selectK": 10,
+      "targetAccuracy": 1.0,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.9294761118340698,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9137783478945494,
+      "contributionLocal": 0.3409702342469245,
+      "parameters": 23939,
+      "elapsedSeconds": 6.636267291993136,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|S-abmil-published-regular-10|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-abmil-published-regular-10",
+      "eje": "seleccion",
+      "mechanism": "abmil-published",
+      "selection": "regular",
+      "selectK": 10,
+      "targetAccuracy": 1.0,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.947736319660434,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9184205075725913,
+      "contributionLocal": 0.35993606550619006,
+      "parameters": 23939,
+      "elapsedSeconds": 5.7744157499982975,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|M-ours|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-ours",
+      "eje": "mecanismo",
+      "mechanism": "ours",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.8751000989718176,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9962608544155955,
+      "contributionLocal": 0.17099208873696625,
+      "parameters": 15491,
+      "elapsedSeconds": 5.212150125007611,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|M-abmil-published|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-abmil-published",
+      "eje": "mecanismo",
+      "mechanism": "abmil-published",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 1.0,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9374925023243565,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9970741393044591,
+      "contributionLocal": 0.17863979167304933,
+      "parameters": 23939,
+      "elapsedSeconds": 4.546905625000363,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|M-abmil-gated|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-abmil-gated",
+      "eje": "mecanismo",
+      "mechanism": "abmil-gated",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.884595243803232,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.996765055693686,
+      "contributionLocal": 0.16820697102230042,
+      "parameters": 32003,
+      "elapsedSeconds": 4.912261207995471,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|M-max|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-max",
+      "eje": "mecanismo",
+      "mechanism": "max",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.5555555555555556,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.363640612469162,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 4,
+      "contributionGlobal": 0.9942048154771328,
+      "contributionLocal": 0.7415394010022283,
+      "parameters": 15491,
+      "elapsedSeconds": 5.154386916998192,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|M-mean|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "M-mean",
+      "eje": "mecanismo",
+      "mechanism": "mean",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9023145430959985,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9961419347673655,
+      "contributionLocal": 0.16407363105099648,
+      "parameters": 15491,
+      "elapsedSeconds": 3.8533762080041924,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|S-abmil-published-todas|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-abmil-published-todas",
+      "eje": "seleccion",
+      "mechanism": "abmil-published",
+      "selection": null,
+      "selectK": null,
+      "targetAccuracy": 1.0,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9374925023243565,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9970741393044591,
+      "contributionLocal": 0.17863979167304933,
+      "parameters": 23939,
+      "elapsedSeconds": 4.546995667013107,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|S-abmil-published-topk-10|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-abmil-published-topk-10",
+      "eje": "seleccion",
+      "mechanism": "abmil-published",
+      "selection": "topk",
+      "selectK": 10,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9843748859734807,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.993303457275033,
+      "contributionLocal": 0.404988155933097,
+      "parameters": 23939,
+      "elapsedSeconds": 5.488300208002329,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|S-abmil-published-arbitrary-10|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-abmil-published-arbitrary-10",
+      "eje": "seleccion",
+      "mechanism": "abmil-published",
+      "selection": "arbitrary",
+      "selectK": 10,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9374925023243565,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 3,
+      "contributionGlobal": 0.9965640557929873,
+      "contributionLocal": 0.22102750418707728,
+      "parameters": 23939,
+      "elapsedSeconds": 6.619747375007137,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|S-abmil-published-regular-10|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "S-abmil-published-regular-10",
+      "eje": "seleccion",
+      "mechanism": "abmil-published",
+      "selection": "regular",
+      "selectK": 10,
+      "targetAccuracy": 1.0,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9960937482300665,
+      "phase1ValidAccuracy": 1.0,
+      "phase2BestEpoch": 4,
+      "contributionGlobal": 0.9964355686679482,
+      "contributionLocal": 0.23045453522354364,
+      "parameters": 23939,
+      "elapsedSeconds": 5.727572540999972,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    }
+  },
+  "rotulos": {
+    "M-ours": "agregacion ours, todas las instancias",
+    "M-abmil-published": "agregacion abmil-published, todas las instancias",
+    "M-abmil-gated": "agregacion abmil-gated, todas las instancias",
+    "M-max": "agregacion max, todas las instancias",
+    "M-mean": "agregacion mean, todas las instancias",
+    "S-ours-todas": "ours, seleccion todas",
+    "S-ours-topk-10": "ours, seleccion topk-10",
+    "S-ours-arbitrary-10": "ours, seleccion arbitrary-10",
+    "S-ours-regular-10": "ours, seleccion regular-10",
+    "S-abmil-published-todas": "abmil-published, seleccion todas",
+    "S-abmil-published-topk-10": "abmil-published, seleccion topk-10",
+    "S-abmil-published-arbitrary-10": "abmil-published, seleccion arbitrary-10",
+    "S-abmil-published-regular-10": "abmil-published, seleccion regular-10"
+  },
+  "porFamilia": {
+    "lunas": {
+      "mecanismos": {
+        "M-ours": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-ours",
+            "eje": "mecanismo",
+            "mechanism": "ours",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 0.6666666666666666,
+            "cefBest": 2.8592854510668007,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9968460639938712,
+            "contributionLocal": 0.19311234506312758,
+            "parameters": 15491,
+            "elapsedSeconds": 5.395131167009822,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-abmil-published": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-abmil-published",
+            "eje": "mecanismo",
+            "mechanism": "abmil-published",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.7222222222222222,
+            "sourceAccuracy": 0.6666666666666666,
+            "cefBest": 2.8371663317465234,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9964968590065837,
+            "contributionLocal": 0.19834179675672203,
+            "parameters": 23939,
+            "elapsedSeconds": 4.524653375003254,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-abmil-gated": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-abmil-gated",
+            "eje": "mecanismo",
+            "mechanism": "abmil-gated",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 0.6666666666666666,
+            "cefBest": 2.9648424366121064,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9964153738692403,
+            "contributionLocal": 0.19244850520044565,
+            "parameters": 32003,
+            "elapsedSeconds": 4.8616597919899505,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-max": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-max",
+            "eje": "mecanismo",
+            "mechanism": "max",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.6111111111111112,
+            "sourceAccuracy": 0.6111111111111112,
+            "cefBest": 2.9733913577516313,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9956880705431104,
+            "contributionLocal": 0.8875739108771086,
+            "parameters": 15491,
+            "elapsedSeconds": 5.351327541997307,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-mean": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-mean",
+            "eje": "mecanismo",
+            "mechanism": "mean",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 0.6666666666666666,
+            "cefBest": 2.937492502324356,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9968207152560353,
+            "contributionLocal": 0.188764046295546,
+            "parameters": 15491,
+            "elapsedSeconds": 3.9936435830022674,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "mediasMecanismo": {
+        "M-ours": 0.7777777777777778,
+        "M-abmil-published": 0.7222222222222222,
+        "M-abmil-gated": 0.7777777777777778,
+        "M-max": 0.6111111111111112,
+        "M-mean": 0.7777777777777778
+      },
+      "ganador": "ours",
+      "selecciones": {
+        "S-ours-todas": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-ours-todas",
+            "eje": "seleccion",
+            "mechanism": "ours",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 0.6666666666666666,
+            "cefBest": 2.8592854510668007,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9968460639938712,
+            "contributionLocal": 0.19311234506312758,
+            "parameters": 15491,
+            "elapsedSeconds": 5.326962624996668,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-ours-topk-10": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-ours-topk-10",
+            "eje": "seleccion",
+            "mechanism": "ours",
+            "selection": "topk",
+            "selectK": 10,
+            "targetAccuracy": 0.7222222222222222,
+            "sourceAccuracy": 0.7222222222222222,
+            "cefBest": 2.6547605657386795,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9971682820469141,
+            "contributionLocal": 0.3308365761768073,
+            "parameters": 15491,
+            "elapsedSeconds": 6.663119874996482,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-ours-arbitrary-10": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-ours-arbitrary-10",
+            "eje": "seleccion",
+            "mechanism": "ours",
+            "selection": "arbitrary",
+            "selectK": 10,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 0.7222222222222222,
+            "cefBest": 2.7697952009992193,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 4,
+            "contributionGlobal": 0.9980044066905975,
+            "contributionLocal": 0.19164572143927217,
+            "parameters": 15491,
+            "elapsedSeconds": 7.196905415999936,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-ours-regular-10": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-ours-regular-10",
+            "eje": "seleccion",
+            "mechanism": "ours",
+            "selection": "regular",
+            "selectK": 10,
+            "targetAccuracy": 0.7222222222222222,
+            "sourceAccuracy": 0.6111111111111112,
+            "cefBest": 2.920427746597138,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9966831244528294,
+            "contributionLocal": 0.24513605795800686,
+            "parameters": 15491,
+            "elapsedSeconds": 6.4275568750017555,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "mediasSeleccion": {
+        "S-ours-todas": 0.7777777777777778,
+        "S-ours-topk-10": 0.7222222222222222,
+        "S-ours-arbitrary-10": 0.7777777777777778,
+        "S-ours-regular-10": 0.7222222222222222
+      }
+    },
+    "toroide": {
+      "mecanismos": {
+        "M-ours": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-ours",
+            "eje": "mecanismo",
+            "mechanism": "ours",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.947736319660434,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.8242722828872502,
+            "contributionLocal": 0.18320645263884217,
+            "parameters": 15491,
+            "elapsedSeconds": 5.2527426250017015,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-abmil-published": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-abmil-published",
+            "eje": "mecanismo",
+            "mechanism": "abmil-published",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 1.0,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9648424366121064,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.8726692968048155,
+            "contributionLocal": 0.2648653140058741,
+            "parameters": 23939,
+            "elapsedSeconds": 4.7036384160019225,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-abmil-gated": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-abmil-gated",
+            "eje": "mecanismo",
+            "mechanism": "abmil-gated",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.9648424366121064,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.8170400611124933,
+            "contributionLocal": 0.21891976206097752,
+            "parameters": 32003,
+            "elapsedSeconds": 4.72061562500312,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-max": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-max",
+            "eje": "mecanismo",
+            "mechanism": "max",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.8888888888888888,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.988036564757356,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9706499138846993,
+            "contributionLocal": 0.8590491432696581,
+            "parameters": 15491,
+            "elapsedSeconds": 5.178813040998648,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-mean": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-mean",
+            "eje": "mecanismo",
+            "mechanism": "mean",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.947736319660434,
+            "phase1ValidAccuracy": 0.9333333333333333,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.8208495676517487,
+            "contributionLocal": 0.1791551144560799,
+            "parameters": 15491,
+            "elapsedSeconds": 3.817596583001432,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "mediasMecanismo": {
+        "M-ours": 0.9444444444444444,
+        "M-abmil-published": 1.0,
+        "M-abmil-gated": 0.9444444444444444,
+        "M-max": 0.8888888888888888,
+        "M-mean": 0.9444444444444444
+      },
+      "ganador": "abmil-published",
+      "selecciones": {
+        "S-abmil-published-todas": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-abmil-published-todas",
+            "eje": "seleccion",
+            "mechanism": "abmil-published",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 1.0,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9648424366121064,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.8726692968048155,
+            "contributionLocal": 0.2648653140058741,
+            "parameters": 23939,
+            "elapsedSeconds": 4.62517983399448,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-abmil-published-topk-10": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-abmil-published-topk-10",
+            "eje": "seleccion",
+            "mechanism": "abmil-published",
+            "selection": "topk",
+            "selectK": 10,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.9648424366121064,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.8621692024171352,
+            "contributionLocal": 0.43462253105826676,
+            "parameters": 23939,
+            "elapsedSeconds": 5.394705375001649,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-abmil-published-arbitrary-10": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-abmil-published-arbitrary-10",
+            "eje": "seleccion",
+            "mechanism": "abmil-published",
+            "selection": "arbitrary",
+            "selectK": 10,
+            "targetAccuracy": 1.0,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.9294761118340698,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9137783478945494,
+            "contributionLocal": 0.3409702342469245,
+            "parameters": 23939,
+            "elapsedSeconds": 6.636267291993136,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-abmil-published-regular-10": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-abmil-published-regular-10",
+            "eje": "seleccion",
+            "mechanism": "abmil-published",
+            "selection": "regular",
+            "selectK": 10,
+            "targetAccuracy": 1.0,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.947736319660434,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9184205075725913,
+            "contributionLocal": 0.35993606550619006,
+            "parameters": 23939,
+            "elapsedSeconds": 5.7744157499982975,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "mediasSeleccion": {
+        "S-abmil-published-todas": 1.0,
+        "S-abmil-published-topk-10": 0.9444444444444444,
+        "S-abmil-published-arbitrary-10": 1.0,
+        "S-abmil-published-regular-10": 1.0
+      }
+    },
+    "rollo": {
+      "mecanismos": {
+        "M-ours": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-ours",
+            "eje": "mecanismo",
+            "mechanism": "ours",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.8751000989718176,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9962608544155955,
+            "contributionLocal": 0.17099208873696625,
+            "parameters": 15491,
+            "elapsedSeconds": 5.212150125007611,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-abmil-published": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-abmil-published",
+            "eje": "mecanismo",
+            "mechanism": "abmil-published",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 1.0,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9374925023243565,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9970741393044591,
+            "contributionLocal": 0.17863979167304933,
+            "parameters": 23939,
+            "elapsedSeconds": 4.546905625000363,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-abmil-gated": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-abmil-gated",
+            "eje": "mecanismo",
+            "mechanism": "abmil-gated",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.884595243803232,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.996765055693686,
+            "contributionLocal": 0.16820697102230042,
+            "parameters": 32003,
+            "elapsedSeconds": 4.912261207995471,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-max": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-max",
+            "eje": "mecanismo",
+            "mechanism": "max",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.5555555555555556,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.363640612469162,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 4,
+            "contributionGlobal": 0.9942048154771328,
+            "contributionLocal": 0.7415394010022283,
+            "parameters": 15491,
+            "elapsedSeconds": 5.154386916998192,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "M-mean": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "M-mean",
+            "eje": "mecanismo",
+            "mechanism": "mean",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9023145430959985,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9961419347673655,
+            "contributionLocal": 0.16407363105099648,
+            "parameters": 15491,
+            "elapsedSeconds": 3.8533762080041924,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "mediasMecanismo": {
+        "M-ours": 0.9444444444444444,
+        "M-abmil-published": 1.0,
+        "M-abmil-gated": 0.9444444444444444,
+        "M-max": 0.5555555555555556,
+        "M-mean": 0.9444444444444444
+      },
+      "ganador": "abmil-published",
+      "selecciones": {
+        "S-abmil-published-todas": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-abmil-published-todas",
+            "eje": "seleccion",
+            "mechanism": "abmil-published",
+            "selection": null,
+            "selectK": null,
+            "targetAccuracy": 1.0,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9374925023243565,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9970741393044591,
+            "contributionLocal": 0.17863979167304933,
+            "parameters": 23939,
+            "elapsedSeconds": 4.546995667013107,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-abmil-published-topk-10": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-abmil-published-topk-10",
+            "eje": "seleccion",
+            "mechanism": "abmil-published",
+            "selection": "topk",
+            "selectK": 10,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9843748859734807,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.993303457275033,
+            "contributionLocal": 0.404988155933097,
+            "parameters": 23939,
+            "elapsedSeconds": 5.488300208002329,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-abmil-published-arbitrary-10": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-abmil-published-arbitrary-10",
+            "eje": "seleccion",
+            "mechanism": "abmil-published",
+            "selection": "arbitrary",
+            "selectK": 10,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9374925023243565,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 3,
+            "contributionGlobal": 0.9965640557929873,
+            "contributionLocal": 0.22102750418707728,
+            "parameters": 23939,
+            "elapsedSeconds": 6.619747375007137,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "S-abmil-published-regular-10": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "S-abmil-published-regular-10",
+            "eje": "seleccion",
+            "mechanism": "abmil-published",
+            "selection": "regular",
+            "selectK": 10,
+            "targetAccuracy": 1.0,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9960937482300665,
+            "phase1ValidAccuracy": 1.0,
+            "phase2BestEpoch": 4,
+            "contributionGlobal": 0.9964355686679482,
+            "contributionLocal": 0.23045453522354364,
+            "parameters": 23939,
+            "elapsedSeconds": 5.727572540999972,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "mediasSeleccion": {
+        "S-abmil-published-todas": 1.0,
+        "S-abmil-published-topk-10": 0.7777777777777778,
+        "S-abmil-published-arbitrary-10": 0.9444444444444444,
+        "S-abmil-published-regular-10": 1.0
+      }
+    }
+  },
+  "arquitecturas": {
+    "lunas": "batchnorm",
+    "toroide": "batchnorm",
+    "rollo": "batchnorm"
+  },
+  "ganadores": {
+    "lunas": "ours",
+    "toroide": "abmil-published",
+    "rollo": "abmil-published"
+  },
+  "mecanismos": [
+    "ours",
+    "abmil-published",
+    "abmil-gated",
+    "max",
+    "mean"
+  ],
+  "selecciones": [
+    "todas",
+    "topk",
+    "arbitrary",
+    "regular"
+  ],
+  "presupuestosK": [
+    10
+  ],
+  "elapsedSeconds": 142.22932733299967,
+  "escala": {
+    "name": "pilot",
+    "epochs_1": 6,
+    "epochs_2": 4,
+    "patience_1": 3,
+    "search_seeds": [
+      100
+    ],
+    "report_seeds": [
+      0
+    ],
+    "trials_1": 2,
+    "trials_2": 2,
+    "points_per_domain": 2835,
+    "lr_1": 0.01,
+    "lr_2": 0.001,
+    "classes": 3,
+    "bags_per_class": 27,
+    "instances_per_bag": 30,
+    "frac_train": 0.6,
+    "frac_valid": 0.2,
+    "isPilot": true,
+    "realizedSplit": {
+      "requested": {
+        "train": 0.6,
+        "valid": 0.2,
+        "test": 0.2
+      },
+      "bagsPerClass": {
+        "train": 16,
+        "valid": 5,
+        "test": 6
+      },
+      "realized": {
+        "train": 0.5925925925925926,
+        "valid": 0.18518518518518517,
+        "test": 0.2222222222222222
+      }
+    }
+  }
+}

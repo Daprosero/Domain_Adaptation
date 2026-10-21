@@ -187,6 +187,7 @@
         "unit": "bag",
         "adaptation": "milcreda",
         "weighting": true,
+        "global": true,
         "local": true,
         "attention": "learned",
         "selection": null,
@@ -412,10 +413,10 @@
   },
   "cost": {
     "cells": 9,
-    "secondsPerPhase1Epoch": 0.09965733287410533,
-    "secondsPerPhase2Step": 0.06208191160414521,
-    "secondsPerCell": 14.94526224544461,
-    "sweepSeconds": 134.5073602090015,
+    "secondsPerPhase1Epoch": 0.1156742695594504,
+    "secondsPerPhase2Step": 0.09179924854856836,
+    "secondsPerCell": 19.30808803699943,
+    "sweepSeconds": 173.77279233299487,
     "measuredAt": "pilot",
     "workHere": {
       "families": 3,
@@ -442,8 +443,8 @@
       "phase2StepCeiling": 1224000
     },
     "instanceScale": 1.0,
-    "forecastFullSeconds": 83881.12056710287,
-    "forecastFullHours": 23.300311268639685,
+    "forecastFullSeconds": 121523.68237255614,
+    "forecastFullHours": 33.75657843682115,
     "caveat": "an upper bound, not a measurement: both early stops end a phase before its declared length, so the epoch and step counts are ceilings, and the per-epoch cost is scaled linearly in instances per bag, which is an assumption about the encoder and not a measurement of it",
     "scale": {
       "name": "pilot",

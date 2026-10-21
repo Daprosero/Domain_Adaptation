@@ -1,0 +1,1224 @@
+{
+  "seccion": 5,
+  "celdas": {
+    "lunas|batchnorm|TG|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TG",
+      "global": true,
+      "local": false,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.6666666666666666,
+      "cefBest": 2.937492502324356,
+      "contributionGlobal": 0.9972118884325027,
+      "contributionLocal": 0.0,
+      "adaptationShare": 0.9776293423280062,
+      "supervised": 0.022818756369815674,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 0.5555555555555556,
+      "adabnNote": null,
+      "phase2BestEpoch": 3,
+      "elapsedSeconds": 13.967050166000263,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|TL|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TL",
+      "global": false,
+      "local": true,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.6666666666666666,
+      "cefBest": 2.9023145430959985,
+      "contributionGlobal": 0.0,
+      "contributionLocal": 0.19224964582826942,
+      "adaptationShare": 0.8939000051304662,
+      "supervised": 0.022818756369815674,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 0.5555555555555556,
+      "adabnNote": null,
+      "phase2BestEpoch": 3,
+      "elapsedSeconds": 13.967050166000263,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "lunas|batchnorm|TGL|0": {
+      "family": "lunas",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TGL",
+      "global": true,
+      "local": true,
+      "targetAccuracy": 0.7777777777777778,
+      "sourceAccuracy": 0.6666666666666666,
+      "cefBest": 2.8592854510668007,
+      "contributionGlobal": 0.9968460639938712,
+      "contributionLocal": 0.19311234506312758,
+      "adaptationShare": 0.9811847081060558,
+      "supervised": 0.022818756369815674,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 0.5555555555555556,
+      "adabnNote": null,
+      "phase2BestEpoch": 3,
+      "elapsedSeconds": 13.967050166000263,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|TG|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TG",
+      "global": true,
+      "local": false,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.947736319660434,
+      "contributionGlobal": 0.8219072660431266,
+      "contributionLocal": 0.0,
+      "adaptationShare": 0.9889287319640702,
+      "supervised": 0.00920142710887717,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 1.0,
+      "adabnNote": null,
+      "phase2BestEpoch": 3,
+      "elapsedSeconds": 13.766522833000636,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|TL|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TL",
+      "global": false,
+      "local": true,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.9511517858675234,
+      "contributionGlobal": 0.0,
+      "contributionLocal": 0.1773149874061346,
+      "adaptationShare": 0.9506669312038668,
+      "supervised": 0.00920142710887717,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 1.0,
+      "adabnNote": null,
+      "phase2BestEpoch": 3,
+      "elapsedSeconds": 13.766522833000636,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "toroide|batchnorm|TGL|0": {
+      "family": "toroide",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TGL",
+      "global": true,
+      "local": true,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 0.9444444444444444,
+      "cefBest": 2.947736319660434,
+      "contributionGlobal": 0.8242722828872502,
+      "contributionLocal": 0.18320645263884217,
+      "adaptationShare": 0.990949536100882,
+      "supervised": 0.00920142710887717,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 1.0,
+      "adabnNote": null,
+      "phase2BestEpoch": 3,
+      "elapsedSeconds": 13.766522833000636,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|TG|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TG",
+      "global": true,
+      "local": false,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.9843748859734807,
+      "contributionGlobal": 0.994116828776896,
+      "contributionLocal": 0.0,
+      "adaptationShare": 0.9839664549850206,
+      "supervised": 0.016198943412746303,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 0.7777777777777778,
+      "adabnNote": null,
+      "phase2BestEpoch": 4,
+      "elapsedSeconds": 13.733104499988258,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|TL|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TL",
+      "global": false,
+      "local": true,
+      "targetAccuracy": 0.8888888888888888,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.8387205126507515,
+      "contributionGlobal": 0.0,
+      "contributionLocal": 0.16283130994997919,
+      "adaptationShare": 0.909518402010378,
+      "supervised": 0.016198943412746303,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 0.7777777777777778,
+      "adabnNote": null,
+      "phase2BestEpoch": 3,
+      "elapsedSeconds": 13.733104499988258,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    },
+    "rollo|batchnorm|TGL|0": {
+      "family": "rollo",
+      "normalization": "batchnorm",
+      "seed": 0,
+      "arm": "TGL",
+      "global": true,
+      "local": true,
+      "targetAccuracy": 0.9444444444444444,
+      "sourceAccuracy": 1.0,
+      "cefBest": 2.8751000989718176,
+      "contributionGlobal": 0.9962608544155955,
+      "contributionLocal": 0.17099208873696625,
+      "adaptationShare": 0.9863121233768447,
+      "supervised": 0.016198943412746303,
+      "predictTargetAccuracy": 0.3333333333333333,
+      "adabnTargetAccuracy": 0.7777777777777778,
+      "adabnNote": null,
+      "phase2BestEpoch": 3,
+      "elapsedSeconds": 13.733104499988258,
+      "scale": {
+        "name": "pilot",
+        "epochs_1": 6,
+        "epochs_2": 4,
+        "patience_1": 3,
+        "search_seeds": [
+          100
+        ],
+        "report_seeds": [
+          0
+        ],
+        "trials_1": 2,
+        "trials_2": 2,
+        "points_per_domain": 2835,
+        "lr_1": 0.01,
+        "lr_2": 0.001,
+        "classes": 3,
+        "bags_per_class": 27,
+        "instances_per_bag": 30,
+        "frac_train": 0.6,
+        "frac_valid": 0.2,
+        "isPilot": true,
+        "realizedSplit": {
+          "requested": {
+            "train": 0.6,
+            "valid": 0.2,
+            "test": 0.2
+          },
+          "bagsPerClass": {
+            "train": 16,
+            "valid": 5,
+            "test": 6
+          },
+          "realized": {
+            "train": 0.5925925925925926,
+            "valid": 0.18518518518518517,
+            "test": 0.2222222222222222
+          }
+        }
+      }
+    }
+  },
+  "porFamilia": {
+    "lunas": {
+      "filas": {
+        "TG": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TG",
+            "global": true,
+            "local": false,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 0.6666666666666666,
+            "cefBest": 2.937492502324356,
+            "contributionGlobal": 0.9972118884325027,
+            "contributionLocal": 0.0,
+            "adaptationShare": 0.9776293423280062,
+            "supervised": 0.022818756369815674,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 0.5555555555555556,
+            "adabnNote": null,
+            "phase2BestEpoch": 3,
+            "elapsedSeconds": 13.967050166000263,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "TL": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TL",
+            "global": false,
+            "local": true,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 0.6666666666666666,
+            "cefBest": 2.9023145430959985,
+            "contributionGlobal": 0.0,
+            "contributionLocal": 0.19224964582826942,
+            "adaptationShare": 0.8939000051304662,
+            "supervised": 0.022818756369815674,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 0.5555555555555556,
+            "adabnNote": null,
+            "phase2BestEpoch": 3,
+            "elapsedSeconds": 13.967050166000263,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "TGL": [
+          {
+            "family": "lunas",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TGL",
+            "global": true,
+            "local": true,
+            "targetAccuracy": 0.7777777777777778,
+            "sourceAccuracy": 0.6666666666666666,
+            "cefBest": 2.8592854510668007,
+            "contributionGlobal": 0.9968460639938712,
+            "contributionLocal": 0.19311234506312758,
+            "adaptationShare": 0.9811847081060558,
+            "supervised": 0.022818756369815674,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 0.5555555555555556,
+            "adabnNote": null,
+            "phase2BestEpoch": 3,
+            "elapsedSeconds": 13.967050166000263,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "medias": {
+        "TG": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "TL": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "TGL": {
+          "mean": 0.7777777777777778,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "toroide": {
+      "filas": {
+        "TG": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TG",
+            "global": true,
+            "local": false,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.947736319660434,
+            "contributionGlobal": 0.8219072660431266,
+            "contributionLocal": 0.0,
+            "adaptationShare": 0.9889287319640702,
+            "supervised": 0.00920142710887717,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 1.0,
+            "adabnNote": null,
+            "phase2BestEpoch": 3,
+            "elapsedSeconds": 13.766522833000636,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "TL": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TL",
+            "global": false,
+            "local": true,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.9511517858675234,
+            "contributionGlobal": 0.0,
+            "contributionLocal": 0.1773149874061346,
+            "adaptationShare": 0.9506669312038668,
+            "supervised": 0.00920142710887717,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 1.0,
+            "adabnNote": null,
+            "phase2BestEpoch": 3,
+            "elapsedSeconds": 13.766522833000636,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "TGL": [
+          {
+            "family": "toroide",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TGL",
+            "global": true,
+            "local": true,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 0.9444444444444444,
+            "cefBest": 2.947736319660434,
+            "contributionGlobal": 0.8242722828872502,
+            "contributionLocal": 0.18320645263884217,
+            "adaptationShare": 0.990949536100882,
+            "supervised": 0.00920142710887717,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 1.0,
+            "adabnNote": null,
+            "phase2BestEpoch": 3,
+            "elapsedSeconds": 13.766522833000636,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "medias": {
+        "TG": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "TL": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "TGL": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    },
+    "rollo": {
+      "filas": {
+        "TG": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TG",
+            "global": true,
+            "local": false,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.9843748859734807,
+            "contributionGlobal": 0.994116828776896,
+            "contributionLocal": 0.0,
+            "adaptationShare": 0.9839664549850206,
+            "supervised": 0.016198943412746303,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 0.7777777777777778,
+            "adabnNote": null,
+            "phase2BestEpoch": 4,
+            "elapsedSeconds": 13.733104499988258,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "TL": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TL",
+            "global": false,
+            "local": true,
+            "targetAccuracy": 0.8888888888888888,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.8387205126507515,
+            "contributionGlobal": 0.0,
+            "contributionLocal": 0.16283130994997919,
+            "adaptationShare": 0.909518402010378,
+            "supervised": 0.016198943412746303,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 0.7777777777777778,
+            "adabnNote": null,
+            "phase2BestEpoch": 3,
+            "elapsedSeconds": 13.733104499988258,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ],
+        "TGL": [
+          {
+            "family": "rollo",
+            "normalization": "batchnorm",
+            "seed": 0,
+            "arm": "TGL",
+            "global": true,
+            "local": true,
+            "targetAccuracy": 0.9444444444444444,
+            "sourceAccuracy": 1.0,
+            "cefBest": 2.8751000989718176,
+            "contributionGlobal": 0.9962608544155955,
+            "contributionLocal": 0.17099208873696625,
+            "adaptationShare": 0.9863121233768447,
+            "supervised": 0.016198943412746303,
+            "predictTargetAccuracy": 0.3333333333333333,
+            "adabnTargetAccuracy": 0.7777777777777778,
+            "adabnNote": null,
+            "phase2BestEpoch": 3,
+            "elapsedSeconds": 13.733104499988258,
+            "scale": {
+              "name": "pilot",
+              "epochs_1": 6,
+              "epochs_2": 4,
+              "patience_1": 3,
+              "search_seeds": [
+                100
+              ],
+              "report_seeds": [
+                0
+              ],
+              "trials_1": 2,
+              "trials_2": 2,
+              "points_per_domain": 2835,
+              "lr_1": 0.01,
+              "lr_2": 0.001,
+              "classes": 3,
+              "bags_per_class": 27,
+              "instances_per_bag": 30,
+              "frac_train": 0.6,
+              "frac_valid": 0.2,
+              "isPilot": true,
+              "realizedSplit": {
+                "requested": {
+                  "train": 0.6,
+                  "valid": 0.2,
+                  "test": 0.2
+                },
+                "bagsPerClass": {
+                  "train": 16,
+                  "valid": 5,
+                  "test": 6
+                },
+                "realized": {
+                  "train": 0.5925925925925926,
+                  "valid": 0.18518518518518517,
+                  "test": 0.2222222222222222
+                }
+              }
+            }
+          }
+        ]
+      },
+      "medias": {
+        "TG": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "TL": {
+          "mean": 0.8888888888888888,
+          "stdev": 0.0,
+          "n": 1
+        },
+        "TGL": {
+          "mean": 0.9444444444444444,
+          "stdev": 0.0,
+          "n": 1
+        }
+      }
+    }
+  },
+  "arquitecturas": {
+    "lunas": "batchnorm",
+    "toroide": "batchnorm",
+    "rollo": "batchnorm"
+  },
+  "brazos": [
+    "TG",
+    "TL",
+    "TGL"
+  ],
+  "rotulos": {
+    "TG": "global only, Eqs. 32-37",
+    "TL": "local only, Eqs. 30-31 and 38",
+    "TGL": "global + local, confidence weighting on, both coefficients 1"
+  },
+  "elapsedSeconds": 41.627309083007276,
+  "escala": {
+    "name": "pilot",
+    "epochs_1": 6,
+    "epochs_2": 4,
+    "patience_1": 3,
+    "search_seeds": [
+      100
+    ],
+    "report_seeds": [
+      0
+    ],
+    "trials_1": 2,
+    "trials_2": 2,
+    "points_per_domain": 2835,
+    "lr_1": 0.01,
+    "lr_2": 0.001,
+    "classes": 3,
+    "bags_per_class": 27,
+    "instances_per_bag": 30,
+    "frac_train": 0.6,
+    "frac_valid": 0.2,
+    "isPilot": true,
+    "realizedSplit": {
+      "requested": {
+        "train": 0.6,
+        "valid": 0.2,
+        "test": 0.2
+      },
+      "bagsPerClass": {
+        "train": 16,
+        "valid": 5,
+        "test": 6
+      },
+      "realized": {
+        "train": 0.5925925925925926,
+        "valid": 0.18518518518518517,
+        "test": 0.2222222222222222
+      }
+    }
+  }
+}
