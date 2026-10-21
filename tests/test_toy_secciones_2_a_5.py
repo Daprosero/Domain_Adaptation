@@ -836,5 +836,15 @@ def test_las_cuatro_secciones_se_niegan_ante_el_barrido_en_memoria():
         assert "exigir_artefacto_de_la_seccion_uno(registro)" in cuerpo, \
             barrido.__name__
         # Antes de resolver el dispositivo, que es la primera linea que cuesta.
+        # El resolutor es `dispositivo_del_toyset` desde el 2026-10-21 y era
+        # `harness.resolve_device`: este test fijaba el nombre viejo, asi que
+        # el renombre lo volvio `ValueError: substring not found` --- una falla
+        # que no dice nada de lo que el test cuida. Se pide la linea, y si no
+        # esta se dice que no esta.
+        resolutor = "dispositivo_del_toyset"
+        assert resolutor in cuerpo, (
+            f"{barrido.__name__} no resuelve el dispositivo por {resolutor!r}, "
+            "asi que este test no puede decir si la guardia va antes de la "
+            "primera linea que cuesta")
         assert (cuerpo.index("exigir_artefacto_de_la_seccion_uno")
-                < cuerpo.index("harness.resolve_device")), barrido.__name__
+                < cuerpo.index(resolutor)), barrido.__name__

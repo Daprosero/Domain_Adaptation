@@ -208,7 +208,9 @@ import copy
 import functools
 import json
 import math
+import multiprocessing
 import time
+from concurrent import futures
 from dataclasses import (asdict, dataclass, fields as _campos_de,
                          replace as _reemplazar)
 from pathlib import Path
@@ -4461,7 +4463,7 @@ def sweep(scale: Scale, device: torch.device | None = None,
     there was nothing", and what is true is that nothing was measured because
     nothing can be. See the module docstring on what the single-arm shape costs.
     """
-    device = harness.resolve_device() if device is None else device
+    device = dispositivo_del_toyset() if device is None else device
     names = tuple(families) if families else tuple(n for n, _ in DURAS)
     started = time.perf_counter()
 
@@ -4532,6 +4534,10 @@ def sweep(scale: Scale, device: torch.device | None = None,
         "cells": cells, "rows": rows,
         "hp1": hp1, "hp2": hp2, "records1": records1, "records2": records2,
         "perFamily": per_family,
+        # Devuelto para que `fusionar` pueda reconstruir `flags` y `cost` sobre
+        # la union de varios barridos: `_mean` de una concatenacion no se
+        # recupera de tres medias cuyo filtrado de NaN pudo diferir.
+        "rates": rates,
         "cost": cost_report(rates, scale, elapsed, families=len(names)),
         "scale": scale.stamp(),
     }
@@ -4580,6 +4586,166 @@ def _resolved_sigma(hyper: dict, chosen1: dict, familia: toy_bags.Familia,
     return {**hyper, "kernelSigma": multiplier * distance}
 
 
+def _callado(*_args, **_kwargs) -> None:
+    """A `report` that says nothing and is picklable, which a `lambda` is not.
+
+    A child process's progress cannot reach the notebook cell that started it:
+    `ipykernel` replaces `sys.stdout` in the PARENT only, so a child that
+    reported would write into the terminal and leave the executed notebook
+    claiming nothing happened for two hours. `barrido_repartido` reports each
+    family in the parent as it lands instead, which is the half that can be
+    seen where a reader looks.
+    """
+    return None
+
+
+def fusionar(barridos: list[dict], scale: Scale, device: torch.device,
+             elapsed: float) -> dict:
+    """Three single-family sweeps back into the one artefact `guardar` writes.
+
+    **The split this undoes is admissible, and that is measured rather than
+    argued.** Each family's search is its own `optuna` study with its own
+    fixed-seed sampler (`TPESampler(seed=0)`, created inside `search_phase_one`
+    and `search_phase_two`), so no family's trials inform another's. Run at
+    `PILOT`, three one-family sweeps return the same six hyperparameter dicts
+    and the same nine `targetAccuracy` values, bit for bit, as one three-family
+    sweep. The argument from the sampler's seed is what made the measurement
+    worth making; the measurement is what settles it.
+
+    `elapsed` is the WALL CLOCK of the concurrent run and never the sum of the
+    three. They ran at the same time, so adding them would report a cost nobody
+    paid and make `secondsPerCell` a figure about no run that happened. The per
+    epoch and per step rates come from the union of the three `rates` lists --
+    which is the whole reason `sweep` returns them, since `_mean` over a
+    concatenation is not recoverable from three means whose NaN filtering
+    differed.
+
+    It REFUSES rather than merges when the three do not describe one
+    experiment: a scale stamp that differs, a device that differs -- the device
+    MOVES the result, which is the whole reason `dispositivo_del_toyset` exists
+    -- or a family measured twice, which a union would silently drop one of.
+    """
+    if not barridos:
+        raise ValueError(
+            "fusionar no recibio ningun barrido, asi que no hay nada que unir")
+
+    stamp = scale.stamp()
+    for i, barrido in enumerate(barridos):
+        if "rates" not in barrido:
+            raise ValueError(
+                f"el barrido {i} no trae 'rates', asi que 'cost' y 'flags' no "
+                f"se pueden reconstruir sobre la union. `sweep` lo devuelve; un "
+                f"barrido sin esa clave viene de otra version de este modulo")
+        if barrido["scale"] != stamp:
+            raise ValueError(
+                f"el barrido {i} lleva un sello de escala que no es el de "
+                f"'{scale.name}': sus numeros fueron medidos bajo otro "
+                f"protocolo, asi que unirlos compararia dos experimentos. Trae "
+                f"{json.dumps(barrido['scale'], sort_keys=True)} y se esperaba "
+                f"{json.dumps(stamp, sort_keys=True)}")
+        if barrido["flags"]["device"] != str(device):
+            raise ValueError(
+                f"el barrido {i} corrio en {barrido['flags']['device']!r} y la "
+                f"fusion declara {str(device)!r}. El dispositivo mueve el "
+                f"resultado --- el mismo brazo dio cuatro targetAccuracy en "
+                f"cuatro dispositivos --- asi que una union de dos "
+                f"dispositivos no es una corrida, son dos")
+
+    nombres: list[str] = []
+    for i, barrido in enumerate(barridos):
+        for name in barrido["flags"]["families"]:
+            if name in nombres:
+                raise ValueError(
+                    f"la familia {name!r} viene en dos barridos (el {i} es el "
+                    f"segundo); una union descartaria una de las dos en "
+                    f"silencio, y cual depende del orden en que terminaron")
+            nombres.append(name)
+    # El orden que `DURAS` declara, nunca el orden en que los procesos
+    # terminaron: la lista de familias del artefacto es una declaracion sobre
+    # el experimento, no una cronica de la corrida. Dos corridas iguales que
+    # terminaron en distinto orden tienen que escribir el mismo artefacto.
+    declarado = [n for n, _ in DURAS]
+    orden = tuple(sorted(
+        nombres, key=lambda n: (declarado.index(n) if n in declarado
+                                else len(declarado), n)))
+
+    unido: dict = {}
+    for llave in ("cells", "rows", "hp1", "hp2", "records1", "records2",
+                  "perFamily"):
+        fundido: dict = {}
+        for barrido in barridos:
+            # Las familias ya se probaron disjuntas, pero `cells` y `rows` se
+            # indexan por `key(familia, ...)` y no por la familia sola: esto
+            # pesca un cambio en esa convencion, que volveria dos claves
+            # distintas en una.
+            solapan = set(fundido) & set(barrido[llave])
+            if solapan:
+                raise ValueError(
+                    f"dos barridos traen la misma clave en {llave!r}: "
+                    f"{sorted(solapan)[:4]}. Las familias son disjuntas, asi "
+                    f"que la convencion de `key` dejo de llevar la familia "
+                    f"adelante y la union perderia filas")
+            fundido.update(barrido[llave])
+        unido[llave] = fundido
+
+    rates = [r for barrido in barridos for r in barrido["rates"]]
+    unido["rates"] = rates
+    unido["flags"] = flags(scale, device, orden, rates, elapsed)
+    unido["cost"] = cost_report(rates, scale, elapsed, families=len(orden))
+    unido["scale"] = stamp
+    return unido
+
+
+def barrido_repartido(scale: Scale, device: torch.device | None = None,
+                      families: tuple[str, ...] | None = None,
+                      report=print) -> dict:
+    """`sweep`, one process per family, then `fusionar`. Same artefact, measured
+    2.48x faster on an M2.
+
+    **Why the process and not the thread and not the accelerator.** The same
+    split, measured at three granularities on this machine: across the GPU's
+    thousands of cores it LOSES 11.6x, across four CPU threads it loses 1.12x,
+    across three processes it GAINS 2.48x. One phase-2 step pushes 90 points (3
+    bags x 30 instances) through an MLP of dim 8, so the process is the only
+    granularity at which the work exceeds the cost of splitting it.
+
+    **Pin the threads from OUTSIDE, with `OMP_NUM_THREADS=1`.** `torch` reads
+    that at import, so a child spawned from a parent that already imported it
+    inherits the variable and not a later call. Unpinned, `torch` takes four
+    threads per process -- twelve on eight cores -- and one thread per process
+    measured faster than four even running alone. `nice -n 19` is free when the
+    machine is idle (0.01028 against 0.01032 s/step) and is what keeps the
+    operator's machine usable, so it belongs on the command line too.
+
+    **Three families is the ceiling, not a parameter to raise.** A family's
+    phase-1 search is ONE `optuna` study whose trials run sequentially, so
+    there is no fourth thing to run at the same time. Splitting by
+    normalization or by search seed would change WHICH hyperparameter gets
+    chosen, which is the science and not the schedule.
+    """
+    names = tuple(families) if families else tuple(n for n, _ in DURAS)
+    device = dispositivo_del_toyset() if device is None else device
+    started = time.perf_counter()
+    report(f"  {len(names)} procesos, uno por familia: {', '.join(names)}")
+
+    barridos: list[dict] = []
+    with futures.ProcessPoolExecutor(
+            max_workers=len(names),
+            mp_context=multiprocessing.get_context("spawn")) as pool:
+        pendientes = {pool.submit(sweep, scale, device, (name,), _callado): name
+                      for name in names}
+        for terminado in futures.as_completed(pendientes):
+            name = pendientes[terminado]
+            # `.result()` re-raises the child's exception here, in the parent,
+            # which is where a notebook can show it. Nothing is swallowed.
+            barrido = terminado.result()
+            barridos.append(barrido)
+            report(f"  {name}: {len(barrido['rates'])} celdas, "
+                   f"{time.perf_counter() - started:.0f}s de reloj")
+
+    return fusionar(barridos, scale, device, time.perf_counter() - started)
+
+
 # ===================================================================
 #        las secciones 2 a 5: leen lo que la seccion 1 eligio
 # ===================================================================
@@ -4616,6 +4782,47 @@ CLAVES_ARTEFACTO = ("hp1", "hp2", "filas", "escala")
 #: vuelta en un solo lugar. En `False` hay que nombrar cual es la fija, y eso
 #: todavia no lo decidio nadie, asi que esa rama se niega en vez de elegir.
 ARQUITECTURA_POR_FAMILIA = True
+
+
+def dispositivo_del_toyset() -> "torch.device":
+    """La CPU, porque en las DOS maquinas medidas le gana al acelerador.
+
+    `harness.resolve_device()` prefiere `cuda > mps > cpu`, que es el orden de
+    `CREDA.training_pipeline` y es el correcto para el banco de digitos: ahi un
+    paso pasa un lote de imagenes por un resnet18 y hay matmuls grandes. Acá no
+    hay ninguno. Un paso de la fase 2 de este toyset procesa TRES bolsas de 30
+    instancias --- 90 puntos --- por un MLP cuya dimension la busqueda eligio en
+    8, asi que el despacho a un acelerador cuesta mas que la aritmetica que
+    lleva.
+
+    Medido el 2026-10-21 sobre la MISMA celda (un brazo `TGL`, lunas,
+    batchnorm, semilla 0, los hiperparametros del artefacto completo), con la
+    fase 2 corriendo sus 100 epocas enteras en los cuatro casos:
+
+    | dispositivo             | s/paso de fase 2 | el flujo entero |
+    | M2 cpu, 8 nucleos       |          0.00967 |          6.16 h |
+    | M2 mps, la GPU de Apple |          0.11182 |         66.34 h |
+    | Kaggle cpu, 4 nucleos   |          0.05059 |         31.52 h |
+    | Kaggle T4 (`sm_75`)     |          0.07521 |         46.48 h |
+
+    El acelerador pierde en las dos maquinas: 11.6x en el M2 y 1.5x en Kaggle.
+    El cruce del matmul cuadrado esta en n~512 en el M2 y en n~128 en Kaggle, y
+    ninguna matriz que este toyset forma llega a n=100 --- los bloques de Gram
+    son de 16x16, una bolsa de entrenamiento por clase.
+
+    **Esto NO es una medicion de velocidad sola: el dispositivo mueve el
+    numero.** La misma celda y la misma semilla dieron `targetAccuracy` 0.5556 /
+    0.3333 / 0.6111 / 0.5000 en esos cuatro dispositivos, que es divergencia
+    float32 entre backends compuesta a lo largo de 100 epocas por 16 pasos.
+    Ninguno de los cuatro es el correcto y no se afirma que lo sea; lo que se
+    sigue es que la campana entera corre en UNO, y esta funcion es donde ese uno
+    queda declarado en vez de salir de un orden de preferencia heredado.
+
+    `harness.resolve_device()` queda intacto: lo leen cinco sitios del banco de
+    digitos y `CREDA.training_pipeline`, y moverlo cambiaria experimentos que
+    esta decision no abarca.
+    """
+    return torch.device("cpu")
 
 
 def exigir_artefacto_de_la_seccion_uno(registro: dict) -> dict:
@@ -5539,7 +5746,7 @@ def barrido_sopesado(registro: dict, scale: Scale,
     """
     # En la puerta, antes de pagar nada: ver `exigir_artefacto_de_la_seccion_uno`.
     exigir_artefacto_de_la_seccion_uno(registro)
-    device = harness.resolve_device() if device is None else device
+    device = dispositivo_del_toyset() if device is None else device
     nombres = tuple(families) if families else tuple(n for n, _ in DURAS)
     arrancado = time.perf_counter()
     brazos = _registrar(brazos_de_sopesado())
@@ -5681,7 +5888,7 @@ def barrido_desplazamiento(registro: dict, scale: Scale,
     entre los dos se mide y viaja como `controlReproduceLaReferencia`, que es
     una prueba que la corrida se hace a si misma.
     """
-    device = harness.resolve_device() if device is None else device
+    device = dispositivo_del_toyset() if device is None else device
     nombres = tuple(families) if families else tuple(n for n, _ in DURAS)
     arrancado = time.perf_counter()
 
@@ -5819,7 +6026,7 @@ def barrido_agregacion(registro: dict, scale: Scale,
     """
     # En la puerta, antes de pagar nada: ver `exigir_artefacto_de_la_seccion_uno`.
     exigir_artefacto_de_la_seccion_uno(registro)
-    device = harness.resolve_device() if device is None else device
+    device = dispositivo_del_toyset() if device is None else device
     nombres = tuple(families) if families else tuple(n for n, _ in DURAS)
     arrancado = time.perf_counter()
 
@@ -6074,7 +6281,7 @@ def barrido_correspondencia(registro: dict, scale: Scale,
     """
     # En la puerta, antes de pagar nada: ver `exigir_artefacto_de_la_seccion_uno`.
     exigir_artefacto_de_la_seccion_uno(registro)
-    device = harness.resolve_device() if device is None else device
+    device = dispositivo_del_toyset() if device is None else device
     nombres = tuple(families) if families else tuple(n for n, _ in DURAS)
     arrancado = time.perf_counter()
 
@@ -6318,7 +6525,7 @@ def barrido_ablacion(registro: dict, scale: Scale,
     """
     # En la puerta, antes de pagar nada: ver `exigir_artefacto_de_la_seccion_uno`.
     exigir_artefacto_de_la_seccion_uno(registro)
-    device = harness.resolve_device() if device is None else device
+    device = dispositivo_del_toyset() if device is None else device
     nombres = tuple(families) if families else tuple(n for n, _ in DURAS)
     arrancado = time.perf_counter()
 
