@@ -1302,6 +1302,22 @@ def _holm(crudas: list) -> list:
     return salida
 
 
+def _gep(fila: dict) -> str:
+    """`gana/empata/pierde` sobre los bloques de semilla, o una raya.
+
+    Uno solo para las cuatro tablas que lo imprimen: el formato es lo que el
+    lector compara entre secciones, y cuatro f-strings separadas son cuatro
+    oportunidades de que una quede en `gana/n`.
+
+    La raya cubre el par DECLARADO sin serie, que no tiene conteo --- y la
+    cubre leyendo `gana`, el mismo campo del que las otras tres columnas de esa
+    fila deciden su propia raya.
+    """
+    if fila.get("gana") is None:
+        return NADA
+    return f"{fila['gana']}/{fila['empata']}/{fila['pierde']}"
+
+
 def _par_medido(primero: str, segundo: str, a: list, b: list) -> dict:
     """One pair already subtracted, with everything the table reports of it.
 
@@ -1331,7 +1347,14 @@ def _par_medido(primero: str, segundo: str, a: list, b: list) -> dict:
     media = statistics.fmean(dif)
     fila = {
         "primero": primero, "segundo": segundo, "n": n, "delta": media,
+        # Los TRES conteos y no uno: con `gana/n` el empate y la derrota caen
+        # en el mismo complemento, asi que `2/10` no distingue «empatamos
+        # siete» de «perdimos ocho». Cierran contra `n` por construccion --- un
+        # par es mayor, igual o menor y no hay cuarta opcion --- y el test lo
+        # asierta, porque un conteo que no cierra miente por omision.
         "gana": sum(1 for d in dif if d > 0),
+        "empata": sum(1 for d in dif if d == 0),
+        "pierde": sum(1 for d in dif if d < 0),
         "mediana": None, "ic": None, "p": None, "razon": None,
         "t": None, "pt": None, "shapiro": None, "gl": n - 1,
     }
@@ -1469,7 +1492,8 @@ def comparar_familia(registro: dict, familia: str) -> dict:
                 sin = [n for n in (primero, segundo) if series[n] is None]
                 filas.append({
                     "primero": primero, "segundo": segundo, "n": bloques,
-                    "delta": None, "gana": None, "mediana": None, "ic": None,
+                    "delta": None, "gana": None, "empata": None,
+                    "pierde": None, "mediana": None, "ic": None,
                     "p": None,
                     "razon": (f"{', '.join(sin)} no tiene escalón en "
                               f"`{norma}`: no hay segunda serie que restar, "
@@ -1702,7 +1726,7 @@ def render_familia_sin_contra_con(registro: dict, familia: str) -> str:
         Columna("p", _opcional("pt", cifras=5)),
         Columna("Shapiro p", _opcional("shapiro", cifras=3)),
         Columna("Wilcoxon p", _opcional("p")),
-        Columna("gana", lambda r: f"{r['gana']}/{r['n']}"),
+        Columna("G/E/P", _gep),
     ]
     pie = [
         f"`Δ = {_llano(con)} − {_llano(sin)}`, así que **Δ>0 quiere decir que "
@@ -1792,9 +1816,7 @@ def render_familia_tests(registro: dict, familia: str) -> str:
             Columna("p (Wilcoxon)", _opcional("p")),
             Columna(f"p Holm (familia de {bloque['familiaDeHolm']})",
                     _opcional("holm")),
-            Columna("gana",
-                    lambda r: (NADA if r["gana"] is None
-                               else f"{r['gana']}/{r['n']}")),
+            Columna("G/E/P", _gep),
         ]
         pie = [
             "`Δ = (columna «gana si Δ>0») − (columna «contra»)`, así que "
@@ -2026,12 +2048,111 @@ def _filas_por_brazo(barrido: dict, familia: str,
     return salida
 
 
-def _rotulo(barrido: dict, brazo: str) -> str:
-    """La etiqueta que el BARRIDO publico para ese brazo, o su id.
+#: La marca de cada mecanismo de agregacion, que es lo que el lector compara.
+#:
+#: **`ours` se imprime `MIL-CREDA` y no `ours`.** El id es nuestro vocabulario
+#: interno --- `wiring.MECHANISMS` lo consume y un `unknown mechanism` sale por
+#: ahi --- asi que el nombre propio entra en el rotulo y nunca en el id.
+#:
+#: Y los otros cuatro son la sigla sola. `agregacion abmil-gated, todas las
+#: instancias` ocupa media fila para decir lo que `ABMIL_G` dice entero: el eje
+#: ya esta en el titulo de la tabla, asi que repetirlo por fila es ruido.
+MARCAS_MECANISMO = {
+    "ours": "MIL-CREDA",
+    "abmil-published": "ABMIL",
+    "abmil-gated": "ABMIL_G",
+    "max": "MAX",
+    "mean": "MEAN",
+}
 
-    El id es la caida honesta: un artefacto viejo no trae `rotulos`, y escribir
-    `W-con` es peor que una frase pero no es una frase inventada.
+#: La marca de cada regla de seleccion. `topk` es NUESTRA regla --- la que
+#: ordena por los pesos de la atencion --- asi que lleva el nombre propio, y
+#: `arbitrary` se imprime `AZAR` porque es el control de sorteo y eso es lo que
+#: un lector tiene que leer en la fila contra la que nos medimos.
+MARCAS_SELECCION = {
+    "topk": "MIL-CREDA",
+    "arbitrary": "AZAR",
+    "regular": "REGULAR",
+}
+
+#: Nuestro nombre, al que las dos ablaciones le cuelgan su sufijo.
+MARCA = "MIL-CREDA"
+
+
+def marca_de_ablacion(tiene_global: bool, tiene_local: bool) -> str:
+    """`MIL-CREDA_G`, `MIL-CREDA_L` o `MIL-CREDA_GL`, por la Ec. (39).
+
+    De los dos terminos y no del id del brazo: `TGL` es el mismo id que
+    `TOY_ARMS[0]`, asi que cuando `ABLACION` lo declara el id ya esta
+    registrado y el rotulo que ABLACION le pone no llega nunca a imprimirse.
+    Medido en el artefacto: `TG` y `TL` tomaron la marca y `TGL` no.
     """
+    sufijo = ("G" if tiene_global else "") + ("L" if tiene_local else "")
+    if not sufijo:
+        raise ValueError(
+            "un brazo de la ablacion sin global y sin local no es un brazo")
+    return f"{MARCA}_{sufijo}"
+
+
+#: Lo que se imprime cuando la regla no recorta nada: la referencia del eje.
+MARCA_TODAS = "TODAS"
+
+
+def marca_de_seleccion(regla: str | None, k: int | None) -> str:
+    """`MIL-CREDA_10`, `AZAR_10`, `REGULAR_10` --- o `TODAS`.
+
+    El `k` entra en el rotulo porque los tres presupuestos se reportan siempre
+    y nunca el mejor: dos filas que dijeran `MIL-CREDA` a secas serian dos
+    presupuestos distintos con el mismo nombre.
+    """
+    if regla is None:
+        return MARCA_TODAS
+    if regla not in MARCAS_SELECCION:
+        raise KeyError(
+            f"regla de seleccion {regla!r} sin marca; {sorted(MARCAS_SELECCION)}")
+    marca = MARCAS_SELECCION[regla]
+    return marca if k is None else f"{marca}_{int(k)}"
+
+
+def _celda_del_brazo(barrido: dict, brazo: str) -> dict:
+    """Una celda cualquiera de ese brazo, para leerle los campos del eje.
+
+    Una cualquiera y no todas: `mechanism`, `selection` y `selectK` son del
+    BRAZO y no de la semilla, asi que cualquiera de sus celdas los trae iguales.
+    """
+    for fila in (barrido.get("celdas") or {}).values():
+        if fila.get("arm") == brazo:
+            return fila
+    return {}
+
+
+def _rotulo(barrido: dict, brazo: str) -> str:
+    """La marca de ese brazo, DERIVADA de sus campos, o su cadena publicada.
+
+    **Derivada y no leida de `rotulos` cuando la celda trae su eje.** Un rotulo
+    guardado es una cadena congelada en el momento de la corrida, y eso es
+    exactamente lo que dejo a la seccion 5 imprimiendo el nombre viejo de un
+    brazo que ya se habia renombrado: el rotulo viaja adentro del artefacto, asi
+    que renombrarlo en el codigo no cambia nada hasta re-correr la seccion.
+    `mechanism`, `selection` y `selectK` tambien viajan ahi, y de esos NO se
+    puede quedar vieja la marca sin que la celda tambien lo este.
+
+    Los otros cuatro barridos no traen `eje`, y para ellos la cadena publicada
+    es el unico rotulo que existe. El id es la caida honesta del todo: un
+    artefacto viejo no trae `rotulos`, y escribir `W-con` es peor que una frase
+    pero no es una frase inventada.
+    """
+    celda = _celda_del_brazo(barrido, brazo)
+    eje = celda.get("eje")
+    if eje == "mecanismo":
+        return MARCAS_MECANISMO[celda["mechanism"]]
+    if eje == "seleccion":
+        return marca_de_seleccion(celda.get("selection"), celda.get("selectK"))
+    # Los DOS campos o ninguno: un brazo con `global` y sin `local` no dice que
+    # el local este apagado --- dice que la celda no lo escribio --- y escribir
+    # `MIL-CREDA_G` ahi afirmaria una ablacion que nadie midio.
+    if isinstance(celda.get("global"), bool) and isinstance(celda.get("local"), bool):
+        return marca_de_ablacion(celda["global"], celda["local"])
     return (barrido.get("rotulos") or {}).get(brazo, brazo)
 
 
@@ -2136,7 +2257,7 @@ def tabla_test(barrido: dict, familia: str, pares: list, nota_familia: str,
                 ("targetAccuracy",)),
         Columna("IC95 de Δ", lambda f: f["ic_texto"], ("targetAccuracy",)),
         Columna("p (Wilcoxon)", lambda f: f["p_texto"], ("targetAccuracy",)),
-        Columna("gana", lambda f: f["gana_texto"], ("targetAccuracy",)),
+        Columna("G/E/P", lambda f: f["gana_texto"], ("targetAccuracy",)),
     ]
     # **Con UN par no hay columna de Holm, y no es que valga lo mismo.** Holm
     # sobre una familia de uno devuelve la p sin tocar, asi que una columna
@@ -2159,7 +2280,7 @@ def tabla_test(barrido: dict, familia: str, pares: list, nota_familia: str,
             "p_texto": NADA if fila.get("p") is None else _num(fila["p"]),
             "holm_texto": (NADA if fila.get("holm") is None
                            else _num(fila["holm"])),
-            "gana_texto": f"{fila['gana']}/{fila['n']}",
+            "gana_texto": _gep(fila),
         }
 
     filas = [_pintar(f) for f in medidos]
@@ -2305,7 +2426,8 @@ def tabla_seleccion_acc(barrido: dict, familia: str) -> str:
     return tabla_acc(
         barrido, familia,
         f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
-        f"la selección, k = {', '.join(str(k) for k in ks)}",
+        f"la selección sobre {_marca_del_ganador(barrido, familia)}, "
+        f"k = {', '.join(str(k) for k in ks)}",
         solo=tuple(reglas[r] for r in ("topk", "arbitrary", "regular")
                    if r in reglas))
 
@@ -2332,7 +2454,8 @@ def tabla_seleccion_test(barrido: dict, familia: str) -> str:
         "Holm dentro de los 3 pares entre reglas · a m=3 el umbral más "
         "pequeño es 0.0167, así que un efecto a p=0.0195 NO sobrevive",
         f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
-        "la selección · test, sólo reporte",
+        f"la selección sobre {_marca_del_ganador(barrido, familia)} · "
+        "test, sólo reporte",
         solo=tuple(reglas[r] for r in ("topk", "arbitrary", "regular")))
 
 
@@ -2480,6 +2603,21 @@ def tabla_ablacion_test(barrido: dict, familia: str) -> str:
         "la ablación · test, sólo reporte",
         sin_test=[("TGL", "predictTargetAccuracy", "`.predict`")],
         solo=("TG", "TL", "TGL"))
+
+
+def _marca_del_ganador(barrido: dict, familia: str) -> str:
+    """La marca del mecanismo que gano el PRIMER eje de la seccion 3.
+
+    El segundo eje corre sobre ese mecanismo, y medido no siempre es el
+    nuestro. Las filas del segundo eje llevan la marca de la REGLA, que si es
+    nuestra; el mecanismo sobre el que la regla ordena va en el titulo, porque
+    sin el `MIL-CREDA_10` se lee como nuestro mecanismo con nuestra regla.
+
+    Del artefacto y no de una constante: cual gano es una lectura y cambia con
+    la corrida.
+    """
+    ganador = ((barrido.get("porFamilia") or {}).get(familia) or {}).get("ganador")
+    return MARCAS_MECANISMO[ganador] if ganador else "?"
 
 
 def _rotulo_norma_de(barrido: dict, familia: str) -> str:
