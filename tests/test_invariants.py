@@ -1179,6 +1179,45 @@ def test_confidence_one_at_onehot_zero_at_uniform() -> None:
         bag_confidence(torch.ones(1, dtype=DTYPE), 1)
 
 
+def test_confidence_is_blind_to_the_true_label() -> None:
+    """Eq. (24) weighs AMBIGUITY, not ERROR, and that is the whole property.
+
+    `w` is a function of `g_j^t` and of nothing else, so it cannot see the true
+    label -- which in UDA does not exist to be seen. The consequence is the one
+    a reader gets wrong: a bag whose posterior concentrates on the WRONG class
+    is confidently wrong and enters `D_c^t` (Eq. 25) at nearly full weight.
+    Only bags that sit BETWEEN classes are weighed down.
+
+    This is not a defect; a target label is unobservable, so no term can
+    penalize having gone to the wrong class. It is stated and pinned because
+    without it "confidence" reads as "correctness".
+
+    **Measured on this toyset** (`Results/Toyset/full`, arm `W-con`, seed 0,
+    81 target bags): in `toroide`, 3 of the 6 mislabelled bags carry `w > 0.9`
+    and one reaches 0.9988. In `lunas` and `rollo` none exceeds 0.9 -- so the
+    correlation between confidence and correctness holds there and not here,
+    which is exactly what makes it an accident of the data rather than a
+    guarantee of the equation.
+
+    What this test pins is the equation, not the toyset: two posteriors that
+    are permutations of one another carry the SAME confidence, so relabelling
+    which class is "true" cannot move `w` by construction.
+    """
+    C = 4
+    seguro = torch.tensor([0.94, 0.02, 0.02, 0.02], dtype=DTYPE)
+    # La MISMA distribucion, apuntando a otra clase. Si una fuera la verdadera
+    # y la otra la equivocada, `w` tendria que distinguirlas --- y no puede.
+    seguro_a_otra_clase = seguro[torch.tensor([1, 0, 2, 3])]
+    assert close(bag_confidence(seguro, C),
+                 bag_confidence(seguro_a_otra_clase, C), atol=TOL)
+    # Y la confiadamente equivocada pesa MAS que la que duda entre dos clases,
+    # que es la consecuencia de arriba escrita como desigualdad.
+    dudosa = torch.tensor([0.48, 0.48, 0.02, 0.02], dtype=DTYPE)
+    assert float(bag_confidence(seguro, C)) > 0.9
+    assert float(bag_confidence(dudosa, C)) < 0.5
+    assert float(bag_confidence(seguro, C)) > float(bag_confidence(dudosa, C))
+
+
 # --------------------------------------------------------------------------
 # conditional.py - Section 3, Eqs. (23), (25)-(27)
 # --------------------------------------------------------------------------
