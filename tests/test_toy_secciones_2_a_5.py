@@ -33,7 +33,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from MIL_CREDA_Benchmark import bags, toy_run
+from MIL_CREDA_Benchmark import bags, toy_run, toy_tables
 
 #: The artefact the readers are tested against. The FULL one, because it is the
 #: one whose winners the agreement writes down.
@@ -848,3 +848,123 @@ def test_las_cuatro_secciones_se_niegan_ante_el_barrido_en_memoria():
             "primera linea que cuesta")
         assert (cuerpo.index("exigir_artefacto_de_la_seccion_uno")
                 < cuerpo.index(resolutor)), barrido.__name__
+
+
+def test_la_marca_del_eje_sale_de_los_campos_y_no_de_la_cadena_guardada():
+    """Los rotulos de la seccion 3 se DERIVAN de `mechanism`/`selection`.
+
+    Derivados y no leidos de `rotulos`: una cadena congelada en el artefacto es
+    exactamente lo que dejo a la seccion 5 imprimiendo el nombre viejo de un
+    brazo despues de renombrarlo. Los campos de los que esto sale ya viajan en
+    cada celda, asi que la marca no puede quedar vieja sin que la celda tambien
+    lo este.
+    """
+    barrido = {
+        "seccion": 3,
+        # `rotulos` trae la cadena VIEJA a proposito: si el lector la prefiriera
+        # a los campos, esta prueba lo ve.
+        "rotulos": {"M-ours": "agregacion ours, todas las instancias",
+                    "S-max-topk-10": "max, seleccion topk-10"},
+        "celdas": {
+            "a": {"family": "lunas", "arm": "M-ours", "eje": "mecanismo",
+                  "mechanism": "ours", "selection": None, "selectK": None},
+            "b": {"family": "lunas", "arm": "M-abmil-gated", "eje": "mecanismo",
+                  "mechanism": "abmil-gated", "selection": None, "selectK": None},
+            "c": {"family": "lunas", "arm": "S-max-topk-10", "eje": "seleccion",
+                  "mechanism": "max", "selection": "topk", "selectK": 10},
+            "d": {"family": "lunas", "arm": "S-max-arbitrary-10",
+                  "eje": "seleccion", "mechanism": "max",
+                  "selection": "arbitrary", "selectK": 10},
+            "e": {"family": "lunas", "arm": "S-max-todas", "eje": "seleccion",
+                  "mechanism": "max", "selection": None, "selectK": None},
+        },
+    }
+    assert toy_tables._rotulo(barrido, "M-ours") == "MIL-CREDA"
+    assert toy_tables._rotulo(barrido, "M-abmil-gated") == "ABMIL_G"
+    assert toy_tables._rotulo(barrido, "S-max-topk-10") == "MIL-CREDA_10"
+    assert toy_tables._rotulo(barrido, "S-max-arbitrary-10") == "AZAR_10"
+    assert toy_tables._rotulo(barrido, "S-max-todas") == "TODAS"
+    # El brazo que NO es de la seccion 3 sigue leyendo su cadena publicada: los
+    # otros cuatro barridos no traen `eje` y su rotulo es el unico que tienen.
+    otro = {"seccion": 2, "rotulos": {"W-con": "con sopesado"}, "celdas": {}}
+    assert toy_tables._rotulo(otro, "W-con") == "con sopesado"
+    assert toy_tables._rotulo(otro, "W-sin") == "W-sin"
+
+
+def test_el_rotulo_que_toy_run_guarda_es_la_misma_marca_que_se_imprime():
+    """La cadena guardada y la derivada son UNA, y el test cruza la junta.
+
+    `toy_run` arma `label` con las mismas marcas que `toy_tables` imprime ---
+    las importa, no las copia --- asi que un artefacto nuevo trae en `rotulos`
+    exactamente lo que el lector derivaria. Dos diccionarios iguales escritos
+    dos veces es la forma en que esto se rompe sin que nada falle.
+    """
+    from MIL_CREDA_Benchmark import toy_run
+    for brazo in toy_run.brazos_de_mecanismo():
+        assert brazo["label"] == toy_tables.MARCAS_MECANISMO[brazo["mechanism"]]
+    for brazo in toy_run.brazos_de_seleccion("max"):
+        esperado = toy_tables.marca_de_seleccion(brazo["selection"],
+                                                 brazo.get("selectK"))
+        assert brazo["label"] == esperado, brazo["id"]
+
+
+def test_el_titulo_de_la_seleccion_nombra_el_mecanismo_que_la_lleva():
+    """Las filas dicen `MIL-CREDA_10`, y el mecanismo NO siempre es el nuestro.
+
+    El segundo eje corre sobre el que GANO el primero, y medido eso es `max` en
+    lunas y en toroide y `ours` solo en rollo. Una fila que diga `MIL-CREDA_10`
+    sin decir sobre que mecanismo deja leer «nuestro mecanismo con nuestra
+    regla» donde dice «MAX con nuestra regla»: la regla es nuestra, los pesos
+    que ordena no. El titulo es el lugar donde eso no cuesta una columna.
+    """
+    barrido = {
+        "seccion": 3,
+        "porFamilia": {"lunas": {"ganador": "max"},
+                       "rollo": {"ganador": "ours"}},
+    }
+    assert toy_tables._marca_del_ganador(barrido, "lunas") == "MAX"
+    assert toy_tables._marca_del_ganador(barrido, "rollo") == "MIL-CREDA"
+    # Sin ganador declarado no se inventa uno: la raya dice que el artefacto no
+    # lo trae, que es distinto de decir que lo lleva el nuestro.
+    assert toy_tables._marca_del_ganador({"seccion": 3}, "lunas") == "?"
+
+
+def test_la_marca_de_la_ablacion_sale_de_los_dos_terminos_y_no_del_id():
+    """`MIL-CREDA_G/_L/_GL` derivado de `global` y `local`, que es la Ec. 39.
+
+    De los dos campos y no del id ni de una cadena guardada, y la razon es
+    medida: `TGL` ES `TOY_ARMS[0]`, asi que su id ya estaba registrado cuando
+    `ABLACION` lo declara y el rotulo que ABLACION le pone NUNCA gana. El
+    artefacto lo probo --- `TG` y `TL` tomaron la marca nueva y `TGL` siguio
+    imprimiendo la frase del brazo principal. Los dos booleanos no tienen ese
+    problema: son del brazo y los escribe la celda.
+    """
+    celdas = {
+        "a": {"family": "lunas", "arm": "TG", "global": True, "local": False},
+        "b": {"family": "lunas", "arm": "TL", "global": False, "local": True},
+        "c": {"family": "lunas", "arm": "TGL", "global": True, "local": True},
+    }
+    barrido = {"seccion": 5, "celdas": celdas,
+               # La cadena guardada es la vieja a proposito, y la de `TGL` es
+               # justo la que el brazo principal impuso.
+               "rotulos": {"TG": "global only, Eqs. 32-37",
+                           "TL": "local only, Eqs. 30-31 and 38",
+                           "TGL": "global + local, confidence weighting on, "
+                                  "both coefficients 1"}}
+    assert toy_tables._rotulo(barrido, "TG") == "MIL-CREDA_G"
+    assert toy_tables._rotulo(barrido, "TL") == "MIL-CREDA_L"
+    assert toy_tables._rotulo(barrido, "TGL") == "MIL-CREDA_GL"
+
+
+def test_un_brazo_sin_los_dos_terminos_no_recibe_marca_de_ablacion():
+    """Los DOS campos o ninguno: media declaracion no nombra un brazo.
+
+    Un brazo con `global` y sin `local` no dice que el local este apagado ---
+    dice que la celda no lo escribio --- y escribir `MIL-CREDA_G` ahi afirmaria
+    una ablacion que nadie midio. Las secciones 2 y 3 son exactamente ese caso.
+    """
+    barrido = {"seccion": 5,
+               "celdas": {"a": {"family": "lunas", "arm": "X",
+                                "global": True}},
+               "rotulos": {"X": "lo que el barrido publico"}}
+    assert toy_tables._rotulo(barrido, "X") == "lo que el barrido publico"
