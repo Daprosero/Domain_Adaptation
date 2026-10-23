@@ -2057,6 +2057,79 @@ def _filas_por_brazo(barrido: dict, familia: str,
 #: Y los otros cuatro son la sigla sola. `agregacion abmil-gated, todas las
 #: instancias` ocupa media fila para decir lo que `ABMIL_G` dice entero: el eje
 #: ya esta en el titulo de la tabla, asi que repetirlo por fila es ruido.
+#: Que secciones del toyset CORREN y se MUESTRAN. Las dos cosas con una sola
+#: bandera, y a proposito: una seccion que no corre pero se muestra publica el
+#: artefacto de la corrida ANTERIOR con la fecha de esta, que es la forma mas
+#: barata de citar un numero viejo sin que nada falle.
+#:
+#: **La 3 esta en `False` y la razon esta medida, no supuesta.** Esa seccion
+#: pregunta si la atencion sabe que instancias importan, y en este toyset no
+#: hay instancias que no importen: `toy_bags.bolsas` le da a cada punto "its
+#: band of the parameter WITHIN its own class", asi que toda instancia de una
+#: bolsa es de la clase de esa bolsa. Sin instancias irrelevantes, podar no
+#: puede ayudar --- solo puede recortar COBERTURA --- y eso es exactamente lo
+#: que salio, medido sobre `Results/Toyset/full` con K=10 y el mecanismo
+#: ganador de cada familia:
+#:
+#:     familia    TODAS     top-k    AZAR     REGULAR
+#:     lunas      0.7111    0.7000   0.5944   0.6000
+#:     toroide    0.9278    0.9278   0.9222   0.9000
+#:     rollo      0.9222    0.6556   0.8111   0.8833
+#:
+#: `TODAS` gana o empata en las tres: la atencion nunca mejora sobre usar todo.
+#: Y en `rollo` top-k queda por DEBAJO del azar --- 0.6556 contra 0.8111 ---
+#: porque se queda con una banda contigua del parametro, y ahi la banda ES la
+#: geometria. El resultado no es "la atencion no funciona": es que este toyset
+#: no puede preguntarlo, y cuesta 3193 s preguntarlo igual.
+#:
+#: Prenderla de nuevo es cambiar este `False` y nada mas. Lo que la haria
+#: decidible es contaminar a nivel de INSTANCIA, como la seccion 2 contamina a
+#: nivel de BOLSA con `RHO_SOPESADO`; eso toca el acuerdo y es del operador.
+SECCIONES_QUE_CORREN = {2: True, 3: False, 4: True, 5: True}
+
+
+def seccion_corre(numero: int) -> bool:
+    """Si la seccion `numero` corre y se muestra en esta corrida.
+
+    Se niega sobre una seccion que nadie declaro en vez de devolver `False`:
+    un numero mal escrito saldria apagado y el lector leeria "esa seccion
+    esta desactivada" cuando lo que pasa es que no existe.
+    """
+    numero = int(numero)
+    if numero not in SECCIONES_QUE_CORREN:
+        raise KeyError(
+            f"la seccion {numero} no esta en SECCIONES_QUE_CORREN "
+            f"({sorted(SECCIONES_QUE_CORREN)}); una seccion sin declarar no "
+            "esta apagada, no existe")
+    return SECCIONES_QUE_CORREN[numero]
+
+
+def nota_de_seccion_apagada(numero: int) -> str:
+    """La linea que reemplaza a las tablas cuando la seccion no corrio.
+
+    Vacia cuando la seccion SI corre, asi que la misma celda sirve para los dos
+    casos y no hay una version del cuaderno por bandera.
+    """
+    if seccion_corre(numero):
+        return ""
+    return (f"> **La seccion {numero} no corrio en esta corrida.** "
+            f"`toy_tables.SECCIONES_QUE_CORREN[{numero}]` esta en `False`; el "
+            "comentario de esa constante dice por que, con los numeros "
+            "medidos. No hay tablas abajo porque no hay corrida que mostrar, "
+            "y mostrar la anterior seria publicarla con la fecha de esta.\n")
+
+
+def tabla_si_corre(renderizar, barrido, familia: str, numero: int) -> str:
+    """La tabla, o nada, segun la bandera de la seccion.
+
+    Toma `renderizar` como funcion y no el texto ya hecho, que es la mitad del
+    punto: con el texto hecho la tabla se calcula igual y lo unico que la
+    bandera ahorraria es imprimirla --- y sobre un `barrido` que vale `None`
+    porque la seccion no corrio, el calculo explota antes de llegar aca.
+    """
+    return renderizar(barrido, familia) if seccion_corre(numero) else ""
+
+
 MARCAS_MECANISMO = {
     "ours": "MIL-CREDA",
     "abmil-published": "ABMIL",
