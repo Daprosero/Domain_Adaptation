@@ -2814,9 +2814,23 @@ def test_the_cell_records_both_moments_and_measures_the_freeze(cell):
     assert fila["latentTargetMoved"] > 0, (
         "la fase 2 no movió ninguna posición del blanco: la figura no tiene "
         "nada que mostrar y este registro no dice por qué")
-    assert fila["latentSourceMoved"] == 0.0, (
-        f"la fuente se movió {fila['latentSourceMoved']} en el espacio que la "
-        "figura dibuja: el panel usa esa nube como marco fijo y no lo es")
+    # **Cero de float32, no cero exacto, y la diferencia la decidio una
+    # medicion.** Con `OMP_NUM_THREADS=1` --- que es como el toyset DEBE
+    # correr, ver `toy_run.py:4724` --- la fuente mide 4.77e-07 y este test
+    # fallaba; con los cuatro hilos que torch toma sin clavar, mide 0.0 exacto
+    # y pasaba. No es que la fuente se mueva: el orden de reduccion del matmul
+    # en CPU depende del numero de hilos, y 4.77e-07 es ruido de float32
+    # (~2^-21). Una igualdad exacta aca asertaba la reproducibilidad bit a bit
+    # de una reduccion cuyo orden nadie fija, asi que el verde salia de correr
+    # la suite con la configuracion que las corridas NO usan.
+    #
+    # La cota es relativa a lo que el blanco SI se movio, no un numero
+    # elegido: lo que la figura necesita es que la nube de la fuente sea un
+    # marco fijo CONTRA ese movimiento.
+    assert fila["latentSourceMoved"] < 1e-4 * fila["latentTargetMoved"], (
+        f"la fuente se movió {fila['latentSourceMoved']} contra "
+        f"{fila['latentTargetMoved']} del blanco en el espacio que la figura "
+        "dibuja: el panel usa esa nube como marco fijo y no lo es")
 
     antes, despues = miembros["targetBefore"], miembros["targetAfter"]
     assert not np.allclose(antes, despues), (
@@ -4532,12 +4546,25 @@ def test_a_trajectory_recorded_off_the_frozen_source_is_caught(tmp_path, familia
     celda = mutado.run_cell(familia, "batchnorm", 0, tiny, hiper, DEVICE)
     cuadros = celda["latent"][ADAPTED]["trajectoryTarget"]
     assert cuadros.shape[0] > 1, cuadros.shape
-    iguales = all(np.array_equal(cuadros[k], cuadros[0])
-                  for k in range(1, cuadros.shape[0]))
-    assert iguales, (
-        "la mutación no congeló la trayectoria: o la fuente se movió, o la "
-        "traza no es lo que este test cree, y entonces el verde del test "
-        "vecino no prueba que los cuadros sean del blanco")
+    # **Congelada al nivel de float32, no bit a bit.** `np.array_equal` exigia
+    # igualdad exacta y por eso este test pasaba con los cuatro hilos que torch
+    # toma sin clavar y fallaba con `OMP_NUM_THREADS=1`, que es como el toyset
+    # DEBE correr (`toy_run.py:4724`): el orden de reduccion del matmul en CPU
+    # depende del numero de hilos. La fuente no se mueve, se reordena la suma.
+    #
+    # La cota no es un numero elegido: el movimiento de la traza mutada se mide
+    # contra el de la VIVA, que el control de abajo exige que sea grande. Lo
+    # que el test afirma es la razon entre las dos, que es lo que distingue
+    # «congelada» de «se movio».
+    quieta = float(np.abs(cuadros - cuadros[0]).max())
+    viva = float(np.abs(cell["latent"][ADAPTED]["trajectoryTarget"]
+                        - cell["latent"][ADAPTED]["trajectoryTarget"][0]).max())
+    assert viva > 0, "la traza viva no se movio: el control no controla nada"
+    assert quieta < 1e-4 * viva, (
+        f"la mutación no congeló la trayectoria: se movió {quieta} contra "
+        f"{viva} de la viva. O la fuente se movió, o la traza no es lo que "
+        "este test cree, y entonces el verde del test vecino no prueba que "
+        "los cuadros sean del blanco")
     # THE CONTROL, on the same scale, the same family and the same
     # architecture: the live module's frames DO differ. Without it «todos los
     # cuadros iguales» could be a property of this fixture rather than of the
@@ -5029,3 +5056,364 @@ def test_el_cuaderno_generador_no_entrega_el_dispositivo_del_banco():
     assert _llamadas_a(codigo, "toy_run", "dispositivo_del_toyset"), (
         "el cuaderno no nombra `toy_run.dispositivo_del_toyset`, asi que no "
         "hay nada que diga en que dispositivo corre lo que escribe")
+
+
+# ===================================================================
+#   la caminata de w: un destino por clase, y que no colapsen
+# ===================================================================
+#
+# Hasta el 2026-10-21 la caminata iba a UN destino, `CLASE_DESTINO_W = 0`, y
+# nada en la suite miraba su salida: los 101 tests que nombran «caminata»
+# pasaban igual con la forma vieja y con la nueva, porque leen el codigo fuente
+# de la funcion y nunca lo que devuelve. Estos la ejecutan.
+
+
+def _caminata_chica(tiny):
+    """`caminata_de_w` corrida de verdad, sobre un brazo entrenado al minimo."""
+    import torch
+    familia = toy_run.build_family("lunas", 0, tiny)
+    backbone = toy_run.NORMALIZATIONS["batchnorm"]
+    material = toy_run.material_for(familia, 0, tiny, backbone)
+    hyper = toy_run.declared_hyper(tiny)
+    source_train, source_valid, _ = bags.roles(material["source"])
+    with toy_run.material_bound(familia, tiny, backbone):
+        brazo = toy_run.build_arm(toy_run.TOY_ADAPTED, material, tiny, hyper,
+                                  DEVICE, 0)
+        toy_run.train_phase_one(brazo, source_train, source_valid, DEVICE,
+                                tiny, hyper,
+                                torch.Generator().manual_seed(9973))
+        # La caminata es geometria del cabezal YA entrenado --- no entrena
+        # nada --- asi que la fase 1 de arriba es lo unico que hace falta.
+        return toy_run.caminata_de_w(
+            brazo, material["source"], material["target"], DEVICE)
+
+
+def test_cada_camino_sale_de_SU_bolsa_del_blanco_y_va_a_SU_clase(tiny):
+    """Tres caminos, no nueve: la declaracion de `CREDA.toy_plots`.
+
+    Alla se escribe literal `arranques = [((0, 1), 0), ((1, 2), 2),
+    (tuple(range(CLASES)), 1)]` --- la frontera de las clases nombradas camina
+    al centro de UNA de ellas --- y aca es lo mismo un nivel arriba, con una
+    BOLSA DEL BLANCO en lugar de una instancia, y la frontera como criterio
+    para elegirla. Ruling del operador del 2026-10-22.
+
+    Lo que se asierta es el EMPAREJAMIENTO, que es lo que se pidio: cada
+    arranque trae exactamente el destino que `CAMINOS_W` le puso, y ninguno
+    trae los otros dos. Con los tres destinos por arranque esto pasa a ser
+    nueve caminos y la figura vuelve a ser la que no servia.
+    """
+    c = _caminata_chica(tiny)
+    assert c["clasesDestino"] == [d for _, d in toy_run.CAMINOS_W], \
+        c["clasesDestino"]
+    assert set(c["caminos"]) == set(toy_run.ARRANQUES_W)
+    for clases, suyo in toy_run.CAMINOS_W:
+        arranque = toy_run._nombre_del_arranque(clases)
+        destinos = c["caminos"][arranque]
+        assert set(destinos) == {str(suyo)}, (arranque, sorted(destinos))
+        camino = destinos[str(suyo)]
+        assert len(camino["w"]) == c["barridos"], arranque
+        assert camino["camino"].shape[0] == c["barridos"]
+
+
+def test_la_bolsa_que_arranca_es_la_mas_indecisa_y_no_un_umbral(tiny):
+    """La propiedad EXACTA que reemplazo a un umbral adivinado.
+
+    Hasta el 2026-10-22 el arranque era el punto de frontera mismo y este test
+    asertaba `w0 < 0.9`. Con el arranque en una bolsa REAL del blanco ese
+    numero pasa a depender de donde cayeron las bolsas, asi que seria una
+    adivinanza mia escrita como si fuera una cota de la formulacion. Lo que se
+    puede afirmar exacto es la REGLA: la bolsa elegida es el argmin de
+    indecision, y eso se prueba sobre `_bolsa_mas_indecisa` con un `g` armado a
+    mano, donde la respuesta correcta se conoce sin correr nada.
+
+    El caso que importa es el tercero: una bolsa que apuesta casi todo a la
+    clase 2 y reparte una miga PAREJA entre 0 y 1 tiene la brecha `|g_0 - g_1|`
+    mas chica de la tabla. Sin el filtro por las dos clases de arriba ganaria
+    la eleccion de la frontera (0,1), y la figura arrancaria con una bolsa que
+    no duda entre 0 y 1 --- duda nada, ya decidio la 2.
+    """
+    import torch
+    g = torch.tensor([
+        [0.45, 0.40, 0.15],   # 0: duda entre 0 y 1, brecha 0.05
+        [0.48, 0.47, 0.05],   # 1: duda entre 0 y 1, brecha 0.01  <- la elegida
+        [0.02, 0.015, 0.965],  # 2: decidio la 2, brecha 0.005 (la mas chica)
+        [0.34, 0.33, 0.33],   # 3: casi uniforme   <- la del empate a tres
+    ])
+    j, relajado = toy_run._bolsa_mas_indecisa(g, (0, 1))
+    assert j == 1, (j, "gano la que decidio la clase 2: falta el filtro por "
+                       "las dos clases de arriba")
+    assert relajado is False
+    k, _ = toy_run._bolsa_mas_indecisa(g, (0, 1, 2))
+    assert k == 3, (k, "el empate a TRES es el `w` mas bajo, no la brecha")
+
+
+def test_un_par_que_ninguna_bolsa_duda_sale_marcado_como_relajado(tiny):
+    """Un relajado silencioso convierte la figura en otra figura.
+
+    Si ninguna bolsa del blanco tiene a `{a, b}` como sus dos clases mas
+    probables, esa frontera no es una frontera que el blanco dude y la
+    eleccion cae sobre todas. Eso puede pasar y no es un error --- pero tiene
+    que VIAJAR, porque la leyenda sigue diciendo "mas indecisa entre a y b".
+    """
+    import torch
+    g = torch.tensor([
+        [0.90, 0.05, 0.05],
+        [0.05, 0.90, 0.05],
+    ])
+    _, relajado = toy_run._bolsa_mas_indecisa(g, (0, 2))
+    assert relajado is True, (
+        "ninguna bolsa tiene a {0, 2} arriba y la eleccion no se marco")
+
+
+def test_los_tres_caminos_arrancan_en_bolsas_DISTINTAS(tiny):
+    """El reparto, sobre el `g` que lo rompio de verdad.
+
+    La bolsa 0 de abajo es casi uniforme: es a la vez la mas pareja entre 0 y
+    1 Y la mas pareja entre las tres, asi que con la regla cruda gana las dos
+    elecciones y la figura dibuja el mismo punto dos veces. Medido a escala
+    completa el 2026-10-22: `rollo` dio la bolsa 41 a la frontera (1,2) y a la
+    triple, y `toroide` dio la bolsa 0 a la (0,1) y a la triple.
+
+    Lo que se asierta es el reparto, no un optimo: por el orden de
+    `CAMINOS_W`, la (0,1) toma la casi uniforme y la TRIPLE --- que llega
+    ultima --- paga el desempate con la que quede.
+    """
+    import torch
+    g = torch.tensor([
+        [0.34, 0.33, 0.33],   # casi uniforme: gana (0,1) Y la triple
+        [0.45, 0.40, 0.15],   # duda entre 0 y 1, pero menos
+        [0.10, 0.46, 0.44],   # duda entre 1 y 2
+        [0.30, 0.36, 0.34],   # la segunda mas uniforme
+    ])
+    reparto = toy_run._bolsas_que_arrancan(g)
+    indices = [reparto[toy_run._nombre_del_arranque(cl)][0]
+               for cl, _ in toy_run.CAMINOS_W]
+    assert len(set(indices)) == 3, (
+        f"dos caminos arrancan en la misma bolsa {indices}: la figura dibuja "
+        "el mismo punto dos veces y cuenta dos historias con una")
+    assert indices[0] == 0, indices
+
+
+def test_la_caminata_NO_mira_ninguna_etiqueta_del_blanco(tiny):
+    """La mutacion es la unica prueba de que el oraculo no entra.
+
+    La Ec. (24) define `w_j^t` sobre `g_j^t` y nada mas; la Ec. (22) deriva la
+    pseudoetiqueta del mismo posterior. Ninguna de las dos conoce
+    `target.labels` --- en el blanco no hay etiqueta observada, ese es el
+    punto entero del problema. Un comentario que lo afirme no prueba nada:
+    esto le da vuelta las etiquetas del blanco y exige que la caminata salga
+    IDENTICA, byte por byte.
+
+    Es lo que habria agarrado el defecto del 2026-10-22 en el otro sentido:
+    la figura leia la geometria de la FUENTE, donde la etiqueta SI es
+    observada, asi que una mutacion de las etiquetas del BLANCO no la habria
+    movido tampoco. Por eso este test viene con el de arriba y no solo: aquel
+    fija que el arranque es una bolsa del blanco, este que su eleccion no
+    miro la respuesta.
+    """
+    import dataclasses
+    import torch
+    familia = toy_run.build_family("lunas", 0, tiny)
+    backbone = toy_run.NORMALIZATIONS["batchnorm"]
+    material = toy_run.material_for(familia, 0, tiny, backbone)
+    hyper = toy_run.declared_hyper(tiny)
+    source_train, source_valid, _ = bags.roles(material["source"])
+    with toy_run.material_bound(familia, tiny, backbone):
+        brazo = toy_run.build_arm(toy_run.TOY_ADAPTED, material, tiny, hyper,
+                                  DEVICE, 0)
+        toy_run.train_phase_one(brazo, source_train, source_valid, DEVICE,
+                                tiny, hyper,
+                                torch.Generator().manual_seed(9973))
+        limpia = toy_run.caminata_de_w(
+            brazo, material["source"], material["target"], DEVICE)
+        # La mutacion, y la prueba de que la mutacion OCURRIO: una rotacion
+        # que dejara las etiquetas donde estaban convertiria este test en uno
+        # que no prueba nada y pasa igual.
+        rotadas = torch.roll(material["target"].labels, 1)
+        assert not torch.equal(rotadas, material["target"].labels), \
+            "la rotacion no movio ninguna etiqueta: el test no probaria nada"
+        sucio = dataclasses.replace(material["target"], labels=rotadas)
+        mutada = toy_run.caminata_de_w(
+            brazo, material["source"], sucio, DEVICE)
+    for clases, suyo in toy_run.CAMINOS_W:
+        arranque = toy_run._nombre_del_arranque(clases)
+        assert (limpia["bolsaDelBlanco"][arranque]
+                == mutada["bolsaDelBlanco"][arranque]), arranque
+        a = limpia["caminos"][arranque][str(suyo)]["w"]
+        b = mutada["caminos"][arranque][str(suyo)]["w"]
+        assert (a == b).all(), (
+            f"{arranque}: dar vuelta las etiquetas del blanco movio `w`, asi "
+            "que la caminata las esta mirando y la Ec. (24) no las nombra")
+
+
+def test_los_tres_caminos_no_son_el_mismo_camino_tres_veces(tiny):
+    """Tres fronteras distintas y tres destinos distintos, asi que tres curvas.
+
+    Con un destino unico para los tres arranques --- la forma anterior a
+    2026-10-21 --- los tres terminaban en el MISMO `w`: medido sobre la
+    corrida completa, lunas 0.999261, rollo 0.439340 y toroide 0.999966,
+    identico para los tres. La figura mostraba tres caminos colapsando en un
+    punto.
+    """
+    c = _caminata_chica(tiny)
+    arranques = [c["caminos"][toy_run._nombre_del_arranque(cl)][str(d)]
+                 for cl, d in toy_run.CAMINOS_W]
+    iniciales = [k["w"][0] for k in arranques]
+    assert len(set(iniciales)) > 1, (
+        f"los tres arrancan en el mismo w = {iniciales}; si las fronteras no "
+        "se distinguen, la figura compara tres copias de un camino")
+
+
+def test_la_frontera_exacta_VIAJA_aunque_el_arranque_sea_una_bolsa(tiny):
+    """El punto de empate se sigue calculando, y por que importa que viaje.
+
+    Hasta el 2026-10-22 el arranque ERA ese punto, asi que `w` arrancaba en
+    ~0 y este test lo acotaba en `< 1e-2`. Ahora arranca una bolsa real, que
+    no esta sobre el empate: medido sobre `lunas` a escala completa, el triple
+    arranca en 0.0618 contra los 0.0005 del punto fabricado. Esa cota ya no es
+    una propiedad de la Ec. (24), es una propiedad de donde cayo una bolsa.
+
+    Lo que SI se afirma: las tres fronteras exactas siguen viajando, y con
+    ellas el residuo del empate triple. Son la referencia contra la que la
+    figura dibuja cuanto le falto a la bolsa real --- la lectura que se perdia
+    si el punto fabricado simplemente desaparecia.
+    """
+    c = _caminata_chica(tiny)
+    assert set(c["fronteras"]) == set(toy_run.ARRANQUES_W), sorted(c["fronteras"])
+    for nombre, punto in c["fronteras"].items():
+        assert punto.ndim == 1 and punto.shape[0] > 0, (nombre, punto.shape)
+    assert "residuoDelEmpateTriple" in c
+    # Y que bolsa camino en cada arranque, en la numeracion del BAGSET.
+    assert set(c["bolsaDelBlanco"]) == set(toy_run.ARRANQUES_W)
+    assert set(c["eleccionRelajada"]) == set(toy_run.ARRANQUES_W)
+
+
+def test_w_inicial_y_final_viajan_por_arranque_y_por_destino(tiny):
+    c = _caminata_chica(tiny)
+    suyo = {toy_run._nombre_del_arranque(cl): {str(d)}
+            for cl, d in toy_run.CAMINOS_W}
+    for mapa in ("wInicial", "wFinal"):
+        assert set(c[mapa]) == set(toy_run.ARRANQUES_W), mapa
+        for arranque, por_destino in c[mapa].items():
+            assert set(por_destino) == suyo[arranque], (mapa, arranque)
+            for clave, valor in por_destino.items():
+                esperado = c["caminos"][arranque][clave]["w"][
+                    0 if mapa == "wInicial" else -1]
+                assert valor == float(esperado), (mapa, arranque, clave)
+
+
+def test_la_figura_camina_a_los_tres_destinos_en_UN_solo_barrido(tiny):
+    """UN barrido, un camino por clase destino, cada uno a un centro DISTINTO.
+
+    **Esto declara la forma de la figura, y la cambio un ruling del operador
+    del 2026-10-22.** Antes eran `1 + clases` paneles --- los tres arranques
+    hacia UN destino por panel --- o sea tres puntos yendo a una clase a la
+    vez, repetido una vez por clase. Lo que se pidio, y lo que la figura de
+    CREDA hace, es un solo barrido en el que los tres puntos caminan a la vez,
+    cada uno hacia su propia cruz.
+
+    Se asierta que los caminos son TANTOS COMO CLASES y que ninguno es el
+    mismo: con el emparejamiento roto --- los tres al mismo destino --- las
+    curvas de `w` coincidirian, que es exactamente el defecto que se corrigio.
+
+    Y se ejecuta: una figura que nadie dibujo no se sabe si compila.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    c = _caminata_chica(tiny)
+    barrido = {"seccion": 2, "caminatas": {"lunas": c},
+               "brazoDeLaFigura": "W-con", "semillaDeLaFigura": 0}
+    fig = toy_run.figura_de_w(barrido, "lunas", k=3)
+    try:
+        # Dos paneles: la nube y las curvas de `w`. Ni uno por destino.
+        assert len(fig.axes) == 2, [a.get_title() for a in fig.axes]
+        rotulos = [l.get_label() for l in fig.axes[1].get_lines()
+                   if not l.get_label().startswith("_")]
+        assert len(rotulos) == tiny.classes, rotulos
+        # Cada camino nombra SU clase, y son todas distintas.
+        destinos = {r.split("clase ")[-1] for r in rotulos}
+        assert destinos == {str(c) for c in range(tiny.classes)}, rotulos
+        # Y las curvas no son la misma curva tres veces.
+        series = [tuple(l.get_ydata()) for l in fig.axes[1].get_lines()
+                  if not l.get_label().startswith("_")]
+        assert len(set(series)) == len(series), series
+    finally:
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+
+
+# ----------------------------------------------------- la fase 2, en EPOCAS
+#
+# Regla permanente del operador, repetida y ya decidida: todo en terminos de
+# EPOCAS, nunca pasos. El eje de `_panel_fase2` ya decia epocas, pero el
+# arreglo que dibujaba trae un renglon por PASO del optimizador --- 16 por
+# epoca a escala completa, 1600 sobre un eje que va de 0 a 100. El rotulo
+# cumplia y la densidad no, y lo que el lector mira es la densidad.
+
+
+def _hist_de_dos_epocas():
+    """Dos epocas de cuatro pasos, con medias que se conocen a mano."""
+    import numpy as np
+    nombres = {n: i for i, n in enumerate(toy_run.TRAJECTORY_HISTORY_FIELDS)}
+    hist = np.zeros((8, len(nombres)), dtype=float)
+    hist[:, nombres["step"]] = np.arange(8)
+    # epoca 0: 1, 2, 3, 4 -> media 2.5 | epoca 1: 10, 20, 30, 40 -> media 25.0
+    hist[:, nombres["adaptation"]] = [1, 2, 3, 4, 10, 20, 30, 40]
+    return hist, nombres
+
+
+def test_la_serie_de_fase_2_se_promedia_adentro_de_su_epoca():
+    """Una fila por epoca, con la media, y la abscisa en el FIN de la epoca.
+
+    Las medias estan elegidas para que ningun paso suelto las iguale: 2.5 no
+    es ninguno de 1, 2, 3, 4 y 25.0 no es ninguno de 10, 20, 30, 40. Un
+    'promedio' que devolviera el ultimo paso de la epoca --- 4 y 40 --- o el
+    primero --- 1 y 10 --- falla aca, que es lo que separa este test de uno
+    que solo cuenta cuantos puntos salieron.
+    """
+    import numpy as np
+    hist, nombres = _hist_de_dos_epocas()
+    s, v = toy_run.serie_de_fase_dos_por_epoca(hist, nombres, 4, "adaptation")
+    assert s.tolist() == [1.0, 2.0], s.tolist()
+    assert np.allclose(v, [2.5, 25.0]), v.tolist()
+
+
+def test_el_panel_de_fase_2_dibuja_una_epoca_por_punto_y_no_un_paso():
+    """El panel entero, no el helper: 2 puntos por curva y no 8.
+
+    Es la mitad que el helper no puede probar. `_panel_fase2` podria llamarlo
+    y despues dibujar `filas` crudo --- los dos existieron en el mismo cuerpo
+    --- y el helper seguiria verde.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    hist, _ = _hist_de_dos_epocas()
+    fila = {"histFase2": hist, "pasosPorEpoca": 4, "epocasCorridas": 2,
+            "pasoElegido": 8, "epocaElegidaFase2": 2, "pasos": [8]}
+    fig, a = plt.subplots()
+    toy_run._panel_fase2(a, fila, 0, 50.0)
+    dibujadas = [l for l in a.get_lines() if l.get_label().startswith(
+        ("adaptación", "parte"))]
+    assert len(dibujadas) == 3, [l.get_label() for l in a.get_lines()]
+    for linea in dibujadas:
+        assert len(linea.get_xdata()) == 2, (
+            linea.get_label(), len(linea.get_xdata()),
+            "el panel dibujo un punto por PASO: son 8 pasos en 2 epocas")
+        assert list(linea.get_xdata()) == [1.0, 2.0], linea.get_xdata()
+    plt.close(fig)
+
+
+def test_el_techo_del_eje_y_se_mide_sobre_las_MISMAS_series_que_se_dibujan():
+    """El eje compartido y la curva no pueden salir de dos cuentas.
+
+    El maximo sobre los pasos crudos es siempre mayor o igual que el maximo
+    sobre sus promedios --- aca 40 contra 25 --- asi que un techo calculado
+    sobre pasos deja el eje holgado y la curva chica, sin que nada falle. Este
+    test fija el 25, que es el unico numero que la curva dibujada alcanza.
+    """
+    hist, _ = _hist_de_dos_epocas()
+    fila = {"histFase2": hist, "pasosPorEpoca": 4, "epocasCorridas": 2}
+    tope = toy_run.limite_fase2([fila])
+    assert abs(tope - 25.0 * toy_run.HOLGURA_EJE) < 1e-9, (
+        tope, "el techo salio de los pasos crudos (40) y no de las epocas (25)")

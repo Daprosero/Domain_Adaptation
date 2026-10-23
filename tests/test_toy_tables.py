@@ -78,6 +78,52 @@ def artefacto() -> Path:
 
 
 @pytest.fixture(scope="module")
+def artefacto_del_cuaderno(cuaderno) -> Path:
+    """El artefacto que el cuaderno dice haber LEIDO, no el que esta fijado aca.
+
+    **Esta fixture existe por un defecto que se midio el 2026-10-21.** Las otras
+    prueban renderizadores y les alcanza el artefacto del piloto; la que CRUZA
+    el documento con el artefacto no, porque su premisa es que los dos son el
+    MISMO. Cuando el cuaderno paso a leer la corrida completa, ese test siguio
+    comparando contra el piloto y fallo diciendo que el documento mentia: el
+    cuaderno publicaba `0.5667 +- 0.1736`, diez semillas, y el artefacto del
+    piloto devolvia `0.6111`, una. Ninguna de las dos cosas estaba mal; estaban
+    midiendo corridas distintas.
+
+    Se lee de la SALIDA EMITIDA y no del codigo de la celda. La celda dice que
+    artefacto ELEGIRIA al correr; lo emitido dice de donde salieron los numeros
+    que el documento muestra, que es exactamente lo que el cruce afirma. Un
+    cuaderno re-ejecutado contra otra escala mueve esta fixture con el.
+    """
+    marca = "leído de:"
+    for celda in cuaderno["cells"]:
+        if celda.get("cell_type") != "code":
+            continue
+        for salida in celda.get("outputs", []):
+            texto = salida.get("text", "")
+            texto = "".join(texto) if isinstance(texto, list) else str(texto)
+            for linea in texto.splitlines():
+                if marca in linea:
+                    relativo = linea.split(marca, 1)[1].strip()
+                    destino = RAIZ / relativo
+                    if not (destino / toy_run.NOMBRE_ARTEFACTO).exists():
+                        pytest.skip(
+                            f"el cuaderno dice haber leído {relativo}, que no "
+                            f"está en disco: re-ejecutalo")
+                    return destino
+    pytest.skip(f"el cuaderno no emitió ninguna línea {marca!r}, así que no "
+                "dice de dónde salieron sus números")
+
+
+@pytest.fixture(scope="module")
+def registro_del_cuaderno(artefacto_del_cuaderno) -> dict:
+    try:
+        return toy_run.cargar(artefacto_del_cuaderno)
+    except toy_run.ArtefactoDeOtroProtocolo as viejo:
+        pytest.skip(str(viejo))
+
+
+@pytest.fixture(scope="module")
 def registro(artefacto) -> dict:
     """The stored artefact, SKIPPED when it is from another protocol.
 
@@ -1542,7 +1588,17 @@ def test_the_notebooks_heading_tree_is_the_one_grouped_by_toyset(
         f"## Las {NUMERO_EN_PALABRAS[len(familias)]} familias, con cada clase "
         "en bolsas",
         f"## Las {NUMERO_EN_PALABRAS[len(normas)]} arquitecturas",
-        "## La figura, una por dataset",
+        # NUMERADA, donde el cuaderno de CREDA no numera --- ruling del
+        # operador, 2026-10-22. El comentario de `CORTE_DE_LAS_SECCIONES` dice
+        # que la seccion 1 lleva la forma del documento de CREDA, y esto se
+        # aparta de eso en UNA cosa: el numero. La razon es que las secciones 2
+        # a 5 anuncian el suyo y esta no lo hacia, asi que entre el preambulo y
+        # aca no habia ninguna marca que dijera donde empieza una seccion --- y
+        # la figura de las bolsas, que no valida ninguna, caia en esa zona muda.
+        # El resto del bloque sigue siendo la forma de CREDA, y los tests que la
+        # cruzan contra el cuaderno de al lado comparan el BLOQUE por familia,
+        # no este encabezado.
+        "## Sección 1 — la figura, una por dataset",
     ]
     for familia in familias:
         esperado += [f"## {familia}", f"### {familia} — la figura",
@@ -1932,7 +1988,8 @@ def test_every_table_the_notebook_shows_came_out_as_a_table(cuaderno):
         "va el resultado es una frase")
 
 
-def test_what_the_notebook_shows_is_what_the_artefact_holds(cuaderno, registro):
+def test_what_the_notebook_shows_is_what_the_artefact_holds(
+        cuaderno, registro_del_cuaderno):
     """The join, read off the emitted output: the numbers a reader meets in the
     document are the numbers the artefact carries.
 
@@ -1949,6 +2006,10 @@ def test_what_the_notebook_shows_is_what_the_artefact_holds(cuaderno, registro):
     the artefact's `phase1ValidAccuracy` per architecture) is no longer a claim
     about this document, because the document no longer renders that column.
     """
+    # El artefacto que el CUADERNO leyó, no el que este archivo fija:
+    # el cruce afirma que los dos son el mismo, así que leer otra
+    # escala lo vuelve una comparación entre dos corridas.
+    registro = registro_del_cuaderno
     rol = toy_tables.rol_publicado(registro)
     for familia in toy_tables.familias(registro):
         llamada = f'toy_tables.render_familia_escalera(REGISTRO, "{familia}")'
@@ -1984,9 +2045,26 @@ def test_what_the_notebook_shows_is_what_the_artefact_holds(cuaderno, registro):
         blanco = _columna(cabecera, filas, f"blanco · {rol}")
         # El número que la corrida publica, por arquitectura, en las filas del
         # método y leído de lo EMITIDO.
-        publicado = {toy_tables.NOMBRE_FILA[celda["normalization"]]:
-                     toy_tables._num(celda["targetAccuracy"])
-                     for celda in celdas}
+        #
+        # **Agregado sobre las semillas de reporte, con el formateador DE LA
+        # TABLA.** Este `dict` se armaba por celda --- una entrada por
+        # (normalización, semilla) sobre la misma clave --- así que de diez
+        # semillas sobrevivía la última. Pasaba igual porque el piloto tiene UNA:
+        # con un solo valor `_num(x)` y `_media_desvio([x])` son el mismo texto,
+        # y `_media_desvio` lo dice en su propio docstring. Contra la corrida
+        # completa el cuaderno publicaba `0.5667 ± 0.1736` y esto esperaba
+        # `0.7778`, el acierto de una semilla sola.
+        #
+        # Se llama a `toy_tables._media_desvio` y no se reproduce la cuenta: una
+        # segunda implementación del formato es una segunda oportunidad de que
+        # el test y la tabla se separen sin que nada falle.
+        por_arquitectura: dict[str, list[float]] = {}
+        for celda in celdas:
+            por_arquitectura.setdefault(
+                toy_tables.NOMBRE_FILA[celda["normalization"]], []
+            ).append(float(celda["targetAccuracy"]))
+        publicado = {arq: toy_tables._media_desvio(valores)
+                     for arq, valores in por_arquitectura.items()}
         del_metodo = [(arq, v) for arq, met, v
                       in zip(arquitecturas, metodos, blanco)
                       if met == toy_tables.ROTULO_ESCALON[
@@ -2273,6 +2351,27 @@ def _suptitle_de_creda() -> str:
     return cuerpo[desde:cuerpo.index("pie = (", desde)]
 
 
+def _alto_dibujado(filas) -> float:
+    """El maximo de las series que el panel DIBUJA, que son las de por EPOCA.
+
+    Hasta el 2026-10-22 esto era el maximo sobre los PASOS crudos, y era el
+    numero correcto porque el panel dibujaba los pasos. Desde que `_panel_fase2`
+    promedia adentro de la epoca --- regla permanente del operador, todo en
+    epocas --- el maximo de los pasos ya no esta en la figura: medido sobre
+    este registro vale 1.4061 contra 1.2496 de la curva dibujada. Un eje
+    acotado contra el primero queda holgado y la curva chica.
+    """
+    nombres = {n: i for i, n in enumerate(toy_run.TRAJECTORY_HISTORY_FIELDS)}
+    alto = 0.0
+    for fila in filas:
+        for campo in toy_run.SERIES_FASE_DOS:
+            _, valores = toy_run.serie_de_fase_dos_por_epoca(
+                fila["histFase2"], nombres, fila["pasosPorEpoca"], campo)
+            if valores.size:
+                alto = max(alto, float(valores.max()))
+    return alto
+
+
 def test_the_frame_carries_credas_shape_and_not_this_experiments_additions(
         registro, filas_animadas):
     """El cuadro tiene la forma de la figura de CREDA, elemento por elemento.
@@ -2435,10 +2534,7 @@ def test_the_frame_carries_credas_shape_and_not_this_experiments_additions(
         for fila, (*_, fase_dos) in zip(filas, ejes):
             assert fase_dos.get_ylim() == (0.0, compartido), (
                 fila["normalizacion"], fase_dos.get_ylim(), compartido)
-        mayor = max(float(fila["histFase2"][:, i].max())
-                    for fila in filas
-                    for i in [toy_run.TRAJECTORY_HISTORY_FIELDS.index(c)
-                              for c in toy_run.SERIES_FASE_DOS])
+        mayor = _alto_dibujado(filas)
         assert compartido >= mayor, (
             f"el eje compartido ({compartido}) queda por debajo de la serie más "
             f"alta ({mayor}): estaría recortando la curva que el panel existe "
@@ -2604,8 +2700,7 @@ def test_credas_literal_axis_would_clip_this_terms_own_curve(registro,
     for fam in toy_tables.familias(registro):
         filas = [toy_run._fila_animada(registro, fam, norma)
                  for norma in toy_tables.normalizaciones(registro)]
-        por_familia[fam] = (filas, max(float(f["histFase2"][:, i].max())
-                                       for f in filas for i in indices))
+        por_familia[fam] = (filas, _alto_dibujado(filas))
     desbordan = {fam: alto for fam, (_, alto) in por_familia.items() if alto > 1.0}
     assert desbordan, (
         "ninguna serie de la fase 2 pasa de 1.0 en este registro, así que el "
@@ -2627,7 +2722,12 @@ def test_credas_literal_axis_would_clip_this_terms_own_curve(registro,
     assert topes == {1.0}, topes
     assert alto > 1.0, alto
     # Y el derivado, sobre la misma familia, la contiene.
-    assert toy_run.limite_fase2(filas) > alto, (toy_run.limite_fase2(filas), alto)
+    # `>=` y no `>`: `limite_fase2` y `_alto_dibujado` miden AHORA la misma
+    # serie, asi que el derivado es exactamente `alto * HOLGURA_EJE`. Con `>`
+    # el test seguiria pasando y ya no diria por que.
+    derivado = toy_run.limite_fase2(filas)
+    assert derivado >= alto, (derivado, alto)
+    assert derivado == pytest.approx(alto * toy_run.HOLGURA_EJE), (derivado, alto)
 
 
 def test_a_phase_two_panel_drawn_past_the_chosen_step_is_caught(registro,
@@ -3792,9 +3892,18 @@ def test_the_average_row_pairs_inside_the_seed_and_never_pools_the_cells(
 
     cabecera, filas = _parsear(
         toy_tables.render_familia_sin_contra_con(dos, familia))
-    assert _columna(cabecera, filas, "gana")[-1] == "1/2"
-    assert f"{gana_agrupado}/{len(agrupados)}" not in _columna(
-        cabecera, filas, "gana")
+    # La columna es `G/E/P` y los tres conteos cierran contra `n`, que es lo
+    # que hace legible el denominador: `1/0/1` dice que de los dos pares de
+    # dentro de la semilla uno gana y uno pierde, y `1/2` decia lo mismo que
+    # «uno gana y uno empata».
+    assert _columna(cabecera, filas, "G/E/P")[-1] == (
+        f"{promedio['gana']}/{promedio['empata']}/{promedio['pierde']}")
+    assert (promedio["gana"] + promedio["empata"] + promedio["pierde"]
+            == promedio["n"])
+    agrupado_gep = (f"{gana_agrupado}"
+                    f"/{sum(1 for d in agrupados if d == 0.0)}"
+                    f"/{sum(1 for d in agrupados if d < 0.0)}")
+    assert agrupado_gep not in _columna(cabecera, filas, "G/E/P")
 
     # El rojo: la versión que agrupa. Misma longitud para que el .pyc no pueda
     # quedar viejo, y el relleno va al final de la última línea.
@@ -4261,3 +4370,39 @@ def test_holm_leaves_an_untestable_pair_out_of_its_own_denominator(registro):
     assert ajustadas[0] != pytest.approx(3 * 0.01)
     # Monótono y topado en uno.
     assert toy_tables._holm([0.9, 0.95]) == [1.0, 1.0]
+
+
+def test_el_conteo_separa_el_empate_de_la_derrota():
+    """`2/10` y `2/7/1` son lecturas distintas, y la columna imprimía la primera.
+
+    Un empate exacto NO es una derrota, y con `gana/n` las dos caen en el mismo
+    complemento: una fila que empata siete veces y pierde una se lee igual que
+    una que pierde ocho. El operador lo pidió por eso --- «un 2/10 es sinónimo
+    de perder, un 2/7/1 es un empate, no perdemos».
+
+    El caso está construido para que los tres números sean distintos entre sí y
+    distintos de `n`, así que una implementación que devolviera cualquier par de
+    ellos intercambiado no pasaría.
+    """
+    a = [1.0, 1.0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0]
+    b = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+    fila = toy_tables._par_medido("A", "B", a, b)
+    assert fila["n"] == 10
+    assert (fila["gana"], fila["empata"], fila["pierde"]) == (2, 7, 1), fila
+    assert fila["gana"] + fila["empata"] + fila["pierde"] == fila["n"], (
+        "los tres conteos tienen que cerrar contra `n`: si no cierran, hay un "
+        "par que no se clasificó y la columna miente por omisión")
+
+
+def test_el_par_sin_medir_declara_los_tres_conteos_en_none():
+    """Un par declarado sin serie no tiene conteo, y los TRES campos lo dicen.
+
+    Es el rojo de «la fila sin medir trae `gana: None` y los otros dos
+    ausentes»: un lector que pinte `fila["empata"]` moriría con `KeyError` en la
+    fila que la tabla ya sabe imprimir con raya.
+    """
+    import inspect
+    fuente = inspect.getsource(toy_tables.comparar_familia)
+    assert '"empata": None' in fuente and '"pierde": None' in fuente, (
+        "la rama que declara un par sin serie no pone los tres conteos en "
+        "None, así que la columna G/E/P no puede pintarla")

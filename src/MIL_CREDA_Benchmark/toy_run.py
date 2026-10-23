@@ -224,7 +224,7 @@ from CREDA.toy_experiment import (ASPECTO_MAX, COL_DURA, DURAS,
                                   contaminar, sigma_de_la_fuente)
 from MIL_CREDA.bag_kernel import (bag_gram, bag_kernel,           # Eq. (18)
                                   bag_kernel_matrix)
-from MIL_CREDA.confidence import confidences                      # Eq. (24)
+from MIL_CREDA.confidence import confidences, pseudolabel      # Eqs. (24), (22)
 from MIL_CREDA.local_term import (local_distance,                 # Eq. (31)
                                   total_correspondence)           # Eq. (29)
 from MIL_CREDA.objective import source_loss                       # Eq. (21)
@@ -5178,7 +5178,11 @@ def brazos_de_mecanismo() -> tuple[dict, ...]:
         {**TOY_ARMS[0],
          "id": f"{PREFIJO_MECANISMO}-{mecanismo}",
          "name": f"Toy-MIL-CREDA ({mecanismo})",
-         "label": f"agregacion {mecanismo}, todas las instancias",
+         # La MARCA y no una frase, y la de `toy_tables` y no una copia:
+         # el rotulo que se guarda tiene que ser el mismo que el lector
+         # derivaria de los campos, o las dos mitades se separan sin que
+         # nada falle. `toy_tables` no puede importar esto; esto si a el.
+         "label": toy_tables.MARCAS_MECANISMO[mecanismo],
          "mechanism": mecanismo,
          "selection": None,
          "why": (f"el eje de agregacion: {mecanismo!r} en lugar de la atencion "
@@ -5210,7 +5214,9 @@ def brazos_de_seleccion(mecanismo: str) -> tuple[dict, ...]:
             brazo = {**TOY_ARMS[0],
                      "id": f"{PREFIJO_SELECCION}-{mecanismo}-{sufijo}",
                      "name": f"Toy-MIL-CREDA ({mecanismo}, {sufijo})",
-                     "label": f"{mecanismo}, seleccion {sufijo}",
+                     # Idem: la marca sale de `toy_tables`, que es donde
+                     # el lector la lee.
+                     "label": toy_tables.marca_de_seleccion(regla, k),
                      "mechanism": mecanismo,
                      "selection": regla,
                      "why": ("el eje de seleccion: si la atencion sabe cuales "
@@ -5233,27 +5239,62 @@ def brazos_de_seleccion(mecanismo: str) -> tuple[dict, ...]:
 #: que ya existe en posiciones que todavia no existian.
 BARRIDOS = 24
 
-#: La clase a cuyo centro llegan las TRES caminatas de la seccion 2.
+#: Los centros de clase a los que llegan las caminatas de la seccion 2: TODOS.
 #:
-#: Una sola, declarada, y el destino es el mismo para las tres: lo que la
-#: figura compara son los ARRANQUES, y un destino por caminata haria tres
-#: curvas que no comparten nada.
-CLASE_DESTINO_W = 0
+#: `None` quiere decir «una por clase», derivado del cabezal y no de una lista
+#: escrita aca: un numero fijo de destinos seria una afirmacion sobre cuantas
+#: clases tiene el problema, que el cabezal ya declara.
+#:
+#: **Antes era UNO, la clase 0, y el cambio lo pidio el operador el
+#: 2026-10-21.** La razon que tenia el destino unico era buena --- lo que la
+#: figura compara son los ARRANQUES, y un destino DISTINTO por arranque daria
+#: tres curvas que no comparten nada --- y se conserva entera: los tres
+#: arranques siguen compartiendo destino DENTRO de cada panel, y lo que se
+#: agrega es un panel por clase. Lo que el destino unico costaba, medido sobre
+#: la corrida completa, es que las tres curvas terminaban en el MISMO `w`
+#: (lunas 0.999261, rollo 0.439340, toroide 0.999966, identico para los tres),
+#: asi que la figura mostraba tres caminos colapsando en un punto y nada sobre
+#: como `w` responde segun A DONDE va la bolsa.
+CLASES_DESTINO_W = None
 
-#: Los tres arranques de la seccion 2, y por que son distintos a proposito.
+#: Los TRES caminos de la seccion 2, en la forma exacta de CREDA: por cada uno,
+#: las clases que EMPATAN en el arranque y la clase a cuyo centro camina.
+#:
+#: Esta es la declaracion de `CREDA.toy_plots._caminos_de_frontera`, que
+#: escribe literalmente `arranques = [((0, 1), 0), ((1, 2), 2),
+#: (tuple(range(CLASES)), 1)]`. Aca es lo mismo UN NIVEL ARRIBA: alla el punto
+#: que camina es una instancia del latente, aca es una BOLSA en el espacio de
+#: representacion.
+#:
+#: **Cada camino arranca en una FRONTERA y termina en una clase, y eso es lo
+#: que la figura demuestra.** El punto sale de donde la cabeza NO sabe --- `w`
+#: a medio camino en un empate doble, casi cero en el triple --- y llega a
+#: donde el posterior satura y `w` va a uno. Un arranque que no fuera frontera
+#: no tendria de donde subir.
+#:
+#: **Antes eran tres arranques hacia los TRES destinos**, nueve caminos en
+#: paneles separados, y uno de los arranques --- el centro de la clase 1 --- ni
+#: siquiera era una frontera. Ruling del operador del 2026-10-22: un solo
+#: barrido, cada punto a un centro distinto, como en CREDA.
 #:
 #: Medidos en CREDA sobre su propia figura: frontera doble `w = 0.369`,
-#: frontera TRIPLE `w = 0.000003`, centro de clase `w = 1.000001`.
-#:
-#: * `frontera-doble` --- el empate entre las clases 1 y 2, que NO incluye al
-#:   destino. Arranca con `w` a medio camino y sube.
-#: * `frontera-triple` --- el empate a tres. Es el unico lugar donde `w` se
-#:   anula de verdad, y desde un empate a tres la bolsa puede irse a CUALQUIER
-#:   clase y `w` sube igual: nadie le pregunto su etiqueta.
-#: * `centro-de-clase` --- el centro de la clase 1, que arranca con `w ~ 1`,
-#:   CRUZA la frontera 0/1 en el camino y vuelve a subir. Es el control: dice
-#:   que `w` no sube por el hecho de caminar.
-ARRANQUES_W = ("frontera-doble", "frontera-triple", "centro-de-clase")
+#: frontera TRIPLE `w = 0.000003`.
+CAMINOS_W = (((0, 1), 0), ((1, 2), 2), ((0, 1, 2), 1))
+
+
+def _nombre_del_arranque(clases) -> str:
+    """Como se llama la frontera donde empatan esas clases.
+
+    Derivado de las clases y no escrito al lado: dos listas que digan lo mismo
+    se separan, y la que se separara seria la que nadie volvio a mirar.
+    """
+    clases = tuple(int(c) for c in clases)
+    return ("frontera-triple" if len(clases) > 2
+            else "frontera-" + "-".join(str(c) for c in clases))
+
+
+#: Los nombres de los tres arranques, DERIVADOS de `CAMINOS_W`.
+ARRANQUES_W = tuple(_nombre_del_arranque(cl) for cl, _ in CAMINOS_W)
 
 
 def _pasos_del_barrido(barridos: int, como: torch.Tensor) -> torch.Tensor:
@@ -5340,25 +5381,122 @@ def _empate_a_tres(head, centros: torch.Tensor, pasos: int = 200
     return Z[cual], float(margenes[cual])
 
 
+def _bolsa_mas_indecisa(g: torch.Tensor, clases: tuple[int, ...],
+                        prohibidas: frozenset[int] = frozenset()
+                        ) -> tuple[int, bool]:
+    """La bolsa del blanco mas indecisa entre las `clases` nombradas.
+
+    **No lee ninguna etiqueta.** Todo sale de `g_j^t`, la Ec. (20), que es lo
+    unico que la formulacion tiene en el blanco: la Ec. (22) deriva la
+    pseudoetiqueta de ahi y la Ec. (24) deriva `w` de ahi. Agrupar por
+    `target.labels` seria meter un oraculo que el metodo no tiene.
+
+    Dos nombradas: la que minimiza `|g_a - g_b|` entre las bolsas cuyas DOS
+    clases mas probables son exactamente `{a, b}`. El filtro por el par de
+    arriba es lo que hace que sea esa frontera: sin el, una bolsa que apuesta
+    todo a una tercera clase y reparte una miga entre `a` y `b` tiene la
+    brecha mas chica de todas y ganaria la eleccion.
+
+    Tres nombradas: la de `w` mas bajo, que es la mas cercana a la uniforme ---
+    el argmin de la Ec. (24), la indecision a tres literal.
+
+    `prohibidas` son las bolsas que otro camino ya tomo. Ver
+    `_bolsas_que_arrancan`, que es quien las junta.
+
+    Devuelve `(indice, relajado)`. `relajado` es `True` cuando ninguna bolsa
+    LIBRE tenia ese par arriba y la eleccion cayo sobre todas: VIAJA porque una
+    frontera que ninguna bolsa duda no es la frontera que la figura nombra, y
+    el lector tiene que poder verlo sin recalcular nada.
+    """
+    clases = tuple(int(c) for c in clases)
+    libres = torch.ones(g.shape[0], dtype=torch.bool, device=g.device)
+    for i in prohibidas:
+        libres[int(i)] = False
+    if not bool(libres.any()):
+        raise ValueError(
+            "no quedan bolsas del blanco libres para este camino: hay menos "
+            f"bolsas ({g.shape[0]}) que caminos a dibujar")
+    if len(clases) > 2:
+        w = confidences(g).masked_fill(~libres, float("inf"))
+        return int(torch.argmin(w)), False
+    a, b = clases
+    brecha = (g[:, a] - g[:, b]).abs()
+    par = torch.tensor(sorted(clases), device=g.device, dtype=torch.long)
+    dos_mas = torch.topk(g, 2, dim=1).indices
+    arriba = (torch.sort(dos_mas, dim=1).values == par).all(dim=1) & libres
+    if bool(arriba.any()):
+        candidatas = torch.nonzero(arriba, as_tuple=False).reshape(-1)
+        return int(candidatas[torch.argmin(brecha[candidatas])]), False
+    return int(torch.argmin(brecha.masked_fill(~libres, float("inf")))), True
+
+
+def _bolsas_que_arrancan(g: torch.Tensor) -> dict[str, tuple[int, bool]]:
+    """Una bolsa del blanco por camino de `CAMINOS_W`, y las TRES distintas.
+
+    **Sin esto dos caminos eligen la misma bolsa y la figura dibuja el mismo
+    punto dos veces.** No es hipotetico: medido el 2026-10-22 a escala
+    completa, en `rollo` la frontera (1,2) y la TRIPLE eligieron las dos la
+    bolsa 41, y en `toroide` la (0,1) y la TRIPLE eligieron las dos la 0. Pasa
+    porque una bolsa casi uniforme es a la vez la mas pareja entre dos clases
+    y la mas pareja entre las tres, asi que gana las dos elecciones.
+
+    Se resuelve por el ORDEN DECLARADO de `CAMINOS_W` y no por un optimo
+    global: cada camino toma su mejor bolsa todavia libre y el que llega
+    ultimo paga el desempate. Un optimo global haria que la bolsa de un camino
+    dependiera de los otros dos, y entonces agregar un cuarto camino moveria
+    los tres que ya estaban --- que es lo contrario de lo que una figura por
+    camino promete.
+    """
+    elegidas: dict[str, tuple[int, bool]] = {}
+    tomadas: set[int] = set()
+    for cl, _ in CAMINOS_W:
+        j, relajado = _bolsa_mas_indecisa(g, cl, frozenset(tomadas))
+        tomadas.add(j)
+        elegidas[_nombre_del_arranque(cl)] = (j, relajado)
+    return elegidas
+
+
 @measuring
 def caminata_de_w(model: wiring.Arm, source: bags.BagSet,
-                  device: torch.device, rol: str = "train_idx",
+                  target: bags.BagSet, device: torch.device,
+                  rol: str = "train_idx", rol_blanco: str = "train_idx",
                   barridos: int = BARRIDOS) -> dict:
-    """La figura de la seccion 2: tres bolsas construidas caminan hacia el
-    centro de una clase, y `w` se lee exacto a lo largo del camino.
+    """La figura de la seccion 2: tres bolsas del BLANCO caminan hacia el
+    centro de clase de la FUENTE que les toca, y `w` se lee exacto a lo largo.
 
     **No entrena nada y no corre ninguna celda.** `w = 1 - H2(g)/ln C` es una
     funcion del posterior y de nada mas, asi que la curva es una propiedad de
     la Ec. (24) y de la cabeza YA entrenada: exacta, sin semillas y sin
     varianza. Lo unico que hace es preguntarle a la cabeza por posiciones que
-    todavia no existian --- que es lo que `animar_familia` no puede hacer
-    leyendo el artefacto, y por eso esto vive en el barrido y el dibujo vive
-    aparte.
+    todavia no existian.
 
-    **Es la geometria de la cabeza de la FUENTE.** Los centros de clase salen
-    de las bolsas de la fuente en su rol, leidas por el codificador de la
-    fuente: lo que la figura muestra es donde la cabeza esta indecisa, y la
-    cabeza es una y la misma para los dos dominios.
+    **El punto que camina es una bolsa del BLANCO, y eso es el arreglo de un
+    defecto.** La Ec. (24) define `w_j^t` sobre `g_j^t` --- superindice `t`,
+    blanco --- y la Ec. (25) la mete en `D_c^t`, que pondera bloques de bolsas
+    OBJETIVO: el parrafo que sigue a la Ec. (24) dice literal que las bolsas
+    fuente no se ponderan "porque su etiqueta es observada y no estimada", y
+    `MIL_CREDA.conditional` lo tiene como invariante (`source_block_never_
+    weighted`). Esta figura caminaba un punto construido en la geometria de la
+    FUENTE, asi que dibujaba `w` sobre algo que la perdida no multiplica nunca
+    --- y la TABLA de esta misma seccion ya lo leia bien en el blanco, por
+    `lectura_de_bolsas`. Dos `w` opuestos en una seccion es lo que un jurado
+    pesca.
+
+    **Los centros de llegada SI son de la fuente.** Ahi la etiqueta es
+    observada y la formulacion la tiene, asi que un centro de clase de la
+    fuente es un objeto legitimo: la bolsa del blanco es empujada hacia el
+    grupo de sujetos de la fuente, que es exactamente la forma de la figura de
+    la seccion 4.
+
+    **La frontera dejo de ser el arranque y es el CRITERIO DE SELECCION.**
+    Antes el arranque era el punto donde la cabeza empata --- exacto, pero
+    FABRICADO: ninguna bolsa lo ocupa, y `w` ahi no es el `w` de nadie. Ahora
+    se elige la bolsa del blanco mas indecisa entre las dos clases que nombra
+    el camino (`_bolsa_mas_indecisa`, sin etiquetas), asi que `w` arranca donde
+    arranca de verdad. Los puntos de frontera se siguen calculando y VIAJAN
+    como referencia, con el residuo del empate triple al lado, para que la
+    figura pueda mostrar cuanto le falto a la bolsa real para estar sobre la
+    frontera.
 
     La unidad de la caminata es un **barrido**. Devuelve, por arranque, el
     camino en representacion (para dibujarlo proyectado) y `w` barrido por
@@ -5370,27 +5508,48 @@ def caminata_de_w(model: wiring.Arm, source: bags.BagSet,
         raise ValueError(
             f"la frontera TRIPLE necesita tres clases y hay {clases}")
     s_idx = getattr(source, rol)
+    t_idx = getattr(target, rol_blanco)
     codificar = codificador_de(model, "source")
+    codificar_blanco = codificador_de(model, "target")
 
     model.eval()
     with torch.no_grad():
+        # La FUENTE: la nube, el plano del dibujo y los centros de llegada. Su
+        # etiqueta es observada, asi que agrupar por ella es legitimo.
         H = codificar(source.images[source.members[s_idx]].to(device))
         Z, _ = model.bag_representations(H, model.sigma)
         etiquetas = source.labels[s_idx].to(Z.device)
         centros = _centros_de_clase(Z, etiquetas, clases)
-        destino = centros[CLASE_DESTINO_W]
 
-        arranques = {
-            "frontera-doble": _empate_en_el_segmento(
-                model.head, centros[1], centros[2], 1, 2),
-            "centro-de-clase": centros[1],
-        }
+        # El BLANCO: de aca sale el punto que camina. `g_t` es lo unico que se
+        # le pregunta --- nunca `target.labels`.
+        H_t = codificar_blanco(target.images[target.members[t_idx]].to(device))
+        Z_t, _ = model.bag_representations(H_t, model.sigma)
+        g_t = F.softmax(model.head(Z_t), dim=1)
+
+        # Las fronteras, de REFERENCIA. El triple sale de `_empate_a_tres`; un
+        # empate de dos sale del segmento entre los dos centros, que es donde
+        # esa frontera lo corta.
         triple, residuo = _empate_a_tres(model.head, centros)
-        arranques["frontera-triple"] = triple
+        fronteras = {}
+        for cl, _ in CAMINOS_W:
+            nombre = _nombre_del_arranque(cl)
+            fronteras[nombre] = (triple if len(cl) > 2 else
+                                 _empate_en_el_segmento(
+                                     model.head, centros[cl[0]], centros[cl[1]],
+                                     cl[0], cl[1]))
+        destinos = tuple(d for _, d in CAMINOS_W)
 
-        caminos = {}
-        for nombre in ARRANQUES_W:
-            inicio = arranques[nombre]
+        reparto = _bolsas_que_arrancan(g_t)
+        caminos: dict[str, dict[str, dict]] = {}
+        elegidas: dict[str, int] = {}
+        relajados: dict[str, bool] = {}
+        for cl, suyo in CAMINOS_W:
+            nombre = _nombre_del_arranque(cl)
+            j, relajado = reparto[nombre]
+            elegidas[nombre] = int(t_idx[j].item())
+            relajados[nombre] = bool(relajado)
+            inicio = Z_t[j]
             # `device=` explicito, y no es cosmetico. Un `linspace` sin device
             # nace en CPU, y un tensor 0-dim de CPU multiplicando uno de MPS
             # DEVUELVE EL ORIGINAL sin fallar: medido, `inicio + t*(final -
@@ -5398,27 +5557,54 @@ def caminata_de_w(model: wiring.Arm, source: bags.BagSet,
             # salia perfectamente plana y se leia como "el termino no responde"
             # en vez de como un defecto.
             ts = _pasos_del_barrido(barridos, inicio)
-            camino = inicio.unsqueeze(0) + ts[:, None] * (destino - inicio).unsqueeze(0)
-            g = F.softmax(model.head(camino), dim=1)
-            caminos[nombre] = {
-                "camino": camino.float().cpu().numpy().astype(np.float64),
-                "g": g.float().cpu().numpy().astype(np.float64),
-                "w": confidences(g).float().cpu().numpy().astype(np.float64),
-            }
+            por_destino: dict[str, dict] = {}
+            # UNO, el suyo: la figura de CREDA empareja cada frontera con una
+            # clase. Se deja el mapa anidado porque es la forma que el
+            # artefacto ya tiene y la que sus lectores recorren.
+            for clase in (suyo,):
+                destino = centros[clase]
+                camino = (inicio.unsqueeze(0)
+                          + ts[:, None] * (destino - inicio).unsqueeze(0))
+                g = F.softmax(model.head(camino), dim=1)
+                # La clave es el ENTERO como texto porque este diccionario
+                # viaja por JSON, que no tiene claves enteras: un `int` sale
+                # como `"0"` y volveria como `"0"`, asi que se escribe asi
+                # desde el principio y el lector no tiene dos convenciones.
+                por_destino[str(int(clase))] = {
+                    "camino": camino.float().cpu().numpy().astype(np.float64),
+                    "g": g.float().cpu().numpy().astype(np.float64),
+                    "w": confidences(g).float().cpu().numpy().astype(np.float64),
+                }
+            caminos[nombre] = por_destino
     set_phase_two_modes(model)
 
+    claves_de = {_nombre_del_arranque(cl): [str(int(d))] for cl, d in CAMINOS_W}
     return {
         "barridos": int(barridos),
-        "claseDestino": CLASE_DESTINO_W,
+        "clasesDestino": [int(c) for c in destinos],
         "arranques": list(ARRANQUES_W),
         "caminos": caminos,
-        # El `w` con el que arranca cada camino: los tres numeros que CREDA
-        # reporta de su propia figura, y lo que hace que los arranques se lean
-        # como distintos sin medir la curva entera.
-        "wInicial": {n: float(caminos[n]["w"][0]) for n in ARRANQUES_W},
-        "wFinal": {n: float(caminos[n]["w"][-1]) for n in ARRANQUES_W},
-        # **Si esto no es ~0, la frontera triple no empata** y su curva no
-        # arranca en cero. Viaja para que no haya que recalcularlo.
+        # El `w` con el que arranca cada camino y con el que termina, por
+        # arranque Y por destino. El inicial no depende del destino --- es el
+        # arranque --- y se reporta igual por par, para que una tabla no tenga
+        # que saber cual de los dos indices lo determina.
+        "wInicial": {n: {c: float(caminos[n][c]["w"][0]) for c in claves_de[n]}
+                     for n in ARRANQUES_W},
+        "wFinal": {n: {c: float(caminos[n][c]["w"][-1]) for c in claves_de[n]}
+                   for n in ARRANQUES_W},
+        # Que bolsa del blanco camina en cada arranque, en la numeracion del
+        # BAGSET, que es con la que `socio_exacto` y las tablas se entienden.
+        "bolsaDelBlanco": elegidas,
+        # `True` cuando ninguna bolsa tenia ese par como sus dos clases mas
+        # probables: la eleccion cayo sobre todas y esa frontera no es una
+        # frontera que el blanco dude. Ver `_bolsa_mas_indecisa`.
+        "eleccionRelajada": relajados,
+        # Las fronteras EXACTAS de la cabeza, de referencia: la bolsa real no
+        # esta sobre ellas y la figura muestra cuanto le falta.
+        "fronteras": {n: v.float().cpu().numpy().astype(np.float64)
+                      for n, v in fronteras.items()},
+        # **Si esto no es ~0, la frontera triple no empata.** Viaja para que no
+        # haya que recalcularlo.
         "residuoDelEmpateTriple": float(residuo),
         # La base de PCA con la que el dibujo proyecta los caminos, calculada
         # sobre las bolsas de la FUENTE para que las tres caminatas y la nube
@@ -5493,12 +5679,33 @@ def caminata_de_correspondencia(model: wiring.Arm, source: bags.BagSet,
 
         pares_s = model._kernel_pairs(model.bags_of(H_s, sigma))
         K_ss = bag_gram(pares_s, sigma)
+        # La NUBE de la figura: una bolsa de la fuente es un punto en el
+        # espacio de representacion, que es donde la bolsa del blanco que
+        # camina tambien es un punto. `pi` y `d^2` siguen saliendo del kernel
+        # --- esto no entra en ninguna cuenta, es el plano sobre el que se
+        # dibuja, igual que `nube` en la caminata de la seccion 2.
+        Z_s, _ = model.bag_representations(H_s, sigma)
 
         socios = socio_exacto(source, target, bolsas_por_clase,
                               rol_fuente, rol_blanco)
-        clase = int(etiquetas_t[0].item())
+        # **La clase sale de la PSEUDOETIQUETA, Ec. (22), y no de
+        # `target.labels`.** Las Ecs. (28)-(31) no nombran ninguna etiqueta del
+        # blanco: la Ec. (29) pesa por `g_{j,c_i}` --- el posterior del blanco
+        # --- y por la clase OBSERVADA de la bolsa FUENTE. Agrupar por la
+        # etiqueta verdadera del blanco metia un oraculo en `u_c`, y de `u_c`
+        # sale `brechaAlCentro`, que es una cantidad MEDIDA: el oraculo no
+        # entraba solo en que bolsa se muestra, entraba en el numero.
+        Z_t_todas, _ = model.bag_representations(H_t, sigma)
+        g_t_todas = F.softmax(model.head(Z_t_todas), dim=1)
+        # El desempate de la Ec. (22) es el indice MAS BAJO entre los
+        # maximos, y `torch.argmax` sobre floats no lo garantiza --- es un
+        # detalle del backend, que es justo lo que `pseudolabel` existe para no
+        # heredar. Sobre la mascara entera `argmax` SI devuelve el primer uno.
+        maximos_t = g_t_todas == g_t_todas.max(dim=1, keepdim=True).values
+        pseudo = torch.argmax(maximos_t.to(torch.int8), dim=1)
+        clase = pseudolabel(g_t_todas[0])
         de_la_clase = [i for i in range(len(t_idx))
-                       if int(etiquetas_t[i].item()) == clase]
+                       if int(pseudo[i].item()) == clase]
         candidatas = [i for i in de_la_clase if socios[i] >= 0]
         if not candidatas:
             raise ValueError(
@@ -5523,12 +5730,14 @@ def caminata_de_correspondencia(model: wiring.Arm, source: bags.BagSet,
         # plana en MPS y no falla.
         ts = _pasos_del_barrido(barridos, inicio)
         pis, g_filas, brechas, d2s, maximos = [], [], [], [], []
+        camino = []
         for t in ts:
             H_j = inicio + t * (final - inicio)
             H_k, w_k = model._kernel_pairs(
                 model.bags_of(H_j.unsqueeze(0), sigma))[0]
             cross = bag_kernel_matrix(pares_s, [(H_k, w_k)], sigma)[:, 0]
             Z_j, _ = model.bag_representations(H_j.unsqueeze(0), sigma)
+            camino.append(Z_j[0].float().cpu())
             g_j = F.softmax(model.head(Z_j), dim=1)[0]
             pi = total_correspondence(cross, etiquetas_s, g_j, model.tau_local)
             d2 = local_distance(bag_kernel(H_k, w_k, H_k, w_k, sigma),
@@ -5573,6 +5782,21 @@ def caminata_de_correspondencia(model: wiring.Arm, source: bags.BagSet,
         "piMaximoDentroDeLaClase": maximos,
         "pisoDeAzar": float(1.0 / n_c),
         "bolsasFuenteDeLaClase": n_c,
+        # La clase de la figura es la PSEUDOETIQUETA (Ec. 22). Estas dos dicen
+        # cuanto se parece a la verdad SIN que la verdad entre en ninguna
+        # cuenta: si el acuerdo es bajo, la figura muestra a la bolsa empujada
+        # hacia el grupo que el modelo CREE, que sigue siendo lo que el termino
+        # local hace --- pero el lector tiene que poder verlo.
+        "claseVerdaderaDeLaElegida": int(etiquetas_t[elegida].item()),
+        "acuerdoPseudoEtiqueta": float(
+            (pseudo == etiquetas_t).float().mean().item()),
+        # El plano de la figura, y NADA MAS: una bolsa de la fuente por punto,
+        # y la bolsa del blanco barrido por barrido. Ninguna cuenta los lee ---
+        # `pi`, `d^2` y la brecha salen todas del kernel --- existen para que
+        # la figura pueda mostrar la bolsa MOVIENDOSE, que es lo que una curva
+        # sola no puede mostrar.
+        "nube": Z_s.float().cpu().numpy().astype(np.float64),
+        "camino": torch.stack(camino).numpy().astype(np.float64),
     }
 
 
@@ -5806,7 +6030,8 @@ def barrido_sopesado(registro: dict, scale: Scale,
                 hace que el gancho no cambie ningun numero de la tabla."""
                 if arm_id != brazo_de_la_figura or _semilla != primera:
                     return {}
-                return {"caminata": caminata_de_w(model, mat["source"], dev)}
+                return {"caminata": caminata_de_w(
+                    model, mat["source"], mat["target"], dev)}
 
             celda = run_cell(sucia, norma, semilla, scale, hyper, device,
                              arms=brazos, lecturas=_gancho)
@@ -7887,13 +8112,52 @@ def limite_fase2(filas: list) -> float:
         hist = fila["histFase2"]
         if hist.size == 0:
             continue
+        # Sobre las series POR EPOCA, que son las que el panel dibuja. Sobre
+        # los pasos crudos el maximo es mayor o igual, asi que el eje salia
+        # holgado y la curva chica --- sin que nada fallara.
         for campo in SERIES_FASE_DOS:
-            alto = max(alto, float(hist[:, nombres[campo]].max()))
+            _, valores = serie_de_fase_dos_por_epoca(
+                hist, nombres, fila["pasosPorEpoca"], campo)
+            if valores.size:
+                alto = max(alto, float(valores.max()))
     if alto <= 0.0:
         raise ValueError(
             f"ninguna serie de la fase 2 llega a un valor positivo ({alto}): un "
             "eje de altura cero no es un eje compartido, es un panel vacío")
     return alto * HOLGURA_EJE
+
+
+def serie_de_fase_dos_por_epoca(hist, nombres: dict, por_epoca: int,
+                                campo: str):
+    """La serie `campo` de la fase 2, UNA FILA POR EPOCA, con su abscisa.
+
+    **Un renglon de `histFase2` es un paso del optimizador y nada mas.** Este
+    paquete reporta en EPOCAS, asi que lo que se dibuja y lo que acota el eje
+    salen los dos de aca: dibujar los pasos sobre un eje de epocas pone
+    `por_epoca` puntos adentro de cada una --- 16 aca, 1600 sobre un eje de 0 a
+    100 --- y el lector mira la densidad, no el rotulo.
+
+    Se PROMEDIA adentro de la epoca y no se toma el ultimo paso: el ultimo paso
+    es un lote, y un lote es justo la oscilacion que esto saca.
+
+    **Existe como funcion y no dos veces en linea porque los dos lectores tienen
+    que coincidir.** El techo del eje `y` se calculaba sobre los pasos crudos
+    mientras la curva pasaba a ser por epoca, y un maximo de pasos es siempre
+    mayor o igual que el de sus promedios: el eje quedaba holgado y la curva
+    chica, sin que nada fallara.
+
+    Devuelve `(abscisa, valores)`. La abscisa es `epoca + 1`: la epoca `e`
+    TERMINA en `e + 1`, y el renglon cero es el estado DESPUES del primer paso.
+    """
+    if hist is None or not getattr(hist, "size", 0):
+        return np.empty(0, dtype=float), np.empty(0, dtype=float)
+    por_epoca = max(int(por_epoca), 1)
+    cual = (hist[:, nombres["step"]] // por_epoca).astype(np.int64)
+    cuantas = np.bincount(cual)
+    vivas = np.nonzero(cuantas)[0]
+    valores = (np.bincount(cual, weights=hist[:, nombres[campo]])[vivas]
+               / cuantas[vivas])
+    return vivas.astype(float) + 1.0, valores
 
 
 def _panel_fase2(a, fila: dict, k: int, tope_y: float) -> None:
@@ -7937,22 +8201,28 @@ def _panel_fase2(a, fila: dict, k: int, tope_y: float) -> None:
     # is ONE path through this panel: the series are sliced to whatever the
     # frame stands at, empty included, and the axes, their limits, their label
     # and their legend are built the same way at every frame.
-    serie = lambda campo: (filas[:, nombres[campo]] if filas.size
-                           else np.empty(0, dtype=float))
-    # **The abscissa is the EPOCH, and the step only gets it there.** A row of
-    # `histFase2` is one optimizer step -- that is what the array is -- so the
-    # epoch of a row is its step divided by the pass this cell ran, read from
-    # the record and never assumed. `+ 1` first, as before: row zero is the
-    # state AFTER the first step, not before it, so the curve starts inside
-    # the first epoch rather than at a zero it never occupied.
+    # **UNA FILA POR EPOCA, y esto no es cosmetico.** Un renglon de `histFase2`
+    # es un paso del optimizador --- eso es el arreglo --- asi que dibujarlos
+    # todos pone `pasosPorEpoca` puntos adentro de cada epoca: 16 aca, 1600
+    # sobre un eje que va de 0 a 100. El eje decia epocas y la densidad decia
+    # pasos, y lo que el lector mira es la densidad. Este paquete reporta en
+    # epocas y nada mas, asi que la serie se PROMEDIA adentro de su epoca.
     #
-    # Dividing here and not at the source is deliberate: the slice above is by
-    # STEP (`tope`), because that is the array's own index, and converting the
-    # column before slicing would make the filter compare an epoch against a
-    # step and silently keep the wrong rows.
-    por_epoca = max(fila["pasosPorEpoca"], 1)
-    s = ((filas[:, nombres["step"]] + 1) / por_epoca if filas.size
-         else np.empty(0, dtype=float))
+    # El promedio y no el ultimo paso de la epoca: el ultimo es un lote, y un
+    # lote es la oscilacion que esto saca, no la epoca. CREDA lee su criterio
+    # de fase 2 una vez por pase por la misma razon.
+    #
+    # Agregar DESPUES de cortar y no antes: el corte de arriba es por PASO
+    # (`tope`), porque ese es el indice propio del arreglo, y convertir la
+    # columna antes de filtrar compararia una epoca contra un paso y se
+    # quedaria en silencio con los renglones equivocados.
+    #
+    # `+ 1` en la abscisa, como antes: la epoca `e` termina en `e + 1`, y el
+    # renglon cero es el estado DESPUES del primer paso, no antes.
+    por_epoca = fila["pasosPorEpoca"]
+    s, _ = serie_de_fase_dos_por_epoca(filas, nombres, por_epoca, "adaptation")
+    serie = lambda campo: serie_de_fase_dos_por_epoca(
+        filas, nombres, por_epoca, campo)[1]
     a.plot(s, serie("adaptation"), color="#2ca02c", lw=2.0,
            label="adaptación (Ec. 39, coef. 1)")
     a.plot(s, serie("contributionGlobal"), color="#9467bd", lw=1.4,
@@ -8148,10 +8418,17 @@ def _escribir_gif(ruta: Path, cuadros: list, al_paso=print) -> Path:
 
 #: El estilo de cada arranque de la seccion 2. Declarado aca y no elegido en el
 #: dibujo, para que la leyenda y la curva no puedan discrepar.
+#: El trazo y el rotulo de cada arranque. Las CLAVES salen de `CAMINOS_W`, no
+#: escritas al lado: una lista de nombres paralela a la declaracion se separa
+#: de ella, y el color no se pone aca --- lo pone el DESTINO, para que la curva
+#: y la cruz a la que va se encuentren por el color.
 ESTILO_ARRANQUE = {
-    "frontera-doble": ("#d62728", "-", "frontera doble (1 vs 2)"),
-    "frontera-triple": ("#9467bd", "-", "frontera TRIPLE"),
-    "centro-de-clase": ("#333333", "--", "centro de la clase 1"),
+    _nombre_del_arranque(cl): (
+        "-" if len(cl) == 2 else "--",
+        ("bolsa del blanco mas indecisa entre "
+         + " y ".join(str(c) for c in cl)) if len(cl) == 2
+        else "bolsa del blanco mas indecisa a TRES")
+    for cl, _ in CAMINOS_W
 }
 
 
@@ -8189,12 +8466,23 @@ def _caminata_de(barrido: dict, familia: str) -> dict:
 
 
 def figura_de_w(barrido: dict, familia: str, k: int):
-    """El cuadro `k` de la figura de la seccion 2: la nube con los tres caminos
-    y `w` contra el barrido.
+    """El cuadro `k` de la figura de la seccion 2: UN barrido, tres destinos.
+
+    **Tres caminos y no nueve, y cada uno a un centro DISTINTO.** El arranque
+    `i` va al centro de la clase `i`: un solo barrido en el que los tres puntos
+    caminan a la vez, cada uno hacia su propia cruz. Lo anterior eran los tres
+    arranques hacia UN destino por panel --- tres puntos yendo a una clase a la
+    vez, repetido tres veces --- y eso contaba la misma historia tres veces en
+    lugar de contar la de la figura de CREDA, que es la que este cuaderno
+    espeja.
 
     **La curva es PARCIAL por cuadro**, y eso es lo que la hace una animacion y
-    no tres lineas: lo que la figura muestra es que `w` SUBE MIENTRAS la bolsa
+    no tres lineas: lo que la figura muestra es que `w` SUBE MIENTRAS el punto
     camina, no que termina en uno.
+
+    El color lo pone el DESTINO y no el arranque, para que la curva de `w` y la
+    trayectoria que le corresponde se encuentren por el color con la cruz a la
+    que van.
     """
     import matplotlib.pyplot as plt
 
@@ -8203,59 +8491,105 @@ def figura_de_w(barrido: dict, familia: str, k: int):
     clases = np.asarray(caminata["clasesDeLaNube"], dtype=int)
     mu, base, explicada = _base_pca(nube)
     proyectar = lambda Z: (np.asarray(Z, dtype=float) - mu) @ base
+    total = int(caminata["barridos"])
+    # Cada frontera con SU clase, leido del artefacto: el mapa de ese arranque
+    # trae exactamente un destino, que es el que `CAMINOS_W` le emparejo.
+    pares = [(n, sorted(caminata["caminos"][n])[0])
+             for n in caminata["arranques"]]
 
-    fig, (a, b) = plt.subplots(1, 2, figsize=(11.0, 4.6))
+    fig, (a, b) = plt.subplots(1, 2, figsize=(12.2, 5.0))
     P = proyectar(nube)
     for c in sorted(set(int(x) for x in clases)):
         cual = clases == c
-        a.scatter(P[cual, 0], P[cual, 1], s=18, alpha=0.45,
+        a.scatter(P[cual, 0], P[cual, 1], s=18, alpha=0.35,
                   color=COL_DURA.get(c, "#777777"), label=f"fuente, clase {c}")
+    # Las TRES cruces: los centros de clase, que son los tres destinos.
     C = proyectar(np.asarray(caminata["centros"], dtype=float))
-    a.scatter(C[:, 0], C[:, 1], s=130, marker="X", c="white",
-              edgecolors="black", linewidths=1.4, zorder=5)
+    a.scatter(C[:, 0], C[:, 1], s=190, marker="X", c="white",
+              edgecolors="black", linewidths=1.6, zorder=5)
     for c in range(C.shape[0]):
-        a.annotate(str(c), (C[c, 0], C[c, 1]), fontsize=8, ha="center",
-                   va="center", zorder=6)
+        a.annotate(str(c), (C[c, 0], C[c, 1]), fontsize=9, ha="center",
+                   va="center", zorder=6, fontweight="bold")
 
-    for nombre in caminata["arranques"]:
-        color, trazo, rotulo = ESTILO_ARRANQUE[nombre]
-        camino = proyectar(np.asarray(caminata["caminos"][nombre]["camino"],
-                                      dtype=float))
+    # Las fronteras EXACTAS de la cabeza, de referencia: un `+` fino donde la
+    # cabeza empata. La bolsa real no esta encima, y la distancia entre el `+`
+    # y el circulo hueco de su color ES cuanto le falta --- que es la lectura
+    # que se perdia cuando el arranque era el punto fabricado mismo.
+    for nombre, destino in pares:
+        bruta = (caminata.get("fronteras") or {}).get(nombre)
+        if bruta is None:
+            continue
+        f = proyectar(np.asarray(bruta, dtype=float).reshape(1, -1))
+        a.plot([f[0, 0]], [f[0, 1]], "+", ms=11, mew=1.4,
+               color=COL_DURA.get(int(destino), "#777777"), alpha=0.75,
+               zorder=5)
+
+    for nombre, destino in pares:
+        color = COL_DURA.get(int(destino), "#777777")
+        trazo, rotulo = ESTILO_ARRANQUE[nombre]
+        camino = proyectar(np.asarray(
+            caminata["caminos"][nombre][destino]["camino"], dtype=float))
         hasta = camino[:k + 1]
-        a.plot(hasta[:, 0], hasta[:, 1], color=color, ls=trazo, lw=1.8,
-               zorder=4)
-        a.plot([hasta[-1, 0]], [hasta[-1, 1]], "o", ms=7, color=color,
+        a.plot(hasta[:, 0], hasta[:, 1], color=color, ls=trazo, lw=2.0,
+               alpha=0.95, zorder=4)
+        # De donde salio, y donde esta: el punto hueco es el arranque y queda
+        # fijo, asi que el avance se lee como distancia entre los dos.
+        a.plot([camino[0, 0]], [camino[0, 1]], "o", ms=7, color="white",
+               markeredgecolor=color, markeredgewidth=1.8, zorder=6)
+        a.plot([hasta[-1, 0]], [hasta[-1, 1]], "o", ms=9, color=color,
                zorder=7)
-        w = np.asarray(caminata["caminos"][nombre]["w"], dtype=float)
-        b.plot(range(k + 1), w[:k + 1], color=color, ls=trazo, lw=1.8,
-               marker="o", ms=3.0, label=rotulo)
-        b.plot([k], [w[k]], "o", ms=7, color=color)
+        w = np.asarray(caminata["caminos"][nombre][destino]["w"], dtype=float)
+        b.plot(range(k + 1), w[:k + 1], color=color, ls=trazo, lw=2.0,
+               marker="o", ms=3.4, label=f"{rotulo} \u2192 centro de la clase {destino}")
+        b.plot([k], [w[k]], "o", ms=8, color=color)
 
-    a.set_title(f"{familia} · latente de la FUENTE (PCA, "
-                f"{100 * explicada:.0f}% explicada)", fontsize=9)
+    a.set_title(f"{familia} · nube y centros de la FUENTE (PCA, "
+                f"{100 * explicada:.0f}% explicada) · cada bolsa del "
+                "BLANCO a SU centro", fontsize=9)
     a.set_xticks([]); a.set_yticks([])
     a.legend(fontsize=7, loc="best", framealpha=0.85)
-    total = int(caminata["barridos"])
+
     b.set_xlim(-0.5, total - 0.5)
     b.set_ylim(-0.03, 1.03)
     b.axhline(0.0, color="#999999", lw=0.8, ls=":")
     b.axhline(1.0, color="#999999", lw=0.8, ls=":")
     b.set_xlabel("barrido", fontsize=9)
     b.set_ylabel(r"$w_j = 1 - \hat H_2(g_j)/\ln C$", fontsize=9)
-    b.set_title(f"barrido {k} de {total - 1} · destino: centro de la clase "
-                f"{caminata['claseDestino']}", fontsize=9)
+    # El titulo NOMBRA la cantidad y no afirma su direccion. Decia "sube
+    # mientras la empujan" y `toroide` lo contradice: ahi la mediana de `w`
+    # del blanco es 1.0000, asi que las curvas arrancan arriba, SE HUNDEN al
+    # cruzar la frontera en el camino, y vuelven a saturar. Un titulo que
+    # afirma la direccion convierte ese hecho en una figura que se lee como
+    # rota.
+    b.set_title(f"barrido {k} de {total - 1} · $w_j^t$ de una bolsa del "
+                "BLANCO empujada a un centro de la FUENTE", fontsize=9)
     b.legend(fontsize=7, loc="lower right", framealpha=0.85)
     fig.tight_layout()
     return fig
 
 
 def figura_de_correspondencia(barrido: dict, familia: str, k: int):
-    """El cuadro `k` de la figura de la seccion 4: `pi` sobre las bolsas de la
-    fuente, y las dos curvas que el termino local mueve.
+    """El cuadro `k` de la figura de la seccion 4, con la MISMA forma que la 2.
 
-    La barra del SOCIO va marcada: lo que la seccion afirma es sobre el reparto
-    adentro de la clase, y sin marcar cual es el socio la barra alta se lee como
-    cualquier bolsa de la clase correcta.
+    Una bolsa del blanco empujada hacia UN grupo de sujetos de la fuente, y las
+    dos curvas que esa empujada promete mover: el loss local BAJANDO y la
+    relevancia del socio SUBIENDO.
+
+    **La bolsa se ve moverse.** Esa es la forma de la figura de la seccion 2 y
+    la razon por la que funciona: una curva sola no muestra que algo se mueve,
+    muestra un numero cambiando. El panel izquierdo es la nube de bolsas de la
+    FUENTE en su propio espacio de representacion, el socio marcado con una
+    cruz, y la bolsa del blanco caminando hacia el.
+
+    **El loss y no `d_j^2` crudo.** `l_loc,j = d_j^2 / 2` es la Ec. (38) misma
+    --- `normalized_local_distance` --- y vive en [0, 1], asi que la curva se
+    lee contra sus dos extremos en vez de contra una escala que depende de la
+    familia. Es la cantidad que el termino MINIMIZA, dicha por su nombre.
+
+    **El azar es una LINEA.** Sin una referencia dibujada no hay con que
+    comparar la altura de `pi`, que es por lo que la version anterior de esta
+    figura no decia nada. Sale de `pisoDeAzar`, del artefacto, nunca de una
+    constante escrita aca.
     """
     import matplotlib.pyplot as plt
 
@@ -8264,40 +8598,89 @@ def figura_de_correspondencia(barrido: dict, familia: str, k: int):
     clases = np.asarray(caminata["clasesFuente"], dtype=int)
     total = int(caminata["barridos"])
     destino = int(caminata["columnaDestino"])
+    azar = float(caminata["pisoDeAzar"])
+    socio = pi[:, destino]
+    # La Ec. (38) misma: `local_term.normalized_local_distance`.
+    loss = np.asarray(caminata["distanciaCuadrada"], dtype=float) / 2.0
 
-    fig, (a, b) = plt.subplots(1, 2, figsize=(11.0, 4.6))
-    colores = [COL_DURA.get(int(c), "#777777") for c in clases]
-    bordes = ["black" if i == destino else "none"
-              for i in range(pi.shape[1])]
-    a.bar(range(pi.shape[1]), pi[k], color=colores, edgecolor=bordes,
-          linewidth=1.6)
-    a.set_ylim(0.0, float(pi.max()) * 1.08)
-    a.set_xlabel("bolsa de la fuente (color = su clase REAL)", fontsize=9)
-    a.set_ylabel(r"$\pi_{ji}$", fontsize=9)
-    a.set_title(f"{familia} · bolsa {caminata['bolsaDelBlanco']} de la clase "
-                f"{caminata['clase']} · socio marcado", fontsize=9)
+    fig, (a, b) = plt.subplots(1, 2, figsize=(12.2, 5.0))
 
-    brecha = np.asarray(caminata["brechaAlCentro"], dtype=float)
-    d2 = np.asarray(caminata["distanciaCuadrada"], dtype=float)
-    b.plot(range(k + 1), d2[:k + 1], color="#d62728", lw=1.9, marker="o",
-           ms=3.0, label=r"$d_j^2$, lo que el local MINIMIZA")
-    b.plot([k], [d2[k]], "o", ms=7, color="#d62728")
+    nube = caminata.get("nube")
+    if nube is None:
+        # Un artefacto anterior al 2026-10-22 no trae el plano. Se dice, y no
+        # se dibuja un panel vacio que se leeria como "la bolsa no se movio".
+        a.text(0.5, 0.5, "este artefacto no trae la nube:\nre-corré la sección 4",
+               ha="center", va="center", fontsize=10, transform=a.transAxes)
+        a.set_xticks([]); a.set_yticks([])
+    else:
+        nube = np.asarray(nube, dtype=float)
+        camino = np.asarray(caminata["camino"], dtype=float)
+        # La base sale de la nube Y del camino juntos: proyectar con la base de
+        # la nube sola puede dejar el camino casi entero fuera del plano, y una
+        # trayectoria aplastada se lee como una bolsa que no se movio.
+        mu, base, explicada = _base_pca(np.vstack([nube, camino]))
+        proyectar = lambda Z: (np.asarray(Z, dtype=float) - mu) @ base
+        P, Q = proyectar(nube), proyectar(camino)
+        for c in sorted(set(int(x) for x in clases)):
+            cual = clases == c
+            a.scatter(P[cual, 0], P[cual, 1], s=22, alpha=0.35,
+                      color=COL_DURA.get(c, "#777777"),
+                      label=f"fuente, clase {c}")
+        # El SOCIO: el grupo de sujetos hacia el que se empuja.
+        a.scatter([P[destino, 0]], [P[destino, 1]], s=220, marker="X",
+                  c="white", edgecolors="black", linewidths=1.8, zorder=5)
+        a.annotate("socio", (P[destino, 0], P[destino, 1]), fontsize=8,
+                   ha="center", va="bottom", xytext=(0, 12),
+                   textcoords="offset points", zorder=6, fontweight="bold")
+        hasta = Q[:k + 1]
+        a.plot(hasta[:, 0], hasta[:, 1], color="#1f77b4", lw=2.2, alpha=0.95,
+               zorder=4)
+        a.plot([Q[0, 0]], [Q[0, 1]], "o", ms=8, color="white",
+               markeredgecolor="#1f77b4", markeredgewidth=1.8, zorder=6,
+               label="arranque: centro de su clase (Ec. 22)")
+        a.plot([hasta[-1, 0]], [hasta[-1, 1]], "o", ms=10, color="#1f77b4",
+               zorder=7, label=f"bolsa {caminata['bolsaDelBlanco']} del blanco")
+        a.set_title(f"{familia} · representación de las bolsas (PCA, "
+                    f"{100 * explicada:.0f}% explicada)", fontsize=9)
+        a.set_xticks([]); a.set_yticks([])
+        a.legend(fontsize=7, loc="best", framealpha=0.85)
+
+    # **Las dos leyendas NOMBRAN la cantidad y no afirman su direccion.**
+    # Decian "BAJA" y "SUBE", que es lo que el termino PROMETE --- y `toroide`
+    # lo contradice: medido el 2026-10-22 sin oraculo, ahi `l_loc` SUBE de
+    # 0.2248 a 0.2508 mientras `pi` al socio llega a 2.12x el azar. Con la
+    # leyenda afirmando la direccion, esa familia se lee como una figura rota
+    # en vez de como la divergencia que es, y la divergencia es justo lo que
+    # hay que poder ver. Lo que promete cada termino se dice en la prosa, que
+    # es donde se puede decir "y aca no pasa".
+    b.plot(range(k + 1), loss[:k + 1], color="#d62728", lw=2.0, marker="o",
+           ms=3.4, label=r"$l_{loc,j}=d_j^2/2$, lo que el local minimiza")
+    b.plot([k], [loss[k]], "o", ms=8, color="#d62728")
     b.set_xlim(-0.5, total - 0.5)
-    b.set_ylim(0.0, max(float(d2.max()) * 1.08, 1e-6))
+    b.set_ylim(0.0, 1.0)
     b.set_xlabel("barrido", fontsize=9)
-    b.set_ylabel(r"$d_j^2 = \|\Psi(B_j^t) - \mu_j^s\|^2$", fontsize=9,
+    b.set_ylabel(r"$l_{loc,j}$, lo que el local MINIMIZA", fontsize=9,
                  color="#d62728")
+    b.tick_params(axis="y", labelcolor="#d62728")
+
+    # ...y la relevancia del socio, contra el azar.
     c = b.twinx()
-    c.plot(range(k + 1), brecha[:k + 1], color="#2ca02c", lw=1.6, ls="--",
-           marker="o", ms=3.0)
-    c.plot([k], [brecha[k]], "o", ms=7, color="#2ca02c")
-    c.set_ylim(0.0, max(float(brecha.max()) * 1.08, 1e-6))
-    c.set_ylabel(r"$\|\mu_j^s - \Psi_c\|$: lo que AGREGA sobre el global",
-                 fontsize=8, color="#2ca02c")
-    b.set_title(f"barrido {k} de {total - 1} · "
-                r"$\pi_{ji|c}$ máx " + f"{caminata['piMaximoDentroDeLaClase'][k]:.4f} "
-                f"(azar {caminata['pisoDeAzar']:.4f})", fontsize=9)
-    b.legend(fontsize=7, loc="upper right", framealpha=0.85)
+    c.axhline(azar, color="#555555", lw=1.4, ls=":")
+    c.annotate(f"azar = {azar:.4f}", (total - 0.6, azar), fontsize=7,
+               ha="right", va="bottom", color="#555555")
+    c.plot(range(k + 1), socio[:k + 1], color="#1f77b4", lw=2.0, marker="o",
+           ms=3.4, label=r"$\pi_{ji}$ al SOCIO")
+    c.plot([k], [socio[k]], "o", ms=8, color="#1f77b4")
+    c.set_ylim(0.0, max(float(socio.max()) * 1.15, azar * 1.6))
+    c.set_ylabel(r"$\pi_{ji}$ al socio", fontsize=9, color="#1f77b4")
+    c.tick_params(axis="y", labelcolor="#1f77b4")
+
+    lineas = b.get_lines()[:1] + c.get_lines()[1:2]
+    b.legend(lineas, [l.get_label() for l in lineas], fontsize=7,
+             loc="center left", framealpha=1.0)
+    b.set_title(f"barrido {k} de {total - 1} · empujada hacia la bolsa "
+                f"{caminata['bolsaFuenteDestino']} · "
+                f"{socio[k] / azar:.2f}× el azar", fontsize=9)
     fig.tight_layout()
     return fig
 
@@ -8342,7 +8725,7 @@ def animar_w(barrido: dict, familia: str, destino,
             "wInicial": c["wInicial"],
             "wFinal": c["wFinal"],
             "residuoDelEmpateTriple": c["residuoDelEmpateTriple"],
-            "claseDestino": c["claseDestino"],
+            "clasesDestino": c["clasesDestino"],
             "brazo": barrido.get("brazoDeLaFigura"),
             "semilla": barrido.get("semillaDeLaFigura"),
             "rho": barrido.get("rho"),
