@@ -3554,8 +3554,8 @@ def test_the_adapted_arms_three_flags_equal_digit_gs_and_the_schedule_is_what_di
     What is measured instead is both halves of the true statement: the flags
     match, AND the protocol does not. The second half is the one that carries
     the separation now, and it is measured on the thing that differs -- the
-    coefficient. `harness.run_one` (the digit path) takes its coefficient from
-    `harness.ramp`; `toy_run.adapt_phase_two` does not call `ramp` at all.
+    coefficient. The digit path took its coefficient from `harness.ramp`;
+    `toy_run.adapt_phase_two` does not call `ramp` at all.
     """
     adapted = toy_run.TOY_ARMS_BY_ID[ADAPTED]
     flags_of = lambda arm: (arm["adaptation"], arm["weighting"], arm["local"],
@@ -3596,8 +3596,7 @@ def test_the_adapted_arms_three_flags_equal_digit_gs_and_the_schedule_is_what_di
     assert curve[0] == 0.0, curve
     assert all(value != toy_run.FIXED_COEFFICIENT for value in curve), curve
     assert curve == sorted(curve) and curve[0] != curve[-1], curve
-    # The digit path reads that curve; this path reads the constant.
-    assert "ramp(" in inspect.getsource(harness.run_one)
+    # This path reads the constant, never that curve.
     assert "ramp(" not in inspect.getsource(toy_run.adapt_phase_two)
 
 

@@ -1,59 +1,40 @@
-"""Subjects built out of an image collection, and the manifest that pins them down.
+"""Bags drawn out of a domain's labelled points, and the manifest that pins them down.
 
-MNIST, USPS and SVHN hold one label per image and no notion of a subject, so the
-bags are constructed here. A bag is pure: 30 instances of one class, drawn at
-random inside that class. The label belongs to the bag; no instance carries one.
+A bag is pure: `INSTANCES_PER_BAG` instances of one class. The label belongs to
+the bag; no instance carries one. The draw is stratified and balanced --
+`BAGS_PER_CLASS` bags of every class in every domain -- because the local
+correspondence of Section 4 is undefined for a class with no source bag.
 
-The draw is stratified and balanced — 12 bags of every class in every domain —
-rather than proportional. USPS and SVHN are imbalanced, and a proportional draw
-can leave a class with too few source bags, which is not a matter of taste: the
-local correspondence of Section 4 is undefined for a class with no source bag.
+Which dataset a domain code resolves to is decided at one seam,
+`_raw_dataset`, which `toy_run.material_bound` replaces with the family it
+binds. The field names (`images`, `imageIndices`) are the manifest's own and
+predate the toyset; they name instances, whatever their dimensionality.
 
 Nothing here is random at read time. Every selection is a function of the seed,
-and the exact image indices are written into a manifest beside the bags, so a
-later session can rebuild the identical material without depending on a library's
-permutation staying the same across versions.
+and the exact instance indices are written into a manifest beside the bags.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from torchvision import datasets, transforms
 
 from MIL_CREDA_Benchmark import config
-from MIL_CREDA_Benchmark import toy
-
-#: The transform CREDA's own generator applies to the digit domains: one shape and
-#: one normalization for all three, so the backbone sees the same kind of input
-#: whichever domain it came from.
-TRANSFORM = transforms.Compose([
-    transforms.Resize((32, 32)),
-    transforms.Grayscale(num_output_channels=3),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5] * 3, std=[0.5] * 3),
-])
 
 
 def _raw_dataset(code: str, root: Path):
-    """The domain as torchvision serves it, or -- for a toy code -- as
-    `toy.build_toy_dataset` generates it. Downloads on first use; a toy
-    domain never touches `root` at all, since it has nothing to download.
+    """The dataset a domain code resolves to.
+
+    Nothing resolves here at rest: `toy_run.material_bound` replaces this seam
+    with the two datasets of the family it binds, and restores it on the way
+    out. A code reaching this body was bound by nobody, so it is refused by
+    name instead of falling through to a download.
     """
-    if code in toy.TOY_CODES:
-        return toy.build_toy_dataset(code)
-    root.mkdir(parents=True, exist_ok=True)
-    if code == "M":
-        return datasets.MNIST(str(root), train=True, download=True, transform=TRANSFORM)
-    if code == "U":
-        return datasets.USPS(str(root), train=True, download=True, transform=TRANSFORM)
-    if code == "S":
-        return datasets.SVHN(str(root), split="train", download=True, transform=TRANSFORM)
+    del root
     raise ValueError(f"unknown domain {code!r}; known: {sorted(config.DOMAINS)}")
 
 
@@ -114,14 +95,10 @@ def _reserve_size(rate: float) -> int:
     exactly one partner's worth of bags, not one ninth of everyone else's.
     The slack absorbs the remainder of that division.
 
-    Checked against USPS, the domain that binds: at the top rung (k = 15)
-    this asks class 8 -- the smallest class, 542 images -- for 180, and it
-    has 182 spare once its own 360 are drawn (`BAGS_PER_CLASS *
-    INSTANCES_PER_BAG`). Sized over every role `NOISE_ROLES` names (all
-    three, `train`/`valid`/`eval`, since the noisy condition contaminates all
-    three with one shared draw) rather than `TRAIN_BAGS` alone -- USPS is what
-    binds, and a caller sizing the reserve over the wrong role count would
-    refuse mid-draw instead of up front.
+    Sized over every role `NOISE_ROLES` names (all three, `train`/`valid`/
+    `eval`, since the noisy condition contaminates all three with one shared
+    draw) rather than `TRAIN_BAGS` alone: a caller sizing the reserve over the
+    wrong role count would refuse mid-draw instead of up front.
     """
     per_bag = config.noise_instances(rate)
     if per_bag == 0:
@@ -341,70 +318,6 @@ def _split_counts(rng: np.random.Generator) -> tuple[dict[int, int], dict[int, i
     return _share(config.TRAIN_BAGS, rng), _share(config.VALID_BAGS, rng)
 
 
-def tie_ceiling(code: str, root: Path, seed: int) -> float:
-    """The top rung's own ceiling for this (domain, seed), never a constant.
-
-    AGREED.md, 'Label noise': for each mutual pair `NOISE_PAIRING` declares, a
-    composition reader can get at most `max(n_a, n_b)` of that pair's
-    `n_a + n_b` evaluation bags right -- guessing the larger side on every
-    bag it cannot otherwise decide. Summed over the five pairs and divided by
-    `EVAL_BAGS`, that is the best ANY composition reader can do at the tie,
-    and it depends on how the evaluation split landed for this domain and
-    this seed, so it travels with the result instead of being written down
-    once as 1.0 or as a single shared number.
-
-    Replays exactly the two calls `build()` makes before contamination ever
-    enters the picture -- `_select` then `_split_counts`, on the SAME `rng`
-    seeded from `(seed, code)` -- because the eval share per class is a
-    function of that replay alone: `_select` always permutes each class's
-    full pool regardless of how large a reserve it is asked to hold back, so
-    the state `_split_counts` sees, and therefore the eval split it returns,
-    does not depend on the noise rate. `reserve=0` here is exact for that
-    reason, not an approximation of the real draw.
-
-    Needs the real per-class pool sizes, which is why `root` has to point at
-    actual cached material (`config.DATA_CACHE` today) rather than a
-    synthetic fixture: a domain's own class sizes are what makes the eval
-    split -- and therefore the ceiling -- differ from another domain's.
-    """
-    # The ceiling is only DEFINED for an involution, and the sum below is
-    # where that assumption lives: it walks `a < NOISE_PAIRING[a]` expecting
-    # that to enumerate each mutual pair exactly once. Refused rather than
-    # computed, because the wrong answer is plausible instead of absurd --
-    # measured against the long cycle `[1,2,...,9,0]`, which is a
-    # fixed-point-free permutation like any other, the walk finds NINE pairs
-    # instead of five, counts eight of the ten classes twice, and returns
-    # 0.9444. That is inside (0, 1], reads like a ceiling, and nothing
-    # downstream could tell it from one. A conclusion printing it would
-    # report a bound nobody derived.
-    #
-    # `config.NOISE_PAIRING` being an involution is declared and asserted on
-    # its own (`test_el_emparejamiento_es_una_involucion_sin_punto_fijo`), so
-    # this cannot fire for the shipped declaration; it fires for a caller
-    # that substituted one, which is exactly what a test exploring the
-    # alternative does.
-    pairing = config.NOISE_PAIRING
-    if any(pairing[pairing[a]] != a or pairing[a] == a
-           for a in range(config.CLASSES)):
-        raise ValueError(
-            f"the tie ceiling is defined only for an involution with no fixed "
-            f"point -- five mutual pairs -- and {pairing} is not one: a bag's "
-            f"own class and its partner's must show each other back, or the "
-            f"pairs this sums over are neither five nor disjoint"
-        )
-
-    dataset = _raw_dataset(code, root)
-    labels = _labels(dataset)
-    rng = np.random.default_rng(seed * 1000 + ord(code))
-    _select(labels, rng, 0)
-    train_share, valid_share = _split_counts(rng)
-    eval_share = {class_id: config.BAGS_PER_CLASS - train_share[class_id]
-                  - valid_share[class_id] for class_id in range(config.CLASSES)}
-    paired = sum(max(eval_share[a], eval_share[pairing[a]])
-                for a in range(config.CLASSES) if a < pairing[a])
-    return paired / config.EVAL_BAGS
-
-
 @dataclass
 class BagSet:
     """One domain's bags, already materialized, split into its three roles.
@@ -541,31 +454,6 @@ def build(code: str, root: Path, seed: int, noise: float | None = None) -> BagSe
     )
 
 
-def rebuild(manifest: dict, root: Path) -> BagSet:
-    """The identical material, from the record rather than from the seed.
-
-    This is what the manifest is for. Rebuilding by re-running the draw would
-    depend on every library involved producing the same permutation it produced
-    the first time, which nobody promises across versions. The indices were
-    written down precisely so a later session does not have to trust that.
-    """
-    dataset = _raw_dataset(manifest["domain"], root)
-    flat = manifest["imageIndices"]
-    per_bag = manifest["instancesPerBag"]
-    images = torch.stack([dataset[i][0] for i in flat])
-    members = torch.arange(len(flat), dtype=torch.long).reshape(-1, per_bag)
-    return BagSet(
-        domain=manifest["domain"],
-        images=images,
-        members=members,
-        labels=torch.tensor(manifest["bagLabels"], dtype=torch.long),
-        train_idx=torch.tensor(manifest["trainBags"], dtype=torch.long),
-        valid_idx=torch.tensor(manifest["validBags"], dtype=torch.long),
-        eval_idx=torch.tensor(manifest["evalBags"], dtype=torch.long),
-        manifest=manifest,
-    )
-
-
 def roles(bagset: BagSet) -> tuple[BagDataset, BagDataset, BagDataset]:
     """The three roles of a domain, disjoint: fitted on, selected on, judged on.
 
@@ -576,10 +464,3 @@ def roles(bagset: BagSet) -> tuple[BagDataset, BagDataset, BagDataset]:
     return (BagDataset(bagset, bagset.train_idx),
             BagDataset(bagset, bagset.valid_idx),
             BagDataset(bagset, bagset.eval_idx))
-
-
-def write_manifest(path: Path, **entries) -> Path:
-    """Persist a manifest so a checkpoint never travels without its material."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(entries, indent=2), encoding="utf-8")
-    return path

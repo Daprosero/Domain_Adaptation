@@ -14,7 +14,6 @@ it -- and everything the claims are about runs for real.
 from __future__ import annotations
 
 import json
-from types import SimpleNamespace
 
 import pytest
 import torch
@@ -967,23 +966,6 @@ def test_patching_the_module_level_feature_extractor_stubs_both_encoders(
     assert isinstance(arm.target_encoder, _Encoder)
 
 
-def test_parameters_reads_the_declared_counts_for_the_floor_and_an_adapted_arm() -> None:
-    """Spec `per-domain-encoders`, "The parameter asymmetry is reported where
-    the count is read": measured from `harness.py`'s own
-    `sum(p.numel() for p in model.parameters())` expression, over the REAL
-    (pretrained, un-stubbed) `FeatureExtractor` -- never asserted from a
-    document.
-
-    Reachable red: a floor or adapted arm whose parameter count drifts from
-    the declared value -- for example, a second encoder built on the floor,
-    or none built on an adapted arm.
-    """
-    floor = _arm("B")
-    adapted = _arm("G")
-    assert sum(p.numel() for p in floor.parameters()) == 11_247_434
-    assert sum(p.numel() for p in adapted.parameters()) == 22_423_946
-
-
 def test_one_optimizer_trains_both_encoders(encoder) -> None:
     """Spec `per-domain-encoders`, "One optimizer trains both encoders":
     `torch.optim.Adam(model.parameters(), ...)` picks up a second registered
@@ -1100,95 +1082,6 @@ def test_a_bag_unit_arm_uses_the_normalized_supervised_term_instead(encoder) -> 
     expected = source_loss(scores, F.one_hot(y, CLASSES).to(scores.dtype),
                            config.EPSILON)
     assert step["supervised"] == pytest.approx(float(expected.detach()), abs=1e-6)
-
-
-# ------------------------------------------------------------ the learning rate
-
-def test_the_learning_rate_is_fixed_and_not_decayed() -> None:
-    """One fixed, declared rate for every arm, at every epoch: `config.LR`.
-
-    `LR_ALPHA`/`LR_BETA` and the decay of CREDA's own `get_eta` are removed --
-    the dynamic schedule is replaced by a single constant, not searched.
-
-    Reachable red: reintroducing `p = epoch / epochs; return config.LR * (1 +
-    LR_ALPHA * p) ** (-LR_BETA)` (or any other epoch-dependent formula) in
-    `harness.learning_rate`.
-    """
-    assert not hasattr(config, "LR_ALPHA")
-    assert not hasattr(config, "LR_BETA")
-    for epoch in range(5):
-        assert harness.learning_rate(epoch, 20) == config.LR, (
-            f"the rate moved at epoch {epoch}: it is supposed to be fixed"
-        )
-
-
-# ------------------------------------------------- what the campaign hands the arms
-
-def _fake_run_one(seen):
-    def run_one(arm_id, transfer, seed, reduction, device, material, **kwargs):
-        seen.append({"arm": arm_id, "transfer": harness.transfer_label(transfer),
-                     "seed": seed, "source": id(material["source"]),
-                     "target": id(material["target"])})
-        return {
-            "arm": arm_id, "transfer": harness.transfer_label(transfer), "seed": seed,
-            "env": "test-env", "targetAccuracy": 0.5 + seed / 100,
-            "sourceAccuracy": 0.5, "seconds": 0.01, "peakMiB": 1.0, "parameters": 4,
-            "contribution": 0.1, "supervised": 0.2, "adaptationShare": 0.3,
-            "curve": [], "epochs": [{"epoch": 0}], "state": None,
-        }
-    return run_one
-
-
-def _fake_build(built):
-    def build(code, cache, seed, noise=0.0):
-        built.append((code, seed, noise))
-        return SimpleNamespace(manifest={"code": code, "seed": seed, "noise": noise})
-    return build
-
-
-@pytest.fixture
-def campana(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "REPOSITORY", tmp_path)
-    monkeypatch.setattr(config, "PRODUCT", tmp_path)
-    monkeypatch.setattr(config, "RESULTS", tmp_path / "Results" / "Benchmark")
-    monkeypatch.setattr(config, "MODELS", tmp_path / "Models")
-    monkeypatch.setattr(config, "CEILINGS_RECORD", tmp_path / "ceilings.json")
-    monkeypatch.setattr(config, "CEILINGS_PILOT_RECORD", tmp_path / "ceilings.pilot.json")
-    seen, built = [], []
-    monkeypatch.setattr(harness, "run_one", _fake_run_one(seen))
-    monkeypatch.setattr(harness.bags, "build", _fake_build(built))
-    return {"runs": seen, "built": built}
-
-
-def _run_campaign(seeds: list[int], noise: float = 0.0) -> dict:
-    return harness.campaign(
-        harness.Reduction(seeds=seeds, epochs=1, labelNoise=noise,
-                          ceilings={"creda": 1e-4, "milcreda": 1.0},
-                          ceilingsByTransfer={}),
-        torch.device("cpu"), progress=lambda *a: None)
-
-
-
-
-
-
-
-
-def _run_one_no_timing(arm_id, transfer, seed, reduction, device, material, **kwargs):
-    """`run_one`'s shape, with none of the timing/memory fields `harness.run_one`
-    no longer returns -- time and memory (`seconds`/`peakMiB`) are removed from
-    this comparison entirely.
-    """
-    label = harness.transfer_label(transfer)
-    return {
-        "arm": arm_id, "transfer": label, "seed": seed,
-        "env": "test-env", "targetAccuracy": 0.5 + seed / 100,
-        "sourceAccuracy": 0.5, "parameters": 4, "contribution": 0.1,
-        "supervised": 0.2, "adaptationShare": 0.3,
-        "curve": [], "epochs": [{"epoch": 0}], "state": None,
-    }
-
-
 
 
 # ------------------------------------------------------- what funds the third role

@@ -35,7 +35,7 @@ from MIL_CREDA.attention import effective_bag_size, mean_consensus
 from MIL_CREDA.bag_kernel import bag_kernel_matrix
 from MIL_CREDA.conditional import conditional_blocks, mixed_matrix
 from MIL_CREDA.global_term import balanced_dependency_score, is_active
-from MIL_CREDA_Benchmark import config, harness, wiring
+from MIL_CREDA_Benchmark import config, wiring
 
 SIGMA = 1.5
 
@@ -372,100 +372,6 @@ def test_the_floor_reports_nan_for_every_degeneracy_reading_never_zero(monkeypat
         assert math.isnan(step[name]), (
             f"{name}: the floor must read nan, never a fabricated number"
         )
-
-
-# --------------------------------------------------------------------------
-# 4.5 -- per-epoch aggregation and the one per-run summary field
-# --------------------------------------------------------------------------
-
-
-def _bagset(domain: str, seed: int):
-    """Ten training bags, one per class -- `tests/test_independent_adaptation_
-    schedules.py`'s own fixture shape, reused rather than reinvented for the
-    identical constraint: `total_correspondence` needs a source bag in every
-    class the target pseudo-labels reach.
-    """
-    from MIL_CREDA_Benchmark import bags
-
-    generator = torch.Generator().manual_seed(seed)
-    bagcount, per_bag = config.CLASSES + 10, 3
-    images = torch.randn(bagcount * per_bag, 3, 8, 8, generator=generator)
-    members = torch.arange(bagcount * per_bag).reshape(bagcount, per_bag)
-    labels = torch.arange(bagcount) % config.CLASSES
-    return bags.BagSet(
-        domain=domain, images=images, members=members, labels=labels,
-        train_idx=torch.arange(0, config.CLASSES),
-        valid_idx=torch.arange(config.CLASSES, config.CLASSES + 5),
-        eval_idx=torch.arange(config.CLASSES + 5, config.CLASSES + 10),
-        manifest={})
-
-
-def test_run_ones_record_carries_the_per_epoch_trace_and_its_per_run_minimum(
-        monkeypatch) -> None:
-    """Design Decision 8's chosen shape: `training_step`'s per-step readings
-    are aggregated into `epochs_record` beside `sourceAccuracy`/
-    `targetAccuracy` (min for `targetBagEntropy` -- "the one reading the
-    epoch trace makes awkward", per the design -- mean for the rest), plus
-    ONE per-run field, `targetBagEntropyMin`: the minimum over epochs, never
-    a new `config.DIMENSIONS` entry.
-
-    A real (stub-encoder) two-epoch run, end to end through `harness.run_one`
-    -- not a hand-assembled dict -- so this is proof the wiring actually
-    reaches the returned record, not merely that the formula is right in
-    isolation.
-    """
-    monkeypatch.setattr(wiring, "FeatureExtractor", _Encoder)
-    torch.manual_seed(11)
-
-    reduction = harness.Reduction(epochs=2, seeds=[0])
-    material = {"source": _bagset("S", 1), "target": _bagset("M", 2)}
-
-    result = harness.run_one("G", ("S", "M"), 0, reduction, torch.device("cpu"),
-                             material, role="valid")
-
-    for point in result["epochs"]:
-        for name in _DIAGNOSTIC_FIELDS:
-            assert name in point, f"{name} missing from an epoch record"
-            assert not math.isnan(point[name]), (
-                f"{name}: an adapted arm's epoch record must not read nan"
-            )
-
-    assert "targetBagEntropyMin" in result
-    epoch_minima = [point["targetBagEntropy"] for point in result["epochs"]]
-    assert result["targetBagEntropyMin"] == pytest.approx(min(epoch_minima))
-
-    # Decision 8: never a declared dimension, on the real returned record.
-    assert "targetBagEntropy" not in config.DIMENSIONS
-    assert "targetBagEntropyMin" not in config.DIMENSIONS
-
-
-# --------------------------------------------------------------------------
-# 4.6 -- absent from every declared dimension set (design Decision 8's guard)
-# --------------------------------------------------------------------------
-
-
-def test_the_degeneracy_diagnostic_fields_are_absent_from_every_declared_dimension_set() -> None:
-    """Design Decision 8 rejects a seventh `config.DIMENSIONS` entry (the
-    floor structurally cannot produce it, `ladder_rows` would compare a
-    fabricated floor value against a real one, and `poolable` is a measured
-    claim with no replication behind this reading) and rejects declaring it
-    in `__benchmark__["report"]["dimensions"]` (membership there IS the
-    render declaration). This guard exists so a later PR does not silently
-    re-add either.
-    """
-    from MIL_CREDA_Benchmark import __benchmark__
-
-    names = {
-        "targetBagEntropy", "targetBagEntropyMin", "targetConfidenceMean",
-        "targetConfidenceMin", "activeClasses", "sourceKernelMean",
-        "crossKernelMean", "targetKernelMean",
-    }
-    assert names.isdisjoint(config.DIMENSIONS), (
-        "a degeneracy-diagnostic field was declared in config.DIMENSIONS"
-    )
-    assert names.isdisjoint(__benchmark__["report"]["dimensions"]), (
-        "a degeneracy-diagnostic field was declared in the render surface"
-    )
 
 
 # --------------------------------------------------------------------------

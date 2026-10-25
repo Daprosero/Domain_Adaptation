@@ -3,9 +3,10 @@
 Design Decision 7 (`two-encoders-because-each-domain-has-its-own-space`)
 names a residual copy-paste hazard even once `represent`/`attention_spread`
 require a `domain` argument: the string itself can still be passed wrong at
-any of the four adjacent-pair call sites (`correspondence`, `bag_pairs`) that
-name `instance_embeddings`/`target_embeddings` directly rather than through
-that argument. Two guards answer different halves of the same risk, and
+a call site that names `instance_embeddings`/`target_embeddings` directly
+rather than through that argument (the digit report's `correspondence` and
+`bag_pairs` were the four such sites; they were retired with the image
+benchmark). Two guards answer different halves of the same risk, and
 neither may be inferred from the other -- this repository has already paid
 for the inferred version:
 
@@ -91,42 +92,24 @@ def _snapshot(model, source, target, device) -> dict:
     device_arg = device
     source_rows, _ = latent.represent(model, source, source.eval_idx, device_arg, "source")
     target_rows, _ = latent.represent(model, target, target.eval_idx, device_arg, "target")
-    source_spread = latent.attention_spread(model, source, source.eval_idx, device_arg, "source")
-    target_spread = latent.attention_spread(model, target, target.eval_idx, device_arg, "target")
-    pairs = latent.bag_pairs(model, source, target, device_arg)
-    correspondence = latent.correspondence(model, source, target, device_arg)
     return {
         "source_rows": source_rows.clone(),
         "target_rows": target_rows.clone(),
-        "source_spread": source_spread,
-        "target_spread": target_spread,
-        "pairs_source_rows": pairs["sourceRows"].clone(),
-        "pairs_target_rows": pairs["targetRows"].clone(),
-        "correspondence_mass": correspondence["massOnTrueClass"],
     }
 
 
 def test_perturbing_the_target_encoder_moves_only_target_side_readings(monkeypatch) -> None:
     """Design Decision 7's behavioural half, target side: perturb `theta_t`
-    and every target-side reading `represent`, `attention_spread` and
-    `bag_pairs` take must move, while every source-side reading of the same
-    three must not -- proof that the target side actually reads `theta_t` and
-    the source side never does.
+    and the target-side reading `represent` takes must move, while the
+    source-side reading must not -- proof that the target side actually reads
+    `theta_t` and the source side never does.
 
-    `correspondence` is different in kind, and asserted differently on
-    purpose rather than folded into either half above: it returns ONE
-    combined scalar over both domains (`massOnTrueClass`), not separate
-    source/target rows, so it cannot be split into a "moves"/"does not move"
-    pair the way the other three can. What it CAN prove, and what it is
-    asserted for here, is the decisive direction: if its target side were
-    silently routed through `theta_s` instead (the domain-mixup this whole
-    guard exists to catch), perturbing `theta_t` alone would leave
-    `massOnTrueClass` completely unchanged, because nothing it read would
-    have moved. That it visibly changes is the reachable red this test
-    exists to make impossible to miss.
+    `represent` is the one latent reader the toyset still calls; the digit
+    report's `attention_spread`/`bag_pairs`/`correspondence` were retired with
+    the image benchmark.
 
-    Reachable red: swap either `target_embeddings` call this design added
-    (`correspondence`'s or `bag_pairs`' `H_t`) back to `instance_embeddings`.
+    Reachable red: route `represent(domain="target")` through
+    `instance_embeddings` instead of `target_embeddings`.
     """
     model, source, target = _model(monkeypatch, "G")
     device = torch.device("cpu")
@@ -138,37 +121,19 @@ def test_perturbing_the_target_encoder_moves_only_target_side_readings(monkeypat
     # target-side readings moved
     assert not torch.equal(before["target_rows"], after["target_rows"]), (
         "represent(domain='target') did not move when theta_t moved")
-    assert before["target_spread"] != after["target_spread"], (
-        "attention_spread(domain='target') did not move when theta_t moved")
-    assert not torch.equal(before["pairs_target_rows"], after["pairs_target_rows"]), (
-        "bag_pairs' targetRows did not move when theta_t moved")
-    assert before["correspondence_mass"] != after["correspondence_mass"], (
-        "correspondence did not move when theta_t moved -- its target side "
-        "is reachable only through theta_s, exactly the domain-mixup this "
-        "guard exists to catch")
 
     # source-side readings did not move
     assert torch.equal(before["source_rows"], after["source_rows"]), (
         "represent(domain='source') moved when only theta_t moved")
-    assert before["source_spread"] == after["source_spread"], (
-        "attention_spread(domain='source') moved when only theta_t moved")
-    assert torch.equal(before["pairs_source_rows"], after["pairs_source_rows"]), (
-        "bag_pairs' sourceRows moved when only theta_t moved")
 
 
 def test_perturbing_the_source_encoder_moves_only_source_side_readings(monkeypatch) -> None:
     """The mirror of the test above: perturb `theta_s` instead, and the
-    source-side readings of `represent`/`attention_spread`/`bag_pairs` move
-    while the target-side readings of the same three do not.
+    source-side reading of `represent` moves while the target-side reading
+    does not.
 
-    `correspondence` moves here too, and for the same reason it moved above:
-    it is a joint reading over both domains, so it is sensitive to either
-    perturbation on its own -- that sensitivity, in BOTH directions, is
-    exactly what proves it is really reading two encoders and not one.
-
-    Reachable red: the mirror of the test above -- swap either
-    `instance_embeddings` call this design left alone (`correspondence`'s or
-    `bag_pairs`' `H_s`) to read `target_embeddings` instead.
+    Reachable red: route `represent(domain="source")` through
+    `target_embeddings` instead of `instance_embeddings`.
     """
     model, source, target = _model(monkeypatch, "G")
     device = torch.device("cpu")
@@ -180,20 +145,10 @@ def test_perturbing_the_source_encoder_moves_only_source_side_readings(monkeypat
     # source-side readings moved
     assert not torch.equal(before["source_rows"], after["source_rows"]), (
         "represent(domain='source') did not move when theta_s moved")
-    assert before["source_spread"] != after["source_spread"], (
-        "attention_spread(domain='source') did not move when theta_s moved")
-    assert not torch.equal(before["pairs_source_rows"], after["pairs_source_rows"]), (
-        "bag_pairs' sourceRows did not move when theta_s moved")
-    assert before["correspondence_mass"] != after["correspondence_mass"], (
-        "correspondence did not move when theta_s moved")
 
     # target-side readings did not move
     assert torch.equal(before["target_rows"], after["target_rows"]), (
         "represent(domain='target') moved when only theta_s moved")
-    assert before["target_spread"] == after["target_spread"], (
-        "attention_spread(domain='target') moved when only theta_s moved")
-    assert torch.equal(before["pairs_target_rows"], after["pairs_target_rows"]), (
-        "bag_pairs' targetRows moved when only theta_s moved")
 
 
 def test_no_module_besides_wiring_and_latent_calls_instance_embeddings() -> None:
@@ -217,11 +172,6 @@ def test_no_module_besides_wiring_and_latent_calls_instance_embeddings() -> None
     cannot see: a wrong-shaped tensor is not what a domain-mixup bug produces,
     so nothing value-based catches a target-side reading quietly added
     elsewhere and routed through `instance_embeddings`.
-
-    Precedent for the mechanism: `tests/test_figure_surfaces.py`'s own AST
-    walk over `latent.analyse`, asserting it never passes `unit=` to
-    `represent` -- the isomorphic problem, a default silently replacing a
-    caller's intent.
 
     Reachable red: add a call to `model.instance_embeddings` inside any
     module other than `wiring.py`/`latent.py`.

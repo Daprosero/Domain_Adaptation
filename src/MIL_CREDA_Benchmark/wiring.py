@@ -12,8 +12,9 @@ blocks are weighted by confidence, whether the local correspondence is on,
 how a bag becomes a representation, and which of a bag's instances the arm
 is allowed to look at.
 
-`FeatureExtractor` and `CREDALoss` are used exactly as they are; the only thing
-this file decides is which tensors go in.
+`CREDALoss` is used exactly as it is; the encoder is an MLP (`mlp.py`) or a
+stub a test installs at the `FeatureExtractor` seam. The only thing this file
+decides is which tensors go in.
 
 Prior work carries one change, and it is a reparameterization rather than a
 change of method: CREDA's adaptation coefficient moved out of
@@ -42,7 +43,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from CREDA.models import CREDALoss, FeatureExtractor
+from CREDA.models import CREDALoss
 from MIL_CREDA.attention import (
     bag_embedding,
     bag_weights,
@@ -253,18 +254,28 @@ class Pool:
         return self.images[self.members[positions]]
 
 
+def FeatureExtractor(backbone: str, pretrained: bool) -> nn.Module:
+    """The seam a non-MLP `config.BACKBONE` reaches, and a refusal.
+
+    The image backbones (`CREDA.models.FeatureExtractor`'s resnet/vit) were
+    retired with the digit benchmark, so nothing here builds one. The name
+    stays module-level because tests replace it with a stub encoder through
+    `monkeypatch.setattr(wiring, "FeatureExtractor", ...)`.
+    """
+    raise ValueError(
+        f"backbone {backbone!r} (pretrained={pretrained}) is not one of "
+        f"{sorted(MLP_BACKBONES)}; the image backbones are retired")
+
+
 def _resolve_encoder(reference_images: torch.Tensor) -> nn.Module:
-    """Which encoder `config.BACKBONE` builds, resolved through the plain
-    module-level `FeatureExtractor` name on the resnet/vit path -- never a
-    local alias, a second import, or a call through this module's own name --
-    so the six existing test files that `monkeypatch.setattr(wiring,
-    "FeatureExtractor", ...)` keep intercepting construction exactly as they
-    did before this resolver existed.
+    """Which encoder `config.BACKBONE` builds: an MLP, or -- for any other
+    name -- whatever the plain module-level `FeatureExtractor` name holds,
+    never a local alias or a call through this module's own name, so tests
+    that `monkeypatch.setattr(wiring, "FeatureExtractor", ...)` keep
+    intercepting construction.
 
     `reference_images` is read only on the MLP path, to size its input layer
-    to this transfer's own instance dimensionality (2 or 3 for a toy domain);
-    the resnet/vit path ignores it completely, exactly as construction did
-    before `config.BACKBONE` could ever name an MLP.
+    to this transfer's own instance dimensionality (2 or 3 for a toy domain).
     """
     if config.BACKBONE in MLP_BACKBONES:
         return build_mlp(config.BACKBONE, reference_images.shape[-1])
