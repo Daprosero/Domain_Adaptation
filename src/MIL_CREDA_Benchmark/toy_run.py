@@ -226,6 +226,7 @@ from MIL_CREDA.bag_kernel import (bag_gram, bag_kernel,           # Eq. (18)
                                   bag_kernel_matrix)
 from MIL_CREDA.confidence import confidences, pseudolabel      # Eqs. (24), (22)
 from MIL_CREDA.local_term import (local_distance,                 # Eq. (31)
+                                  normalized_local_distance,      # Eq. (38)
                                   total_correspondence)           # Eq. (29)
 from MIL_CREDA.objective import source_loss                       # Eq. (21)
 from MIL_CREDA_Benchmark import (bags, config, harness, latent, toy, toy_bags,
@@ -2921,7 +2922,7 @@ def adabn_reading(model: wiring.Arm, target_train, target_eval,
 def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
                     device: torch.device, scale: Scale, hyper: dict,
                     generator: torch.Generator, trace=None,
-                    target_eval=None) -> dict:
+                    target_eval=None, lambda_global=None) -> dict:
     """Phase 2: the global and local terms, under the ramp, move theta_t alone.
 
     The floor (`B`) has no theta_t, so it has no phase 2: it returns zero steps
@@ -3082,7 +3083,19 @@ def adapt_phase_two(model: wiring.Arm, source_train, source_valid,
         # value: see `FIXED_COEFFICIENT` for why a constant routed through a
         # warmup is a schedule and not a constant. `training_step` wants two
         # plain floats here and that is all it ever wanted.
-        coefficient = coefficient_local = FIXED_COEFFICIENT
+        if lambda_global is None:
+            coefficient = coefficient_local = FIXED_COEFFICIENT
+        else:
+            # THE CONVEX SPLIT, and it is an EXPERIMENT and not Eq. (39):
+            # `lambda_loc = 1 - lambda_glob`, so the adaptation total stays in
+            # [0, 1] for every lambda instead of summing to [0, 2]. Measured on
+            # `Results/Toyset/full`, the summed form exceeds 1 in 62 of 90
+            # cells, and the three section-5 arms hand the optimizer totals
+            # 5.2x to 9.8x apart while sharing one `lr2` -- so an arm's
+            # effective step size, not only its terms, differs between arms.
+            # `None` is the declared form and reproduces it exactly.
+            coefficient = float(lambda_global)
+            coefficient_local = 1.0 - float(lambda_global)
         x, y = _batch(source_train, positions, device)
         optimizer.zero_grad()
         record = model.training_step(x, y, coefficient, generator,
@@ -3774,7 +3787,7 @@ def _moved(first: np.ndarray, second: np.ndarray) -> float:
 def run_cell(familia: toy_bags.Familia, normalization: str, seed: int,
              scale: Scale, hyper: dict, device: torch.device,
              arms: tuple[str, ...] = TOY_ARM_IDS,
-             lecturas=None) -> dict:
+             lecturas=None, lambda_global=None) -> dict:
     """Every declared arm on one (family, normalization, seed), sharing one
     phase 1.
 
@@ -3947,7 +3960,7 @@ def run_cell(familia: toy_bags.Familia, normalization: str, seed: int,
                 # objective can read one. `TARGET_SERIES` declares what the
                 # reading is for and `tests/test_milcreda_fase2_por_epoca.py`
                 # proves from the syntax tree that this is the one call site.
-                target_eval=target_eval)
+                target_eval=target_eval, lambda_global=lambda_global)
             # And AFTER, on the weights the run ended with -- `adapt_phase_two`
             # restores the best step's `theta_t` before returning, so this is
             # the same state every published reading of this cell comes from.
@@ -5616,6 +5629,157 @@ def caminata_de_w(model: wiring.Arm, source: bags.BagSet,
 
 
 @measuring
+def caminata_fusionada(model: wiring.Arm, source: bags.BagSet,
+                       target: bags.BagSet, device: torch.device,
+                       rol_fuente: str = "train_idx",
+                       rol_blanco: str = "train_idx",
+                       barridos: int = BARRIDOS) -> dict:
+    """UNA caminata, las DOS ramas: `w` por la cabeza y `l_loc` por el kernel.
+
+    **Camina en H y no en Z, y esa es la razon de que exista.** De `H` salen
+    las dos vistas que la formulacion usa, y salen por los seams del propio
+    modelo:
+
+        H --> bags_of --> (H, w) --+--> bag_embedding --> Z --> cabeza --> g --> w
+                                   |                                  Ecs. 19, 20, 24
+                                   +--> _kernel_embedding --> kappa --> pi, d^2
+                                                                      Ecs. 18, 28-31
+
+    `Z` SALE de `H` por la Ec. (19), que es una suma pesada sobre las
+    instancias: muchos-a-uno, no invertible. Asi que no hay camino de vuelta y
+    una caminata en `Z` --- la que esta seccion tenia --- es un punto sin
+    instancias detras: legal para `w`, que solo necesita `Z`, e imposible de
+    preguntarle `pi`. Moviendo `H` las dos ramas se mueven JUNTAS y las dos
+    curvas son de la misma bolsa en el mismo barrido, que es lo que dos
+    caminatas separadas no pueden afirmar.
+
+    Tres bolsas del BLANCO, elegidas sin mirar ninguna etiqueta
+    (`_bolsas_que_arrancan`), caminan cada una al centro de clase de la FUENTE
+    que `CAMINOS_W` le empareja. En `H` ese centro es el promedio instancia por
+    instancia de las bolsas fuente de la clase --- una bolsa construida --- y no
+    la media de las `Z`, que no se puede deshacer.
+
+    No entrena nada: todo esto es geometria del modelo ya entrenado.
+    """
+    clases = int(model.head.out_features) if hasattr(model.head, "out_features") \
+        else int(config.CLASSES)
+    if clases < 3:
+        raise ValueError(
+            f"la frontera TRIPLE necesita tres clases y hay {clases}")
+    s_idx = getattr(source, rol_fuente)
+    t_idx = getattr(target, rol_blanco)
+    codificar_fuente = codificador_de(model, "source")
+    codificar_blanco = codificador_de(model, "target")
+
+    model.eval()
+    with torch.no_grad():
+        sigma = model.sigma
+        H_s = codificar_fuente(source.images[source.members[s_idx]].to(device))
+        H_t = codificar_blanco(target.images[target.members[t_idx]].to(device))
+        etiquetas_s = source.labels[s_idx].to(H_s.device)
+
+        pares_s = model._kernel_pairs(model.bags_of(H_s, sigma))
+        K_ss = bag_gram(pares_s, sigma)
+        # El plano del dibujo, y NADA MAS: una bolsa de la fuente por punto.
+        # Ninguna cuenta lo lee --- `pi` y `d^2` salen del kernel --- existe
+        # para que la bolsa se vea MOVERSE.
+        Z_s, _ = model.bag_representations(H_s, sigma)
+
+        Z_t, _ = model.bag_representations(H_t, sigma)
+        g_t = F.softmax(model.head(Z_t), dim=1)
+        reparto = _bolsas_que_arrancan(g_t)
+
+        caminos: dict[str, dict] = {}
+        for cl, suyo in CAMINOS_W:
+            nombre = _nombre_del_arranque(cl)
+            j, relajado = reparto[nombre]
+            de_la_clase = etiquetas_s == suyo
+            if not bool(de_la_clase.any()):
+                raise ValueError(f"la fuente no tiene bolsas de la clase {suyo}")
+            inicio = H_t[j]
+            # **El destino es una bolsa REAL de la clase, y la elige el propio
+            # termino.** Medido el 2026-10-23, un promedio instancia por
+            # instancia de las bolsas de la clase --- que es lo obvio y fue la
+            # primera version --- es una bolsa ARTIFICIALMENTE APRETADA: su
+            # `kappa(j,j)` sube de ~0.20 a ~0.82 a lo largo del camino, y
+            # `kappa(j,j)` entra DIRECTO en la Ec. (31). Descompuesto, aportaba
+            # entre el 71% y el 259% de la subida de `l_loc` --- en `toroide`
+            # mas del 100%, o sea que sin el la curva BAJABA. La figura habria
+            # mostrado la compresion de una bolsa fabricada y se habria leido
+            # como el termino.
+            #
+            # La elige `pi`: la bolsa fuente de la clase destino a la que el
+            # arranque ya le pone mas masa. Sin oraculo --- la etiqueta de la
+            # FUENTE es observada, y `pi` sale del modelo --- y sin socio: no
+            # es la pareja verdadera, es a donde el termino ya apunta.
+            H_k0, w_k0 = model._kernel_pairs(
+                model.bags_of(inicio.unsqueeze(0), sigma))[0]
+            cross0 = bag_kernel_matrix(pares_s, [(H_k0, w_k0)], sigma)[:, 0]
+            Z_0, _ = model.bag_representations(inicio.unsqueeze(0), sigma)
+            g_0 = F.softmax(model.head(Z_0), dim=1)[0]
+            pi_0 = total_correspondence(cross0, etiquetas_s, g_0,
+                                        model.tau_local)
+            indices = torch.nonzero(de_la_clase, as_tuple=False).reshape(-1)
+            destino_i = int(indices[torch.argmax(pi_0[de_la_clase])])
+            final = H_s[destino_i]
+            ts = _pasos_del_barrido(barridos, inicio)
+            w_s, loss_s, pi_s, kappa_s, camino = [], [], [], [], []
+            for t in ts:
+                H_j = inicio + t * (final - inicio)
+                # RAMA DE LA CABEZA
+                Z_j, _ = model.bag_representations(H_j.unsqueeze(0), sigma)
+                g_j = F.softmax(model.head(Z_j), dim=1)[0]
+                w_s.append(float(confidences(g_j.unsqueeze(0))[0]))
+                camino.append(Z_j[0].float().cpu())
+                # RAMA DEL KERNEL
+                H_k, w_k = model._kernel_pairs(
+                    model.bags_of(H_j.unsqueeze(0), sigma))[0]
+                cross = bag_kernel_matrix(pares_s, [(H_k, w_k)], sigma)[:, 0]
+                pi = total_correspondence(cross, etiquetas_s, g_j,
+                                          model.tau_local)
+                propio = bag_kernel(H_k, w_k, H_k, w_k, sigma)
+                d2 = local_distance(propio, cross, K_ss, pi)
+                loss_s.append(float(normalized_local_distance(d2)))
+                # `kappa(j,j)` VIAJA, y no es un diagnostico de mas. La Ec.
+                # (31) es `d^2 = kappa(j,j) - 2<Psi,mu> + ||mu||^2`, y el
+                # kernel de bolsa NO esta normalizado --- medido, `kappa(j,j)`
+                # va de 0.18 a 0.65 entre bolsas REALES --- asi que `l_loc`
+                # mezcla «cuan dispersa es mi bolsa» con «cuan cerca estoy de
+                # mi referencia» sin separarlas. Descompuesto sobre estos
+                # mismos caminos, `kappa` aporta del 64% al 663% del
+                # movimiento de `d^2`. Una curva de `l_loc` sola se lee como
+                # alineacion y no lo es.
+                kappa_s.append(float(normalized_local_distance(propio)))
+                # Cuanta masa le pone a la clase a la que camina. No es el
+                # socio --- `mu_j` es un GRUPO, no un sujeto --- y esto dice
+                # cuanto de ese grupo es de la clase de destino.
+                pi_s.append(float(pi[de_la_clase].sum()))
+            caminos[nombre] = {
+                "destino": int(suyo),
+                "bolsaDelBlanco": int(t_idx[j].item()),
+                "bolsaFuenteDestino": int(s_idx[destino_i].item()),
+                "eleccionRelajada": bool(relajado),
+                "w": np.asarray(w_s, dtype=np.float64),
+                "lLocal": np.asarray(loss_s, dtype=np.float64),
+                "kappaPropio": np.asarray(kappa_s, dtype=np.float64),
+                "piDeLaClase": np.asarray(pi_s, dtype=np.float64),
+                "camino": torch.stack(camino).numpy().astype(np.float64),
+                "bolsasFuenteDeLaClase": int(de_la_clase.sum()),
+            }
+    set_phase_two_modes(model)
+
+    return {
+        "barridos": int(barridos),
+        "arranques": list(ARRANQUES_W),
+        "caminos": caminos,
+        "nube": Z_s.float().cpu().numpy().astype(np.float64),
+        "clasesDeLaNube": etiquetas_s.cpu().numpy().astype(np.int16),
+        "centrosEnZ": _centros_de_clase(
+            Z_s, etiquetas_s, clases).float().cpu().numpy().astype(np.float64),
+    }
+
+
+@measuring
 def caminata_de_correspondencia(model: wiring.Arm, source: bags.BagSet,
                                 target: bags.BagSet, device: torch.device,
                                 bolsas_por_clase: int,
@@ -5955,18 +6119,26 @@ def barrido_sopesado(registro: dict, scale: Scale,
                      device: torch.device | None = None,
                      families: tuple[str, ...] | None = None,
                      report=print) -> dict:
-    """Seccion 2: el sopesado por confianza, con y sin, bajo contaminacion.
+    """Seccion 2: UNA figura por familia, y nada mas.
 
-    **Los dos brazos comparten UNA fase 1, y aca eso es exacto.** La fase 1 es
-    la Ec. (21) sobre la FUENTE; el sopesado entra en el termino condicional de
-    la fase 2 y la contaminacion esta en el train del BLANCO, asi que ninguno
-    de los dos alcanza la fase 1. Entrenarla dos veces daria dos veces el mismo
-    numero.
+    **Esta seccion dejo de tener tablas.** Ruling del operador, 2026-10-23:
+    "en esa nueva 2 se van las tablas y las iteraciones o pruebas asociadas".
+    Lo que queda es `caminata_fusionada`: una bolsa del blanco camina en `H` y
+    las DOS ramas que salen de ahi se leen a la vez --- `w` por la cabeza
+    (Ecs. 19, 20, 24) y `l_loc` por el kernel (Ecs. 18, 28-31). Dos curvas de
+    la MISMA bolsa en el MISMO barrido, que es lo que dos caminatas separadas
+    no podian afirmar, y por eso la seccion 4 pudo apagarse.
 
-    **Un solo nivel y un solo modo**, los dos declarados antes de correr: ver
-    `RHO_SOPESADO` y `MODO_SOPESADO`, donde esta escrito por que el segundo
-    modo de CREDA no existe en este paquete y que eso hace que esta seccion
-    corra el modo en el que el sopesado no esta predicho que ayude.
+    **No entrena un barrido: entrena UNA celda por familia.** La caminata es
+    geometria del modelo ya entrenado --- no promedia nada, es exacta sobre la
+    cabeza que esa celda dejo --- asi que diez semillas darian diez figuras de
+    las que se publica una. Medido, una celda por familia cuesta ~16 s contra
+    los 1138 s que costaba el barrido entero.
+
+    **El brazo, la semilla y la contaminacion no cambian.** Siguen siendo
+    `brazo_de_la_figura`, la primera semilla del rol y `RHO_SOPESADO` en el
+    modo `MODO_SOPESADO`: la figura conserva exactamente la procedencia que ya
+    tenia, y lo unico que se fue son las 29 celdas que alimentaban tablas.
     """
     # En la puerta, antes de pagar nada: ver `exigir_artefacto_de_la_seccion_uno`.
     exigir_artefacto_de_la_seccion_uno(registro)
@@ -5974,21 +6146,9 @@ def barrido_sopesado(registro: dict, scale: Scale,
     nombres = tuple(families) if families else tuple(n for n, _ in DURAS)
     arrancado = time.perf_counter()
     brazos = _registrar(brazos_de_sopesado())
-    # La caminata se toma de UN brazo y de UNA semilla, declarados aca.
-    #
-    # De un brazo porque es la geometria de la cabeza y no de los pesos del
-    # termino: `w = 1 - H2(g)/ln C` sale del posterior, asi que dibujarla dos
-    # veces daria dos figuras cuya diferencia es la cabeza y no el sopesado.
-    # Del brazo CON sopesado porque es el brazo cuyo `w` la seccion afirma que
-    # hace algo. De una semilla porque la figura no promedia nada: es exacta
-    # sobre la cabeza que esa celda dejo, y un promedio de curvas exactas de
-    # cabezas distintas no es la curva de ninguna.
     brazo_de_la_figura = f"{PREFIJO_SOPESADO}-con"
     primera = scale.report_seeds[0]
     caminatas: dict[str, dict] = {}
-
-    celdas: dict[str, dict] = {}
-    por_familia: dict[str, dict] = {}
     arquitecturas: dict[str, str] = {}
 
     for nombre in nombres:
@@ -5996,96 +6156,66 @@ def barrido_sopesado(registro: dict, scale: Scale,
         arquitecturas[nombre] = norma
         report(f"  {nombre} / {norma}  (rho={RHO_SOPESADO}, {MODO_SOPESADO})")
         backbone = NORMALIZATIONS[norma]
-        por_brazo: dict[str, list[dict]] = {b: [] for b in brazos}
-        for semilla in scale.report_seeds:
-            familia = build_family(nombre, semilla, scale)
-            hyper = hyper_de_seccion(registro, familia, norma, scale, device)
-            # El material limpio se arma AFUERA de `run_cell` --- su binding de
-            # los globales no se puede anidar --- y sirve para dos cosas: saber
-            # cuales filas crudas cayeron en el TRAIN del blanco, y ser el
-            # testigo contra el que se comprueba que el sorteo no se movio.
-            limpio = material_for(familia, semilla, scale, backbone)
-            Xt, contaminacion = contaminar_el_train_del_blanco(
-                familia, limpio, RHO_SOPESADO, semilla)
-            sucia = _reemplazar(familia, Xt=Xt)
-            sucio = material_for(sucia, semilla, scale, backbone)
-            # **El sorteo tiene que ser el MISMO.** Si se movio, las filas que
-            # se contaminaron no son las del train de esta corrida y "solo el
-            # train del blanco" deja de ser verdad sin que nada falle.
-            for rol in ("train_idx", "valid_idx", "eval_idx"):
-                if not torch.equal(getattr(limpio["target"], rol),
-                                   getattr(sucio["target"], rol)):
-                    raise RuntimeError(
-                        f"contaminar movio el corte {rol} del blanco; "
-                        "`bags.build` sortea sobre las etiquetas y cambiar "
-                        "coordenadas no deberia moverlo")
-            if not torch.equal(limpio["target"].members,
-                               sucio["target"].members):
+        familia = build_family(nombre, primera, scale)
+        hyper = hyper_de_seccion(registro, familia, norma, scale, device)
+        # El material limpio se arma AFUERA de `run_cell` --- su binding de los
+        # globales no se puede anidar --- y sirve para dos cosas: saber cuales
+        # filas crudas cayeron en el TRAIN del blanco, y ser el testigo contra
+        # el que se comprueba que el sorteo no se movio.
+        limpio = material_for(familia, primera, scale, backbone)
+        Xt, contaminacion = contaminar_el_train_del_blanco(
+            familia, limpio, RHO_SOPESADO, primera)
+        sucia = _reemplazar(familia, Xt=Xt)
+        sucio = material_for(sucia, primera, scale, backbone)
+        # **El sorteo tiene que ser el MISMO.** Si se movio, las filas que se
+        # contaminaron no son las del train de esta corrida y "solo el train
+        # del blanco" deja de ser verdad sin que nada falle.
+        for rol in ("train_idx", "valid_idx", "eval_idx"):
+            if not torch.equal(getattr(limpio["target"], rol),
+                               getattr(sucio["target"], rol)):
                 raise RuntimeError(
-                    "contaminar movio los miembros de las bolsas del blanco")
+                    f"contaminar movio el corte {rol} del blanco; "
+                    "`bags.build` sortea sobre las etiquetas y cambiar "
+                    "coordenadas no deberia moverlo")
+        if not torch.equal(limpio["target"].members, sucio["target"].members):
+            raise RuntimeError(
+                "contaminar movio los miembros de las bolsas del blanco")
 
-            def _gancho(model, mat, dev, arm_id, _semilla=semilla):
-                """La caminata construida, solo del brazo y la semilla
-                declarados. Para todo lo demas no devuelve nada, que es lo que
-                hace que el gancho no cambie ningun numero de la tabla."""
-                if arm_id != brazo_de_la_figura or _semilla != primera:
-                    return {}
-                return {"caminata": caminata_de_w(
-                    model, mat["source"], mat["target"], dev)}
+        def _gancho(model, mat, dev, arm_id):
+            """La caminata fusionada, solo del brazo declarado."""
+            if arm_id != brazo_de_la_figura:
+                return {}
+            return {"caminata": caminata_fusionada(
+                model, mat["source"], mat["target"], dev)}
 
-            celda = run_cell(sucia, norma, semilla, scale, hyper, device,
-                             arms=brazos, lecturas=_gancho)
-            leido = celda["lecturas"].get(brazo_de_la_figura, {})
-            if "caminata" in leido:
-                caminatas[nombre] = leido["caminata"]
-            for brazo in brazos:
-                fila = celda["rows"][brazo]
-                especificacion = TOY_ARMS_BY_ID[brazo]
-                registro_fila = {
-                    "family": nombre,
-                    "normalization": norma,
-                    "seed": int(semilla),
-                    "arm": brazo,
-                    # El interruptor, escrito en la fila: la tabla lee que
-                    # computa cada fila de la fila misma y no de un default.
-                    "weighting": bool(especificacion["weighting"]),
-                    "sourceAccuracy": float(fila["sourceAccuracy"]),
-                    "targetAccuracy": float(fila["targetAccuracy"]),
-                    "cefBest": float(fila["cefBest"]),
-                    "phase2BestEpoch": int(fila["phase2BestEpoch"]),
-                    "contaminacion": contaminacion,
-                    "elapsedSeconds": float(celda["elapsedSeconds"]),
-                    "scale": scale.stamp(),
-                }
-                por_brazo[brazo].append(registro_fila)
-                celdas[key(nombre, norma, brazo, semilla)] = registro_fila
-            report(f"      semilla {semilla}: " + "  ".join(
-                f"{b} {celda['rows'][b]['targetAccuracy']:.4f}"
-                for b in brazos))
-        por_familia[nombre] = {
-            "filas": por_brazo,
-            "medias": {b: harness.spread(
-                [f["targetAccuracy"] for f in por_brazo[b]])
-                for b in brazos},
-        }
+        celda = run_cell(sucia, norma, primera, scale, hyper, device,
+                         arms=[brazo_de_la_figura], lecturas=_gancho)
+        leido = celda["lecturas"].get(brazo_de_la_figura, {})
+        if "caminata" not in leido:
+            raise RuntimeError(
+                f"{nombre}: la celda corrio y no dejo caminata, asi que esta "
+                "seccion no tiene nada que publicar")
+        caminatas[nombre] = leido["caminata"]
+        via = leido["caminata"]["caminos"]
+        for arranque in leido["caminata"]["arranques"]:
+            v = via[arranque]
+            report(f"      {arranque}: clase {v['destino']} \u00b7 "
+                   f"w {v['w'][0]:.4f}->{v['w'][-1]:.4f} \u00b7 "
+                   f"l_loc {v['lLocal'][0]:.4f}->{v['lLocal'][-1]:.4f}")
+        del contaminacion
 
     return {
         "seccion": 2,
-        "celdas": celdas,
-        "porFamilia": por_familia,
         "arquitecturas": arquitecturas,
-        "brazos": list(brazos),
         "rho": RHO_SOPESADO,
-        # La ETIQUETA de cada brazo, que viaja con el artefacto porque
-        # `toy_tables` no puede importar este modulo: lo importa el, y una
-        # tabla que resolviera su propio rotulo cerraria el ciclo. Sin esto la
-        # tabla imprimiria el id (`W-con`) donde CREDA imprime una frase.
-        "rotulos": {b: TOY_ARMS_BY_ID[b]["label"] for b in brazos},
-
         "modo": MODO_SOPESADO,
         "caminatas": caminatas,
         "brazoDeLaFigura": brazo_de_la_figura,
         "semillaDeLaFigura": int(primera),
+        # **Sin `celdas` y sin `porFamilia`, a proposito.** Esta seccion no
+        # tiene tablas, asi que un mapa de filas vacio seria una tabla de cero
+        # filas esperando a que alguien la lea como "ningun brazo gano". El
+        # lector del cuaderno pregunta por la clave en vez de asumirla.
         "elapsedSeconds": time.perf_counter() - arrancado,
         "escala": scale.stamp(),
     }
@@ -6763,11 +6893,34 @@ def barrido_ablacion(registro: dict, scale: Scale,
         arquitecturas[nombre] = norma
         report(f"  {nombre} / {norma}")
         por_brazo: dict[str, list[dict]] = {b: [] for b in ABLACION_IDS}
+        backbone = NORMALIZATIONS[norma]
         for semilla in scale.report_seeds:
             familia = build_family(nombre, semilla, scale)
             hyper = hyper_de_seccion(registro, familia, norma, scale, device)
+            # **La correspondencia viaja MONTADA en esta seccion.** La 4 y la 5
+            # corren el MISMO contraste --- `BRAZOS_CORRESPONDENCIA`, o sea
+            # `TG` contra `TGL` --- sobre dos metricas: aca el accuracy, donde
+            # el local SUMA, y alla la correspondencia, donde RESTA. Apagar la
+            # 4 sin traerse esto se quedaba con la evidencia a favor y borraba
+            # la que esta en contra.
+            #
+            # Cuesta 0.09 s por brazo, el 0.6% de una celda: es una LECTURA
+            # sobre el modelo ya entrenado, no un entrenamiento. El material se
+            # arma AFUERA de `run_cell` por la razon de
+            # `barrido_correspondencia` --- `material_for` abre su propio
+            # binding de los globales y anidarlo adentro hace fallar su
+            # guardia --- y aca solo lo usa `socio_exacto`, que lee cortes de
+            # rol y ninguna imagen.
+            material = material_for(familia, semilla, scale, backbone)
+
+            def _gancho(model, mat, dev, arm_id):
+                if arm_id not in BRAZOS_CORRESPONDENCIA:
+                    return {}
+                return {"masa": masa_de_correspondencia(
+                    model, mat["source"], mat["target"], dev)}
+
             celda = run_cell(familia, norma, semilla, scale, hyper, device,
-                             arms=ABLACION_IDS)
+                             arms=ABLACION_IDS, lecturas=_gancho)
             for brazo in ABLACION_IDS:
                 fila = celda["rows"][brazo]
                 especificacion = TOY_ARMS_BY_ID[brazo]
@@ -6798,6 +6951,18 @@ def barrido_ablacion(registro: dict, scale: Scale,
                     "elapsedSeconds": float(celda["elapsedSeconds"]),
                     "scale": scale.stamp(),
                 }
+                # Las lecturas de correspondencia, solo sobre los dos
+                # brazos que las tienen. Un brazo sin ellas NO lleva las claves
+                # en cero: una tabla no puede distinguir un cero medido de un
+                # cero que nadie midio, y `TL` no entra en este contraste.
+                leido = celda["lecturas"].get(brazo, {})
+                if "masa" in leido:
+                    correspondencia = _fila_de_correspondencia(
+                        leido["masa"], fila, material, nombre, norma,
+                        semilla, brazo, scale)
+                    registro_fila.update({
+                        k: v for k, v in correspondencia.items()
+                        if k not in registro_fila})
                 por_brazo[brazo].append(registro_fila)
                 celdas[key(nombre, norma, brazo, semilla)] = registro_fila
             report(f"      semilla {semilla}: " + "  ".join(
@@ -8045,9 +8210,9 @@ def _panel_fase1(a, fila: dict) -> None:
     # measurement that came out flat, and what it would be hiding is that phase
     # 1 stopped immediately.
     a.plot(e, ce, color="#1f77b4", lw=1.4, alpha=0.7, marker="o", ms=3.5,
-           label="CE de la FUENTE " + chr(183) + " train")
+           label="SOURCE CE " + chr(183) + " train")
     a.plot(e, cv, color="#333333", lw=2.0, marker="o", ms=3.5,
-           label="CE de la FUENTE " + chr(183) + " valid")
+           label="SOURCE CE " + chr(183) + " valid")
     a.set_ylim(0.0, 1.0)
     bajo, alto = float(min(ce.min(), cv.min())), float(max(ce.max(), cv.max()))
     # CREDA's own second line and nothing beside it: what of the fixed axis this
@@ -8055,19 +8220,19 @@ def _panel_fase1(a, fila: dict) -> None:
     # travelled here too and was retired on 2026-10-15 with the rest of this
     # figure's additions -- it has no counterpart in CREDA's title, and the same
     # reading is the row's `phase1Epochs`/`phase1BestEpoch` in the record.
-    a.set_title(f"{COL_PHASE_ONE}\n(CE realizada: [{bajo:.4f}, {alto:.4f}] = "
-                f"{100 * (alto - bajo):.1f}% del eje)", fontsize=9.5,
+    a.set_title(f"{COL_PHASE_ONE}\n(realised CE: [{bajo:.4f}, {alto:.4f}] = "
+                f"{100 * (alto - bajo):.1f}% of the axis)", fontsize=9.5,
                 linespacing=1.4)
     a.set_xlim(0, max(float(e.max()), 1.0))
     a.grid(alpha=0.25)
     a.tick_params(labelsize=8)
-    a.set_xlabel("época de la fase 1", fontsize=9)
+    a.set_xlabel("phase 1 epoch", fontsize=9)
     a.legend(loc="upper right", fontsize=8, framealpha=0.85)
     b = a.twinx()
     b.plot(e, av, color="#8c564b", lw=1.2, alpha=0.75, ls="--")
     b.set_ylim(0, 1.02)
     b.tick_params(labelsize=7, colors="#8c564b")
-    b.set_ylabel("acierto valid de la fuente", fontsize=8, color="#8c564b")
+    b.set_ylabel("source valid accuracy", fontsize=8, color="#8c564b")
     b.plot([e[-1]], [av[-1]], "o", ms=6, color="#8c564b")
 
 
@@ -8224,11 +8389,11 @@ def _panel_fase2(a, fila: dict, k: int, tope_y: float) -> None:
     serie = lambda campo: serie_de_fase_dos_por_epoca(
         filas, nombres, por_epoca, campo)[1]
     a.plot(s, serie("adaptation"), color="#2ca02c", lw=2.0,
-           label="adaptación (Ec. 39, coef. 1)")
+           label="adaptation (Eq. 39, coef. 1)")
     a.plot(s, serie("contributionGlobal"), color="#9467bd", lw=1.4,
-           ls="--", label="parte global (Ecs. 32-37)")
+           ls="--", label="global part (Eqs. 32-37)")
     a.plot(s, serie("contributionLocal"), color="#d62728", lw=1.4,
-           ls=":", label="parte local (Ecs. 30-31, 38)")
+           ls=":", label="local part (Eqs. 30-31, 38)")
     a.set_xlim(0, max(fila["epocasCorridas"], 1))
     # The SAME limit in every row, handed in rather than computed here: a panel
     # that derived its own would derive it from its own row and the three would
@@ -8236,7 +8401,7 @@ def _panel_fase2(a, fila: dict, k: int, tope_y: float) -> None:
     a.set_ylim(0.0, tope_y)
     a.grid(alpha=0.25)
     a.tick_params(labelsize=8)
-    a.set_xlabel("época de la fase 2", fontsize=9)
+    a.set_xlabel("phase 2 epoch", fontsize=9)
     a.legend(loc="upper right", fontsize=7.5, framealpha=0.9)
     # One line, as CREDA's is. The second line said which step this frame stands
     # at and which one the run chose; the step is in the suptitle, the chosen
@@ -8247,7 +8412,7 @@ def _panel_fase2(a, fila: dict, k: int, tope_y: float) -> None:
            alpha=0.75, ls="-.")
     b.set_ylim(0, 1.02)
     b.tick_params(labelsize=7, colors="#8c564b")
-    b.set_ylabel("vigía: fuente conservada por theta_t (el que PARA)",
+    b.set_ylabel("watchman: source kept by theta_t (the one that STOPS)",
                  fontsize=7.5, color="#8c564b")
     # **The guard is in steps and the line is in epochs, on purpose.** `tope`
     # is this frame's own step ceiling, so asking whether the choice has
@@ -8333,10 +8498,10 @@ def figura_del_cuadro(registro: dict, familia: str, filas: list, k: int):
     # schedule; measured on this record the three rows stand at the same step at
     # every common frame.
     fig.suptitle(
-        f"{familia} {chr(183)} fuente y cabeza QUIETAS {chr(183)} "
-        f"época {filas[0]['pasos'][k] // STEPS_PER_EPOCH_DECLARED} de "
+        f"{familia} {chr(183)} source and head FROZEN {chr(183)} "
+        f"epoch {filas[0]['pasos'][k] // STEPS_PER_EPOCH_DECLARED} of "
         f"{registro['scale']['epochs_2']} "
-        f"{chr(183)} azar {toy_tables.azar(registro):.3f}",
+        f"{chr(183)} chance {toy_tables.azar(registro):.3f}",
         fontsize=13, y=0.985)
     # **One line, which is the shape of CREDA's.** Its footer names the markers,
     # the two kinds of centroid and the one term with a gradient, and stops.
@@ -8425,9 +8590,9 @@ def _escribir_gif(ruta: Path, cuadros: list, al_paso=print) -> Path:
 ESTILO_ARRANQUE = {
     _nombre_del_arranque(cl): (
         "-" if len(cl) == 2 else "--",
-        ("bolsa del blanco mas indecisa entre "
+        ("most undecided TARGET bag between "
          + " y ".join(str(c) for c in cl)) if len(cl) == 2
-        else "bolsa del blanco mas indecisa a TRES")
+        else "most undecided TARGET bag of THREE")
     for cl, _ in CAMINOS_W
 }
 
@@ -8502,7 +8667,7 @@ def figura_de_w(barrido: dict, familia: str, k: int):
     for c in sorted(set(int(x) for x in clases)):
         cual = clases == c
         a.scatter(P[cual, 0], P[cual, 1], s=18, alpha=0.35,
-                  color=COL_DURA.get(c, "#777777"), label=f"fuente, clase {c}")
+                  color=COL_DURA.get(c, "#777777"), label=f"source, class {c}")
     # Las TRES cruces: los centros de clase, que son los tres destinos.
     C = proyectar(np.asarray(caminata["centros"], dtype=float))
     a.scatter(C[:, 0], C[:, 1], s=190, marker="X", c="white",
@@ -8540,12 +8705,12 @@ def figura_de_w(barrido: dict, familia: str, k: int):
                zorder=7)
         w = np.asarray(caminata["caminos"][nombre][destino]["w"], dtype=float)
         b.plot(range(k + 1), w[:k + 1], color=color, ls=trazo, lw=2.0,
-               marker="o", ms=3.4, label=f"{rotulo} \u2192 centro de la clase {destino}")
+               marker="o", ms=3.4, label=f"{rotulo} \u2192 centre of class {destino}")
         b.plot([k], [w[k]], "o", ms=8, color=color)
 
-    a.set_title(f"{familia} · nube y centros de la FUENTE (PCA, "
-                f"{100 * explicada:.0f}% explicada) · cada bolsa del "
-                "BLANCO a SU centro", fontsize=9)
+    a.set_title(f"{familia} · SOURCE cloud and centres (PCA, "
+                f"{100 * explicada:.0f}% explained) · each TARGET bag "
+                "to ITS centre", fontsize=9)
     a.set_xticks([]); a.set_yticks([])
     a.legend(fontsize=7, loc="best", framealpha=0.85)
 
@@ -8553,7 +8718,7 @@ def figura_de_w(barrido: dict, familia: str, k: int):
     b.set_ylim(-0.03, 1.03)
     b.axhline(0.0, color="#999999", lw=0.8, ls=":")
     b.axhline(1.0, color="#999999", lw=0.8, ls=":")
-    b.set_xlabel("barrido", fontsize=9)
+    b.set_xlabel("sweep", fontsize=9)
     b.set_ylabel(r"$w_j = 1 - \hat H_2(g_j)/\ln C$", fontsize=9)
     # El titulo NOMBRA la cantidad y no afirma su direccion. Decia "sube
     # mientras la empujan" y `toroide` lo contradice: ahi la mediana de `w`
@@ -8561,9 +8726,124 @@ def figura_de_w(barrido: dict, familia: str, k: int):
     # cruzar la frontera en el camino, y vuelven a saturar. Un titulo que
     # afirma la direccion convierte ese hecho en una figura que se lee como
     # rota.
-    b.set_title(f"barrido {k} de {total - 1} · $w_j^t$ de una bolsa del "
-                "BLANCO empujada a un centro de la FUENTE", fontsize=9)
+    b.set_title(f"sweep {k} of {total - 1} · $w_j^t$ of a TARGET bag "
+                "pushed to a SOURCE centre", fontsize=9)
     b.legend(fontsize=7, loc="lower right", framealpha=0.85)
+    fig.tight_layout()
+    return fig
+
+
+def figura_fusionada(barrido: dict, familia: str, k: int):
+    """El cuadro `k` de la figura fusionada: UNA fila, TRES columnas.
+
+    Las tres bolsas caminan a la vez, y las tres columnas son la MISMA bolsa
+    mirada por las dos ramas que salen de `H`: el plano, `w` por la cabeza y
+    `l_loc` por el kernel. Lo que esto puede afirmar y dos figuras separadas no
+    es que las dos curvas son de la misma bolsa en el mismo barrido.
+
+    La curva es PARCIAL por cuadro, igual que en CREDA: lo que la figura
+    muestra es que las cantidades se mueven MIENTRAS la bolsa camina, no en que
+    valor terminan.
+    """
+    import matplotlib.pyplot as plt
+
+    caminata = _caminata_de(barrido, familia)
+    nube = np.asarray(caminata["nube"], dtype=float)
+    clases = np.asarray(caminata["clasesDeLaNube"], dtype=int)
+    caminos = caminata["caminos"]
+    # La base la fijan la nube Y los caminos juntos: con la nube sola una
+    # trayectoria que sale de ella se proyecta aplastada contra el plano.
+    trazos = [np.asarray(caminos[n]["camino"], dtype=float)
+              for n in caminata["arranques"]]
+    mu, base, explicada = _base_pca(np.vstack([nube] + trazos))
+    proyectar = lambda Z: (np.asarray(Z, dtype=float) - mu) @ base
+    total = int(caminata["barridos"])
+
+    fig, (a, b, c) = plt.subplots(1, 3, figsize=(16.4, 4.6))
+
+    P = proyectar(nube)
+    for cl in sorted(set(int(x) for x in clases)):
+        cual = clases == cl
+        a.scatter(P[cual, 0], P[cual, 1], s=18, alpha=0.32,
+                  color=COL_DURA.get(cl, "#777777"), label=f"source, class {cl}")
+    C = proyectar(np.asarray(caminata["centrosEnZ"], dtype=float))
+    a.scatter(C[:, 0], C[:, 1], s=190, marker="X", c="white",
+              edgecolors="black", linewidths=1.6, zorder=5)
+    for cl in range(C.shape[0]):
+        a.annotate(str(cl), (C[cl, 0], C[cl, 1]), fontsize=9, ha="center",
+                   va="center", zorder=6, fontweight="bold")
+
+    for nombre in caminata["arranques"]:
+        via = caminos[nombre]
+        destino = int(via["destino"])
+        color = COL_DURA.get(destino, "#777777")
+        trazo, rotulo = ESTILO_ARRANQUE[nombre]
+        camino = proyectar(np.asarray(via["camino"], dtype=float))
+        hasta = camino[:k + 1]
+        a.plot(hasta[:, 0], hasta[:, 1], color=color, ls=trazo, lw=2.0,
+               alpha=0.95, zorder=4)
+        # Hueco de donde salio, lleno donde esta: el avance se lee como la
+        # distancia entre los dos y no hay que recordar el cuadro anterior.
+        a.plot([camino[0, 0]], [camino[0, 1]], "o", ms=7, color="white",
+               markeredgecolor=color, markeredgewidth=1.8, zorder=6)
+        a.plot([hasta[-1, 0]], [hasta[-1, 1]], "o", ms=9, color=color, zorder=7)
+        # **Los TRES paneles comparten el color del camino y cada uno lleva su
+        # propia leyenda.** El del kernel no la tenia y sus tres curvas eran
+        # indistinguibles: una figura que obliga a mirar el panel de al lado
+        # para saber que es cada linea no se explica sola.
+        # **El COLOR dice el camino y el ESTILO dice la cantidad.** El panel
+        # del kernel repetia palabra por palabra los tres rotulos del de la
+        # cabeza --- largos --- y encima les tapaba las curvas. El camino ya
+        # esta nombrado una vez, a la izquierda, y el color es el mismo en los
+        # tres paneles: lo que falta aca no es cual camino es, es QUE cantidad
+        # es cada linea.
+        # **El rotulo nombra la CLASE DE DESTINO y, en el panel del kernel, la
+        # cantidad.** Los tres destinos son distintos por construccion
+        # (`CAMINOS_W`), asi que la clase identifica el camino sola --- y es la
+        # misma clase, con el mismo color, en los tres paneles. Antes el
+        # rotulo era la frase entera que describe que bolsa arranca, repetida
+        # en los dos paneles: tapaba las curvas y no decia que cantidad era
+        # cada linea. Ruling del operador, 2026-10-23.
+        for eje, campo, texto in (
+                (b, "w", f"class {destino}"),
+                (c, "lLocal", r"$\ell_{loc}$ " + f"class {destino}")):
+            serie = np.asarray(via[campo], dtype=float)
+            eje.plot(range(k + 1), serie[:k + 1], color=color, ls=trazo,
+                     lw=2.0, marker="o", ms=3.4, label=texto)
+            eje.plot([k], [serie[k]], "o", ms=8, color=color)
+        # **El panel del kernel dibuja el LOSS y nada mas.** Ruling del
+        # operador, 2026-10-23. `kappa(j,j)` se midio y se sigue GUARDANDO en
+        # `kappaPropio` --- aporta del 64% al 663% del movimiento de `d^2`,
+        # porque el kernel de bolsa no esta normalizado --- pero no se dibuja.
+        # Lo que se MIDE y lo que se MUESTRA son dos decisiones distintas, y
+        # esta es la segunda: el artefacto conserva la evidencia y la figura
+        # queda legible.
+
+    a.set_title(f"{familia} · SOURCE cloud and centres (PCA, "
+                f"{100 * explicada:.0f}% explained) · the TARGET bag "
+                "walking", fontsize=9)
+    a.set_xticks([]); a.set_yticks([])
+    a.legend(fontsize=7, loc="best", framealpha=0.85)
+
+    for eje, etiqueta, titulo in (
+            (b, r"$w_j^t = 1 - \hat H_2(g_j^t)/\ln C$",
+             "the HEAD branch · Eqs. 19, 20, 24"),
+            (c, "the local LOSS   " + r"$\ell_{loc,j} = d_j^2/2$",
+             "the KERNEL branch · Eqs. 18, 28-31")):
+        eje.set_xlim(-0.5, total - 0.5)
+        eje.set_ylim(-0.03, 1.03)
+        eje.axhline(0.0, color="#999999", lw=0.8, ls=":")
+        eje.axhline(1.0, color="#999999", lw=0.8, ls=":")
+        eje.set_xlabel("sweep", fontsize=9)
+        eje.set_ylabel(etiqueta, fontsize=9)
+        # El titulo NOMBRA la rama y la cantidad, y no afirma la direccion:
+        # `toroide` contradice las dos --- ahi la mediana de `w` del blanco es
+        # 1.0000 y el loss local sube.
+        eje.set_title(f"sweep {k} of {total - 1} · {titulo}", fontsize=9)
+    b.legend(fontsize=7, loc="lower right", framealpha=0.85)
+    # Corta y abajo: nombra los MISMOS tres caminos que el panel de al lado,
+    # con el mismo color, en una linea cada uno.
+    c.legend(fontsize=7, loc="lower left", framealpha=0.9)
     fig.tight_layout()
     return fig
 
@@ -8609,7 +8889,7 @@ def figura_de_correspondencia(barrido: dict, familia: str, k: int):
     if nube is None:
         # Un artefacto anterior al 2026-10-22 no trae el plano. Se dice, y no
         # se dibuja un panel vacio que se leeria como "la bolsa no se movio".
-        a.text(0.5, 0.5, "este artefacto no trae la nube:\nre-corré la sección 4",
+        a.text(0.5, 0.5, "this artefact carries no cloud:\nre-run section 4",
                ha="center", va="center", fontsize=10, transform=a.transAxes)
         a.set_xticks([]); a.set_yticks([])
     else:
@@ -8625,11 +8905,11 @@ def figura_de_correspondencia(barrido: dict, familia: str, k: int):
             cual = clases == c
             a.scatter(P[cual, 0], P[cual, 1], s=22, alpha=0.35,
                       color=COL_DURA.get(c, "#777777"),
-                      label=f"fuente, clase {c}")
+                      label=f"source, class {c}")
         # El SOCIO: el grupo de sujetos hacia el que se empuja.
         a.scatter([P[destino, 0]], [P[destino, 1]], s=220, marker="X",
                   c="white", edgecolors="black", linewidths=1.8, zorder=5)
-        a.annotate("socio", (P[destino, 0], P[destino, 1]), fontsize=8,
+        a.annotate("partner", (P[destino, 0], P[destino, 1]), fontsize=8,
                    ha="center", va="bottom", xytext=(0, 12),
                    textcoords="offset points", zorder=6, fontweight="bold")
         hasta = Q[:k + 1]
@@ -8637,11 +8917,11 @@ def figura_de_correspondencia(barrido: dict, familia: str, k: int):
                zorder=4)
         a.plot([Q[0, 0]], [Q[0, 1]], "o", ms=8, color="white",
                markeredgecolor="#1f77b4", markeredgewidth=1.8, zorder=6,
-               label="arranque: centro de su clase (Ec. 22)")
+               label="start: centre of its class (Eq. 22)")
         a.plot([hasta[-1, 0]], [hasta[-1, 1]], "o", ms=10, color="#1f77b4",
-               zorder=7, label=f"bolsa {caminata['bolsaDelBlanco']} del blanco")
-        a.set_title(f"{familia} · representación de las bolsas (PCA, "
-                    f"{100 * explicada:.0f}% explicada)", fontsize=9)
+               zorder=7, label=f"target bag {caminata['bolsaDelBlanco']}")
+        a.set_title(f"{familia} · bag representation (PCA, "
+                    f"{100 * explicada:.0f}% explained)", fontsize=9)
         a.set_xticks([]); a.set_yticks([])
         a.legend(fontsize=7, loc="best", framealpha=0.85)
 
@@ -8654,33 +8934,33 @@ def figura_de_correspondencia(barrido: dict, familia: str, k: int):
     # hay que poder ver. Lo que promete cada termino se dice en la prosa, que
     # es donde se puede decir "y aca no pasa".
     b.plot(range(k + 1), loss[:k + 1], color="#d62728", lw=2.0, marker="o",
-           ms=3.4, label=r"$l_{loc,j}=d_j^2/2$, lo que el local minimiza")
+           ms=3.4, label=r"$\ell_{loc,j}=d_j^2/2$ — what the LOCAL term minimises")
     b.plot([k], [loss[k]], "o", ms=8, color="#d62728")
     b.set_xlim(-0.5, total - 0.5)
     b.set_ylim(0.0, 1.0)
-    b.set_xlabel("barrido", fontsize=9)
-    b.set_ylabel(r"$l_{loc,j}$, lo que el local MINIMIZA", fontsize=9,
+    b.set_xlabel("sweep", fontsize=9)
+    b.set_ylabel(r"$\ell_{loc,j}$ — what the LOCAL term MINIMISES", fontsize=9,
                  color="#d62728")
     b.tick_params(axis="y", labelcolor="#d62728")
 
     # ...y la relevancia del socio, contra el azar.
     c = b.twinx()
     c.axhline(azar, color="#555555", lw=1.4, ls=":")
-    c.annotate(f"azar = {azar:.4f}", (total - 0.6, azar), fontsize=7,
+    c.annotate(f"chance = {azar:.4f}", (total - 0.6, azar), fontsize=7,
                ha="right", va="bottom", color="#555555")
     c.plot(range(k + 1), socio[:k + 1], color="#1f77b4", lw=2.0, marker="o",
-           ms=3.4, label=r"$\pi_{ji}$ al SOCIO")
+           ms=3.4, label=r"$\pi_{ji}$ to the PARTNER")
     c.plot([k], [socio[k]], "o", ms=8, color="#1f77b4")
     c.set_ylim(0.0, max(float(socio.max()) * 1.15, azar * 1.6))
-    c.set_ylabel(r"$\pi_{ji}$ al socio", fontsize=9, color="#1f77b4")
+    c.set_ylabel(r"$\pi_{ji}$ to the partner", fontsize=9, color="#1f77b4")
     c.tick_params(axis="y", labelcolor="#1f77b4")
 
     lineas = b.get_lines()[:1] + c.get_lines()[1:2]
     b.legend(lineas, [l.get_label() for l in lineas], fontsize=7,
              loc="center left", framealpha=1.0)
-    b.set_title(f"barrido {k} de {total - 1} · empujada hacia la bolsa "
+    b.set_title(f"sweep {k} of {total - 1} · pushed toward bag "
                 f"{caminata['bolsaFuenteDestino']} · "
-                f"{socio[k] / azar:.2f}× el azar", fontsize=9)
+                f"{socio[k] / azar:.2f}× chance", fontsize=9)
     fig.tight_layout()
     return fig
 
@@ -8732,6 +9012,42 @@ def animar_w(barrido: dict, familia: str, destino,
             "modo": barrido.get("modo"),
         },
         al_paso)
+
+
+def animar_fusionada(barrido: dict, familia: str, destino,
+                     nombre_archivo: str | None = None,
+                     al_paso=print) -> AnimacionConstruida:
+    """La figura de la seccion 2. Lee el artefacto y corre NADA.
+
+    Los hechos que archiva son los de las DOS ramas, que es lo que esta figura
+    puede afirmar y dos caminatas separadas no podian: `w` por la cabeza y
+    `l_loc` por el kernel salen de la MISMA bolsa en el MISMO barrido.
+    """
+    def _hechos(c):
+        caminos = c["caminos"]
+        primero = lambda n, k: float(caminos[n][k][0])
+        ultimo = lambda n, k: float(caminos[n][k][-1])
+        return {
+            "bolsaDelBlanco": {n: caminos[n]["bolsaDelBlanco"]
+                               for n in c["arranques"]},
+            "bolsaFuenteDestino": {n: caminos[n]["bolsaFuenteDestino"]
+                                   for n in c["arranques"]},
+            "clasesDestino": {n: caminos[n]["destino"] for n in c["arranques"]},
+            "wInicial": {n: primero(n, "w") for n in c["arranques"]},
+            "wFinal": {n: ultimo(n, "w") for n in c["arranques"]},
+            "lLocalInicial": {n: primero(n, "lLocal") for n in c["arranques"]},
+            "lLocalFinal": {n: ultimo(n, "lLocal") for n in c["arranques"]},
+            "eleccionRelajada": {n: caminos[n]["eleccionRelajada"]
+                                 for n in c["arranques"]},
+            "brazo": barrido.get("brazoDeLaFigura"),
+            "semilla": barrido.get("semillaDeLaFigura"),
+            "rho": barrido.get("rho"),
+            "modo": barrido.get("modo"),
+        }
+
+    return _animar_caminata(
+        barrido, familia, destino, figura_fusionada,
+        nombre_archivo or f"toy_fusionada_{familia}.gif", _hechos, al_paso)
 
 
 def animar_correspondencia(barrido: dict, familia: str, destino,

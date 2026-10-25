@@ -76,7 +76,8 @@ def test_la_bolsa_se_ve_moverse_y_el_socio_esta_marcado(barrido):
         assert len(a.collections) >= len(set(caminata["clasesFuente"])), \
             len(a.collections)
         # La cruz del socio, dicha por su nombre.
-        assert any("socio" in t.get_text() for t in a.texts), \
+        # Toda figura habla INGLES --- regla del operador, 2026-10-23.
+        assert any("partner" in t.get_text() for t in a.texts), \
             [t.get_text() for t in a.texts]
         # La trayectoria llega hasta `k`, no hasta el final.
         largos = {len(l.get_xdata()) for l in a.get_lines()}
@@ -97,7 +98,7 @@ def test_sin_nube_la_figura_lo_DICE_en_vez_de_dibujar_un_panel_vacio(barrido):
     del barrido["caminatas"]["lunas"]["nube"]
     fig = toy_run.figura_de_correspondencia(barrido, "lunas", 3)
     try:
-        assert any("re-corr" in t.get_text() for t in fig.axes[0].texts), \
+        assert any("re-run" in t.get_text() for t in fig.axes[0].texts), \
             [t.get_text() for t in fig.axes[0].texts]
     finally:
         plt.close(fig)

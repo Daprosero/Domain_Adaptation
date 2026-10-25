@@ -163,6 +163,14 @@ def cuaderno() -> dict:
 #: bloque, que es lo unico que estos dos tests existen para decir.
 SECCIONES_CON_GIF = (2, 4)
 
+#: Las secciones que NO llevan tablas, asi que su bloque por familia es solo
+#: la figura. La 2 entro aca el 2026-10-23 por ruling del operador --- "en esa
+#: nueva 2 se van las tablas y las iteraciones o pruebas asociadas" --- cuando
+#: su figura paso a ser `caminata_fusionada`, que lee las dos ramas de una
+#: bolsa sola. Declarado y no contado del cuaderno: contarlo haria que un
+#: bloque perdido pasara sin que nada lo dijera.
+SECCIONES_SIN_TABLA = (2,)
+
 #: Las cuatro secciones que siguen a la 1, con el titulo que el documento les
 #: da. Escritas y no leidas del cuaderno, por la razon de `SECCIONES_CON_GIF`:
 #: una lista tomada del documento no puede decir que al documento le falta una
@@ -1615,11 +1623,20 @@ def test_the_notebooks_heading_tree_is_the_one_grouped_by_toyset(
     esperado.append("## Lo que las secciones 2 a 5 dejaron")
     for numero, titulo in SECCIONES_DEL_TOYSET:
         esperado.append(f"## Secci\u00f3n {numero} \u2014 {titulo}")
+        # Una seccion APAGADA es su encabezado y una nota, sin bloque por
+        # familia. Las celdas que lo renderizaban no estan: una celda guardada
+        # que igual llama a `display` deja una salida VACIA, y doce de esas no
+        # son una seccion apagada, son ruido. Esto se DERIVA de la bandera, asi
+        # que volver a prenderla pone este test en rojo nombrando los
+        # subtitulos que faltan --- que es exactamente el aviso que hace falta.
+        if not toy_tables.seccion_corre(numero):
+            continue
         for familia in familias:
             if numero in SECCIONES_CON_GIF:
                 esperado.append(f"### {familia} \u2014 la figura")
-            esperado += [f"### {familia} \u2014 la tabla",
-                         f"### {familia} \u2014 los tests declarados"]
+            if numero not in SECCIONES_SIN_TABLA:
+                esperado += [f"### {familia} \u2014 la tabla",
+                             f"### {familia} \u2014 los tests declarados"]
     assert _titulos(cuaderno) == esperado
 
 
@@ -1920,6 +1937,14 @@ def test_the_figure_cells_emitted_an_image_and_not_a_description(cuaderno,
         if not ("display(Image(filename=" in fuente
                 or "figures.inline(" in fuente):
             continue
+        # Una celda de una seccion APAGADA dice dibujar y no dibuja, a
+        # proposito: su caminata no se calculo y la celda esta guardada por
+        # `seccion_corre`. Sin esto, apagar una seccion pone este test en rojo
+        # y el rojo no dice nada --- la figura no falta, la seccion no corrio.
+        if "toy_tables.seccion_corre(" in fuente and not any(
+                toy_tables.seccion_corre(int(n))
+                for n in re.findall(r"seccion_corre\((\d+)\)", fuente)):
+            continue
         imagenes = [salida for salida in celda.get("outputs", [])
                     if any(clave.startswith("image/")
                            for clave in (salida.get("data") or {}))]
@@ -1937,12 +1962,16 @@ def test_the_figure_cells_emitted_an_image_and_not_a_description(cuaderno,
     # `SECCIONES_CON_GIF`, donde está escrito, porque contarlas del cuaderno
     # haría que un bloque perdido pasara sin que nada lo dijera.
     cuantas = len(toy_tables.familias(registro))
-    esperadas = cuantas + 1 + len(SECCIONES_CON_GIF) * cuantas
+    # Solo las secciones con gif que ADEMAS corren: una apagada no deja celdas
+    # que dibujen, y la cuenta tiene que seguirla o el test se vuelve una
+    # constante que hay que editar a mano cada vez que la bandera cambia.
+    con_gif = [n for n in SECCIONES_CON_GIF if toy_tables.seccion_corre(n)]
+    esperadas = cuantas + 1 + len(con_gif) * cuantas
     assert len(mostradas) == esperadas, (
         f"el cuaderno trae {len(mostradas)} celdas que dibujan y el registro "
         f"declara {cuantas} familias, así que tendrían que ser {esperadas}: "
         f"una por familia más la de los datos, más una por familia por cada "
-        f"sección de {list(SECCIONES_CON_GIF)}")
+        f"sección de {con_gif} (las de {list(SECCIONES_CON_GIF)} que corren)")
     malas = [indice for indice, imagenes, descrito in mostradas
              if imagenes != 1 or descrito]
     assert malas == [], (
@@ -2423,8 +2452,13 @@ def test_the_frame_carries_credas_shape_and_not_this_experiments_additions(
             # de este mismo test ya seguía a CREDA a épocas mientras esta
             # seguía leyendo la palabra vieja sin que nada lo dijera.
         assert re.fullmatch(
-            rf"{re.escape(familia)} · fuente y cabeza QUIETAS · "
-            rf"época \d+ de \d+ · azar \d\.\d{{3}}", titulo), titulo
+            # Toda figura habla INGLES --- regla del operador, 2026-10-23.
+            # La FORMA sigue siendo la de CREDA y no cambia: familia, el
+            # estado congelado, la epoca de un total y el azar. Lo que
+            # viaja con el idioma son las palabras, no la estructura ---
+            # que es lo que este test existe para fijar.
+            rf"{re.escape(familia)} · source and head FROZEN · "
+            rf"epoch \d+ of \d+ · chance \d\.\d{{3}}", titulo), titulo
         # El sello retirado, nombrado por sus palabras y no por su función: lo
         # que no puede volver es la LÍNEA, la escriba quien la escriba.
         for palabra in ("escala «", "ENSAYO", "revisión", "dispositivo",
@@ -2487,7 +2521,9 @@ def test_the_frame_carries_credas_shape_and_not_this_experiments_additions(
                 "el panel de la fase 2 del cuadro 0 dibuja texto adentro de los "
                 "ejes: CREDA dibuja sus ejes y los deja salir vacíos")
             assert len(fase_dos.get_xticks()) > 0, "el eje x quedó sin marcas"
-            assert fase_dos.get_xlabel() == "época de la fase 2", (
+            # Toda figura habla INGLES --- regla del operador, 2026-10-23 ---
+            # y este test fija el rotulo, asi que viaja con el.
+            assert fase_dos.get_xlabel() == "phase 2 epoch", (
                 fase_dos.get_xlabel())
             assert fase_dos.get_legend() is not None, (
                 "el panel de la fase 2 del cuadro 0 no trae leyenda: la de "
@@ -2505,8 +2541,8 @@ def test_the_frame_carries_credas_shape_and_not_this_experiments_additions(
             primera, segunda = fase_uno.get_title().split("\n")
             assert primera == de_creda["1"], (primera, de_creda["1"])
             assert re.fullmatch(
-                r"\(CE realizada: \[-?\d\.\d{4}, -?\d\.\d{4}\] = "
-                r"-?\d+\.\d% del eje\)", segunda), segunda
+                r"\(realised CE: \[-?\d\.\d{4}, -?\d\.\d{4}\] = "
+                r"-?\d+\.\d% of the axis\)", segunda), segunda
             assert fase_dos.get_title() == de_creda["2"], fase_dos.get_title()
 
         # La caja CUADRADA es una caja dibujada cuadrada, no sólo unos límites
@@ -2829,13 +2865,18 @@ def test_the_notebook_shows_the_animated_grid_inline_and_archives_it(cuaderno,
     for familia in toy_tables.familias(registro):
         assert f'toy_run.animar_familia(REGISTRO, "{familia}", FIGURAS)' in codigo, familia
     # Una por familia por cada sección que muestra gif: la 1, y las que
-    # `SECCIONES_CON_GIF` declara.
+    # `SECCIONES_CON_GIF` declara Y ADEMÁS corren. Una sección apagada no deja
+    # celda de gif --- su bloque entero es su encabezado y una nota --- así que
+    # la cuenta se DERIVA de la bandera en vez de ser una constante que hay que
+    # editar a mano cada vez que una sección se prende o se apaga.
     cuantas = len(toy_tables.familias(registro))
-    esperadas = cuantas * (1 + len(SECCIONES_CON_GIF))
+    con_gif = [n for n in SECCIONES_CON_GIF if toy_tables.seccion_corre(n)]
+    esperadas = cuantas * (1 + len(con_gif))
     assert codigo.count("display(Image(filename=") == esperadas, (
         f"el cuaderno muestra {codigo.count('display(Image(filename=')} gifs y "
         f"tendría que mostrar {esperadas}: uno por familia en la sección 1, "
-        f"más uno por familia por cada sección de {list(SECCIONES_CON_GIF)}")
+        f"más uno por familia por cada sección de {con_gif} (las de "
+        f"{list(SECCIONES_CON_GIF)} que corren)")
 
 
 def test_the_notebook_renders_the_intervention_ladder_for_every_family(

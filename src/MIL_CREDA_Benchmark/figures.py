@@ -383,7 +383,7 @@ def noise_curves(metric: str = "targetAccuracy", path: Path | None = None,
     if not drawn["rates"] or not wanted:
         # Decirlo dentro de la figura y no dibujar ejes vacíos: una figura en
         # blanco se lee como un resultado plano.
-        axis.text(0.5, 0.5, "ningún nivel declarado dejó registro todavía",
+        axis.text(0.5, 0.5, "no declared level has left a record yet",
                   ha="center", va="center", transform=axis.transAxes)
         axis.set_axis_off()
         return emit(figure, path) if path else figure
@@ -392,10 +392,10 @@ def noise_curves(metric: str = "targetAccuracy", path: Path | None = None,
         axis.plot(drawn["rates"], drawn["series"][arm], marker="o",
                   label=config.NAME_OF.get(arm, arm))
     axis.axhline(1.0 / config.CLASSES, linestyle=":", linewidth=1, color="0.5")
-    axis.annotate(f"azar ({1.0 / config.CLASSES:.2f})",
+    axis.annotate(f"chance ({1.0 / config.CLASSES:.2f})",
                   xy=(drawn["rates"][0], 1.0 / config.CLASSES),
                   xytext=(2, 3), textcoords="offset points", fontsize=8, color="0.4")
-    axis.set_xlabel("tasa de contaminación ρ")
+    axis.set_xlabel("contamination rate $\\rho$")
     axis.set_ylabel(metric)
     axis.set_xticks(drawn["rates"])
     axis.legend(fontsize=8, ncol=2)
