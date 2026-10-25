@@ -2082,10 +2082,26 @@ def _filas_por_brazo(barrido: dict, familia: str,
 #: geometria. El resultado no es "la atencion no funciona": es que este toyset
 #: no puede preguntarlo, y cuesta 3193 s preguntarlo igual.
 #:
+#: **La 4 tambien esta en `False`, y por otra razon.** Su figura y la de la 2
+#: pasaron a ser UNA: `caminata_fusionada` mueve `H` una sola vez y lee las DOS
+#: ramas que salen de ahi --- `w` por la cabeza (Ecs. 19, 20, 24) y `l_loc` por
+#: el kernel (Ecs. 18, 28-31) --- asi que las dos curvas son de la misma bolsa
+#: en el mismo barrido, que es lo que dos caminatas separadas no podian
+#: afirmar. La 4 no tenia otra cosa que esa figura y su tabla.
+#:
+#: **Y su tabla NO se perdio.** La 4 y la 5 corren el MISMO contraste --- `TG`
+#: contra `TGL` --- sobre dos metricas: la 5 mide accuracy, donde el local
+#: SUMA (p=0.0054, 0 derrotas en 30), y la 4 media correspondencia, donde el
+#: local RESTA (-0.0043, p=0.0045, 23 de 30 peor). Apagar la 4 sin mas se
+#: quedaba con la evidencia a favor y borraba la que esta en contra, que es lo
+#: que un jurado pesca. `masa_de_correspondencia` es una LECTURA sobre un
+#: modelo ya entrenado --- medido, 0.09 s por brazo, 0.27 s por celda, el 0.6%
+#: de una celda de la 5 --- asi que viaja montada en la 5 por +8 s en total.
+#:
 #: Prenderla de nuevo es cambiar este `False` y nada mas. Lo que la haria
 #: decidible es contaminar a nivel de INSTANCIA, como la seccion 2 contamina a
 #: nivel de BOLSA con `RHO_SOPESADO`; eso toca el acuerdo y es del operador.
-SECCIONES_QUE_CORREN = {2: True, 3: False, 4: True, 5: True}
+SECCIONES_QUE_CORREN = {2: True, 3: False, 4: False, 5: True}
 
 
 def seccion_corre(numero: int) -> bool:
@@ -2532,7 +2548,8 @@ def tabla_seleccion_test(barrido: dict, familia: str) -> str:
         solo=tuple(reglas[r] for r in ("topk", "arbitrary", "regular")))
 
 
-def tabla_correspondencia(barrido: dict, familia: str) -> str:
+def tabla_correspondencia(barrido: dict, familia: str,
+                          brazos: tuple | None = None) -> str:
     """Seccion 4: a que bolsas de la fuente se pego cada bolsa del blanco.
 
     Agrupada por la clase VERDADERA de la bolsa del blanco y sobre TODAS las
@@ -2546,7 +2563,7 @@ def tabla_correspondencia(barrido: dict, familia: str) -> str:
     la clase entre sus sujetos. El azar de cada columna va al lado, derivado de
     los conteos de este rol y nunca escrito a mano.
     """
-    por_brazo = _filas_por_brazo(barrido, familia)
+    por_brazo = _filas_por_brazo(barrido, familia, solo=brazos)
     cuantas = int(barrido.get("cuantasDeMasMasa", 5))
     clases = sorted({c for filas in por_brazo.values() for f in filas
                      for c in (f.get("deClase") or {})}, key=int)
@@ -2614,17 +2631,34 @@ def tabla_correspondencia(barrido: dict, familia: str) -> str:
             + "\n\n" + pie)
 
 
-def tabla_correspondencia_acc(barrido: dict, familia: str) -> str:
-    """Seccion 4: el acierto de los dos brazos de la correspondencia."""
+def tabla_correspondencia_acc(barrido: dict, familia: str,
+                              brazos: tuple | None = None) -> str:
+    """Seccion 4: el acierto de los dos brazos de la correspondencia.
+
+    `brazos` restringe el padron a los que el que llama declara, en su orden.
+    Existe porque estas tres tablas se mudaron: la seccion 4 esta apagada y su
+    contraste --- `TG` contra `TGL` --- viaja montado en la 5, cuyo artefacto
+    trae TRES brazos. Sin esto, `TL` entraria con todas sus lecturas vacias y
+    la tabla de test se negaria por contar tres donde espera dos.
+    """
     return tabla_acc(
         barrido, familia,
         f"{familia.upper()} · {_rotulo_norma_de(barrido, familia)} · "
-        "el término local")
+        "el término local", solo=brazos)
 
 
-def tabla_correspondencia_test(barrido: dict, familia: str) -> str:
-    """Seccion 4: UN par declarado, `con local - sin local`."""
-    brazos = list(barrido.get("brazos") or ())
+def tabla_correspondencia_test(barrido: dict, familia: str,
+                               brazos: tuple | None = None) -> str:
+    """Seccion 4: UN par declarado, `con local - sin local`.
+
+    `brazos` restringe el padron a los que el que llama declara, en su orden.
+    Existe porque estas tres tablas se mudaron: la seccion 4 esta apagada y su
+    contraste --- `TG` contra `TGL` --- viaja montado en la 5, cuyo artefacto
+    trae TRES brazos. Sin esto, `TL` entraria con todas sus lecturas vacias y
+    la tabla de test se negaria por contar tres donde espera dos.
+    """
+    brazos = list(brazos if brazos is not None
+                  else (barrido.get("brazos") or ()))
     if len(brazos) != 2:
         raise ValueError(
             f"la seccion 4 declara dos brazos y el artefacto trae {brazos}")

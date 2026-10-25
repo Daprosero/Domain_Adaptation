@@ -5331,7 +5331,7 @@ def test_la_figura_camina_a_los_tres_destinos_en_UN_solo_barrido(tiny):
                    if not l.get_label().startswith("_")]
         assert len(rotulos) == tiny.classes, rotulos
         # Cada camino nombra SU clase, y son todas distintas.
-        destinos = {r.split("clase ")[-1] for r in rotulos}
+        destinos = {r.split("class ")[-1] for r in rotulos}
         assert destinos == {str(c) for c in range(tiny.classes)}, rotulos
         # Y las curvas no son la misma curva tres veces.
         series = [tuple(l.get_ydata()) for l in fig.axes[1].get_lines()
@@ -5394,7 +5394,7 @@ def test_el_panel_de_fase_2_dibuja_una_epoca_por_punto_y_no_un_paso():
     fig, a = plt.subplots()
     toy_run._panel_fase2(a, fila, 0, 50.0)
     dibujadas = [l for l in a.get_lines() if l.get_label().startswith(
-        ("adaptación", "parte"))]
+        ("adaptation", "global part", "local part"))]
     assert len(dibujadas) == 3, [l.get_label() for l in a.get_lines()]
     for linea in dibujadas:
         assert len(linea.get_xdata()) == 2, (

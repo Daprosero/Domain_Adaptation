@@ -790,13 +790,33 @@ def test_la_seccion_tres_escribe_su_eje_en_la_fila():
     assert len(referencia) == 1, referencia
 
 
-def test_cada_barrido_publica_la_etiqueta_de_sus_brazos():
+def test_los_rotulos_viajan_con_las_FILAS_y_no_sin_ellas():
     """`toy_tables` no puede importar `toy_run` --- lo importa el --- asi que
-    el rotulo tiene que viajar con el artefacto o la tabla imprime el id."""
+    el rotulo tiene que viajar con el artefacto o la tabla imprime el id.
+
+    **La regla se DERIVA en vez de listar secciones**: los rotulos existen
+    para nombrar FILAS, asi que un barrido publica `rotulos` exactamente
+    cuando publica `celdas`. Antes era una lista de los cuatro barridos y la 2
+    la rompio al quedarse sin tablas (ruling del operador, 2026-10-23): un
+    artefacto sin filas no tiene nada que rotular. Una lista habria pedido
+    editarla a mano; esto sigue sola a la seccion que cambie.
+
+    Los dos lados importan. Sin filas y CON rotulos es un mapa que nadie lee.
+    Con filas y SIN rotulos la tabla imprime el id (`W-con`) donde CREDA
+    imprime una frase, que es el defecto que este test existe para atrapar.
+    """
     import inspect
     for barrido in (toy_run.barrido_sopesado, toy_run.barrido_agregacion,
                     toy_run.barrido_correspondencia, toy_run.barrido_ablacion):
-        assert '"rotulos"' in inspect.getsource(barrido), barrido.__name__
+        fuente = inspect.getsource(barrido)
+        tiene_filas = '"celdas": celdas' in fuente
+        tiene_rotulos = '"rotulos"' in fuente
+        assert tiene_filas == tiene_rotulos, (
+            barrido.__name__,
+            f"publica celdas={tiene_filas} y rotulos={tiene_rotulos}: "
+            "un artefacto con filas y sin rotulos hace que la tabla imprima "
+            "el id del brazo, y uno con rotulos y sin filas deja un mapa que "
+            "nadie lee")
 
 
 def test_la_caminata_de_correspondencia_no_materializa_psi_ni_mu():
