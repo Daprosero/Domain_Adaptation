@@ -191,22 +191,18 @@ def test_each_family_keeps_the_default_its_own_method_was_defined_with():
     own source and checks `milcreda_ramp`'s body is a call to `creda_ramp`
     and not a second copy of the curve.
 
-    And the benchmark's own promise -- "it always passes explicit values" --
-    is checked where it is made: every call in `harness.py` to the module's
-    `ramp(...)` (the one function whose own `ceiling` default is
-    `config.RAMP_CEILING` and could silently stand in for a search's winner)
-    is read from source and has to carry its own `ceiling=` keyword.
+    The call-site half (every `ramp(...)` call in `harness.py` carries its own
+    `ceiling=`) left with the digit benchmark's loops: `harness.py` no longer
+    calls `ramp` anywhere.
 
-    Reachable red, either half: rewrite `milcreda_ramp` to compute the curve
-    inline instead of calling `creda_ramp` (still produces the same numbers,
-    so the OTHER test stays green); or add a call to `harness.ramp(...)` (or
-    strip `ceiling=` from an existing one) that leans on the default.
+    Reachable red: rewrite `milcreda_ramp` to compute the curve inline instead
+    of calling `creda_ramp` (still produces the same numbers, so the OTHER
+    test stays green).
     """
     import ast
     from pathlib import Path as _Path
 
     from CREDA.schedules import CREDA_CEILING
-    from MIL_CREDA_Benchmark import harness
     from MIL_CREDA_Benchmark.schedules import MILCREDA_CEILING, milcreda_ramp
 
     assert CREDA_CEILING == 1e-4          # `creda_lambda_special`, the published one
@@ -226,18 +222,6 @@ def test_each_family_keeps_the_default_its_own_method_was_defined_with():
         f"milcreda_ramp calls {called_names}, not exactly {{'creda_ramp'}} -- "
         "it looks like a second implementation of the curve rather than a binding"
     )
-
-    # every real call site always passes the ceiling explicitly.
-    harness_tree = ast.parse(_Path(harness.__file__).read_text(encoding="utf-8"))
-    ramp_calls = [node for node in ast.walk(harness_tree)
-                 if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "ramp"]
-    assert ramp_calls, "harness.py no longer calls ramp(...) at all"
-    for call in ramp_calls:
-        keywords = {kw.arg for kw in call.keywords}
-        assert "ceiling" in keywords, (
-            f"a call to ramp(...) at harness.py:{call.lineno} omits `ceiling=` "
-            "and would silently fall back to config.RAMP_CEILING"
-        )
 
 
 def test_a_floor_gets_no_coefficient_rather_than_one_it_does_not_carry():
