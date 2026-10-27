@@ -22,6 +22,8 @@ __provenance__ = {
     "experiments": ["2.10"],
     "invariants": [
         "every_figure_carries_title_axis_labels_and_caption",
+        "panel_figures_carry_title_axis_labels_and_caption",
+        "the_auc_figure_carries_title_axis_labels_caption_and_chance_line",
     ],
 }
 
@@ -152,6 +154,142 @@ def box_by_group(groups: dict, title: str, xlabel: str, ylabel: str,
     if log_y:
         ax.set_yscale("log")
     return _finish(fig, ax, title, xlabel, ylabel, caption)
+
+
+def _panel_grid(n: int, ncols: int, title: str, panel_size):
+    ncols = max(1, min(ncols, n))
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols, squeeze=False,
+                             figsize=(panel_size[0] * ncols, panel_size[1] * nrows))
+    for ax in axes.flat[n:]:
+        ax.set_visible(False)
+    fig.suptitle(title, fontsize=12, fontweight="bold")
+    return fig, list(axes.flat[:n])
+
+
+def _finish_panels(fig, caption: str | None):
+    fig.tight_layout()
+    if caption:
+        fig.text(0.01, -0.01, textwrap.fill(caption, 130), ha="left", va="top",
+                 fontsize=9, style="italic", color="#333333")
+    return fig
+
+
+def box_panels(panels: dict, title: str, xlabel: str, ylabel: str,
+               caption: str | None = None, log_y: bool = False, ncols: int = 3,
+               panel_size=(4.2, 3.8)):
+    """One small box-by-group plot per panel (a cohort, a task), every point drawn."""
+    fig, axes = _panel_grid(len(panels), ncols, title, panel_size)
+    rng = np.random.default_rng(0)
+    for ax, (panel, groups) in zip(axes, panels.items()):
+        names = list(groups)
+        data = [np.asarray(groups[n], dtype=float) for n in names]
+        data = [d[np.isfinite(d)] for d in data]
+        ax.boxplot([d if len(d) else [np.nan] for d in data], showfliers=False)
+        ax.set_xticks(range(1, len(names) + 1),
+                      [f"{LABEL_ES.get(str(n), str(n))}\n(n={len(d)})" for n, d in zip(names, data)],
+                      fontsize=8)
+        for k, (n, d) in enumerate(zip(names, data), start=1):
+            ax.scatter(k + rng.uniform(-0.15, 0.15, len(d)), d, s=10, alpha=0.6,
+                       color=PALETTE.get(str(n), "#555555"))
+        if log_y:
+            ax.set_yscale("log")
+        ax.set_title(str(panel), fontsize=10)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.grid(axis="y", alpha=0.3)
+    return _finish_panels(fig, caption)
+
+
+def scatter_panels(panels: dict, title: str, xlabel: str, ylabel: str,
+                   caption: str | None = None, log_y: bool = False, ncols: int = 3,
+                   panel_size=(4.2, 3.8)):
+    """Per panel, one point cloud per group: `{panel: {group: (x, y)}}`."""
+    fig, axes = _panel_grid(len(panels), ncols, title, panel_size)
+    for ax, (panel, groups) in zip(axes, panels.items()):
+        for name, (x, y) in groups.items():
+            ax.scatter(np.asarray(x, dtype=float), np.asarray(y, dtype=float), s=12,
+                       alpha=0.65, color=PALETTE.get(str(name), "#555555"),
+                       label=LABEL_ES.get(str(name), str(name)))
+        if log_y:
+            ax.set_yscale("log")
+        ax.set_title(str(panel), fontsize=10)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.grid(alpha=0.3)
+        ax.legend(frameon=False, fontsize=7)
+    return _finish_panels(fig, caption)
+
+
+def paired_box_panels(panels: dict, title: str, xlabel: str, ylabel: str,
+                      caption: str | None = None, log_y: bool = False, ncols: int = 2,
+                      panel_size=(6.0, 4.0)):
+    """Per panel, side-by-side boxes per category, one colour per group:
+    `{panel: {category: {group: values}}}`."""
+    fig, axes = _panel_grid(len(panels), ncols, title, panel_size)
+    rng = np.random.default_rng(0)
+    for ax, (panel, categories) in zip(axes, panels.items()):
+        groups = list(dict.fromkeys(g for c in categories.values() for g in c))
+        width = 0.8 / max(len(groups), 1)
+        for k, group in enumerate(groups):
+            positions, data = [], []
+            for i, cat in enumerate(categories):
+                d = np.asarray(categories[cat].get(group, []), dtype=float)
+                d = d[np.isfinite(d)]
+                positions.append(i + (k - (len(groups) - 1) / 2) * width)
+                data.append(d)
+            color = PALETTE.get(str(group), "#555555")
+            ax.boxplot([d if len(d) else [np.nan] for d in data], positions=positions,
+                       widths=width * 0.9, showfliers=False,
+                       medianprops={"color": color, "linewidth": 2})
+            for p, d in zip(positions, data):
+                ax.scatter(p + rng.uniform(-width / 4, width / 4, len(d)), d, s=9,
+                           alpha=0.6, color=color)
+            ax.scatter([], [], color=color, label=LABEL_ES.get(str(group), str(group)))
+        ax.set_xticks(range(len(categories)), [str(c) for c in categories])
+        if log_y:
+            ax.set_yscale("log")
+        ax.set_title(str(panel), fontsize=10)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.grid(axis="y", alpha=0.3)
+        ax.legend(frameon=False, fontsize=8)
+    return _finish_panels(fig, caption)
+
+
+def auc_bars(table: pd.DataFrame, title: str, xlabel: str, ylabel: str,
+             caption: str | None = None, figsize=(11, 5.5)):
+    """One horizontal bar per pair: mean AUC with its fold sd, the 0.5 chance
+    line, and the permutation null's 2.5-97.5 % band drawn behind each bar.
+
+    `table` needs `pair`, `auc_mean`, `auc_sd`, `null_q025`, `null_q975`,
+    `perm_p` and, for colour, `arm`.
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    positions = np.arange(len(table))
+    arms = list(dict.fromkeys(table["arm"]))
+    cmap = plt.get_cmap("tab10")
+    colors = [cmap(arms.index(a) % 10) for a in table["arm"]]
+    for k, row in enumerate(table.itertuples()):
+        ax.add_patch(plt.Rectangle((row.null_q025, k - 0.42), row.null_q975 - row.null_q025,
+                                   0.84, color="#bbbbbb", alpha=0.6, zorder=0))
+    ax.barh(positions, table["auc_mean"], xerr=table["auc_sd"], color=colors,
+            height=0.55, capsize=3, zorder=2)
+    for k, row in enumerate(table.itertuples()):
+        ax.text(min(row.auc_mean + row.auc_sd, 1.0) + 0.01, k,
+                f"{row.auc_mean:.2f} (p={row.perm_p:.2g})", va="center", fontsize=8)
+    ax.axvline(0.5, color="black", linestyle="--", linewidth=1, zorder=3)
+    ax.set_yticks(positions, list(table["pair"]), fontsize=8)
+    ax.invert_yaxis()
+    ax.set_xlim(0.0, 1.18)
+    handles = [plt.Rectangle((0, 0), 1, 1, color=cmap(i % 10)) for i in range(len(arms))]
+    handles.append(plt.Rectangle((0, 0), 1, 1, color="#bbbbbb", alpha=0.6))
+    ax.legend(handles, arms + ["nulo por permutación (2,5–97,5 %)"], fontsize=7,
+              frameon=False, loc="center left", bbox_to_anchor=(1.0, 0.5))
+    fig = _finish(fig, ax, title, xlabel, ylabel, caption)
+    ax.grid(axis="x", alpha=0.3)
+    ax.grid(axis="y", visible=False)
+    return fig
 
 
 def save(fig, name: str, out_dir: str | Path) -> Path:
