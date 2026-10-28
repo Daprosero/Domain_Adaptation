@@ -24,6 +24,7 @@ __provenance__ = {
         "every_figure_carries_title_axis_labels_and_caption",
         "panel_figures_carry_title_axis_labels_and_caption",
         "the_auc_figure_carries_title_axis_labels_caption_and_chance_line",
+        "the_spectrum_figure_shows_both_curves_the_band_edge_and_the_new_nyquist",
     ],
 }
 
@@ -290,6 +291,31 @@ def auc_bars(table: pd.DataFrame, title: str, xlabel: str, ylabel: str,
     ax.grid(axis="x", alpha=0.3)
     ax.grid(axis="y", visible=False)
     return fig
+
+
+def psd_before_after(raw: tuple, processed: tuple, title: str,
+                     caption: str | None = None, lines: dict | None = None,
+                     xlabel: str = "frecuencia (Hz)",
+                     ylabel: str = "densidad espectral (µV²/Hz, escala log)",
+                     labels: tuple[str, str] = ("crudo", "preprocesado"),
+                     figsize=(9, 4.5)):
+    """Two spectra on a log axis, `(freqs, psd)` each, with reference frequencies.
+
+    Experiments plan v05, Sec. 2.7: the raw record against the processed one,
+    so the 45 Hz edge and the 128 Hz rate (64 Hz Nyquist) are visible.
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    for (freqs, psd), label, color in zip((raw, processed), labels, ("#7f8c8d", "#117a65")):
+        freqs, psd = np.asarray(freqs, dtype=float), np.asarray(psd, dtype=float)
+        keep = psd > 0
+        ax.plot(freqs[keep], psd[keep], label=label, color=color, linewidth=1.3)
+    ax.set_yscale("log")
+    for k, (label, x) in enumerate((lines or {}).items()):
+        ax.axvline(x, color="#c0392b", linestyle="--", linewidth=1.2)
+        ax.text(x, 0.98 - 0.07 * (k % 2), f" {label}", color="#c0392b", fontsize=9,
+                va="top", transform=ax.get_xaxis_transform())
+    ax.legend(frameon=False)
+    return _finish(fig, ax, title, xlabel, ylabel, caption)
 
 
 def save(fig, name: str, out_dir: str | Path) -> Path:
