@@ -294,3 +294,43 @@ def test_a_two_trial_smoke_study_completes_and_writes_its_sqlite(tmp_path):
         assert math.isfinite(trial.user_attrs["label_free_score"])
         assert trial.user_attrs["sigmaByRotation"] == [records[r][1]["sigma"]
                                                        for r in range(4)]
+
+
+def _lowest(space):
+    return {k: (d.low if isinstance(d, FloatDistribution) else d.choices[0])
+            for k, d in space.items()}
+
+
+def test_a_registered_phase_one_trainer_replaces_the_shared_one_for_its_group_only(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(search, "PHASE_ONE_TRAINERS", dict(search.PHASE_ONE_TRAINERS))
+    monkeypatch.setattr(model_store, "BUILDERS", dict(model_store.BUILDERS))
+    model_store.BUILDERS["AdaptMIL"] = model_store.BUILDERS["common"]
+    calls = []
+
+    def trainer(name):
+        def run(model, source_train, source_valid, hyper, generator, device, *, seed, fold,
+                transfer):
+            calls.append((name, fold, transfer))
+            return {"history": [{"epoch": 1}], "checkpoint": {}}
+        return run
+
+    monkeypatch.setattr(tp, "train_source_phase", trainer("shared"))
+    search.register_phase_one("AdaptMIL", trainer("native"))
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    for group in ("AdaptMIL", "common"):
+        hyper = search.phase_one_hyper(group, _lowest(search.PHASE_ONE_SPACES[group]),
+                                       SCHEDULE)
+        out = search.train_phase_one(group, data, 0, search.SEARCH_SEED, hyper, CPU)
+        assert out["result"]["history"] == [{"epoch": 1, "model": f"{group}:phase1"}]
+    assert calls == [("native", 0, LEVEL.name), ("shared", 0, LEVEL.name)]
+
+
+def test_only_a_group_with_its_own_unit_registers_a_phase_one_trainer(monkeypatch):
+    monkeypatch.setattr(search, "PHASE_ONE_TRAINERS", dict(search.PHASE_ONE_TRAINERS))
+    assert search.PHASE_ONE_TRAINERS == {}
+    for group in ("common", "MIL-CREDA", "UDA-DDA"):
+        with pytest.raises(search.SearchError):
+            search.register_phase_one(group, print)
+    search.register_phase_one("HASD", print)
+    assert search.PHASE_ONE_TRAINERS == {"HASD": print}

@@ -281,9 +281,27 @@ def _rotation(data: SearchData, rotation: int) -> Mapping[str, list[two_phase.Ba
         raise SearchError(f"rotation {rotation} is not in the search data") from None
 
 
+#: Phase-1 group -> its own source trainer, for a group whose unit trains phase 1 with its
+#: native loss. A group absent here trains with `two_phase.train_source_phase`.
+PHASE_ONE_TRAINERS: dict[str, Callable] = {}
+
+
+def register_phase_one(group: str, trainer: Callable) -> None:
+    """Wire the native phase-1 trainer of a group registered by its own unit.
+
+    `trainer` has the signature of `two_phase.train_source_phase`:
+    `(model, source_train, source_valid, hyper, generator, device, *, seed, fold, transfer)`.
+    The common group and MIL-CREDA keep the shared trainer.
+    """
+    if group not in model_store.GROUPS or group in ("common", "MIL-CREDA"):
+        raise SearchError(f"{group!r} is not a phase-1 group registered by its own unit")
+    PHASE_ONE_TRAINERS[group] = trainer
+
+
 def train_phase_one(group: str, data: SearchData, rotation: int, seed: int, hyper: Mapping,
                     device: torch.device | str = "cpu") -> dict:
-    """Phase 1 of `group` on one rotation (`two_phase.train_source_phase`)."""
+    """Phase 1 of `group` on one rotation (its registered trainer, else
+    `two_phase.train_source_phase`)."""
     device = torch.device(device)
     d = _rotation(data, rotation)
     channels = data.channels()
@@ -291,9 +309,9 @@ def train_phase_one(group: str, data: SearchData, rotation: int, seed: int, hype
     generator = torch.Generator().manual_seed(seed)
     model = model_store.build_model(group, channels["source"], channels["target"],
                                     hyper).to(device)
-    result = two_phase.train_source_phase(model, d["source_train"], d["source_valid"], hyper,
-                                          generator, device, seed=seed, fold=rotation,
-                                          transfer=data.transfer.name)
+    trainer = PHASE_ONE_TRAINERS.get(group, two_phase.train_source_phase)
+    result = trainer(model, d["source_train"], d["source_valid"], hyper, generator, device,
+                     seed=seed, fold=rotation, transfer=data.transfer.name)
     result["history"] = [{**r, "model": f"{group}:phase1"} for r in result["history"]]
     return {"group": group, "model": model, "result": result, "hyper": dict(hyper),
             "channels": channels}
