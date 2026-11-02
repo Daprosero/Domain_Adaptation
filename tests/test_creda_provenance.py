@@ -47,24 +47,8 @@ PACKAGE = REPOSITORY / "src" / "CREDA"
 TESTS = Path(__file__).resolve().parent
 
 
-COMPARATORS = PACKAGE / "comparators"
-
-
-def _is_vendored(path: Path) -> bool:
-    """A comparator file copied verbatim from a paper's official repository.
-
-    Those files are third-party code kept byte-for-byte (local edits marked
-    `# LOCAL EDIT:`); stamping a `__provenance__` on them would break that.
-    Their own declaration is the citation header that
-    `tests/test_comparators_official.py::test_vendored_files_carry_citation_headers`
-    demands. The adapters around them are ours and stay under the rule.
-    """
-    return path.parent.parent == COMPARATORS and path.name.startswith("upstream_")
-
-
 def _modules() -> list[Path]:
-    return [path for path in sorted(PACKAGE.rglob("*.py"))
-            if path.name != "__init__.py" and not _is_vendored(path)]
+    return [path for path in sorted(PACKAGE.rglob("*.py")) if path.name != "__init__.py"]
 
 
 def _provenance(path: Path) -> dict | None:
@@ -127,21 +111,11 @@ def test_the_package_holds_the_modules_this_file_speaks_for():
     }, f"the package no longer holds the modules this file was written for: {found}"
 
 
-def test_only_verbatim_comparator_files_are_exempt_from_the_rule():
-    """The exemption reaches the vendored files and nothing else.
-
-    Every exempt file must carry the citation header, and every comparator
-    adapter must still be enumerated, so widening `_is_vendored` by mistake
-    cannot silently drop our own code from the check.
-    """
-    exempt = [path for path in sorted(PACKAGE.rglob("*.py")) if _is_vendored(path)]
-    assert exempt, "no vendored comparator file found: the exemption guards nothing"
-    for path in exempt:
-        head = path.read_text(encoding="utf-8")[:2500]
-        assert "Repository:" in head and "Commit:" in head, path
-    enumerated = set(_modules())
-    adapters = sorted(COMPARATORS.glob("*/adapter.py"))
-    assert adapters and all(path in enumerated for path in adapters)
+def test_the_old_creda_comparators_are_gone():
+    """The vendored CREDA comparators were removed on the operator's word
+    (2026-11-02); the comparators live only under `MIL_CREDA_EEG/comparators`."""
+    assert not (PACKAGE / "comparators").exists()
+    assert not list(TESTS.glob("test_comparator*.py"))
 
 
 def test_every_module_under_the_package_declares_a_provenance():
