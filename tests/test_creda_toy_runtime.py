@@ -86,13 +86,13 @@ RETENIDOS = (
 
 
 def _tree(path: Path) -> ast.Module:
-    """Parse, tolerating a SyntaxWarning only in vendored comparator code."""
+    """Parse, failing on any SyntaxWarning: no vendored code remains to tolerate."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", SyntaxWarning)
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    assert not caught or "comparators" in path.parts, (
+    assert not caught, (
         f"{path.name} raised {[str(w.message) for w in caught]} while being "
-        "parsed, and it is not vendored, so it is ours to fix")
+        "parsed, so it is ours to fix")
     return tree
 
 

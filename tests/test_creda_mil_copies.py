@@ -90,14 +90,6 @@ RENAMED = {
 IMPORTED = ("confidences",)
 
 
-#: Vendored upstream lives here, and its defects are not ours to repair. The
-#: only one that reaches this file is a docstring that spells LaTeX in a
-#: non-raw string (`comparators/daln/upstream_grl.py:41`), which makes
-#: `ast.parse` emit a SyntaxWarning. Tolerated by path and never by warning
-#: class, so the same mistake in our own sources still fails below.
-VENDORED = "comparators"
-
-
 def _public_functions(root: pathlib.Path) -> dict[str, list[str]]:
     """Every public function and method the package defines, by name."""
     found: dict[str, list[str]] = {}
@@ -107,9 +99,9 @@ def _public_functions(root: pathlib.Path) -> dict[str, list[str]]:
             # `filename=` is what makes the warning nameable at all: without it
             # the message reads `<unknown>:41` and cannot be attributed.
             tree = ast.parse(path.read_text(), filename=str(path))
-        assert not caught or VENDORED in path.parts, (
+        assert not caught, (
             f"{path.relative_to(ROOT)} raised {[str(w.message) for w in caught]} "
-            "while being parsed, and it is not vendored, so it is ours to fix")
+            "while being parsed, so it is ours to fix")
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
