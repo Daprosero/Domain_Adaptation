@@ -1,12 +1,21 @@
 """The reproducible entry point: raw BALLADEER in, `Data/processed/` out.
 
-Experiments plan v05, Secs. 2.1-2.10 and 3.1. One function,
+Experiments plan v18, Secs. 2.1-2.10, 3.1, 3.2 and 4.2. One function,
 `build_processed`, takes the raw release and writes every processed record,
-the manifest, the two flow tables and the exclusion crosses. The notebook
-`BALLADEER_03_Preprocesamiento.ipynb` calls it, and so does the command line:
+the manifest, the two flow tables and the exclusion crosses; then it freezes
+the five-fold partition over the surviving subjects (`partition`, Sec. 4.2)
+and writes the sha256 of every processed file to a manifest kept in git. The
+notebook `BALLADEER_03_Preprocesamiento.ipynb` calls it, and so does the
+command line, from the repository root:
 
     PYTHONPATH=src python -m MIL_CREDA_EEG.preprocess \\
         --raw "MIL-CREDA/Data/raw/BALLADEER ADHD DATASET" --out MIL-CREDA/Data/processed
+
+The command line writes the partition to `MIL-CREDA/Partition/folds.json` and
+the hash manifest to `MIL-CREDA/Manifests/processed_sha256.csv` unless told
+otherwise; the function writes them only where it is told to. A partition
+that already exists is recomputed and compared, never overwritten
+(`partition.freeze_partition`).
 
 Nothing here reads an audit output, a scratch file or anything git-ignored
 except the raw release itself: every exclusion and every mark is recomputed
@@ -27,17 +36,22 @@ import hashlib
 import json
 from pathlib import Path
 
-from MIL_CREDA_EEG import exclusions, inventory
+import pandas as pd
+
+from MIL_CREDA_EEG import exclusions, inventory, partition
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v05.md",
-    "sections": ["2.1", "2.2", "2.3", "2.4", "2.5", "2.7", "2.8", "2.10", "3.1"],
-    "experiments": ["2.1", "2.2", "2.3", "2.4", "2.5", "2.7", "2.8", "2.10", "3.1"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v18.md",
+    "sections": ["2.1", "2.2", "2.3", "2.4", "2.5", "2.7", "2.8", "2.10", "3.1", "3.2", "4.2"],
+    "experiments": ["2.1", "2.2", "2.3", "2.4", "2.5", "2.7", "2.8", "2.10", "3.1", "3.2",
+                    "4.2"],
     "invariants": [
         "the_cli_and_the_notebook_entry_function_write_identical_outputs",
         "rebuild_clears_only_the_files_this_pipeline_writes",
         "a_raw_tree_without_demographics_or_with_the_wrong_subject_count_refuses",
         "a_zip_whose_md5_differs_refuses",
+        "the_hash_manifest_lists_every_processed_file",
+        "a_changed_partition_input_stops_the_entry_point",
     ],
 }
 
@@ -49,6 +63,10 @@ EXPECTED_SUBJECTS = 158
 
 #: Every file name this pipeline writes at the top of the output folder.
 OUTPUT_FILES = ("manifest.csv", "flow_CGX.csv", "flow_EMOTIV.csv", "exclusion_crosses.csv")
+
+#: Kept in git, outside the data folder (Sec. 4.2), relative to the repository root.
+PARTITION_RELATIVE = partition.PARTITION_RELATIVE
+SHA_MANIFEST_RELATIVE = Path("MIL-CREDA") / "Manifests" / "processed_sha256.csv"
 
 
 class RawDataError(RuntimeError):
@@ -84,6 +102,28 @@ def file_md5(path: str | Path, chunk: int = 1 << 24) -> str:
     return digest.hexdigest()
 
 
+def file_sha256(path: str | Path, chunk: int = 1 << 24) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(chunk), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def write_sha_manifest(out_dir: str | Path, path: str | Path) -> pd.DataFrame:
+    """Every file under `out_dir` (hidden files aside): its path, size and sha256."""
+    out_dir, path = Path(out_dir), Path(path)
+    files = sorted((p for p in out_dir.rglob("*")
+                    if p.is_file() and not p.name.startswith(".")),
+                   key=lambda p: p.relative_to(out_dir).as_posix())
+    table = pd.DataFrame([{"file": p.relative_to(out_dir).as_posix(),
+                           "bytes": p.stat().st_size, "sha256": file_sha256(p)}
+                          for p in files], columns=["file", "bytes", "sha256"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(path, index=False, lineterminator="\n")
+    return table
+
+
 def check_zip(data_dir: str | Path, expected: str = ZIP_MD5) -> dict:
     """The release zip's MD5 when the zip sits in `data_dir`; refuses on a mismatch."""
     for name in ZIP_NAMES:
@@ -113,8 +153,17 @@ def clear_outputs(out_dir: str | Path) -> int:
 
 def build_processed(raw_root: str | Path, out_dir: str | Path, workers: int = 4,
                     rebuild: bool = True,
-                    expected_subjects: int | None = EXPECTED_SUBJECTS) -> dict:
-    """Raw release -> every processed record, the manifest, the flows and the crosses."""
+                    expected_subjects: int | None = EXPECTED_SUBJECTS,
+                    partition_path: str | Path | None = None,
+                    sha_manifest_path: str | Path | None = None,
+                    partition_seed: int = partition.PARTITION_SEED,
+                    regenerate_partition: bool = False,
+                    new_partition_name: str | None = None) -> dict:
+    """Raw release -> processed records, manifest, flows, crosses, partition, hashes.
+
+    The partition is frozen at `partition_path` and the hash manifest written
+    at `sha_manifest_path`; either step is skipped when its path is None.
+    """
     raw = check_raw(raw_root, expected_subjects)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -122,12 +171,21 @@ def build_processed(raw_root: str | Path, out_dir: str | Path, workers: int = 4,
     summaries = exclusions.run_preprocess(raw_root, out_dir, workers=workers, force=rebuild)
     demo = inventory.load_demographics(raw_root)
     outputs = exclusions.write_outputs(summaries, demo, out_dir)
-    return {**outputs, "raw": raw, "cleared": cleared, "summaries": summaries}
+    frozen = None
+    if partition_path is not None:
+        frozen = partition.freeze_partition(
+            partition.survivors(outputs["manifest"]), partition_path, seed=partition_seed,
+            regenerate=regenerate_partition, new_name=new_partition_name)
+    hashes = (write_sha_manifest(out_dir, sha_manifest_path)
+              if sha_manifest_path is not None else None)
+    return {**outputs, "raw": raw, "cleared": cleared, "summaries": summaries,
+            "partition": frozen, "sha_manifest": hashes}
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="BALLADEER preprocessing (plan v05): raw release -> Data/processed/.")
+        description="BALLADEER preprocessing (plan v18): raw release -> Data/processed/, "
+                    "then the frozen partition and the hash manifest.")
     parser.add_argument("--raw", required=True, help="the extracted release folder")
     parser.add_argument("--out", required=True, help="the processed output folder")
     parser.add_argument("--workers", type=int, default=4)
@@ -135,13 +193,25 @@ def main(argv: list[str] | None = None) -> None:
                         help="reuse the per-record cache under --out instead of recomputing")
     parser.add_argument("--expected-subjects", type=int, default=EXPECTED_SUBJECTS,
                         help="UB* folders the release must hold; 0 skips the count")
+    parser.add_argument("--partition", default=str(PARTITION_RELATIVE),
+                        help="the frozen folds.json; recomputed and compared, never overwritten")
+    parser.add_argument("--sha-manifest", default=str(SHA_MANIFEST_RELATIVE),
+                        help="where the sha256 of every processed file is written")
+    parser.add_argument("--regenerate-partition", metavar="NEW_NAME", default=None,
+                        help="write a new partition under this file name, next to --partition")
     args = parser.parse_args(argv)
     result = build_processed(args.raw, args.out, args.workers, not args.no_rebuild,
-                             args.expected_subjects or None)
+                             args.expected_subjects or None,
+                             partition_path=args.partition, sha_manifest_path=args.sha_manifest,
+                             regenerate_partition=args.regenerate_partition is not None,
+                             new_partition_name=args.regenerate_partition)
     manifest = result["manifest"]
+    frozen = result["partition"]
     print(json.dumps({"records": int(len(manifest)),
                       "excluded": int(manifest["excluded"].sum()),
                       "windows": int(manifest["n_windows"].sum()),
+                      "partition": {"status": frozen["status"], "path": str(frozen["path"]),
+                                    "sha256": frozen["doc"][partition.HASH_FIELD]},
                       "raw": result["raw"], "out": str(args.out)}))
 
 
