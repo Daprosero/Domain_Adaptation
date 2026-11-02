@@ -129,3 +129,20 @@ def test_an_unregistered_phase_one_group_cannot_be_rebuilt(tmp_path):
     path = _save(tmp_path / "Models", model, sha, name="AdaptMIL", sigma=None)
     with pytest.raises(model_store.GroupNotRegistered):
         model_store.load_model(path, partition_path=path_p)
+
+
+def test_the_code_version_covers_every_comparator_module(tmp_path, monkeypatch):
+    src = model_store._SRC
+    comparators = sorted(p.relative_to(src).as_posix()
+                         for p in (src / "MIL_CREDA_EEG" / "comparators").rglob("*.py"))
+    assert comparators and set(comparators) <= set(model_store.CODE_FILES)
+    import shutil
+    copy = tmp_path / "src"
+    for name in model_store.CODE_FILES:
+        (copy / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src / name, copy / name)
+    monkeypatch.setattr(model_store, "_SRC", copy)
+    before = model_store.code_version()
+    edited = copy / comparators[-1]
+    edited.write_text(edited.read_text(encoding="utf-8") + "\n# edited\n", encoding="utf-8")
+    assert model_store.code_version() != before

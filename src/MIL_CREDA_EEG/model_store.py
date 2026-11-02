@@ -86,6 +86,10 @@ CODE_FILES = (
     *sorted(p.relative_to(_SRC).as_posix() for p in (_SRC / "MIL_CREDA").glob("*.py")),
     "MIL_CREDA_EEG/eegnet.py", "MIL_CREDA_EEG/mil_creda_model.py",
     "MIL_CREDA_EEG/mil_wrapper.py", "MIL_CREDA_EEG/two_phase.py",
+    # Every comparator's model and training code, so a checkpoint names the comparator
+    # bytes that produced it too.
+    *sorted(p.relative_to(_SRC).as_posix()
+            for p in (_SRC / "MIL_CREDA_EEG" / "comparators").rglob("*.py")),
 )
 
 
