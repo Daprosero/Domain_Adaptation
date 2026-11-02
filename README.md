@@ -9,6 +9,40 @@ The implementation follows the article: [Conditional Domain Adaptation with α-R
 - CREDA model and loss implementations in `src/CREDA/models.py`.
 - Training utilities for CREDA and comparison methods in `src/CREDA/training_pipeline.py`.
 - Result-generation notebooks under `CREDA/Notebooks/` and stored model/result artifacts under `CREDA/`.
+- One toyset training tutorial per method (see below).
+
+## Toyset tutorials: how to train CREDA and MIL-CREDA
+
+Each method has exactly one toyset notebook. It is a complete, readable training example: data, model, loss, optimizer, training loops, evaluation and plots, on the three toyset families (`lunas`, `toroide`, `rollo`) with a single architecture, an MLP with BatchNorm (fixed, not a choice).
+
+| Method | Notebook | What you choose |
+|--------|----------|-----------------|
+| CREDA | `CREDA/Notebooks/Toyset.ipynb` | `VERSION = "v2"` (default, the current two-phase protocol) or `"v01"` (the single joint training of the previous publication). Each version is one dictionary in an `if/else`. |
+| MIL-CREDA | `MIL-CREDA/Notebooks/Toyset.ipynb` | The budget cell; bags, the adapted arm and the declared hyperparameters come from `MIL_CREDA_Benchmark`. |
+
+### Run it
+
+1. Install the dependencies from `requirements.txt` in a virtual environment.
+2. Start Jupyter as usual, either from the repository root (`jupyter lab`, then open the notebook) or from the notebook's folder (`cd CREDA/Notebooks && jupyter lab Toyset.ipynb`).
+3. Run all cells. The kernel starts in the notebook's folder and the first cell resolves the repository root from there, so no install of `src/` is needed.
+
+Both notebooks train on CPU, download nothing and write no separate result files; models, histories and figures stay in memory. The notebooks are saved with executed outputs. Each starts with one input-data figure: three 3D panels (one per toyset), with source (`x`) and target (`o`) overlaid on the same axes. Source points are coloured by class and target points stay grey, without using target labels. Outputs also include an adaptation GIF and a confidence-`w` animation for each family (six GIFs per method), alongside the static summaries. CREDA reads confidence on points; MIL-CREDA reads it on bag posteriors. Adaptation frames come from real training epochs; the confidence paths are constructed sweeps, not training time.
+
+Rendering controls do not change training: CREDA's `FRAMES` selects captured epochs and `WALK_STEPS` sets the confidence-walk resolution; MIL-CREDA's `BARRIDOS_W` sets its confidence-walk resolution.
+
+### Budgets are didactic, not published results
+
+The defaults are short so the notebooks finish quickly. They are not tuned and they are not the image benchmarks or the stored runs under `*/Results/`; the accuracies a notebook prints belong to that run only.
+
+| Notebook | Defaults (one seed) |
+|----------|---------------------|
+| CREDA, `v2` | `source_epochs=60` (ceiling, early stop with `source_patience=15`), then `adaptation_epochs=20` |
+| CREDA, `v01` | `epochs=60` of joint training |
+| MIL-CREDA | `EPOCAS_1 = 60` (ceiling, `PACIENCIA_1 = 15`), then `EPOCAS_2 = 20` |
+
+To change the CREDA budget, set `ADJUSTMENTS` (for example `{"source_epochs": 3, "adaptation_epochs": 2}`); for MIL-CREDA, edit the budget cell.
+
+`MIL-CREDA/AGREED-TOYSET.md` is kept as the historical record of the earlier toyset experiment; the tutorials above replace it as the entrypoint.
 
 ## Verified dependencies
 

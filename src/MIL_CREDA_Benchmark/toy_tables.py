@@ -93,7 +93,7 @@ as evidence while being none:
 * **A table is grouped BY FAMILY, never by kind of quantity.** Every renderer
   whose rows are cells takes a `familia` and shows that family alone, so one
   block of the document holds one toyset's figure and one toyset's numbers
-  together -- the shape `CREDA/Notebooks/Toyset_Plot.ipynb` already has. The
+  together -- the shape the retired `CREDA/Notebooks/Toyset_Plot.ipynb` had. The
   shape this replaced crossed all three families inside each table, one table
   per kind of quantity, and a reader who wanted to know what happened to
   `toroide` had to assemble it out of five tables. The grouping is enforced
@@ -265,9 +265,9 @@ def rol_seleccion(registro: dict) -> str:
 #: and CREDA's suptitle is one line.** So the stamp goes from the figure, this
 #: was its last reader, and the function goes rather than standing for nobody.
 #: Do not re-raise it as an open gap, and do not reintroduce the line as prose
-#: in a cell: what a reader loses is still said by the record itself and by the
-#: preamble cell of `Toyset_Plot.ipynb`, which prints the scale and the revision
-#: before anything is drawn.
+#: in a cell: what a reader loses is still said by the record itself, which
+#: carries the scale and the revision (the retired `Toyset_Plot.ipynb` also
+#: printed them in its preamble cell).
 
 
 def familias(registro: dict) -> list[str]:
@@ -608,7 +608,7 @@ def _por_celda(registro: dict, familia: str | None = None) -> list[dict]:
 # prose either: a number typed into a paragraph cannot be recomputed, which is
 # the defect that rule exists to stop, so moving them there would have traded a
 # removal for a worse one. Every one of them is still in the record
-# `Toyset_Generator.ipynb` wrote, under the field named here, and is one
+# `toy_run.guardar` wrote, under the field named here, and is one
 # `toy_run.cargar` away from whoever wants it.
 #
 # * `phase1Epochs` / `phase2Steps` -- the count of cells whose stop chose an
@@ -666,8 +666,9 @@ def _por_celda(registro: dict, familia: str | None = None) -> list[dict]:
 # * `render_familia_busqueda` -- DROPPED, and not folded. Every fact it
 #   rendered -- the trial counts, the best valid accuracy, the ties, the
 #   criteria, the searched dimensions and the six chosen values -- is already
-#   rendered by `MIL-CREDA/Notebooks/Toyset_Generator.ipynb`'s own search cell,
-#   out of the same four record fields (`records1`, `records2`, `hp1`, `hp2`).
+#   rendered by the search cell of the since-retired
+#   `MIL-CREDA/Notebooks/Toyset_Generator.ipynb`, out of the same four record
+#   fields (`records1`, `records2`, `hp1`, `hp2`), which the record still holds.
 #   It was therefore one measurement in two documents, which is the duplication
 #   rule across the two notebooks of one run, and the document that OWNS a
 #   search is the one that ran it. Nothing is left computing it: the renderer,

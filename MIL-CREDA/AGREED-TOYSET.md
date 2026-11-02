@@ -1,5 +1,14 @@
 # Agreed for the toyset — bound to research-concept-r34.md
 
+> **Historical record — superseded on 2026-11-02.** The two-notebook toyset this
+> document prescribes (`Toyset_Generator.ipynb` + `Toyset_Plot.ipynb`) and its
+> section-by-section experiment were retired. The toyset entrypoint is now one
+> teaching notebook, `MIL-CREDA/Notebooks/Toyset.ipynb`: the three families, one
+> BatchNorm MLP, trained in memory with a short didactic budget, writing nothing
+> to `Results/`. See the repository `README.md`. The items below are kept
+> unchanged as the record of what was agreed for the runs stored under
+> `MIL-CREDA/Results/Toyset/`; do not tick or extend them.
+
 Every item here was settled with the operator, not derived from a plan of work.
 An item that never reaches the code shows up as an unticked box rather than as a
 silence. Nothing here is re-decided while implementing: a collision with any of
@@ -10,6 +19,8 @@ the DIGIT benchmark report, which is being retired. Its content stays in git at
 `7b9f4a0` and is not repaired. This file governs the toyset and nothing else.
 
 ## Scope — two notebooks, and the rest is gone
+
+*(Superseded: see the banner above.)*
 
 - [ ] The toyset is `Toyset_Generator.ipynb` and `Toyset_Plot.ipynb`, and no other
       notebook exists under `MIL-CREDA/Notebooks/`. The generator trains and writes

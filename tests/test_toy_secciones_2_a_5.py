@@ -627,7 +627,6 @@ def test_regular_es_determinista_y_arbitrary_no_lo_es_sobre_la_misma_bolsa():
     assert pos1 != pos2, "arbitrary sortea por bolsa; dos bolsas no coinciden"
 
 
-
 # ===========================================================================
 # El rediseno del 2026-10-20: la seccion 4 de dos brazos, la 2 contaminada, y
 # las dos caminatas construidas.
@@ -991,50 +990,6 @@ def test_un_brazo_sin_los_dos_terminos_no_recibe_marca_de_ablacion():
 
 
 # ------------------------------------- la bandera que apaga una seccion entera
-
-
-def test_la_bandera_apaga_CORRER_y_MOSTRAR_en_los_dos_cuadernos():
-    """Una sola bandera gobierna las dos cosas, y eso no es comodidad.
-
-    Correr sin mostrar deja un artefacto que nadie mira. **Mostrar sin correr
-    publica el artefacto de la corrida ANTERIOR con la fecha de esta**, que es
-    la forma mas barata de citar un numero viejo sin que nada falle --- el
-    `.json` de la seccion apagada sigue en disco.
-
-    Asi que los dos cuadernos tienen que leer la MISMA constante, y eso se
-    asierta sobre el texto de los dos: el generador no la corre y el de plot no
-    la lee.
-    """
-    import json
-    from pathlib import Path
-    raiz = Path(__file__).resolve().parents[1] / "MIL-CREDA" / "Notebooks"
-    for nombre, marca in (("Toyset_Generator", "toy_tables.seccion_corre"),
-                          ("Toyset_Plot", "toy_tables.seccion_corre")):
-        nb = json.loads((raiz / f"{nombre}.ipynb").read_text(encoding="utf-8"))
-        texto = "\n".join("".join(c.get("source", [])) for c in nb["cells"]
-                          if c["cell_type"] == "code")
-        assert marca in texto, (
-            f"{nombre}.ipynb no consulta {marca}: su mitad de la bandera no "
-            "existe, asi que apagar una seccion la apaga a medias")
-
-
-def test_una_seccion_apagada_no_entra_al_mapa_que_el_cuaderno_lee():
-    """`SEC[n]` tiene que REVENTAR, no devolver la corrida anterior.
-
-    El `.json` de una seccion apagada sigue en disco --- nadie lo borra --- asi
-    que un cargador que lo lea igual entrega numeros viejos sin una sola
-    excepcion. Lo que esto fija es que el lazo del cargador SALTA la apagada,
-    que es lo que convierte el error en un `KeyError` ruidoso.
-    """
-    import json
-    from pathlib import Path
-    nb = json.loads((Path(__file__).resolve().parents[1] / "MIL-CREDA" /
-                     "Notebooks" / "Toyset_Plot.ipynb").read_text(encoding="utf-8"))
-    cargador = [s for s in ("".join(c.get("source", [])) for c in nb["cells"])
-                if "SEC = {}" in s]
-    assert len(cargador) == 1, len(cargador)
-    assert "if not toy_tables.seccion_corre(_n):" in cargador[0], cargador[0]
-    assert "continue" in cargador[0], cargador[0]
 
 
 def test_la_nota_reemplaza_a_la_tabla_y_se_calla_cuando_la_seccion_corre():
