@@ -43,8 +43,8 @@ __benchmark__ = {
         # section of its own the revision names -- so retiring it removes an
         # arm and no equation from what this comparison reaches.
     },
-    # Retired with the digit benchmark's ceiling search; nothing searches a
-    # ceiling any more (the toyset's own search lives in `toy_run`).
+    # Retired with the digit benchmark's ceiling search. The toyset's own
+    # search was retired with its sweeps: the tutorial runs declared values.
     "search": {},
     "report": {
         # The calls that produce or show a picture. Naming them here is what lets
@@ -55,27 +55,20 @@ __benchmark__ = {
         "figures": [
             "figures.inline",
             "plt.show",
-            # El gif 3xN del toyset: filas = normalizaciones declaradas,
-            # columnas = embedding por clase real / por prediccion / loss de
-            # fase 1 / loss de fase 2, cuadros = pasos de la fase 2. Era la
-            # figura del ya retirado `CREDA/Notebooks/Toyset_Plot.ipynb` con
-            # las piezas de MIL-CREDA, y se declara aca por la misma razon que
-            # las otras:
-            # sin la declaracion el motor no puede distinguir una celda que
-            # dibuja de una que muestra una imagen sin haberla dibujado.
-            "toy_run.animar_familia",
+            # Los dos GIF del cuaderno tutorial
+            # `MIL-CREDA/Notebooks/Toyset.ipynb`, dibujados en memoria: la
+            # trayectoria real de la adaptacion y la caminata de confianza por
+            # bolsa. Reemplazan al retirado `toy_run.animar_familia`, y se
+            # declaran aca por la misma razon que las otras: sin la
+            # declaracion el motor no puede distinguir una celda que dibuja de
+            # una que muestra una imagen sin haberla dibujado.
+            "tutorial_visuals.gif_de_adaptacion",
+            "tutorial_visuals.gif_de_caminata",
         ],
-        # What a run leaves under `Results/`.
-        "records": [
-            # El artefacto del toyset, bajo su propia coordenada de escala.
-            # Declarado como DIRECTORIO y no archivo por archivo: adentro va
-            # un `<familia>.npz` por familia, y la lista de familias es de
-            # `CREDA.toy_experiment`, no de este paquete --- enumerarlas aca
-            # pondria el nombre de cada una en una segunda lista que nadie
-            # mantiene, y el dia que se agregue una cuarta este bloque
-            # quedaria corto sin que nada lo diga.
-            "Results/Toyset",
-        ],
+        # The tutorial keeps new results in memory and saved notebook outputs.
+        # Declare the retained historical archive too: retiring its writers
+        # must not make those existing files undeclared records in audits.
+        "records": ["Results/Toyset"],
     },
     # Retired with the digit campaign's shards and its seed/transfer axes.
     "distribution": {},

@@ -44,6 +44,10 @@ To change the CREDA budget, set `ADJUSTMENTS` (for example `{"source_epochs": 3,
 
 `MIL-CREDA/AGREED-TOYSET.md` is kept as the historical record of the earlier toyset experiment; the tutorials above replace it as the entrypoint.
 
+### Legacy toyset experiments were removed
+
+The earlier toyset benchmark code is gone, not hidden: its experiment runners, hyperparameter searches, sweeps, ablations, contamination and oracle experiments, result-file I/O and renderers (`CREDA.toy_plots`, `MIL_CREDA_Benchmark.toy_tables`, and the corresponding functions of `CREDA.toy_experiment` and `MIL_CREDA_Benchmark.toy_run`). Nothing in the repository regenerates the toyset artefacts stored under `CREDA/Results/tesis/toyset/` or `MIL-CREDA/Results/Toyset/`; they remain only as a historical record. The publication notebooks `CREDA/Notebooks/{Results,Plots,Tables}_Generator.ipynb` and their source modules are unchanged.
+
 ## Verified dependencies
 
 `requirements.txt` declares the notebook and runtime dependencies: Jupyter, IPython kernel support, gdown, Matplotlib, NumPy 1.26.4, pandas 2.2.3, scikit-image, scikit-learn, timm, PyTorch, torchcam, torchvision, tqdm, and umap-learn. The project build configuration requires `setuptools>=61`.

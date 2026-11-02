@@ -28,11 +28,11 @@ imported in this environment still has a declaration to check, and importing
 `training_pipeline` costs scikit-image, timm, pandas and matplotlib.
 
 The per-module tests below are here because their modules had no test of their
-own anywhere -- `artifacts.py` and `toy_plots.py` were imported by nothing
-under `tests/`, and `training_pipeline.py` only by the schedule's copy check.
-An invariant declared with nothing to hold it reads as covered and is worse
-than one left out, so each id those three declare is either an older test that
-already existed or one of these.
+own anywhere -- `artifacts.py` was imported by nothing under `tests/`, and
+`training_pipeline.py` only by the schedule's copy check. An invariant declared
+with nothing to hold it reads as covered and is worse than one left out, so
+each id those two declare is either an older test that already existed or one
+of these.
 """
 
 from __future__ import annotations
@@ -108,17 +108,6 @@ def _calls_in(path: Path, function: str) -> set[str]:
             for call in ast.walk(target) if isinstance(call, ast.Call)}
 
 
-def _imported_modules(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    imported: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            imported.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            imported.add(node.module)
-    return imported
-
-
 # ============================================ 1. the package-wide declaration
 
 
@@ -133,7 +122,7 @@ def test_the_package_holds_the_modules_this_file_speaks_for():
     assert PACKAGE.is_dir(), f"{PACKAGE} is not a directory"
     assert found >= {
         "artifacts.py", "bounds.py", "models.py", "sample_adaptation.py",
-        "schedules.py", "toy_experiment.py", "toy_plots.py",
+        "schedules.py", "toy_experiment.py",
         "training_pipeline.py", "two_phase.py",
     }, f"the package no longer holds the modules this file was written for: {found}"
 
@@ -298,54 +287,7 @@ def test_a_baseline_checkpoint_needs_a_component_and_the_others_carry_none():
     assert creda == models_root / "resnet18" / "resnet18_CREDA_MNIST_USPS_weights.pth"
 
 
-# ======================================= 3. `toy_plots.py` -- the drawing half
-
-
-def test_the_drawing_module_reads_the_grid_it_draws_from_the_experiment():
-    """The same objects, not equal copies. Two lists already diverged once.
-
-    `toy_plots`' own docstring records the consequence: the figures showed an
-    arm the table did not have, and the arm the table reported as best had no
-    figure. Identity is what makes that unrepeatable -- a hand-written second
-    copy would be `==` and would not be `is`.
-
-    Only the mutable containers are checked. An `is` on a small integer or an
-    interned string passes for a copy too, which would be an assertion that
-    cannot fail.
-    """
-    from CREDA import toy_experiment, toy_plots
-
-    shared = ("FILAS", "TABLA", "POS_FILAS", "FAMILIAS", "NOMBRE_FILA",
-              "COLOR", "MARCA")
-    for name in shared:
-        drawn = getattr(toy_plots, name)
-        computed = getattr(toy_experiment, name)
-        assert isinstance(drawn, (list, dict)), (
-            f"{name} is a {type(drawn).__name__}; identity would pass for a "
-            "copy of it and this test would check nothing")
-        assert drawn is computed, (
-            f"toy_plots.{name} is not toy_experiment.{name} -- the grid has "
-            "been written out a second time and the two can now disagree")
-
-
-def test_nothing_in_the_drawing_module_imports_torch():
-    """It reads the saved artifact, so its labels are numpy arrays.
-
-    The module says so where it matters -- `panel_embedding` used to call
-    `.numpy()` on them, which is what was needed while the same notebook both
-    trained and drew. A `torch` import here is the signal that something began
-    computing in the drawing half again.
-    """
-    from CREDA import toy_plots
-
-    imported = _imported_modules(Path(toy_plots.__file__))
-    offenders = sorted(name for name in imported
-                       if name == "torch" or name.startswith("torch."))
-    assert offenders == [], f"toy_plots imports {offenders}"
-    assert "torch" not in vars(toy_plots)
-
-
-# =============================== 4. `training_pipeline.py` -- the campaign loop
+# =============================== 3. `training_pipeline.py` -- the campaign loop
 
 
 def test_the_campaign_builds_its_adaptation_term_from_the_method_module():

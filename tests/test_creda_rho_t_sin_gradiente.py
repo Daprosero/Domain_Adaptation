@@ -70,19 +70,6 @@ class RhoTSinGradiente(unittest.TestCase):
         b = _grad(self._loss(detach_target_entropy=True), _lote())
         self.assertFalse(torch.allclose(a, b, atol=1e-7))
 
-    def test_the_run_records_the_flag_it_used(self):
-        from CREDA import toy_experiment as T
-        fam = T.FAMILIAS[0]
-        D = T.datos_semilla(fam, 100)
-        *_, a = T.corrida(fam, D, 'layernorm', semilla=100, mover_fuente=False,
-                          cuadros=T.CTRL, hp2={'RHO_T_SIN_GRAD': False})
-        *_, b = T.corrida(fam, D, 'layernorm', semilla=100, mover_fuente=False,
-                          cuadros=T.CTRL)
-        *_, c = T.corrida(fam, D, 'layernorm', semilla=100, mover_fuente=False,
-                          cuadros=T.CTRL, hp2={'RHO_T_SIN_GRAD': True})
-        self.assertEqual(a['acc_te'], b['acc_te'])
-        self.assertNotEqual(a['acc_te'], c['acc_te'])
-
 
 if __name__ == '__main__':
     unittest.main()

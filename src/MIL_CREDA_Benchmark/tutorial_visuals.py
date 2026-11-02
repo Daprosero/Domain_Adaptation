@@ -1,9 +1,8 @@
 """The two teaching animations of the MIL-CREDA toyset tutorial, in memory.
 
 `MIL-CREDA/Notebooks/Toyset.ipynb` trains one model per family and must not
-write anything to disk, so the animations the benchmark used to write as GIF
-files (`toy_run.animar_familia`, `toy_run.animar_w`) are rebuilt here from the
-tutorial's OWN run and handed back as GIF bytes:
+write anything to disk, so the animations are drawn here from the tutorial's
+OWN run and handed back as GIF bytes:
 
 - **The adaptation.** `Trayectoria` is an observer the tutorial's phase-2 loop
   calls at epoch 0 (theta_t still the clone of theta_s) and at the end of each
@@ -15,9 +14,8 @@ tutorial's OWN run and handed back as GIF bytes:
   frozen trained head. Its unit is a SWEEP of a constructed path, never an
   optimizer epoch.
 
-The frame drawing follows the benchmark's renderers (`figura_del_cuadro`,
-`figura_de_w`): a PCA basis fitted once, fixed limits for every frame, partial
-curves. Target labels only colour the "true class" panel and the accuracy
+Every frame shares one PCA basis fitted once (`toy_run._base_pca`), fixed
+limits (`toy_run._limites`) and partial curves. Target labels only colour the "true class" panel and the accuracy
 reading; nothing here feeds back into training.
 """
 

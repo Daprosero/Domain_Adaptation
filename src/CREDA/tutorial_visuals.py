@@ -31,6 +31,24 @@ from PIL import Image
 from CREDA.toy_experiment import CLASES, COL_DURA, caminata_al_centro, puntos_de_frontera
 from MIL_CREDA.confidence import confidences
 
+
+__provenance__ = {
+    "revision": None,
+    "claims_no_equation": (
+        "in-memory observations of the tutorial's own training; every "
+        "quantity drawn is computed by `CREDA.toy_experiment` or "
+        "`MIL_CREDA.confidence`, so no method equation is implemented here"),
+    "invariants": [
+        "every_family_has_an_animated_adaptation_gif",
+        "snapshots_run_from_the_start_to_the_final_epoch",
+        "the_last_snapshot_is_the_final_model",
+        "capturing_snapshots_does_not_change_training",
+        "a_snapshot_restores_modes_and_leaves_buffers_and_rng_alone",
+        "every_family_has_an_animated_confidence_walk",
+        "the_walk_reads_w_through_the_trained_head_and_creda_confidence",
+    ],
+}
+
 #: Milliseconds per frame and for the final pause of each GIF.
 MS_FRAME, MS_WALK_FRAME, MS_PAUSE = 600, 140, 2500
 

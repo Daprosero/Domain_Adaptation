@@ -6,7 +6,7 @@ both ends and the balance that feeds them. Three changes land here:
 
 1. **One bandwidth for every class.** r28 line 732: a single sigma governs the
    three blocks, because the three derive from the same instance kernel. The
-   toy's phase-2 search is no longer allowed to pick a per-class median.
+   toyset freezes one source-only bandwidth (`sigma_de_la_fuente`) instead.
 2. **The mix balances by TRACE, not by cardinality** (Eq. 32). The Gaussian
    kernel has 1 on its diagonal, so `tr(K_s) = n_s` and the source side does
    not move; but `K~_t` arrives already weighted (`D K_t D`), so its diagonal
@@ -41,9 +41,7 @@ written; the file is new precisely so that nothing in the 50k-line
 
 from __future__ import annotations
 
-import ast
 import inspect
-import textwrap
 import math
 import unittest
 
@@ -876,45 +874,6 @@ class R28ToyWiringTests(unittest.TestCase):
         from CREDA import toy_experiment
         cls.toy = toy_experiment
 
-    def test_the_phase_two_search_cannot_pick_a_bandwidth_at_all(self) -> None:
-        """r28 line 732 narrowed this to the batch scopes; a MEASUREMENT then
-        retired the knob outright, on 2026-10-10.
-
-        All three families had searched and all three PICKED `batch-pooled` --
-        the scope whose own docstring in `models.SIGMA_SCOPES` records its
-        defect: the pooled median reads the target features, which are exactly
-        what the optimizer moves, so displacing a class makes its score FALL
-        (0.505 at a displacement of 10, 0.437 at 30, 0.397 at 100). The search
-        space is no longer narrowed; the bandwidth is not searched. It is
-        `toy_experiment.sigma_de_la_fuente` over the whole source train, once,
-        frozen -- see `tests/test_toy_sigma_fijo.py` for what it then has to
-        satisfy.
-
-        Read through the AST rather than as a substring on purpose: the search
-        body EXPLAINS the retirement in a comment that names the old scopes, so
-        a text search would read that prose as a live choice. What this asserts
-        is the set of names actually handed to a `suggest_*` call.
-        """
-        arbol = ast.parse(textwrap.dedent(inspect.getsource(self.toy.buscar_hp2)))
-        buscados = set()
-        for nodo in ast.walk(arbol):
-            if not isinstance(nodo, ast.Call):
-                continue
-            fn = nodo.func
-            if (isinstance(fn, ast.Attribute)
-                    and fn.attr.startswith('suggest_')
-                    and nodo.args
-                    and isinstance(nodo.args[0], ast.Constant)):
-                buscados.add(nodo.args[0].value)
-        # `DELTA` salio el 2026-10-11 con el warmup: no esta en
-        # `research-concept-r29.md`, y sobre un UNICO termino con gradiente un
-        # coeficiente no balancea nada. Como `SIGMA_FROM`, dejo de ser una
-        # dimension de esta busqueda.
-        self.assertEqual(buscados, {'LR_2', 'WD_2', 'LOTE_2'}, buscados)
-        for retirada in ('SIGMA_FROM', 'DELTA', 'TECHO'):
-            self.assertNotIn(retirada, buscados)
-            self.assertNotIn(retirada, self.toy.HP_2)
-
     def test_the_four_sigma_scopes_are_still_all_available(self) -> None:
         """Narrowing the search is not retiring a scope."""
         self.assertEqual(models.SIGMA_SCOPES,
@@ -928,17 +887,6 @@ class R28ToyWiringTests(unittest.TestCase):
         self.assertEqual(self.toy.BALANCE_DE_MASA, 'trace')
         self.assertIn(self.toy.FORMA_DE_COTAS, models.BOUNDS_FORMS)
         self.assertIn(self.toy.BALANCE_DE_MASA, models.BALANCE_MASSES)
-
-    def test_the_loss_is_built_from_those_declarations(self) -> None:
-        """The construction site reads the constants rather than repeating them.
-
-        A declaration nothing passes along is the defect this asserts away: the
-        two constants above could both be right while `corrida` built the loss
-        with neither.
-        """
-        source = inspect.getsource(self.toy.corrida)
-        self.assertIn('bounds_form=FORMA_DE_COTAS', source)
-        self.assertIn('balance_mass=BALANCE_DE_MASA', source)
 
     def test_the_prose_no_longer_argues_for_the_superseded_map(self) -> None:
         """The comment block above the flag is part of the change.
@@ -1186,62 +1134,6 @@ class R28BoundHypothesisTests(unittest.TestCase):
         """`normalize_by_bounds=False` reaches no map, so there is nothing to pair."""
         loss = CREDALoss(bounds_form='entropy-cosh', balance_mix_blocks=False)
         self.assertFalse(loss.normalize_by_bounds)
-
-
-# ------------------------------- 11. The toy's own flags must agree, AT IMPORT
-
-
-class R28ToyCoherenceTests(unittest.TestCase):
-    """`toy_experiment.verificar_coherencia` catches the pairing at declaration.
-
-    `CREDALoss` already refuses the pairing, but it refuses inside `corrida` --
-    twelve minutes into a full run and after both Optuna searches have been
-    spent. A sweep row with `balance=False` beside these flags is an incoherent
-    DECLARATION, not an arm, so it is charged at import, where it still costs
-    nothing.
-
-    A function rather than a bare module-level `assert` precisely so these
-    tests can hand it incoherent input: an assert at module scope can only be
-    checked by reading the source, and a constant nobody reads looks exactly
-    like green.
-    """
-
-    OK = (True, False, 'row', 'key')
-    BAD = (False, False, 'row', 'key')
-
-    def setUp(self) -> None:
-        from CREDA import toy_experiment
-        self.verify = toy_experiment.verificar_coherencia
-
-    def test_a_row_asking_for_no_balance_is_refused(self) -> None:
-        with self.assertRaises(ValueError) as raised:
-            self.verify([self.BAD], [self.OK], True, 'entropy-cosh', 'trace')
-        self.assertIn('32', str(raised.exception))
-
-    def test_the_cardinality_mass_is_refused(self) -> None:
-        with self.assertRaises(ValueError) as raised:
-            self.verify([self.OK], [self.OK], True, 'entropy-cosh', 'cardinality')
-        self.assertIn('trace', str(raised.exception))
-
-    def test_the_table_is_checked_and_not_only_the_frames(self) -> None:
-        """Both lists. Checking one would leave the other free to disagree."""
-        with self.assertRaises(ValueError):
-            self.verify([self.OK], [self.BAD], True, 'entropy-cosh', 'trace')
-
-    def test_the_coherent_declaration_passes(self) -> None:
-        self.verify([self.OK], [self.OK], True, 'entropy-cosh', 'trace')
-
-    def test_nothing_is_checked_when_the_map_is_not_reached(self) -> None:
-        """No bounds, or r25's constant ends, carry no hypothesis to violate."""
-        self.verify([self.BAD], [self.BAD], False, 'entropy-cosh', 'cardinality')
-        self.verify([self.BAD], [self.BAD], True, 'conservative', 'cardinality')
-
-    def test_the_live_declaration_is_coherent(self) -> None:
-        """And the module as it actually stands, which is what runs tonight."""
-        from CREDA import toy_experiment as toy
-        self.verify(toy.FILAS, toy.TABLA, toy.NORMALIZAR_POR_COTAS,
-                    toy.FORMA_DE_COTAS, toy.BALANCE_DE_MASA)
-        self.assertTrue(all(row[0] for row in list(toy.FILAS) + list(toy.TABLA)))
 
 
 if __name__ == '__main__':

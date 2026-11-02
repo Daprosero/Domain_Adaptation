@@ -8,6 +8,13 @@
 > to `Results/`. See the repository `README.md`. The items below are kept
 > unchanged as the record of what was agreed for the runs stored under
 > `MIL-CREDA/Results/Toyset/`; do not tick or extend them.
+>
+> **Code removed on 2026-11-02.** The runners, searches, sweeps, ablations,
+> artefact I/O and renderers this record names (for example `ABLACION`,
+> `animar_familia`, `socio_exacto`, `src/CREDA/toy_plots.py` and
+> `toy_tables`) no longer exist, and nothing regenerates the stored runs. Code
+> references and line numbers below describe the code as it was when each
+> item was agreed.
 
 Every item here was settled with the operator, not derived from a plan of work.
 An item that never reaches the code shows up as an unticked box rather than as a

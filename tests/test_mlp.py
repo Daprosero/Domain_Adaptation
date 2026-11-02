@@ -17,8 +17,8 @@ the LayerNorm row beside it: without it, *normalizing helped* and
 not touched by it; its claims about `"mlp"` and `"mlp-nobn"` are unchanged and
 still hold. What is here is the THIRD kind and the claims that only exist once
 there are three: that the structural axis is one, that the normalization layer
-is the whole of it, and that AdaBN's reachability is read off the module tree by
-type rather than off a backbone's name.
+is the whole of it, and that which layers hold re-estimable running statistics
+is read off the module tree by type rather than off a backbone's name.
 """
 
 from __future__ import annotations
@@ -27,14 +27,13 @@ import hashlib
 import importlib.util
 import shutil
 import sys
-import types
 from pathlib import Path
 
 import pytest
 import torch
 import torch.nn as nn
 
-from MIL_CREDA_Benchmark import config, mlp, toy_run
+from MIL_CREDA_Benchmark import config, mlp
 
 
 def _linear_layers(net: nn.Sequential) -> list[nn.Linear]:
@@ -45,6 +44,20 @@ def _normalization_layers(net: nn.Sequential) -> list[nn.Module]:
     return [layer for layer in net
             if isinstance(layer, (nn.modules.batchnorm._BatchNorm,
                                   nn.LayerNorm, nn.GroupNorm))]
+
+
+def _normalizing_modules(module: nn.Module) -> list[nn.Module]:
+    """Every normalization layer anywhere in the module tree, by TYPE."""
+    return [child for child in module.modules()
+            if isinstance(child, (nn.modules.batchnorm._BatchNorm,
+                                  nn.LayerNorm, nn.GroupNorm))]
+
+
+def _reestimable_modules(module: nn.Module) -> list[nn.Module]:
+    """The normalization layers holding running statistics a target domain
+    could re-estimate without an optimizer."""
+    return [layer for layer in _normalizing_modules(module)
+            if getattr(layer, "running_mean", None) is not None]
 
 
 def _activations(net: nn.Sequential) -> list[type]:
@@ -100,18 +113,19 @@ def test_there_are_three_backbones_and_the_roster_is_derived():
     module shipped exactly that defect once, with the toyset's row names in one
     file and the backbone names in another.
 
-    The count is asserted against CREDA's own row list and not against a three
-    written here: three is what CREDA draws, so the number has a source.
+    The count is asserted against CREDA's own `NORMAS` and not against a three
+    written here: three is what CREDA's MLP declares, so the number has a
+    source.
     """
     from CREDA import toy_experiment as creda
 
     assert mlp.MLP_BACKBONES == tuple(mlp.BACKBONE_NORM)
     assert set(mlp.BACKBONE_NORM.values()) == set(mlp.NORM_LAYERS)
-    assert set(mlp.NORM_LAYERS) == set(creda.POS_FILAS), (
+    assert set(mlp.NORM_LAYERS) == set(creda.NORMAS), (
         f"las normalizaciones de `mlp` son {sorted(mlp.NORM_LAYERS)} y CREDA "
-        f"dibuja {sorted(creda.POS_FILAS)}: la grilla de este paquete no es la "
+        f"declara {sorted(creda.NORMAS)}: la grilla de este paquete no es la "
         "de al lado")
-    assert len(mlp.MLP_BACKBONES) == len(creda.POS_FILAS)
+    assert len(mlp.MLP_BACKBONES) == len(creda.NORMAS)
 
 
 def test_every_declared_backbone_builds_and_names_its_own_kind():
@@ -250,8 +264,8 @@ def test_layernorm_normalizes_and_holds_no_reestimable_buffer():
 
     Three readings and the three together are the claim: the LayerNorm backbone
     HAS normalization layers (so it normalizes), has ZERO buffers of any kind
-    (so there is nothing to carry between batches), and `_reestimable_layers`
-    finds none (so AdaBN cannot act). The BatchNorm backbone is the contrast on
+    (so there is nothing to carry between batches), and none of its layers
+    holds running statistics (so nothing could be re-estimated). The BatchNorm backbone is the contrast on
     all three, and the un-normalized one is the contrast on the first -- which
     is what keeps «no re-estimable buffer» from reading the same for the row
     that does not normalize at all.
@@ -260,8 +274,8 @@ def test_layernorm_normalizes_and_holds_no_reestimable_buffer():
     for backbone in mlp.MLP_BACKBONES:
         encoder = mlp.build_mlp(backbone, 3)
         lecturas[backbone] = {
-            "normaliza": len(toy_run._normalization_layers(encoder)),
-            "reestimable": len(toy_run._reestimable_layers(encoder)),
+            "normaliza": len(_normalizing_modules(encoder)),
+            "reestimable": len(_reestimable_modules(encoder)),
             "buffers": sum(b.numel() for b in encoder.buffers()),
         }
 
@@ -269,7 +283,7 @@ def test_layernorm_normalizes_and_holds_no_reestimable_buffer():
                                     "buffers": 0}
     assert lecturas["mlp-layernorm"]["normaliza"] == 2
     assert lecturas["mlp-layernorm"]["reestimable"] == 0, (
-        "`mlp-layernorm` trae capas que AdaBN podría reestimar: entonces no es "
+        "`mlp-layernorm` trae capas que el blanco podría reestimar: entonces no es "
         "el control que separa «normalizar ayuda» de «reestimar ayuda»")
     assert lecturas["mlp-layernorm"]["buffers"] == 0
     assert lecturas["mlp"]["normaliza"] == 2
@@ -279,49 +293,6 @@ def test_layernorm_normalizes_and_holds_no_reestimable_buffer():
     # una llevara una capa y la otra dos, el par no sería un control.
     assert (lecturas["mlp"]["normaliza"]
             == lecturas["mlp-layernorm"]["normaliza"])
-
-
-def test_adabn_says_why_it_has_no_rung_and_the_two_reasons_are_apart():
-    """`adabn_reading` reports a REASON on the LayerNorm row, never a number.
-
-    A number there would be `.predict` under another name, published as if a
-    second thing had been measured. And the two reasons are different facts
-    about the backbone -- «does not normalize» against «normalizes and keeps
-    nothing» -- so they do not share a sentence: collapsing them would make the
-    control row and the bare row read alike, which is the confusion the control
-    exists to end.
-
-    Driven through the early-return path, which reads `model.target_encoder` and
-    nothing else, so a namespace carrying that one attribute exercises exactly
-    what runs. The BatchNorm pole is measured by the suite's own cell fixtures
-    and by the artefact the toyset tests read; what this adds is that the two
-    `None` branches are distinguishable.
-    """
-    lecturas = {}
-    for backbone in ("mlp-nobn", "mlp-layernorm"):
-        modelo = types.SimpleNamespace(
-            target_encoder=mlp.build_mlp(backbone, 3))
-        lecturas[backbone] = toy_run.adabn_reading(
-            modelo, None, None, torch.device("cpu"))
-
-    for backbone, lectura in lecturas.items():
-        assert lectura["accuracy"] is None, backbone
-        assert lectura["layers"] == 0, backbone
-        assert lectura["batches"] == 0, backbone
-        assert lectura["note"], backbone
-
-    assert lecturas["mlp-nobn"]["normLayers"] == 0
-    assert lecturas["mlp-layernorm"]["normLayers"] == 2
-    assert (lecturas["mlp-nobn"]["note"]
-            != lecturas["mlp-layernorm"]["note"]), (
-        "las dos razones comparten la frase: «no normaliza» y «normaliza y no "
-        "guarda nada» son hechos distintos del backbone y la fila del control "
-        "se leería igual que la fila pelada")
-    assert "NINGUNA capa de normalización" in lecturas["mlp-nobn"]["note"]
-    control = lecturas["mlp-layernorm"]["note"]
-    assert "control" in control, control
-    assert "LayerNorm" in control, control
-    assert "reestimar" in control, control
 
 
 # ---------------------------------------------- las dos puertas, y su negativa
@@ -354,15 +325,13 @@ def test_the_legacy_boolean_door_and_the_knob_cannot_both_be_given():
 def test_a_layernorm_row_that_carried_running_statistics_is_caught(tmp_path):
     """Point the third kind at `nn.BatchNorm1d` and the control collapses.
 
-    The red for `test_layernorm_normalizes_and_holds_no_reestimable_buffer` and
-    for `test_adabn_says_why_it_has_no_rung_and_the_two_reasons_are_apart` at
-    once, which is what makes those two measurements rather than descriptions.
-    Under the mutation the `layernorm` row would hold buffers AdaBN re-estimates
-    and `adabn_reading` would try to report a NUMBER on it -- so the row that is
-    supposed to answer «did BatchNorm win by normalizing» would be a second
-    BatchNorm row, and every other assertion in this file would stay green: the
-    widths, the activations, the draw order and the parameter count are all
-    unchanged by it.
+    The red for `test_layernorm_normalizes_and_holds_no_reestimable_buffer`,
+    which is what makes it a measurement rather than a description. Under the
+    mutation the `layernorm` row would hold running statistics -- so the row
+    that is supposed to answer «did BatchNorm win by normalizing» would be a
+    second BatchNorm row, and every other assertion in this file would stay
+    green: the widths, the activations, the draw order and the parameter count
+    are all unchanged by it.
     """
     mutado = _mlp_mutado(
         tmp_path,
@@ -371,22 +340,12 @@ def test_a_layernorm_row_that_carried_running_statistics_is_caught(tmp_path):
         "mlp_layernorm_con_corridas")
 
     encoder = mutado.build_mlp("mlp-layernorm", 3)
-    assert toy_run._reestimable_layers(encoder), (
+    assert _reestimable_modules(encoder), (
         "la mutación no le dio capas reestimables a la fila de layernorm, así "
         "que el verde de arriba no prueba nada")
     assert sum(b.numel() for b in encoder.buffers()) > 0
-    modelo = types.SimpleNamespace(target_encoder=encoder)
-    # `adabn_reading` ya no toma el camino del `None`: entra al camino que
-    # reestima, que sobre este namespace falla en la primera llamada que un
-    # `nn.Module` real contesta --- lo que importa es que DEJÓ de contestar «no
-    # hay nada que reestimar», que es lo que la fila del control informa.
-    with pytest.raises(AttributeError):
-        toy_run.adabn_reading(modelo, None, None, torch.device("cpu"))
-    # Y el control: el módulo sin mutar sigue contestando la razón.
-    sano = types.SimpleNamespace(
-        target_encoder=mlp.build_mlp("mlp-layernorm", 3))
-    assert toy_run.adabn_reading(
-        sano, None, None, torch.device("cpu"))["accuracy"] is None
+    # Y el control: el módulo sin mutar sigue sin nada que reestimar.
+    assert _reestimable_modules(mlp.build_mlp("mlp-layernorm", 3)) == []
 
 
 def test_a_third_kind_that_stopped_normalizing_is_caught(tmp_path):
@@ -396,9 +355,9 @@ def test_a_third_kind_that_stopped_normalizing_is_caught(tmp_path):
     that is cheap, has no state and «does nothing» satisfies «no re-estimable
     buffer» perfectly, and a row built on it answers nothing -- the question is
     whether NORMALIZING helps, so the control has to normalize. Under this
-    mutation the row keeps its name, keeps its three `Linear` layers and keeps
-    AdaBN's `None`, and what changes is that it no longer normalizes and no
-    longer carries the two layers' parameters.
+    mutation the row keeps its name, keeps its three `Linear` layers and still
+    holds nothing re-estimable, and what changes is that it no longer
+    normalizes and no longer carries the two layers' parameters.
     """
     mutado = _mlp_mutado(
         tmp_path,
@@ -407,7 +366,7 @@ def test_a_third_kind_that_stopped_normalizing_is_caught(tmp_path):
         "mlp_layernorm_que_no_normaliza")
 
     encoder = mutado.build_mlp("mlp-layernorm", 3)
-    assert toy_run._normalization_layers(encoder) == [], (
+    assert _normalizing_modules(encoder) == [], (
         "la mutación no sacó la normalización, así que el verde de arriba no "
         "prueba nada")
     cuentas = sum(p.numel() for p in encoder.parameters())
@@ -415,9 +374,4 @@ def test_a_third_kind_that_stopped_normalizing_is_caught(tmp_path):
                           for p in mutado.build_mlp("mlp-nobn", 3).parameters()), (
         "la fila mutada sigue llevando los parámetros de una capa que "
         "normaliza")
-    modelo = types.SimpleNamespace(target_encoder=encoder)
-    lectura = toy_run.adabn_reading(modelo, None, None, torch.device("cpu"))
-    assert lectura["normLayers"] == 0
-    assert "NINGUNA capa de normalización" in lectura["note"], (
-        "la lectura sigue diciendo que esta fila es el control, y la mutación "
-        "le quitó justo lo que la hacía serlo")
+    assert _reestimable_modules(encoder) == []
