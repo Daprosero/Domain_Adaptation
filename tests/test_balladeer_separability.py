@@ -1,4 +1,4 @@
-"""Experiments plan v38, Sec. 5.1: domain separability re-measured, and the core rule."""
+"""Experiments plan v40, Sec. 5.1: domain separability re-measured, and the core rule."""
 
 from __future__ import annotations
 
@@ -86,12 +86,12 @@ def _bag(root: Path, subject: str, condition: str, label: str, fold: int, alpha:
 
 
 def _world(root: Path, alpha_target: float):
-    """Level arm L1 vs L6: 60 subjects, one condition each, 3 per fold x label x side."""
+    """Level arm L1 vs L6: one condition each, 3 subjects per fold x label x side."""
     channels = list(CGX_CHANNELS)
     bags, folds, labels = [], {}, {}
     holders = {"L1": set(), "L6": set()}
     k = 0
-    for fold in range(5):
+    for fold in range(partition.N_FOLDS):
         for label in ("yes", "no"):
             for condition, alpha in (("L1", 0.0), ("L6", alpha_target)):
                 for _ in range(3):
@@ -109,7 +109,7 @@ def _world(root: Path, alpha_target: float):
 
 def test_source_and_target_are_the_rotation_training_subjects(tmp_path):
     bags, a = _world(tmp_path, 0.0)
-    for r in range(5):
+    for r in range(partition.N_FOLDS):
         design = separability.design(a, bags, r, "all")
         sources = set(design["groups"][design["y"] == 1])
         targets = set(design["groups"][design["y"] == 0])
@@ -128,7 +128,7 @@ def test_both_directions_of_a_pair_use_the_same_subjects_swapped(tmp_path):
     holders = {c: bags.holders(c) for c in ("L1", "L6")}
     b = assignment.assign(assignment.Transfer("level", "L6", "L1"), holders, a.folds,
                           a.labels, a.rotations, partition_sha256="h" * 64)
-    for r in range(5):
+    for r in range(partition.N_FOLDS):
         forward = separability.design(a, bags, r, "all")
         backward = separability.design(b, bags, r, "all")
         assert set(forward["groups"][forward["y"] == 1]) == \
@@ -153,7 +153,7 @@ def test_separable_domains_read_high_and_identical_ones_near_chance(tmp_path):
     lo = separability.measure(b, same, 0, "all", n_permutations=20)
     assert hi["auc_mean"] > 0.95 and hi["perm_p"] < 0.1
     assert lo["auc_mean"] < 0.8
-    assert hi["n_source"] == 18 and hi["n_target"] == 18
+    assert hi["n_source"] == hi["n_target"] == 3 * 2 * 2   # two training folds x two labels
 
 
 def test_bag_features_match_the_audit_window_features(tmp_path):
@@ -207,3 +207,37 @@ def test_a_result_with_another_partition_hash_is_refused_on_load(tmp_path):
     separability.write_results(rows, out, partition_sha256=partition.current_partition_hash(part),
                                extra={})
     assert separability.load_results(out, part)["summary"]["core"]["device"]
+
+
+def test_separability_is_measured_over_the_four_rotations(tmp_path):
+    bags, _ = _world(tmp_path, 0.5)
+    transfers = [assignment.Transfer("level", "L1", "L6"), assignment.Transfer("level", "L6", "L1")]
+    rows, seconds = separability.measure_transfers(bags, transfers, n_permutations=5, workers=1)
+    assert len(bags.rotations) == partition.N_FOLDS == 4
+    for _, g in rows.groupby(["transfer", "reading"]):
+        assert sorted(g["rotation"]) == [0, 1, 2, 3]
+    assert len(rows) == 2 * 4 * len(separability.READINGS)
+    for r in range(4):
+        assert len(bags.rotations[str(r)]["train_folds"]) == 2
+    assert set(seconds) == {"level:L1->L6", "level:L6->L1"}
+
+
+def test_the_eligibility_report_adds_the_pooled_target_totals(tmp_path):
+    bags, _ = _world(tmp_path, 0.0)
+    transfers = [assignment.Transfer("level", "L1", "L6"), assignment.Transfer("level", "L6", "L1")]
+    assignments = [assignment.assign_from_bags(t, bags) for t in transfers]
+    paths = separability.write_assignment_tables(assignments, tmp_path / "out")
+    table = pd.read_csv(paths["eligibility"])
+    assert set(table["scope"]) == {"fold", "pooled_transfer", "pooled_pair"}
+    per_fold = table[table.scope == "fold"]
+    assert len(per_fold) == 2 * 2 * partition.N_FOLDS * 2
+    pooled = table[table.scope == "pooled_transfer"].set_index(["transfer", "label"])["n"]
+    assert pooled[("L1->L6", "yes")] == 3 * partition.N_FOLDS
+    pair = table[table.scope == "pooled_pair"].set_index("label")["n"]
+    assert set(table.loc[table.scope == "pooled_pair", "transfer"]) == {"L1|L6"}
+    assert pair["yes"] == pair["no"] == 6 * partition.N_FOLDS
+    summary = separability.eligibility_summary(assignments)
+    assert summary["transfers"]["level:L1->L6"]["pooled_target"] == {"no": 12, "yes": 12}
+    assert summary["transfers"]["level:L1->L6"]["min_per_fold"]["target"] == {"no": 3, "yes": 3}
+    assert summary["pairs"]["level:L1|L6"]["pooled_target"] == {"no": 24, "yes": 24}
+    assert summary["pairs"]["level:L1|L6"]["by_direction"]["L6->L1"] == {"no": 12, "yes": 12}

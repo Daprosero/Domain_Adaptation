@@ -1,40 +1,51 @@
 """Domain assignment per transfer, the leakage guard, and the paired probe.
 
-Experiments plan v38, Secs. 4.3 and 6.2. Inside each transfer the assignment
-is a total, single-valued function that takes every subject of the partition
-to exactly one of three destinations: source, target or excluded. It is fixed
-per transfer and identical in the five rotations: a source subject is source
-in training, validation and test alike, so the target set of a transfer does
-not change between rotations.
+Experiments plan v40, Secs. 4.3, 4.6 and 6.2. Inside each transfer the
+assignment is a total, single-valued function that takes every subject of the
+partition to exactly one of three destinations: source, target or excluded.
+It is fixed per transfer and identical in the four rotations: a source
+subject is source in training, validation and test alike, so the target set
+of a transfer does not change between rotations.
 
-**The rule (Sec. 4.3).** A subject holding one of the two conditions goes to
-that side; a subject holding neither is excluded. Subjects holding both (the
-commons) are assigned so that source and target are as equal in size as
-possible, stratified by diagnosis within each fold, with the partition seed:
-inside each (fold, label) cell the commons are ordered by
-`sha256("<seed>:<pair>:<subject>")` and the first `x` go to the first
-condition of the pair, `x` chosen to make the cell's two sides as equal as
-possible. When the cell's total is odd the extra subject goes to the side
-that is behind over the cells already laid (cells in (label, fold) order),
-and on an exact tie to the side the cell's own hash parity names. In the
-device arm the commons go to the low-cost side (EPOC X) in both directions,
-as the plan declares: halving them would leave about three subjects of that
-side per class in each test fold.
+**The rule (Sec. 4.3), the same in every arm.** A subject holding one of the
+two conditions goes to that side; a subject holding neither is excluded.
+Subjects holding both (the commons) are assigned so that, within each fold
+and for each diagnosis separately, source and target are as equal in size as
+possible, with the partition seed: inside each (fold, label) cell the commons
+are ordered by `sha256("<seed>:<pair>:<subject>")` and the first `x` go to
+the first condition of the pair, `x` chosen to make the cell's two sides as
+equal as possible. When the cell's total is odd the extra subject goes to the
+side that is behind over the cells of the same label already laid (in fold
+order), and on an exact tie to the side the cell's own hash parity names, so
+each class's totals stay within one of each other too. The equalization is
+per class, not by the side's total size: in the device arm, where the
+high-density-only subjects are almost all diagnosed, it sends the diagnosed
+commons to the low-cost side and splits the control commons between both
+sides. Plan v38's special case (every device-arm common to the low-cost side)
+is gone: it left one control per fold on the high-density side.
 
 **One function per unordered pair.** The rule is keyed by the pair of
 conditions, not by the direction, so A->B and B->A read the same condition of
 every subject and differ only in which side is labelled.
+
+**The pair is pooled (Sec. 4.6).** The primary contrast of a core pair pools
+its two directions, and every assigned subject is predicted by the model of
+the direction where it is target. `pair_pool` returns that direction for every
+assigned subject and asserts that each one is target exactly once across the
+two directions; `pair_totals` reports the pooled target sizes per class.
 
 **The guard is an assertion.** `check_disjoint` raises when source and target
 share a subject, for the transfer and for every rotation view. A subject's
 other condition is never returned by `side_bags`; the only way to it is
 `probe_bag`, and only for the test-fold subjects holding both conditions of
 the transfer in that rotation (Sec. 6.2): each common subject passes through
-the probe exactly once over the five rotations.
+the probe exactly once over the four rotations.
 
-**Eligibility (Sec. 4.3).** Each side needs at least five subjects per class
-in every fold. `eligibility` evaluates it and reports every (side, fold,
-label) cell under the minimum; it never excludes anything by itself.
+**Eligibility (Sec. 4.3).** Read per side, each side needs at least five
+subjects per class in every fold. `eligibility` evaluates it per side and per
+fold, reports every (side, fold, label) cell under the minimum, the minimum
+per side and class, and the pooled target totals per class; it never
+excludes anything by itself.
 """
 
 from __future__ import annotations
@@ -49,8 +60,8 @@ from MIL_CREDA_EEG import partition
 from MIL_CREDA_EEG.bag_data import Bag, BagSet
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v38.md",
-    "sections": ["4.3", "6.2", "5.1", "5.2", "5.3"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "sections": ["4.3", "4.6", "6.2", "5.1", "5.2", "5.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K2-emparejamiento"],
     "invariants": [
         "the_ten_transfers_are_the_declared_ones",
@@ -63,7 +74,11 @@ __provenance__ = {
         "commons_are_stratified_by_diagnosis_within_each_fold",
         "the_assignment_is_seeded_by_the_partition_seed",
         "mirrored_transfers_read_the_same_condition_of_each_subject",
-        "device_arm_commons_go_to_the_low_cost_side_in_both_directions",
+        "commons_are_equalized_per_fold_and_diagnosis_in_every_arm",
+        "mirrored_transfers_swap_the_sides_of_one_assignment_in_every_arm",
+        "a_pair_pools_every_assigned_subject_as_target_exactly_once",
+        "a_pair_that_is_not_one_assignment_swapped_refuses",
+        "the_pooled_target_totals_are_reported_per_transfer_and_per_pair",
         "the_probe_reads_only_test_fold_commons",
         "the_other_condition_is_reached_only_through_the_probe_accessor",
         "the_eligibility_rule_is_evaluated_and_reported",
@@ -75,8 +90,6 @@ ROLES = ("train", "validation", "test")
 DEFAULT_SEED = partition.PARTITION_SEED
 #: Sec. 4.3: at least five subjects per class per fold.
 MIN_PER_CLASS_PER_FOLD = 5
-#: The low-cost device's conditions (EPOC X), where the device arm's commons go.
-LOW_COST = frozenset({"Robots", "CogniFit"})
 
 
 class AssignmentError(RuntimeError):
@@ -185,34 +198,27 @@ def assign(transfer: Transfer, holders: Mapping[str, Iterable[str]],
     for s in folds:
         has = [c for c in (first, second) if s in held[c]]
         condition[s] = has[0] if len(has) == 1 else None
-    if transfer.arm == "device":
-        low = [c for c in (first, second) if c in LOW_COST]
-        if len(low) != 1:
-            raise AssignmentError(f"El brazo de dispositivo necesita un lado de bajo costo: "
-                                  f"{transfer.pair}.")
-        for s in commons:
-            condition[s] = low[0]
-    else:
-        pair_key = f"{first}|{second}"
-        running = 0                                     # (#first - #second) laid so far
-        cells = sorted({(labels[s], folds[s]) for s in folds})
-        for label, fold in cells:
-            cell = [s for s in folds if folds[s] == fold and labels[s] == label]
-            a = sum(1 for s in cell if condition[s] == first)
-            b = sum(1 for s in cell if condition[s] == second)
-            common = sorted((s for s in cell if s in commons),
-                            key=lambda s: (_hash(f"{seed}:{pair_key}:{s}"), s))
-            n = len(common)
-            twice = b - a + n
-            x = twice // 2
-            if twice % 2:
-                behind_first = running < 0 or (
-                    running == 0 and int(_hash(f"{seed}:{pair_key}:{fold}:{label}"), 16) % 2)
-                x += 1 if behind_first else 0
-            x = min(max(x, 0), n)
-            for k, s in enumerate(common):
-                condition[s] = first if k < x else second
-            running += (a + x) - (b + n - x)
+    pair_key = f"{first}|{second}"
+    running: dict[str, int] = {}                        # per label: #first - #second laid
+    cells = sorted({(labels[s], folds[s]) for s in folds})
+    for label, fold in cells:
+        cell = [s for s in folds if folds[s] == fold and labels[s] == label]
+        a = sum(1 for s in cell if condition[s] == first)
+        b = sum(1 for s in cell if condition[s] == second)
+        common = sorted((s for s in cell if s in commons),
+                        key=lambda s: (_hash(f"{seed}:{pair_key}:{s}"), s))
+        n = len(common)
+        twice = b - a + n
+        x = twice // 2
+        lead = running.get(label, 0)
+        if twice % 2:
+            behind_first = lead < 0 or (
+                lead == 0 and int(_hash(f"{seed}:{pair_key}:{fold}:{label}"), 16) % 2)
+            x += 1 if behind_first else 0
+        x = min(max(x, 0), n)
+        for k, s in enumerate(common):
+            condition[s] = first if k < x else second
+        running[label] = lead + (a + x) - (b + n - x)
     sides = {s: ("excluded" if c is None else "source" if c == transfer.source else "target")
              for s, c in condition.items()}
     out = Assignment(transfer=transfer, sides=dict(sorted(sides.items())),
@@ -237,6 +243,64 @@ def assign_from_bags(transfer: Transfer, bags: BagSet,
     holders = {c: bags.holders(c) for c in (transfer.source, transfer.target)}
     return assign(transfer, holders, folds, labels, bags.rotations, seed,
                   bags.partition_sha256)
+
+
+# ------------------------------------------------------------- the pair (Sec. 4.6)
+
+
+def pair_pool(a: Assignment, b: Assignment) -> dict[str, str]:
+    """Every assigned subject of a pair -> the direction in which it is target.
+
+    `a` and `b` must be the two directions of one pair under one partition.
+    Raises when an assigned subject is target in both directions or in
+    neither, or when the two disagree on who is excluded.
+    """
+    if b.transfer != Transfer(a.transfer.arm, a.transfer.target, a.transfer.source):
+        raise AssignmentError(f"{a.transfer.name} y {b.transfer.name} no son las dos "
+                              f"direcciones de un par.")
+    if a.partition_sha256 != b.partition_sha256 or set(a.sides) != set(b.sides):
+        raise AssignmentError(f"Las dos direcciones del par {a.transfer.pair} no comparten "
+                              f"la partición.")
+    pooled, wrong = {}, []
+    for s in sorted(a.sides):
+        excluded = (a.side(s) == "excluded", b.side(s) == "excluded")
+        if all(excluded):
+            continue
+        targets = [d.transfer.name for d in (a, b) if d.side(s) == "target"]
+        if any(excluded) or len(targets) != 1:
+            wrong.append(f"{s} ({a.side(s)}/{b.side(s)})")
+            continue
+        pooled[s] = targets[0]
+    if wrong:
+        raise AssignmentError(f"En el par {a.transfer.pair}, cada sujeto asignado debe ser "
+                              f"objetivo exactamente una vez entre las dos direcciones: "
+                              f"{', '.join(wrong)}.")
+    return pooled
+
+
+def _label_counts(subjects: Iterable[str], labels: Mapping[str, str]) -> dict[str, int]:
+    names = sorted(set(labels.values()))
+    subjects = list(subjects)
+    return {label: sum(1 for s in subjects if labels[s] == label) for label in names}
+
+
+def pair_totals(a: Assignment, b: Assignment) -> dict:
+    """The pooled target sizes per class of a pair, overall and by direction."""
+    pooled = pair_pool(a, b)
+    return {"arm": a.transfer.arm, "pair": "|".join(a.transfer.pair),
+            "pooled_target": _label_counts(pooled, a.labels),
+            "by_direction": {d.transfer.name: _label_counts(d.subjects("target"), d.labels)
+                             for d in (a, b)}}
+
+
+def pairs(assignments: Iterable[Assignment]) -> list[tuple[Assignment, Assignment]]:
+    """The two directions of every pair among `assignments`, in pair order."""
+    by = {(x.transfer.arm, x.transfer.source, x.transfer.target): x for x in assignments}
+    out = []
+    for (arm, source, target), x in sorted(by.items()):
+        if (source, target) == tuple(sorted((source, target))) and (arm, target, source) in by:
+            out.append((x, by[(arm, target, source)]))
+    return out
 
 
 # ------------------------------------------------------------- accessors
@@ -276,9 +340,12 @@ def eligibility(a: Assignment, minimum: int = MIN_PER_CLASS_PER_FOLD) -> dict:
                              "fold": fold, "label": label, "n": n})
     table = pd.DataFrame(rows)
     failing = table[table["n"] < minimum]
+    min_per_fold = {side: {label: int(g["n"].min()) for label, g in t.groupby("label")}
+                    for side, t in table.groupby("side")}
     return {"transfer": a.transfer.name, "arm": a.transfer.arm,
             "passes": bool(failing.empty), "min_count": int(table["n"].min()),
-            "minimum": int(minimum), "table": table,
+            "minimum": int(minimum), "table": table, "min_per_fold": min_per_fold,
+            "pooled_target": _label_counts(a.subjects("target"), a.labels),
             "failing": failing[["side", "fold", "label", "n"]].to_dict("records")}
 
 

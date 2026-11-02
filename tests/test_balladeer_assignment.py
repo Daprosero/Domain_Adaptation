@@ -1,4 +1,4 @@
-"""Experiments plan v38, Secs. 4.3 and 6.2: domain assignment, leakage guard, probe."""
+"""Experiments plan v40, Secs. 4.3, 4.6 and 6.2: domain assignment, leakage guard, probe."""
 
 from __future__ import annotations
 
@@ -155,21 +155,110 @@ def test_mirrored_transfers_read_the_same_condition_of_each_subject():
 
 
 def _device_population() -> dict:
-    pop = _population(n_per_cell_common=5, singles_a=6, singles_b=1)
-    holders = {"L6": pop["holders"]["A"], "Robots": pop["holders"]["B"]}
-    return {**pop, "holders": holders}
+    """As in BALLADEER: the high-density-only subjects are almost all diagnosed."""
+    holders = {"L6": set(), "Robots": set()}
+    folds, labels = {}, {}
+    k = 0
+    cells = {"yes": (("L6", 4), ("Robots", 0), ("L6Robots", 5)),
+             "no": (("L6", 0), ("Robots", 1), ("L6Robots", 5))}
+    for fold in range(partition.N_FOLDS):
+        for label, kinds in cells.items():
+            for kind, count in kinds:
+                for _ in range(count):
+                    k += 1
+                    s = f"UB{k:04d}"
+                    folds[s], labels[s] = fold, label
+                    for c in ("L6", "Robots"):
+                        if c in kind:
+                            holders[c].add(s)
+    return {"holders": holders, "folds": folds, "labels": labels,
+            "rotations": partition.rotations(folds)}
 
 
-def test_device_arm_commons_go_to_the_low_cost_side_in_both_directions():
+def _device(pop: dict, source: str, target: str) -> assignment.Assignment:
+    return assignment.assign(assignment.Transfer("device", source, target), pop["holders"],
+                             pop["folds"], pop["labels"], pop["rotations"],
+                             partition_sha256="h" * 64)
+
+
+def test_commons_are_equalized_per_fold_and_diagnosis_in_every_arm():
+    level = _population(n_per_cell_common=7, singles_a=3, singles_b=0)
+    device = _device_population()
+    cases = [(level, _assign(level)), (level, _assign(level, "B", "A")),
+             (device, _device(device, "L6", "Robots")), (device, _device(device, "Robots", "L6"))]
+    for pop, a in cases:
+        for fold in range(partition.N_FOLDS):
+            for label in ("yes", "no"):
+                cell = [s for s in pop["folds"] if pop["folds"][s] == fold
+                        and pop["labels"][s] == label]
+                n = Counter(a.side(s) for s in cell)
+                assert abs(n["source"] - n["target"]) <= 1, (a.transfer.name, fold, label, n)
+    # Device arm: diagnosed commons go mostly to the low-cost side, control commons are split.
+    a = _device(device, "L6", "Robots")
+    commons = device["holders"]["L6"] & device["holders"]["Robots"]
+    by_label = {lab: Counter(a.condition_of(s) for s in commons if device["labels"][s] == lab)
+                for lab in ("yes", "no")}
+    assert by_label["yes"]["Robots"] > by_label["yes"]["L6"]
+    assert by_label["no"]["L6"] > 0 and by_label["no"]["Robots"] > 0
+    targets = Counter(device["labels"][s] for s in a.subjects("target"))
+    sources = Counter(device["labels"][s] for s in a.subjects("source"))
+    for lab in ("yes", "no"):
+        assert abs(targets[lab] - sources[lab]) <= 1
+
+
+def test_mirrored_transfers_swap_the_sides_of_one_assignment_in_every_arm():
+    swap = {"source": "target", "target": "source", "excluded": "excluded"}
+    level, device = _population(n_per_cell_common=7, singles_a=2), _device_population()
+    for ab, ba in ((_assign(level, "A", "B"), _assign(level, "B", "A")),
+                   (_device(device, "L6", "Robots"), _device(device, "Robots", "L6"))):
+        assert set(ab.sides) == set(ba.sides)
+        for s in ab.sides:
+            assert ba.side(s) == swap[ab.side(s)]
+            assert ab.condition_of(s) == ba.condition_of(s)
+        for r in range(partition.N_FOLDS):
+            assert ab.rotation(r)["target_test"] == ba.rotation(r)["source_test"]
+
+
+def test_a_pair_pools_every_assigned_subject_as_target_exactly_once():
+    for pop, ab, ba in ((p := _population(n_per_cell_common=7, singles_a=2),
+                         _assign(p, "A", "B"), _assign(p, "B", "A")),
+                        (d := _device_population(), _device(d, "L6", "Robots"),
+                         _device(d, "Robots", "L6"))):
+        pooled = assignment.pair_pool(ab, ba)
+        assigned = set(pop["folds"]) - ab.subjects("excluded")
+        assert set(pooled) == assigned
+        for s, direction in pooled.items():
+            owner = ab if direction == ab.transfer.name else ba
+            assert direction in (ab.transfer.name, ba.transfer.name)
+            assert owner.side(s) == "target"
+        assert Counter(pooled.values()) == {ab.transfer.name: len(ab.subjects("target")),
+                                            ba.transfer.name: len(ba.subjects("target"))}
+        assert assignment.pair_pool(ba, ab) == pooled
+
+
+def test_a_pair_that_is_not_one_assignment_swapped_refuses():
+    pop = _population(n_per_cell_common=8)
+    ab = _assign(pop, "A", "B")
+    with pytest.raises(assignment.AssignmentError, match="exactamente una vez"):
+        assignment.pair_pool(ab, _assign(pop, "B", "A", seed=SEED + 1))
+    with pytest.raises(assignment.AssignmentError, match="par"):
+        assignment.pair_pool(ab, ab)
+
+
+def test_the_pooled_target_totals_are_reported_per_transfer_and_per_pair():
     pop = _device_population()
-    commons = pop["holders"]["L6"] & pop["holders"]["Robots"]
-    for source, target in (("L6", "Robots"), ("Robots", "L6")):
-        a = assignment.assign(assignment.Transfer("device", source, target), pop["holders"],
-                              pop["folds"], pop["labels"], pop["rotations"],
-                              partition_sha256="h" * 64)
-        assert all(a.condition_of(s) == "Robots" for s in commons)
-        low_cost_side = "target" if target == "Robots" else "source"
-        assert all(a.side(s) == low_cost_side for s in commons)
+    ab, ba = _device(pop, "L6", "Robots"), _device(pop, "Robots", "L6")
+    e = assignment.eligibility(ab)
+    assert e["pooled_target"] == dict(Counter(pop["labels"][s] for s in ab.subjects("target")))
+    assert set(e["min_per_fold"]) == {"source", "target"}
+    assert e["min_per_fold"]["target"]["no"] == int(
+        e["table"].query("side == 'target' and label == 'no'")["n"].min())
+    pair = assignment.pair_totals(ab, ba)
+    assert pair["pair"] == "L6|Robots"
+    assert pair["pooled_target"] == dict(Counter(
+        pop["labels"][s] for s in assignment.pair_pool(ab, ba)))
+    assert pair["by_direction"] == {ab.transfer.name: e["pooled_target"],
+                                    ba.transfer.name: assignment.eligibility(ba)["pooled_target"]}
 
 
 def test_the_probe_reads_only_test_fold_commons():
@@ -182,7 +271,7 @@ def test_the_probe_reads_only_test_fold_commons():
         probe = a.probe_subjects(r)
         assert probe == {s for s in commons if pop["folds"][s] == test_fold}
         seen.update(probe)
-    assert set(seen) == commons and set(seen.values()) == {1}
+    assert set(seen) == commons and set(seen.values()) == {1}   # once over the four rotations
 
 
 # --------------------------------------------------- the accessor over real bags
