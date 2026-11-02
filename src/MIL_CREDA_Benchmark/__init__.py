@@ -57,9 +57,10 @@ __benchmark__ = {
             "plt.show",
             # El gif 3xN del toyset: filas = normalizaciones declaradas,
             # columnas = embedding por clase real / por prediccion / loss de
-            # fase 1 / loss de fase 2, cuadros = pasos de la fase 2. Es la
-            # figura de `CREDA/Notebooks/Toyset_Plot.ipynb` con las piezas de
-            # MIL-CREDA, y se declara aca por la misma razon que las otras:
+            # fase 1 / loss de fase 2, cuadros = pasos de la fase 2. Era la
+            # figura del ya retirado `CREDA/Notebooks/Toyset_Plot.ipynb` con
+            # las piezas de MIL-CREDA, y se declara aca por la misma razon que
+            # las otras:
             # sin la declaracion el motor no puede distinguir una celda que
             # dibuja de una que muestra una imagen sin haberla dibujado.
             "toy_run.animar_familia",

@@ -5031,30 +5031,32 @@ def test_el_toyset_resuelve_su_dispositivo_por_el_suyo():
         "`harness.resolve_device`, y sin ella el cambio parece un capricho")
 
 
-def test_el_cuaderno_generador_no_entrega_el_dispositivo_del_banco():
-    """El cuaderno no puede pasarle a `sweep` un dispositivo del banco.
+def test_el_cuaderno_tutorial_no_entrega_el_dispositivo_del_banco():
+    """El cuaderno no puede pasarle a `toy_run` un dispositivo del banco.
 
     **Este es el defecto que nada pescaba.** Los seis sitios de `toy_run` que
-    resuelven el dispositivo lo hacen cuando `device is None`; el cuaderno lo
-    pasaba EXPLICITO, desde `harness.resolve_device()`, asi que los seis
-    quedaban inertes y la corrida entera habria ido por MPS --- 5.42 h se
-    vuelven ~71 h, con otros numeros. Cambiar el default de un parametro no
-    alcanza cuando el llamador lo pasa; lo que hay que medir es QUIEN llama.
+    resuelven el dispositivo lo hacen cuando `device is None`; el cuaderno
+    generador (retirado el 2026-11-02) lo pasaba EXPLICITO, desde
+    `harness.resolve_device()`, asi que los seis quedaban inertes y la corrida
+    entera habria ido por MPS --- 5.42 h se vuelven ~71 h, con otros numeros.
+    Cambiar el default de un parametro no alcanza cuando el llamador lo pasa;
+    lo que hay que medir es QUIEN llama. El tutorial de MIL-CREDA pasa
+    `DISPOSITIVO` explicito a `toy_run`, asi que la misma guarda vale para el.
     """
     cuaderno = json.loads(
         (pathlib.Path(toy_run.__file__).resolve().parents[2]
-         / "MIL-CREDA" / "Notebooks" / "Toyset_Generator.ipynb")
+         / "MIL-CREDA" / "Notebooks" / "Toyset.ipynb")
         .read_text(encoding="utf-8"))
     codigo = "\n".join("".join(c["source"]) for c in cuaderno["cells"]
                        if c["cell_type"] == "code")
 
     assert _llamadas_a(codigo, "harness", "resolve_device") == [], (
-        "el cuaderno generador resuelve el dispositivo con "
+        "el cuaderno tutorial resuelve el dispositivo con "
         "`harness.resolve_device`, y lo pasa explicito, asi que los seis "
         "sitios de `toy_run` no se alcanzan")
     assert _llamadas_a(codigo, "toy_run", "dispositivo_del_toyset"), (
         "el cuaderno no nombra `toy_run.dispositivo_del_toyset`, asi que no "
-        "hay nada que diga en que dispositivo corre lo que escribe")
+        "hay nada que diga en que dispositivo entrena")
 
 
 # ===================================================================

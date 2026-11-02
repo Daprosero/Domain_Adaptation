@@ -2297,8 +2297,8 @@ def refuse_retired_hyper(hyper: dict | None) -> None:
     against this path's names, and for the identical reason its own comment
     gives: "un `barrido.json` anterior los trae, y quien los manda cree que
     decide algo". A stale artefact of this toyset carries `ceiling`,
-    `ceilingLocal`, `rampDelta` and `rampDeltaLocal` -- `MIL-CREDA/Notebooks/
-    toy_search.json` on this disk still does, with `ceiling` at 0.01568 -- and
+    `ceilingLocal`, `rampDelta` and `rampDeltaLocal` -- the retired
+    `MIL-CREDA/Notebooks/toy_search.json` did, with `ceiling` at 0.01568 -- and
     a caller who reads one back and passes it in believes it is reproducing the
     run those values came from.
 
@@ -4850,7 +4850,8 @@ def exigir_artefacto_de_la_seccion_uno(registro: dict) -> dict:
 
     Pasarle el barrido en memoria moria con `KeyError: 'filas'` adentro de
     `mejor_arquitectura`, despues de que el cuaderno ya habia pagado la
-    seccion 1 entera. Medido el 2026-10-20 en `Toyset_Generator.ipynb`. Un
+    seccion 1 entera. Medido el 2026-10-20 en el ya retirado
+    `Toyset_Generator.ipynb`. Un
     `KeyError` pelado no dice cual de los tres objetos hay que pasar, que es
     exactamente lo que `CLAVES_ARTEFACTO` existe para evitar cuando el
     artefacto llega por disco.
@@ -7565,8 +7566,10 @@ def _refuse_a_foreign_stamp(origen: Path, stamp: dict) -> None:
         f"declare: it is missing {faltan}"
         + (f" and carries {sobran}, which this Scale retired" if sobran else "")
         + ". Its numbers were measured under another protocol, so reading them "
-        "as this one's would compare two experiments. Regenerate it with "
-        "MIL-CREDA/Notebooks/Toyset_Generator.ipynb at this scale")
+        "as this one's would compare two experiments. Regenerate it at this "
+        "scale with the sweep API: `toy_run.guardar(toy_run.destination(scale), "
+        "toy_run.barrido_repartido(scale))`. The toyset tutorial notebooks "
+        "train in memory and do not write this artefact")
 
 
 def cargar(origen) -> dict:
@@ -7744,8 +7747,8 @@ def _angulo_entre_bases(primera: np.ndarray, segunda: np.ndarray) -> float:
 #:
 #: What a reader of the GIF alone loses is the sentence saying these numbers are
 #: a trial. It is still stated where it was already stated: by the record
-#: itself, and by the preamble cell of `Toyset_Plot.ipynb`, which prints the
-#: scale and the revision before any figure is drawn.
+#: itself, which carries the scale and the revision (the retired
+#: `Toyset_Plot.ipynb` also printed them in its preamble cell).
 
 
 def _brazo_unico(registro: dict) -> str:
@@ -7995,7 +7998,9 @@ def _fila_animada(registro: dict, familia: str, normalizacion: str) -> dict:
         raise KeyError(
             f"{familia}.npz no trae las posiciones de {handle!r}: este "
             "artefacto lo escribió un generador anterior a `LATENT_MEMBERS`. "
-            "Corré `MIL-CREDA/Notebooks/Toyset_Generator.ipynb` de nuevo; un "
+            "Regeneralo con la API del barrido: `toy_run.guardar("
+            "toy_run.destination(escala), toy_run.barrido_repartido(escala))`; "
+            "los cuadernos tutoriales del toyset no escriben este artefacto. Un "
             "cuadro vacío se lee igual que una medición que salió plana")
     miembros = latentes[handle]
     faltan = [m for m in LATENT_MEMBERS if m not in miembros]
