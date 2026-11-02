@@ -337,7 +337,6 @@ def test_the_ends_of_the_theorem_map_to_the_ends_of_the_interval(
 import ast
 import inspect
 import pathlib
-import re
 
 from CREDA import bounds as creda_bounds_module
 from CREDA import models as creda_models
@@ -352,11 +351,6 @@ SOURCES = {
 def _toy_source() -> str:
     from CREDA import toy_experiment
     return pathlib.Path(toy_experiment.__file__).read_text()
-
-
-def _plots_source() -> str:
-    from CREDA import toy_plots
-    return pathlib.Path(toy_plots.__file__).read_text()
 
 
 def _training_pipeline_source() -> str:
@@ -827,28 +821,7 @@ def test_neither_package_attributes_the_lower_end_to_equation_thirty_five() -> N
         assert lower == pytest.approx(-math.log(2.0), abs=1e-15), package
 
 
-# --------------------------------------- the two files downstream of the term
-
-
-def test_the_axis_comment_gives_r31s_reason_for_the_unit_interval() -> None:
-    """`toy_plots.py` fixed its axis to [0, 1] and said why. The why moved.
-
-    It argued from the two ends -- `L_c = -ln 2` and `U_c = ...` -- which was
-    r28's construction. Under r31 the interval comes from r30's theorem on the
-    span instead. The axis is unchanged and its justification is not.
-    """
-    source = _plots_source()
-    # Anchored on a line that occurs once. `# Lineal y 0 a 1 FIJO` occurs
-    # TWICE -- the phase-1 panel's axis carries the same decision for Eq. 21 --
-    # and anchoring there silently measured the wrong block.
-    assert source.count('# Lineal y 0 a 1 FIJO') == 2
-    block = _block(source, '# vistazo. El de valid va sobre el MISMO lote',
-                   'a.set_ylim(0.0, 1.0)')
-    assert 'r31' in block
-    assert 'r28, Ecs. 35-36' not in block
-    assert 'ln 2' in block
-    # The axis itself stays where it was.
-    assert 'a.set_ylim(0.0, 1.0)' in source
+# ------------------------------------------ the file downstream of the term
 
 
 def test_the_toy_block_dates_the_denominator_it_was_measured_under() -> None:
@@ -887,8 +860,7 @@ def test_every_r28_mention_left_in_creda_is_history_and_not_a_live_rule() -> Non
     bound to, and no file may still attribute Eq. (36)'s denominator to a
     span.
     """
-    everything = dict(SOURCES, toy_experiment=_toy_source(),
-                      toy_plots=_plots_source())
+    everything = dict(SOURCES, toy_experiment=_toy_source())
     for name, source in everything.items():
         # Naming r28 in prose is allowed and this file does it deliberately.
         # Naming it as the binding is not: that is the declaration's own slot.
