@@ -41,6 +41,10 @@ MIL-CREDA/Models/Pilot/Benchmark/*.pt
 # fall outside the next subtree exactly as this one did.
 MIL-CREDA/Models/Noise/**/*.pt
 MIL-CREDA/Models/Pilot/Noise/**/*.pt
+# The BALLADEER experiments store every final model per transfer, rotation,
+# seed and strategy (`model_store`): thousands of weight files. The JSON
+# sidecars beside them stay tracked; the weights do not.
+MIL-CREDA/Models/Balladeer/**/*.pt
 #
 # What stays out is the dataset cache, and only that. It is MNIST, USPS and SVHN
 # exactly as torchvision downloads them: somebody else's data, 243 MB of it, that a
