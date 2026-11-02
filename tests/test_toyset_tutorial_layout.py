@@ -29,6 +29,8 @@ RETIRED = (
     "MIL-CREDA/Notebooks/Toyset_Generator.ipynb",
     "MIL-CREDA/Notebooks/Toyset_Plot.ipynb",
     "MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb",
+    "MIL-CREDA/Notebooks/BALLADEER_01_Inventario.ipynb",
+    "MIL-CREDA/Notebooks/BALLADEER_02_Auditoria.ipynb",
 )
 
 #: What the retired notebooks left next to themselves: the plot notebook's
@@ -42,8 +44,6 @@ RETAINED = (
     "CREDA/Notebooks/Plots_Generator.ipynb",
     "CREDA/Notebooks/Results_Generator.ipynb",
     "CREDA/Notebooks/Tables_Generator.ipynb",
-    "MIL-CREDA/Notebooks/BALLADEER_01_Inventario.ipynb",
-    "MIL-CREDA/Notebooks/BALLADEER_02_Auditoria.ipynb",
     "MIL-CREDA/Notebooks/BALLADEER_03_Preprocesamiento.ipynb",
 )
 
