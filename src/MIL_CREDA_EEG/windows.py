@@ -74,6 +74,10 @@ WINDOW_S = 4.0
 WINDOW_SAMPLES = int(TARGET_RATE * WINDOW_S)
 #: Leading windows discarded as the filter transient (Sec. 2.7).
 DISCARDED_LEADING = 1
+#: Plan v18, Sec. 3.2: a bag needs at least this many useful windows, already
+#: without the first and the partial last. One floor for every condition; the
+#: exclusion itself is `exclusions.bag_floor_reasons`.
+BAG_FLOOR = 68
 
 #: Per-window side arrays, aligned with the kept windows.
 WINDOW_ARRAYS = ("integrity_mark", "lost_fraction", "interpolated_fraction", "long_gap",

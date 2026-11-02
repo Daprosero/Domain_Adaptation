@@ -1,7 +1,7 @@
 """What preprocessing excludes, and the flow log that keeps it honest.
 
-Experiments plan v05, Secs. 2.2, 2.4, 2.5 and 2.10. Exactly three rules drop a
-record here, each a hard defect of the record and each with its reason:
+Experiments plan v18, Secs. 2.2, 2.4, 2.5, 2.10 and 3.2. Three rules drop a
+record as a hard defect of the record, each with its reason:
 
 * **2.2 rate**: an effective rate outside the manufacturer's menu or different
   from the nominal one -- `audit_rate`'s own classification;
@@ -13,19 +13,27 @@ record here, each a hard defect of the record and each with its reason:
 * **2.5 contact**: the operator-approved majority rule,
   `audit_contact.contact_rule`, unchanged.
 
-Nothing else is excluded. A defective channel stays (Sec. 2.4), a marked
-window stays (Secs. 2.3, 2.5), and a subject with an undetermined diagnosis is
-flagged in the manifest and kept: leaving every partition is Sec. 4.3's
-decision, not preprocessing's. Whether a record's unmarked windows reach the
-bag cardinality floor (Sec. 2.3) belongs to the bag definition (Sec. 3) and is
-not decided here either.
+Then two exclusions by design (Sec. 2.10), each its own step and its own kind:
+
+* **2.10 undetermined**: every record of a subject whose diagnosis is
+  undetermined (the reason is Sec. 4.3's);
+* **2.10 EPOC+**: every record of the EPOC+ model of the low-cost device. The
+  subject keeps its high-density (CGX) records and, if it has them, its EPOC X
+  ones -- the rule reads the record's device, never the subject.
+
+And the bag floor (Sec. 3.2): a record whose useful windows, already without
+the first and the partial last, fall below `windows.BAG_FLOOR` leaves. On the
+published release it removes nothing; it stays as a guard.
+
+Nothing else is excluded. A defective channel stays (Sec. 2.4) and a marked
+window stays (Secs. 2.3, 2.5).
 
 The flow table (Sec. 2.10) runs per device cohort from the initial records and
 subjects to the final ones, step by step in plan order; a record meeting two
-rules leaves at the first. Hard defects and incompatibilities are crossed with
-label, sex and age apart, each in its own table. Every rule here is a hard
-defect, so the incompatibility table is written and is empty: stated, not
-omitted.
+rules leaves at the first. Each kind -- hard defects, incompatibilities, each
+design exclusion and the floor -- is crossed with label, sex and age apart, in
+its own rows. No rule here is an incompatibility, so that table is written and
+is empty: stated, not omitted.
 
 This module also drives the single preprocessing pass: each record is read
 once, its exclusion decided, and when kept its windows are written to
@@ -51,22 +59,25 @@ from MIL_CREDA_EEG.defect_log import _clean, cross_with_demographics
 from MIL_CREDA_EEG.modality import read_columns, read_record
 from MIL_CREDA_EEG.preprocess_filter import scalp_signal
 from MIL_CREDA_EEG.windows import (
-    channel_marks, complete_windows, emotiv_cq, record_windows,
+    BAG_FLOOR, channel_marks, complete_windows, emotiv_cq, record_windows,
 )
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v05.md",
-    "sections": ["2.2", "2.4", "2.5", "2.10"],
-    "experiments": ["2.2", "2.4", "2.5", "2.10"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v18.md",
+    "sections": ["2.2", "2.4", "2.5", "2.10", "3.2"],
+    "experiments": ["2.2", "2.4", "2.5", "2.10", "3.2"],
     "invariants": [
         "a_record_with_most_channels_dead_in_every_window_has_no_eeg",
         "a_channel_dead_in_all_but_one_window_is_not_dead",
         "a_minority_of_dead_channels_is_a_channel_defect_not_a_record_without_eeg",
         "reasons_follow_plan_order_and_only_the_three_declared_rules_exclude",
         "the_excluded_set_is_exactly_the_records_with_a_reason",
-        "undetermined_subjects_are_flagged_and_never_dropped",
+        "undetermined_subjects_leave_with_all_their_records",
+        "epocplus_records_leave_and_their_subject_keeps_cgx_and_epocx",
+        "a_bag_below_the_floor_leaves_at_its_own_row",
+        "the_floor_excludes_no_bag_of_the_processed_data",
         "flow_table_counts_records_and_subjects_left_after_each_step",
-        "hard_defects_and_incompatibilities_are_crossed_apart",
+        "each_kind_of_exclusion_is_crossed_apart",
     ],
 }
 
@@ -76,11 +87,27 @@ REASON_STEP = {
     "2.2 rate_hard_defect": "2.2 tasa",
     "2.4 no_eeg": "2.4 registro sin EEG",
     "2.5 majority_bad_contact": "2.5 contacto",
+    "2.10 undetermined_diagnosis": "2.10 indeterminado",
+    "2.10 epocplus_record": "2.10 EPOC+",
+    "3.2 bag_floor": "3.2 piso de bolsa",
 }
 STEPS = tuple(dict.fromkeys(REASON_STEP.values()))
-#: Every rule here is a defect of the record itself; none is an incompatibility.
-REASON_KIND = {reason: "hard_defect" for reason in REASON_STEP}
-KINDS = ("hard_defect", "incompatibility")
+#: The defects are of the record itself; the design exclusions and the floor
+#: each keep their own kind, so no cross mixes them. None is an incompatibility.
+REASON_KIND = {
+    "lectura unreadable": "hard_defect",
+    "2.2 rate_hard_defect": "hard_defect",
+    "2.4 no_eeg": "hard_defect",
+    "2.5 majority_bad_contact": "hard_defect",
+    "2.10 undetermined_diagnosis": "design_undetermined",
+    "2.10 epocplus_record": "design_epocplus",
+    "3.2 bag_floor": "bag_floor",
+}
+KINDS = ("hard_defect", "incompatibility", "design_undetermined", "design_epocplus",
+         "bag_floor")
+
+#: Sec. 2.10: the low-cost model whose records leave by design.
+EXCLUDED_DEVICE = "EPOCPLUS"
 
 #: Sec. 2.4: a record without EEG has MORE than half its channels dead.
 NO_EEG_MAJORITY = 0.5
@@ -119,6 +146,21 @@ def exclusion_reasons(rate_hard_defect: bool, n_dead: int, n_channels: int,
     if contact_meets_rule:
         reasons.append("2.5 majority_bad_contact")
     return reasons
+
+
+def design_reasons(undetermined: bool, device: str) -> list[str]:
+    """Sec. 2.10's two exclusions by design the record meets, in plan order."""
+    reasons = []
+    if undetermined:
+        reasons.append("2.10 undetermined_diagnosis")
+    if device == EXCLUDED_DEVICE:
+        reasons.append("2.10 epocplus_record")
+    return reasons
+
+
+def bag_floor_reasons(n_windows: int) -> list[str]:
+    """Sec. 3.2: a bag with fewer useful windows than the floor leaves."""
+    return ["3.2 bag_floor"] if n_windows < BAG_FLOOR else []
 
 
 # ------------------------------------------------------------- one record
@@ -182,6 +224,7 @@ def preprocess_record(path: str, meta: dict, signals_dir: str) -> dict:
     rule = contact_rule(cq, rate) if cq is not None else None
     reasons = exclusion_reasons(rate_report["hard_defect"], n_dead, len(channels),
                                 rule["meets_rule"] if rule else None)
+    reasons += design_reasons(bool(meta.get("undetermined")), meta["device"])
     out.update({
         "readable": True, "error": None, "nominal_rate": rate,
         "effective_rate": rate_report["effective_rate"],
@@ -191,12 +234,17 @@ def preprocess_record(path: str, meta: dict, signals_dir: str) -> dict:
         "contact_n_bad_channels": rule["n_bad_channels"] if rule else None,
         "contact_meets_rule": rule["meets_rule"] if rule else None,
         "reasons": reasons, "npz": None, "npz_bytes": None,
-        "n_windows": 0,
+        "n_windows": 0, "bag_windows": None,
     })
     if reasons:
         return _clean(out)
     focus, focus_column = read_focus(path) if record.family == "EMOTIV" else (None, None)
     windows = record_windows(record, cq=cq, focus=focus)
+    out["bag_windows"] = windows["n_windows"]
+    floor = bag_floor_reasons(windows["n_windows"])
+    if floor:
+        out["reasons"] = floor
+        return _clean(out)
     target = Path(signals_dir) / f"{meta['record_id']}.npz"
     arrays = {key: value for key, value in windows.items()
               if isinstance(value, np.ndarray)}
@@ -221,12 +269,14 @@ def _work(args: tuple[str, dict, str, str]) -> dict:
     return result
 
 
-def _cached(cache: Path, out_dir: Path) -> dict | None:
+def _cached(cache: Path, out_dir: Path, meta: dict) -> dict | None:
     if not cache.is_file():
         return None
     summary = json.loads(cache.read_text(encoding="utf-8"))
     if summary.get("npz") and not (out_dir / summary["npz"]).is_file():
         return None
+    if any(summary.get(key) != value for key, value in meta.items()):
+        return None         # decided under another label or another floor
     return summary
 
 
@@ -238,6 +288,8 @@ def run_preprocess(raw_root: str | Path, out_dir: str | Path, workers: int = 4,
     records_dir.mkdir(parents=True, exist_ok=True)
     signals_dir.mkdir(parents=True, exist_ok=True)
     eeg = inventory.eeg_records(inventory.build_index(raw_root))
+    demo = inventory.load_demographics(raw_root)
+    undetermined = set(demo.loc[demo["label"] == "undetermined", "subject"])
     if record_ids is not None:
         eeg = eeg[eeg["record_id"].isin(record_ids)]
     keys = ["record_id", "subject", "task", "level", "task_label", "condition",
@@ -247,8 +299,10 @@ def run_preprocess(raw_root: str | Path, out_dir: str | Path, workers: int = 4,
         meta = _clean({k: row[k] for k in keys})
         if meta["level"] is not None:
             meta["level"] = int(meta["level"])
+        meta["undetermined"] = meta["subject"] in undetermined
+        meta["bag_floor"] = BAG_FLOOR
         cache = records_dir / f"{row['record_id']}.json"
-        summary = None if force else _cached(cache, out_dir)
+        summary = None if force else _cached(cache, out_dir, meta)
         if summary is not None:
             done.append(summary)
         else:
@@ -280,7 +334,7 @@ def finalize_manifest(frame: pd.DataFrame) -> pd.DataFrame:
 MANIFEST_COLUMNS = (
     "record_id", "subject", "condition", "task_label", "family", "device", "label",
     "sex", "age", "undetermined", "nominal_rate", "effective_rate", "n_samples_raw",
-    "n_channels", "n_windows_total", "n_windows", "excluded", "exclusion_step",
+    "n_channels", "n_windows_total", "n_windows", "bag_windows", "excluded", "exclusion_step",
     "exclusion_reason", "exclusion_kind", "n_dead_channels", "contact_n_bad_channels",
     "contact_meets_rule", "gap_exceeds_window", "windows_integrity_marked",
     "windows_long_gap", "windows_any_flat", "windows_any_saturated",

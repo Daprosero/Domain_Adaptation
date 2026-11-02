@@ -1,0 +1,1536 @@
+{
+  "fingerprint": {
+    "code_version": "736fd8f22abf10bf83f20d06b24366640a3e519a4d7769c2326f4e9895fdeaa0",
+    "seed": 20261025,
+    "survivors": [
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0004"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0020"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0021"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0022"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0023"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0024"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0025"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0026"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0027"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0028"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0029"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0030"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0031"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0032"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0033"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0034"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0035"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0036"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0037"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0038"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0040"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0041"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0042"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0043"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0044"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0045"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0046"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0047"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0050"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0051"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0052"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0055"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0056"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0057"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0060"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0061"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0062"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0064"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0066"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0067"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0068"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0069"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0070"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0071"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0072"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0073"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0074"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0075"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0076"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0077"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0078"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0079"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0080"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0081"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0082"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0083"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0084"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0085"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0086"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0087"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0088"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0090"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0091"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0092"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0094"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0095"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0096"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0097"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0098"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0099"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0100"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0102"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0103"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0104"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0106"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0107"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0109"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0110"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0111"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0113"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0115"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0116"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0117"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0118"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0119"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0120"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0121"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0122"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0124"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0125"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0127"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0128"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0129"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0131"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0132"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0133"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0134"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0136"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0137"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0138"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0139"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0140"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0141"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0142"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0143"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0144"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0145"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0146"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0147"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0148"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0149"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0150"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0152"
+      },
+      {
+        "label": "no",
+        "sex": "M",
+        "subject": "UB0155"
+      },
+      {
+        "label": "no",
+        "sex": "F",
+        "subject": "UB0156"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0157"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0159"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0160"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0161"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0162"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0164"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0165"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0166"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0167"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0168"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0169"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0170"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0173"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0174"
+      },
+      {
+        "label": "yes",
+        "sex": "M",
+        "subject": "UB0175"
+      },
+      {
+        "label": "yes",
+        "sex": "F",
+        "subject": "UB0176"
+      }
+    ]
+  },
+  "folds": {
+    "UB0004": 4,
+    "UB0020": 4,
+    "UB0021": 0,
+    "UB0022": 2,
+    "UB0023": 1,
+    "UB0024": 4,
+    "UB0025": 3,
+    "UB0026": 4,
+    "UB0027": 0,
+    "UB0028": 4,
+    "UB0029": 0,
+    "UB0030": 4,
+    "UB0031": 3,
+    "UB0032": 0,
+    "UB0033": 2,
+    "UB0034": 2,
+    "UB0035": 2,
+    "UB0036": 3,
+    "UB0037": 3,
+    "UB0038": 1,
+    "UB0040": 1,
+    "UB0041": 1,
+    "UB0042": 2,
+    "UB0043": 0,
+    "UB0044": 3,
+    "UB0045": 3,
+    "UB0046": 4,
+    "UB0047": 3,
+    "UB0050": 2,
+    "UB0051": 1,
+    "UB0052": 1,
+    "UB0055": 1,
+    "UB0056": 0,
+    "UB0057": 2,
+    "UB0060": 2,
+    "UB0061": 4,
+    "UB0062": 2,
+    "UB0064": 0,
+    "UB0066": 1,
+    "UB0067": 1,
+    "UB0068": 2,
+    "UB0069": 0,
+    "UB0070": 4,
+    "UB0071": 2,
+    "UB0072": 3,
+    "UB0073": 4,
+    "UB0074": 4,
+    "UB0075": 0,
+    "UB0076": 4,
+    "UB0077": 2,
+    "UB0078": 0,
+    "UB0079": 0,
+    "UB0080": 0,
+    "UB0081": 4,
+    "UB0082": 4,
+    "UB0083": 2,
+    "UB0084": 0,
+    "UB0085": 3,
+    "UB0086": 0,
+    "UB0087": 3,
+    "UB0088": 1,
+    "UB0090": 0,
+    "UB0091": 3,
+    "UB0092": 1,
+    "UB0094": 1,
+    "UB0095": 3,
+    "UB0096": 0,
+    "UB0097": 1,
+    "UB0098": 0,
+    "UB0099": 2,
+    "UB0100": 0,
+    "UB0102": 1,
+    "UB0103": 4,
+    "UB0104": 4,
+    "UB0106": 4,
+    "UB0107": 0,
+    "UB0109": 3,
+    "UB0110": 2,
+    "UB0111": 2,
+    "UB0113": 2,
+    "UB0115": 1,
+    "UB0116": 3,
+    "UB0117": 4,
+    "UB0118": 0,
+    "UB0119": 4,
+    "UB0120": 3,
+    "UB0121": 4,
+    "UB0122": 1,
+    "UB0124": 1,
+    "UB0125": 2,
+    "UB0127": 1,
+    "UB0128": 1,
+    "UB0129": 2,
+    "UB0131": 1,
+    "UB0132": 0,
+    "UB0133": 2,
+    "UB0134": 3,
+    "UB0136": 1,
+    "UB0137": 0,
+    "UB0138": 0,
+    "UB0139": 2,
+    "UB0140": 4,
+    "UB0141": 0,
+    "UB0142": 3,
+    "UB0143": 3,
+    "UB0144": 3,
+    "UB0145": 1,
+    "UB0146": 0,
+    "UB0147": 1,
+    "UB0148": 4,
+    "UB0149": 2,
+    "UB0150": 4,
+    "UB0152": 0,
+    "UB0155": 3,
+    "UB0156": 4,
+    "UB0157": 2,
+    "UB0159": 2,
+    "UB0160": 3,
+    "UB0161": 1,
+    "UB0162": 3,
+    "UB0164": 3,
+    "UB0165": 4,
+    "UB0166": 1,
+    "UB0167": 1,
+    "UB0168": 0,
+    "UB0169": 3,
+    "UB0170": 3,
+    "UB0173": 3,
+    "UB0174": 2,
+    "UB0175": 4,
+    "UB0176": 2
+  },
+  "format": "balladeer-folds/v1",
+  "n_folds": 5,
+  "partition_sha256": "1de58db2307394de57d2ee853a350099e6492aa5470119a9cecb6633df165ad3",
+  "plan": "experiments-plan-experimental-mil-creda-sobre-balladeer-v18.md, Sec. 4.2",
+  "rotations": {
+    "0": {
+      "test": [
+        "UB0021",
+        "UB0027",
+        "UB0029",
+        "UB0032",
+        "UB0043",
+        "UB0056",
+        "UB0064",
+        "UB0069",
+        "UB0075",
+        "UB0078",
+        "UB0079",
+        "UB0080",
+        "UB0084",
+        "UB0086",
+        "UB0090",
+        "UB0096",
+        "UB0098",
+        "UB0100",
+        "UB0107",
+        "UB0118",
+        "UB0132",
+        "UB0137",
+        "UB0138",
+        "UB0141",
+        "UB0146",
+        "UB0152",
+        "UB0168"
+      ],
+      "test_fold": 0,
+      "train": [
+        "UB0004",
+        "UB0020",
+        "UB0022",
+        "UB0024",
+        "UB0025",
+        "UB0026",
+        "UB0028",
+        "UB0030",
+        "UB0031",
+        "UB0033",
+        "UB0034",
+        "UB0035",
+        "UB0036",
+        "UB0037",
+        "UB0042",
+        "UB0044",
+        "UB0045",
+        "UB0046",
+        "UB0047",
+        "UB0050",
+        "UB0057",
+        "UB0060",
+        "UB0061",
+        "UB0062",
+        "UB0068",
+        "UB0070",
+        "UB0071",
+        "UB0072",
+        "UB0073",
+        "UB0074",
+        "UB0076",
+        "UB0077",
+        "UB0081",
+        "UB0082",
+        "UB0083",
+        "UB0085",
+        "UB0087",
+        "UB0091",
+        "UB0095",
+        "UB0099",
+        "UB0103",
+        "UB0104",
+        "UB0106",
+        "UB0109",
+        "UB0110",
+        "UB0111",
+        "UB0113",
+        "UB0116",
+        "UB0117",
+        "UB0119",
+        "UB0120",
+        "UB0121",
+        "UB0125",
+        "UB0129",
+        "UB0133",
+        "UB0134",
+        "UB0139",
+        "UB0140",
+        "UB0142",
+        "UB0143",
+        "UB0144",
+        "UB0148",
+        "UB0149",
+        "UB0150",
+        "UB0155",
+        "UB0156",
+        "UB0157",
+        "UB0159",
+        "UB0160",
+        "UB0162",
+        "UB0164",
+        "UB0165",
+        "UB0169",
+        "UB0170",
+        "UB0173",
+        "UB0174",
+        "UB0175",
+        "UB0176"
+      ],
+      "train_folds": [
+        2,
+        3,
+        4
+      ],
+      "validation": [
+        "UB0023",
+        "UB0038",
+        "UB0040",
+        "UB0041",
+        "UB0051",
+        "UB0052",
+        "UB0055",
+        "UB0066",
+        "UB0067",
+        "UB0088",
+        "UB0092",
+        "UB0094",
+        "UB0097",
+        "UB0102",
+        "UB0115",
+        "UB0122",
+        "UB0124",
+        "UB0127",
+        "UB0128",
+        "UB0131",
+        "UB0136",
+        "UB0145",
+        "UB0147",
+        "UB0161",
+        "UB0166",
+        "UB0167"
+      ],
+      "validation_fold": 1
+    },
+    "1": {
+      "test": [
+        "UB0023",
+        "UB0038",
+        "UB0040",
+        "UB0041",
+        "UB0051",
+        "UB0052",
+        "UB0055",
+        "UB0066",
+        "UB0067",
+        "UB0088",
+        "UB0092",
+        "UB0094",
+        "UB0097",
+        "UB0102",
+        "UB0115",
+        "UB0122",
+        "UB0124",
+        "UB0127",
+        "UB0128",
+        "UB0131",
+        "UB0136",
+        "UB0145",
+        "UB0147",
+        "UB0161",
+        "UB0166",
+        "UB0167"
+      ],
+      "test_fold": 1,
+      "train": [
+        "UB0004",
+        "UB0020",
+        "UB0021",
+        "UB0024",
+        "UB0025",
+        "UB0026",
+        "UB0027",
+        "UB0028",
+        "UB0029",
+        "UB0030",
+        "UB0031",
+        "UB0032",
+        "UB0036",
+        "UB0037",
+        "UB0043",
+        "UB0044",
+        "UB0045",
+        "UB0046",
+        "UB0047",
+        "UB0056",
+        "UB0061",
+        "UB0064",
+        "UB0069",
+        "UB0070",
+        "UB0072",
+        "UB0073",
+        "UB0074",
+        "UB0075",
+        "UB0076",
+        "UB0078",
+        "UB0079",
+        "UB0080",
+        "UB0081",
+        "UB0082",
+        "UB0084",
+        "UB0085",
+        "UB0086",
+        "UB0087",
+        "UB0090",
+        "UB0091",
+        "UB0095",
+        "UB0096",
+        "UB0098",
+        "UB0100",
+        "UB0103",
+        "UB0104",
+        "UB0106",
+        "UB0107",
+        "UB0109",
+        "UB0116",
+        "UB0117",
+        "UB0118",
+        "UB0119",
+        "UB0120",
+        "UB0121",
+        "UB0132",
+        "UB0134",
+        "UB0137",
+        "UB0138",
+        "UB0140",
+        "UB0141",
+        "UB0142",
+        "UB0143",
+        "UB0144",
+        "UB0146",
+        "UB0148",
+        "UB0150",
+        "UB0152",
+        "UB0155",
+        "UB0156",
+        "UB0160",
+        "UB0162",
+        "UB0164",
+        "UB0165",
+        "UB0168",
+        "UB0169",
+        "UB0170",
+        "UB0173",
+        "UB0175"
+      ],
+      "train_folds": [
+        0,
+        3,
+        4
+      ],
+      "validation": [
+        "UB0022",
+        "UB0033",
+        "UB0034",
+        "UB0035",
+        "UB0042",
+        "UB0050",
+        "UB0057",
+        "UB0060",
+        "UB0062",
+        "UB0068",
+        "UB0071",
+        "UB0077",
+        "UB0083",
+        "UB0099",
+        "UB0110",
+        "UB0111",
+        "UB0113",
+        "UB0125",
+        "UB0129",
+        "UB0133",
+        "UB0139",
+        "UB0149",
+        "UB0157",
+        "UB0159",
+        "UB0174",
+        "UB0176"
+      ],
+      "validation_fold": 2
+    },
+    "2": {
+      "test": [
+        "UB0022",
+        "UB0033",
+        "UB0034",
+        "UB0035",
+        "UB0042",
+        "UB0050",
+        "UB0057",
+        "UB0060",
+        "UB0062",
+        "UB0068",
+        "UB0071",
+        "UB0077",
+        "UB0083",
+        "UB0099",
+        "UB0110",
+        "UB0111",
+        "UB0113",
+        "UB0125",
+        "UB0129",
+        "UB0133",
+        "UB0139",
+        "UB0149",
+        "UB0157",
+        "UB0159",
+        "UB0174",
+        "UB0176"
+      ],
+      "test_fold": 2,
+      "train": [
+        "UB0004",
+        "UB0020",
+        "UB0021",
+        "UB0023",
+        "UB0024",
+        "UB0026",
+        "UB0027",
+        "UB0028",
+        "UB0029",
+        "UB0030",
+        "UB0032",
+        "UB0038",
+        "UB0040",
+        "UB0041",
+        "UB0043",
+        "UB0046",
+        "UB0051",
+        "UB0052",
+        "UB0055",
+        "UB0056",
+        "UB0061",
+        "UB0064",
+        "UB0066",
+        "UB0067",
+        "UB0069",
+        "UB0070",
+        "UB0073",
+        "UB0074",
+        "UB0075",
+        "UB0076",
+        "UB0078",
+        "UB0079",
+        "UB0080",
+        "UB0081",
+        "UB0082",
+        "UB0084",
+        "UB0086",
+        "UB0088",
+        "UB0090",
+        "UB0092",
+        "UB0094",
+        "UB0096",
+        "UB0097",
+        "UB0098",
+        "UB0100",
+        "UB0102",
+        "UB0103",
+        "UB0104",
+        "UB0106",
+        "UB0107",
+        "UB0115",
+        "UB0117",
+        "UB0118",
+        "UB0119",
+        "UB0121",
+        "UB0122",
+        "UB0124",
+        "UB0127",
+        "UB0128",
+        "UB0131",
+        "UB0132",
+        "UB0136",
+        "UB0137",
+        "UB0138",
+        "UB0140",
+        "UB0141",
+        "UB0145",
+        "UB0146",
+        "UB0147",
+        "UB0148",
+        "UB0150",
+        "UB0152",
+        "UB0156",
+        "UB0161",
+        "UB0165",
+        "UB0166",
+        "UB0167",
+        "UB0168",
+        "UB0175"
+      ],
+      "train_folds": [
+        0,
+        1,
+        4
+      ],
+      "validation": [
+        "UB0025",
+        "UB0031",
+        "UB0036",
+        "UB0037",
+        "UB0044",
+        "UB0045",
+        "UB0047",
+        "UB0072",
+        "UB0085",
+        "UB0087",
+        "UB0091",
+        "UB0095",
+        "UB0109",
+        "UB0116",
+        "UB0120",
+        "UB0134",
+        "UB0142",
+        "UB0143",
+        "UB0144",
+        "UB0155",
+        "UB0160",
+        "UB0162",
+        "UB0164",
+        "UB0169",
+        "UB0170",
+        "UB0173"
+      ],
+      "validation_fold": 3
+    },
+    "3": {
+      "test": [
+        "UB0025",
+        "UB0031",
+        "UB0036",
+        "UB0037",
+        "UB0044",
+        "UB0045",
+        "UB0047",
+        "UB0072",
+        "UB0085",
+        "UB0087",
+        "UB0091",
+        "UB0095",
+        "UB0109",
+        "UB0116",
+        "UB0120",
+        "UB0134",
+        "UB0142",
+        "UB0143",
+        "UB0144",
+        "UB0155",
+        "UB0160",
+        "UB0162",
+        "UB0164",
+        "UB0169",
+        "UB0170",
+        "UB0173"
+      ],
+      "test_fold": 3,
+      "train": [
+        "UB0021",
+        "UB0022",
+        "UB0023",
+        "UB0027",
+        "UB0029",
+        "UB0032",
+        "UB0033",
+        "UB0034",
+        "UB0035",
+        "UB0038",
+        "UB0040",
+        "UB0041",
+        "UB0042",
+        "UB0043",
+        "UB0050",
+        "UB0051",
+        "UB0052",
+        "UB0055",
+        "UB0056",
+        "UB0057",
+        "UB0060",
+        "UB0062",
+        "UB0064",
+        "UB0066",
+        "UB0067",
+        "UB0068",
+        "UB0069",
+        "UB0071",
+        "UB0075",
+        "UB0077",
+        "UB0078",
+        "UB0079",
+        "UB0080",
+        "UB0083",
+        "UB0084",
+        "UB0086",
+        "UB0088",
+        "UB0090",
+        "UB0092",
+        "UB0094",
+        "UB0096",
+        "UB0097",
+        "UB0098",
+        "UB0099",
+        "UB0100",
+        "UB0102",
+        "UB0107",
+        "UB0110",
+        "UB0111",
+        "UB0113",
+        "UB0115",
+        "UB0118",
+        "UB0122",
+        "UB0124",
+        "UB0125",
+        "UB0127",
+        "UB0128",
+        "UB0129",
+        "UB0131",
+        "UB0132",
+        "UB0133",
+        "UB0136",
+        "UB0137",
+        "UB0138",
+        "UB0139",
+        "UB0141",
+        "UB0145",
+        "UB0146",
+        "UB0147",
+        "UB0149",
+        "UB0152",
+        "UB0157",
+        "UB0159",
+        "UB0161",
+        "UB0166",
+        "UB0167",
+        "UB0168",
+        "UB0174",
+        "UB0176"
+      ],
+      "train_folds": [
+        0,
+        1,
+        2
+      ],
+      "validation": [
+        "UB0004",
+        "UB0020",
+        "UB0024",
+        "UB0026",
+        "UB0028",
+        "UB0030",
+        "UB0046",
+        "UB0061",
+        "UB0070",
+        "UB0073",
+        "UB0074",
+        "UB0076",
+        "UB0081",
+        "UB0082",
+        "UB0103",
+        "UB0104",
+        "UB0106",
+        "UB0117",
+        "UB0119",
+        "UB0121",
+        "UB0140",
+        "UB0148",
+        "UB0150",
+        "UB0156",
+        "UB0165",
+        "UB0175"
+      ],
+      "validation_fold": 4
+    },
+    "4": {
+      "test": [
+        "UB0004",
+        "UB0020",
+        "UB0024",
+        "UB0026",
+        "UB0028",
+        "UB0030",
+        "UB0046",
+        "UB0061",
+        "UB0070",
+        "UB0073",
+        "UB0074",
+        "UB0076",
+        "UB0081",
+        "UB0082",
+        "UB0103",
+        "UB0104",
+        "UB0106",
+        "UB0117",
+        "UB0119",
+        "UB0121",
+        "UB0140",
+        "UB0148",
+        "UB0150",
+        "UB0156",
+        "UB0165",
+        "UB0175"
+      ],
+      "test_fold": 4,
+      "train": [
+        "UB0022",
+        "UB0023",
+        "UB0025",
+        "UB0031",
+        "UB0033",
+        "UB0034",
+        "UB0035",
+        "UB0036",
+        "UB0037",
+        "UB0038",
+        "UB0040",
+        "UB0041",
+        "UB0042",
+        "UB0044",
+        "UB0045",
+        "UB0047",
+        "UB0050",
+        "UB0051",
+        "UB0052",
+        "UB0055",
+        "UB0057",
+        "UB0060",
+        "UB0062",
+        "UB0066",
+        "UB0067",
+        "UB0068",
+        "UB0071",
+        "UB0072",
+        "UB0077",
+        "UB0083",
+        "UB0085",
+        "UB0087",
+        "UB0088",
+        "UB0091",
+        "UB0092",
+        "UB0094",
+        "UB0095",
+        "UB0097",
+        "UB0099",
+        "UB0102",
+        "UB0109",
+        "UB0110",
+        "UB0111",
+        "UB0113",
+        "UB0115",
+        "UB0116",
+        "UB0120",
+        "UB0122",
+        "UB0124",
+        "UB0125",
+        "UB0127",
+        "UB0128",
+        "UB0129",
+        "UB0131",
+        "UB0133",
+        "UB0134",
+        "UB0136",
+        "UB0139",
+        "UB0142",
+        "UB0143",
+        "UB0144",
+        "UB0145",
+        "UB0147",
+        "UB0149",
+        "UB0155",
+        "UB0157",
+        "UB0159",
+        "UB0160",
+        "UB0161",
+        "UB0162",
+        "UB0164",
+        "UB0166",
+        "UB0167",
+        "UB0169",
+        "UB0170",
+        "UB0173",
+        "UB0174",
+        "UB0176"
+      ],
+      "train_folds": [
+        1,
+        2,
+        3
+      ],
+      "validation": [
+        "UB0021",
+        "UB0027",
+        "UB0029",
+        "UB0032",
+        "UB0043",
+        "UB0056",
+        "UB0064",
+        "UB0069",
+        "UB0075",
+        "UB0078",
+        "UB0079",
+        "UB0080",
+        "UB0084",
+        "UB0086",
+        "UB0090",
+        "UB0096",
+        "UB0098",
+        "UB0100",
+        "UB0107",
+        "UB0118",
+        "UB0132",
+        "UB0137",
+        "UB0138",
+        "UB0141",
+        "UB0146",
+        "UB0152",
+        "UB0168"
+      ],
+      "validation_fold": 0
+    }
+  },
+  "strata": [
+    "label",
+    "sex"
+  ]
+}
