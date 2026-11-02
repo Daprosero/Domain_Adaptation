@@ -1,0 +1,649 @@
+{
+  "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v38.md",
+  "partition_sha256": "1de58db2307394de57d2ee853a350099e6492aa5470119a9cecb6633df165ad3",
+  "instrument": {
+    "features": "audit_domains log band power",
+    "bands": [
+      "delta",
+      "theta",
+      "alpha",
+      "beta",
+      "gamma_low"
+    ],
+    "classifier": "median imputation + scaling + L2 logistic, C=1",
+    "cv": "StratifiedGroupKFold(5) by subject",
+    "n_permutations": 200,
+    "seed": 20261025
+  },
+  "core": {
+    "device": [
+      "L6->Robots",
+      "Robots->L6"
+    ],
+    "level": [
+      "L1->L11",
+      "L11->L1"
+    ],
+    "task": [
+      "CogniFit->Robots",
+      "Robots->CogniFit"
+    ]
+  },
+  "control": {
+    "device": [],
+    "level": [
+      "L1->L6",
+      "L11->L6",
+      "L6->L1",
+      "L6->L11"
+    ],
+    "task": []
+  },
+  "pairs": {
+    "device:L6|Robots": 0.9764,
+    "level:L1|L11": 0.5851,
+    "level:L1|L6": 0.5674,
+    "level:L11|L6": 0.5105,
+    "task:CogniFit|Robots": 0.6803
+  },
+  "eligibility": {
+    "level:L1->L6": {
+      "transfer": "L1->L6",
+      "arm": "level",
+      "passes": false,
+      "min_count": 4,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        }
+      ]
+    },
+    "level:L1->L11": {
+      "transfer": "L1->L11",
+      "arm": "level",
+      "passes": false,
+      "min_count": 4,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        }
+      ]
+    },
+    "level:L6->L1": {
+      "transfer": "L6->L1",
+      "arm": "level",
+      "passes": false,
+      "min_count": 4,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        }
+      ]
+    },
+    "level:L6->L11": {
+      "transfer": "L6->L11",
+      "arm": "level",
+      "passes": false,
+      "min_count": 3,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 3
+        }
+      ]
+    },
+    "level:L11->L1": {
+      "transfer": "L11->L1",
+      "arm": "level",
+      "passes": false,
+      "min_count": 4,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        }
+      ]
+    },
+    "level:L11->L6": {
+      "transfer": "L11->L6",
+      "arm": "level",
+      "passes": false,
+      "min_count": 3,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        }
+      ]
+    },
+    "task:Robots->CogniFit": {
+      "transfer": "Robots->CogniFit",
+      "arm": "task",
+      "passes": false,
+      "min_count": 2,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 0,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "yes",
+          "n": 2
+        },
+        {
+          "side": "source",
+          "fold": 2,
+          "label": "no",
+          "n": 2
+        },
+        {
+          "side": "source",
+          "fold": 2,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "yes",
+          "n": 2
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 0,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 0,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "yes",
+          "n": 2
+        },
+        {
+          "side": "target",
+          "fold": 2,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "target",
+          "fold": 2,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "yes",
+          "n": 2
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "yes",
+          "n": 4
+        }
+      ]
+    },
+    "task:CogniFit->Robots": {
+      "transfer": "CogniFit->Robots",
+      "arm": "task",
+      "passes": false,
+      "min_count": 2,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 0,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 0,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "yes",
+          "n": 2
+        },
+        {
+          "side": "source",
+          "fold": 2,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "source",
+          "fold": 2,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "yes",
+          "n": 2
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 0,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "yes",
+          "n": 2
+        },
+        {
+          "side": "target",
+          "fold": 2,
+          "label": "no",
+          "n": 2
+        },
+        {
+          "side": "target",
+          "fold": 2,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "yes",
+          "n": 2
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 3
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "yes",
+          "n": 4
+        }
+      ]
+    },
+    "device:L6->Robots": {
+      "transfer": "L6->Robots",
+      "arm": "device",
+      "passes": false,
+      "min_count": 1,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 0,
+          "label": "no",
+          "n": 2
+        },
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "no",
+          "n": 2
+        },
+        {
+          "side": "source",
+          "fold": 4,
+          "label": "no",
+          "n": 1
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "yes",
+          "n": 3
+        }
+      ]
+    },
+    "device:Robots->L6": {
+      "transfer": "Robots->L6",
+      "arm": "device",
+      "passes": false,
+      "min_count": 1,
+      "minimum": 5,
+      "failing": [
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 1,
+          "label": "yes",
+          "n": 4
+        },
+        {
+          "side": "source",
+          "fold": 3,
+          "label": "yes",
+          "n": 3
+        },
+        {
+          "side": "target",
+          "fold": 0,
+          "label": "no",
+          "n": 2
+        },
+        {
+          "side": "target",
+          "fold": 1,
+          "label": "no",
+          "n": 4
+        },
+        {
+          "side": "target",
+          "fold": 3,
+          "label": "no",
+          "n": 2
+        },
+        {
+          "side": "target",
+          "fold": 4,
+          "label": "no",
+          "n": 1
+        }
+      ]
+    }
+  },
+  "timing": {
+    "wall_seconds": 187.5,
+    "workers": 4,
+    "seconds_per_transfer": {
+      "level:L1->L6": 77.1,
+      "level:L1->L11": 76.6,
+      "level:L6->L1": 77.0,
+      "level:L6->L11": 76.3,
+      "level:L11->L1": 73.0,
+      "level:L11->L6": 72.5,
+      "task:Robots->CogniFit": 56.8,
+      "task:CogniFit->Robots": 56.9,
+      "device:L6->Robots": 51.7,
+      "device:Robots->L6": 51.4
+    }
+  }
+}
