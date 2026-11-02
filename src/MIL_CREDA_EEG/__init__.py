@@ -17,6 +17,10 @@ torch and `MIL_CREDA`: `eegnet` (EEGNet-8,2 as trunk and common head, and the
 phase-2 layer copy), `mil_creda_model` (two trunks, one shared attention, one
 head, wired to the proposal's equations without re-implementing them) and
 `two_phase` (phase 1, bridge and phase 2 for one transfer, rotation and seed).
-Nothing in this file imports them, so importing the package still needs no
-torch.
+Four more build on them (Secs. 4.5, 7.2, 7.3, 7.5, 7.7): `mil_wrapper` (the
+common MIL wrapper of the non-MIL comparators, Eq. 15 at gamma = 0),
+`controls` (source-only references and the target-supervised upper bound),
+`search` (the Optuna studies of both phases) and `model_store` (every final
+model with its hyperparameters, partition hash and code version). Nothing in
+this file imports them, so importing the package still needs no torch.
 """

@@ -1,0 +1,131 @@
+"""Experiments plan v40, Sec. 7.3: every final model saved, and refused on a foreign partition."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+import torch
+
+from MIL_CREDA_EEG import assignment, model_store, partition
+from MIL_CREDA_EEG.mil_creda_model import MILCREDAModel
+
+LEVEL = assignment.Transfer("level", "L1", "L11")
+HYPER1 = {"lr1": 1e-3, "wd1": 1e-5, "attentionGamma": 0.3, "attentionTemperature": 0.7,
+          "sigmaMultiplier": 0.75, "epochs1": 3, "patience1": 2, "epochs2": 3,
+          "bagsPerStep": 4}
+
+
+def _partition(root, tag: str = "a"):
+    doc = {"format": "tiny", "tag": tag}
+    doc[partition.HASH_FIELD] = partition.partition_hash(doc)
+    path = root / f"partition_{tag}.json"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return path, doc[partition.HASH_FIELD]
+
+
+def _model():
+    torch.manual_seed(0)
+    model = MILCREDAModel(3, 3, attention_gamma=0.3, attention_temperature=0.7)
+    model.fix_sigma(1.2345678901234567)
+    return model
+
+
+def _phase_one_state(model):
+    return {k: v for k, v in model.state_dict().items() if not k.startswith("target_trunk.")}
+
+
+def _save(root, model, sha, **overrides):
+    kwargs = dict(transfer=LEVEL, rotation=2, seed=1, phase=1, name="MIL-CREDA",
+                  state=_phase_one_state(model), hyper=HYPER1, partition_sha256=sha,
+                  sigma=model.sigma, channels={"source": 3, "target": 3})
+    kwargs.update(overrides)
+    return model_store.save(root, **kwargs)
+
+
+def test_a_saved_model_round_trips_bit_identically(tmp_path):
+    path_p, sha = _partition(tmp_path)
+    model = _model()
+    path = _save(tmp_path / "Models", model, sha)
+    state, meta = model_store.load(path, partition_path=path_p)
+    original = _phase_one_state(model)
+    assert state.keys() == original.keys()
+    for k in original:
+        assert state[k].dtype == original[k].dtype and torch.equal(state[k], original[k])
+    assert meta["sigma"] == model.sigma
+    assert meta["hyper"] == HYPER1 and meta["partition_sha256"] == sha
+    assert meta["code_version"] == model_store.code_version()
+    loaded, meta2 = model_store.load_model(path, partition_path=path_p)
+    assert loaded.sigma == model.sigma
+    assert loaded.attention_gamma == 0.3 and loaded.attention_temperature == 0.7
+    for k, v in original.items():
+        assert torch.equal(loaded.state_dict()[k], v)
+
+
+def test_load_refuses_a_foreign_partition_hash(tmp_path):
+    _, sha_a = _partition(tmp_path, "a")
+    path_b, _ = _partition(tmp_path, "b")
+    path = _save(tmp_path / "Models", _model(), sha_a)
+    with pytest.raises(partition.PartitionMismatch):
+        model_store.load(path, partition_path=path_b)
+
+
+def test_load_refuses_a_code_version_mismatch_unless_allowed(tmp_path, monkeypatch):
+    path_p, sha = _partition(tmp_path)
+    path = _save(tmp_path / "Models", _model(), sha)
+    monkeypatch.setattr(model_store, "code_version", lambda: "0" * 64)
+    with pytest.raises(model_store.CodeVersionMismatch):
+        model_store.load(path, partition_path=path_p)
+    _, meta = model_store.load(path, partition_path=path_p, allow_code_mismatch=True)
+    assert meta["code_version_mismatch"] == {"stored": meta["code_version"],
+                                             "current": "0" * 64}
+
+
+def test_a_mil_creda_model_is_stored_with_its_sigma(tmp_path):
+    _, sha = _partition(tmp_path)
+    with pytest.raises(model_store.StoreError, match="sigma"):
+        _save(tmp_path / "Models", _model(), sha, sigma=None)
+    with pytest.raises(model_store.StoreError, match="sigma"):
+        _save(tmp_path / "Models", _model(), sha, phase=2, sigma=None)
+
+
+def test_the_store_never_overwrites_a_saved_model(tmp_path):
+    _, sha = _partition(tmp_path)
+    _save(tmp_path / "Models", _model(), sha)
+    with pytest.raises(model_store.ModelExists):
+        _save(tmp_path / "Models", _model(), sha)
+
+
+def test_a_state_that_changed_on_disk_is_refused(tmp_path):
+    path_p, sha = _partition(tmp_path)
+    path = _save(tmp_path / "Models", _model(), sha)
+    state = torch.load(path, weights_only=True)
+    key = next(iter(state))
+    state[key] = state[key] + 1
+    torch.save(state, path)
+    with pytest.raises(model_store.StoreError, match="state"):
+        model_store.load(path, partition_path=path_p)
+
+
+def test_every_final_model_has_its_own_path_per_transfer_rotation_seed_and_name(tmp_path):
+    root = tmp_path / "Models"
+    paths = {model_store.model_path(root, t, r, s, p, n)
+             for t in (LEVEL, assignment.Transfer("level", "L11", "L1"))
+             for r in range(4) for s in (1, 2, 3)
+             for p, names in ((1, model_store.GROUPS), (2, model_store.STRATEGIES))
+             for n in names}
+    assert len(paths) == 2 * 4 * 3 * (len(model_store.GROUPS) + len(model_store.STRATEGIES))
+    assert len(model_store.STRATEGIES) == 9 and len(model_store.GROUPS) == 4
+    with pytest.raises(model_store.StoreError):
+        model_store.model_path(root, LEVEL, 0, 1, 1, "UDA-DDA")       # not a phase-1 group
+    with pytest.raises(model_store.StoreError):
+        model_store.model_path(root, LEVEL, 0, 1, 2, "common")        # not a strategy
+    assert model_store.DEFAULT_ROOT.parts[-3:] == ("MIL-CREDA", "Models", "Balladeer")
+
+
+def test_an_unregistered_phase_one_group_cannot_be_rebuilt(tmp_path):
+    path_p, sha = _partition(tmp_path)
+    model = _model()
+    path = _save(tmp_path / "Models", model, sha, name="AdaptMIL", sigma=None)
+    with pytest.raises(model_store.GroupNotRegistered):
+        model_store.load_model(path, partition_path=path_p)
