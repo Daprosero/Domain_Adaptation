@@ -1,0 +1,62 @@
+{
+ "kind": "timing probe (informational; not the remote-parallelism schema-1 record)",
+ "measuredAt": "2026-11-02T18:45:32+00:00",
+ "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+ "model": "MIL-CREDA",
+ "transfer": "L1->L11",
+ "arm": "level",
+ "rotation": 0,
+ "seed": 0,
+ "host": "local",
+ "device": "cpu",
+ "threads": 4,
+ "cpuCount": 8,
+ "platform": "macOS-26.5.2-arm64-arm-64bit",
+ "torch": "2.13.0",
+ "secondsPerEpoch": {
+  "phase1": 17.641314834007062,
+  "phase2": 21.918105209013447
+ },
+ "epochIncludes": "one pass over the training bags plus the validation pass (phase 1: source validation; phase 2: target validation)",
+ "setupSeconds": 14.38733354001306,
+ "setupIncludes": "reading the bags' windows from disk, the phase-1 sigma measurement, the bridge and the target test-fold predictions",
+ "wallSeconds": 53.94675358303357,
+ "bags": {
+  "source_train": 31,
+  "source_valid": 16,
+  "target_train": 32,
+  "target_valid": 17,
+  "target_test": 15
+ },
+ "windows": {
+  "source_train": 2331,
+  "source_valid": 1202,
+  "target_train": 2711,
+  "target_valid": 1275,
+  "target_test": 1126
+ },
+ "hyper": {
+  "lr1": 0.001,
+  "wd1": 0.0001,
+  "attentionGamma": 0.5,
+  "attentionTemperature": 1.0,
+  "sigmaMultiplier": 1.0,
+  "lr2": 0.0001,
+  "wd2": 0.0001,
+  "tauLocal": 1.0,
+  "epochs1": 1,
+  "patience1": 1,
+  "epochs2": 1,
+  "bagsPerStep": 8
+ },
+ "sigma": 10.171521057867219,
+ "partition_sha256": "abc9012bad78eaaa542c08a1e38e2f35d110e00f33739d76853624297d8735d1",
+ "planCounts": {
+  "transfers": 10,
+  "rotations": 4,
+  "seeds": 3,
+  "trialsPerStudy": 20,
+  "studies": 130
+ },
+ "pendingCanonicalRecord": "MIL-CREDA/Results/timing.json (schema 1, {poc,full} x {arms,folds,seeds,epochs}) is written once the pilot fixes the epoch caps (plan Sec. 7.6)"
+}

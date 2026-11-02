@@ -8,6 +8,15 @@ units of plan v40 -- the four-fold partition (`partition`), bags
 re-measured separability (`separability`) -- declare v40 in theirs.
 
 Kept apart from `MIL_CREDA`, which holds the mathematical objects of the
-proposal: this package reads and measures raw recordings and implements no
-equation. It imports nothing from `MIL_CREDA`, so the audit runs without torch.
+proposal: the audit, preprocessing and data-unit modules read and measure raw
+recordings, implement no equation and import nothing from `MIL_CREDA`, so they
+run without torch.
+
+Three modules of plan v40 (Sec. 7.3) are the exception, and only they import
+torch and `MIL_CREDA`: `eegnet` (EEGNet-8,2 as trunk and common head, and the
+phase-2 layer copy), `mil_creda_model` (two trunks, one shared attention, one
+head, wired to the proposal's equations without re-implementing them) and
+`two_phase` (phase 1, bridge and phase 2 for one transfer, rotation and seed).
+Nothing in this file imports them, so importing the package still needs no
+torch.
 """
