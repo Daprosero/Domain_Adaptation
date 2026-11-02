@@ -1,14 +1,21 @@
-"""Experiments plan v18, Sec. 4.2: the five-fold partition, generated once and frozen."""
+"""Experiments plan v40, Sec. 4.2: the four-fold partition, generated once and frozen."""
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 from collections import Counter
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from MIL_CREDA_EEG import partition
+from MIL_CREDA_EEG import partition, preprocess
+
+REPOSITORY = Path(__file__).resolve().parents[1]
+#: sha256 of the five-fold file frozen at 7a75dd8; it is kept, never rewritten.
+FIVE_FOLD_FILE_SHA256 = "8a723bc4e04c4e5c7753c9c4fbff1a15dd026fd6d34984848da79bafe19d32cb"
 
 
 def _survivors(n: int = 60) -> pd.DataFrame:
@@ -140,3 +147,76 @@ def test_a_tampered_file_is_refused(tmp_path):
     path.write_text(json.dumps(doc), encoding="utf-8")
     with pytest.raises(partition.PartitionError, match="hash"):
         partition.current_partition_hash(path)
+
+
+# ------------------------------------------------------------- plan v40: four folds
+
+
+def test_four_folds_rotate_with_one_test_one_validation_and_two_training_folds():
+    assert partition.N_FOLDS == 4
+    doc = partition.build_partition(_survivors())
+    assert doc["n_folds"] == 4 and set(doc["folds"].values()) == {0, 1, 2, 3}
+    assert "v40" in doc["plan"]
+    rotations = doc["rotations"]
+    assert sorted(rotations) == ["0", "1", "2", "3"]
+    assert Counter(v["test_fold"] for v in rotations.values()) == Counter(range(4))
+    assert Counter(v["validation_fold"] for v in rotations.values()) == Counter(range(4))
+    for v in rotations.values():
+        assert len(v["train_folds"]) == 2
+        assert {v["test_fold"], v["validation_fold"], *v["train_folds"]} == {0, 1, 2, 3}
+
+
+def test_the_fold_count_is_a_parameter_recorded_in_the_document():
+    five = partition.build_partition(_survivors(), n_folds=5)
+    assert five["n_folds"] == 5 and len(five["rotations"]) == 5
+    assert set(five["folds"].values()) == set(range(5))
+    assert five["partition_sha256"] != partition.build_partition(_survivors())["partition_sha256"]
+
+
+def test_the_current_partition_is_one_declared_four_fold_file():
+    assert partition.PARTITION_RELATIVE == Path("MIL-CREDA") / "Partition" / "folds_4.json"
+    assert partition.FIVE_FOLD_RELATIVE == Path("MIL-CREDA") / "Partition" / "folds.json"
+    assert preprocess.PARTITION_RELATIVE == partition.PARTITION_RELATIVE
+    doc = partition.load_partition(REPOSITORY / partition.PARTITION_RELATIVE)
+    assert partition.check_current(doc) is doc
+
+
+def test_the_five_fold_file_is_kept_and_refused_as_current(tmp_path):
+    five = REPOSITORY / partition.FIVE_FOLD_RELATIVE
+    assert hashlib.sha256(five.read_bytes()).hexdigest() == FIVE_FOLD_FILE_SHA256
+    doc = partition.load_partition(five)                 # its own hash still holds
+    with pytest.raises(partition.PartitionError, match="5 folds"):
+        partition.check_current(doc)
+    copy = tmp_path / "folds.json"
+    shutil.copyfile(five, copy)
+    survivors = pd.DataFrame(doc["fingerprint"]["survivors"])
+    with pytest.raises(partition.PartitionChanged, match="versión del código"):
+        partition.freeze_partition(survivors, copy, seed=doc["fingerprint"]["seed"])
+    assert hashlib.sha256(copy.read_bytes()).hexdigest() == FIVE_FOLD_FILE_SHA256
+
+
+def test_regenerating_under_a_new_name_never_touches_the_five_fold_file(tmp_path):
+    five = REPOSITORY / partition.FIVE_FOLD_RELATIVE
+    copy = tmp_path / "folds.json"
+    shutil.copyfile(five, copy)
+    survivors = pd.DataFrame(partition.load_partition(five)["fingerprint"]["survivors"])
+    result = partition.freeze_partition(survivors, copy, regenerate=True,
+                                        new_name="folds_4.json")
+    assert result["status"] == "regenerated" and result["path"] == tmp_path / "folds_4.json"
+    assert hashlib.sha256(copy.read_bytes()).hexdigest() == FIVE_FOLD_FILE_SHA256
+    assert partition.load_partition(result["path"])["n_folds"] == 4
+
+
+def test_the_committed_four_fold_partition_reruns_byte_for_byte(tmp_path):
+    path = REPOSITORY / partition.PARTITION_RELATIVE
+    stored = partition.load_partition(path)
+    survivors = pd.DataFrame(stored["fingerprint"]["survivors"])
+    seed = stored["fingerprint"]["seed"]
+    assert seed == partition.PARTITION_SEED
+    assert partition.serialize(partition.build_partition(survivors, seed)) == path.read_bytes()
+    copy = tmp_path / path.name
+    shutil.copyfile(path, copy)
+    assert partition.freeze_partition(survivors, copy, seed=seed)["status"] == "unchanged"
+    # The five-fold file's survivors are the four-fold file's: only the rule changed.
+    five = partition.load_partition(REPOSITORY / partition.FIVE_FOLD_RELATIVE)
+    assert five["fingerprint"]["survivors"] == stored["fingerprint"]["survivors"]

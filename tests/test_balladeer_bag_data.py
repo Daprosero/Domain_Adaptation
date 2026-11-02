@@ -1,4 +1,4 @@
-"""Experiments plan v38, Sec. 3.2: a bag is one subject in one condition."""
+"""Experiments plan v40, Secs. 3.2 and 4.2: a bag is one subject in one condition."""
 
 from __future__ import annotations
 
@@ -33,7 +33,8 @@ def _write_npz(root: Path, record_id: str, channels: list[str], n_windows: int,
     return relative
 
 
-def _fixture(root: Path, extra_rows: list[tuple] = ()) -> tuple[pd.DataFrame, Path]:
+def _fixture(root: Path, extra_rows: list[tuple] = (),
+             n_folds: int = partition.N_FOLDS) -> tuple[pd.DataFrame, Path]:
     """Six subjects; UB0003's Robots record is excluded; one EPOC+ record."""
     rows = [
         # subject, condition, device, label, sex, excluded
@@ -61,7 +62,8 @@ def _fixture(root: Path, extra_rows: list[tuple] = ()) -> tuple[pd.DataFrame, Pa
     manifest = pd.DataFrame(records)
     manifest.to_csv(root / "manifest.csv", index=False)
     part = root / "folds.json"
-    partition.freeze_partition(partition.survivors(manifest), part)
+    doc = partition.build_partition(partition.survivors(manifest), n_folds=n_folds)
+    part.write_bytes(partition.serialize(doc))
     return manifest, part
 
 
@@ -146,3 +148,15 @@ def test_the_holders_of_a_condition_are_its_bag_subjects(tmp_path):
     bags = bag_data.load_bags(tmp_path, part)
     assert bags.holders("Robots") == {"UB0001", "UB0006"}
     assert bags.holders("L6") == {"UB0001", "UB0003"}
+
+
+def test_the_bags_read_the_current_four_fold_partition_by_default():
+    assert bag_data.default_partition_path() == (bag_data.REPOSITORY / "MIL-CREDA" / "Partition"
+                                                 / "folds_4.json")
+    assert bag_data.default_partition_path() == bag_data.REPOSITORY / partition.PARTITION_RELATIVE
+
+
+def test_a_five_fold_partition_is_refused_as_not_current(tmp_path):
+    _, part = _fixture(tmp_path, n_folds=5)
+    with pytest.raises(partition.PartitionError, match="5 folds"):
+        bag_data.load_bags(tmp_path, part)

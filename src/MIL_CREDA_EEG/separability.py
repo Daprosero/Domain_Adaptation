@@ -1,6 +1,6 @@
 """Domain separability re-measured on the assigned subjects, and the core rule.
 
-Experiments plan v38, Sec. 5.1 (and 5.2, 5.3 for their arms). The audit's
+Experiments plan v40, Sec. 5.1 (and 5.2, 5.3 for their arms). The audit's
 separabilities were provisional: same subjects on both sides, no reading
 within class, and both Emotiv models together. They are measured again with
 the audit's own instrument (`audit_domains`: the same log band-power features,
@@ -9,7 +9,7 @@ the grouped design and the same seed), so that only the composition of
 subjects changes.
 
 **What each measurement compares.** Per transfer and rotation, the source
-subjects in that rotation's three training folds against the target subjects
+subjects in that rotation's two training folds against the target subjects
 in the same training folds, each in the one condition the assignment reads
 for it (Sec. 4.3). That is exactly what phase-2 adaptation sees: validation
 and test subjects of either side never enter. Because the assignment is one
@@ -32,7 +32,7 @@ variance over the whole record carries no feature, as in the audit.
 
 **The core/control rule (Sec. 5.1), declared before measuring.** The
 separability of a pair of conditions is the mean of its two directions, each
-direction being the mean over the five rotations of the reading over all
+direction being the mean over the four rotations of the reading over all
 subjects. In each arm the pair with the highest separability is core, with
 both its transfers, and the other pairs are control, however small the
 difference. The task and device arms hold one pair each, so both their
@@ -42,8 +42,12 @@ transfers are core. An exact tie at the top refuses instead of choosing.
 `tables/separability.csv` (per transfer and reading: mean and sd over the
 rotations, with the pair separability and the role), `tables/
 separability_rotations.csv` (every rotation), `tables/assignment_sizes.csv`,
-`tables/eligibility.csv` and `summary.json`, which records the partition hash
-`load_results` checks with `partition.check_result`.
+`tables/eligibility.csv` (per side and fold, `scope == "fold"`, plus the
+pooled target totals per class of each transfer, `pooled_transfer`, and of
+each pair with both directions, `pooled_pair`, Sec. 4.6) and `summary.json`,
+which records the same eligibility and the partition hash `load_results`
+checks with `partition.check_result`. The rotations are the partition's: four
+under the current four-fold partition (`partition.PARTITION_RELATIVE`).
 """
 
 from __future__ import annotations
@@ -64,8 +68,8 @@ from MIL_CREDA_EEG.bag_data import REPOSITORY, Bag, BagSet
 from MIL_CREDA_EEG.modality import CGX_CHANNELS, EMOTIV_CHANNELS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v38.md",
-    "sections": ["5.1", "5.2", "5.3", "4.3"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "sections": ["5.1", "5.2", "5.3", "4.3", "4.6"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
         "the_instrument_is_the_audits",
@@ -81,6 +85,8 @@ __provenance__ = {
         "a_missing_direction_refuses",
         "results_land_in_the_dashboard_layout_and_record_the_partition",
         "a_result_with_another_partition_hash_is_refused_on_load",
+        "separability_is_measured_over_the_four_rotations",
+        "the_eligibility_report_adds_the_pooled_target_totals",
     ],
 }
 
@@ -257,6 +263,39 @@ def write_results(rows: pd.DataFrame, out_dir: str | Path, partition_sha256: str
     return paths
 
 
+def eligibility_table(assignments: Iterable[Assignment]) -> pd.DataFrame:
+    """Per side and fold, then pooled target totals per transfer and per pair."""
+    assignments = list(assignments)
+    per_fold = pd.concat([assignment.eligibility(a)["table"] for a in assignments])
+    per_fold.insert(0, "scope", "fold")
+    pooled = [{"scope": "pooled_transfer", "arm": a.transfer.arm, "transfer": a.transfer.name,
+               "side": "target", "label": label, "n": n}
+              for a in assignments for label, n in assignment.eligibility(a)[
+                  "pooled_target"].items()]
+    for a, b in assignment.pairs(assignments):
+        totals = assignment.pair_totals(a, b)
+        pooled += [{"scope": "pooled_pair", "arm": totals["arm"], "transfer": totals["pair"],
+                    "side": "target", "label": label, "n": n}
+                   for label, n in totals["pooled_target"].items()]
+    table = pd.concat([per_fold, pd.DataFrame(pooled)], ignore_index=True)
+    table["fold"] = table["fold"].astype("Int64")
+    return table
+
+
+def eligibility_summary(assignments: Iterable[Assignment]) -> dict:
+    """Eligibility per transfer (per side and fold, pooled target) and pooled per pair."""
+    assignments = list(assignments)
+    transfers = {f"{a.transfer.arm}:{a.transfer.name}": {
+        k: v for k, v in assignment.eligibility(a).items() if k != "table"}
+        for a in assignments}
+    pairs = {}
+    for a, b in assignment.pairs(assignments):
+        totals = assignment.pair_totals(a, b)
+        pairs[f"{totals['arm']}:{totals['pair']}"] = {k: v for k, v in totals.items()
+                                                      if k not in ("arm", "pair")}
+    return {"transfers": transfers, "pairs": pairs}
+
+
 def write_assignment_tables(assignments: Iterable[Assignment],
                             out_dir: str | Path) -> dict[str, Path]:
     """Subjects per side, role and rotation, and the eligibility cells."""
@@ -265,8 +304,7 @@ def write_assignment_tables(assignments: Iterable[Assignment],
     tables.mkdir(parents=True, exist_ok=True)
     paths = {"sizes": tables / "assignment_sizes.csv", "eligibility": tables / "eligibility.csv"}
     assignment.size_table(assignments).to_csv(paths["sizes"], index=False)
-    pd.concat([assignment.eligibility(a)["table"] for a in assignments]).to_csv(
-        paths["eligibility"], index=False)
+    eligibility_table(assignments).to_csv(paths["eligibility"], index=False)
     return paths
 
 
@@ -287,15 +325,14 @@ def run(bags: BagSet, out_dir: str | Path | None = None,
     out_dir = Path(out_dir or REPOSITORY / RESULTS_RELATIVE)
     transfers = list(transfers)
     assignments = [assignment.assign_from_bags(t, bags) for t in transfers]
-    eligible = {f"{a.transfer.arm}:{a.transfer.name}": {
-        k: v for k, v in assignment.eligibility(a).items() if k != "table"}
-        for a in assignments}
+    eligible = eligibility_summary(assignments)
     start = time.perf_counter()
     rows, seconds = measure_transfers(bags, transfers, n_permutations, workers=workers)
     wall = time.perf_counter() - start
     paths = write_assignment_tables(assignments, out_dir)
     paths.update(write_results(rows, out_dir, bags.partition_sha256, extra={
-        "eligibility": eligible,
+        "eligibility": eligible["transfers"],
+        "pairs_pooled": eligible["pairs"],
         "timing": {"wall_seconds": round(wall, 1), "workers": int(workers),
                    "seconds_per_transfer": {k: round(v, 1) for k, v in seconds.items()}},
     }))

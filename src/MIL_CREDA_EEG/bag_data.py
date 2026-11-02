@@ -1,6 +1,6 @@
 """Bags: one subject in one condition, read from the processed data.
 
-Experiments plan v38, Secs. 3.2, 4.2 and 5.1-5.3. A bag is a pair of subject
+Experiments plan v40, Secs. 3.2, 4.2 and 5.1-5.3. A bag is a pair of subject
 and condition, where a condition is one recording context (task, device and
 level). Each bag lives in exactly one domain, because each condition has one
 device. A bag carries its windows (Sec. 3.1, already cut by `windows`), the
@@ -13,8 +13,11 @@ every other exclusion were decided there (Secs. 2.10 and 4.3) and are never
 re-decided here.
 
 **The partition is read, never made.** The fold of every subject comes from
-`partition.load_partition`, and a caller that recorded a partition hash has it
-checked with `partition.check_result` before any bag is built. A kept subject
+`partition.load_partition`, by default from the one partition in force,
+`partition.PARTITION_RELATIVE` (the four-fold `folds_4.json`); a partition of
+another fold count, such as the retained five-fold `folds.json`, is refused by
+`partition.check_current` before any bag is built. A caller that recorded a
+partition hash has it checked with `partition.check_result`. A kept subject
 the partition does not name is refused: it would mean the processed data and
 the frozen partition disagree.
 
@@ -37,7 +40,7 @@ import pandas as pd
 from MIL_CREDA_EEG import partition
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v38.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
     "sections": ["3.2", "4.2", "5.1", "5.2", "5.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K2-emparejamiento"],
     "invariants": [
@@ -49,6 +52,8 @@ __provenance__ = {
         "a_partition_hash_mismatch_is_refused",
         "a_subject_outside_the_partition_is_refused",
         "arm_conditions_are_the_declared_ones",
+        "the_bags_read_the_current_four_fold_partition_by_default",
+        "a_five_fold_partition_is_refused_as_not_current",
     ],
 }
 
@@ -182,6 +187,11 @@ def bags_from_manifest(manifest: pd.DataFrame, processed_root: str | Path,
                   rotations=doc["rotations"])
 
 
+def default_partition_path() -> Path:
+    """The partition in force: the one constant every reader takes it from."""
+    return REPOSITORY / partition.PARTITION_RELATIVE
+
+
 def load_bags(processed_root: str | Path | None = None,
               partition_path: str | Path | None = None,
               expected_partition_sha256: str | None = None) -> BagSet:
@@ -191,8 +201,8 @@ def load_bags(processed_root: str | Path | None = None,
     mismatch with the partition in force raises `partition.PartitionMismatch`.
     """
     processed_root = Path(processed_root or REPOSITORY / PROCESSED_RELATIVE)
-    partition_path = Path(partition_path or REPOSITORY / partition.PARTITION_RELATIVE)
-    doc = partition.load_partition(partition_path)
+    partition_path = Path(partition_path or default_partition_path())
+    doc = partition.check_current(partition.load_partition(partition_path))
     if expected_partition_sha256 is not None:
         partition.check_result(expected_partition_sha256, partition_path)
     manifest = pd.read_csv(processed_root / "manifest.csv", low_memory=False)

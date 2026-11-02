@@ -3,7 +3,7 @@
 Experiments plan v18, Secs. 2.1-2.10, 3.1, 3.2 and 4.2. One function,
 `build_processed`, takes the raw release and writes every processed record,
 the manifest, the two flow tables and the exclusion crosses; then it freezes
-the five-fold partition over the surviving subjects (`partition`, Sec. 4.2)
+the current partition over the surviving subjects (`partition`, Sec. 4.2)
 and writes the sha256 of every processed file to a manifest kept in git. The
 notebook `BALLADEER_03_Preprocesamiento.ipynb` calls it, and so does the
 command line, from the repository root:
@@ -11,7 +11,7 @@ command line, from the repository root:
     PYTHONPATH=src python -m MIL_CREDA_EEG.preprocess \\
         --raw "MIL-CREDA/Data/raw/BALLADEER ADHD DATASET" --out MIL-CREDA/Data/processed
 
-The command line writes the partition to `MIL-CREDA/Partition/folds.json` and
+The command line writes the partition to `partition.PARTITION_RELATIVE` and
 the hash manifest to `MIL-CREDA/Manifests/processed_sha256.csv` unless told
 otherwise; the function writes them only where it is told to. A partition
 that already exists is recomputed and compared, never overwritten
@@ -194,7 +194,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--expected-subjects", type=int, default=EXPECTED_SUBJECTS,
                         help="UB* folders the release must hold; 0 skips the count")
     parser.add_argument("--partition", default=str(PARTITION_RELATIVE),
-                        help="the frozen folds.json; recomputed and compared, never overwritten")
+                        help="the frozen current partition; recomputed and compared, never overwritten")
     parser.add_argument("--sha-manifest", default=str(SHA_MANIFEST_RELATIVE),
                         help="where the sha256 of every processed file is written")
     parser.add_argument("--regenerate-partition", metavar="NEW_NAME", default=None,

@@ -1,6 +1,6 @@
 {
-  "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v38.md",
-  "partition_sha256": "1de58db2307394de57d2ee853a350099e6492aa5470119a9cecb6633df165ad3",
+  "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+  "partition_sha256": "abc9012bad78eaaa542c08a1e38e2f35d110e00f33739d76853624297d8735d1",
   "instrument": {
     "features": "audit_domains log band power",
     "bands": [
@@ -40,242 +40,154 @@
     "task": []
   },
   "pairs": {
-    "device:L6|Robots": 0.9764,
-    "level:L1|L11": 0.5851,
-    "level:L1|L6": 0.5674,
-    "level:L11|L6": 0.5105,
-    "task:CogniFit|Robots": 0.6803
+    "device:L6|Robots": 0.952,
+    "level:L1|L11": 0.5706,
+    "level:L1|L6": 0.5386,
+    "level:L11|L6": 0.393,
+    "task:CogniFit|Robots": 0.7076
   },
   "eligibility": {
     "level:L1->L6": {
       "transfer": "L1->L6",
       "arm": "level",
-      "passes": false,
-      "min_count": 4,
+      "passes": true,
+      "min_count": 5,
       "minimum": 5,
-      "failing": [
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 4
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 9
         },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 4,
-          "label": "no",
-          "n": 4
+        "target": {
+          "no": 5,
+          "yes": 10
         }
-      ]
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 41
+      },
+      "failing": []
     },
     "level:L1->L11": {
       "transfer": "L1->L11",
       "arm": "level",
-      "passes": false,
-      "min_count": 4,
+      "passes": true,
+      "min_count": 5,
       "minimum": 5,
-      "failing": [
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 4
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 9
         },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 4,
-          "label": "no",
-          "n": 4
+        "target": {
+          "no": 5,
+          "yes": 10
         }
-      ]
+      },
+      "pooled_target": {
+        "no": 23,
+        "yes": 41
+      },
+      "failing": []
     },
     "level:L6->L1": {
       "transfer": "L6->L1",
       "arm": "level",
-      "passes": false,
-      "min_count": 4,
+      "passes": true,
+      "min_count": 5,
       "minimum": 5,
-      "failing": [
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 4
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 10
         },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 4,
-          "label": "no",
-          "n": 4
+        "target": {
+          "no": 5,
+          "yes": 9
         }
-      ]
+      },
+      "pooled_target": {
+        "no": 23,
+        "yes": 40
+      },
+      "failing": []
     },
     "level:L6->L11": {
       "transfer": "L6->L11",
       "arm": "level",
       "passes": false,
-      "min_count": 3,
+      "min_count": 4,
       "minimum": 5,
+      "min_per_fold": {
+        "source": {
+          "no": 4,
+          "yes": 9
+        },
+        "target": {
+          "no": 5,
+          "yes": 10
+        }
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 41
+      },
       "failing": [
         {
           "side": "source",
-          "fold": 1,
+          "fold": 0,
           "label": "no",
           "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 4,
-          "label": "no",
-          "n": 3
         }
       ]
     },
     "level:L11->L1": {
       "transfer": "L11->L1",
       "arm": "level",
-      "passes": false,
-      "min_count": 4,
+      "passes": true,
+      "min_count": 5,
       "minimum": 5,
-      "failing": [
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 4
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 10
         },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 4,
-          "label": "no",
-          "n": 4
+        "target": {
+          "no": 5,
+          "yes": 9
         }
-      ]
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 41
+      },
+      "failing": []
     },
     "level:L11->L6": {
       "transfer": "L11->L6",
       "arm": "level",
       "passes": false,
-      "min_count": 3,
+      "min_count": 4,
       "minimum": 5,
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 10
+        },
+        "target": {
+          "no": 4,
+          "yes": 9
+        }
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 40
+      },
       "failing": [
         {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 3
-        },
-        {
           "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 4,
+          "fold": 0,
           "label": "no",
           "n": 4
         }
@@ -287,12 +199,26 @@
       "passes": false,
       "min_count": 2,
       "minimum": 5,
+      "min_per_fold": {
+        "source": {
+          "no": 3,
+          "yes": 2
+        },
+        "target": {
+          "no": 3,
+          "yes": 2
+        }
+      },
+      "pooled_target": {
+        "no": 16,
+        "yes": 17
+      },
       "failing": [
         {
           "side": "source",
           "fold": 0,
-          "label": "no",
-          "n": 4
+          "label": "yes",
+          "n": 2
         },
         {
           "side": "source",
@@ -303,18 +229,6 @@
         {
           "side": "source",
           "fold": 1,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "source",
-          "fold": 2,
-          "label": "no",
-          "n": 2
-        },
-        {
-          "side": "source",
-          "fold": 2,
           "label": "yes",
           "n": 4
         },
@@ -327,56 +241,20 @@
         {
           "side": "source",
           "fold": 3,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "source",
-          "fold": 4,
           "label": "yes",
           "n": 4
         },
         {
           "side": "target",
           "fold": 0,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 0,
-          "label": "yes",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "target",
-          "fold": 1,
           "label": "yes",
           "n": 2
         },
         {
           "side": "target",
-          "fold": 2,
+          "fold": 1,
           "label": "no",
           "n": 3
-        },
-        {
-          "side": "target",
-          "fold": 2,
-          "label": "yes",
-          "n": 4
         },
         {
           "side": "target",
@@ -387,18 +265,6 @@
         {
           "side": "target",
           "fold": 3,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "target",
-          "fold": 4,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 4,
           "label": "yes",
           "n": 4
         }
@@ -410,42 +276,32 @@
       "passes": false,
       "min_count": 2,
       "minimum": 5,
+      "min_per_fold": {
+        "source": {
+          "no": 3,
+          "yes": 2
+        },
+        "target": {
+          "no": 3,
+          "yes": 2
+        }
+      },
+      "pooled_target": {
+        "no": 17,
+        "yes": 16
+      },
       "failing": [
         {
           "side": "source",
           "fold": 0,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 0,
-          "label": "yes",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "source",
-          "fold": 1,
           "label": "yes",
           "n": 2
         },
         {
           "side": "source",
-          "fold": 2,
+          "fold": 1,
           "label": "no",
           "n": 3
-        },
-        {
-          "side": "source",
-          "fold": 2,
-          "label": "yes",
-          "n": 4
         },
         {
           "side": "source",
@@ -456,26 +312,14 @@
         {
           "side": "source",
           "fold": 3,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 4,
           "label": "yes",
           "n": 4
         },
         {
           "side": "target",
           "fold": 0,
-          "label": "no",
-          "n": 4
+          "label": "yes",
+          "n": 2
         },
         {
           "side": "target",
@@ -486,18 +330,6 @@
         {
           "side": "target",
           "fold": 1,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "target",
-          "fold": 2,
-          "label": "no",
-          "n": 2
-        },
-        {
-          "side": "target",
-          "fold": 2,
           "label": "yes",
           "n": 4
         },
@@ -510,18 +342,6 @@
         {
           "side": "target",
           "fold": 3,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "target",
-          "fold": 4,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "target",
-          "fold": 4,
           "label": "yes",
           "n": 4
         }
@@ -531,50 +351,28 @@
       "transfer": "L6->Robots",
       "arm": "device",
       "passes": false,
-      "min_count": 1,
+      "min_count": 4,
       "minimum": 5,
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 10
+        },
+        "target": {
+          "no": 5,
+          "yes": 4
+        }
+      },
+      "pooled_target": {
+        "no": 23,
+        "yes": 29
+      },
       "failing": [
         {
-          "side": "source",
+          "side": "target",
           "fold": 0,
-          "label": "no",
-          "n": 2
-        },
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "no",
-          "n": 2
-        },
-        {
-          "side": "source",
-          "fold": 4,
-          "label": "no",
-          "n": 1
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 1,
           "label": "yes",
           "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "yes",
-          "n": 3
         }
       ]
     },
@@ -582,68 +380,128 @@
       "transfer": "Robots->L6",
       "arm": "device",
       "passes": false,
-      "min_count": 1,
+      "min_count": 4,
       "minimum": 5,
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 4
+        },
+        "target": {
+          "no": 5,
+          "yes": 10
+        }
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 53
+      },
       "failing": [
         {
           "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "yes",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "yes",
-          "n": 3
-        },
-        {
-          "side": "target",
           "fold": 0,
-          "label": "no",
-          "n": 2
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
+          "label": "yes",
           "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "no",
-          "n": 2
-        },
-        {
-          "side": "target",
-          "fold": 4,
-          "label": "no",
-          "n": 1
         }
       ]
     }
   },
+  "pairs_pooled": {
+    "device:L6|Robots": {
+      "pooled_target": {
+        "no": 45,
+        "yes": 82
+      },
+      "by_direction": {
+        "L6->Robots": {
+          "no": 23,
+          "yes": 29
+        },
+        "Robots->L6": {
+          "no": 22,
+          "yes": 53
+        }
+      }
+    },
+    "level:L1|L11": {
+      "pooled_target": {
+        "no": 45,
+        "yes": 82
+      },
+      "by_direction": {
+        "L1->L11": {
+          "no": 23,
+          "yes": 41
+        },
+        "L11->L1": {
+          "no": 22,
+          "yes": 41
+        }
+      }
+    },
+    "level:L1|L6": {
+      "pooled_target": {
+        "no": 45,
+        "yes": 81
+      },
+      "by_direction": {
+        "L1->L6": {
+          "no": 22,
+          "yes": 41
+        },
+        "L6->L1": {
+          "no": 23,
+          "yes": 40
+        }
+      }
+    },
+    "level:L11|L6": {
+      "pooled_target": {
+        "no": 44,
+        "yes": 81
+      },
+      "by_direction": {
+        "L11->L6": {
+          "no": 22,
+          "yes": 40
+        },
+        "L6->L11": {
+          "no": 22,
+          "yes": 41
+        }
+      }
+    },
+    "task:CogniFit|Robots": {
+      "pooled_target": {
+        "no": 33,
+        "yes": 33
+      },
+      "by_direction": {
+        "CogniFit->Robots": {
+          "no": 17,
+          "yes": 16
+        },
+        "Robots->CogniFit": {
+          "no": 16,
+          "yes": 17
+        }
+      }
+    }
+  },
   "timing": {
-    "wall_seconds": 187.5,
+    "wall_seconds": 147.4,
     "workers": 4,
     "seconds_per_transfer": {
-      "level:L1->L6": 77.1,
-      "level:L1->L11": 76.6,
-      "level:L6->L1": 77.0,
-      "level:L6->L11": 76.3,
-      "level:L11->L1": 73.0,
-      "level:L11->L6": 72.5,
-      "task:Robots->CogniFit": 56.8,
-      "task:CogniFit->Robots": 56.9,
-      "device:L6->Robots": 51.7,
-      "device:Robots->L6": 51.4
+      "level:L1->L6": 61.1,
+      "level:L1->L11": 62.1,
+      "level:L6->L1": 61.8,
+      "level:L6->L11": 61.1,
+      "level:L11->L1": 56.1,
+      "level:L11->L6": 52.8,
+      "task:Robots->CogniFit": 43.1,
+      "task:CogniFit->Robots": 43.0,
+      "device:L6->Robots": 40.8,
+      "device:Robots->L6": 40.4
     }
   }
 }
