@@ -131,8 +131,15 @@ def bridge(model):
 
 @torch.no_grad()
 def _bandwidth(model, source_train, target_train, multiplier, device):
+    """Width in the mode adaptation trains in: BatchNorm on batch statistics, dropout
+    off, buffers restored -- MIL-CREDA's sigma rule (`two_phase.within_bag_median_distance`).
+    An eval-mode width is ~35x smaller on these trunks and saturates the train-mode kernel."""
     modes = {m: m.training for m in model.modules()}
-    model.eval()
+    buffers = {k: v.clone() for k, v in model.state_dict().items()}
+    model.train()
+    for m in model.modules():
+        if isinstance(m, torch.nn.Dropout):
+            m.eval()
     try:
         source = model.representations([b.windows.to(device) for b in source_train],
                                        "source", mean=True, chunk=two_phase.EVAL_CHUNK)
@@ -140,6 +147,7 @@ def _bandwidth(model, source_train, target_train, multiplier, device):
                                        "target", mean=True, chunk=two_phase.EVAL_CHUNK)
         return median_bandwidth(source, target, multiplier)
     finally:
+        model.load_state_dict(buffers)
         for module, mode in modes.items():
             module.train(mode)
 
