@@ -1,0 +1,546 @@
+"""Every measurement the plan declares, written where the dashboard reads it.
+
+Experiments plan v40, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
+`experimental-implementation` skill's Results table, under the product folder
+`MIL-CREDA/Results/` (`DEFAULT_ROOT`), one folder per experiment
+(`EXPERIMENTS`):
+
+- `Results/significance_<experiment>.json`: a JSON list of rows with exactly
+  the dashboard's keys plus `hypothesis` and `experiment`
+  (`statistics.SIGNIFICANCE_KEYS`), refused otherwise (`write_significance`);
+- `Results/<experiment>/tables/<name>.csv` and `.md` (`write_table`);
+- `Results/<experiment>/summary.json`, one object (`write_summary`);
+- `Results/history_<name>.json`, per-epoch records with `epoch`, `seed`,
+  `fold` and `model` (`two_phase.write_history`, reused);
+- `Results/<experiment>/figures/<name>.pdf` (the ladder of Sec. 5.4, which spans
+  the arms, in `Results/figures/`) with a PNG preview, drawn through
+  the skill's figure helper, copied byte for byte beside this module
+  (`ps_figures.apply_style`, `ps_figures.save_figure`): printed size at 0.8 of
+  the text width of a 10 pt body, no in-figure title, tight and transparent,
+  vector PDF with embedded text. Declared figures: per arm the convergence
+  curves, the optimization history, MIL-CREDA's contour over its two most
+  important hyperparameters and the critical-difference diagram; across arms the
+  domain-shift ladder;
+- `Results/<experiment>/runs/predictions.jsonl`: the per-run test predictions
+  every table and contrast is computed from (`append_predictions`); the panel
+  does not show `runs/`.
+
+**Tables (what each one is).** Per performance arm (Secs. 5.1-5.3):
+`transfer_detail` (MIL-CREDA per transfer: balanced accuracy, AUC,
+sensitivity, specificity, pooled per seed, mean and sd over seeds),
+`comparison` (one row per method, one column per transfer, each cell the
+pooled balanced accuracy as mean +/- sd over seeds, and the average rank of
+the nine adapted strategies over the core transfers; the source-only controls
+of the device arm print `controls.NA_RECORD`), `secondary` (kappa, AUC,
+sensitivity, specificity over the core pair), `per_fold` (the per-rotation
+summary, AUC included, Sec. 4.6), `ranking` (Friedman and the Nemenyi critical
+difference), `selection_rules` (Sec. 4.5: the configuration each rule chose and
+whether they coincide) and `hyperparameters` (Sec. 5.4: chosen values per
+phase). K1, K2 and K3 write the tables of Secs. 6.1-6.3.
+
+Nothing here computes a model or a test: it lays out what `statistics` and
+`mechanisms` returned. A result written from synthetic data says so in its
+summary (`synthetic: true`).
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+import math
+from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
+
+import numpy as np
+
+from MIL_CREDA_EEG import bag_data, controls, model_store, ps_figures
+from MIL_CREDA_EEG import statistics as st
+from MIL_CREDA_EEG.two_phase import write_history as _write_history
+
+__provenance__ = {
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
+    "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
+                    "K2-emparejamiento", "K3-ablacion"],
+    "invariants": [
+        "every_writer_lands_in_the_dashboard_layout",
+        "a_significance_file_missing_a_dashboard_key_is_refused",
+        "json_never_carries_nan",
+        "the_comparison_table_has_every_method_row_and_every_transfer_column",
+        "the_device_arm_controls_print_the_na_record",
+        "the_rank_column_ranks_only_the_nine_adapted_strategies_on_core_transfers",
+        "the_selection_table_reads_both_rules_from_the_same_trials",
+        "every_figure_goes_through_the_shipped_helper_with_a_png_preview",
+        "the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_epoch",
+        "the_critical_difference_diagram_draws_every_rank_and_the_cd_bar",
+        "predictions_round_trip_through_the_runs_file",
+        "the_ladder_reads_each_strategys_own_source_only_control",
+    ],
+}
+
+DEFAULT_ROOT = bag_data.REPOSITORY / "MIL-CREDA" / "Results"
+EXPERIMENT_OF_ARM = {"level": "A-nivel", "task": "B-tarea", "device": "C-dispositivo"}
+EXPERIMENTS = (*EXPERIMENT_OF_ARM.values(), "K1-atencion", "K2-emparejamiento", "K3-ablacion")
+#: Sec. 5.1-5.3: the transfer columns of each arm, in the plan's order.
+ARM_TRANSFERS = {"level": ("L1->L6", "L1->L11", "L6->L1", "L6->L11", "L11->L1", "L11->L6"),
+                 "task": ("Robots->CogniFit", "CogniFit->Robots"),
+                 "device": ("L6->Robots", "Robots->L6")}
+#: The method rows of the comparison tables (Secs. 5.1-5.3), keyed as predictions are.
+SOURCE_ONLY = {"source-only:common": "Source only, common attention",
+               "source-only:AdaptMIL": "Source only, AdaptMIL",
+               "source-only:HASD": "Source only, HASD",
+               "source-only:MIL-CREDA": "Source only, MIL-CREDA"}
+UPPER_BOUND = "upper-bound"
+METHOD_ROWS = {**SOURCE_ONLY, **{s: s for s in model_store.STRATEGIES},
+               UPPER_BOUND: "Target-supervised upper bound"}
+FIGURE_BODY_PT = 10
+FIGURE_WIDTH_FRACTION = 0.8
+
+
+class ResultsError(RuntimeError):
+    """A result cannot be written in the shape the dashboard reads."""
+
+
+# ------------------------------------------------------------------ primitives
+
+
+def _plain(value):
+    if isinstance(value, Mapping):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    if isinstance(value, np.ndarray):
+        return [_plain(v) for v in value.tolist()]
+    if isinstance(value, (np.floating, np.integer, np.bool_)):
+        value = value.item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
+
+
+def write_json(path: str | Path, obj) -> Path:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_plain(obj), indent=1, ensure_ascii=False, allow_nan=False),
+                    encoding="utf-8")
+    return path
+
+
+def _experiment(experiment: str) -> str:
+    if experiment not in EXPERIMENTS:
+        raise ResultsError(f"{experiment!r} is not an experiment of the plan {EXPERIMENTS}")
+    return experiment
+
+
+def write_significance(root: str | Path, experiment: str, rows: Sequence[Mapping]) -> Path:
+    """`Results/significance_<experiment>.json`, every row checked against the schema."""
+    _experiment(experiment)
+    for i, row in enumerate(rows):
+        missing = [k for k in (*st.SIGNIFICANCE_KEYS, *st.OPTIONAL_KEYS) if k not in row]
+        if missing:
+            raise ResultsError(f"row {i} lacks the dashboard keys {missing}")
+        if row["experiment"] != experiment:
+            raise ResultsError(f"row {i} belongs to {row['experiment']}, not {experiment}")
+    return write_json(Path(root) / f"significance_{experiment}.json", list(rows))
+
+
+def _cell(value) -> str:
+    value = _plain(value)
+    if value is None:
+        return ""
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    return str(value)
+
+
+def write_table(root: str | Path, experiment: str, name: str, rows: Sequence[Mapping],
+                columns: Sequence[str] | None = None, note: str | None = None) -> list[Path]:
+    """`Results/<experiment>/tables/<name>.csv` and `.md`."""
+    folder = Path(root) / _experiment(experiment) / "tables"
+    folder.mkdir(parents=True, exist_ok=True)
+    columns = list(columns or (list(rows[0]) if rows else []))
+    csv_path, md_path = folder / f"{name}.csv", folder / f"{name}.md"
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: _cell(row.get(k)) for k in columns})
+    lines = ["| " + " | ".join(columns) + " |", "|" + "---|" * len(columns)]
+    lines += ["| " + " | ".join(_cell(r.get(k)) for k in columns) + " |" for r in rows]
+    if note:
+        lines += ["", note]
+    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return [csv_path, md_path]
+
+
+def write_summary(root: str | Path, experiment: str, summary: Mapping, *,
+                  synthetic: bool) -> Path:
+    return write_json(Path(root) / _experiment(experiment) / "summary.json",
+                      {"experiment": experiment, "revision": __provenance__["revision"],
+                       "synthetic": bool(synthetic), **summary})
+
+
+def write_history(root: str | Path, name: str, records: Sequence[Mapping]) -> Path:
+    return _write_history(records, Path(root) / f"history_{name}.json")
+
+
+def append_predictions(root: str | Path, experiment: str, records: Iterable[Mapping]) -> Path:
+    path = Path(root) / _experiment(experiment) / "runs" / "predictions.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        for r in records:
+            handle.write(json.dumps(_plain(r), allow_nan=False) + "\n")
+    return path
+
+
+def read_predictions(root: str | Path, experiment: str) -> list[dict]:
+    path = Path(root) / _experiment(experiment) / "runs" / "predictions.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+# ------------------------------------------------------------------ arm tables
+
+
+def _select(records: Sequence[Mapping], method: str, transfers: Iterable[str]) -> list[Mapping]:
+    transfers = set(transfers)
+    return [r for r in records if r["strategy"] == method and r["transfer"] in transfers]
+
+
+def _pooled(records: Sequence[Mapping]) -> dict:
+    return st.summarize_seeds(st.pooled_by_seed(records)) if records else {}
+
+
+def _mean_sd(summary: Mapping, metric: str) -> str:
+    m = summary.get(metric) if summary else None
+    if not m or m["mean"] is None or not math.isfinite(m["mean"]):
+        return ""
+    sd = m["sd"]
+    return f"{m['mean']:.3f} ± {sd:.3f}" if sd is not None and math.isfinite(sd) \
+        else f"{m['mean']:.3f}"
+
+
+def transfer_detail(records: Sequence[Mapping], arm: str,
+                    method: str = "MIL-CREDA") -> list[dict]:
+    rows = []
+    for t in ARM_TRANSFERS[arm]:
+        s = _pooled(_select(records, method, [t]))
+        rows.append({"transfer": t, **{m: _mean_sd(s, m) for m in
+                                       ("balanced_accuracy", "auc", "sensitivity",
+                                        "specificity")}})
+    return rows
+
+
+def comparison_table(records: Sequence[Mapping], arm: str, core: Sequence[str],
+                     ranking: Mapping | None) -> list[dict]:
+    """One row per method, one column per transfer; the rank column is the nine's."""
+    rows = []
+    for key, label in METHOD_ROWS.items():
+        row = {"method": label}
+        na = arm in controls.HETEROGENEOUS_ARMS and key in SOURCE_ONLY
+        for t in ARM_TRANSFERS[arm]:
+            row[t] = controls.NA_RECORD if na else _mean_sd(
+                _pooled(_select(records, key, [t])), "balanced_accuracy")
+        rank = (ranking or {}).get("average_rank", {}).get(key)
+        row["average rank (core)"] = (controls.NA_RECORD if na else
+                                      "" if rank is None else f"{rank:.2f}")
+        rows.append(row)
+    return rows
+
+
+def ranking_scores(records: Sequence[Mapping], core: Sequence[str]) -> dict[str, list[float]]:
+    """Per adapted strategy, the pooled BA (mean over seeds) of each core transfer."""
+    out = {}
+    for s in model_store.STRATEGIES:
+        values = []
+        for t in core:
+            summary = _pooled(_select(records, s, [t]))
+            values.append(summary["balanced_accuracy"]["mean"] if summary else float("nan"))
+        if all(math.isfinite(v) for v in values):
+            out[s] = values
+    return out
+
+
+def secondary_table(pooled_pair: Mapping[str, Sequence[Mapping]], arm: str) -> list[dict]:
+    rows = []
+    for key, label in METHOD_ROWS.items():
+        na = arm in controls.HETEROGENEOUS_ARMS and key in SOURCE_ONLY
+        s = {} if na else _pooled(pooled_pair.get(key, []))
+        rows.append({"method": label, **{m: controls.NA_RECORD if na else _mean_sd(s, m)
+                                         for m in ("kappa", "auc", "sensitivity",
+                                                   "specificity")}})
+    return rows
+
+
+def per_fold_table(pooled_pair: Mapping[str, Sequence[Mapping]]) -> list[dict]:
+    rows = []
+    for key, records in pooled_pair.items():
+        if not records:
+            continue
+        f = st.per_fold(records)
+        for r, m in sorted(f["rotations"].items()):
+            rows.append({"method": METHOD_ROWS.get(key, key), "rotation": r,
+                         "balanced_accuracy": m["balanced_accuracy"], "auc": m["auc"]})
+        rows.append({"method": METHOD_ROWS.get(key, key), "rotation": "mean ± sd",
+                     "balanced_accuracy": _mean_sd(f, "balanced_accuracy"),
+                     "auc": _mean_sd(f, "auc")})
+    return rows
+
+
+def ranking_table(ranking: Mapping | None) -> list[dict]:
+    if not ranking:
+        return [{"ranking": "nine adapted strategies, core transfers",
+                 "statistic": None, "p_value": None, "post hoc": "Nemenyi",
+                 "critical difference": None, "note": "not computable yet"}]
+    return [{"ranking": "nine adapted strategies, core transfers",
+             "statistic": ranking["statistic"], "p_value": ranking["p_value"],
+             "post hoc": "Nemenyi", "critical difference": ranking["critical_difference"],
+             "blocks": ranking["blocks"], "methods": ranking["k"]}]
+
+
+# ------------------------------------------------------------------ Sec. 4.5 and 5.4
+
+
+def selection_rows(study, strategy: str, transfer: str,
+                   test_primary: float | None = None,
+                   test_secondary: float | None = None) -> dict:
+    """Sec. 4.5's two rules over the same trials of one phase-2 study."""
+    trials = [t for t in study.trials if t.value is not None]
+    if not trials:
+        raise ResultsError(f"{study.study_name}: no completed trial")
+    primary = max(trials, key=lambda t: t.value)
+    free = max(trials, key=lambda t: t.user_attrs.get("label_free_score", -math.inf))
+    diff = (test_primary - test_secondary
+            if test_primary is not None and test_secondary is not None else None)
+    return {"strategy": strategy, "transfer": transfer, "primary trial": primary.number,
+            "primary configuration": json.dumps(primary.params, sort_keys=True),
+            "label-free trial": free.number,
+            "label-free configuration": json.dumps(free.params, sort_keys=True),
+            "coincide": primary.number == free.number,
+            "test BA, primary rule": test_primary, "test BA, label-free rule": test_secondary,
+            "difference": diff}
+
+
+def hyperparameter_rows(phase_one: Mapping[str, object], phase_two: Mapping[str, object],
+                        transfer: str) -> list[dict]:
+    """Sec. 5.4: chosen values per strategy and phase (phase 1 from its group's study)."""
+    from MIL_CREDA_EEG.search import PHASE_ONE_GROUP_OF
+    rows = []
+    for strategy in model_store.STRATEGIES:
+        group = PHASE_ONE_GROUP_OF[strategy]
+        one, two = phase_one.get(group), phase_two.get(strategy)
+        rows.append({"strategy": strategy, "transfer": transfer, "phase-1 group": group,
+                     "phase 1": json.dumps(one.best_params, sort_keys=True) if one else "",
+                     "phase 2": json.dumps(two.best_params, sort_keys=True) if two else ""})
+    return rows
+
+
+def importance_rows(study, strategy: str, seed: int = 0) -> list[dict]:
+    """fANOVA importance (Optuna) of each searched hyperparameter of one study."""
+    import optuna
+    evaluator = optuna.importance.FanovaImportanceEvaluator(seed=seed)
+    importances = optuna.importance.get_param_importances(study, evaluator=evaluator)
+    return [{"strategy": strategy, "study": study.study_name, "parameter": k,
+             "importance": v} for k, v in importances.items()]
+
+
+# ------------------------------------------------------------------ figures
+
+
+def _figure(rows: int = 1, cols: int = 1, aspect: float = ps_figures.GOLDEN, **kwargs):
+    """A figure at its printed size through the skill's helper (no title, ever)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    ps_figures.apply_style(body_pt=FIGURE_BODY_PT, printed_width_fraction=FIGURE_WIDTH_FRACTION,
+                           aspect=aspect)
+    fig, axes = plt.subplots(rows, cols, squeeze=False, **kwargs)
+    return plt, fig, axes
+
+
+def _save(plt, fig, path: Path) -> Path:
+    ps_figures.save_figure(fig, path, png_preview=True)
+    plt.close(fig)
+    return path
+
+
+def _band(ax, xs, rows: Sequence[Sequence[float]], label: str, **style) -> None:
+    arr = np.asarray(rows, dtype=float)
+    mean = np.nanmean(arr, axis=0)
+    line, = ax.plot(xs, mean, label=label, **style)
+    if arr.shape[0] > 1:
+        sd = np.nanstd(arr, axis=0, ddof=1)
+        ax.fill_between(xs, mean - sd, mean + sd, alpha=0.2, color=line.get_color())
+
+
+def selected_epoch(records: Sequence[Mapping], key: str = "val_balanced_accuracy") -> float | None:
+    """Median over runs (transfer, seed, fold) of the first epoch of maximal `key`: the
+    epoch phase 1 restores and phase 2 selects (Sec. 4.5's primary rule)."""
+    runs: dict = {}
+    for r in records:
+        if key in r:
+            runs.setdefault((r.get("transfer"), r["seed"], r["fold"]), []).append(r)
+    picks = []
+    for rs in runs.values():
+        rs = sorted(rs, key=lambda r: r["epoch"])
+        best = max(r[key] for r in rs)
+        picks.append(next(r["epoch"] for r in rs if r[key] == best))
+    return float(np.median(picks)) if picks else None
+
+
+CONVERGENCE_SERIES = {"loss": "loss", "val_balanced_accuracy": "validation BA",
+                      "global": "global term", "local": "local term"}
+
+
+def convergence_figure(root: str | Path, experiment: str, history: Sequence[Mapping],
+                       core: Sequence[str], name: str = "convergence") -> Path:
+    """Sec. 5.4: one figure per arm on its core transfers, one panel per phase-1 group and
+    per phase-2 strategy; each curve the mean +/- sd over seeds of the rotation-averaged
+    value; the selected epoch marked; MIL-CREDA's global and local terms with their bounds."""
+    path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
+    records = [r for r in history if r.get("transfer") in set(core)]
+    if not records:
+        raise ResultsError(f"no history of the core transfers {list(core)}")
+    models = sorted({r["model"] for r in records}, key=lambda m: (not m.endswith("phase1"), m))
+    plt, fig, axes = _figure(len(models), 1, aspect=0.42 * len(models), sharex=False)
+    for ax, model in zip(axes[:, 0], models):
+        rs = [r for r in records if r["model"] == model]
+        epochs = sorted({r["epoch"] for r in rs})
+        seeds = sorted({r["seed"] for r in rs})
+        for key, label in CONVERGENCE_SERIES.items():
+            if not any(key in r for r in rs):
+                continue
+            per_seed = [[np.nanmean([r[key] for r in rs if r["seed"] == s
+                                     and r["epoch"] == e and key in r] or [np.nan])
+                         for e in epochs] for s in seeds]
+            _band(ax, epochs, per_seed, label)
+        for term in ("global", "local"):
+            if any(f"{term}_bound_high" in r for r in rs):
+                for bound in (rs[0][f"{term}_bound_low"], rs[0][f"{term}_bound_high"]):
+                    ax.axhline(bound, linestyle=":", linewidth=0.6, color="grey")
+        chosen = selected_epoch(rs)
+        if chosen is not None:
+            ax.axvline(chosen, linestyle="--", linewidth=0.8, color="black",
+                       label="selected epoch (median)")
+        ax.set_ylabel(model.replace(":phase", ", phase "))
+        ax.legend(loc="best")
+    axes[-1, 0].set_xlabel("epoch")
+    return _save(plt, fig, path)
+
+
+def optimization_history_figure(root: str | Path, experiment: str,
+                                studies: Mapping[str, object],
+                                name: str = "optimization_history") -> Path:
+    """Sec. 5.4: best mean - sd so far against the trial number, one line per strategy."""
+    path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
+    plt, fig, axes = _figure()
+    ax = axes[0, 0]
+    for label, study in studies.items():
+        values = [t.value for t in sorted(study.trials, key=lambda t: t.number)
+                  if t.value is not None]
+        if values:
+            ax.plot(range(1, len(values) + 1), np.maximum.accumulate(values), label=label,
+                    linewidth=2 if label.startswith("MIL-CREDA") else 1)
+    ax.set_xlabel("trial")
+    ax.set_ylabel("best mean - sd")
+    ax.legend(loc="best")
+    return _save(plt, fig, path)
+
+
+def contour_figure(root: str | Path, experiment: str, study, parameters: Sequence[str],
+                   name: str = "contour_mil_creda") -> Path:
+    """Sec. 5.4: MIL-CREDA's trials over its two most important hyperparameters."""
+    if len(parameters) != 2:
+        raise ResultsError("the contour reads exactly two hyperparameters")
+    path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
+    trials = [t for t in study.trials if t.value is not None
+              and all(p in t.params for p in parameters)]
+    plt, fig, axes = _figure()
+    ax = axes[0, 0]
+    xs = [t.params[parameters[0]] for t in trials]
+    ys = [t.params[parameters[1]] for t in trials]
+    zs = [t.value for t in trials]
+    if len(trials) >= 4:
+        try:
+            ax.tricontourf(xs, ys, zs, alpha=0.4)
+        except (ValueError, RuntimeError):
+            pass                                   # collinear trials: points alone
+    points = ax.scatter(xs, ys, c=zs)
+    fig.colorbar(points, ax=ax, label="mean - sd")
+    ax.set_xlabel(parameters[0])
+    ax.set_ylabel(parameters[1])
+    return _save(plt, fig, path)
+
+
+def critical_difference_figure(root: str | Path, experiment: str, ranking: Mapping,
+                               name: str = "critical_difference") -> Path:
+    """Secs. 5.1-5.3: average ranks on one axis (1 = best) and the Nemenyi CD bar."""
+    path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
+    ranks = sorted(ranking["average_rank"].items(), key=lambda kv: kv[1])
+    k, cd = ranking["k"], ranking["critical_difference"]
+    plt, fig, axes = _figure(aspect=0.25 + 0.06 * k)
+    ax = axes[0, 0]
+    ax.set_xlim(k + 0.5, 0.5)
+    ax.set_ylim(-1, len(ranks) + 1)
+    for i, (strategy, rank) in enumerate(ranks):
+        y = len(ranks) - i
+        ax.plot([rank], [y], "o", markersize=4, color="black" if strategy == "MIL-CREDA"
+                else "grey")
+        ax.annotate(f"{strategy} ({rank:.2f})", (rank, y), xytext=(4, 0),
+                    textcoords="offset points", va="center")
+    ax.plot([1, 1 + cd], [0, 0], color="black", linewidth=2)
+    ax.annotate(f"CD = {cd:.2f}", (1 + cd / 2, 0), xytext=(0, 3), textcoords="offset points",
+                ha="center")
+    ax.set_xlabel("average rank (1 = best)")
+    ax.set_yticks([])
+    for side in ("left", "right", "top"):
+        ax.spines[side].set_visible(False)
+    return _save(plt, fig, path)
+
+
+def own_control(strategy: str) -> str:
+    """Sec. 5.4: the source-only control each strategy's gain is read against."""
+    return f"source-only:{strategy}" if strategy in ("MIL-CREDA", "AdaptMIL", "HASD") \
+        else "source-only:common"
+
+
+def ladder_points(records: Sequence[Mapping], separability_rows: Sequence[Mapping]) -> list[dict]:
+    """Per strategy and level or task transfer: separability (reading `all`) and the gain
+    of the pooled BA (mean over seeds) over the strategy's own source-only control."""
+    sep = {r["transfer"]: r for r in separability_rows if r["reading"] == "all"
+           and r["arm"] in controls.SAME_CHANNEL_ARMS}
+    points = []
+    for strategy in model_store.STRATEGIES:
+        for transfer, row in sep.items():
+            mine = _pooled(_select(records, strategy, [transfer]))
+            base = _pooled(_select(records, own_control(strategy), [transfer]))
+            if not mine or not base:
+                continue
+            points.append({"strategy": strategy, "transfer": transfer, "role": row.get("role"),
+                           "separability": float(row["auc_rotation_mean"]),
+                           "separability_sd": float(row["auc_rotation_sd"]),
+                           "gain": mine["balanced_accuracy"]["mean"]
+                           - base["balanced_accuracy"]["mean"],
+                           "control": own_control(strategy)})
+    return points
+
+
+def ladder_figure(root: str | Path, points: Sequence[Mapping], device_separability: float | None,
+                  name: str = "domain_shift_ladder") -> Path:
+    """Sec. 5.4: gain over each strategy's own source-only control against separability."""
+    path = Path(root) / "figures" / f"{name}.pdf"
+    plt, fig, axes = _figure()
+    ax = axes[0, 0]
+    for strategy in sorted({p["strategy"] for p in points}):
+        ps = [p for p in points if p["strategy"] == strategy]
+        ax.errorbar([p["separability"] for p in ps], [p["gain"] for p in ps],
+                    xerr=[p.get("separability_sd") or 0 for p in ps], fmt="o",
+                    label=strategy, markersize=6 if strategy == "MIL-CREDA" else 3)
+    if device_separability is not None:
+        ax.axvline(device_separability, linestyle="--", label="device arm separability")
+    ax.axhline(0.0, linewidth=0.5)
+    ax.set_xlabel("domain separability (AUC)")
+    ax.set_ylabel("BA gain over own source-only control")
+    ax.legend(loc="best")
+    return _save(plt, fig, path)
