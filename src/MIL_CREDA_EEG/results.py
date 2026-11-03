@@ -1,6 +1,6 @@
 """Every measurement the plan declares, written where the dashboard reads it.
 
-Experiments plan v43, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
+Experiments plan v44, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 `experimental-implementation` skill's Results table, under the product folder
 `MIL-CREDA/Results/` (`DEFAULT_ROOT`), one folder per experiment
 (`EXPERIMENTS`):
@@ -19,8 +19,8 @@ Experiments plan v43, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
   the text width of a 10 pt body, no in-figure title, tight and transparent,
   vector PDF with embedded text. Declared figures: per arm the convergence
   curves, the optimization history, MIL-CREDA's contour over its two most
-  important hyperparameters and the critical-difference diagram; across arms the
-  domain-shift ladder;
+  important hyperparameters; across arms the domain-shift ladder and the global
+  critical-difference diagram (`Results/figures/critical_difference.pdf`);
 - `Results/<experiment>/runs/predictions.jsonl`: the per-run test predictions
   every table and contrast is computed from (`append_predictions`), each record
   stamped with the partition hash, plan revision and code version it was
@@ -36,13 +36,29 @@ pooled balanced accuracy at the report seed, and the average rank of
 the nine adapted strategies over the core transfers; the source-only controls
 of the device arm print `controls.NA_RECORD`), `secondary` (kappa, AUC,
 sensitivity, specificity over the core pair), `per_fold` (the per-rotation
-summary, AUC included, Sec. 4.6), `ranking` (Friedman and the Nemenyi critical
-difference), `selection_rules` (Sec. 4.5: per strategy and transfer, the trial
+summary, AUC included, Sec. 4.6), `ranking` (the descriptive arm ranking of
+Secs. 5.1-5.3 under the plan's headers: MIL-CREDA's average rank and position
+among the nine, no test, `arm_ranking`), `significance` (the arm's significance
+table under the plan's headers, `significance_table`: per rival the
+balanced-accuracy difference with its interval and raw and Holm p values, the
+kappa difference with its Holm p value, DeLong's and Nadeau-Bengio's Holm p
+values and the discordant subjects), `selection_rules` (Sec. 4.5: per strategy and transfer, the trial
 each rule chose for each test rotation, in how many rotations they coincide, and
 the pooled test balanced accuracy of each choice with their difference),
 `selected_configurations` (per rule and test rotation, the trial and the three
 rotations it was selected over) and `hyperparameters` (Sec. 5.4: phase 1's one
 configuration, phase 2's configuration per test rotation). K1, K2 and K3 write the tables of Secs. 6.1-6.3.
+
+**The global ranking (Sec. 5.4)** spans the arms, so it lands beside the
+ladder at the top of `Results/` (`write_global_ranking`): one Friedman test
+over the ten transfers as blocks and the nine adapted strategies, the Nemenyi
+critical difference and its groups (`global_ranking`), in
+`Results/figures/critical_difference.pdf`, `Results/tables/global_ranking`
+and `Results/tables/global_ranking_strategies` (the plan's two tables and
+headers), one row in `Results/significance_global_ranking.json` and the key
+`global_ranking` of `Results/summary.json`, which carries the limitation the
+plan declares (`statistics.GLOBAL_RANKING_LIMITATION`). It is computed only
+when all nine strategies have a pooled value on all ten transfers.
 
 Nothing here computes a model or a test: it lays out what `statistics` and
 `mechanisms` returned. A result written from synthetic data says so in its
@@ -64,7 +80,7 @@ from MIL_CREDA_EEG import statistics as st
 from MIL_CREDA_EEG.two_phase import write_history as _write_history
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
@@ -79,6 +95,9 @@ __provenance__ = {
         "every_figure_goes_through_the_shipped_helper_with_a_png_preview",
         "the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_epoch",
         "the_critical_difference_diagram_draws_every_rank_and_the_cd_bar",
+        "the_arm_ranking_is_descriptive_under_the_plans_headers",
+        "the_arm_significance_table_carries_both_families_under_the_plans_headers",
+        "the_global_ranking_is_one_friedman_over_the_ten_transfers_and_the_nine",
         "predictions_round_trip_through_the_runs_file",
         "every_prediction_carries_the_identity_it_was_written_under",
         "the_label_free_rule_predictions_live_in_their_own_file",
@@ -107,6 +126,25 @@ IDENTITY_FIELDS = ("partition_sha256", "revision", "code_version")
 PREDICTION_FILES = {"primary": "predictions.jsonl", "label-free": "predictions_label_free.jsonl"}
 METHOD_ROWS = {**SOURCE_ONLY, **{s: s for s in model_store.STRATEGIES},
                UPPER_BOUND: "Target-supervised upper bound"}
+#: Sec. 5.4: the ten transfers of the three arms, the blocks of the global ranking.
+GLOBAL_TRANSFERS = tuple(t for ts in ARM_TRANSFERS.values() for t in ts)
+#: Secs. 5.1-5.3, the descriptive arm ranking table, headers verbatim.
+RANKING_COLUMNS = ("Ranking descriptivo del brazo", "Ranking promedio de MIL-CREDA",
+                   "Posición de MIL-CREDA entre las nueve")
+RANKING_ROW = "Nueve estrategias adaptadas, transferencias núcleo"
+#: Secs. 5.1-5.3, the arm significance table, headers verbatim.
+SIGNIFICANCE_TABLE_COLUMNS = (
+    "Contraste", "Transferencia núcleo", "Diferencia de exactitud balanceada",
+    "Intervalo bootstrap al 95 %", "Valor de p crudo", "Valor de p ajustado por Holm",
+    "Diferencia de kappa", "Valor de p de la kappa ajustado por Holm",
+    "Valor de p de DeLong ajustado por Holm", "Valor de p de Nadeau-Bengio ajustado por Holm",
+    "Sujetos en que discrepan")
+#: Sec. 5.4, the global ranking's two tables, headers verbatim.
+GLOBAL_RANKING_COLUMNS = ("Ranking global", "Estadístico de Friedman", "Valor de p",
+                          "Diferencia crítica de Nemenyi")
+GLOBAL_RANKING_ROW = "Nueve estrategias adaptadas, diez transferencias"
+GLOBAL_STRATEGY_COLUMNS = ("Estrategia, ranking global",
+                           "Ranking promedio sobre las diez transferencias")
 FIGURE_BODY_PT = 10
 FIGURE_WIDTH_FRACTION = 0.8
 
@@ -170,7 +208,12 @@ def _cell(value) -> str:
 def write_table(root: str | Path, experiment: str, name: str, rows: Sequence[Mapping],
                 columns: Sequence[str] | None = None, note: str | None = None) -> list[Path]:
     """`Results/<experiment>/tables/<name>.csv` and `.md`."""
-    folder = Path(root) / _experiment(experiment) / "tables"
+    return _write_table_in(Path(root) / _experiment(experiment) / "tables", name, rows,
+                           columns, note)
+
+
+def _write_table_in(folder: Path, name: str, rows: Sequence[Mapping],
+                    columns: Sequence[str] | None = None, note: str | None = None) -> list[Path]:
     folder.mkdir(parents=True, exist_ok=True)
     columns = list(columns or (list(rows[0]) if rows else []))
     csv_path, md_path = folder / f"{name}.csv", folder / f"{name}.md"
@@ -335,15 +378,96 @@ def per_fold_table(pooled_pair: Mapping[str, Sequence[Mapping]]) -> list[dict]:
     return rows
 
 
+def arm_ranking(records: Sequence[Mapping], core: Sequence[str]) -> dict | None:
+    """Secs. 5.1-5.3: the descriptive ranking of the nine on an arm's core transfers.
+
+    None until at least two adapted strategies have a pooled value on every core
+    transfer; no test is run (Sec. 5.4 holds the plan's one ranking test).
+    """
+    scores = ranking_scores(records, core)
+    return st.descriptive_ranking(scores) if len(scores) >= 2 else None
+
+
 def ranking_table(ranking: Mapping | None) -> list[dict]:
-    if not ranking:
-        return [{"ranking": "nine adapted strategies, core transfers",
-                 "statistic": None, "p_value": None, "post hoc": "Nemenyi",
-                 "critical difference": None, "note": "not computable yet"}]
-    return [{"ranking": "nine adapted strategies, core transfers",
-             "statistic": ranking["statistic"], "p_value": ranking["p_value"],
-             "post hoc": "Nemenyi", "critical difference": ranking["critical_difference"],
-             "blocks": ranking["blocks"], "methods": ranking["k"]}]
+    """The arm's descriptive ranking table: MIL-CREDA's average rank and position."""
+    rank = (ranking or {}).get("average_rank", {}).get("MIL-CREDA")
+    position = (ranking or {}).get("position", {}).get("MIL-CREDA")
+    return [dict(zip(RANKING_COLUMNS, (RANKING_ROW, rank, position)))]
+
+
+def significance_table(rows: Sequence[Mapping]) -> list[dict]:
+    """Secs. 5.1-5.3: one row per rival contrast, both families of Sec. 4.6 side by side."""
+    by: dict = {}
+    for r in rows:
+        if r.get("contrast") and r["test"] in st.CONTRAST_TESTS:
+            by.setdefault(r["contrast"], {})[r["test"]] = r
+    out = []
+    for parts in by.values():
+        boot = parts.get(st.TEST_BOOTSTRAP)
+        if boot is None:
+            continue
+        kappa = parts.get(st.TEST_KAPPA, {})
+        interval = ("" if boot["ci_low"] is None or boot["ci_high"] is None
+                    else f"[{boot['ci_low']:.4f}, {boot['ci_high']:.4f}]")
+        name = boot["comparison"].rsplit(":", 1)[-1]
+        out.append(dict(zip(SIGNIFICANCE_TABLE_COLUMNS, (
+            name, boot.get("scope"), boot["effect_size"], interval, boot["p_value"],
+            boot["p_adjusted"], kappa.get("effect_size"), kappa.get("p_adjusted"),
+            parts.get(st.TEST_DELONG, {}).get("p_adjusted"),
+            parts.get(st.TEST_NADEAU_BENGIO, {}).get("p_adjusted"), boot.get("discordant")))))
+    return out
+
+
+def global_ranking(records: Sequence[Mapping]) -> dict | None:
+    """Sec. 5.4: Friedman and Nemenyi over the ten transfers and the nine strategies.
+
+    None unless every adapted strategy has a pooled value on all ten transfers.
+    """
+    scores = ranking_scores(records, GLOBAL_TRANSFERS)
+    if sorted(scores) != sorted(model_store.STRATEGIES):
+        return None
+    ranking = st.friedman_nemenyi({s: scores[s] for s in model_store.STRATEGIES})
+    return {**ranking, "transfers": list(GLOBAL_TRANSFERS), "test": st.TEST_FRIEDMAN_GLOBAL,
+            "groups": st.nemenyi_groups(ranking["average_rank"],
+                                        ranking["critical_difference"]),
+            "limitation": st.GLOBAL_RANKING_LIMITATION}
+
+
+def write_global_ranking(root: str | Path, ranking: Mapping) -> list[Path]:
+    """Sec. 5.4's cross-arm outputs: the figure, the two tables, the test row, the summary."""
+    root = Path(root)
+    paths = [critical_difference_figure_at(root / "figures" / "critical_difference.pdf",
+                                           ranking)]
+    paths += _write_table_in(root / "tables", "global_ranking", [dict(zip(
+        GLOBAL_RANKING_COLUMNS, (GLOBAL_RANKING_ROW, ranking["statistic"],
+                                 ranking["p_value"], ranking["critical_difference"])))],
+        note=ranking["limitation"])
+    paths += _write_table_in(root / "tables", "global_ranking_strategies", [
+        dict(zip(GLOBAL_STRATEGY_COLUMNS, (s, ranking["average_rank"][s])))
+        for s in model_store.STRATEGIES if s in ranking["average_rank"]])
+    row = st.significance_row(
+        comparison="global ranking of the nine adapted strategies over the ten transfers",
+        test=ranking["test"], statistic=ranking["statistic"], p_value=ranking["p_value"],
+        p_adjusted=ranking["p_value"],
+        correction="one global test (m=1); Nemenyi post hoc, critical difference",
+        effect_size=ranking["average_rank"].get("MIL-CREDA"),
+        effect_size_name="MIL-CREDA average rank over the ten transfers (1 = best)",
+        ci_low=None, ci_high=None, n=ranking["blocks"],
+        hypothesis="A-nivel, B-tarea, C-dispositivo", experiment="A-nivel, B-tarea, C-dispositivo",
+        critical_difference=ranking["critical_difference"], methods=ranking["k"],
+        groups=ranking["groups"], limitation=ranking["limitation"])
+    paths.append(write_json(root / "significance_global_ranking.json", [row]))
+    summary_path = root / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8")) \
+        if summary_path.exists() else {}
+    summary["global_ranking"] = {
+        "revision": __provenance__["revision"], "transfers": ranking["transfers"],
+        "statistic": ranking["statistic"], "p_value": ranking["p_value"],
+        "critical_difference": ranking["critical_difference"], "alpha": ranking["alpha"],
+        "average_rank": ranking["average_rank"], "position": ranking["position"],
+        "groups": ranking["groups"], "limitation": ranking["limitation"]}
+    paths.append(write_json(summary_path, summary))
+    return paths
 
 
 # ------------------------------------------------------------------ Sec. 4.5 and 5.4
@@ -551,7 +675,12 @@ def contour_figure(root: str | Path, experiment: str, study, parameters: Sequenc
 def critical_difference_figure(root: str | Path, experiment: str, ranking: Mapping,
                                name: str = "critical_difference") -> Path:
     """Secs. 5.1-5.3: average ranks on one axis (1 = best) and the Nemenyi CD bar."""
-    path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
+    return critical_difference_figure_at(
+        Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf", ranking)
+
+
+def critical_difference_figure_at(path: Path, ranking: Mapping) -> Path:
+    """Average ranks (1 = best), the Nemenyi CD bar and a line under each group."""
     ranks = sorted(ranking["average_rank"].items(), key=lambda kv: kv[1])
     k, cd = ranking["k"], ranking["critical_difference"]
     plt, fig, axes = _figure(aspect=0.25 + 0.06 * k)
@@ -567,6 +696,10 @@ def critical_difference_figure(root: str | Path, experiment: str, ranking: Mappi
     ax.plot([1, 1 + cd], [0, 0], color="black", linewidth=2)
     ax.annotate(f"CD = {cd:.2f}", (1 + cd / 2, 0), xytext=(0, 3), textcoords="offset points",
                 ha="center")
+    for g, group in enumerate(ranking.get("groups") or []):
+        values = [ranking["average_rank"][s] for s in group]
+        ax.plot([min(values), max(values)], [-0.3 - 0.25 * g] * 2, color="black",
+                linewidth=1.5)
     ax.set_xlabel("average rank (1 = best)")
     ax.set_yticks([])
     for side in ("left", "right", "top"):

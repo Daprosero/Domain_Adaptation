@@ -1,7 +1,7 @@
 """The report and variance design: subject-level metrics, pooled summaries and contrasts.
 
-Experiments plan v42, Secs. 4.4 and 4.6, with the significance tables of
-Secs. 5.1-5.3 and the tests of Secs. 6.1-6.3. Every function here reads
+Experiments plan v44, Secs. 4.4 and 4.6, with the significance tables of
+Secs. 5.1-5.3, the global ranking of Sec. 5.4 and the tests of Secs. 6.1-6.3. Every function here reads
 predictions that already exist (one record per target test subject, rotation,
 seed and strategy, as `two_phase.predictions` writes them); nothing here trains.
 
@@ -32,27 +32,64 @@ bootstrap (Koehn 2004 for the pairing, Robin et al. 2011 for the
 stratification): each replicate resamples subjects with replacement inside
 every (class, direction) stratum, scores both models on the same replicate,
 and recomputes the whole balanced accuracy and kappa. Reported: the difference,
-its 95% percentile interval, a p value, the kappa difference and the number of
-subjects on which the two models disagree (the only subjects that carry
-information with binary responses). Holm adjusts the p values of a declared
-family (`holm`). The AUCs on the same subjects are compared with DeLong's test
-(`delong`, the structural-components algorithm of Sun and Xu 2014). The
-secondary contrast is Nadeau and Bengio's corrected resampled t test over the
-four rotations, one value per rotation at the report seed (`nadeau_bengio`).
+its 95% percentile interval, a p value, the kappa difference with its own p
+value and the number of subjects on which the two models disagree (the only
+subjects that carry information with binary responses). The AUCs on the same
+subjects are compared with DeLong's test (`delong`, the structural-components
+algorithm of Sun and Xu 2014), and the four rotations with Nadeau and Bengio's
+corrected resampled t test, one value per rotation at the report seed
+(`nadeau_bengio`).
 
-**The arm ranking (Secs. 5.1-5.3).** Friedman's test over the nine adapted
-strategies, blocks the core transfers, with the Nemenyi critical difference
-of the critical-difference diagram (Demsar 2006, alpha 0.05) as its post hoc
-(`friedman_nemenyi`).
+**Two families (Sec. 4.6).** No row is reported uncorrected. The primary
+family (`FAMILY_PRIMARY`, confirmatory, the only one the success criteria
+read) is the balanced-accuracy bootstrap, Holm over the rivals of each core
+pair. The secondary family (`FAMILY_SECONDARY`, support, no criterion) is the
+kappa difference through the same paired, stratified bootstrap with its own p
+value, computed from the same replicates exactly as the balanced-accuracy one
+(`TEST_KAPPA`), DeLong's AUC test and the Nadeau-Bengio t; Holm runs within
+each metric over the same rivals. `pair_contrast` emits the four rows of one
+rival, each carrying its `family` and the `contrast` it belongs to, and
+`apply_contrast_families` adjusts all of them at once (`holm`, `apply_holm`).
+
+**The ranking (Secs. 5.1-5.4).** The arm rankings are descriptive
+(`descriptive_ranking`): the average rank of the nine adapted strategies over
+the arm's core transfers (1 = best, ties share the average rank), the position
+and whether it is among the top three, with no test, because two core
+transfers per arm cannot separate any pair. The plan's one ranking test is the
+global one of Sec. 5.4 (Demsar 2006): the ten transfers of the three arms are
+the blocks, Friedman's test at alpha 0.05 and the Nemenyi critical difference
+as its post hoc (`friedman_nemenyi`); `nemenyi_groups` gives the maximal sets
+of strategies whose rank gap does not exceed the critical difference, the
+lines of the diagram. `GLOBAL_RANKING_LIMITATION` is the limitation the plan
+declares: the blocks share subjects.
 
 **The mechanism tests (Secs. 6.1-6.3).** Wilcoxon's signed-rank test over
-subjects, with the matched-pairs rank-biserial correlation as effect size
-(`wilcoxon_signed_rank`).
+subjects, with the matched-pairs rank-biserial correlation as effect size and,
+beside it, the Hodges-Lehmann estimator of the per-subject difference with its
+Wilcoxon-based 95% confidence interval (`wilcoxon_signed_rank`,
+`hodges_lehmann`). The estimator is the median of the n(n+1)/2 Walsh averages
+(d_i + d_j) / 2, i <= j. The interval is the exact signed-rank interval on the
+sorted Walsh averages (Hollander and Wolfe, Nonparametric Statistical Methods,
+Sec. 3.3; cited from memory): with T+ the signed-rank statistic under the
+null, whose exact distribution over n subjects is counted by dynamic
+programming over the 2^n sign patterns, k is the largest integer with
+P(T+ <= k - 1) <= alpha / 2, and the interval runs from the k-th to the
+(M + 1 - k)-th Walsh average, M = n(n+1)/2; its achieved coverage
+1 - 2 P(T+ <= k - 1) is reported, at least 0.95. Every finite difference
+enters, zeros included, and the exact distribution assumes no ties, which
+continuous attention weights and distances meet. Below six subjects no k
+reaches 0.95 and the interval is not reported (`None`, with a note).
 
 **Implementation choices the plan does not fix.** The bootstrap draws
 `BOOTSTRAP_RESAMPLES` = 10000 replicates from `BOOTSTRAP_SEED`; its p value is
 two-sided, twice the smaller tail of the replicate differences at zero with
 the (1 + count) / (1 + replicates) convention, so it is never exactly zero.
+The kappa p value applies the same formula to the kappa differences of the
+same replicates; a replicate whose kappa is undefined (one predicted and true
+class only, impossible while both classes are present in every stratum)
+leaves the count, and the replicates are the finite ones. A Nemenyi group is
+joined while the rank gap is at most the critical difference, the plan's
+wording («no la supera»).
 Every other test is two-sided as well; the direction a hypothesis states is
 read from the sign of the effect, never from a one-sided p. The Nadeau-Bengio
 test-to-training ratio is an input (`test_train_ratio`): the campaign passes
@@ -76,8 +113,8 @@ from sklearn.metrics import roc_auc_score
 from MIL_CREDA_EEG.two_phase import balanced_accuracy
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
-    "sections": ["4.4", "4.6", "5.1", "5.2", "5.3", "6.1", "6.2", "6.3"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "sections": ["4.4", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
     "invariants": [
@@ -89,12 +126,17 @@ __provenance__ = {
         "the_contrasts_read_one_report_seed_and_no_reduction",
         "the_bootstrap_is_paired_and_keeps_every_stratum_size",
         "the_bootstrap_reports_difference_interval_kappa_and_discordant_subjects",
+        "the_kappa_p_value_comes_from_the_same_replicates_as_the_balanced_accuracy_one",
+        "every_contrast_row_belongs_to_a_holm_family_within_its_metric",
         "identical_models_give_a_zero_difference_and_p_one",
         "delong_matches_its_structural_components_definition",
         "nadeau_bengio_reduces_to_the_one_sample_t_at_zero_ratio",
         "holm_is_the_step_down_adjustment",
         "friedman_ranks_with_one_as_best_and_nemenyi_gives_the_critical_difference",
+        "the_arm_ranking_is_descriptive_with_no_test",
+        "a_nemenyi_group_joins_strategies_whose_rank_gap_does_not_exceed_the_cd",
         "wilcoxon_reports_the_rank_biserial_effect",
+        "hodges_lehmann_is_the_walsh_median_with_the_exact_signed_rank_interval",
         "significance_rows_carry_exactly_the_dashboard_keys",
     ],
 }
@@ -113,10 +155,26 @@ OPTIONAL_KEYS = ("hypothesis", "experiment")
 NEMENYI_Q05 = {2: 1.960, 3: 2.343, 4: 2.569, 5: 2.728, 6: 2.850, 7: 2.949, 8: 3.031,
                9: 3.102, 10: 3.164}
 TEST_BOOTSTRAP = "paired class-stratified subject bootstrap (balanced accuracy)"
+TEST_KAPPA = "paired class-stratified subject bootstrap (Cohen's kappa)"
 TEST_DELONG = "DeLong (paired AUC)"
 TEST_NADEAU_BENGIO = "Nadeau-Bengio corrected resampled t (per-rotation balanced accuracy)"
 TEST_WILCOXON = "Wilcoxon signed-rank over subjects"
 TEST_FRIEDMAN = "Friedman over core transfers, Nemenyi critical difference"
+TEST_FRIEDMAN_GLOBAL = "Friedman over the ten transfers, Nemenyi critical difference"
+#: Sec. 4.6: the two declared families of the performance contrasts.
+FAMILY_PRIMARY = "primary (confirmatory)"
+FAMILY_SECONDARY = "secondary (support, no criterion)"
+CONTRAST_TESTS = (TEST_BOOTSTRAP, TEST_KAPPA, TEST_DELONG, TEST_NADEAU_BENGIO)
+METRIC_OF_TEST = {TEST_BOOTSTRAP: "balanced accuracy", TEST_KAPPA: "kappa",
+                  TEST_DELONG: "AUC", TEST_NADEAU_BENGIO: "Nadeau-Bengio"}
+#: Sec. 5.4: the arm success criteria read the top three by average rank.
+TOP_RANKS = 3
+#: Sec. 5.4, the limitation the plan declares for the global ranking, verbatim.
+GLOBAL_RANKING_LIMITATION = (
+    "La limitación se declara: varias transferencias comparten sujetos, porque las dos "
+    "direcciones de cada par usan los mismos sujetos con los lados invertidos y las "
+    "transferencias de un mismo dispositivo salen de la misma cohorte, así que los bloques "
+    "no son del todo independientes, como la prueba supone.")
 
 
 class StatisticsError(RuntimeError):
@@ -257,6 +315,16 @@ def _ba_kappa(y: np.ndarray, a: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return ba, kappa
 
 
+def _bootstrap_p(replicates: np.ndarray) -> float | None:
+    """Two-sided: twice the smaller tail at zero, (1 + count) / (1 + replicates)."""
+    n = len(replicates)
+    if n == 0:
+        return None
+    lower = (1 + np.sum(replicates <= 0)) / (n + 1)
+    upper = (1 + np.sum(replicates >= 0)) / (n + 1)
+    return float(min(1.0, 2 * min(lower, upper)))
+
+
 def paired_bootstrap(labels: Sequence[int], prob_a: Sequence[float], prob_b: Sequence[float],
                      strata: Sequence, *, resamples: int = BOOTSTRAP_RESAMPLES,
                      seed: int = BOOTSTRAP_SEED) -> dict:
@@ -275,14 +343,13 @@ def paired_bootstrap(labels: Sequence[int], prob_a: Sequence[float], prob_b: Seq
     obs_a, obs_ka = _ba_kappa(y[None, :], a[None, :])
     obs_b, obs_kb = _ba_kappa(y[None, :], b[None, :])
     observed = float(obs_a[0] - obs_b[0])
-    lower = (1 + np.sum(diff <= 0)) / (resamples + 1)
-    upper = (1 + np.sum(diff >= 0)) / (resamples + 1)
     lo, hi = np.percentile(diff, [2.5, 97.5])
     klo, khi = np.nanpercentile(kdiff, [2.5, 97.5])
     return {"difference": observed, "ci_low": float(lo), "ci_high": float(hi),
-            "p_value": float(min(1.0, 2 * min(lower, upper))),
+            "p_value": _bootstrap_p(diff),
             "kappa_difference": float(obs_ka[0] - obs_kb[0]),
             "kappa_ci_low": float(klo), "kappa_ci_high": float(khi),
+            "kappa_p_value": _bootstrap_p(kdiff[np.isfinite(kdiff)]),
             "discordant": int(np.sum(a != b)), "n": int(len(y)),
             "strata_sizes": [int(len(g)) for g in groups], "resamples": int(resamples),
             "seed": int(seed), "replicates": diff}
@@ -398,20 +465,89 @@ def friedman_nemenyi(scores: Mapping[str, Sequence[float]], alpha: float = ALPHA
             "critical_difference": cd, "q_alpha": NEMENYI_Q05[k], "alpha": alpha}
 
 
+def _average_ranks(scores: Mapping[str, Sequence[float]]) -> tuple[list, np.ndarray]:
+    names = list(scores)
+    table = np.asarray([scores[k] for k in names], dtype=float)      # (k, N)
+    if table.ndim != 2 or not np.all(np.isfinite(table)):
+        raise StatisticsError("a ranking needs a finite score of every method in every block")
+    ranks = np.vstack([sps.rankdata(-table[:, j]) for j in range(table.shape[1])]).T
+    return names, ranks.mean(axis=1)
+
+
+def descriptive_ranking(scores: Mapping[str, Sequence[float]]) -> dict:
+    """Secs. 5.1-5.4: average rank (1 = best), position and top three; no test."""
+    if len(scores) < 2:
+        raise StatisticsError("a ranking needs at least two methods")
+    names, average = _average_ranks(scores)
+    position = {n: int(1 + np.sum(average < average[i])) for i, n in enumerate(names)}
+    return {"average_rank": dict(zip(names, map(float, average))), "position": position,
+            "top_three": {n: position[n] <= TOP_RANKS for n in names},
+            "blocks": int(len(next(iter(scores.values())))), "k": len(names), "test": None}
+
+
+def nemenyi_groups(average_rank: Mapping[str, float], critical_difference: float
+                   ) -> list[list[str]]:
+    """The maximal runs of strategies, by rank, whose rank gap is at most the CD."""
+    ordered = sorted(average_rank.items(), key=lambda kv: (kv[1], kv[0]))
+    groups: list[list[str]] = []
+    for i in range(len(ordered)):
+        j = i
+        while j + 1 < len(ordered) and ordered[j + 1][1] - ordered[i][1] <= critical_difference:
+            j += 1
+        if j > i and not (groups and len(groups[-1]) and ordered[j][0] == groups[-1][-1]):
+            groups.append([name for name, _ in ordered[i:j + 1]])
+    return groups
+
+
+def _signed_rank_cdf(n: int) -> np.ndarray:
+    """P(T+ <= t), t = 0..n(n+1)/2, under the null: each rank's sign is a fair coin."""
+    counts = np.zeros(n * (n + 1) // 2 + 1)
+    counts[0] = 1.0
+    for rank in range(1, n + 1):
+        counts[rank:] = counts[rank:] + counts[:-rank].copy()
+    return np.cumsum(counts) / 2.0 ** n
+
+
+def hodges_lehmann(differences: Sequence[float], alpha: float = ALPHA) -> dict:
+    """The Walsh-average median and its exact signed-rank (1 - alpha) interval."""
+    d = np.asarray([x for x in differences if x is not None and math.isfinite(x)], float)
+    n = len(d)
+    if n == 0:
+        return {"estimate": None, "ci_low": None, "ci_high": None, "k": None, "walsh": 0,
+                "coverage": None, "n": 0, "note": "no finite difference"}
+    i, j = np.triu_indices(n)
+    walsh = np.sort((d[i] + d[j]) / 2.0)
+    M = len(walsh)
+    cdf = _signed_rank_cdf(n)
+    # k is the largest integer with P(T+ <= k - 1) <= alpha / 2
+    admissible = np.nonzero(cdf <= alpha / 2)[0]
+    out = {"estimate": float(np.median(walsh)), "walsh": int(M), "n": int(n)}
+    if len(admissible) == 0:
+        return {**out, "ci_low": None, "ci_high": None, "k": None, "coverage": None,
+                "note": f"n = {n}: no exact signed-rank interval reaches {1 - alpha:.2f}"}
+    k = int(admissible[-1]) + 1
+    return {**out, "ci_low": float(walsh[k - 1]), "ci_high": float(walsh[M - k]), "k": k,
+            "coverage": float(1 - 2 * cdf[k - 1]), "note": None}
+
+
 def wilcoxon_signed_rank(differences: Sequence[float]) -> dict:
     """Two-sided signed-rank test of per-subject differences against zero."""
     d = np.asarray([x for x in differences if x is not None and math.isfinite(x)], float)
     nonzero = d[d != 0]
+    hl = hodges_lehmann(d)
+    interval = {"hodges_lehmann": hl["estimate"], "ci_low": hl["ci_low"],
+                "ci_high": hl["ci_high"], "ci_coverage": hl["coverage"],
+                "ci_note": hl["note"]}
     if len(nonzero) == 0:
         return {"statistic": float("nan"), "p_value": 1.0, "rank_biserial": 0.0,
                 "n": int(len(d)), "n_nonzero": 0, "median": float(np.median(d)) if len(d)
-                else float("nan")}
+                else float("nan"), **interval}
     ranks = sps.rankdata(np.abs(nonzero))
     plus, minus = float(ranks[nonzero > 0].sum()), float(ranks[nonzero < 0].sum())
     result = sps.wilcoxon(d, zero_method="wilcox", alternative="two-sided")
     return {"statistic": float(result.statistic), "p_value": float(result.pvalue),
             "rank_biserial": (plus - minus) / (plus + minus), "n": int(len(d)),
-            "n_nonzero": int(len(nonzero)), "median": float(np.median(d))}
+            "n_nonzero": int(len(nonzero)), "median": float(np.median(d)), **interval}
 
 
 # ------------------------------------------------------------------ rows
@@ -444,6 +580,20 @@ def apply_holm(rows: list[dict], family: str) -> list[dict]:
     for r, p in zip(rows, adjusted):
         r["p_adjusted"] = _clean(p)
         r["correction"] = f"holm ({family}, m={sum(a is not None for a in adjusted)})"
+    return rows
+
+
+def apply_contrast_families(rows: list[dict], family: str) -> list[dict]:
+    """Sec. 4.6: Holm within each metric over the rivals of `rows` (one core pair).
+
+    The balanced-accuracy rows are the primary family; kappa, DeLong and
+    Nadeau-Bengio are each a secondary family of their own. Rows of any other
+    test are left as they are.
+    """
+    for test in CONTRAST_TESTS:
+        members = [r for r in rows if r["test"] == test]
+        if members:
+            apply_holm(members, f"{family}, {METRIC_OF_TEST[test]}")
     return rows
 
 
@@ -484,6 +634,8 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
     pa, pb = [ra[s]["probability"] for s in subjects], [rb[s]["probability"] for s in subjects]
     strata = [(ra[s]["label"], ra[s].get("direction")) for s in subjects]
     boot = paired_bootstrap(labels, pa, pb, strata, resamples=resamples, seed=seed)
+    common = {"contrast": comparison, "rival": name_b, "scope": scope,
+              "report_seed": report_seed}
     rows.append(significance_row(
         comparison=comparison, test=TEST_BOOTSTRAP, statistic=boot["difference"],
         p_value=boot["p_value"], effect_size=boot["difference"],
@@ -493,9 +645,18 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
         kappa_difference=boot["kappa_difference"], kappa_ci_low=boot["kappa_ci_low"],
         kappa_ci_high=boot["kappa_ci_high"], discordant=boot["discordant"],
         resamples=boot["resamples"], bootstrap_seed=boot["seed"],
-        strata="class x direction", report_seed=report_seed,
+        strata="class x direction", family=FAMILY_PRIMARY, **common,
         information_note="with binary responses the bootstrap's information lies only "
                          "in the discordant subjects"))
+    rows.append(significance_row(
+        comparison=f"{comparison} (kappa)", test=TEST_KAPPA,
+        statistic=boot["kappa_difference"], p_value=boot["kappa_p_value"],
+        effect_size=boot["kappa_difference"],
+        effect_size_name=f"Cohen's kappa difference ({name_a} - {name_b})",
+        ci_low=boot["kappa_ci_low"], ci_high=boot["kappa_ci_high"], n=boot["n"],
+        hypothesis=hypothesis, experiment=experiment, discordant=boot["discordant"],
+        resamples=boot["resamples"], bootstrap_seed=boot["seed"],
+        strata="class x direction", family=FAMILY_SECONDARY, **common))
     try:
         dl = delong(labels, pa, pb)
         rows.append(significance_row(
@@ -504,13 +665,14 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
             effect_size_name=f"AUC difference ({name_a} - {name_b})",
             ci_low=dl["ci_low"], ci_high=dl["ci_high"], n=dl["n"],
             hypothesis=hypothesis, experiment=experiment, auc_a=dl["auc_a"],
-            auc_b=dl["auc_b"], report_seed=report_seed))
+            auc_b=dl["auc_b"], family=FAMILY_SECONDARY, **common))
     except StatisticsError as error:
         rows.append(significance_row(
             comparison=f"{comparison} (AUC)", test=TEST_DELONG, statistic=None, p_value=None,
             effect_size=None, effect_size_name=f"AUC difference ({name_a} - {name_b})",
             ci_low=None, ci_high=None, n=len(subjects), hypothesis=hypothesis,
-            experiment=experiment, not_computed=str(error)))
+            experiment=experiment, not_computed=str(error), family=FAMILY_SECONDARY,
+            **common))
     nb = nadeau_bengio(fold_differences(records_a, records_b), test_train_ratio)
     rows.append(significance_row(
         comparison=f"{comparison} (per-rotation)", test=TEST_NADEAU_BENGIO, statistic=nb["t"],
@@ -518,5 +680,5 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
         effect_size_name=f"mean per-rotation balanced accuracy difference ({name_a} - {name_b})",
         ci_low=nb["ci_low"], ci_high=nb["ci_high"], n=nb["n"], hypothesis=hypothesis,
         experiment=experiment, df=nb["df"], test_train_ratio=nb["test_train_ratio"],
-        report_seed=report_seed))
+        family=FAMILY_SECONDARY, **common))
     return rows
