@@ -115,10 +115,20 @@ def test_uda_alpha_decays_from_tau_h_to_tau_l():
     assert losses.mmd_weight_schedule(0, 1) == 1.0
 
 
-def test_uda_beta_is_eq9_step():
-    assert [losses.cmmd_weight(x) for x in (0.05, 0.1, 0.12, 0.15, 0.2)] == [1, 1, .5, 0, 0]
-    with pytest.raises(ValueError):
-        losses.cmmd_weight(float("nan"))
+def test_uda_confidence_thresholds_are_sorted_so_the_schedule_never_inverts():
+    assert training.ordered_thresholds(params(confidenceA=0.9, confidenceB=0.6)) == (0.6, 0.9)
+    assert training.ordered_thresholds(params(confidenceA=0.6, confidenceB=0.9)) == (0.6, 0.9)
+    runs = []
+    for a, b in ((0.9, 0.6), (0.6, 0.9)):
+        model, source, _, target, valid = fixture()
+        out = training.adapt(model, source, target, valid,
+                             params(confidenceA=a, confidenceB=b), schedule(10), seed=13)
+        by_stage = {h["stage"]: h["threshold"] for h in out["history"]}
+        assert by_stage == {0: 0.0, 1: 0.6, 2: 0.9, 3: 1.0}
+        assert out["checkpoint"]["thresholds"] == {"middle": 0.6, "late": 0.9}
+        runs.append([h["threshold"] for h in out["history"]])
+    assert runs[0] == runs[1]
+    assert all(x <= y for x, y in zip(runs[0], runs[0][1:]))
 
 
 def test_uda_degenerate_terms_are_finite():
@@ -199,7 +209,7 @@ def test_uda_search_hook_uses_common_checkpoint(registries):
     assert set(space) == set(params())
     assert space["mmdWeight"] == space["cmmdWeight"] == search.LOSS_WEIGHT
     assert space["kernelMultiplier"] == search.KERNEL_MULTIPLIER
-    assert space["confidenceMiddle"] == space["confidenceLate"] == search.CONFIDENCE_THRESHOLD
+    assert space["confidenceA"] == space["confidenceB"] == search.CONFIDENCE_THRESHOLD
     assert search.PHASE_ONE_GROUP_OF["UDA-DDA"] == "common"
     assert search.PHASE_TWO_TRAINERS["UDA-DDA"] is training.train_phase_two
     model, s, sv, t, tv = fixture()
@@ -210,7 +220,8 @@ def test_uda_search_hook_uses_common_checkpoint(registries):
         "seed": 13, "partition_sha256": "hash", "hyper": {}})
     trained = search.train_phase_two("UDA-DDA", data, 0, 13, record, params(), schedule())
     assert isinstance(trained["model"], mil_wrapper.CommonMILModel)
-    assert trained["result"]["checkpoint"]["hyper"]["confidenceLate"] == 0.75
+    assert trained["result"]["checkpoint"]["hyper"]["confidenceB"] == 0.75
+    assert trained["result"]["checkpoint"]["thresholds"] == {"middle": 0.5, "late": 0.75}
     for wrong in ({"rotation": 1}, {"name": "AdaptMIL"}, {"partition_sha256": "other"}):
         with pytest.raises(search.SearchError, match="checkpoint"):
             training.train_phase_two(data, 0, 13, (record[0], {**record[1], **wrong}),
@@ -238,7 +249,7 @@ def test_uda_selection_restores_best_epoch(monkeypatch):
 
 @pytest.mark.parametrize("change", [{"lr2": -1}, {"wd2": -1}, {"mmdWeight": -1},
                                     {"cmmdWeight": float("nan")}, {"kernelMultiplier": 0},
-                                    {"confidenceMiddle": 1.5}, {"confidenceLate": -0.1}])
+                                    {"confidenceA": 1.5}, {"confidenceB": -0.1}])
 def test_uda_invalid_inputs_fail_closed(change):
     with pytest.raises(ValueError):
         training.check_params(params(**change))
@@ -260,10 +271,8 @@ def test_uda_objective_weights_are_effective():
     torch.manual_seed(7)
     p = params(mmdWeight=2.0, cmmdWeight=3.0)
     terms = training.adaptation_step(model, source, target, p, 0.5, 0.0, torch.device("cpu"))
-    expected = (terms["source_ce"] + 2.0 * 0.5 * terms["mmd"]
-                + 3.0 * terms["beta"] * terms["cmmd"])
+    expected = terms["source_ce"] + 2.0 * 0.5 * terms["mmd"] + 3.0 * terms["cmmd"]
     torch.testing.assert_close(terms["loss"], expected)
-    assert terms["beta"] == losses.cmmd_weight(float(terms["source_ce"]))
     assert terms["selected"] == 1.0 and terms["cmmd"] > 0
     assert not terms["source_ce"].requires_grad
     terms["loss"].backward()
@@ -271,15 +280,24 @@ def test_uda_objective_weights_are_effective():
                for p in model.target_trunk.parameters())
 
 
-def test_uda_beta_reads_the_frozen_source_ce(monkeypatch):
-    model, source, _, target, _ = fixture()
+def test_uda_cmmd_has_no_source_loss_gate(monkeypatch):
+    # Plan v42 Sec. 7.7: the Eq. 9 gate is gone, CMMD weighs cmmdWeight from phase-2 start.
+    assert not hasattr(losses, "cmmd_weight") and not hasattr(losses, "RHO")
+    assert "beta" not in training.TERMS
+    model, source, _, target, valid = fixture()
     two_phase.bridge(model)
-    seen = []
-    monkeypatch.setattr(losses, "cmmd_weight", lambda ce: seen.append(ce) or 1.0)
-    p = params(cmmdWeight=3.0)
-    on = training.adaptation_step(model, source, target, p, 0.5, 0.0, torch.device("cpu"))
-    assert seen == [pytest.approx(float(on["source_ce"]))] and on["beta"] == 1.0
+    # A source loss far above the paper's rho_1 = 0.15 would have closed the gate.
+    monkeypatch.setattr(losses, "source_cross_entropy",
+                        lambda p, y: torch.tensor(5.0, dtype=torch.float64))
+    on = training.adaptation_step(model, source, target, params(cmmdWeight=3.0), 0.5, 0.0,
+                                  torch.device("cpu"))
+    assert "beta" not in on and on["cmmd"] > 0
     torch.testing.assert_close(on["loss"], on["source_ce"] + 0.5 * on["mmd"] + 3.0 * on["cmmd"])
+    monkeypatch.undo()
+    model, source, _, target, valid = fixture()
+    out = training.adapt(model, source, target, valid, params(), schedule(), seed=13)
+    first = out["history"][0]
+    assert first["stage"] == 0 and first["cmmd"] > 0 and "beta" not in first
 
 
 def test_uda_package_is_a_controlled_variant_and_import_registers_nothing(registries):
@@ -294,7 +312,7 @@ def test_uda_package_is_a_controlled_variant_and_import_registers_nothing(regist
     for module in (uda_dda, training, losses, importlib.import_module(
             "MIL_CREDA_EEG.comparators.uda_dda.smoke")):
         assert module.__provenance__["revision"] == (
-            "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md")
+            "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md")
 
 
 def test_uda_synthetic_smoke_executes(capsys):

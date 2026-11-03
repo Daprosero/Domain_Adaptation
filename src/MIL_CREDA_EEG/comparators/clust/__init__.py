@@ -13,11 +13,11 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from .training import NAME, PARAMETERS, adapt_target_phase, restore_model
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_search_reuses_common_checkpoint_and_never_reads_source_data",
-                   "clust_registration_is_explicit_and_uses_generic_spaces",
+                   "clust_registration_is_explicit_and_draws_the_ema_on_its_own_axis",
                    "clust_store_checks_comparator_code_version"],
 }
 
@@ -46,15 +46,16 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
 
 
 def register():
-    """Explicit registration. EMA uses allowed bounded [.5,.95] generic axis.
+    """Explicit registration (plan v42 Sec. 7.7 CLUST row).
 
-    The shared hook permits no arbitrary EMA distribution; this range excludes
-    the paper's .999. REPLICATION.md discloses the controlled-search restriction.
+    Weights and pseudo-label confidence follow the generic rule; the teacher
+    EMA momentum has its own axis, rho in [0.9, 0.999] with 1 - rho drawn
+    log-uniformly (`search.EMA_MOMENTUM_COMPLEMENT`); the trainer converts.
     """
     search.register_phase_two(NAME, {
         "clusteringWeight": search.LOSS_WEIGHT, "consistencyWeight": search.LOSS_WEIGHT,
         "informationWeight": search.LOSS_WEIGHT, "confidence": search.CONFIDENCE_THRESHOLD,
-        "emaMomentum": search.CONFIDENCE_THRESHOLD}, train_phase_two)
+        "emaMomentumComplement": search.EMA_MOMENTUM_COMPLEMENT}, train_phase_two)
 
 
 def code_version():

@@ -2,8 +2,9 @@
 
 Tang et al., Neurocomputing 658 (2025) 131715: marginal MMD (Eqs. 2-5),
 conditional CMMD (Eq. 6), the dynamic confidence threshold (Eq. 7), the
-source cross-entropy (Eq. 8), the CMMD weight beta (Eq. 9) and the MMD weight
-schedule from tau_h to tau_l (Sec. 3.4). Every epoch boundary of the paper is
+source cross-entropy (Eq. 8) and the MMD weight schedule from tau_h to tau_l
+(Sec. 3.4). The CMMD weight beta of Eq. 9, a gate on the source loss, is not
+implemented: plan v42 Sec. 7.7 removes it. Every epoch boundary of the paper is
 read on its own 100-epoch scale and rescaled to the phase-2 budget (plan 7.4).
 """
 from __future__ import annotations
@@ -14,17 +15,15 @@ import torch
 from torch.nn import functional as F
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["7.1", "7.2", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["uda_mmd_is_eq5_and_the_eq4_trace_form", "uda_cmmd_is_eq6_per_class",
                    "uda_kernel_is_gaussian_with_median_bandwidth",
                    "uda_confidence_schedule_is_eq7_rescaled", "uda_alpha_decays_from_tau_h_to_tau_l",
-                   "uda_beta_is_eq9_step", "uda_degenerate_terms_are_finite"],
+                   "uda_degenerate_terms_are_finite"],
 }
 
-#: Sec. 4.2 / code main.py: rho_0, rho_1 of Eq. 9.
-RHO = (0.1, 0.15)
 #: Sec. 3.4 tau_h > tau_l; Sec. 4.2 values {1, 0.01}, ordering resolved in REPLICATION.md.
 TAU_HIGH, TAU_LOW = 1.0, 0.01
 #: Sec. 3.3 (Eq. 7 prose) stage boundaries on the paper's 100-epoch run: [0,10), [10,40), [40,85], >85.
@@ -141,14 +140,6 @@ def mmd_weight_schedule(epoch: int, epochs: int, high: float = TAU_HIGH,
     if p >= end:
         return low
     return high * (low / high) ** ((p - start) / (end - start))
-
-
-def cmmd_weight(source_ce: float, rho: tuple = RHO) -> float:
-    """Eq. 9: beta = e(rho0 - L) + 1/2 e(L - rho0) e(rho1 - L); ties as the code (L <= rho0 -> 1)."""
-    if not math.isfinite(source_ce):
-        raise ValueError("source cross-entropy must be finite")
-    low, high = rho
-    return 1.0 if source_ce <= low else 0.5 if source_ce < high else 0.0
 
 
 def source_cross_entropy(probability: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:

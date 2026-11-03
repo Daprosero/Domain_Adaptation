@@ -1,12 +1,17 @@
 """CASUAL Algorithm 1 under BALLADEER's frozen common-head protocol.
 
-No import-time registration. The parent calls register(radius_distribution)
-only after the operator supplies the missing VAT-radius search range.
+No import-time registration. register() wires the production search: the
+plan v42 Sec. 7.7 CASUAL row draws the VAT radius as a fraction of the typical
+window L2 norm, log-uniform in [0.01, 1] (`search.VAT_RADIUS_FRACTION`). The
+plan does not say how "typical" is measured; here it is the median L2 norm of
+the target-training windows of the rotation, measured once at the start of
+phase 2 (`typical_window_norm`), an unspecified choice (REPLICATION.md).
 """
 from __future__ import annotations
 
 import hashlib
 import math
+import statistics
 from pathlib import Path
 from collections.abc import Mapping
 
@@ -20,19 +25,21 @@ from .losses import (adaptation_objective, classification_loss, conditional_entr
                      virtual_adversarial_loss)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["casual_alternation_updates_only_allowed_parameters",
                    "casual_checkpoint_identity_is_checked",
                    "casual_selection_runs_full_budget_and_keeps_both_states",
                    "casual_training_does_not_read_target_labels",
-                   "casual_search_hook_uses_common_group_and_explicit_radius",
+                   "casual_search_hook_uses_common_group_and_the_radius_fraction_axis",
+                   "casual_vat_radius_is_the_fraction_of_the_median_target_training_window_norm",
                    "casual_models_round_trip_with_comparator_digest"],
 }
 
 STRATEGY = "CASUAL"
-PARAM_KEYS = {"lr2", "wd2", "lambda_align", "lambda_entropy", "lambda_vat", "vat_radius"}
+PARAM_KEYS = {"lr2", "wd2", "lambda_align", "lambda_entropy", "lambda_vat",
+              "vat_radius_fraction"}
 
 
 def check_params(params):
@@ -42,6 +49,19 @@ def check_params(params):
         if not math.isfinite(float(v)) or (v < 0 if k == "wd2" else v <= 0):
             raise ValueError(f"invalid {k}: {v}")
     return dict(params)
+
+
+def typical_window_norm(bags):
+    """The typical window L2 norm of Sec. 7.7: median over every window of `bags`.
+
+    Each window's norm is taken over all its (channels, samples); the median of
+    an even count is the mean of the two middle values. Reads windows only.
+    """
+    norms = [float(torch.linalg.vector_norm(w.detach().to(torch.float64)))
+             for b in bags for w in b.windows]
+    if not norms:
+        raise ValueError("the typical window norm needs at least one window")
+    return statistics.median(norms)
 
 
 class DomainDiscriminator(nn.Sequential):
@@ -63,11 +83,12 @@ def _features(model, windows, domain):
 
 
 def alternating_step(model, discriminator, source, target, params, target_optimizer,
-                     discriminator_optimizer, device="cpu"):
+                     discriminator_optimizer, device="cpu", *, vat_radius):
     """Algorithm 1: Eq.17 on detached joints, then Eq.16 through frozen phi.
 
     Target BagTensor.label is deliberately never accessed. Each source label
     supervises one bag, not its windows. Source CE has no target gradient.
+    `vat_radius` is absolute: the drawn fraction times the typical window norm.
     """
     params = check_params(params)
     two_phase.set_phase_two_modes(model)
@@ -89,7 +110,7 @@ def alternating_step(model, discriminator, source, target, params, target_optimi
         # Recompute scores after discriminator step, keeping the target feature graph.
         alignment = support_alignment(discriminator(js).sigmoid(), discriminator(jt).sigmoid())
         entropy = conditional_entropy(pt)
-        vat = virtual_adversarial_loss(model, tw, params["vat_radius"])
+        vat = virtual_adversarial_loss(model, tw, vat_radius)
         ce = classification_loss(ps, torch.tensor([b.label for b in source], device=device))
         objective = adaptation_objective(ce, alignment, entropy, vat,
                                         **{k: params[k] for k in ("lambda_align", "lambda_entropy", "lambda_vat")})
@@ -124,6 +145,8 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     device = torch.device(device)
     torch.manual_seed(seed)
     generator = torch.Generator().manual_seed(seed)
+    typical = typical_window_norm(target_train)
+    vat_radius = params["vat_radius_fraction"] * typical
     discriminator = DomainDiscriminator(model.source_trunk.output_dim * model.classes).to(device)
     optimizer = torch.optim.Adam(model.target_trunk.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
     dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
@@ -136,12 +159,13 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
             s = source_batches[step % len(source_batches)]
             totals.append(alternating_step(model, discriminator, [source_train[i] for i in s],
                                           [target_train[i] for i in batch], params, optimizer,
-                                          dis_optimizer, device))
+                                          dis_optimizer, device, vat_radius=vat_radius))
         probabilities = two_phase.evaluate(model, target_valid, "target", device)
         ba = two_phase.balanced_accuracy([b.label for b in target_valid], probabilities.argmax(1).tolist())
         free = two_phase.label_free_score(probabilities)
         row = {"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
                "model": "CASUAL:phase2", "val_balanced_accuracy": ba, "label_free_score": free,
+               "typical_window_norm": typical, "vat_radius": vat_radius,
                **{k: sum(r[k] for r in totals) / len(totals) for k in totals[0]}}
         history.append(row)
         if selected is None or ba > selected["valid_balanced_accuracy"]:
@@ -186,16 +210,17 @@ def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Map
             "channels": channels, "layer_copy": joint["layer_copy"]}
 
 
-def register(radius_distribution):
-    """Explicit integration: radius range is an operator input, never guessed here.
+def register():
+    """Explicit integration of the production search (plan v42 Sec. 7.7 CASUAL row).
 
-    The shared registration hook admits only its generic distributions. An
-    incompatible range is refused by that hook, not silently coerced.
+    Alignment, entropy and VAT weights follow the generic rule; the VAT radius
+    is drawn on its own axis as a fraction of the typical window norm.
     """
     search.register_phase_two(STRATEGY, {"lambda_align": search.LOSS_WEIGHT,
                               "lambda_entropy": search.LOSS_WEIGHT,
                               "lambda_vat": search.LOSS_WEIGHT,
-                              "vat_radius": radius_distribution}, train_phase_two)
+                              "vat_radius_fraction": search.VAT_RADIUS_FRACTION},
+                              train_phase_two)
 
 
 def code_digest():

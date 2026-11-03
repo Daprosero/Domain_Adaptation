@@ -8,7 +8,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel, COMMON_PHASE_ONE_FIXED
 from .training import adapt_target_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["7.2", "7.3", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["casual_smoke_runs_common_phase_one_and_cpu_adaptation"],
@@ -35,7 +35,7 @@ def run(seed=20261102):
     two_phase.bridge(model)
     result = adapt_target_phase(model, source, target, target_valid,
         dict(lr2=0.001, wd2=1e-5, lambda_align=1., lambda_entropy=0.1,
-             lambda_vat=0.1, vat_radius=0.5), schedule, seed=seed, device=device)
+             lambda_vat=0.1, vat_radius_fraction=0.5), schedule, seed=seed, device=device)
     return {"data": "seeded synthetic; no BALLADEER data present in worktree",
             "device": "cpu", "seed": seed, "source_shape": [4, 3, 29, 512],
             "target_shape": [4, 3, 14, 512], "phase1_epochs": phase1["epochs"],
@@ -43,6 +43,8 @@ def run(seed=20261102):
             "phase2_epochs": result["epochs"],
             "phase2_loss": [r["loss"] for r in result["history"]],
             "phase2_vat": [r["vat"] for r in result["history"]],
+            "typical_window_norm": result["history"][0]["typical_window_norm"],
+            "vat_radius": result["history"][0]["vat_radius"],
             "best_epoch": result["best_epoch"]}
 
 

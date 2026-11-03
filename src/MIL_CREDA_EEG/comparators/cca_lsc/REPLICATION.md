@@ -7,6 +7,12 @@ https://github.com/ysxcj-hub/CCA-LSC, observed HEAD
 `4c78f079026cfce7b55b0bf36d45251f3d134ed7`. No upstream implementation bytes
 are copied into this target; `third_party/cca_lsc/` is not populated.
 
+Checked 2026-11-03 against plan v42 §7.1: its CCA-LSC row and canonical table
+record the same route («Reimplementado desde el artículo»; repository without a
+license, read only to audit, at commit
+`4c78f079026cfce7b55b0bf36d45251f3d134ed7`), so this route row stands. The
+modules of this package were not changed by v42 and stay bound to v40.
+
 | Place searched | Answer |
 | --- | --- |
 | Ingested paper abstract/code statement and arXiv abstract https://arxiv.org/abs/2412.20337 | Authors link ysxcj-hub/CCA-LSC. |

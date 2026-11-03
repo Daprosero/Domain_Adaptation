@@ -1,6 +1,6 @@
 """CS+CCS controlled variant: common phase-1 checkpoint -> target-only phase 2 (Eq. 90).
 
-Plan v40 Secs. 7.2-7.4: the bag representation of the common MIL wrapper is
+Plan v42 Secs. 7.2-7.4 and 7.7: the bag representation of the common MIL wrapper is
 the paper's z, the common head's prediction is its y_hat, and only the target
 trunk trains. Eq. 90, L = L_CE + lambda D_CS + beta D_CCS, keeps its source
 cross-entropy as a summand computed on frozen source bags: with the source
@@ -21,13 +21,14 @@ from MIL_CREDA_EEG import eegnet, mil_wrapper, model_store, search, two_phase
 from .divergences import ccs_divergence, cs_divergence, median_bandwidth, normalise
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
         "cs_ccs_phase_two_freezes_common_predictor",
         "cs_ccs_target_training_labels_are_unread",
         "cs_ccs_bandwidths_are_fixed_from_training_bags_at_phase_two_start",
+        "cs_ccs_prediction_kernel_is_fixed_at_sigma_one_on_normalised_predictions",
         "cs_ccs_objective_is_eq_90_with_frozen_source_ce",
         "cs_ccs_selection_restores_best_epoch_and_keeps_secondary",
         "cs_ccs_invalid_inputs_fail_closed",
@@ -39,9 +40,14 @@ __provenance__ = {
 }
 
 NAME = "CS+CCS"
-#: Sec. 4.2 / C.5: lambda = beta = 1. Multiplier 1 x median replaces sigma = 1 (plan 7.7).
-DEFAULTS = {"csWeight": 1.0, "ccsWeight": 1.0, "zKernelMultiplier": 1.0,
-            "yKernelMultiplier": 1.0}
+#: Sec. 4.2 / C.5: lambda = beta = 1. Representation kernel: multiplier 1 x median
+#: replaces sigma = 1 (plan v42 Sec. 7.7); the prediction kernel keeps the paper's
+#: sigma = 1 (`PREDICTION_SIGMA`) and is not searched.
+DEFAULTS = {"csWeight": 1.0, "ccsWeight": 1.0, "zKernelMultiplier": 1.0}
+#: Plan v42 Sec. 7.7 and the paper's Sec. 4.2: the prediction kernel is fixed at
+#: sigma = 1 on the L2-normalised softmax predictions (the median rule gives a
+#: near-zero width on the near-uniform early phase-2 predictions).
+PREDICTION_SIGMA = 1.0
 #: Sec. 4.2 "SGD optimizer"; momentum unspecified by the paper (upstream script default).
 MOMENTUM = 0.9
 HISTORY_KEYS = ("loss", "source_ce", "cs", "ccs")
@@ -58,10 +64,9 @@ def check_params(params: Mapping) -> dict:
         raise ValueError("positive learning rate and nonnegative weight decay required")
     if p["csWeight"] < 0 or p["ccsWeight"] < 0:
         raise ValueError("divergence weights must be nonnegative")
-    for k in ("zKernelMultiplier", "yKernelMultiplier"):
-        if p[k] not in search.KERNEL_MULTIPLIER.choices:
-            raise ValueError(f"{k} must follow the shared multiplier rule "
-                             f"{search.KERNEL_MULTIPLIER.choices}")
+    if p["zKernelMultiplier"] not in search.KERNEL_MULTIPLIER.choices:
+        raise ValueError(f"zKernelMultiplier must follow the shared multiplier rule "
+                         f"{search.KERNEL_MULTIPLIER.choices}")
     return p
 
 
@@ -86,7 +91,8 @@ def kernel_inputs(model, bags: Sequence[two_phase.BagTensor], domain: str, devic
 def phase_two_bandwidths(model, source_train, target_train, params, device) -> dict:
     """Fixed once after the bridge from the TRAINING bags of both sides (windows only).
 
-    Each bag passes alone in eval mode (BatchNorm statistics untouched); the
+    The representation width is the median rule; the prediction width is the
+    fixed `PREDICTION_SIGMA` (plan v42 Sec. 7.7). Each bag passes alone in eval mode (BatchNorm statistics untouched); the
     modes are restored. Target validation bags are not read.
     """
     modes = {m: m.training for m in model.modules()}
@@ -99,9 +105,8 @@ def phase_two_bandwidths(model, source_train, target_train, params, device) -> d
         for m, mode in modes.items():
             m.train(mode)
     z = torch.cat([r[0] for r in rows])
-    y = torch.cat([r[1] for r in rows])
     return {"zBandwidth": median_bandwidth(z, params["zKernelMultiplier"]),
-            "yBandwidth": median_bandwidth(y, params["yKernelMultiplier"])}
+            "yBandwidth": PREDICTION_SIGMA}
 
 
 def cs_ccs_objective(source_ce, cs, ccs, cs_weight: float, ccs_weight: float):
@@ -229,11 +234,13 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
 
 
 def register() -> None:
-    """Explicit opt-in; importing this package never changes the search registries."""
+    """Explicit opt-in; importing this package never changes the search registries.
+
+    Plan v42 Sec. 7.7: one searched kernel axis, the representations'.
+    """
     search.register_phase_two(NAME, {"csWeight": search.LOSS_WEIGHT,
                                      "ccsWeight": search.LOSS_WEIGHT,
-                                     "zKernelMultiplier": search.KERNEL_MULTIPLIER,
-                                     "yKernelMultiplier": search.KERNEL_MULTIPLIER},
+                                     "zKernelMultiplier": search.KERNEL_MULTIPLIER},
                               train_phase_two)
 
 

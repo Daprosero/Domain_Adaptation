@@ -18,7 +18,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from . import losses
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["4.5", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_adaptation_never_reads_training_labels_or_source_bags",
@@ -26,11 +26,12 @@ __provenance__ = {
                    "clust_teacher_uses_exact_ema_and_never_predicts_diagnosis",
                    "clust_epoch_selection_restores_both_rules_and_dashboard_history",
                    "clust_rejects_invalid_parameters_and_empty_inputs",
-                   "clust_auxiliary_state_round_trips"],
+                   "clust_auxiliary_state_round_trips",
+                   "clust_teacher_momentum_is_one_minus_the_drawn_complement"],
 }
 NAME = "CLUST — variante source-free"
 PARAMETERS = ("lr2", "wd2", "clusteringWeight", "consistencyWeight", "informationWeight",
-              "confidence", "emaMomentum")
+              "confidence", "emaMomentumComplement")
 
 
 def check_parameters(params):
@@ -41,9 +42,15 @@ def check_parameters(params):
         raise ValueError("CLUST parameters must be finite")
     if out["lr2"] <= 0 or any(out[k] < 0 for k in PARAMETERS[1:5]):
         raise ValueError("positive learning rate and nonnegative decay/weights required")
-    if not .5 <= out["confidence"] <= 1 or not 0 <= out["emaMomentum"] < 1:
-        raise ValueError("confidence in [.5,1] and EMA momentum in [0,1) required")
+    if not .5 <= out["confidence"] <= 1 or not 0 < out["emaMomentumComplement"] <= 1:
+        raise ValueError("confidence in [.5,1] and EMA momentum complement 1 - rho in (0,1] "
+                         "required")
     return out
+
+
+def ema_momentum(params):
+    """Plan v42 Sec. 7.7: the search draws 1 - rho log-uniformly; the teacher uses rho."""
+    return 1.0 - float(params["emaMomentumComplement"])
 
 
 def clone_state(module):
@@ -132,6 +139,7 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
     device = torch.device(device)
     model.to(device)
     model.clust_auxiliary = Auxiliary(model).to(device)
+    momentum = ema_momentum(params)
     optimizer = torch.optim.Adam(model.target_trunk.parameters(), lr=params["lr2"],
                                  weight_decay=params["wd2"])
     history, seconds = [], []
@@ -155,8 +163,7 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
                 raise FloatingPointError("nonfinite loss or missing/nonfinite target gradient")
             optimizer.step()
             eegnet.apply_max_norm(model.target_trunk)
-            model.clust_auxiliary.update(model, step["centroids"], step["active"],
-                                         params["emaMomentum"])
+            model.clust_auxiliary.update(model, step["centroids"], step["active"], momentum)
             for k in sums:
                 sums[k] += len(batch) * float(step["objective" if k == "loss" else k].detach())
             class_sum += len(batch) * step["per_class"]

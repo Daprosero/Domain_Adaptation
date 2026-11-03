@@ -24,7 +24,7 @@ def seeded():
 
 def params():
     return dict(lr2=.001, wd2=.0001, clusteringWeight=1., consistencyWeight=1.,
-                informationWeight=1., confidence=.5, emaMomentum=.9)
+                informationWeight=1., confidence=.5, emaMomentumComplement=.1)
 
 
 def schedule():
@@ -188,6 +188,19 @@ def test_clust_teacher_uses_exact_ema_and_never_predicts_diagnosis():
     assert torch.equal(m.predict(inputs, "target"), expected)
 
 
+def test_clust_teacher_momentum_is_one_minus_the_drawn_complement(monkeypatch):
+    seen = []
+    real = training.Auxiliary.update
+    monkeypatch.setattr(training.Auxiliary, "update",
+                        lambda self, m, c, a, momentum: seen.append(momentum)
+                        or real(self, m, c, a, momentum))
+    p = {**params(), "emaMomentumComplement": 1e-3}
+    training.adapt_target_phase(model(), bags(), bags("v"), p, schedule(),
+                                torch.Generator().manual_seed(17))
+    assert seen and all(m == pytest.approx(0.999) for m in seen)
+    assert training.ema_momentum({"emaMomentumComplement": 0.1}) == pytest.approx(0.9)
+
+
 def test_clust_epoch_selection_restores_both_rules_and_dashboard_history(monkeypatch):
     m = model()
     accuracies, free = iter([.9, .2]), iter([.1, .8])
@@ -206,7 +219,8 @@ def test_clust_epoch_selection_restores_both_rules_and_dashboard_history(monkeyp
 
 
 @pytest.mark.parametrize("key,value", [("lr2", 0), ("wd2", -1), ("confidence", .1),
-                                       ("emaMomentum", 1), ("informationWeight", float("nan"))])
+                                       ("emaMomentumComplement", 0), ("emaMomentumComplement", 1.5),
+                                       ("informationWeight", float("nan"))])
 def test_clust_rejects_invalid_parameters_and_empty_inputs(key, value):
     p = params(); p[key] = value
     with pytest.raises(ValueError):
@@ -223,13 +237,17 @@ def test_clust_auxiliary_state_round_trips():
     assert all(torch.equal(v, restored.state_dict()[k]) for k, v in m.state_dict().items())
 
 
-def test_clust_registration_is_explicit_and_uses_generic_spaces():
+def test_clust_registration_is_explicit_and_draws_the_ema_on_its_own_axis():
     old_trainers, old_extra = dict(search.PHASE_TWO_TRAINERS), dict(search.PHASE_TWO_EXTRA)
     try:
         clust.register()
         space = search.phase_two_space(training.NAME)
         assert set(space) == set(training.PARAMETERS)
-        assert space["emaMomentum"] == search.CONFIDENCE_THRESHOLD
+        assert "emaMomentum" not in space
+        assert space["emaMomentumComplement"] == search.EMA_MOMENTUM_COMPLEMENT
+        assert space["confidence"] == search.CONFIDENCE_THRESHOLD
+        for k in ("clusteringWeight", "consistencyWeight", "informationWeight"):
+            assert space[k] == search.LOSS_WEIGHT
         assert search.PHASE_ONE_GROUP_OF[training.NAME] == "common"
     finally:
         search.PHASE_TWO_TRAINERS.clear(); search.PHASE_TWO_TRAINERS.update(old_trainers)

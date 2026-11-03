@@ -5,7 +5,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from .training import adapt_target_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["7.3"], "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_smoke_uses_seeded_balladeer_shapes_on_cpu"],
 }
@@ -29,7 +29,7 @@ def run(seed=17):
     joint = two_phase.bridge(model)
     params = {"lr2": .001, "wd2": .0001, "clusteringWeight": 1,
               "consistencyWeight": 1, "informationWeight": 1,
-              "confidence": .6, "emaMomentum": .999}
+              "confidence": .6, "emaMomentumComplement": .001}
     result = adapt_target_phase(model, bags("target-train", 14), bags("target-valid", 14),
                                 params, schedule, generator, seed=seed)
     output = {"material": "seeded synthetic; no worktree toy data", "seed": seed,

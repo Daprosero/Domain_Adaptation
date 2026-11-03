@@ -1,6 +1,6 @@
 """The Optuna searches of both phases, per transfer.
 
-Experiments plan v40, Secs. 4.5, 7.3 and 7.7. Phase 1 has four studies per
+Experiments plan v42, Secs. 4.5, 7.3 and 7.7. Phase 1 has four studies per
 transfer, one per pre-training group (`PHASE_ONE_SPACES`: the common group of
 the six non-MIL comparators, AdaptMIL, HASD and MIL-CREDA); phase 2 has one
 study per strategy per transfer. Every study gets the same budget: `N_TRIALS`
@@ -12,7 +12,7 @@ Sec. 7.7; nothing of the retired toy-set runner is imported.
 
 **A trial (Sec. 4.5).** Each configuration is trained from scratch in all four
 rotations of the frozen partition with ONE training seed, `SEARCH_SEED`,
-distinct from the three report seeds (`REPORT_SEEDS`), so the search is not
+distinct from the single report seed (`REPORT_SEEDS`, plan v42 Sec. 4.6), so the search is not
 tuned on the seeds that later measure it. The trial's value is the mean minus
 the standard deviation over the four rotations (`robust`):
 
@@ -43,7 +43,13 @@ refuses a foreign partition). MIL-CREDA's sigma is that checkpoint's sigma
 `sigmaMultiplier` in {0.5, 0.75, 1, 1.5}. The comparators' phase-2 spaces
 follow one generic rule (`LOSS_WEIGHT`, `KERNEL_MULTIPLIER`,
 `CONFIDENCE_THRESHOLD`), registered per strategy by its own unit through
-`register_phase_two`; none is wired here, and AdaptMIL and HASD have no
+`register_phase_two`. Sec. 7.7 adds two comparator-specific axes, each admitted
+only for its own strategy (`OWN_AXES`): CLUST's teacher EMA momentum rho in
+[0.9, 0.999] with 1 - rho log-uniform, drawn as `EMA_MOMENTUM_COMPLEMENT`
+(1 - rho in [1e-3, 1e-1], log) and converted by the CLUST trainer; and
+CASUAL's VAT radius as a fraction of the typical window L2 norm, log-uniform
+in [0.01, 1] (`VAT_RADIUS_FRACTION`), scaled by the CASUAL trainer. None is
+wired here, and AdaptMIL and HASD have no
 phase-1 architecture registered yet (`model_store.BUILDERS`), so their studies
 refuse before any storage is created.
 
@@ -54,7 +60,7 @@ already exists is refused: no budget is silently extended.
 
 **Implementation choices the plan does not fix.** The deviation is the sample
 standard deviation (`SD_DDOF` = 1) over the four rotations. The seeds:
-`SEARCH_SEED` = 0, `REPORT_SEEDS` = (1, 2, 3), `SAMPLER_SEED` = 20261102. Epoch
+`SEARCH_SEED` = 0, `REPORT_SEEDS` = (1,), `SAMPLER_SEED` = 20261102. Epoch
 caps and patience (`epochs1`, `patience1`, `epochs2`) and `bagsPerStep` are
 inputs with no default: the pilot fixes them (Sec. 7.6). Groups other than
 MIL-CREDA fix `attentionGamma` = 0, `attentionTemperature` = 1 and
@@ -82,7 +88,7 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, mil_wrapper, model_store, partition, two_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["4.5", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -90,6 +96,7 @@ __provenance__ = {
         "the_search_seed_is_not_a_report_seed",
         "the_spaces_are_exactly_those_of_sec_7_7",
         "no_comparator_phase_two_is_wired_and_the_hook_takes_only_the_generic_rule",
+        "the_comparator_specific_axes_are_admitted_only_for_their_own_strategy",
         "epoch_caps_and_patience_have_no_default",
         "the_objective_is_mean_minus_sd_over_all_four_rotations",
         "the_search_never_loads_a_test_fold_bag",
@@ -104,9 +111,9 @@ __provenance__ = {
 #: Sec. 7.7: 20 trials per study, GPSampler with a fixed seed, no pruning.
 N_TRIALS = 20
 SAMPLER_SEED = 20261102
-#: Sec. 7.7: one search training seed, distinct from the three report seeds.
+#: Sec. 7.7: one search training seed, distinct from the single report seed (Sec. 4.6).
 SEARCH_SEED = 0
-REPORT_SEEDS = (1, 2, 3)
+REPORT_SEEDS = (1,)
 #: Sec. 4.5: mean minus the (sample) standard deviation over the rotations.
 SD_DDOF = 1
 DEFAULT_ROOT = bag_data.REPOSITORY / "MIL-CREDA"
@@ -123,6 +130,16 @@ LOSS_WEIGHT = FloatDistribution(1e-3, 10.0, log=True)
 KERNEL_MULTIPLIER = CategoricalDistribution((0.5, 0.75, 1.0, 1.5))
 CONFIDENCE_THRESHOLD = FloatDistribution(0.5, 0.95)
 GENERIC_RULE = (LOSS_WEIGHT, KERNEL_MULTIPLIER, CONFIDENCE_THRESHOLD)
+#: Sec. 7.7, CLUST: the teacher EMA momentum rho in [0.9, 0.999] with 1 - rho
+#: log-uniform; the sampler draws 1 - rho and the CLUST trainer converts.
+EMA_MOMENTUM_COMPLEMENT = FloatDistribution(1e-3, 1e-1, log=True)
+#: Sec. 7.7, CASUAL: the VAT radius as a fraction of the typical window L2 norm.
+VAT_RADIUS_FRACTION = FloatDistribution(0.01, 1.0, log=True)
+#: Strategy -> the axes outside the generic rule that Sec. 7.7 assigns to it alone.
+OWN_AXES: dict[str, tuple[BaseDistribution, ...]] = {
+    "CLUST — variante source-free": (EMA_MOMENTUM_COMPLEMENT,),
+    "CASUAL": (VAT_RADIUS_FRACTION,),
+}
 
 _SHARED_PHASE_ONE = {"lr1": LR1, "wd1": WEIGHT_DECAY}
 PHASE_ONE_SPACES: dict[str, dict[str, BaseDistribution]] = {
@@ -230,7 +247,8 @@ def phase_two_space(strategy: str) -> dict[str, BaseDistribution]:
 
 def register_phase_two(strategy: str, extra: Mapping[str, BaseDistribution],
                        trainer: Callable) -> None:
-    """Wire a comparator's phase 2: its own parameters under the generic rule only.
+    """Wire a comparator's phase 2: its own parameters under the generic rule, plus
+    only the Sec. 7.7 axes `OWN_AXES` assigns to this strategy.
 
     `trainer(data, rotation, seed, record, params, schedule, device)` returns
     `{"result": {"checkpoint": {"valid_balanced_accuracy", "label_free_score"},
@@ -241,11 +259,13 @@ def register_phase_two(strategy: str, extra: Mapping[str, BaseDistribution],
     clash = set(extra) & set(SHARED_PHASE_TWO)
     if clash:
         raise SearchError(f"{sorted(clash)} are the shared axes; a comparator adds its own")
-    off_rule = [k for k, d in extra.items() if not any(d == g for g in GENERIC_RULE)]
+    allowed = (*GENERIC_RULE, *OWN_AXES.get(strategy, ()))
+    off_rule = [k for k, d in extra.items() if not any(d == g for g in allowed)]
     if off_rule:
         raise SearchError(f"{off_rule} do not follow the generic rule of Sec. 7.7 (loss "
                           f"weights [1e-3, 10] log, kernel multipliers {{0.5, 0.75, 1, 1.5}}, "
-                          f"confidence thresholds [0.5, 0.95])")
+                          f"confidence thresholds [0.5, 0.95]) nor an axis Sec. 7.7 assigns "
+                          f"to {strategy}")
     PHASE_TWO_EXTRA[strategy] = dict(extra)
     PHASE_TWO_TRAINERS[strategy] = trainer
 

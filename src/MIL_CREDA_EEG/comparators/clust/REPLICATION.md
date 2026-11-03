@@ -11,7 +11,7 @@ Route: reimplementation; no usable CLUST implementation located in the searches 
 
 ## Plan and scope
 
-Binding: experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md §§4.5, 7.1–7.4, 7.7; task T6/S1–S5. This is NOT a reproduction of CLUST's reported results. Only the source-free variant is implemented: phase 2 accepts target training windows, never source bags or target training labels. Source classifier weights are the only source prototypes. No source CE, source sampling or replay exists in this adapter. No Eq.16 ensemble at inference.
+Binding: experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md §§4.5, 7.1–7.4, 7.7 (rebound from v40 on 2026-11-03); task T6/S1–S5. This is NOT a reproduction of CLUST's reported results. Only the source-free variant is implemented: phase 2 accepts target training windows, never source bags or target training labels. Source classifier weights are the only source prototypes. No source CE, source sampling or replay exists in this adapter. No Eq.16 ensemble at inference.
 
 Reuse common phase-1 model/trainer, bridge, EEGNet, evaluation, metrics, batching, assignment/search and model store. No existing module is changed. Phase-1 checkpoint is supplied by the shared common group rather than retrained here.
 
@@ -68,7 +68,7 @@ Rows marked `unspecified` explicitly state choices the paper/plan do not settle;
 | Combined prototype | Midpoint of frozen source and current target centroid | unspecified: source-free combined prototype weighting not given; no source counts available and no source data read |
 | Teacher | EMA copy of target trunk, frozen shared attention, source prototype assignments and EMA target bank for consistency | unspecified: paper mentions momentum encoder but Eq.5 specifies only prototypes; explicit mean-teacher interpretation |
 | EMA buffers | Float buffers EMA, integer BatchNorm counters copied | unspecified: paper gives no BatchNorm teacher-buffer rule |
-| EMA momentum | Caller supplies [0,1); smoke .999 | Paper Eq.5 rho=.999 |
+| EMA momentum | Parameter `emaMomentumComplement` = 1 − rho in (0,1]; the trainer uses rho = 1 − value (`training.ema_momentum`); smoke 1 − rho = .001 (rho = .999) | Paper Eq.5 rho=.999; plan v42 §7.7 searches rho, drawn as 1 − rho |
 | EMA prototype destination | Update target-only bank from target centroids; source classifier prototypes remain fixed | unspecified: Eq.5 labels its bank source, while source-free section does not define that update without source data; plan freezes diagnostic head |
 | Missing class EMA | Unchanged bank row | unspecified: Eq.5 omits empty-class behavior |
 | KL branch | Teacher source-prototype distribution detached, student target-bank distribution differentiable | unspecified: Eq.13 symmetric KL clear, stop-gradient direction unspecified |
@@ -81,8 +81,8 @@ Rows marked `unspecified` explicitly state choices the paper/plan do not settle;
 | Optimizer | Adam on target trunk, caller lr2/wd2, constraints after step | unspecified: standardized trainer uses Adam, paper uses SGD .9 and decaying lr .01 with beta .0002,exponent .75; no paper schedule retained |
 | Schedule | Caller epochs2,bagsPerStep; full cap, one shuffled target pass/epoch | Plan §7.7; unspecified batch size controlled by caller, not paper target64/source32 |
 | Selection | Shared BA primary, shared label_free_score secondary; keep independent epoch snapshots | Plan §4.5 |
-| Search ranges | Shared lr2/wd2; loss weights generic LOSS_WEIGHT,confidence generic CONFIDENCE_THRESHOLD | Existing search.register_phase_two generic contract |
-| EMA search range | Generic CONFIDENCE_THRESHOLD [.5,.95] reused as bounded EMA momentum distribution | unspecified: shared registration accepts only three generic distributions; excludes paper .999; exposed explicitly, not a paper range |
+| Search ranges | Shared lr2/wd2; loss weights generic LOSS_WEIGHT, pseudo-label confidence generic CONFIDENCE_THRESHOLD | Plan v42 §7.7 CLUST row and generic rule |
+| EMA search range | Own axis `search.EMA_MOMENTUM_COMPLEMENT`: 1 − rho log-uniform in [1e-3, 1e-1], i.e. rho in [0.9, 0.999], includes the paper's .999; admitted by `search.register_phase_two` for CLUST only | Plan v42 §7.7 «el momento rho de la EMA del maestro se busca en su propio eje, entre 0,9 y 0,999, con 1 − rho en escala logarítmica» (task log L59); replaces v40's reuse of CONFIDENCE_THRESHOLD [.5,.95] |
 | State and history | Shared store; dashboard history keys; explicit seed,fold,transfer | Plan §7.3/S5 |
 | Adapter code version | Additional sha256 of CLUST .py files in clust.save/load; shared store alone hashes only common code | unspecified: extra integrity check prevents accepting a changed adapter; separate primary/secondary roots retain store no-overwrite invariant |
 | Seed | Caller seed; smoke 17, local torch generator | unspecified: paper reports three trials without seed values |
@@ -96,7 +96,7 @@ Working directory for all commands: `/Users/diego/Proyectos/papersmith-ai/implem
 - `PYTHONPATH=$PWD/src .venv/bin/python -m MIL_CREDA_EEG.comparators.clust.smoke` — exit 0, CPU, seed17, ragged windows `(2/3,29/14,512)`, shared supervised phase then three target-only epochs. Printed phase1 loss `[0.03769494443617027]`, phase2 losses `[0.0002472325979681305, -0.000496143341823255, -0.0001454566571337108]`, selected epoch0. Spatial depthwise initialization retained on 29→14 bridge. These are synthetic execution diagnostics, not paper results or evidence of convergence.
 - AST provenance measurement: 17 declared invariant IDs; zero IDs missing their named test. Parametrization expands them to 21 tests.
 
-Invariants cover closed-form transport, nearest-prototype softmax axis, confident centroids, missing classes, finite gradients through every target parameter, source/attention/head tensors and buffers bit-identical, no source forward call, unreadable target-training labels, teacher EMA, diagnostic independence from auxiliaries, independent primary/secondary epoch snapshots, generic explicit search registration, same-rotation/seed checkpoint guard, and a real shared-store save/load round trip for both selection rules including adapter-version refusal and no overwrite. Tests also execute shared supervised phase1 in the synthetic smoke.
+Invariants cover closed-form transport, nearest-prototype softmax axis, confident centroids, missing classes, finite gradients through every target parameter, source/attention/head tensors and buffers bit-identical, no source forward call, unreadable target-training labels, teacher EMA, diagnostic independence from auxiliaries, independent primary/secondary epoch snapshots, explicit search registration with the EMA momentum on its own axis (v42) and rho = 1 − drawn complement, same-rotation/seed checkpoint guard, and a real shared-store save/load round trip for both selection rules including adapter-version refusal and no overwrite. Tests also execute shared supervised phase1 in the synthetic smoke.
 
 For integration: call `clust.register()` explicitly (no import side effects), use the shared phase1 common checkpoint and the shared search engine. Use `clust.save/load` for final models, not bare `search.save_phase_two`: the latter does not record this adapter's extra code digest. Secondary models can be saved with `selection="secondary"` under a separate root. Auxiliary teacher/bank/alpha tensors round-trip, but optimizer state and mid-epoch resumption are not implemented or claimed.
 
@@ -109,3 +109,7 @@ Read `skills/remote-parallelism/SKILL.md`. Running its CLI with `assess --axis f
 > measured inputs are required, never guessed; missing: --units or --units-file, --unit-minutes, --owners, --sessions-per-account, --session-limit-hours, --quota-hours, --setup-minutes
 
 Therefore no speedup, makespan, quota or split verdict is asserted. The CPU synthetic smoke is not a remote full-unit timing measurement. `checklist` executed successfully and is retained in scratch; outstanding launch-stage checklist: declare fold/seed unit IDs (never split by comparator), derive each campaign seed as `int(sha256(unit_id).hexdigest()[:8],16) % 2**31` before BOTH phase1 and phase2 so checkpoints match, pin commit/requirements/accelerator, identical per-shard Python/torch/CUDA/cuDNN/accelerator/commit/requirements/data/preparation stamps, deterministic flags and CUBLAS workspace, identical official dataset, per-owner rehearsal, per-environment timing, one account/person/service and one service/campaign. No remote job was generated or launched.
+
+## Plan v42 update — 2026-11-03
+
+Run in `implementations/Domain_Adaptation-worktrees/v42cmp` (detached at 7db39f8). The teacher EMA momentum moved from the generic confidence axis to its own axis (rows above); the confidence threshold keeps the generic rule. Invariant witnesses added or renamed: `clust_registration_is_explicit_and_draws_the_ema_on_its_own_axis`, `clust_teacher_momentum_is_one_minus_the_drawn_complement`. The smoke (1 − rho = .001) prints the same losses as before, `[0.0002472325979681305, -0.000496143341823255, -0.0001454566571337108]`, because rho = .999 is unchanged.

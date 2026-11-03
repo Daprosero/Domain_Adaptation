@@ -5,7 +5,7 @@ from MIL_CREDA_EEG import mil_wrapper, two_phase
 from .training import DEFAULTS, adapt
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["7.2", "7.3", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["uda_synthetic_smoke_executes"],
@@ -42,7 +42,7 @@ def run(epochs2=10):
     print("phase2_mmd", [round(r["mmd"], 6) for r in h])
     print("phase2_cmmd", [round(r["cmmd"], 6) for r in h])
     print("source_ce", [round(r["source_ce"], 6) for r in h])
-    print("alpha", [round(r["alpha"], 4) for r in h], "beta", [r["beta"] for r in h])
+    print("alpha", [round(r["alpha"], 4) for r in h])
     print("stage", [r["stage"] for r in h], "threshold", [r["threshold"] for r in h],
           "selected", [round(r["selected"], 3) for r in h])
     print("sigma", [round(r["sigma"], 4) for r in h])

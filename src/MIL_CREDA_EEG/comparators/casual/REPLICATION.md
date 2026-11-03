@@ -16,7 +16,7 @@ This is a bounded search, not a claim that code cannot exist. Scratch HTML/text 
 
 ## Plan and equation analysis (before coding)
 
-Binding plan: `experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md`, §§4.5, 7.1–7.4, 7.7; T6/S1–S5. This is explicitly a controlled variant, not reproduction of published image experiments.
+Binding plan: `experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md`, §§4.5, 7.1–7.4, 7.7 (rebound from v40 on 2026-11-03); T6/S1–S5. This is explicitly a controlled variant, not reproduction of published image experiments.
 
 - `losses.py`: classification, conditional entropy, joint conditioning, discriminator loss, support loss and VAT, one function per computational equation.
 - `training.py`: auxiliary discriminator, alternating updates, shared bridge and checkpoint reconstruction, full epoch budget and both validation selectors, explicit search registration and model-store wrappers.
@@ -63,17 +63,18 @@ Every row is either a cited choice or explicitly unspecified. Published image se
 | Entropy conditioning formula and scope | Detached weights 1+exp(-H), domain-normalized, discriminator BCE only; alignment remains exact Eq.15 | unspecified — paper cites Long et al. without writing formula or application scope; no gradient reversal through weights. |
 | Probability log stabilizer | Clamp at dtype tiny | unspecified — numerical protection for logs without smoothing labels. |
 | VAT domain | Target windows only | Plan §7.4; source term of paper Eq.13 constant under frozen source. |
-| VAT norm unit | L2 over all windows/channels/time within each bag | unspecified — bag is prediction unit; no inherited window labels. |
+| VAT norm unit | L2 over all windows/channels/time within each bag | unspecified — bag is prediction unit; no inherited window labels. Under plan v42 the radius is stated relative to a window («fracción de la norma L2 típica de una ventana», §7.7) while it still bounds the whole bag's perturbation, so across the m windows of a bag the per-window perturbation norm has root mean square radius/√m. |
 | VAT finite difference and iterations | xi=0.01, one power iteration, Gaussian initial direction | unspecified — paper says power iteration but omits values; xi chosen above float32 roundoff. |
 | VAT stochastic layers | Temporarily eval all model modules, restore exact modes; no clean-reference gradient | unspecified — isolates consistency from dropout/BN drift. |
-| VAT radius | Required positive finite caller parameter, no default; search range must be supplied explicitly | unspecified — plan §7.7 names the axis but fixes no radius range; registration cannot silently choose one. |
+| VAT radius | Searched as `vat_radius_fraction` on its own axis `search.VAT_RADIUS_FRACTION`, log-uniform in [0.01, 1]; the trainer uses radius = fraction × typical window L2 norm; each bag's whole (m, C, T) perturbation has that norm (`losses.virtual_adversarial_loss`, unchanged) | Plan v42 §7.7 «el radio de la perturbación VAT se busca como fracción de la norma L2 típica de una ventana, entre 0,01 y 1 en escala logarítmica … una elección de este plan y no del artículo» (task log L60); §7.4 |
+| Typical window L2 norm | Median of the L2 norms (over channels × samples, float64) of every window of the rotation's **target-training** bags, measured once at the start of phase 2 (`training.typical_window_norm`); the median of an even count is the mean of the two middle values; recorded per epoch as `typical_window_norm` and `vat_radius` | unspecified — plan v42 §7.7 says «norma L2 típica de una ventana» without stating which windows or which statistic; reads windows only, never labels |
 | Alignment, entropy, VAT weights | Required caller parameters; generic loss-weight search [1e-3,10] log | Plan §7.7; paper Appendix G dataset-specific weights/ramp not preserved. |
 | Target optimizer | Adam using lr2/wd2, beta=(0.9,0.999), eps=1e-8, no LR scheduler | unspecified — shared existing trainer precedent; paper Appendix G varies SGD/Adam by image dataset. |
 | Auxiliary optimizer | Adam, same lr2/wd2 and defaults as target, constant rate | unspecified — avoids unplanned additional search axes. |
 | Epoch budget and batches | Required schedule; shuffled target pass and cyclic shuffled source batches; partial batches retained | unspecified — epochs/bagsPerStep supplied by common pilot; source sampling does not introduce target labels. |
 | Alignment schedule | Fixed supplied weight, no ramp | unspecified — EEG pilot budget has no corresponding published image step count; departure from Appendix G ramps. |
 | Selection | Entire epoch budget; best target validation BA and separate best label-free epoch/state | Plan §4.5, shared evaluate/balanced_accuracy/label_free_score. |
-| Search | Explicit register hook; shared lr2/wd2, three loss weights, required caller radius distribution | Plan §7.7, existing search.register_phase_two; radius must satisfy current hook's generic distribution restriction. |
+| Search | Explicit `register()` wires production search: shared lr2/wd2, three loss weights on the generic rule, `vat_radius_fraction` on `search.VAT_RADIUS_FRACTION` (admitted by the hook for CASUAL only) | Plan v42 §7.7. |
 | Final persistence | Existing model_store plus comparator source digest in extra metadata; check both digests on load | Plan §7.3; existing store code_version excludes comparator files. |
 | Seeds | Caller unit seed, torch and batch generator seeded from it | Plan §§4.6,7.7; reuse search seeds, no seed search. |
 
@@ -102,7 +103,7 @@ Read Appendix G in the HTML cross-check (not present in the ingested main-paper 
 
 Import `MIL_CREDA_EEG.comparators.casual` by full path. No parent `comparators/__init__.py` is written. No shared module, partition or existing test is modified. `train_phase_two(data, rotation, seed, record, params, schedule, device)` implements the existing search trainer seam and checks the record's common group, phase, transfer, rotation, seed, partition and channel counts before loading. It calls the existing bridge and returns a CommonMILModel (no additional diagnostic head). It returns independent primary and label-free target states, first epoch winning a tie. Use `save_final_model` / `load_final_model` for primary model persistence: the existing shared store's code digest excludes comparator sources, so these wrappers add and verify `casual_code_digest`. No existing store logic is rewritten. The model-store roundtrip test mocks only the partition-file check (no partition file exists here); actual partition refusal remains covered by the shared BALLADEER tests.
 
-`register(radius_distribution)` is explicit and has no default. Production registration is **not performed**: the parent/operator must supply a VAT-radius distribution accepted by the shared generic-rule hook, or authorize a separate change to that hook if a scientifically chosen radius range falls outside it. Test registration with LOSS_WEIGHT is a fixture, not a production choice. `vat_radius=.5` is only the synthetic smoke fixture. The module does not pretend that an unspecified range was settled.
+`register()` is explicit (no import-time side effect) and takes no argument: plan v42 §7.7 settled the radius axis, so it registers the production search space. `vat_radius_fraction=.5` is only the synthetic smoke fixture.
 
 Returned histories have the dashboard's epoch/seed/fold/model/transfer keys. The parent experiment runner owns placement under `MIL-CREDA/Results/` (S5); no official Results files were produced under these narrow edit surfaces.
 
@@ -144,3 +145,9 @@ Exit 2; no verdict produced. Exact refusal:
 Objective location: before `measured`; purpose is a measured split decision, arrival is a recorded verdict with reproducibility checklist satisfied. A synthetic CPU smoke does not supply GPU pilot duration, remote setup overhead, owner capacity or quota; no numbers substituted for them. Parent must measure these before assess can proceed. Later units must be seeded from `int(sha256(unit_id).hexdigest()[:8],16) % 2**31`; this trainer accepts the resulting seed and seeds torch and batch ordering from it (never from an account). Parent must reconcile that campaign unit-id mapping with the plan's fixed search/report seed definitions, rather than silently replace search seeds.
 
 Inherited checklist: split only along declared fold/seed/subject axis (never arm/comparison); one published commit and pinned requirements; same pinned accelerator; identical environment stamps (Python, torch, CUDA/cuDNN, accelerator, commit, requirements digest, dataset checksum/preparation); deterministic torch/CUBLAS/cuDNN flags measured in pilot; same official prepared dataset; rehearsal/readiness per owner; timing kept per machine; one account/person/service and one service/campaign unless verified identical stamps. No jobs generated or launched.
+
+## Plan v42 update — 2026-11-03
+
+Run in `implementations/Domain_Adaptation-worktrees/v42cmp` (detached at 7db39f8). The VAT radius is now a searched fraction of the typical window norm (rows above); the typical norm's definition is this implementation's unspecified choice, owed to `/experimental-deliberation` if the operator wants it stated in the plan. Invariant witnesses: `casual_search_hook_uses_common_group_and_the_radius_fraction_axis` (renamed from `..._and_explicit_radius`), `casual_vat_radius_is_the_fraction_of_the_median_target_training_window_norm`.
+
+Smoke (same seed 20261102, `vat_radius_fraction=.5`): typical window norm 84.65887687367304, VAT radius 42.32943843683652 (under v40 the radius was 0.5 absolute), `phase2_loss [0.7717759795983745, 0.8558351886599931, 1.0560732468618614]`, `phase2_vat [0.0008136540925804975, 0.0007753256761211273, 0.0007787624837322085]` (v40: about 1.1e-7), best epoch 0. Execution evidence only.

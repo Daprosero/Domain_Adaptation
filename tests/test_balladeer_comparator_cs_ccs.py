@@ -238,7 +238,7 @@ def test_cs_ccs_bandwidths_are_fixed_from_training_bags_at_phase_two_start(monke
                 for d, bags in (("source", source), ("target", target)) for b in bags]
     two_phase.set_phase_two_modes(reference)
     assert expected == {"zBandwidth": median_bandwidth(torch.cat([r[0] for r in rows]), 1.),
-                        "yBandwidth": median_bandwidth(torch.cat([r[1] for r in rows]), 1.)}
+                        "yBandwidth": 1.0}
     # The bandwidth pass leaves BatchNorm statistics and modes untouched.
     stats = {k: v.clone() for k, v in reference.state_dict().items()}
     two_phase.set_phase_two_modes(reference)
@@ -256,10 +256,30 @@ def test_cs_ccs_bandwidths_are_fixed_from_training_bags_at_phase_two_start(monke
                h["yBandwidth"] == expected["yBandwidth"] for h in result["history"])
     assert result["checkpoint"]["hyper"]["zBandwidth"] == expected["zBandwidth"]
     model2, *_ = fixture()
-    doubled = training.adapt(model2, source, target, valid, params(zKernelMultiplier=1.5,
-                             yKernelMultiplier=0.5), schedule(1), seed=11)
+    doubled = training.adapt(model2, source, target, valid, params(zKernelMultiplier=1.5),
+                             schedule(1), seed=11)
     torch.testing.assert_close(doubled["bandwidths"]["zBandwidth"], 1.5 * expected["zBandwidth"])
-    torch.testing.assert_close(doubled["bandwidths"]["yBandwidth"], 0.5 * expected["yBandwidth"])
+    assert doubled["bandwidths"]["yBandwidth"] == 1.0
+
+
+def test_cs_ccs_prediction_kernel_is_fixed_at_sigma_one_on_normalised_predictions(monkeypatch):
+    # Plan v42 Sec. 7.7: sigma = 1 on the L2-normalised softmax predictions, never searched.
+    assert training.PREDICTION_SIGMA == 1.0
+    assert "yKernelMultiplier" not in training.DEFAULTS
+    model, source, _, target, valid = fixture()
+    seen = []
+    original = training.ccs_divergence
+    def spy(zs, zt, ys, yt, sigma_z, sigma_y):
+        seen.append((sigma_y, ys.detach(), yt.detach()))
+        return original(zs, zt, ys, yt, sigma_z, sigma_y)
+    monkeypatch.setattr(training, "ccs_divergence", spy)
+    for multiplier in (0.5, 1.5):
+        training.adapt(copy.deepcopy(model), source, target, valid,
+                       params(zKernelMultiplier=multiplier), schedule(1), seed=11)
+    assert seen and all(sigma == 1.0 for sigma, *_ in seen)
+    for _, ys, yt in seen:
+        for y in (ys, yt):
+            torch.testing.assert_close(y.norm(dim=1), torch.ones(len(y), dtype=y.dtype))
 
 
 def test_cs_ccs_objective_is_eq_90_with_frozen_source_ce():
@@ -321,7 +341,7 @@ def test_cs_ccs_invalid_inputs_fail_closed():
     model, source, _, target, valid = fixture()
     bad = [params(extra=1.), {k: v for k, v in params().items() if k != "csWeight"},
            params(lr2=0.), params(wd2=-1.), params(csWeight=-1.), params(ccsWeight=math.nan),
-           params(zKernelMultiplier=2.), params(yKernelMultiplier=0.6)]
+           params(zKernelMultiplier=2.), params(yKernelMultiplier=1.)]
     for p in bad:
         with pytest.raises(ValueError):
             training.adapt(copy.deepcopy(model), source, target, valid, p, schedule(), seed=11)
@@ -355,7 +375,7 @@ def test_cs_ccs_package_is_a_controlled_variant(registries):
     assert "controlled" in package.__doc__ and "not a reproduction" in package.__doc__
     for module in ("", ".divergences", ".training", ".smoke"):
         prov = importlib.import_module("MIL_CREDA_EEG.comparators.cs_ccs" + module).__provenance__
-        assert prov["revision"] == "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md"
+        assert prov["revision"] == "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md"
     assert "CS+CCS" in mil_wrapper.COMPARATORS and "CS+CCS" in model_store.STRATEGIES
 
 
@@ -368,7 +388,8 @@ def test_cs_ccs_search_registration_is_explicit_and_restorable(registries):
     space = search.phase_two_space("CS+CCS")
     assert set(space) == set(params())
     assert space["csWeight"] == space["ccsWeight"] == search.LOSS_WEIGHT
-    assert space["zKernelMultiplier"] == space["yKernelMultiplier"] == search.KERNEL_MULTIPLIER
+    assert space["zKernelMultiplier"] == search.KERNEL_MULTIPLIER
+    assert [k for k, d in space.items() if d == search.KERNEL_MULTIPLIER] == ["zKernelMultiplier"]
     assert search.PHASE_ONE_GROUP_OF["CS+CCS"] == mil_wrapper.GROUP
     trained = search.train_phase_two("CS+CCS", data, 0, 11, record, params(), schedule(2))
     assert isinstance(trained["model"], mil_wrapper.CommonMILModel)
