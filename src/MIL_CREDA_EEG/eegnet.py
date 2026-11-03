@@ -39,10 +39,10 @@ electrode mapping, and never zeros (with every weight at zero the filters of
 that layer would start identical and never differentiate). It returns which
 layers were copied.
 
-**Official-code commit: not recorded here.** Sec. 7.3 asks the implementation
-to record the commit of the official code it follows. No network access was
-used in this unit, so `OFFICIAL_CODE["commit"]` is None and says so; it must be
-pinned before the full run.
+**Official-code commit.** Sec. 7.3 asks the implementation to record the
+commit of the official code it follows: vlawhern/arl-eegmodels at 4a512e5
+(2022-05-02), the last commit touching `EEGModels.py` and the HEAD of `master`
+when this unit read it (resolved 2026-11-02).
 """
 
 from __future__ import annotations
@@ -87,10 +87,12 @@ LAYERS = ("conv_temporal", "bn1", "depthwise", "bn2", "separable_depth",
 #: The one layer whose shape depends on the channel count.
 CHANNEL_DEPENDENT = ("depthwise",)
 OFFICIAL_CODE = {
-    "url": "https://raw.githubusercontent.com/vlawhern/arl-eegmodels/master/EEGModels.py",
+    "url": "https://raw.githubusercontent.com/vlawhern/arl-eegmodels/"
+           "4a512e503198db2010848813ead9afbf8cd54c97/EEGModels.py",
     "paper": "https://arxiv.org/abs/1611.08024",
-    "commit": None,
-    "commitNote": "not resolved in this unit (no network); pin before the full run",
+    "commit": "4a512e503198db2010848813ead9afbf8cd54c97",
+    "commitNote": "last commit touching EEGModels.py (2022-05-02) and HEAD of master on "
+                  "2026-11-02",
 }
 
 

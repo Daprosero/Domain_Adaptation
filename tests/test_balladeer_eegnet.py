@@ -121,3 +121,11 @@ def test_the_standard_init_is_glorot_uniform_with_keras_fans():
     assert float(w.detach().abs().max()) > 0.9 * limit
     assert torch.equal(trunk.bn1.weight, torch.ones(8))
     assert torch.equal(trunk.bn1.running_var, torch.ones(8))
+
+
+def test_the_official_code_commit_is_pinned():
+    """Sec. 7.3: the implementation records the commit of the official code it follows."""
+    import re
+    from MIL_CREDA_EEG import eegnet as module
+    assert re.fullmatch(r"[0-9a-f]{40}", module.OFFICIAL_CODE["commit"] or "")
+    assert module.OFFICIAL_CODE["commit"] in module.OFFICIAL_CODE["url"]
