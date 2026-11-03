@@ -19,12 +19,17 @@ the instant: `start <= t < start + length`, no neighbouring window
 (`event_windows`).
 
 Pure functions only: the preprocessing task that writes each processed record's
-`event_window` mark (`mechanisms.EVENT_MARK`) parses the TAGS file, aligns the
-window starts to the level start and calls these; nothing here reads a file.
+`event_window` mark (`mechanisms.EVENT_MARK`) reads the TAGS file, parses its
+text (`parse_tags`), aligns the window starts to the level start and calls
+these; nothing here reads a file. A TAGS text that does not hold the logged rows
+is refused (`K1EventError`), never read as a level without events.
 """
 
 from __future__ import annotations
 
+import ast
+import csv
+import io
 import math
 from collections.abc import Iterable, Mapping, Sequence
 
@@ -40,11 +45,14 @@ __provenance__ = {
         "an_omission_row_is_refused_not_guessed",
         "the_event_instant_is_general_time",
         "a_window_holds_an_event_when_it_contains_its_instant",
+        "an_unparseable_tags_file_is_refused_not_read_as_no_events",
     ],
 }
 
 EVENT_KINDS = ("hit", "error", "correct no-press")
 INSTANT = "generalTime"
+#: The TAGS value holding the logged rows: `{'reactionOrOmission': [row, ...]}`.
+ROWS_KEY = "reactionOrOmission"
 _FLAGS = {True: True, False: False, "True": True, "False": False}
 
 
@@ -90,6 +98,54 @@ def _instant(row: Mapping) -> float:
 def event_instants(rows: Iterable[Mapping]) -> list[float]:
     """`generalTime` of every event row, in row order; duplicated rows dropped."""
     return [_instant(r) for r in rows if event_kind(r) is not None]
+
+
+def parse_tags(text: str) -> list[dict]:
+    """Every logged row of a TAGS file's text, in file order.
+
+    The release writes the header with and without a byte-order mark and a
+    leading space (` timestamp,label,value,port`); each line's `value` is a
+    Python literal `{'reactionOrOmission': [row, ...]}`. A text with no
+    `value` column, no row, or a value that is not that literal is refused.
+    """
+    reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")))
+    fields = [f.strip() for f in (reader.fieldnames or [])]
+    if "value" not in fields:
+        raise K1EventError(f"a TAGS file has a 'value' column, got {fields}")
+    reader.fieldnames = fields
+    rows: list[dict] = []
+    for line in reader:
+        try:
+            value = ast.literal_eval(line["value"] or "")
+        except (ValueError, SyntaxError) as error:
+            raise K1EventError(f"a TAGS value is not a literal: {line['value']!r}") from error
+        entries = value.get(ROWS_KEY) if isinstance(value, dict) else None
+        if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+            raise K1EventError(f"a TAGS value holds {{{ROWS_KEY!r}: [rows]}}, "
+                               f"got {line['value']!r}")
+        rows.extend(entries)
+    if not rows:
+        raise K1EventError("a TAGS file with no logged row")
+    return rows
+
+
+def event_counts(rows: Iterable[Mapping]) -> dict[str, int]:
+    """Events by kind; duplicated rows count in none."""
+    counts = dict.fromkeys(EVENT_KINDS, 0)
+    for row in rows:
+        kind = event_kind(row)
+        if kind is not None:
+            counts[kind] += 1
+    return counts
+
+
+def instants_outside(instants: Sequence[float], starts: Sequence[float],
+                     length: float) -> int:
+    """Event instants that fall in none of the windows (discarded or past the last)."""
+    starts = np.asarray(starts, dtype=float).reshape(-1)
+    t = np.asarray(instants, dtype=float).reshape(-1)
+    inside = (t[:, None] >= starts[None, :]) & (t[:, None] < starts[None, :] + length)
+    return int((~inside.any(axis=1)).sum())
 
 
 def event_windows(instants: Sequence[float], starts: Sequence[float],
