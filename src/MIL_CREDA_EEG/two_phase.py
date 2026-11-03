@@ -203,6 +203,11 @@ def bag_tensors(bags: Sequence[bag_data.Bag]) -> list[BagTensor]:
 # ------------------------------------------------------------------ metrics
 
 
+def labels_like(labels: Sequence[int], like: torch.Tensor) -> torch.Tensor:
+    """Labels as a tensor on the device of the predictions they are scored against."""
+    return torch.tensor(list(labels), device=like.device)
+
+
 def balanced_accuracy(labels: Sequence[int], predicted: Sequence[int]) -> float:
     """Mean recall over the classes present in `labels`."""
     labels, predicted = np.asarray(labels), np.asarray(predicted)
@@ -383,7 +388,7 @@ def train_source_phase(model: MILCREDAModel, source_train: Sequence[BagTensor],
             steps += 1
         G_valid = evaluate(model, source_valid, "source", device)
         accuracy = balanced_accuracy(valid_labels, G_valid.argmax(dim=1).tolist())
-        valid_loss = float(source_term(model, G_valid, torch.tensor(valid_labels)))
+        valid_loss = float(source_term(model, G_valid, labels_like(valid_labels, G_valid)))
         seconds.append(time.perf_counter() - started)
         history.append(_record(epoch, seed, fold, 1, transfer, {
             "loss": total / max(steps, 1), "val_loss": valid_loss,

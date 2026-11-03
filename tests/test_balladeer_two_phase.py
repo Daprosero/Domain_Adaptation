@@ -284,3 +284,17 @@ def test_test_predictions_are_only_for_target_test_fold_subjects(tmp_path):
     assert out["sigma"] == out["checkpoints"]["phase1"]["sigma"]
     assert out["checkpoints"]["phase2"]["sigma"] == out["sigma"]
     assert {r["fold"] for r in out["history"]} == {1} and {r["seed"] for r in out["history"]} == {3}
+
+
+def test_the_phase_one_validation_labels_live_on_the_predictions_device(monkeypatch):
+    """On a GPU the validation predictions are device tensors; the labels the source
+    term pairs them with must be built on that same device, never on the CPU."""
+    G = torch.empty(4, 2, device="meta")
+    assert tp.labels_like([0, 1, 1, 0], G).device == G.device
+    model, data, generator = _setup()
+    calls = []
+    real = tp.labels_like
+    monkeypatch.setattr(tp, "labels_like",
+                        lambda labels, like: calls.append(like.shape) or real(labels, like))
+    _phase_one(model, data, generator)
+    assert calls == [torch.Size([len(data["source_valid"]), 2])] * HYPER["epochs1"]

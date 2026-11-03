@@ -242,8 +242,9 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
                 "partition_sha256": data.partition_sha256}
     if any(meta.get(k) != v for k, v in expected.items()):
         raise ValueError("AdaptMIL phase1 record does not match transfer/rotation/seed/partition")
-    if meta.get("adaptmil_source_digest") != source_digest():
-        raise model_store.CodeVersionMismatch("AdaptMIL checkpoint has missing/foreign comparator digest")
+    # Code identity is the store's: `model_store.load` refuses a record whose
+    # `code_version` (which covers comparators/**) differs; the campaign's shared
+    # `search.save_phase_one` writes no comparator-specific digest.
     torch.manual_seed(seed)
     model = AdaptMILModel(**{f"{k}_channels": v for k, v in data.channels().items()}).to(device)
     missing, unexpected = model.load_state_dict(state, strict=False)
