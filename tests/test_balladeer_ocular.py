@@ -138,7 +138,7 @@ def test_panel_figures_carry_title_axis_labels_and_caption():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    from MIL_CREDA_EEG import audit_plots
+    from MIL_CREDA_EEG import audit_plots, ps_figures
 
     caption = "Mirá si las cajas se separan."
     boxes = audit_plots.box_panels(
@@ -147,11 +147,11 @@ def test_panel_figures_carry_title_axis_labels_and_caption():
     dots = audit_plots.scatter_panels(
         {"A": {"yes": ([7, 8], [1, 2]), "no": ([12], [3])}}, "T", "x", "y", caption)
     for fig, n_panels in ((boxes, 2), (dots, 1)):
-        assert fig._suptitle is not None and fig._suptitle.get_text() == "T"
+        assert ps_figures.figure_titles(fig) == []
         drawn = [ax for ax in fig.axes if ax.get_visible() and ax.has_data()]
         assert len(drawn) == n_panels
         for ax in drawn:
-            assert ax.get_title() and ax.get_xlabel() and ax.get_ylabel()
+            assert ax.texts[0].get_text() and ax.get_xlabel() and ax.get_ylabel()
         assert any(t.get_text() == caption for t in fig.texts)
         plt.close(fig)
 

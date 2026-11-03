@@ -86,3 +86,48 @@ def test_the_common_wrapper_is_the_phase_one_architecture_of_the_six_non_mil_com
                                 torch.Generator().manual_seed(0), CPU)
     assert set(out["checkpoint"]["state"]) == set(tp.phase_one_state(model))
     assert not any(k.startswith("target_trunk.") for k in out["checkpoint"]["state"])
+
+
+def test_gamma_zero_skips_the_consensus_kernel(monkeypatch):
+    """Review should-fix: at gamma exactly 0 the consensus kernel is never computed."""
+    from MIL_CREDA import attention
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("the consensus kernel was computed at gamma = 0")
+
+    torch.manual_seed(0)
+    model = mil_wrapper.CommonMILModel(3, 2)
+    H = _embeddings(1, 6)
+    monkeypatch.setattr(attention, "consensus_component", refuse)
+    (_, weights), = model.bag_pairs([H])
+    assert weights.shape == (6,)
+    logits = mil_wrapper.zero_consensus_logits(H, model.V_R, model.b_R, model.v_R, 0.0,
+                                               mil_wrapper.NEUTRAL_SIGMA)
+    assert logits.shape == (6,)
+    with pytest.raises(AssertionError, match="consensus kernel"):
+        mil_wrapper.zero_consensus_logits(H, model.V_R, model.b_R, model.v_R, 0.5, 1.0)
+
+
+def _outputs_and_grads(logits_fn, monkeypatch) -> tuple[list, list]:
+    monkeypatch.setattr(mil_wrapper, "zero_consensus_logits", logits_fn)
+    torch.manual_seed(7)
+    model = mil_wrapper.CommonMILModel(3, 3)
+    g = torch.Generator().manual_seed(3)
+    bags = [torch.randn(m, 3, eegnet.SAMPLES, generator=g) for m in (2, 5, 4)]
+    G = model.predict(bags, "source")
+    G.sum().backward()
+    grads = [p.grad.clone() for p in model.parameters() if p.grad is not None]
+    return [G.detach().clone()], grads
+
+
+def test_the_gamma_zero_shortcut_is_byte_identical_in_outputs_and_gradients(monkeypatch):
+    """The shortcut changes no number: seeded forward and backward match Eq. 15 at gamma 0."""
+    def through_eq_15(H, V_R, b_R, v_R, gamma, sigma):
+        return relevance_logits(H, V_R, b_R, v_R, gamma, sigma)
+
+    shortcut = mil_wrapper.zero_consensus_logits
+    out_ref, grad_ref = _outputs_and_grads(through_eq_15, monkeypatch)
+    out_new, grad_new = _outputs_and_grads(shortcut, monkeypatch)
+    assert len(grad_ref) == len(grad_new) > 0
+    for a, b in zip(out_ref + grad_ref, out_new + grad_new):
+        assert a.dtype == b.dtype and torch.equal(a, b)

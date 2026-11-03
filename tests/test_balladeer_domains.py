@@ -133,7 +133,7 @@ def test_the_auc_figure_carries_title_axis_labels_caption_and_chance_line():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import pandas as pd
-    from MIL_CREDA_EEG import audit_plots
+    from MIL_CREDA_EEG import audit_plots, ps_figures
 
     table = pd.DataFrame({"pair": ["a vs b", "c vs d"], "arm": ["x", "y"],
                           "auc_mean": [0.9, 0.5], "auc_sd": [0.05, 0.1],
@@ -141,7 +141,7 @@ def test_the_auc_figure_carries_title_axis_labels_caption_and_chance_line():
                           "perm_p": [0.005, 0.5]})
     fig = audit_plots.auc_bars(table, "T", "AUC", "par", "Mirá la línea.")
     ax = fig.axes[0]
-    assert ax.get_title() and ax.get_xlabel() and ax.get_ylabel()
+    assert not ps_figures.figure_titles(fig) and ax.get_xlabel() and ax.get_ylabel()
     assert any(t.get_text() for t in fig.texts)
     assert any(list(line.get_xdata()) == [0.5, 0.5] for line in ax.lines)
     plt.close(fig)

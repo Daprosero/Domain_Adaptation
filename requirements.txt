@@ -8,7 +8,9 @@ matplotlib
 # La busqueda de v2 elige el techo con Optuna y su GPSampler. GPSampler
 # necesita torch y scipy, que ya estan; se declara igual porque un
 # requisito que se cumple por casualidad deja de cumplirse sin aviso.
-optuna
+# Pinned to the target venv's versions (code review: split reproducibility; the
+# forge checklist asks one pinned requirements file for every remote account).
+optuna==4.9.0
 numpy==1.26.4
 pandas==2.2.3
 # Y scipy se declara por la misma razon que el comentario de arriba enuncia, que
@@ -20,11 +22,11 @@ pandas==2.2.3
 # auditoria y preprocesamiento de `MIL_CREDA_EEG` (scipy.signal, scipy.stats). El
 # dia que alguno de los dos scikit saliera de esta lista, todos dejarian de importar
 # y nada en el archivo diria por que.
-scipy
+scipy==1.18.0
 scikit-image
 scikit-learn
 timm
-torch
+torch==2.13.0
 torchcam
 torchvision
 tqdm
