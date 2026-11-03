@@ -2,8 +2,9 @@
 
 Experiments plan v40, Secs. 6.1-6.3, over proposal r34 Eqs. 14-19 (attention
 and bag kernel), 28-31 (local alignment) and 34-38 (bounds of the normalized
-terms). Nothing here trains: every function reads a model that
-`model_store` saved (Sec. 7.3) or a history that training already recorded.
+terms). K1 and K2 train nothing: they read a model that `model_store` saved
+(Sec. 7.3) or a history that training already recorded. K3 trains its variants
+(`train_ablation_variant`, `train_aggregation_variant`).
 
 **K1, the attention selects something meaningful (Sec. 6.1).** Only in the
 conditions with an event stream (`EVENT_CONDITIONS`: the three high-density
@@ -40,9 +41,20 @@ subjects on the two declared transfers (`K2_DECLARED`), with Holm over four.
 the normalized terms reads the per-epoch minimum and maximum of the global
 and local terms that `two_phase.adapt_target_phase` records on every step
 (`bound_control`). The two tables and their contrasts (`variant_table`,
-`k3_contrasts`) read the pooled test predictions of each variant; the variants'
-training is not wired (`train_ablation_variant`, `train_aggregation_variant`
-refuse with `NotWired`).
+`k3_contrasts`) read the pooled test predictions of each variant. No variant has
+a search of its own: every one runs with full MIL-CREDA's selected
+hyperparameters of the same transfer. The ablation variants (`ABLATIONS`,
+`two_phase.TERM_SELECTIONS`) share phase 1 with full MIL-CREDA: they start from
+its stored phase-1 checkpoint at its sigma and run phase 2 with one term
+dropped, built exactly as `search.train_mil_creda_phase_two` builds full
+MIL-CREDA's phase 2 ("both terms" reproduces it bit for bit). The aggregation
+variants (`aggregation_variants`) change phase 1, so each trains both phases:
+phase 1 as `search.train_phase_one` trains the MIL-CREDA group, phase 2 from
+that checkpoint as full MIL-CREDA's, with `attentionGamma` and
+`attentionTemperature` recorded as not applicable (NaN in the hyperparameters,
+listed in `not_applicable`), never reused. Each variant's history is tagged
+`MIL-CREDA [<variant>]:phase<n>`, so the bound control of full MIL-CREDA never
+reads it.
 
 **Implementation choices the plan does not fix.** The K1 band edges are a
 required input (`bands`), because Sec. 2.7 records two conventions for the
@@ -68,9 +80,11 @@ import torch
 from scipy import stats as sps
 
 from MIL_CREDA.bag_kernel import bag_kernel_matrix
+from MIL_CREDA_EEG import aggregation_variants
 from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, model_store, search
 from MIL_CREDA_EEG import statistics as st
+from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.two_phase import EVAL_CHUNK
 
 __provenance__ = {
@@ -92,7 +106,11 @@ __provenance__ = {
         "k2_tests_the_two_declared_transfers_with_holm_over_four",
         "the_bound_control_reads_every_recorded_step",
         "a_stored_phase_two_model_is_rebuilt_with_every_parameter",
-        "the_variant_trainers_refuse_until_wired",
+        "the_variant_trainers_refuse_an_unknown_variant",
+        "the_both_terms_ablation_is_full_mil_creda",
+        "the_ablation_starts_from_full_mil_credas_phase_one_and_its_hyperparameters",
+        "the_parameters_a_variant_lacks_are_not_applicable",
+        "an_aggregation_variant_trains_both_phases",
     ],
 }
 
@@ -109,8 +127,8 @@ K1_SCOPES = ("pooled", "per-pair")
 K2_DECLARED = {"smaller shift": assignment_mod.Transfer("level", "L1", "L6"),
                "larger shift": assignment_mod.Transfer("device", "L6", "Robots")}
 #: Sec. 6.3.
-AGGREGATIONS = ("own", "published attention", "gated attention", "max", "mean")
-ABLATIONS = ("global term only", "local term only", "both terms")
+AGGREGATIONS = ("own", *aggregation_variants.VARIANTS)
+ABLATIONS = tuple(two_phase.TERM_SELECTIONS)
 TERMS = ("global", "local")
 
 
@@ -120,10 +138,6 @@ class MechanismError(RuntimeError):
 
 class NotRecorded(MechanismError):
     """A quantity the analysis needs is not recorded by preprocessing or training."""
-
-
-class NotWired(MechanismError):
-    """The training this analysis needs is not implemented yet."""
 
 
 # ------------------------------------------------------------------ stored models
@@ -508,23 +522,135 @@ def variant_table(predictions: Mapping[str, Sequence[Mapping]]) -> list[dict]:
 
 
 def k3_contrasts(table: str, pair: str, reference: str, predictions: Mapping[str, Sequence],
-                 rivals: Sequence[str], *, reduction: str, test_train_ratio: float) -> list[dict]:
+                 rivals: Sequence[str], *, reduction: str, test_train_ratio: float,
+                 resamples: int = st.BOOTSTRAP_RESAMPLES) -> list[dict]:
     """The bootstrap contrasts of one table and core pair (Holm is applied per table)."""
     rows = []
     for rival in rivals:
         rows += st.pair_contrast(predictions[reference], predictions[rival], name_a=reference,
                                  name_b=rival, scope=f"{table}:{pair}", reduction=reduction,
                                  test_train_ratio=test_train_ratio, hypothesis="K3-ablacion",
-                                 experiment="K3-ablacion")
+                                 experiment="K3-ablacion", resamples=resamples)
     return rows
 
 
-def train_ablation_variant(*args, **kwargs):
-    raise NotWired("the ablation variants (global term only, local term only) need a term "
-                   "mask in two_phase's phase-2 objective, which hard-codes both coefficients "
-                   "to 1; that shared trainer is not changed here")
+#: Full MIL-CREDA's phase-2 keys: the only phase-2 hyperparameters a variant receives.
+MIL_CREDA_PHASE_TWO = ("lr2", "wd2", "tauLocal")
 
 
-def train_aggregation_variant(*args, **kwargs):
-    raise NotWired("the aggregation variants (published attention, gated attention, max, "
-                   "mean) need their own MIL-CREDA model classes, not written yet")
+def _exactly(params: Mapping, keys: Sequence[str], what: str) -> dict:
+    if set(params) != set(keys):
+        raise MechanismError(f"a K3 variant has no search of its own (Sec. 6.3): it takes "
+                             f"exactly full MIL-CREDA's selected {what} {sorted(keys)}; got "
+                             f"{sorted(params)}")
+    return dict(params)
+
+
+def _variant_history(records: Sequence[Mapping], variant: str) -> list[dict]:
+    """Tag `MIL-CREDA:phase<n>` as `MIL-CREDA [<variant>]:phase<n>`."""
+    out = []
+    for r in records:
+        phase = str(r["model"]).rsplit(":", 1)[-1]
+        out.append({**r, "model": f"{two_phase.MODEL} [{variant}]:{phase}"})
+    return out
+
+
+def _adapt_from_phase_one(model, state: Mapping, sigma: float, data: search.SearchData,
+                          rotation: int, seed: int, hyper: Mapping, device: torch.device,
+                          term_selection: str) -> dict:
+    """Phase 2 from a phase-1 state, as `search.train_mil_creda_phase_two` runs it."""
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    if unexpected or any(not k.startswith("target_trunk.") for k in missing):
+        raise MechanismError(f"the phase-1 state does not fit (missing {missing}, unexpected "
+                             f"{unexpected})")
+    model.fix_sigma(sigma)
+    generator = torch.Generator().manual_seed(seed)
+    joint = two_phase.bridge(model)
+    d = search._rotation(data, rotation)
+    result = two_phase.adapt_target_phase(
+        model, {"checkpoint": {"sigma": sigma}}, joint["frozen_state"], d["source_train"],
+        d["target_train"], d["target_valid"], hyper, generator, device, seed=seed,
+        fold=rotation, transfer=data.transfer.name, term_selection=term_selection)
+    return {"result": result, "layer_copy": joint["layer_copy"]}
+
+
+def train_ablation_variant(data: search.SearchData, rotation: int, seed: int, record,
+                           params: Mapping, schedule: Mapping, term_selection: str,
+                           device: torch.device | str = "cpu") -> dict:
+    """Sec. 6.3's ablation: full MIL-CREDA's phase 1, phase 2 with `term_selection`.
+
+    `record` is full MIL-CREDA's stored phase-1 checkpoint `(state, meta)` of this
+    transfer, rotation and seed; `params` are full MIL-CREDA's selected phase-2
+    hyperparameters of this transfer.
+    """
+    two_phase.term_coefficients(term_selection)
+    state, meta = record
+    expected = {"phase": 1, "name": two_phase.MODEL, "transfer": data.transfer.name,
+                "rotation": int(rotation), "seed": int(seed)}
+    wrong = {k: meta.get(k) for k, v in expected.items() if meta.get(k) != v}
+    if wrong:
+        raise MechanismError(f"the ablation starts from full MIL-CREDA's phase-1 checkpoint "
+                             f"of {data.transfer.name}, rotation {rotation}, seed {seed}; the "
+                             f"record differs in {wrong}")
+    if meta.get("sigma") is None:
+        raise MechanismError("the MIL-CREDA phase-1 checkpoint carries no sigma; phase 2 "
+                             "runs at exactly that value")
+    device = torch.device(device)
+    params = _exactly(params, MIL_CREDA_PHASE_TWO, "phase-2 hyperparameters")
+    hyper = two_phase.check_hyper({**{k: meta["hyper"][k] for k in two_phase.PHASE_ONE_KEYS},
+                                   **params, **search.check_schedule(schedule)})
+    channels = data.channels()
+    torch.manual_seed(seed)
+    model = model_store.build_model(two_phase.MODEL, channels["source"], channels["target"],
+                                    hyper).to(device)
+    out = _adapt_from_phase_one(model, state, float(meta["sigma"]), data, rotation, seed,
+                                hyper, device, term_selection)
+    return {"variant": term_selection, "term_selection": term_selection, "model": model,
+            "hyper": hyper, "channels": channels, "result": out["result"],
+            "layer_copy": out["layer_copy"],
+            "history": _variant_history(out["result"]["history"], term_selection)}
+
+
+def aggregation_hyper(phase_one: Mapping, phase_two: Mapping, schedule: Mapping) -> dict:
+    """Full MIL-CREDA's selected hyperparameters, with what a variant lacks set to NaN."""
+    phase_one = _exactly(phase_one, tuple(search.PHASE_ONE_SPACES[two_phase.MODEL]),
+                         "phase-1 hyperparameters")
+    phase_two = _exactly(phase_two, MIL_CREDA_PHASE_TWO, "phase-2 hyperparameters")
+    nan = float("nan")
+    return two_phase.check_hyper({**phase_one,
+                                  **{k: nan for k in aggregation_variants.NOT_APPLICABLE},
+                                  **phase_two, **search.check_schedule(schedule)})
+
+
+def train_aggregation_variant(data: search.SearchData, rotation: int, seed: int,
+                              aggregation: str, phase_one: Mapping, phase_two: Mapping,
+                              schedule: Mapping, device: torch.device | str = "cpu") -> dict:
+    """Sec. 6.3's aggregation table: one variant, both phases, at full MIL-CREDA's choice."""
+    aggregation_variants.check_aggregation(aggregation)
+    hyper = aggregation_hyper(phase_one, phase_two, schedule)
+    device = torch.device(device)
+    channels = data.channels()
+    d = search._rotation(data, rotation)
+
+    def build():
+        return aggregation_variants.AggregationVariantModel(
+            channels["source"], channels["target"], aggregation=aggregation).to(device)
+
+    torch.manual_seed(seed)
+    generator = torch.Generator().manual_seed(seed)
+    model = build()
+    phase1 = two_phase.train_source_phase(model, d["source_train"], d["source_valid"], hyper,
+                                          generator, device, seed=seed, fold=rotation,
+                                          transfer=data.transfer.name)
+    checkpoint = phase1["checkpoint"]
+    torch.manual_seed(seed)
+    model = build()
+    out = _adapt_from_phase_one(model, checkpoint["state"], checkpoint["sigma"], data,
+                                rotation, seed, hyper, device, two_phase.BOTH_TERMS)
+    return {"variant": aggregation, "aggregation": aggregation,
+            "form": aggregation_variants.FORMS[aggregation], "model": model, "hyper": hyper,
+            "not_applicable": list(aggregation_variants.NOT_APPLICABLE),
+            "channels": channels, "phase1": phase1, "result": out["result"],
+            "layer_copy": out["layer_copy"],
+            "history": _variant_history(phase1["history"] + out["result"]["history"],
+                                        aggregation)}

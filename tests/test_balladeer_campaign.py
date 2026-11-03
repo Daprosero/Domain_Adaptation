@@ -14,7 +14,8 @@ from pathlib import Path
 import optuna
 import pytest
 
-from MIL_CREDA_EEG import campaign, controls, model_store, results, search
+from MIL_CREDA_EEG import aggregation_variants, campaign, controls, model_store, results
+from MIL_CREDA_EEG import search
 from MIL_CREDA_EEG import statistics as st
 
 BASE = {"schedule": {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4},
@@ -53,7 +54,7 @@ def level_run(tmp_path_factory, registries):
 
 
 def test_the_steps_are_the_declared_ones_in_order():
-    assert campaign.STEPS == ("search", "final", "statistics", "mechanisms", "results")
+    assert campaign.STEPS == ("search", "final", "k3", "statistics", "mechanisms", "results")
     assert list(campaign.RUNNERS) == list(campaign.STEPS)
     with pytest.raises(campaign.CampaignError, match="step"):
         campaign.run("launch", {**BASE}, "/nonexistent")
@@ -216,3 +217,73 @@ def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
     for w in written:
         if w.endswith(".pdf"):
             assert (root / w).with_suffix(".png").exists()
+
+
+def _csv(path: Path) -> list[dict]:
+    import csv
+    with path.open(encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def test_k3_trains_the_variants_and_writes_both_tables_with_holm_per_table(level_run):
+    cfg, product, outcome = level_run
+    root = product / "Results"
+    records = results.read_predictions(root, campaign.K3)
+    st.check_once(records)
+    variants = {f"aggregation:{v}" for v in aggregation_variants.VARIANTS}
+    assert {r["strategy"] for r in records} == variants | {"ablation:global term only",
+                                                           "ablation:local term only"}
+    assert outcome["k3"]["trained_aggregation"] == 4 * 4 * 2
+    assert outcome["k3"]["trained_ablation"] == 2 * 4 * 2
+    assert outcome["k3"]["owed"] == []
+    full = {(r["transfer"], r["rotation"], r["seed"], r["subject"])
+            for r in results.read_predictions(root, "A-nivel") if r["strategy"] == "MIL-CREDA"}
+    for name in {r["strategy"] for r in records}:
+        assert {(r["transfer"], r["rotation"], r["seed"], r["subject"]) for r in records
+                if r["strategy"] == name} == full
+    for rel in ("K3-ablacion/tables/aggregation.csv", "K3-ablacion/tables/ablation.csv",
+                "K3-ablacion/tables/variant_hyperparameters.csv",
+                "K3-ablacion/tables/term_bounds.csv", "significance_K3-ablacion.json",
+                "history_K3-ablacion.json", "K3-ablacion/summary.json"):
+        assert (root / rel).exists(), rel
+    aggregation = _csv(root / "K3-ablacion" / "tables" / "aggregation.csv")
+    assert [r["variant"] for r in aggregation] == ["own", *aggregation_variants.VARIANTS]
+    assert {r["pair"] for r in aggregation} == {"L1|L11"}
+    ablation = _csv(root / "K3-ablacion" / "tables" / "ablation.csv")
+    assert [r["variant"] for r in ablation] == ["global term only", "local term only",
+                                                "both terms"]
+    rows = json.loads((root / "significance_K3-ablacion.json").read_text())
+    assert {r["experiment"] for r in rows} == {"K3-ablacion"}
+    boot = [r for r in rows if r["test"] == st.TEST_BOOTSTRAP]
+    agg = [r for r in boot if ":aggregation:" in r["comparison"]]
+    abl = [r for r in boot if ":ablation:" in r["comparison"]]
+    assert [r["comparison"] for r in agg] == ["K3-ablacion:aggregation:L1|L11:own vs "
+                                              "published attention"]
+    assert [r["comparison"] for r in abl] == [
+        "K3-ablacion:ablation:L1|L11:both terms vs global term only",
+        "K3-ablacion:ablation:L1|L11:both terms vs local term only"]
+    assert all("aggregation" in r["correction"] and "m=1" in r["correction"] for r in agg)
+    assert all("ablation" in r["correction"] and "m=2" in r["correction"] for r in abl)
+    assert all(r["correction"] == "none" for r in rows if r["test"] != st.TEST_BOOTSTRAP)
+    hyper = _csv(root / "K3-ablacion" / "tables" / "variant_hyperparameters.csv")
+    for row in hyper:
+        if row["table"] == "aggregation":
+            assert row["attentionGamma"] == row["attentionTemperature"] == "not applicable"
+        else:
+            assert row["attentionGamma"] not in ("", "not applicable")
+    summary = json.loads((root / "K3-ablacion" / "summary.json").read_text())
+    assert summary["term_bounds"] and summary["aggregation_variants"]["trained"] == list(
+        aggregation_variants.VARIANTS)
+    assert summary["ablation_variants"]["trained"] == ["global term only", "local term only"]
+    history = json.loads((root / "history_K3-ablacion.json").read_text())
+    assert {h["model"] for h in history} == {
+        *(f"MIL-CREDA [{v}]:phase{n}" for v in aggregation_variants.VARIANTS for n in (1, 2)),
+        "MIL-CREDA [global term only]:phase2", "MIL-CREDA [local term only]:phase2"}
+
+
+def test_k3_does_not_train_a_variant_again(level_run, registries):
+    cfg, product, _ = level_run
+    before = len(results.read_predictions(product / "Results", campaign.K3))
+    again = campaign.run_k3(campaign.check_config(cfg), product)
+    assert again["trained_aggregation"] == again["trained_ablation"] == 0
+    assert len(results.read_predictions(product / "Results", campaign.K3)) == before

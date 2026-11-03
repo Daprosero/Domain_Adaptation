@@ -51,6 +51,15 @@ the mean per-bag entropy) is recorded beside it. After phase 2 the source
 trunk, attention and head are asserted bit-identical to the end of the bridge
 (`FrozenPartsMoved` otherwise).
 
+**The K3 ablation (Sec. 6.3).** `term_selection` names which adaptation terms
+enter the phase-2 objective: "both terms" (the default, every caller above),
+"global term only" or "local term only" (`TERM_SELECTIONS`, the names of
+`mechanisms.ABLATIONS`). A dropped term gets coefficient 0 and is detached
+before it enters Eq. 39, so it contributes exactly zero to the gradient; its
+value is still computed and recorded on every step, for the bound control.
+With the default the objective is the same expression on the same tensors as
+before the selection existed, so every existing caller is unchanged.
+
 **Batches.** `bagsPerStep` bags per step, an implementation choice the plan
 does not fix. Phase 1 takes one class-interleaved pass over the source training
 bags per epoch. Phase 2 takes one shuffled pass over the target training bags
@@ -100,6 +109,10 @@ __provenance__ = {
         "phase_two_updates_only_the_target_trunk",
         "sigma_in_phase_two_is_exactly_the_phase_one_value",
         "the_adaptation_coefficients_are_one_with_no_ramp",
+        "the_term_selection_is_validated",
+        "the_default_term_selection_leaves_every_caller_unchanged",
+        "a_dropped_term_contributes_exactly_zero_to_the_gradient",
+        "the_dropped_terms_value_is_still_recorded_for_the_bound_control",
         "the_source_term_does_not_change_the_phase_two_gradient",
         "the_best_phase_two_epoch_is_chosen_by_target_validation_balanced_accuracy",
         "the_label_free_score_is_entropy_of_the_mean_minus_mean_entropy",
@@ -112,6 +125,12 @@ MODEL = "MIL-CREDA"
 #: Sec. 7.7: the adaptation coefficients of phase 2, fixed, with no ramp.
 LAMBDA_GLOBAL = 1.0
 LAMBDA_LOCAL = 1.0
+#: Sec. 6.3: the ablation's term selections -> (lambda_glob, lambda_loc). A dropped term
+#: has coefficient 0; the names are `mechanisms.ABLATIONS`, in that order.
+TERM_SELECTIONS = {"global term only": (LAMBDA_GLOBAL, 0.0),
+                   "local term only": (0.0, LAMBDA_LOCAL),
+                   "both terms": (LAMBDA_GLOBAL, LAMBDA_LOCAL)}
+BOTH_TERMS = "both terms"
 #: Sec. 7.7: what each phase searches, and the schedule the pilot fixes (7.6).
 PHASE_ONE_KEYS = ("lr1", "wd1", "attentionGamma", "attentionTemperature", "sigmaMultiplier")
 PHASE_TWO_KEYS = ("lr2", "wd2", "tauLocal")
@@ -135,6 +154,18 @@ class FrozenPartsMoved(RuntimeError):
 
 class SigmaChanged(RuntimeError):
     """Phase 2 would run at a sigma other than the stored phase-1 value."""
+
+
+class UnknownTermSelection(ValueError):
+    """A term selection that Sec. 6.3 does not declare."""
+
+
+def term_coefficients(term_selection: str) -> tuple[float, float]:
+    """(lambda_glob, lambda_loc) of a declared term selection; anything else refuses."""
+    if not isinstance(term_selection, str) or term_selection not in TERM_SELECTIONS:
+        raise UnknownTermSelection(f"the term selection is one of {list(TERM_SELECTIONS)}; "
+                                   f"got {term_selection!r}")
+    return TERM_SELECTIONS[term_selection]
 
 
 @dataclass(frozen=True)
@@ -401,15 +432,21 @@ def set_phase_two_modes(model: MILCREDAModel) -> None:
 # ------------------------------------------------------------------ phase 2
 
 
-def phase_two_objective(terms: Mapping) -> torch.Tensor:
-    """Eq. 39 without its supervised summand: lambda_glob L_glob + lambda_loc L_loc."""
+def phase_two_objective(terms: Mapping, term_selection: str = BOTH_TERMS) -> torch.Tensor:
+    """Eq. 39 without its supervised summand: lambda_glob L_glob + lambda_loc L_loc.
+
+    A term the selection drops enters detached with coefficient 0: no gradient.
+    """
+    lambda_global, lambda_local = term_coefficients(term_selection)
+    global_term = terms["global"] if lambda_global else terms["global"].detach()
+    local_term = terms["local"] if lambda_local else terms["local"].detach()
     zero = torch.zeros((), dtype=terms["local"].dtype, device=terms["local"].device)
-    return total_objective(zero, terms["global"], terms["local"], LAMBDA_GLOBAL, LAMBDA_LOCAL)
+    return total_objective(zero, global_term, local_term, lambda_global, lambda_local)
 
 
 def phase_two_step(model: MILCREDAModel, source: Sequence[BagTensor],
                    target: Sequence[BagTensor], tau_local: float,
-                   device: torch.device) -> dict:
+                   device: torch.device, term_selection: str = BOTH_TERMS) -> dict:
     """One step's terms: the objective, its two summands and Eq. 21 (read only)."""
     labels = torch.tensor([b.label for b in source], device=device)
     with torch.no_grad():
@@ -417,15 +454,18 @@ def phase_two_step(model: MILCREDAModel, source: Sequence[BagTensor],
         source_ce = source_term(model, model.classify(model.represent(pairs_s)), labels)
     pairs_t = model.bag_pairs(model.embed([b.windows.to(device) for b in target], "target"))
     terms = adaptation_terms(model, pairs_s, labels, pairs_t, tau_local)
-    return {**terms, "objective": phase_two_objective(terms), "source_ce": source_ce}
+    return {**terms, "objective": phase_two_objective(terms, term_selection),
+            "source_ce": source_ce}
 
 
 def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: Mapping,
                        source_train: Sequence[BagTensor], target_train: Sequence[BagTensor],
                        target_valid: Sequence[BagTensor], hyper: Mapping,
                        generator: torch.Generator, device: torch.device, *,
-                       seed: int = 0, fold: int = 0, transfer: str = "") -> dict:
+                       seed: int = 0, fold: int = 0, transfer: str = "",
+                       term_selection: str = BOTH_TERMS) -> dict:
     """Phase 2: the target trunk alone, at the phase-1 sigma, for `epochs2` epochs."""
+    lambda_global, lambda_local = term_coefficients(term_selection)
     hyper = check_hyper(hyper)
     sigma1 = phase_one["checkpoint"]["sigma"]
     model.fix_sigma(sigma1)                       # refuses any other value
@@ -449,7 +489,7 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
         for batch in shuffled_batches(len(target_train), hyper["bagsPerStep"], generator):
             source = [source_train[i] for i in queues.draw(per_class)]
             step = phase_two_step(model, source, [target_train[i] for i in batch],
-                                  hyper["tauLocal"], device)
+                                  hyper["tauLocal"], device, term_selection=term_selection)
             optimizer.zero_grad()
             step["objective"].backward()
             optimizer.step()
@@ -472,7 +512,7 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
         means = {k: v / max(steps, 1) for k, v in sums.items()}
         history.append(_record(epoch, seed, fold, 2, transfer, {
             **means, "val_balanced_accuracy": accuracy, "label_free_score": score,
-            "lambda_global": LAMBDA_GLOBAL, "lambda_local": LAMBDA_LOCAL,
+            "lambda_global": lambda_global, "lambda_local": lambda_local,
             "global_min": global_range[0], "global_max": global_range[1],
             "local_min": local_range[0], "local_max": local_range[1],
             "global_bound_low": TERM_BOUNDS["global"][0],

@@ -254,10 +254,12 @@ def test_a_stored_phase_two_model_is_rebuilt_with_every_parameter(tmp_path):
         mech.load_phase_two(path2, partition_path=ppath)
 
 
-def test_the_variant_trainers_refuse_until_wired():
-    with pytest.raises(mech.NotWired, match="term mask"):
-        mech.train_ablation_variant()
-    with pytest.raises(mech.NotWired, match="model classes"):
-        mech.train_aggregation_variant()
+def test_the_variant_trainers_refuse_an_unknown_variant():
+    from MIL_CREDA_EEG import aggregation_variants, two_phase
     assert mech.ABLATIONS == ("global term only", "local term only", "both terms")
-    assert len(mech.AGGREGATIONS) == 5
+    assert mech.AGGREGATIONS == ("own", "published attention", "gated attention", "max",
+                                 "mean")
+    with pytest.raises(two_phase.UnknownTermSelection):
+        mech.train_ablation_variant(None, 0, 1, None, {}, {}, "no local term")
+    with pytest.raises(aggregation_variants.UnknownAggregation):
+        mech.train_aggregation_variant(None, 0, 1, "own", {}, {}, {})
