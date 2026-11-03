@@ -25,7 +25,7 @@ from .losses import (adaptation_objective, classification_loss, conditional_entr
                      virtual_adversarial_loss)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["casual_alternation_updates_only_allowed_parameters",
@@ -127,7 +127,7 @@ def alternating_step(model, discriminator, source, target, params, target_optimi
 
 
 def adapt_target_phase(model, source_train, target_train, target_valid, params, schedule,
-                       *, seed=0, fold=0, transfer="", device="cpu"):
+                       *, seed=0, fold=0, transfer="", device="cpu", label_free=False):
     """Full phase-2 budget; validate only after training, restore primary best.
 
     Caller has loaded the common phase-1 state and called shared bridge(). Both
@@ -151,6 +151,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     optimizer = torch.optim.Adam(model.target_trunk.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
     dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
     history, selected, free_selected = [], None, None
+    keeper = two_phase.LabelFreeBest(label_free)
     size = schedule["bagsPerStep"]
     for epoch in range(schedule["epochs2"]):
         source_batches = two_phase.shuffled_batches(len(source_train), size, generator)
@@ -172,6 +173,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
             selected = {"target_state": _state(model.target_trunk), "epoch": epoch,
                         "valid_balanced_accuracy": ba, "label_free_score": free,
                         "hyper": params, "discriminator_state": _state(discriminator)}
+        keeper.offer(epoch, free, model)
         if free_selected is None or free > free_selected["label_free_score"]:
             free_selected = {"target_state": _state(model.target_trunk), "epoch": epoch,
                              "label_free_score": free, "hyper": params}
@@ -179,14 +181,16 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
         raise two_phase.FrozenPartsMoved("CASUAL changed frozen source/attention/head state")
     model.target_trunk.load_state_dict(selected["target_state"])
     model.eval()
-    return {"checkpoint": selected, "label_free_checkpoint": free_selected, "history": history,
+    return two_phase.with_label_free({
+            "checkpoint": selected, "label_free_checkpoint": free_selected, "history": history,
             "best_epoch": selected["epoch"], "epochs": len(history),
             "selection": {"primary": "target-validation balanced accuracy",
                           "secondary": "entropy of mean minus mean entropy",
-                          "best_label_free_epoch": free_selected["epoch"]}}
+                          "best_label_free_epoch": free_selected["epoch"]}}, keeper)
 
 
-def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Mapping, device="cpu"):
+def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Mapping, device="cpu",
+                    *, label_free=False):
     """Existing search trainer seam; checkpoint identity checked before loading."""
     state, meta = record
     expected = {"phase": 1, "name": "common", "rotation": rotation, "seed": seed,
@@ -205,8 +209,10 @@ def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Map
     d = data.rotations[rotation]
     result = adapt_target_phase(model, d["source_train"], d["target_train"], d["target_valid"],
                                params, schedule, seed=seed, fold=rotation,
-                               transfer=data.transfer.name, device=device)
+                               transfer=data.transfer.name, device=device,
+                               label_free=label_free)
     return {"strategy": STRATEGY, "model": model, "result": result, "hyper": dict(params),
+
             "channels": channels, "layer_copy": joint["layer_copy"]}
 
 

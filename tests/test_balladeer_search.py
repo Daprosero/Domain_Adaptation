@@ -431,4 +431,4 @@ def test_a_study_records_the_identity_it_is_checked_against(tmp_path, monkeypatc
     assert study.user_attrs["code_version"] == model_store.code_version()
     assert study.user_attrs["partition_sha256"] == data.partition_sha256
     assert study.user_attrs["revision"] == search.__provenance__["revision"]
-    assert study.user_attrs["revision"].endswith("v43.md")
+    assert study.user_attrs["revision"].endswith("v44.md")

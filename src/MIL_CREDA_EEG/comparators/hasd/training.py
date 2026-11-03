@@ -18,7 +18,7 @@ from .model import HASDModel, GROUP
 from .prototypes import cluster_assignments, centroids
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.1", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["hasd_bridge_freezes_all_but_target_and_keeps_reference",
@@ -96,7 +96,7 @@ def _check_params(params):
 
 def train_phase_two(model: HASDModel, context: AdaptationContext, source_train,
                     target_train, target_valid, params, schedule, *, seed: int,
-                    fold: int, transfer: str, device="cpu") -> dict:
+                    fold: int, transfer: str, device="cpu", label_free: bool = False) -> dict:
     """Whole fixed epoch budget, selecting only with target-validation bag labels."""
     _check_params(params)
     schedule = search.check_schedule(schedule)
@@ -113,6 +113,7 @@ def train_phase_two(model: HASDModel, context: AdaptationContext, source_train,
     queues = two_phase.ClassQueues(source_train, model.classes, generator)
     history, best_state, best_epoch, best = [], None, -1, -math.inf
     secondary_state, secondary_best = None, -math.inf
+    keeper = two_phase.LabelFreeBest(label_free)
     reference_state = _snapshot(context.reference)
     for epoch in range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
@@ -144,6 +145,7 @@ def train_phase_two(model: HASDModel, context: AdaptationContext, source_train,
                         "val_balanced_accuracy": accuracy, "label_free_score": score})
         if accuracy > best:
             best, best_epoch, best_state = accuracy, epoch, _snapshot(model.target_trunk)
+        keeper.offer(epoch, score, model)
         if score > secondary_best:
             secondary_best, secondary_state = score, _snapshot(model.target_trunk)
     model.target_trunk.load_state_dict(best_state)
@@ -154,16 +156,18 @@ def train_phase_two(model: HASDModel, context: AdaptationContext, source_train,
     for k, v in context.reference.state_dict().items():
         if not torch.equal(v, reference_state[k]):
             raise two_phase.FrozenPartsMoved(f"HASD initial target reference moved: {k}")
-    return {"checkpoint": {"target_state": best_state, "epoch": best_epoch,
+    return two_phase.with_label_free({
+            "checkpoint": {"target_state": best_state, "epoch": best_epoch,
                             "valid_balanced_accuracy": best,
                             "label_free_score": history[best_epoch]["label_free_score"],
                             "hyper": {**params, **schedule}},
             "best_epoch": best_epoch, "epochs": len(history), "history": history,
             "secondary_checkpoint": {"target_state": secondary_state,
-                                      "label_free_score": secondary_best}}
+                                      "label_free_score": secondary_best}}, keeper)
 
 
-def train_search_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
+def train_search_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
+                           label_free=False):
     """Existing search hook: each trial starts fresh from its own phase1 rotation."""
     state, meta = record
     expected = {"name": GROUP, "phase": 1, "rotation": rotation, "seed": seed,
@@ -181,7 +185,9 @@ def train_search_phase_two(data, rotation, seed, record, params, schedule, devic
     d = data.rotations[rotation]
     result = train_phase_two(model, context, d["source_train"], d["target_train"],
                              d["target_valid"], params, schedule, seed=seed, fold=rotation,
-                             transfer=data.transfer.name, device=device)
+                             transfer=data.transfer.name, device=device,
+                             label_free=label_free)
+
     return {"strategy": GROUP, "model": model, "result": result,
             "hyper": dict(params), "channels": channels, "layer_copy": context.layer_copy}
 

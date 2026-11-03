@@ -96,7 +96,7 @@ from MIL_CREDA_EEG.mil_creda_model import (CLASSES, TERM_BOUNDS, MILCREDAModel,
                                            adaptation_terms, source_term)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "equations": ["21", "32", "33", "34", "35", "36", "37", "38", "39"],
@@ -116,6 +116,9 @@ __provenance__ = {
         "the_source_term_does_not_change_the_phase_two_gradient",
         "the_best_phase_two_epoch_is_chosen_by_target_validation_balanced_accuracy",
         "the_label_free_score_is_entropy_of_the_mean_minus_mean_entropy",
+        "the_label_free_state_is_the_earliest_best_label_free_epoch",
+        "no_target_validation_label_changes_the_label_free_epoch",
+        "asking_for_the_label_free_state_changes_nothing_of_the_default",
         "history_records_carry_the_dashboard_keys",
         "test_predictions_are_only_for_target_test_fold_subjects",
     ],
@@ -333,6 +336,46 @@ def _clone_state(module: torch.nn.Module) -> dict:
     return {k: v.detach().clone() for k, v in module.state_dict().items()}
 
 
+#: Sec. 4.5 and 7.7: the epoch the secondary rule keeps, ties broken as the primary rule
+#: breaks them (`if accuracy > best`: the earliest of equal scores).
+LABEL_FREE_EPOCH_RULE = ("the phase-2 epoch with the best label-free score over the "
+                         "target-validation bags (Sec. 4.5), the earliest on ties")
+
+
+class LabelFreeBest:
+    """The state of the epoch with the best label-free score, kept only when asked.
+
+    Sec. 4.5's secondary rule "no usa etiquetas del objetivo": it is offered the score
+    and the model, never a label. The whole `module.state_dict()` is kept, because that
+    is what a stored phase-2 model holds. Asked for nothing, it keeps and clones nothing,
+    so a default run is unchanged.
+    """
+
+    def __init__(self, enabled: bool):
+        self.enabled = bool(enabled)
+        self.epoch, self.score, self.state = -1, -math.inf, None
+
+    def offer(self, epoch: int, score: float, module: torch.nn.Module) -> None:
+        if self.enabled and score > self.score:
+            self.epoch, self.score, self.state = int(epoch), float(score), _clone_state(module)
+
+    def checkpoint(self) -> dict | None:
+        if not self.enabled:
+            return None
+        if self.state is None:
+            raise RuntimeError("no epoch offered a finite label-free score")
+        return {"epoch": self.epoch, "label_free_score": self.score, "state": self.state,
+                "rule": LABEL_FREE_EPOCH_RULE}
+
+
+def with_label_free(result: dict, keeper: LabelFreeBest) -> dict:
+    """`result` with `label_free_best` added when the keeper was asked; else as is."""
+    kept = keeper.checkpoint()
+    if kept is not None:
+        result["label_free_best"] = kept
+    return result
+
+
 def phase_one_state(model: MILCREDAModel) -> dict:
     """Everything phase 1 fits: all but the target trunk (buffers included)."""
     return {k: v.detach().clone() for k, v in model.state_dict().items()
@@ -468,8 +511,11 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
                        target_valid: Sequence[BagTensor], hyper: Mapping,
                        generator: torch.Generator, device: torch.device, *,
                        seed: int = 0, fold: int = 0, transfer: str = "",
-                       term_selection: str = BOTH_TERMS) -> dict:
-    """Phase 2: the target trunk alone, at the phase-1 sigma, for `epochs2` epochs."""
+                       term_selection: str = BOTH_TERMS, label_free: bool = False) -> dict:
+    """Phase 2: the target trunk alone, at the phase-1 sigma, for `epochs2` epochs.
+
+    `label_free=True` also returns `label_free_best`, the whole model state of the
+    epoch with the best label-free score (Sec. 4.5, `LabelFreeBest`)."""
     lambda_global, lambda_local = term_coefficients(term_selection)
     hyper = check_hyper(hyper)
     sigma1 = phase_one["checkpoint"]["sigma"]
@@ -483,6 +529,7 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
     valid_labels = _labels(target_valid)
     history, seconds = [], []
     best, best_epoch, best_state = -math.inf, -1, None
+    keeper = LabelFreeBest(label_free)
     for epoch in range(hyper["epochs2"]):
         started = time.perf_counter()
         set_phase_two_modes(model)
@@ -532,6 +579,7 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
             "sigma": sigma1}))
         if accuracy > best:
             best, best_epoch, best_state = accuracy, epoch, _clone_state(model.target_trunk)
+        keeper.offer(epoch, score, model)
     model.target_trunk.load_state_dict(best_state)
     set_phase_two_modes(model)
     if not _states_equal(_clone_state(model.target_trunk), best_state):
@@ -539,7 +587,7 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
     if not _states_equal(phase_one_state(model), frozen_state):
         raise FrozenPartsMoved("phase 2 changed the source trunk, the attention or the head")
     selected = history[best_epoch]
-    return {"checkpoint": {"target_state": best_state, "sigma": sigma1, "epoch": best_epoch,
+    return with_label_free({"checkpoint": {"target_state": best_state, "sigma": sigma1, "epoch": best_epoch,
                            "valid_balanced_accuracy": best,
                            "label_free_score": selected["label_free_score"],
                            "hyper": dict(hyper)},
@@ -550,7 +598,7 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
                           "best_label_free_epoch": int(np.argmax(
                               [r["label_free_score"] for r in history]))},
             "seconds_per_epoch": float(np.mean(seconds)), "seconds": seconds,
-            "history": history}
+            "history": history}, keeper)
 
 
 # ------------------------------------------------------------------ the run

@@ -15,7 +15,7 @@ from .model import AdaptMILModel
 from .objectives import alignment_objective, median_bandwidth, stage_two_objective
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["adaptmil_source_pretraining_restores_best_native_checkpoint",
@@ -153,7 +153,7 @@ def _bandwidth(model, source_train, target_train, multiplier, device):
 
 
 def adapt_target_phase(model, source_train, target_train, target_valid, params, schedule,
-                       generator, device, *, seed=0, fold=0, transfer=""):
+                       generator, device, *, seed=0, fold=0, transfer="", label_free=False):
     """Fixed-cap mean-pool MMD; primary + label-free selected target snapshots."""
     schedule = search.check_schedule(schedule)
     # Reuse the shared schedule guards without treating AdaptMIL as MIL-CREDA.
@@ -176,6 +176,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     queues = two_phase.ClassQueues(source_train, model.classes, generator)
     best, free_best = -math.inf, -math.inf
     history, primary, secondary = [], None, None
+    keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         model.train()
         losses, mmds = [], []
@@ -203,6 +204,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
             best = accuracy
             primary = {"target_state": _state(model.target_trunk), "epoch": epoch,
                        "valid_balanced_accuracy": accuracy, "label_free_score": score}
+        keeper.offer(epoch, score, model)
         if score > free_best:
             free_best = score
             secondary = {"target_state": _state(model.target_trunk), "epoch": epoch,
@@ -213,12 +215,13 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
         raise two_phase.FrozenPartsMoved("AdaptMIL phase2 changed frozen parameters/buffers")
     if model_store.state_digest(_state(model.target_trunk)) != model_store.state_digest(primary["target_state"]):
         raise two_phase.RestoreFailed("AdaptMIL phase2 restore failed")
-    return {"checkpoint": {**primary, "sigma": sigma, "hyper": {**params, **schedule}},
+    return two_phase.with_label_free({
+            "checkpoint": {**primary, "sigma": sigma, "hyper": {**params, **schedule}},
             "secondary_checkpoint": {**secondary, "sigma": sigma,
                                      "hyper": {**params, **schedule}},
             "history": history, "best_epoch": primary["epoch"], "epochs": len(history),
             "selection": {"primary": "target-validation balanced accuracy",
-                          "secondary": "H(mean prediction) - mean H(prediction)"}}
+                          "secondary": "H(mean prediction) - mean H(prediction)"}}, keeper)
 
 
 def train_phase_one(data, rotation, seed, params, schedule, device="cpu"):
@@ -234,7 +237,8 @@ def train_phase_one(data, rotation, seed, params, schedule, device="cpu"):
             "channels": data.channels()}
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
+                    label_free=False):
     """Existing search.register_phase_two callback; one fresh model per trial/rotation."""
     state, meta = record
     expected = {"phase": 1, "name": GROUP, "transfer": data.transfer.name,
@@ -254,8 +258,10 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     d = data.rotations[rotation]
     result = adapt_target_phase(model, d["source_train"], d["target_train"], d["target_valid"],
                                 params, schedule, torch.Generator().manual_seed(seed), device,
-                                seed=seed, fold=rotation, transfer=data.transfer.name)
+                                seed=seed, fold=rotation, transfer=data.transfer.name,
+                                label_free=label_free)
     return {"strategy": GROUP, "model": model, "result": result,
+
             "hyper": {**params, **schedule}, "channels": data.channels(),
             "layer_copy": joint["layer_copy"]}
 

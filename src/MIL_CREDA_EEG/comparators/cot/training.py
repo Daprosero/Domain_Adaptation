@@ -15,7 +15,7 @@ from MIL_CREDA_EEG.comparators.cot.losses import (
 from MIL_CREDA_EEG.comparators.cot.model import COTModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -94,7 +94,8 @@ def _check_roles(d):
             raise ValueError("training/validation subjects overlap")
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
+                    label_free=False):
     """Existing search trainer hook; target-training labels are never accessed.
 
     Phase one is the shared common-group trainer/checkpoint, not retrained here.
@@ -122,6 +123,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     optimizer = torch.optim.SGD([*model.target_trunk.parameters(), model.target_centers],
                                 lr=params["lr2"], weight_decay=params["wd2"], momentum=.9)
     history, primary, secondary = [], None, None
+    keeper = two_phase.LabelFreeBest(label_free)
     valid_labels = [b.label for b in d["target_valid"]]
     for epoch in range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
@@ -177,6 +179,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
                       "label_free_score": free, "hyper": hyper}
         if primary is None or accuracy > primary["valid_balanced_accuracy"]:
             primary = {**checkpoint, "state": _snapshot(model)}
+        keeper.offer(epoch, free, model)
         if secondary is None or free > secondary["label_free_score"]:
             secondary = {**checkpoint, "state": _snapshot(model)}
         if any(not torch.equal(model.state_dict()[k], v) for k, v in frozen.items()):
@@ -184,12 +187,13 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     model.load_state_dict(primary["state"])
     two_phase.set_phase_two_modes(model)
     return {"strategy": "COT", "model": model, "channels": channels, "hyper": hyper,
-            "layer_copy": joint["layer_copy"], "result": {
+            "layer_copy": joint["layer_copy"], "result": two_phase.with_label_free({
                 "checkpoint": primary, "secondary_checkpoint": secondary,
                 "best_epoch": primary["epoch"], "epochs": len(history), "history": history,
                 "selection": {"primary": "target-validation balanced accuracy",
                               "secondary": "entropy of mean minus mean entropy",
-                              "best_label_free_epoch": secondary["epoch"]}}}
+                              "best_label_free_epoch": secondary["epoch"]}}, keeper)}
+
 
 
 def register() -> None:
