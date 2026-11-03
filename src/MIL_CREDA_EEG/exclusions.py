@@ -39,11 +39,23 @@ This module also drives the single preprocessing pass: each record is read
 once, its exclusion decided, and when kept its windows are written to
 `MIL-CREDA/Data/processed/signals/<record_id>.npz` beside a JSON summary under
 `records/`, so a rerun only computes what is missing.
+
+The npz holds `signal`, `window_index`, `window_start_s`, every per-window
+side array of `windows.WINDOW_ARRAYS` the record has, and the record-level
+`channels`, `record_id`, `subject`, `condition`, `device`, `family`, `rate`,
+`target_rate`, `gap_exceeds_window` and `contact_meets_rule`. A Slackline
+record also holds `event_window` (plan v42, Sec. 6.1): its session's sibling
+`*_TAGS_*.csv` is read and every K1 event instant marks the kept window that
+contains it. A Slackline record whose TAGS file is missing, ambiguous or
+unparseable gets no `event_window` -- never an all-False one -- and one entry
+in the defect log, the manifest's `event_defect` column. It is a defect of the
+mark, never an exclusion: the record and the partition are unchanged.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -51,7 +63,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from MIL_CREDA_EEG import inventory
+from MIL_CREDA_EEG import inventory, k1_events
 from MIL_CREDA_EEG.audit_channels import RAILS
 from MIL_CREDA_EEG.audit_contact import contact_rule
 from MIL_CREDA_EEG.audit_rate import CGX_MENU, EMOTIV_MENU, audit_rate
@@ -59,13 +71,13 @@ from MIL_CREDA_EEG.defect_log import _clean, cross_with_demographics
 from MIL_CREDA_EEG.modality import read_columns, read_record
 from MIL_CREDA_EEG.preprocess_filter import scalp_signal
 from MIL_CREDA_EEG.windows import (
-    BAG_FLOOR, channel_marks, complete_windows, emotiv_cq, record_windows,
+    BAG_FLOOR, EVENT_MARK, WINDOW_S, channel_marks, complete_windows, emotiv_cq, record_windows,
 )
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v18.md",
-    "sections": ["2.2", "2.4", "2.5", "2.10", "3.2"],
-    "experiments": ["2.2", "2.4", "2.5", "2.10", "3.2"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "sections": ["2.2", "2.4", "2.5", "2.7", "2.10", "3.2", "6.1"],
+    "experiments": ["2.2", "2.4", "2.5", "2.10", "3.2", "K1-atencion"],
     "invariants": [
         "a_record_with_most_channels_dead_in_every_window_has_no_eeg",
         "a_channel_dead_in_all_but_one_window_is_not_dead",
@@ -78,6 +90,11 @@ __provenance__ = {
         "the_floor_excludes_no_bag_of_the_processed_data",
         "flow_table_counts_records_and_subjects_left_after_each_step",
         "each_kind_of_exclusion_is_crossed_apart",
+        "a_slackline_record_writes_its_event_window_and_counts_its_events",
+        "a_slackline_record_without_a_readable_tags_file_gets_no_mark_and_one_defect",
+        "another_condition_gets_no_event_key_and_no_defect",
+        "every_existing_npz_member_is_byte_for_byte_unchanged",
+        "the_partition_inputs_do_not_change",
     ],
 }
 
@@ -118,6 +135,13 @@ NO_EEG_MAJORITY = 0.5
 #: under a later EmotivPRO name -- an assumption, so the column actually read
 #: is recorded per record in the manifest.
 FOCUS_COLUMNS = ("PM.Focus.Scaled", "PM.Attention.Scaled")
+
+#: Plan v42, Sec. 6.1: only the Slackline levels log K1 events with an instant.
+EVENT_TASK = "Slackline"
+TAGS_GLOB = "*_TAGS_*.csv"
+#: Per-record event fields of the summary and the manifest; None when not marked.
+EVENT_FIELDS = ("event_tags", "event_defect", "events_hit", "events_error",
+                "events_correct_no_press", "events_outside_kept", "windows_event_marked")
 
 
 # ------------------------------------------------------------- rules
@@ -202,6 +226,25 @@ def _summary_counts(out: dict) -> dict:
                                            if "focus_median" in out else None)}
 
 
+def session_events(path: str) -> tuple[list[dict] | None, str | None, str | None]:
+    """The logged rows of the EEG file's sibling TAGS file, its name, and the defect.
+
+    Exactly one `*_TAGS_*.csv` beside the EEG file is read; none, more than
+    one, or one `k1_events.parse_tags` refuses returns no rows and the defect.
+    """
+    found = sorted(Path(path).parent.glob(TAGS_GLOB))
+    if not found:
+        return None, None, "tags_missing"
+    if len(found) > 1:
+        return None, None, "tags_ambiguous: " + ", ".join(p.name for p in found)
+    try:
+        rows = k1_events.parse_tags(found[0].read_text(encoding="utf-8-sig"))
+        k1_events.event_instants(rows)
+    except (k1_events.K1EventError, UnicodeDecodeError, csv.Error) as error:
+        return None, found[0].name, f"tags_unparseable: {error}"
+    return rows, found[0].name, None
+
+
 def preprocess_record(path: str, meta: dict, signals_dir: str) -> dict:
     """Read once, decide the exclusion, and when kept write the windows."""
     out = dict(meta)
@@ -234,12 +277,16 @@ def preprocess_record(path: str, meta: dict, signals_dir: str) -> dict:
         "contact_n_bad_channels": rule["n_bad_channels"] if rule else None,
         "contact_meets_rule": rule["meets_rule"] if rule else None,
         "reasons": reasons, "npz": None, "npz_bytes": None,
-        "n_windows": 0, "bag_windows": None,
+        "n_windows": 0, "bag_windows": None, **dict.fromkeys(EVENT_FIELDS),
     })
     if reasons:
         return _clean(out)
     focus, focus_column = read_focus(path) if record.family == "EMOTIV" else (None, None)
-    windows = record_windows(record, cq=cq, focus=focus)
+    rows, instants = None, None
+    if meta.get("task") == EVENT_TASK:
+        rows, out["event_tags"], out["event_defect"] = session_events(path)
+        instants = k1_events.event_instants(rows) if rows is not None else None
+    windows = record_windows(record, cq=cq, focus=focus, events=instants)
     out["bag_windows"] = windows["n_windows"]
     floor = bag_floor_reasons(windows["n_windows"])
     if floor:
@@ -259,6 +306,13 @@ def preprocess_record(path: str, meta: dict, signals_dir: str) -> dict:
                 "npz": f"signals/{target.name}", "npz_bytes": target.stat().st_size,
                 "gap_exceeds_window": windows["gap_exceeds_window"],
                 **_summary_counts(windows)})
+    if EVENT_MARK in windows:
+        counts = k1_events.event_counts(rows)
+        out.update({"events_hit": counts["hit"], "events_error": counts["error"],
+                    "events_correct_no_press": counts["correct no-press"],
+                    "events_outside_kept": k1_events.instants_outside(
+                        instants, windows["window_start_s"], WINDOW_S),
+                    "windows_event_marked": int(windows[EVENT_MARK].sum())})
     return _clean(out)
 
 
@@ -277,6 +331,8 @@ def _cached(cache: Path, out_dir: Path, meta: dict) -> dict | None:
         return None
     if any(summary.get(key) != value for key, value in meta.items()):
         return None         # decided under another label or another floor
+    if summary.get("readable") and "event_defect" not in summary:
+        return None         # written before the event mark existed (plan v42, Sec. 6.1)
     return summary
 
 
@@ -339,7 +395,8 @@ MANIFEST_COLUMNS = (
     "contact_meets_rule", "gap_exceeds_window", "windows_integrity_marked",
     "windows_long_gap", "windows_any_flat", "windows_any_saturated",
     "windows_any_contact_bad", "windows_rail_ocular", "frontal_ptp_median",
-    "low_ratio_median", "focus_column", "focus_windows_with_reading", "npz", "npz_bytes", "error",
+    "low_ratio_median", "focus_column", "focus_windows_with_reading", *EVENT_FIELDS,
+    "npz", "npz_bytes", "error",
 )
 
 

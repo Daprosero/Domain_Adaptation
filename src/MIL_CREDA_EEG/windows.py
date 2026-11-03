@@ -37,6 +37,13 @@ Per window, side data only -- the signal is never touched by a mark:
   record at its native rate, as the audit measured them. Values, never a cut.
 * **focus** (Sec. 2.1), Emotiv only: the window median of `PM.Focus.Scaled`,
   audit metadata for the optional contrast of Sec. 6.1, never in the signal.
+* **event_window** (plan v42, Sec. 6.1), Slackline levels only: the window
+  contains the instant of a K1 behavioural event (`k1_events`), no neighbour.
+  The EEG of a level starts at the level start, so `window_start_s` -- raw
+  window `k` starts at `4k` seconds, nothing is trimmed before windowing -- is
+  also seconds from the level start: an event at `generalTime` `t` falls in raw
+  window `floor(t / 4)`, kept window `floor(t / 4) - 1`. An event in the
+  discarded first window or past the last complete one marks nothing.
 """
 
 from __future__ import annotations
@@ -45,7 +52,7 @@ import warnings
 
 import numpy as np
 
-from MIL_CREDA_EEG import audit_contact, audit_ocular
+from MIL_CREDA_EEG import audit_contact, audit_ocular, k1_events
 from MIL_CREDA_EEG.audit_channels import RAILS
 from MIL_CREDA_EEG.audit_integrity import counter_modulus, lost_before_each_sample
 from MIL_CREDA_EEG.modality import EEGRecord
@@ -67,6 +74,8 @@ __provenance__ = {
         "kept_marks_are_the_audit_marks_without_the_first_window",
         "focus_is_kept_as_a_per_window_median_and_never_in_the_signal",
         "marking_never_modifies_the_signal",
+        "an_event_marks_the_kept_window_holding_its_general_time",
+        "the_event_mark_never_touches_another_array",
     ],
 }
 
@@ -79,10 +88,13 @@ DISCARDED_LEADING = 1
 #: exclusion itself is `exclusions.bag_floor_reasons`.
 BAG_FLOOR = 68
 
+#: Plan v42, Sec. 6.1: K1's behavioural event mark (`mechanisms.EVENT_MARK`).
+EVENT_MARK = "event_window"
+
 #: Per-window side arrays, aligned with the kept windows.
 WINDOW_ARRAYS = ("integrity_mark", "lost_fraction", "interpolated_fraction", "long_gap",
                  "flat", "saturated", "contact_bad", "frontal_ptp", "low_ratio",
-                 "rail_window", "focus_median")
+                 "rail_window", "focus_median", EVENT_MARK)
 
 
 def raw_window_size(rate: float, window_s: float = WINDOW_S) -> int:
@@ -182,11 +194,14 @@ def emotiv_cq(record: EEGRecord, channels: list[str]) -> np.ndarray | None:
 
 
 def record_windows(record: EEGRecord, cq: np.ndarray | None = None,
-                   focus: np.ndarray | None = None, keep_first: bool = False) -> dict:
+                   focus: np.ndarray | None = None, keep_first: bool = False,
+                   events: list[float] | None = None) -> dict:
     """The processed windows of one record and every per-window side array.
 
     `keep_first=True` keeps the transient window, so marks can be laid beside
     the audit's own per-window readings; the processed output never keeps it.
+    `events` are K1 event instants in seconds from the level start; when given,
+    `EVENT_MARK` marks each window that contains one. Without it no key is added.
     """
     rate = float(record.nominal_rate)
     scalp, channels = scalp_signal(record)
@@ -215,4 +230,6 @@ def record_windows(record: EEGRecord, cq: np.ndarray | None = None,
            "signal": signal[first:]}
     for key, value in side.items():
         out[key] = value[first:] if key in WINDOW_ARRAYS else value
+    if events is not None:
+        out[EVENT_MARK] = k1_events.event_windows(events, out["window_start_s"], WINDOW_S)
     return out
