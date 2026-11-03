@@ -1,4 +1,4 @@
-"""Experiments plan v40, Secs. 4.5, 7.3 and 7.7: the Optuna searches of both phases."""
+"""Experiments plan v42, Secs. 4.5, 7.3 and 7.7: the Optuna searches of both phases."""
 
 from __future__ import annotations
 
@@ -75,7 +75,8 @@ def test_the_sampler_is_gpsampler_with_the_fixed_seed_and_no_pruner(tmp_path, mo
 
 
 def test_the_search_seed_is_not_a_report_seed():
-    assert len(search.REPORT_SEEDS) == 3 == len(set(search.REPORT_SEEDS))
+    # Plan v42 Sec. 4.6: a single report seed, seed 1, distinct from the search seed 0.
+    assert search.REPORT_SEEDS == (1,)
     assert search.SEARCH_SEED not in search.REPORT_SEEDS
 
 
@@ -95,6 +96,33 @@ def test_the_spaces_are_exactly_those_of_sec_7_7():
     assert search.LOSS_WEIGHT == FloatDistribution(1e-3, 10.0, log=True)
     assert search.KERNEL_MULTIPLIER == CategoricalDistribution((0.5, 0.75, 1.0, 1.5))
     assert search.CONFIDENCE_THRESHOLD == FloatDistribution(0.5, 0.95)
+    # The two comparator-specific axes of Sec. 7.7's closing paragraph.
+    assert search.EMA_MOMENTUM_COMPLEMENT == FloatDistribution(1e-3, 1e-1, log=True)
+    rho = sorted(1 - b for b in (search.EMA_MOMENTUM_COMPLEMENT.low,
+                                 search.EMA_MOMENTUM_COMPLEMENT.high))
+    assert rho == pytest.approx([0.9, 0.999])
+    assert search.VAT_RADIUS_FRACTION == FloatDistribution(0.01, 1.0, log=True)
+
+
+def test_the_comparator_specific_axes_are_admitted_only_for_their_own_strategy(monkeypatch):
+    monkeypatch.setattr(search, "PHASE_TWO_TRAINERS", dict(search.PHASE_TWO_TRAINERS))
+    monkeypatch.setattr(search, "PHASE_TWO_EXTRA", dict(search.PHASE_TWO_EXTRA))
+    clust, casual = "CLUST — variante source-free", "CASUAL"
+    assert set(search.OWN_AXES) == {clust, casual} <= set(model_store.STRATEGIES)
+    assert search.OWN_AXES[clust] == (search.EMA_MOMENTUM_COMPLEMENT,)
+    assert search.OWN_AXES[casual] == (search.VAT_RADIUS_FRACTION,)
+    for strategy, axis in ((casual, search.EMA_MOMENTUM_COMPLEMENT),
+                           (clust, search.VAT_RADIUS_FRACTION),
+                           ("COT", search.EMA_MOMENTUM_COMPLEMENT),
+                           ("UDA-DDA", search.VAT_RADIUS_FRACTION)):
+        with pytest.raises(search.SearchError, match="generic"):
+            search.register_phase_two(strategy, {"axis": axis}, print)
+        assert strategy not in search.PHASE_TWO_EXTRA
+    search.register_phase_two(clust, {"w": search.LOSS_WEIGHT,
+                                      "ema": search.EMA_MOMENTUM_COMPLEMENT}, print)
+    search.register_phase_two(casual, {"r": search.VAT_RADIUS_FRACTION}, print)
+    assert search.phase_two_space(clust)["ema"] == search.EMA_MOMENTUM_COMPLEMENT
+    assert search.phase_two_space(casual)["r"] == search.VAT_RADIUS_FRACTION
 
 
 def test_no_comparator_phase_two_is_wired_and_the_hook_takes_only_the_generic_rule(

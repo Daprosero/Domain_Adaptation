@@ -24,7 +24,7 @@ def deterministic_cpu():
 
 def params():
     return dict(lr2=0.001, wd2=1e-5, lambda_align=1., lambda_entropy=0.1,
-                lambda_vat=0.1, vat_radius=0.5)
+                lambda_vat=0.1, vat_radius_fraction=0.5)
 
 
 def schedule(epochs=2):
@@ -149,7 +149,8 @@ def test_casual_alternation_updates_only_allowed_parameters(s, t):
             torch.testing.assert_close(p, initial_parameters[n], rtol=0, atol=0)
         return original_step(*args, **kwargs)
     with patch.object(dop, "step", side_effect=checked_discriminator_step):
-        out = T.alternating_step(m, dis, bags(s, n=3), bags(t, "t", 2), params(), op, dop)
+        out = T.alternating_step(m, dis, bags(s, n=3), bags(t, "t", 2), params(), op, dop,
+                                 vat_radius=0.5)
     assert all(torch.isfinite(torch.tensor(v)) for v in out.values())
     assert out["vat"] > 0 and out["entropy"] > 0
     assert frozen == model_store.state_digest(two_phase.phase_one_state(m))
@@ -228,22 +229,53 @@ def test_casual_training_does_not_read_target_labels():
     assert trained["result"]["epochs"] == 1
 
 
-def test_casual_search_hook_uses_common_group_and_explicit_radius():
+def test_casual_search_hook_uses_common_group_and_the_radius_fraction_axis():
     before = dict(search.PHASE_TWO_TRAINERS), dict(search.PHASE_TWO_EXTRA)
     try:
         with pytest.raises(TypeError):
-            T.register()
-        T.register(search.LOSS_WEIGHT)  # Test fixture choice, NOT a production radius decision.
+            T.register(search.LOSS_WEIGHT)  # no caller-supplied radius any more
+        T.register()
         assert search.PHASE_ONE_GROUP_OF["CASUAL"] == "common"
-        assert set(search.phase_two_space("CASUAL")) == T.PARAM_KEYS
+        space = search.phase_two_space("CASUAL")
+        assert set(space) == T.PARAM_KEYS
+        assert space["vat_radius_fraction"] == search.VAT_RADIUS_FRACTION
+        for k in ("lambda_align", "lambda_entropy", "lambda_vat"):
+            assert space[k] == search.LOSS_WEIGHT
         assert search.PHASE_TWO_TRAINERS["CASUAL"] is T.train_phase_two
-        with pytest.raises(search.SearchError):
-            T.register(search.LR1)
     finally:
         search.PHASE_TWO_TRAINERS.clear()
         search.PHASE_TWO_TRAINERS.update(before[0])
         search.PHASE_TWO_EXTRA.clear()
         search.PHASE_TWO_EXTRA.update(before[1])
+
+
+def test_casual_vat_radius_is_the_fraction_of_the_median_target_training_window_norm(
+        monkeypatch):
+    import statistics
+    data, record = data_record()
+    target = data.rotations[0]["target_train"]
+    expected = statistics.median(float(torch.linalg.vector_norm(w.double()))
+                                 for b in target for w in b.windows)
+    assert T.typical_window_norm(target) == pytest.approx(expected, rel=1e-12)
+    # The median of an even count is the mean of the two middle norms, not the lower one.
+    two = [two_phase.BagTensor("x", "s", 0, torch.stack([torch.full((1, 4), 1.),
+                                                         torch.full((1, 4), 2.)]))]
+    assert T.typical_window_norm(two) == pytest.approx(3.)
+    measured, radii = [], []
+    real_norm, real_vat = T.typical_window_norm, T.virtual_adversarial_loss
+    monkeypatch.setattr(T, "typical_window_norm",
+                        lambda b: measured.append(b) or real_norm(b))
+    monkeypatch.setattr(T, "virtual_adversarial_loss",
+                        lambda m, w, r: radii.append(r) or real_vat(m, w, r))
+    trained = T.train_phase_two(data, 0, 19, record, {**params(), "vat_radius_fraction": 0.1},
+                                schedule(2))
+    assert len(measured) == 1 and measured[0] is target  # once, target training bags only
+    assert radii and all(r == pytest.approx(0.1 * expected, rel=1e-12) for r in radii)
+    for row in trained["result"]["history"]:
+        assert row["typical_window_norm"] == pytest.approx(expected, rel=1e-12)
+        assert row["vat_radius"] == pytest.approx(0.1 * expected, rel=1e-12)
+    with pytest.raises(ValueError):
+        T.typical_window_norm([])
 
 
 def test_casual_import_does_not_register_or_fork_common_model():
@@ -275,7 +307,8 @@ def test_casual_models_round_trip_with_comparator_digest(tmp_path):
         T.load_final_model(path)
 
 
-@pytest.mark.parametrize("key,value", [("lr2", 0), ("vat_radius", float("nan")),
+@pytest.mark.parametrize("key,value", [("lr2", 0), ("vat_radius_fraction", float("nan")),
+                                       ("vat_radius_fraction", 0),
                                        ("lambda_align", -1), ("wd2", -1)])
 def test_casual_invalid_parameters_refuse(key, value):
     with pytest.raises(ValueError):
