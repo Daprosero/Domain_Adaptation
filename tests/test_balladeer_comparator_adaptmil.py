@@ -390,8 +390,11 @@ def test_adaptmil_store_checks_comparator_code_identity(tmp_path, monkeypatch):
     monkeypatch.setattr(tr, "source_digest", lambda: "changed")
     with pytest.raises(model_store.CodeVersionMismatch):
         tr.load_model(path, partition_path=pp)
+    # The phase-2 trainer takes the record `model_store.load` returned; that load is
+    # where foreign code is refused, through the store's code_version.
+    monkeypatch.setattr(model_store, "code_version", lambda: "0" * 64)
     with pytest.raises(model_store.CodeVersionMismatch):
-        tr.train_phase_two(data, 0, 0, (trained["result"]["checkpoint"]["state"], meta), PARAMS2, SCHEDULE)
+        model_store.load(path, partition_path=pp)
 
 
 def test_adaptmil_registration_is_explicit_and_uses_shared_search_spaces():
@@ -441,3 +444,19 @@ def test_adaptmil_every_declared_invariant_has_a_test():
         assert "experiments" in provenance
         for invariant in provenance["invariants"]:
             assert callable(globals().get("test_" + invariant)), invariant
+
+
+def test_adaptmil_phase_two_reads_the_checkpoint_the_campaign_stores(tmp_path):
+    """The campaign stores phase 1 through `search.save_phase_one` and reads it back
+    with `model_store.load`; AdaptMIL's phase 2 must accept exactly that record."""
+    adaptmil.register()
+    data, trained = trained_source()
+    doc = {"format": "test"}
+    doc[partition.HASH_FIELD] = partition.partition_hash(doc)
+    pp = tmp_path / "partition.json"
+    pp.write_text(json.dumps(doc))
+    data = replace(data, partition_sha256=doc[partition.HASH_FIELD])
+    path = search.save_phase_one(tmp_path, "AdaptMIL", data, 0, 0, trained)
+    record = model_store.load(path, partition_path=pp)
+    out = search.train_phase_two("AdaptMIL", data, 0, 0, record, PARAMS2, SCHEDULE)
+    assert out["result"]["checkpoint"]["valid_balanced_accuracy"] >= 0
