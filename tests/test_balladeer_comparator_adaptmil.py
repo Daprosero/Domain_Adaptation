@@ -223,6 +223,29 @@ def test_adaptmil_bandwidth_is_training_only_and_degenerate_safe():
     assert equal(original, state(model))  # no BatchNorm update during measurement
 
 
+def test_adaptmil_bandwidth_is_measured_in_the_mode_adaptation_trains_in():
+    """The width comes from the representations phase 2 actually aligns: BatchNorm on
+    batch statistics, dropout off -- MIL-CREDA's sigma rule (two_phase
+    .within_bag_median_distance). An eval-mode width saturates the train-mode kernel."""
+    model = adaptmil.AdaptMILModel(14, 14)
+    tr.bridge(model)
+    source, target = bags("s"), bags("t", seed=1)
+    sigma = tr._bandwidth(model, source, target, 1, torch.device("cpu"))
+    modes = {m: m.training for m in model.modules()}
+    model.train()
+    for m in model.modules():
+        if isinstance(m, torch.nn.Dropout):
+            m.eval()
+    with torch.no_grad():
+        s = model.representations([b.windows for b in source], "source", mean=True,
+                                  chunk=two_phase.EVAL_CHUNK)
+        t = model.representations([b.windows for b in target], "target", mean=True,
+                                  chunk=two_phase.EVAL_CHUNK)
+    for m, mode in modes.items():
+        m.train(mode)
+    assert sigma == pytest.approx(obj.median_bandwidth(s, t, 1), rel=1e-6)
+
+
 @pytest.mark.parametrize("sigma", [0, -1, float("nan"), float("inf")])
 def test_adaptmil_mmd_refuses_invalid_inputs(sigma):
     with pytest.raises(ValueError):
