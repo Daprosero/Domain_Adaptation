@@ -9,7 +9,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from MIL_CREDA_EEG import audit_plots  # noqa: E402
+from MIL_CREDA_EEG import audit_plots, ps_figures  # noqa: E402
 
 
 def test_the_spectrum_figure_shows_both_curves_the_band_edge_and_the_new_nyquist():
@@ -18,7 +18,7 @@ def test_the_spectrum_figure_shows_both_curves_the_band_edge_and_the_new_nyquist
     fig = audit_plots.psd_before_after(raw, processed, "T", "Mirá el corte.",
                                        lines={"45 Hz": 45.0, "Nyquist 64 Hz": 64.0})
     ax = fig.axes[0]
-    assert ax.get_title() and ax.get_xlabel() and ax.get_ylabel()
+    assert not ps_figures.figure_titles(fig) and ax.get_xlabel() and ax.get_ylabel()
     assert any(t.get_text() for t in fig.texts), "the caption is missing"
     assert ax.get_yscale() == "log"
     curves = [line for line in ax.get_lines() if len(line.get_xdata()) > 2]

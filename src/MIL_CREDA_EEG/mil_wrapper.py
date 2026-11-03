@@ -1,6 +1,6 @@
 """The common MIL wrapper of the non-MIL comparators, on EEG.
 
-Experiments plan v40, Secs. 7.2 and 7.3, over proposal r34, Eqs. 15, 16, 19
+Experiments plan v43, Secs. 7.2 and 7.3, over proposal r34, Eqs. 15, 16, 19
 and 20. The six comparators that are not MIL methods (UDA-DDA, CCA-LSC,
 CASUAL, COT, CS+CCS and CLUST in its source-free variant) all receive the same
 attention wrapper, and this is it: each window is encoded by the EEGNet-8,2
@@ -27,6 +27,12 @@ gamma_zero" of that module; at gamma = 0 the consensus term is multiplied by
 zero, so the kernel width handed to it (`NEUTRAL_SIGMA`) changes no weight,
 and this model never reads a fitted sigma.
 
+**The consensus is not computed at gamma = 0** (`zero_consensus_logits`, code
+review should-fix). Eq. 15 multiplies the in-bag kernel consensus by gamma,
+so at gamma exactly 0 its kernel is skipped and the logit is the relevance
+term alone; the outputs and gradients are the same bytes as Eq. 15 evaluated
+in full, because adding `0 * consensus` to a finite relevance adds nothing.
+
 **Implementation choice the plan does not fix.** Sec. 7.2 writes "a learned
 tanh relevance score through a softmax", with no temperature; the softmax is
 taken at temperature 1 (`COMMON_TEMPERATURE`), and nothing is searched for the
@@ -39,11 +45,11 @@ from collections.abc import Sequence
 
 import torch
 
-from MIL_CREDA.attention import bag_weights, relevance_logits
+from MIL_CREDA.attention import bag_weights, relevance_component, relevance_logits
 from MIL_CREDA_EEG.mil_creda_model import ATTENTION_WIDTH, CLASSES, MILCREDAModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md",
     "sections": ["7.2", "7.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "equations": ["13", "15", "16", "19", "20"],
@@ -52,6 +58,8 @@ __provenance__ = {
         "the_bag_is_the_attention_weighted_sum_and_the_head_applies_once_per_bag",
         "the_common_wrapper_fixes_gamma_and_temperature",
         "the_common_wrapper_is_the_phase_one_architecture_of_the_six_non_mil_comparators",
+        "gamma_zero_skips_the_consensus_kernel",
+        "the_gamma_zero_shortcut_is_byte_identical_in_outputs_and_gradients",
     ],
 }
 
@@ -73,6 +81,14 @@ COMMON_PHASE_ONE_FIXED = {"attentionGamma": COMMON_GAMMA,
                           "sigmaMultiplier": 1.0}
 
 
+def zero_consensus_logits(H: torch.Tensor, V_R: torch.Tensor, b_R: torch.Tensor,
+                          v_R: torch.Tensor, gamma: float, sigma: float) -> torch.Tensor:
+    """Eq. 15, without computing the consensus kernel when gamma is exactly 0."""
+    if gamma == 0:
+        return relevance_component(H, V_R, b_R, v_R)
+    return relevance_logits(H, V_R, b_R, v_R, gamma, sigma)
+
+
 class CommonMILModel(MILCREDAModel):
     """Two EEGNet trunks, one tanh-relevance attention (gamma = 0), one common head."""
 
@@ -86,7 +102,7 @@ class CommonMILModel(MILCREDAModel):
         """Eqs. 15 (gamma = 0) and 16 per bag: (embeddings, in-bag weights)."""
         out = []
         for H_k in H:
-            logits = relevance_logits(H_k, self.V_R, self.b_R, self.v_R, COMMON_GAMMA,
-                                      NEUTRAL_SIGMA)
+            logits = zero_consensus_logits(H_k, self.V_R, self.b_R, self.v_R, COMMON_GAMMA,
+                                           NEUTRAL_SIGMA)
             out.append((H_k, bag_weights(logits, COMMON_TEMPERATURE)))
         return out

@@ -95,11 +95,11 @@ def test_overall_is_cross_tabulated_against_the_channels_at_the_top_level():
 def test_the_paired_box_figure_carries_title_axis_labels_caption_and_legend():
     import matplotlib
     matplotlib.use("Agg")
-    from MIL_CREDA_EEG import audit_plots
+    from MIL_CREDA_EEG import audit_plots, ps_figures
     panels = {"Robots": {"CQ = 0": {"EPOCX": [1.0, 2.0], "EPOCPLUS": [1.5]},
                          "CQ = 4": {"EPOCX": [0.1], "EPOCPLUS": []}}}
     fig = audit_plots.paired_box_panels(panels, "t", "x", "y", "caption")
     ax = fig.axes[0]
-    assert fig._suptitle.get_text() == "t" and ax.get_xlabel() and ax.get_ylabel()
+    assert not ps_figures.figure_titles(fig) and ax.get_xlabel() and ax.get_ylabel()
     assert any(t.get_text() for t in fig.texts)
     assert [t.get_text() for t in ax.get_legend().get_texts()] == ["EPOCX", "EPOCPLUS"]
