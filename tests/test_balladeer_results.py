@@ -1,4 +1,4 @@
-"""Experiments plan v42, Secs. 4.5, 5.1-5.4 and 6: the Results writers.
+"""Experiments plan v43, Secs. 4.5, 5.1-5.4 and 6: the Results writers.
 
 Every record here is synthetic (seeded), never a measured result.
 """
@@ -29,6 +29,10 @@ def _records(strategy, transfer, *, n=12, seeds=(1,), shift=0.0, seed=0):
     return out
 
 
+IDENTITY = {"partition_sha256": "a" * 64, "code_version": "b" * 64,
+            "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md"}
+
+
 def _row(**extra):
     return st.significance_row(comparison="c", test="t", statistic=1.0, p_value=0.5,
                                effect_size=0.1, effect_size_name="e", ci_low=0.0, ci_high=0.2,
@@ -42,13 +46,17 @@ def test_every_writer_lands_in_the_dashboard_layout(tmp_path):
              results.write_summary(root, "A-nivel", {"n": 3}, synthetic=True),
              results.write_history(root, "A-nivel", [{"epoch": 0, "loss": 1.0, "seed": 1,
                                                       "fold": 0, "model": "m"}]),
-             results.append_predictions(root, "A-nivel", [{"subject": "s"}])]
+             results.append_predictions(root, "A-nivel", [{"subject": "s"}],
+                                        identity=IDENTITY)]
     rel = sorted(p.relative_to(root).as_posix() for p in paths)
     assert rel == ["A-nivel/runs/predictions.jsonl", "A-nivel/summary.json",
                    "A-nivel/tables/comparison.csv", "A-nivel/tables/comparison.md",
                    "history_A-nivel.json", "significance_A-nivel.json"]
     summary = json.loads((root / "A-nivel" / "summary.json").read_text())
-    assert summary["synthetic"] is True and summary["revision"].endswith("v42.md")
+    assert summary["synthetic"] is True and summary["revision"].endswith("v43.md")
+    assert summary["rehearsal"] is False
+    results.write_summary(root, "A-nivel", {"n": 3}, synthetic=False, rehearsal=True)
+    assert json.loads((root / "A-nivel" / "summary.json").read_text())["rehearsal"] is True
     with pytest.raises(results.ResultsError):
         results.write_table(root, "Z-unknown", "t", [])
 
@@ -112,17 +120,42 @@ def test_the_rank_column_ranks_only_the_nine_adapted_strategies_on_core_transfer
     assert ranks["MIL-CREDA"] == f"{ranking['average_rank']['MIL-CREDA']:.2f}"
 
 
+def _selection(trials, rule):
+    return {r: {"rotation": r, "rule": rule, "trial": n, "params": {"lr2": 1e-3 * (n + 1)},
+                "score": 0.5, "testFold": r, "selectionRotations": [q for q in range(4)
+                                                                    if q != (r + 3) % 4],
+                "excludedRotation": (r + 3) % 4} for r, n in enumerate(trials)}
+
+
 def test_the_selection_table_reads_both_rules_from_the_same_trials():
+    primary, free = _selection([1, 1, 2, 0], "primary"), _selection([1, 2, 2, 3], "label-free")
+    row = results.selection_rows("MIL-CREDA", "L1->L11", primary, free, test_primary=0.7,
+                                 test_label_free=0.65)
+    assert row["primary trial by rotation"] == "r0: 1; r1: 1; r2: 2; r3: 0"
+    assert row["label-free trial by rotation"] == "r0: 1; r1: 2; r2: 2; r3: 3"
+    assert row["coinciding rotations"] == 2
+    assert row["test BA, primary rule"] == 0.7 and row["test BA, label-free rule"] == 0.65
+    assert row["difference"] == pytest.approx(0.05)
+    assert json.loads(row["primary configuration by rotation"])["3"] == {"lr2": 1e-3}
+    detail = results.selected_configuration_rows("MIL-CREDA", "L1->L11",
+                                                 {"primary": primary, "label-free": free})
+    assert [(d["rule"], d["rotation"], d["trial"]) for d in detail][:2] == [
+        ("primary", 0, 1), ("primary", 1, 1)]
+    assert detail[0]["selection rotations"] == "0, 1, 2" and detail[0]["excluded rotation"] == 3
+    with pytest.raises(results.ResultsError, match="rotations"):
+        results.selection_rows("MIL-CREDA", "L1->L11", primary, {0: free[0]})
+
+
+def test_the_hyperparameter_table_carries_phase_two_per_test_rotation():
     study = optuna.create_study(direction="maximize")
-    for value, free in ((0.6, 0.1), (0.8, 0.05), (0.7, 0.3)):
-        trial = study.ask()
-        trial.suggest_float("lr2", 1e-5, 1e-2, log=True)
-        trial.set_user_attr("label_free_score", free)
-        study.tell(trial, value)
-    row = results.selection_rows(study, "MIL-CREDA", "L1->L11", test_primary=0.7)
-    assert row["primary trial"] == 1 and row["label-free trial"] == 2
-    assert row["coincide"] is False and row["test BA, label-free rule"] is None
-    assert row["difference"] is None
+    study.optimize(lambda t: t.suggest_float("lr1", 1e-4, 1e-1, log=True), n_trials=2)
+    rows = results.hyperparameter_rows({"MIL-CREDA": study},
+                                       {"MIL-CREDA": _selection([1, 0, 1, 1], "primary")},
+                                       "L1->L11")
+    mine = next(r for r in rows if r["strategy"] == "MIL-CREDA")
+    assert json.loads(mine["phase 1"]) == study.best_params
+    assert json.loads(mine["phase 2"]) == {"0": {"lr2": 2e-3}, "1": {"lr2": 1e-3},
+                                           "2": {"lr2": 2e-3}, "3": {"lr2": 2e-3}}
 
 
 def _spy(monkeypatch):
@@ -219,10 +252,40 @@ def test_the_critical_difference_diagram_draws_every_rank_and_the_cd_bar(tmp_pat
 
 def test_predictions_round_trip_through_the_runs_file(tmp_path):
     records = _records("MIL-CREDA", "L1->L11")
-    results.append_predictions(tmp_path, "A-nivel", records[:5])
-    results.append_predictions(tmp_path, "A-nivel", records[5:])
-    assert results.read_predictions(tmp_path, "A-nivel") == records
+    results.append_predictions(tmp_path, "A-nivel", records[:5], identity=IDENTITY)
+    results.append_predictions(tmp_path, "A-nivel", records[5:], identity=IDENTITY)
+    assert results.read_predictions(tmp_path, "A-nivel") == [{**r, **IDENTITY}
+                                                             for r in records]
     assert results.read_predictions(tmp_path, "B-tarea") == []
+
+
+def test_every_prediction_carries_the_identity_it_was_written_under(tmp_path):
+    records = _records("MIL-CREDA", "L1->L11")[:3]
+    for broken in ({}, {k: v for k, v in IDENTITY.items() if k != "code_version"},
+                   {**IDENTITY, "revision": ""}):
+        with pytest.raises(results.ResultsError, match="identity"):
+            results.append_predictions(tmp_path, "A-nivel", records, identity=broken)
+    assert not (tmp_path / "A-nivel").exists()
+    results.append_predictions(tmp_path, "A-nivel", records, identity=IDENTITY)
+    assert results.stale_predictions(results.read_predictions(tmp_path, "A-nivel"),
+                                     IDENTITY) == []
+    newer = {**IDENTITY, "code_version": "c" * 64}
+    stale = results.stale_predictions(results.read_predictions(tmp_path, "A-nivel"), newer)
+    assert stale == [f"code_version: 3 records written under {'b' * 64!r}, current "
+                     f"{'c' * 64!r}"]
+    assert results.stale_predictions([{"strategy": "x"}], IDENTITY)[0].startswith(
+        "partition_sha256: 1 records written under None")
+
+
+def test_the_label_free_rule_predictions_live_in_their_own_file(tmp_path):
+    records = _records("MIL-CREDA", "L1->L11")[:4]
+    path = results.append_predictions(tmp_path, "A-nivel", records, identity=IDENTITY,
+                                      rule="label-free")
+    assert path.name == "predictions_label_free.jsonl" and path.parent.name == "runs"
+    assert results.read_predictions(tmp_path, "A-nivel") == []
+    assert len(results.read_predictions(tmp_path, "A-nivel", rule="label-free")) == 4
+    with pytest.raises(results.ResultsError, match="rule"):
+        results.read_predictions(tmp_path, "A-nivel", rule="oracle")
 
 
 def test_the_ladder_reads_each_strategys_own_source_only_control():

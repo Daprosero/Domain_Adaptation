@@ -1,6 +1,6 @@
 """The Optuna searches of both phases, per transfer.
 
-Experiments plan v42, Secs. 4.5, 7.3 and 7.7. Phase 1 has four studies per
+Experiments plan v43, Secs. 4.5, 7.3 and 7.7. Phase 1 has four studies per
 transfer, one per pre-training group (`PHASE_ONE_SPACES`: the common group of
 the six non-MIL comparators, AdaptMIL, HASD and MIL-CREDA); phase 2 has one
 study per strategy per transfer. Every study gets the same budget: `N_TRIALS`
@@ -25,7 +25,20 @@ the standard deviation over the four rotations (`robust`):
   as the user attribute `label_free_score`: per rotation the best per-epoch
   label-free score (entropy of the mean prediction minus mean per-bag entropy
   over the target validation bags, no labels), summarized by the same mean
-  minus deviation. Nothing is trained for it.
+  minus deviation. Nothing is trained for it in the search.
+
+**Selection per test rotation (Secs. 4.5, 7.3, 7.7).** The value a phase-2 study
+optimizes, what its sampler observes, is the mean minus sd over all four rotations.
+The selection is not one for the four: each test fold is another rotation's
+validation fold, so for the test fold of rotation r `select_per_rotation` picks
+the completed trial with the highest mean minus sd over the three rotations whose
+validation fold is not r's test fold (`selection_rotations`, derived from the
+partition's rotations recorded in `SearchData.folds`, never from an offset). Both
+rules (`RULES`) apply that exclusion. Each rotation may receive a different
+configuration. The residual Sec. 4.5 declares stays: the sampler saw all four
+rotations' scores, so r's test subjects may influence which configurations were
+tried, never which one r gets. Phase 1 keeps one selection over the four rotations,
+its study's best trial (Sec. 7.3: it reads source validation only).
 
 The search reads only the training and validation roles of both sides
 (`search_data`): no test-fold bag is ever loaded.
@@ -55,8 +68,18 @@ refuse before any storage is created.
 
 **Storage.** One SQLite file per study, `<root>/Results/hpo/
 <source>-to-<target>__phase<p>__<group or strategy>.db`, with the study named
-as the file's stem; `<root>` defaults to `MIL-CREDA/`. A study whose file
-already exists is refused: no budget is silently extended.
+as the file's stem; `<root>` defaults to `MIL-CREDA/`. Each study records its
+identity (`study_identity`: transfer, phase, budget, space, sampler and its seed,
+schedule, the partition hash, the plan revision, the code version and the
+rotations' folds). A study whose file exists is continued only when its identity
+is the requested one, up to its declared trial count (an interrupted search
+resumes), and returned as it is when complete; another identity is refused,
+naming what differs (`open_study`). No budget is silently extended. A continued
+study's sampler is seeded with `SAMPLER_SEED` plus the trials it already holds,
+so it does not replay the seeded first draws; an interrupted-and-continued study
+is therefore not the same sequence of trials as an uninterrupted one, and records
+where it was continued (`resumedAfter`). Trials left running by a killed process
+stay as they are: they are neither counted nor re-run.
 
 **Implementation choices the plan does not fix.** The deviation is the sample
 standard deviation (`SD_DDOF` = 1) over the four rotations. The seeds:
@@ -75,7 +98,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -88,7 +111,7 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, mil_wrapper, model_store, partition, two_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md",
     "sections": ["4.5", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -103,6 +126,14 @@ __provenance__ = {
         "the_phase_two_mil_creda_sigma_comes_from_the_phase_one_checkpoint",
         "phase_two_starts_only_from_the_phase_one_checkpoints_at_the_search_seed",
         "the_label_free_score_is_recorded_per_trial",
+        "the_excluded_rotation_is_derived_from_the_frozen_partition",
+        "the_selection_is_per_test_rotation_by_mean_minus_sd_over_three_rotations",
+        "the_label_free_rule_applies_the_same_exclusion",
+        "the_labels_of_r_test_subjects_cannot_change_r_selection",
+        "the_study_records_each_rotations_folds_from_the_partition",
+        "an_interrupted_study_of_the_same_identity_continues_to_its_declared_count",
+        "a_study_of_another_identity_is_refused_naming_what_differs",
+        "a_study_records_the_identity_it_is_checked_against",
         "unwired_groups_and_strategies_refuse_before_creating_storage",
         "a_two_trial_smoke_study_completes_and_writes_its_sqlite",
     ],
@@ -179,6 +210,8 @@ class SearchData:
     transfer: assignment_mod.Transfer
     partition_sha256: str
     rotations: Mapping[int, Mapping[str, list[two_phase.BagTensor]]]
+    #: Rotation -> its test and validation folds, read from the frozen partition.
+    folds: Mapping[int, Mapping[str, int]] = field(default_factory=dict)
 
     def channels(self) -> dict[str, int]:
         first = self.rotations[min(self.rotations)]
@@ -203,7 +236,8 @@ def search_data(transfer: assignment_mod.Transfer, bags: bag_data.BagSet) -> Sea
             out.append(cache[(b.subject, b.condition)])
         return out
 
-    return SearchData(transfer=transfer, partition_sha256=a.partition_sha256, rotations={
+    return SearchData(transfer=transfer, partition_sha256=a.partition_sha256,
+                      folds=rotation_folds(bags.rotations), rotations={
         r: {"source_train": tensors("source", r, "train"),
             "source_valid": tensors("source", r, "validation"),
             "target_train": tensors("target", r, "train"),
@@ -289,6 +323,85 @@ def robust(values: Sequence[float]) -> float:
                           f"{len(values)} values")
     values = np.asarray(values, dtype=float)
     return float(values.mean() - values.std(ddof=SD_DDOF))
+
+
+# ------------------------------------------------------------------ selection (Sec. 4.5)
+
+#: Sec. 4.5's two rules -> the per-rotation trial attribute each one reads.
+RULES = {"primary": "rotationValues", "label-free": "labelFreeRotationValues"}
+
+
+def rotation_folds(rotations: Mapping) -> dict[int, dict[str, int]]:
+    """Rotation -> its test and validation folds, from the frozen partition's rotations."""
+    return {int(r): {"test_fold": int(v["test_fold"]),
+                     "validation_fold": int(v["validation_fold"])}
+            for r, v in rotations.items()}
+
+
+def selection_rotations(rotations: Mapping, rotation: int) -> list[int]:
+    """Sec. 4.5: the rotations whose validation fold is not `rotation`'s test fold.
+
+    Derived from the partition (`rotation_folds`), never from an offset: the one rotation
+    left out is the one that validates on the subjects `rotation` is tested on.
+    """
+    folds = rotation_folds(rotations)
+    if sorted(folds) != list(range(partition.N_FOLDS)):
+        raise SearchError(f"the selection reads the {partition.N_FOLDS} rotations of the "
+                          f"partition; got {sorted(folds)}")
+    test = folds[int(rotation)]["test_fold"]
+    kept = [q for q in sorted(folds) if folds[q]["validation_fold"] != test]
+    if len(kept) != partition.N_FOLDS - 1:
+        raise SearchError(f"rotation {rotation}: Sec. 4.5 selects over three rotations, the "
+                          f"ones whose validation fold is not its test fold {test}; the "
+                          f"partition leaves {kept}")
+    return kept
+
+
+def robust_selection(values: Sequence[float]) -> float:
+    """Sec. 4.5: mean minus standard deviation over the three selection rotations."""
+    if len(values) != partition.N_FOLDS - 1:
+        raise SearchError(f"a per-rotation selection is over {partition.N_FOLDS - 1} "
+                          f"rotations; got {len(values)} values")
+    values = np.asarray(values, dtype=float)
+    return float(values.mean() - values.std(ddof=SD_DDOF))
+
+
+def select_per_rotation(study: optuna.Study, rotations: Mapping,
+                        rule: str = "primary") -> dict[int, dict]:
+    """Sec. 4.5: per test rotation r, the completed trial with the highest mean minus sd
+    of `rule`'s per-rotation values over `selection_rotations(rotations, r)`.
+
+    Ties go to the lowest trial number. A trial whose summary is not finite is not a
+    candidate. Phase 1 is not selected here: it keeps one selection over the four
+    rotations, its study's best trial (Sec. 7.3).
+    """
+    if rule not in RULES:
+        raise SearchError(f"the selection rule is one of {list(RULES)}; got {rule!r}")
+    key = RULES[rule]
+    trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+    if not trials:
+        raise SearchError(f"{study.study_name}: no completed trial to select from")
+    folds = rotation_folds(rotations)
+    out = {}
+    for r in sorted(folds):
+        kept = selection_rotations(folds, r)
+        best, best_score = None, -math.inf
+        for t in trials:
+            values = t.user_attrs.get(key)
+            if values is None or len(values) != partition.N_FOLDS:
+                raise SearchError(f"{study.study_name} trial {t.number} records no "
+                                  f"{partition.N_FOLDS} per-rotation values under {key!r}")
+            score = robust_selection([values[q] for q in kept])
+            if math.isfinite(score) and score > best_score:
+                best, best_score = t, score
+        if best is None:
+            raise SearchError(f"{study.study_name}: no trial has a finite {rule} score for "
+                              f"rotation {r}")
+        out[r] = {"rotation": r, "rule": rule, "trial": best.number,
+                  "params": dict(best.params), "score": best_score,
+                  "testFold": folds[r]["test_fold"], "selectionRotations": kept,
+                  "excludedRotation": next(q for q in sorted(folds) if q not in kept)}
+    return out
 
 
 # ------------------------------------------------------------------ training units
@@ -402,9 +515,11 @@ def train_phase_two(strategy: str, data: SearchData, rotation: int, seed: int, r
 
 
 def save_phase_two(root: str | Path, strategy: str, data: SearchData, rotation: int,
-                   seed: int, trained: Mapping) -> Path:
-    """Store a selected phase-2 model whole (frozen parts and the selected target trunk)."""
+                   seed: int, trained: Mapping, selection: Mapping | None = None) -> Path:
+    """Store a selected phase-2 model whole (frozen parts and the selected target trunk),
+    with the Sec. 4.5 selection that chose its configuration when one is given."""
     checkpoint = trained["result"]["checkpoint"]
+    extra = {"selection": dict(selection)} if selection is not None else {}
     return model_store.save(root, transfer=data.transfer, rotation=rotation, seed=seed,
                             phase=2, name=strategy, state=trained["model"].state_dict(),
                             hyper=dict(checkpoint["hyper"]),
@@ -413,7 +528,8 @@ def save_phase_two(root: str | Path, strategy: str, data: SearchData, rotation: 
                             extra={"epoch": checkpoint["epoch"],
                                    "valid_balanced_accuracy":
                                        checkpoint["valid_balanced_accuracy"],
-                                   "label_free_score": checkpoint["label_free_score"]})
+                                   "label_free_score": checkpoint["label_free_score"],
+                                   **extra})
 
 
 def _check_phase_one_records(strategy: str, data: SearchData, records: Mapping) -> None:
@@ -456,18 +572,70 @@ def make_study(path: str | Path, name: str) -> optuna.Study:
                                pruner=optuna.pruners.NopPruner())
 
 
-def _describe(study: optuna.Study, data: SearchData, phase: int, name: str,
-              schedule: Mapping, n_trials: int, objective: str) -> None:
+#: The fields that make a stored study the one a run asks for. A stored study whose fields
+#: differ is refused, naming them; one that matches and holds fewer completed trials than
+#: its declared count is continued up to that count.
+IDENTITY_FIELDS = ("transfer", "arm", "phase", "name", "sampler", "samplerSeed", "nTrials",
+                   "pruner", "searchSeed", "reportSeeds", "schedule", "objective", "space",
+                   partition.HASH_FIELD, "revision", "code_version", "rotationFolds")
+
+
+def _json(value):
+    import json
+    return json.loads(json.dumps(value, sort_keys=True, default=str))
+
+
+def study_identity(data: SearchData, phase: int, name: str, schedule: Mapping,
+                   n_trials: int, objective: str) -> dict:
+    """What a study is: its transfer, phase, budget, space, sampler and the partition,
+    plan revision and code version it was run against."""
     space = PHASE_ONE_SPACES[name] if phase == 1 else phase_two_space(name)
-    for key, value in {
-            "transfer": data.transfer.name, "arm": data.transfer.arm, "phase": phase,
-            "name": name, "sampler": "GPSampler", "samplerSeed": SAMPLER_SEED,
-            "nTrials": n_trials, "pruner": "none", "searchSeed": SEARCH_SEED,
-            "reportSeeds": list(REPORT_SEEDS), "schedule": dict(schedule),
-            "objective": objective, "space": {k: repr(v) for k, v in space.items()},
-            "partition_sha256": data.partition_sha256,
-            "revision": __provenance__["revision"]}.items():
-        study.set_user_attr(key, value)
+    return _json({
+        "transfer": data.transfer.name, "arm": data.transfer.arm, "phase": phase,
+        "name": name, "sampler": "GPSampler", "samplerSeed": SAMPLER_SEED,
+        "nTrials": n_trials, "pruner": "none", "searchSeed": SEARCH_SEED,
+        "reportSeeds": list(REPORT_SEEDS), "schedule": dict(schedule),
+        "objective": objective, "space": {k: repr(v) for k, v in space.items()},
+        partition.HASH_FIELD: data.partition_sha256,
+        "revision": __provenance__["revision"], "code_version": model_store.code_version(),
+        "rotationFolds": {str(r): v for r, v in data.folds.items()}})
+
+
+def identity_differences(stored: Mapping, current: Mapping,
+                         fields: Sequence[str] | None = None) -> list[str]:
+    """`field: stored X, current Y` for every field of `current` the stored record differs in."""
+    return [f"{k}: stored {_json(stored.get(k))!r}, current {current[k]!r}"
+            for k in (fields or current) if _json(stored.get(k)) != current[k]]
+
+
+def open_study(path: str | Path, identity: Mapping) -> tuple[optuna.Study, int]:
+    """(study, completed trials): a new study, or the stored one of the same identity.
+
+    A stored study of another identity is refused, naming what differs. A continued
+    study's sampler is seeded with `SAMPLER_SEED` plus the number of trials it already
+    holds, so the continuation does not replay the first draws of the seeded sampler; an
+    uninterrupted study runs at `SAMPLER_SEED` exactly.
+    """
+    path = Path(path)
+    if not path.exists():
+        study = make_study(path, path.stem)
+        for key, value in identity.items():
+            study.set_user_attr(key, value)
+        return study, 0
+    study = optuna.load_study(study_name=path.stem, storage=f"sqlite:///{path}")
+    differ = identity_differences(study.user_attrs, identity, IDENTITY_FIELDS)
+    if differ:
+        raise SearchError(f"{path} is a study of another identity and is not continued: "
+                          + "; ".join(differ) + "; remove it to search again")
+    complete = sum(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials)
+    if complete > identity["nTrials"]:
+        raise SearchError(f"{path} holds {complete} completed trials, more than its declared "
+                          f"{identity['nTrials']}")
+    if complete < identity["nTrials"]:
+        held = len(study.trials)
+        study.sampler = optuna.samplers.GPSampler(seed=SAMPLER_SEED + held)
+        study.set_user_attr("resumedAfter", [*study.user_attrs.get("resumedAfter", []), held])
+    return study, complete
 
 
 def _summary(values: Sequence[float]) -> dict:
@@ -484,9 +652,9 @@ def run_phase_one_study(group: str, data: SearchData, schedule: Mapping, *,
         raise SearchError(f"{group!r} is not a phase-1 group")
     model_store.require_registered(group)
     path = study_path(root, data.transfer, 1, group)
-    study = make_study(path, path.stem)
-    _describe(study, data, 1, group, schedule, n_trials,
-              "mean - sd over the four rotations of the source-validation balanced accuracy")
+    study, complete = open_study(path, study_identity(
+        data, 1, group, schedule, n_trials,
+        "mean - sd over the four rotations of the source-validation balanced accuracy"))
 
     def objective(trial: optuna.Trial) -> float:
         hyper = phase_one_hyper(group, suggest(trial, PHASE_ONE_SPACES[group]), schedule)
@@ -501,7 +669,7 @@ def run_phase_one_study(group: str, data: SearchData, schedule: Mapping, *,
             trial.set_user_attr(key, value)
         return robust(values)
 
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=n_trials - complete)
     return study
 
 
@@ -514,11 +682,13 @@ def run_phase_two_study(strategy: str, data: SearchData, phase_one: Mapping,
     schedule = check_schedule(schedule)
     _check_phase_one_records(strategy, data, phase_one)
     path = study_path(root, data.transfer, 2, strategy)
-    study = make_study(path, path.stem)
-    _describe(study, data, 2, strategy, schedule, n_trials,
-              "mean - sd over the four rotations of the target-validation balanced accuracy "
-              "(primary rule, Sec. 4.5); label_free_score: the same summary of the "
-              "label-free score (secondary rule)")
+    study, complete = open_study(path, study_identity(
+        data, 2, strategy, schedule, n_trials,
+        "mean - sd over the four rotations of the target-validation balanced accuracy "
+        "(primary rule, Sec. 4.5), what the sampler observes; the selection is per test "
+        "rotation over the three rotations whose validation fold is not its test fold "
+        "(select_per_rotation); label_free_score: the same summary of the label-free "
+        "score (secondary rule)"))
 
     def objective(trial: optuna.Trial) -> float:
         params = suggest(trial, space)
@@ -542,5 +712,5 @@ def run_phase_two_study(strategy: str, data: SearchData, phase_one: Mapping,
             raise SearchError(f"a rotation returned a non-finite validation score: {primary}")
         return robust(primary)
 
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=n_trials - complete)
     return study

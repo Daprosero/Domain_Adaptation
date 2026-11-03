@@ -1,6 +1,6 @@
 """Every measurement the plan declares, written where the dashboard reads it.
 
-Experiments plan v42, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
+Experiments plan v43, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 `experimental-implementation` skill's Results table, under the product folder
 `MIL-CREDA/Results/` (`DEFAULT_ROOT`), one folder per experiment
 (`EXPERIMENTS`):
@@ -22,8 +22,11 @@ Experiments plan v42, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
   important hyperparameters and the critical-difference diagram; across arms the
   domain-shift ladder;
 - `Results/<experiment>/runs/predictions.jsonl`: the per-run test predictions
-  every table and contrast is computed from (`append_predictions`); the panel
-  does not show `runs/`.
+  every table and contrast is computed from (`append_predictions`), each record
+  stamped with the partition hash, plan revision and code version it was
+  produced under (`IDENTITY_FIELDS`, `stale_predictions`); the label-free
+  rule's predictions go to `runs/predictions_label_free.jsonl` and are read only
+  by `selection_rules`. The panel does not show `runs/`.
 
 **Tables (what each one is).** Per performance arm (Secs. 5.1-5.3):
 `transfer_detail` (MIL-CREDA per transfer: balanced accuracy, AUC,
@@ -34,9 +37,12 @@ the nine adapted strategies over the core transfers; the source-only controls
 of the device arm print `controls.NA_RECORD`), `secondary` (kappa, AUC,
 sensitivity, specificity over the core pair), `per_fold` (the per-rotation
 summary, AUC included, Sec. 4.6), `ranking` (Friedman and the Nemenyi critical
-difference), `selection_rules` (Sec. 4.5: the configuration each rule chose and
-whether they coincide) and `hyperparameters` (Sec. 5.4: chosen values per
-phase). K1, K2 and K3 write the tables of Secs. 6.1-6.3.
+difference), `selection_rules` (Sec. 4.5: per strategy and transfer, the trial
+each rule chose for each test rotation, in how many rotations they coincide, and
+the pooled test balanced accuracy of each choice with their difference),
+`selected_configurations` (per rule and test rotation, the trial and the three
+rotations it was selected over) and `hyperparameters` (Sec. 5.4: phase 1's one
+configuration, phase 2's configuration per test rotation). K1, K2 and K3 write the tables of Secs. 6.1-6.3.
 
 Nothing here computes a model or a test: it lays out what `statistics` and
 `mechanisms` returned. A result written from synthetic data says so in its
@@ -58,7 +64,7 @@ from MIL_CREDA_EEG import statistics as st
 from MIL_CREDA_EEG.two_phase import write_history as _write_history
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md",
     "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
@@ -74,6 +80,9 @@ __provenance__ = {
         "the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_epoch",
         "the_critical_difference_diagram_draws_every_rank_and_the_cd_bar",
         "predictions_round_trip_through_the_runs_file",
+        "every_prediction_carries_the_identity_it_was_written_under",
+        "the_label_free_rule_predictions_live_in_their_own_file",
+        "the_hyperparameter_table_carries_phase_two_per_test_rotation",
         "the_ladder_reads_each_strategys_own_source_only_control",
     ],
 }
@@ -91,6 +100,11 @@ SOURCE_ONLY = {"source-only:common": "Source only, common attention",
                "source-only:HASD": "Source only, HASD",
                "source-only:MIL-CREDA": "Source only, MIL-CREDA"}
 UPPER_BOUND = "upper-bound"
+#: What a stored prediction must have been produced under to be reused (Sec. 7.3).
+IDENTITY_FIELDS = ("partition_sha256", "revision", "code_version")
+#: Sec. 4.5's two selection rules: the primary rule's predictions feed every table and
+#: contrast; the label-free rule's are kept apart and read only by `selection_rules`.
+PREDICTION_FILES = {"primary": "predictions.jsonl", "label-free": "predictions_label_free.jsonl"}
 METHOD_ROWS = {**SOURCE_ONLY, **{s: s for s in model_store.STRATEGIES},
                UPPER_BOUND: "Target-supervised upper bound"}
 FIGURE_BODY_PT = 10
@@ -174,30 +188,57 @@ def write_table(root: str | Path, experiment: str, name: str, rows: Sequence[Map
 
 
 def write_summary(root: str | Path, experiment: str, summary: Mapping, *,
-                  synthetic: bool) -> Path:
+                  synthetic: bool, rehearsal: bool = False) -> Path:
+    """`rehearsal` marks a result of a run that does not cover the plan's full comparison."""
     return write_json(Path(root) / _experiment(experiment) / "summary.json",
                       {"experiment": experiment, "revision": __provenance__["revision"],
-                       "synthetic": bool(synthetic), **summary})
+                       "synthetic": bool(synthetic), "rehearsal": bool(rehearsal), **summary})
 
 
 def write_history(root: str | Path, name: str, records: Sequence[Mapping]) -> Path:
     return _write_history(records, Path(root) / f"history_{name}.json")
 
 
-def append_predictions(root: str | Path, experiment: str, records: Iterable[Mapping]) -> Path:
-    path = Path(root) / _experiment(experiment) / "runs" / "predictions.jsonl"
+def _predictions_path(root: str | Path, experiment: str, rule: str) -> Path:
+    if rule not in PREDICTION_FILES:
+        raise ResultsError(f"predictions are kept per selection rule {list(PREDICTION_FILES)}; "
+                           f"got {rule!r}")
+    return Path(root) / _experiment(experiment) / "runs" / PREDICTION_FILES[rule]
+
+
+def append_predictions(root: str | Path, experiment: str, records: Iterable[Mapping], *,
+                       identity: Mapping, rule: str = "primary") -> Path:
+    """Append test predictions, each stamped with the partition hash, plan revision and
+    code version they were produced under (`IDENTITY_FIELDS`)."""
+    if sorted(identity) != sorted(IDENTITY_FIELDS) or not all(identity.values()):
+        raise ResultsError(f"a prediction is written with its identity {list(IDENTITY_FIELDS)}, "
+                           f"every one non-empty; got {dict(identity)}")
+    path = _predictions_path(root, experiment, rule)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         for r in records:
-            handle.write(json.dumps(_plain(r), allow_nan=False) + "\n")
+            handle.write(json.dumps(_plain({**r, **identity}), allow_nan=False) + "\n")
     return path
 
 
-def read_predictions(root: str | Path, experiment: str) -> list[dict]:
-    path = Path(root) / _experiment(experiment) / "runs" / "predictions.jsonl"
+def read_predictions(root: str | Path, experiment: str, rule: str = "primary") -> list[dict]:
+    path = _predictions_path(root, experiment, rule)
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+def stale_predictions(records: Sequence[Mapping], identity: Mapping) -> list[str]:
+    """Per identity field, how many records were written under another value than now."""
+    out = []
+    for key in IDENTITY_FIELDS:
+        stored: dict = {}
+        for r in records:
+            if r.get(key) != identity[key]:
+                stored[r.get(key)] = stored.get(r.get(key), 0) + 1
+        out += [f"{key}: {n} records written under {value!r}, current {identity[key]!r}"
+                for value, n in stored.items()]
+    return out
 
 
 # ------------------------------------------------------------------ arm tables
@@ -308,29 +349,51 @@ def ranking_table(ranking: Mapping | None) -> list[dict]:
 # ------------------------------------------------------------------ Sec. 4.5 and 5.4
 
 
-def selection_rows(study, strategy: str, transfer: str,
-                   test_primary: float | None = None,
-                   test_secondary: float | None = None) -> dict:
-    """Sec. 4.5's two rules over the same trials of one phase-2 study."""
-    trials = [t for t in study.trials if t.value is not None]
-    if not trials:
-        raise ResultsError(f"{study.study_name}: no completed trial")
-    primary = max(trials, key=lambda t: t.value)
-    free = max(trials, key=lambda t: t.user_attrs.get("label_free_score", -math.inf))
-    diff = (test_primary - test_secondary
-            if test_primary is not None and test_secondary is not None else None)
-    return {"strategy": strategy, "transfer": transfer, "primary trial": primary.number,
-            "primary configuration": json.dumps(primary.params, sort_keys=True),
-            "label-free trial": free.number,
-            "label-free configuration": json.dumps(free.params, sort_keys=True),
-            "coincide": primary.number == free.number,
-            "test BA, primary rule": test_primary, "test BA, label-free rule": test_secondary,
+def _by_rotation(selection: Mapping[int, Mapping], key: str) -> str:
+    return "; ".join(f"r{r}: {selection[r][key]}" for r in sorted(selection))
+
+
+def selection_rows(strategy: str, transfer: str, primary: Mapping[int, Mapping],
+                   label_free: Mapping[int, Mapping], test_primary: float | None = None,
+                   test_label_free: float | None = None) -> dict:
+    """Sec. 4.5's table row: per test rotation the trial each rule chose
+    (`search.select_per_rotation`), in how many rotations they coincide, and the pooled
+    test balanced accuracy of each choice with their difference (primary minus label-free).
+    """
+    if sorted(primary) != sorted(label_free) or not primary:
+        raise ResultsError(f"both rules select for the same test rotations; got "
+                           f"{sorted(primary)} and {sorted(label_free)}")
+    diff = (test_primary - test_label_free
+            if test_primary is not None and test_label_free is not None else None)
+    return {"strategy": strategy, "transfer": transfer,
+            "primary trial by rotation": _by_rotation(primary, "trial"),
+            "label-free trial by rotation": _by_rotation(label_free, "trial"),
+            "primary configuration by rotation": json.dumps(
+                {str(r): primary[r]["params"] for r in sorted(primary)}, sort_keys=True),
+            "label-free configuration by rotation": json.dumps(
+                {str(r): label_free[r]["params"] for r in sorted(label_free)}, sort_keys=True),
+            "coinciding rotations": sum(primary[r]["trial"] == label_free[r]["trial"]
+                                        for r in primary),
+            "test BA, primary rule": test_primary, "test BA, label-free rule": test_label_free,
             "difference": diff}
 
 
-def hyperparameter_rows(phase_one: Mapping[str, object], phase_two: Mapping[str, object],
+def selected_configuration_rows(strategy: str, transfer: str,
+                                selections: Mapping[str, Mapping[int, Mapping]]) -> list[dict]:
+    """Per rule and test rotation: the trial chosen and the rotations it was chosen over."""
+    return [{"strategy": strategy, "transfer": transfer, "rule": rule, "rotation": r,
+             "test fold": sel["testFold"], "trial": sel["trial"],
+             "configuration": json.dumps(sel["params"], sort_keys=True),
+             "selection rotations": ", ".join(str(q) for q in sel["selectionRotations"]),
+             "excluded rotation": sel["excludedRotation"], "score (mean - sd)": sel["score"]}
+            for rule, chosen in selections.items() for r, sel in sorted(chosen.items())]
+
+
+def hyperparameter_rows(phase_one: Mapping[str, object],
+                        phase_two: Mapping[str, Mapping[int, Mapping]],
                         transfer: str) -> list[dict]:
-    """Sec. 5.4: chosen values per strategy and phase (phase 1 from its group's study)."""
+    """Sec. 5.4: chosen values per strategy and phase: phase 1 the one configuration of its
+    group's study, phase 2 the configuration chosen for each test rotation (Sec. 4.5)."""
     from MIL_CREDA_EEG.search import PHASE_ONE_GROUP_OF
     rows = []
     for strategy in model_store.STRATEGIES:
@@ -338,7 +401,8 @@ def hyperparameter_rows(phase_one: Mapping[str, object], phase_two: Mapping[str,
         one, two = phase_one.get(group), phase_two.get(strategy)
         rows.append({"strategy": strategy, "transfer": transfer, "phase-1 group": group,
                      "phase 1": json.dumps(one.best_params, sort_keys=True) if one else "",
-                     "phase 2": json.dumps(two.best_params, sort_keys=True) if two else ""})
+                     "phase 2": json.dumps({str(r): two[r]["params"] for r in sorted(two)},
+                                           sort_keys=True) if two else ""})
     return rows
 
 
