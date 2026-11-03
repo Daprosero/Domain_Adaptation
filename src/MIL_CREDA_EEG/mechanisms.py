@@ -1,6 +1,6 @@
 """The mechanism experiments, read from the stored models: K1, K2 and K3.
 
-Experiments plan v42, Secs. 6.1-6.3, over proposal r34 Eqs. 14-19 (attention
+Experiments plan v44, Secs. 6.1-6.3, over proposal r34 Eqs. 14-19 (attention
 and bag kernel), 28-31 (local alignment) and 34-38 (bounds of the normalized
 terms). K1 and K2 train nothing: they read a model that `model_store` saved
 (Secs. 6.3 and 7.3) or a history that training already recorded. K3 trains its
@@ -50,6 +50,17 @@ declared transfers (`K2_DECLARED`): separation > 0 with MIL-CREDA, and
 MIL-CREDA vs the global-term-only variant of the Sec. 6.3 ablation
 (`K2_NO_LOCAL`) paired per subject, Holm over four.
 
+**Every Wilcoxon row of K1 and K2 (Secs. 6.1, 6.2)** carries the
+matched-pairs rank-biserial correlation as its effect size and, beside it,
+the Hodges-Lehmann estimator of the per-subject difference (`hodges_lehmann`)
+with its Wilcoxon-based 95% confidence interval in `ci_low` and `ci_high`:
+the exact signed-rank interval on the sorted Walsh averages, from the k-th to
+the (M + 1 - k)-th, with k the largest integer whose null probability
+P(T+ <= k - 1) is at most 0.025 (`statistics.hodges_lehmann`, which states
+the method and reports the achieved coverage). `k1_test_table` and
+`k2_test_table` lay the rows out under the column headers of Secs. 6.1 and
+6.2, verbatim (`K1_TABLE_COLUMNS`, `K2_TABLE_COLUMNS`).
+
 **K3, aggregation and ablation (Sec. 6.3).** The implementation control of
 the normalized terms reads the per-epoch minimum and maximum of the global
 and local terms that `two_phase.adapt_target_phase` records on every step
@@ -97,7 +108,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.two_phase import EVAL_CHUNK
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.6", "6.1", "6.2", "6.3", "7.2", "7.3"],
     "experiments": ["K1-atencion", "K2-emparejamiento", "K3-ablacion"],
     "equations": ["14", "15", "16", "17", "18", "19", "37", "38"],
@@ -112,6 +123,8 @@ __provenance__ = {
         "the_kernel_distance_is_the_rkhs_distance_at_the_frozen_sigma",
         "the_separation_is_others_minus_own",
         "k2_tests_the_two_declared_transfers_with_holm_over_four",
+        "every_k1_and_k2_wilcoxon_row_carries_hodges_lehmann_and_its_interval",
+        "the_k1_and_k2_test_tables_carry_the_plans_headers",
         "the_bound_control_reads_every_recorded_step",
         "a_stored_phase_two_model_is_rebuilt_with_every_parameter",
         "a_stored_k3_variant_model_is_rebuilt_for_its_attention",
@@ -148,6 +161,21 @@ K2_DECLARED = {"smaller shift": assignment_mod.Transfer("level", "L1", "L6"),
                "larger shift": assignment_mod.Transfer("device", "L6", "Robots")}
 #: Sec. 6.2: MIL-CREDA without its local term is the Sec. 6.3 global-term-only variant.
 K2_NO_LOCAL = model_store.variant_name("global term only")
+#: Sec. 6.1's test table, headers verbatim.
+K1_TABLE_COLUMNS = ("Contraste", "Estadístico", "Valor de p",
+                    "Tamaño del efecto, correlación biserial de rangos",
+                    "Estimador de Hodges-Lehmann", "Intervalo de confianza al 95 % de Wilcoxon")
+#: Sec. 6.2's test table, headers and rows verbatim, in the plan's order.
+K2_TABLE_COLUMNS = ("Prueba de Wilcoxon", "Estadístico", "Valor de p crudo",
+                    "Valor de p ajustado por Holm",
+                    "Tamaño del efecto, correlación biserial de rangos",
+                    "Estimador de Hodges-Lehmann", "Intervalo de confianza al 95 % de Wilcoxon",
+                    "Sujetos de la sonda")
+K2_TABLE_ROWS = (
+    ("smaller shift", "separation", "Corrimiento menor: separación de MIL-CREDA mayor que cero"),
+    ("larger shift", "separation", "Corrimiento mayor: separación de MIL-CREDA mayor que cero"),
+    ("smaller shift", "no local", "Corrimiento menor: MIL-CREDA contra sin término local"),
+    ("larger shift", "no local", "Corrimiento mayor: MIL-CREDA contra sin término local"))
 #: Sec. 6.3.
 AGGREGATIONS = ("own", *aggregation_variants.VARIANTS)
 ABLATIONS = tuple(two_phase.TERM_SELECTIONS)
@@ -309,9 +337,13 @@ def _wilcoxon_row(values: Sequence[float | None], *, comparison: str, name: str,
     return st.significance_row(comparison=comparison, test=st.TEST_WILCOXON,
                                statistic=w["statistic"], p_value=w["p_value"],
                                effect_size=w["rank_biserial"], effect_size_name=name,
-                               ci_low=None, ci_high=None, n=w["n"], hypothesis=experiment,
-                               experiment=experiment, median=w["median"],
-                               n_nonzero=w["n_nonzero"], **(extra or {}))
+                               ci_low=w["ci_low"], ci_high=w["ci_high"], n=w["n"],
+                               hypothesis=experiment, experiment=experiment,
+                               median=w["median"], n_nonzero=w["n_nonzero"],
+                               hodges_lehmann=w["hodges_lehmann"],
+                               ci_name="Hodges-Lehmann, exact Wilcoxon signed-rank 95% interval",
+                               ci_coverage=w["ci_coverage"], ci_note=w["ci_note"],
+                               **(extra or {}))
 
 
 def _not_recorded(members: Sequence[Mapping]) -> str | None:
@@ -477,7 +509,8 @@ def k2_tests(full_rows: Sequence[Mapping], no_local_rows: Sequence[Mapping] | No
         family.append(_wilcoxon_row(
             [r["separation"] for r in mine],
             comparison=f"{experiment}:{transfer.name} ({label}):separation, {full}",
-            name="matched-pairs rank-biserial (others - own distance)", experiment=experiment))
+            name="matched-pairs rank-biserial (others - own distance)", experiment=experiment,
+            extra={"declared": label, "k2_test": "separation"}))
         other = {r["subject"]: r for r in no_local_rows if r["transfer"] == transfer.name}
         diffs = [r["separation"] - other[r["subject"]]["separation"] for r in mine
                  if r["subject"] in other]
@@ -486,8 +519,36 @@ def k2_tests(full_rows: Sequence[Mapping], no_local_rows: Sequence[Mapping] | No
         family.append(_wilcoxon_row(
             diffs, comparison=f"{experiment}:{transfer.name} ({label}):{full} vs {no_local}",
             name=f"matched-pairs rank-biserial ({full} - {no_local} separation)",
-            experiment=experiment, extra={"not_computed": note} if note else None))
+            experiment=experiment, extra={"declared": label, "k2_test": "no local",
+                                          **({"not_computed": note} if note else {})}))
     return st.apply_holm(family, f"{experiment} criterion tests")
+
+
+def _interval(row: Mapping) -> str:
+    lo, hi = row.get("ci_low"), row.get("ci_high")
+    return "" if lo is None or hi is None else f"[{lo:.4f}, {hi:.4f}]"
+
+
+def k1_test_table(rows: Sequence[Mapping]) -> list[dict]:
+    """Sec. 6.1's test table from `k1_tests` rows, one per contrast, in their order."""
+    return [dict(zip(K1_TABLE_COLUMNS, (r["comparison"], r["statistic"], r["p_value"],
+                                        r["effect_size"], r.get("hodges_lehmann"),
+                                        _interval(r)))) for r in rows]
+
+
+def k2_test_table(rows: Sequence[Mapping]) -> list[dict]:
+    """Sec. 6.2's test table from `k2_tests` rows, in the plan's row order."""
+    by = {(r["declared"], r["k2_test"]): r for r in rows}
+    out = []
+    for declared, test, label in K2_TABLE_ROWS:
+        r = by.get((declared, test))
+        if r is None:
+            raise MechanismError(f"no K2 test row for {declared}, {test}")
+        out.append(dict(zip(K2_TABLE_COLUMNS, (label, r["statistic"], r["p_value"],
+                                               r["p_adjusted"], r["effect_size"],
+                                               r.get("hodges_lehmann"), _interval(r),
+                                               r["n"]))))
+    return out
 
 
 # ------------------------------------------------------------------ K3 (Sec. 6.3)

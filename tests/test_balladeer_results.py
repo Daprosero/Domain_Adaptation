@@ -53,7 +53,7 @@ def test_every_writer_lands_in_the_dashboard_layout(tmp_path):
                    "A-nivel/tables/comparison.csv", "A-nivel/tables/comparison.md",
                    "history_A-nivel.json", "significance_A-nivel.json"]
     summary = json.loads((root / "A-nivel" / "summary.json").read_text())
-    assert summary["synthetic"] is True and summary["revision"].endswith("v43.md")
+    assert summary["synthetic"] is True and summary["revision"].endswith("v44.md")
     assert summary["rehearsal"] is False
     results.write_summary(root, "A-nivel", {"n": 3}, synthetic=False, rehearsal=True)
     assert json.loads((root / "A-nivel" / "summary.json").read_text())["rehearsal"] is True
@@ -303,3 +303,126 @@ def test_the_ladder_reads_each_strategys_own_source_only_control():
     base = st.pooled(records[12:])["balanced_accuracy"]
     assert points[0]["gain"] == pytest.approx(mine - base)
     assert model_store.STRATEGIES[-1] == "MIL-CREDA"
+
+
+# ------------------------------------------------------------------ plan v44
+
+
+def test_the_provenance_binds_plan_v44():
+    assert results.__provenance__["revision"] == (
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md")
+
+
+def _all_ten(strategies=model_store.STRATEGIES):
+    records = []
+    for k, s in enumerate(strategies):
+        for t in results.GLOBAL_TRANSFERS:
+            records += _records(s, t, shift=0.02 * k, seed=k)
+    return records
+
+
+def test_the_arm_ranking_table_is_descriptive_with_the_plans_headers():
+    records = []
+    for k, s in enumerate(("MIL-CREDA", "COT", "HASD")):
+        for t in ("L1->L11", "L11->L1"):
+            records += _records(s, t, shift=0.05 * k, seed=k)
+    ranking = results.arm_ranking(records, ["L1->L11", "L11->L1"])
+    assert ranking["test"] is None and "p_value" not in ranking
+    table = results.ranking_table(ranking)
+    assert table == [{"Ranking descriptivo del brazo":
+                      "Nueve estrategias adaptadas, transferencias núcleo",
+                      "Ranking promedio de MIL-CREDA": ranking["average_rank"]["MIL-CREDA"],
+                      "Posición de MIL-CREDA entre las nueve": ranking["position"]["MIL-CREDA"]}]
+    assert ranking["top_three"]["MIL-CREDA"] is (ranking["position"]["MIL-CREDA"] <= 3)
+    # the comparison table still reads the rank of the nine from the same ranking
+    comparison = results.comparison_table(records, "level", ["L1->L11", "L11->L1"], ranking)
+    ranks = {r["method"]: r["average rank (core)"] for r in comparison}
+    assert ranks["MIL-CREDA"] == f"{ranking['average_rank']['MIL-CREDA']:.2f}"
+    empty = results.ranking_table(None)
+    assert list(empty[0]) == list(table[0]) and empty[0][
+        "Ranking promedio de MIL-CREDA"] is None
+
+
+def test_the_arm_significance_table_carries_both_families_with_the_plans_headers():
+    a = _records("MIL-CREDA", "L1->L11", n=24, shift=0.1)
+    rows = []
+    for k, rival in enumerate(("COT", "HASD")):
+        rows += st.pair_contrast(a, _records(rival, "L1->L11", n=24, seed=3 + k),
+                                 name_a="MIL-CREDA", name_b=rival, scope="L1|L11",
+                                 test_train_ratio=0.3, hypothesis="A-nivel",
+                                 experiment="A-nivel", resamples=200)
+    st.apply_contrast_families(rows, "A-nivel MIL-CREDA vs rivals")
+    table = results.significance_table(rows)
+    assert list(results.SIGNIFICANCE_TABLE_COLUMNS) == [
+        "Contraste", "Transferencia núcleo", "Diferencia de exactitud balanceada",
+        "Intervalo bootstrap al 95 %", "Valor de p crudo", "Valor de p ajustado por Holm",
+        "Diferencia de kappa", "Valor de p de la kappa ajustado por Holm",
+        "Valor de p de DeLong ajustado por Holm", "Valor de p de Nadeau-Bengio ajustado por Holm",
+        "Sujetos en que discrepan"]
+    assert len(table) == 2 and all(list(r) == list(results.SIGNIFICANCE_TABLE_COLUMNS)
+                                   for r in table)
+    by_test = {(r["rival"], r["test"]): r for r in rows}
+    first = table[0]
+    assert first["Contraste"] == "MIL-CREDA vs COT" and first["Transferencia núcleo"] == "L1|L11"
+    assert first["Valor de p de la kappa ajustado por Holm"] == by_test[
+        ("COT", st.TEST_KAPPA)]["p_adjusted"]
+    assert first["Diferencia de kappa"] == by_test[("COT", st.TEST_KAPPA)]["effect_size"]
+    assert first["Valor de p de DeLong ajustado por Holm"] == by_test[
+        ("COT", st.TEST_DELONG)]["p_adjusted"]
+    assert first["Valor de p ajustado por Holm"] == by_test[("COT", st.TEST_BOOTSTRAP)][
+        "p_adjusted"]
+    assert first["Sujetos en que discrepan"] == by_test[("COT", st.TEST_BOOTSTRAP)]["discordant"]
+
+
+def test_the_global_ranking_is_one_friedman_over_the_ten_transfers(tmp_path, monkeypatch):
+    assert len(results.GLOBAL_TRANSFERS) == 10
+    assert set(results.GLOBAL_TRANSFERS) == {t for ts in results.ARM_TRANSFERS.values()
+                                             for t in ts}
+    records = _all_ten() + _records("source-only:common", "L1->L11") + _records(
+        "upper-bound", "L1->L11")
+    ranking = results.global_ranking(records)
+    assert ranking["k"] == 9 and ranking["blocks"] == 10
+    assert sorted(ranking["average_rank"]) == sorted(model_store.STRATEGIES)
+    assert ranking["critical_difference"] == pytest.approx(3.102 * np.sqrt(1.5))
+    assert ranking["groups"] == st.nemenyi_groups(ranking["average_rank"],
+                                                  ranking["critical_difference"])
+    assert ranking["limitation"] == st.GLOBAL_RANKING_LIMITATION
+    calls = _spy(monkeypatch)
+    titles = []
+    import matplotlib.axes
+    monkeypatch.setattr(matplotlib.axes.Axes, "set_title",
+                        lambda self, *a, **k: titles.append(a))
+    paths = results.write_global_ranking(tmp_path, ranking)
+    rel = sorted(p.relative_to(tmp_path).as_posix() for p in paths)
+    assert rel == ["figures/critical_difference.pdf", "significance_global_ranking.json",
+                   "summary.json", "tables/global_ranking.csv", "tables/global_ranking.md",
+                   "tables/global_ranking_strategies.csv",
+                   "tables/global_ranking_strategies.md"]
+    assert (tmp_path / "figures" / "critical_difference.png").exists() and not titles
+    assert [c for c in calls if c[0] == "save"][0][2].get("png_preview") is True
+    header = (tmp_path / "tables" / "global_ranking.csv").read_text(encoding="utf-8")
+    assert header.splitlines()[0] == ("Ranking global,Estadístico de Friedman,Valor de p,"
+                                      "Diferencia crítica de Nemenyi")
+    assert "Nueve estrategias adaptadas, diez transferencias" in header
+    strategies = (tmp_path / "tables" / "global_ranking_strategies.csv").read_text(
+        encoding="utf-8").splitlines()
+    assert strategies[0] == ("\"Estrategia, ranking global\","
+                             "Ranking promedio sobre las diez transferencias")
+    assert [line.split(",")[0] for line in strategies[1:]] == [
+        f'"{s}"' if "," in s else s for s in model_store.STRATEGIES]
+    sig = json.loads((tmp_path / "significance_global_ranking.json").read_text())
+    assert len(sig) == 1 and sig[0]["test"] == st.TEST_FRIEDMAN_GLOBAL
+    assert sig[0]["correction"] != "none" and sig[0]["n"] == 10
+    assert set(st.SIGNIFICANCE_KEYS) <= set(sig[0])
+    summary = json.loads((tmp_path / "summary.json").read_text())
+    assert summary["global_ranking"]["limitation"] == st.GLOBAL_RANKING_LIMITATION
+    assert summary["global_ranking"]["critical_difference"] == pytest.approx(
+        ranking["critical_difference"])
+
+
+def test_the_global_ranking_refuses_a_strategy_missing_a_transfer():
+    records = [r for r in _all_ten() if not (r["strategy"] == "COT"
+                                             and r["transfer"] == "L6->Robots")]
+    ranking = results.global_ranking(records)
+    assert ranking is None          # the plan ranks the nine; eight is not its test
+    assert results.global_ranking(_all_ten(model_store.STRATEGIES[:2])) is None

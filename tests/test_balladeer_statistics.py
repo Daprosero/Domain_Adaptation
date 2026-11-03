@@ -225,7 +225,7 @@ def test_significance_rows_carry_exactly_the_dashboard_keys():
     rows = st.pair_contrast(a, b, name_a="MIL-CREDA", name_b="X", scope="L1|L11",
                             test_train_ratio=0.3,
                             hypothesis="A-nivel", experiment="A-nivel", resamples=200)
-    assert [r["test"] for r in rows] == [st.TEST_BOOTSTRAP, st.TEST_DELONG,
+    assert [r["test"] for r in rows] == [st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_DELONG,
                                          st.TEST_NADEAU_BENGIO]
     for r in rows:
         assert set(st.SIGNIFICANCE_KEYS) | set(st.OPTIONAL_KEYS) <= set(r)
@@ -233,3 +233,145 @@ def test_significance_rows_carry_exactly_the_dashboard_keys():
         assert r["experiment"] == "A-nivel"
         assert all(not (isinstance(v, float) and not math.isfinite(v)) for v in r.values())
     assert "discordant" in rows[0] and "kappa_difference" in rows[0]
+
+
+# ------------------------------------------------------------------ plan v44
+
+
+def test_the_provenance_binds_plan_v44():
+    assert st.__provenance__["revision"] == (
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md")
+
+
+def test_hodges_lehmann_and_its_exact_wilcoxon_interval_on_one_to_eight():
+    # Walsh averages of 1..8: (i + j) / 2 for i <= j, 36 of them, symmetric about 4.5.
+    out = st.hodges_lehmann([1, 2, 3, 4, 5, 6, 7, 8])
+    assert out["estimate"] == pytest.approx(4.5)
+    # n = 8: P(T+ <= 3) = 5/256 <= 0.025 < P(T+ <= 4) = 7/256, so k = 4 and the
+    # interval is the 4th and the 33rd Walsh averages, (1+3)/2 and (8+6)/2.
+    assert out["k"] == 4 and out["walsh"] == 36
+    assert (out["ci_low"], out["ci_high"]) == (pytest.approx(2.0), pytest.approx(7.0))
+    assert out["coverage"] == pytest.approx(1 - 2 * 5 / 256)
+
+
+def test_hodges_lehmann_is_the_walsh_median_and_too_few_subjects_give_no_interval():
+    out = st.hodges_lehmann([1, 2, 10])      # Walsh: 1, 1.5, 2, 5.5, 6, 10
+    assert out["estimate"] == pytest.approx((2 + 5.5) / 2)
+    assert out["ci_low"] is None and out["ci_high"] is None and "n = 3" in out["note"]
+    rng = np.random.default_rng(4)
+    d = rng.normal(0.2, 1, size=11)
+    walsh = sorted((d[i] + d[j]) / 2 for i in range(11) for j in range(i, 11))
+    got = st.hodges_lehmann(d)
+    assert got["estimate"] == pytest.approx(np.median(walsh))
+    assert got["ci_low"] == pytest.approx(walsh[got["k"] - 1])
+    assert got["ci_high"] == pytest.approx(walsh[len(walsh) - got["k"]])
+    # n = 11 at 95%: the signed-rank lower critical value is 10, so k = 11.
+    assert got["k"] == 11
+
+
+def test_wilcoxon_reports_hodges_lehmann_beside_the_rank_biserial():
+    d = [0.3, 0.2, 0.1, -0.05, 0.4, 0.0, 0.25, 0.15]
+    out = st.wilcoxon_signed_rank(d)
+    hl = st.hodges_lehmann(d)
+    assert out["hodges_lehmann"] == pytest.approx(hl["estimate"])
+    assert (out["ci_low"], out["ci_high"]) == (hl["ci_low"], hl["ci_high"])
+    assert out["rank_biserial"] == st.wilcoxon_signed_rank(d)["rank_biserial"]
+
+
+def test_the_kappa_p_value_equals_a_direct_recomputation():
+    rng = np.random.default_rng(7)
+    y = np.array([i % 2 for i in range(30)])
+    pa = np.clip(0.5 + 0.3 * (y - 0.5) + rng.normal(0, 0.25, 30), 0, 1)
+    pb = np.clip(0.5 + 0.1 * (y - 0.5) + rng.normal(0, 0.25, 30), 0, 1)
+    strata = [(int(v), "d1" if i < 15 else "d2") for i, v in enumerate(y)]
+    out = st.paired_bootstrap(y, pa, pb, strata, resamples=3000, seed=11)
+    groups = st._strata_index(strata)
+    rng2 = np.random.default_rng(11)
+    index = np.concatenate([g[rng2.integers(0, len(g), size=(3000, len(g)))]
+                            for g in groups], axis=1)
+    ka = np.array([cohen_kappa_score(y[i], st.predicted_labels(pa)[i]) for i in index])
+    kb = np.array([cohen_kappa_score(y[i], st.predicted_labels(pb)[i]) for i in index])
+    kdiff = ka - kb
+    lower = (1 + np.sum(kdiff <= 0)) / 3001
+    upper = (1 + np.sum(kdiff >= 0)) / 3001
+    assert out["kappa_p_value"] == pytest.approx(min(1.0, 2 * min(lower, upper)))
+    # the balanced-accuracy p value is unchanged by the kappa one
+    diff = out["replicates"]
+    lo, hi = (1 + np.sum(diff <= 0)) / 3001, (1 + np.sum(diff >= 0)) / 3001
+    assert out["p_value"] == pytest.approx(min(1.0, 2 * min(lo, hi)))
+
+
+def test_pair_contrast_emits_the_primary_and_the_three_secondary_rows():
+    a = _records(strategy="MIL-CREDA", rng=np.random.default_rng(5))
+    b = _records(strategy="X", rng=np.random.default_rng(6), skill=0.1)
+    rows = st.pair_contrast(a, b, name_a="MIL-CREDA", name_b="X", scope="L1|L11",
+                            test_train_ratio=0.3, hypothesis="A-nivel", experiment="A-nivel",
+                            resamples=200)
+    assert [r["test"] for r in rows] == [st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_DELONG,
+                                         st.TEST_NADEAU_BENGIO]
+    assert [r["family"] for r in rows] == [st.FAMILY_PRIMARY] + [st.FAMILY_SECONDARY] * 3
+    boot = st.paired_bootstrap(
+        [r["label"] for r in sorted(a, key=lambda r: r["subject"])],
+        [r["probability"] for r in sorted(a, key=lambda r: r["subject"])],
+        [r["probability"] for r in sorted(b, key=lambda r: r["subject"])],
+        [(r["label"], r["direction"]) for r in sorted(a, key=lambda r: r["subject"])],
+        resamples=200)
+    kappa = rows[1]
+    assert kappa["p_value"] == pytest.approx(boot["kappa_p_value"])
+    assert kappa["effect_size"] == pytest.approx(boot["kappa_difference"])
+    assert (kappa["ci_low"], kappa["ci_high"]) == (pytest.approx(boot["kappa_ci_low"]),
+                                                   pytest.approx(boot["kappa_ci_high"]))
+    assert len({r["contrast"] for r in rows}) == 1
+
+
+def test_holm_runs_within_each_metric_and_no_row_stays_uncorrected():
+    rows = []
+    for k, rival in enumerate(("X", "Y", "Z")):
+        rows += st.pair_contrast(
+            _records(strategy="MIL-CREDA", rng=np.random.default_rng(5)),
+            _records(strategy=rival, rng=np.random.default_rng(10 + k), skill=0.05 * k),
+            name_a="MIL-CREDA", name_b=rival, scope="L1|L11", test_train_ratio=0.3,
+            hypothesis="A-nivel", experiment="A-nivel", resamples=200)
+    primary_only = [dict(r) for r in rows if r["test"] == st.TEST_BOOTSTRAP]
+    st.apply_holm(primary_only, "A-nivel MIL-CREDA vs rivals, bootstrap")
+    st.apply_contrast_families(rows, "A-nivel MIL-CREDA vs rivals")
+    assert all(r["correction"] != "none" for r in rows)
+    for test in (st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_DELONG, st.TEST_NADEAU_BENGIO):
+        family = [r for r in rows if r["test"] == test]
+        assert len(family) == 3
+        assert [r["p_adjusted"] for r in family] == pytest.approx(
+            st.holm([r["p_value"] for r in family]))
+        assert all("m=3" in r["correction"] for r in family)
+    # the primary family is the one the success criteria read, unchanged
+    assert [r["p_adjusted"] for r in rows if r["test"] == st.TEST_BOOTSTRAP] == [
+        r["p_adjusted"] for r in primary_only]
+
+
+def test_nemenyi_critical_difference_for_nine_strategies_and_ten_blocks():
+    # Demsar 2006, Table 5(a): q_0.05 = 3.102 for k = 9; CD = q sqrt(k(k+1) / 6N).
+    rng = np.random.default_rng(1)
+    scores = {f"S{i}": list(rng.uniform(0.5, 0.9, 10)) for i in range(9)}
+    out = st.friedman_nemenyi(scores)
+    assert out["q_alpha"] == 3.102
+    assert out["critical_difference"] == pytest.approx(3.102 * math.sqrt(1.5))
+    assert out["critical_difference"] == pytest.approx(3.799, abs=5e-4)
+
+
+def test_the_arm_ranking_is_descriptive_with_no_test():
+    scores = {"MIL-CREDA": [0.9, 0.8], "X": [0.7, 0.75], "Y": [0.5, 0.6], "Z": [0.6, 0.6]}
+    out = st.descriptive_ranking(scores)
+    assert set(out) == {"average_rank", "position", "top_three", "blocks", "k", "test"}
+    assert out["test"] is None
+    assert out["average_rank"] == st.friedman_nemenyi(scores)["average_rank"]
+    assert out["position"]["MIL-CREDA"] == 1 and out["top_three"]["MIL-CREDA"] is True
+    assert out["position"]["Z"] == 3 and out["top_three"]["Z"] is True      # the boundary
+    assert out["top_three"]["Y"] is False
+    # two strategies are enough: nothing is tested
+    assert st.descriptive_ranking({"A": [0.5], "B": [0.6]})["position"] == {"A": 2, "B": 1}
+
+
+def test_the_global_ranking_joins_strategies_whose_rank_gap_does_not_exceed_the_cd():
+    ranks = {"A": 1.0, "B": 2.0, "C": 4.5, "D": 5.0}
+    assert st.nemenyi_groups(ranks, 3.5) == [["A", "B", "C"], ["B", "C", "D"]]
+    assert st.nemenyi_groups(ranks, 0.5) == [["C", "D"]]
+    assert st.nemenyi_groups(ranks, 0.1) == []

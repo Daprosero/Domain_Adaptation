@@ -331,3 +331,56 @@ def test_a_stored_k3_variant_model_is_rebuilt_for_its_attention(tmp_path):
     assert rebuilt.attention_temperature == 0.8 and rebuilt.sigma == 1.5 and extra == []
     x = torch.randn(5, CHANNELS, 512)
     assert np.allclose(mech.attention_weights(rebuilt, x), mech.attention_weights(model, x))
+
+
+# ------------------------------------------------------------------ plan v44
+
+
+def test_the_provenance_binds_plan_v44():
+    assert mech.__provenance__["revision"] == (
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md")
+
+
+def test_k1_rows_carry_hodges_lehmann_and_its_wilcoxon_interval():
+    table = mech.k1_tests({"MIL-CREDA": _k1_rows("MIL-CREDA", "level", "L1->L11")})
+    row = table[0]
+    values = [-0.1 * (i + 1) for i in range(8)]
+    hl = st.hodges_lehmann(values)
+    assert row["hodges_lehmann"] == pytest.approx(hl["estimate"])
+    assert (row["ci_low"], row["ci_high"]) == (pytest.approx(hl["ci_low"]),
+                                               pytest.approx(hl["ci_high"]))
+    assert row["effect_size"] == pytest.approx(-1.0)          # the rank-biserial stays
+    out = mech.k1_test_table(table)
+    assert list(out[0]) == list(mech.K1_TABLE_COLUMNS) == [
+        "Contraste", "Estadístico", "Valor de p",
+        "Tamaño del efecto, correlación biserial de rangos", "Estimador de Hodges-Lehmann",
+        "Intervalo de confianza al 95 % de Wilcoxon"]
+    assert out[0]["Estimador de Hodges-Lehmann"] == pytest.approx(hl["estimate"])
+
+
+def test_k2_gets_the_test_table_of_sec_6_2():
+    rows = [{"model": "MIL-CREDA", "transfer": t, "subject": f"S{i}",
+             "separation": 0.1 * (i + 1)} for t in ("L1->L6", "L6->Robots") for i in range(8)]
+    weaker = [{**r, "model": mech.K2_NO_LOCAL, "separation": r["separation"] / 2}
+              for r in rows]
+    tests = mech.k2_tests(rows, weaker)
+    hl = st.hodges_lehmann([0.1 * (i + 1) for i in range(8)])
+    assert tests[0]["hodges_lehmann"] == pytest.approx(hl["estimate"])
+    assert (tests[0]["ci_low"], tests[0]["ci_high"]) == (pytest.approx(hl["ci_low"]),
+                                                         pytest.approx(hl["ci_high"]))
+    table = mech.k2_test_table(tests)
+    assert list(mech.K2_TABLE_COLUMNS) == [
+        "Prueba de Wilcoxon", "Estadístico", "Valor de p crudo", "Valor de p ajustado por Holm",
+        "Tamaño del efecto, correlación biserial de rangos", "Estimador de Hodges-Lehmann",
+        "Intervalo de confianza al 95 % de Wilcoxon", "Sujetos de la sonda"]
+    assert [r["Prueba de Wilcoxon"] for r in table] == [
+        "Corrimiento menor: separación de MIL-CREDA mayor que cero",
+        "Corrimiento mayor: separación de MIL-CREDA mayor que cero",
+        "Corrimiento menor: MIL-CREDA contra sin término local",
+        "Corrimiento mayor: MIL-CREDA contra sin término local"]     # Sec. 6.2's row order
+    assert table[2]["Valor de p crudo"] == tests[1]["p_value"]
+    assert all(list(r) == list(mech.K2_TABLE_COLUMNS) for r in table)
+    assert table[0]["Valor de p ajustado por Holm"] == tests[0]["p_adjusted"]
+    assert table[0]["Sujetos de la sonda"] == 8
+    assert table[0]["Intervalo de confianza al 95 % de Wilcoxon"] == (
+        f"[{hl['ci_low']:.4f}, {hl['ci_high']:.4f}]")
