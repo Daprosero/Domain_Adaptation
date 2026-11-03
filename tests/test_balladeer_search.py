@@ -1,4 +1,4 @@
-"""Experiments plan v42, Secs. 4.5, 7.3 and 7.7: the Optuna searches of both phases."""
+"""Experiments plan v43, Secs. 4.5, 7.3 and 7.7: the Optuna searches of both phases."""
 
 from __future__ import annotations
 
@@ -362,3 +362,73 @@ def test_only_a_group_with_its_own_unit_registers_a_phase_one_trainer(monkeypatc
             search.register_phase_one(group, print)
     search.register_phase_one("HASD", print)
     assert search.PHASE_ONE_TRAINERS == {"HASD": print}
+
+
+def _scripted_phase_one(fail_at=None):
+    calls = []
+
+    def fake(group, data_, rotation, seed, hyper, device):
+        calls.append(rotation)
+        if fail_at is not None and len(calls) == fail_at:
+            raise RuntimeError("the session was cut")
+        return {"result": {"best_valid_balanced_accuracy": 0.5 + 0.1 * hyper["lr1"],
+                           "epochs": 1, "best_epoch": 0}}
+
+    return fake
+
+
+def test_an_interrupted_study_of_the_same_identity_continues_to_its_declared_count(
+        tmp_path, monkeypatch):
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    # the second trial dies in its third rotation: one complete trial and one failed
+    monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one(fail_at=7))
+    with pytest.raises(RuntimeError, match="cut"):
+        search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3)
+    path = search.study_path(tmp_path, LEVEL, 1, "common")
+    cut = optuna.load_study(study_name=path.stem, storage=f"sqlite:///{path}")
+    states = [t.state for t in cut.trials]
+    assert states == [optuna.trial.TrialState.COMPLETE, optuna.trial.TrialState.FAIL]
+    monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one())
+    study = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3)
+    complete = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+    assert len(complete) == 3
+    # the continuation does not replay the sampler's first draws
+    params = [json.dumps(t.params, sort_keys=True) for t in study.trials]
+    assert len(set(params)) == len(params)
+    assert study.user_attrs["resumedAfter"] == [2]
+    # a complete study is returned as it is, never extended
+    again = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3)
+    assert len(again.trials) == len(study.trials)
+
+
+def test_a_study_of_another_identity_is_refused_naming_what_differs(tmp_path, monkeypatch):
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one())
+    search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+    with monkeypatch.context() as m:
+        m.setattr(model_store, "code_version", lambda: "0" * 64)
+        with pytest.raises(search.SearchError, match="code_version"):
+            search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+    with monkeypatch.context() as m:
+        m.setitem(search.__provenance__, "revision", "old-v01.md")
+        with pytest.raises(search.SearchError, match="revision"):
+            search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+    other = search.SearchData(transfer=data.transfer, partition_sha256="y" * 64,
+                              rotations=data.rotations, folds=data.folds)
+    with pytest.raises(search.SearchError, match="partition_sha256"):
+        search.run_phase_one_study("common", other, SCHEDULE, root=tmp_path, n_trials=1)
+    with pytest.raises(search.SearchError, match="schedule"):
+        search.run_phase_one_study("common", data, {**SCHEDULE, "epochs1": 2},
+                                   root=tmp_path, n_trials=1)
+    with pytest.raises(search.SearchError, match="nTrials"):
+        search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=2)
+
+
+def test_a_study_records_the_identity_it_is_checked_against(tmp_path, monkeypatch):
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one())
+    study = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+    assert study.user_attrs["code_version"] == model_store.code_version()
+    assert study.user_attrs["partition_sha256"] == data.partition_sha256
+    assert study.user_attrs["revision"] == search.__provenance__["revision"]
+    assert study.user_attrs["revision"].endswith("v43.md")

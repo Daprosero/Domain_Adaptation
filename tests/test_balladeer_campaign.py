@@ -1,4 +1,4 @@
-"""Experiments plan v42: the campaign entry point, rehearsed on a SYNTHETIC set on CPU.
+"""Experiments plan v43: the campaign entry point, rehearsed on a SYNTHETIC set on CPU.
 
 The synthetic set is seeded noise with a weak class signal; no number it yields is a
 measured result.
@@ -20,7 +20,9 @@ from MIL_CREDA_EEG import search
 from MIL_CREDA_EEG import statistics as st
 
 BASE = {"schedule": {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4},
-        "strategies": ["MIL-CREDA"], "transfers": ["L1->L6"]}
+        "strategies": ["MIL-CREDA"], "transfers": ["L1->L6"], "rehearsal": True}
+FULL = {"schedule": BASE["schedule"], "strategies": list(model_store.STRATEGIES),
+        "transfers": [t.name for t in campaign.assignment_mod.TRANSFERS]}
 
 
 @pytest.fixture(scope="module")
@@ -118,17 +120,80 @@ def test_the_campaign_never_launches_remote_work():
     assert "submit" not in parser_choices and "launch" not in parser_choices
 
 
+def _identity(sha="x" * 64):
+    return {"partition_sha256": sha, "revision": campaign.REVISION,
+            "code_version": model_store.code_version()}
+
+
 def test_an_incomplete_study_is_refused_not_extended(tmp_path):
     missing = tmp_path / "absent.db"
     with pytest.raises(campaign.CampaignError, match="search step"):
-        campaign._study(missing, 2)
+        campaign._study(missing, 2, "x" * 64)
     assert not missing.exists()
     path = tmp_path / "s.db"
     study = optuna.create_study(study_name="s", storage=f"sqlite:///{path}")
+    for key, value in _identity().items():
+        study.set_user_attr(key, value)
     study.optimize(lambda t: t.suggest_float("x", 0, 1), n_trials=1)
     with pytest.raises(campaign.CampaignError, match="1 completed trials of 2"):
-        campaign._study(path, 2)
-    assert len(campaign._study(path, 1).trials) == 1
+        campaign._study(path, 2, "x" * 64)
+    assert len(campaign._study(path, 1, "x" * 64).trials) == 1
+
+
+def test_a_stale_study_is_refused_naming_what_differs(tmp_path, monkeypatch):
+    path = tmp_path / "s.db"
+    study = optuna.create_study(study_name="s", storage=f"sqlite:///{path}")
+    for key, value in _identity().items():
+        study.set_user_attr(key, value)
+    study.optimize(lambda t: t.suggest_float("x", 0, 1), n_trials=1)
+    with pytest.raises(campaign.CampaignError, match="partition_sha256"):
+        campaign._study(path, 1, "y" * 64)
+    monkeypatch.setattr(model_store, "code_version", lambda: "0" * 64)
+    with pytest.raises(campaign.CampaignError, match="code_version"):
+        campaign._study(path, 1, "x" * 64)
+
+
+def test_stale_predictions_are_refused_naming_what_differs(tmp_path, monkeypatch):
+    root = tmp_path / "Results"
+    results.append_predictions(root, "A-nivel", [{"strategy": "MIL-CREDA", "transfer": "t",
+                                                  "rotation": 0, "seed": 1}],
+                               identity=_identity())
+    assert campaign._predicted(tmp_path, "A-nivel", _identity()) == {
+        ("MIL-CREDA", "t", 0, 1)}
+    for current, field in ((_identity("y" * 64), "partition_sha256"),
+                           ({**_identity(), "revision": "plan-v44.md"}, "revision"),
+                           ({**_identity(), "code_version": "0" * 64}, "code_version")):
+        with pytest.raises(campaign.CampaignError, match=field):
+            campaign._predicted(tmp_path, "A-nivel", current)
+        with pytest.raises(campaign.CampaignError, match=field):
+            campaign._read_predictions(tmp_path, "A-nivel", current)
+
+
+def test_every_changed_module_answers_to_one_plan_revision():
+    assert campaign.REVISION.endswith("v43.md")
+    for module in (search, results, model_store):
+        assert module.__provenance__["revision"] == campaign.REVISION
+
+
+def test_a_reduced_run_is_refused_outside_rehearsal_mode():
+    cfg = campaign.check_config(FULL)
+    assert cfg["rehearsal"] is False and cfg["nTrials"] == search.N_TRIALS
+    for change, field in (({"strategies": ["MIL-CREDA", "COT"]}, "strategies"),
+                          ({"transfers": ["L1->L6"]}, "transfers"),
+                          ({"nTrials": 4}, "nTrials")):
+        with pytest.raises(campaign.CampaignError, match=field) as refused:
+            campaign.check_config({**FULL, **change})
+        assert "rehearsal" in str(refused.value)
+        assert campaign.check_config({**FULL, **change, "rehearsal": True})["rehearsal"]
+    # a synthetic set is a rehearsal by construction
+    assert campaign.check_config({**FULL, "nTrials": 4, "synthetic": True})["rehearsal"]
+
+
+def test_the_rehearsal_summaries_say_so(level_run):
+    _, product, _ = level_run
+    for experiment in ("A-nivel", "K3-ablacion", "K1-atencion"):
+        summary = json.loads((product / "Results" / experiment / "summary.json").read_text())
+        assert summary["rehearsal"] is True
 
 
 def test_the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation(level_run):
@@ -161,7 +226,8 @@ def test_a_stored_model_is_not_trained_again(level_run, registries):
     cfg, product, _ = level_run
     before = len(results.read_predictions(product / "Results", "A-nivel"))
     again = campaign.run_final(campaign.check_config(cfg), product)
-    assert again == {"trained_phase1": 0, "trained_phase2": 0, "predictions": 0}
+    assert again == {"trained_phase1": 0, "trained_phase2": 0, "predictions": 0,
+                     "trained_label_free": 0, "label_free_predictions": 0}
     assert len(results.read_predictions(product / "Results", "A-nivel")) == before
 
 
@@ -328,3 +394,93 @@ def test_k2_trains_the_global_term_only_variant_on_its_declared_transfers():
     # transfer, trains only the global-term-only variant; any other transfer, nothing
     assert plan == {"L1->L11": full, "L11->L1": full, "L6->Robots": full,
                     "L1->L6": {"aggregation": (), "ablation": ("global term only",)}}
+
+
+def _sidecar(path: Path) -> dict:
+    return json.loads(path.with_suffix(".json").read_text())
+
+
+def test_phase_two_is_selected_per_test_rotation_and_phase_one_once(level_run):
+    cfg, product, _ = level_run
+    models = product / "Models" / "Balladeer"
+    bags = campaign.load_bags(campaign.check_config(cfg))
+    for transfer in campaign.transfers_of(campaign.check_config(cfg)):
+        data = search.search_data(transfer, bags)
+        # phase 1: one configuration over the four rotations, the study's best (Sec. 7.3)
+        one = campaign._study(search.study_path(product, transfer, 1, "MIL-CREDA"),
+                              cfg["nTrials"], data.partition_sha256)
+        for r in range(4):
+            meta = _sidecar(models / model_store.transfer_slug(transfer) / f"rotation{r}"
+                            / "seed1" / "phase1__MIL-CREDA.pt")
+            assert {k: meta["hyper"][k] for k in one.best_params} == one.best_params
+        for strategy in ("MIL-CREDA", "COT"):
+            study = campaign._study(search.study_path(product, transfer, 2, strategy),
+                                    cfg["nTrials"], data.partition_sha256)
+            chosen = search.select_per_rotation(study, data.folds)
+            for r in range(4):
+                meta = _sidecar(models / model_store.transfer_slug(transfer) / f"rotation{r}"
+                                / "seed1" / f"phase2__{strategy}.pt")
+                assert meta["selection"]["trial"] == chosen[r]["trial"]
+                assert meta["selection"]["selectionRotations"] == \
+                    search.selection_rotations(data.folds, r)
+                assert meta["selection"]["excludedRotation"] == chosen[r]["excludedRotation"]
+                assert {k: meta["hyper"][k] for k in chosen[r]["params"]} == \
+                    chosen[r]["params"]
+    detail = _csv(product / "Results" / "A-nivel" / "tables" / "selected_configurations.csv")
+    assert {(d["strategy"], d["transfer"], d["rule"], d["rotation"]) for d in detail} == {
+        (s, t, rule, str(r)) for s in cfg["strategies"] for t in cfg["transfers"]
+        for rule in ("primary", "label-free") for r in range(4)}
+    k3 = _csv(product / "Results" / "K3-ablacion" / "tables" / "variant_hyperparameters.csv")
+    assert {d["rotation"] for d in k3} == {"0", "1", "2", "3"}
+
+
+def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, monkeypatch):
+    real = search.select_per_rotation
+
+    def other_trial(study, rotations, rule="primary"):
+        chosen = real(study, rotations, rule)
+        if rule != "label-free":
+            return chosen
+        primary = real(study, rotations, "primary")
+        for r in (1, 2, 3):         # rotation 0 coincides, the other three differ
+            n = 1 - primary[r]["trial"]
+            chosen[r] = {**chosen[r], "trial": n, "params": dict(study.trials[n].params)}
+        chosen[0] = {**chosen[0], "trial": primary[0]["trial"],
+                     "params": dict(primary[0]["params"])}
+        return chosen
+
+    monkeypatch.setattr(search, "select_per_rotation", other_trial)
+    cfg = campaign.write_synthetic_set(tmp_path / "synthetic", seed=0, subjects=24)
+    cfg.update({"strategies": ["MIL-CREDA"], "nTrials": 2, "bootstrapResamples": 200,
+                "schedule": {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4}})
+    product = tmp_path / "product"
+    product.mkdir()
+    outcome = {s: campaign.run(s, cfg, product) for s in ("search", "final", "results")}
+    assert outcome["final"]["final"]["trained_label_free"] == 3 * 2
+    root = product / "Models" / "Balladeer" / campaign.LABEL_FREE_MODELS
+    for slug in ("L1-to-L6", "L6-to-L1"):
+        assert not (root / slug / "rotation0").exists()
+        for r in (1, 2, 3):
+            meta = _sidecar(root / slug / f"rotation{r}" / "seed1" / "phase2__MIL-CREDA.pt")
+            assert meta["selection"]["rule"] == "label-free"
+    res = product / "Results"
+    primary = results.read_predictions(res, "A-nivel")
+    free = results.read_predictions(res, "A-nivel", rule="label-free")
+    key = lambda x: (x["transfer"], x["rotation"], x["subject"])  # noqa: E731
+    p0 = sorted((key(x), x["probability"]) for x in primary
+                if x["strategy"] == "MIL-CREDA" and x["rotation"] == 0)
+    f0 = sorted((key(x), x["probability"]) for x in free if x["rotation"] == 0)
+    assert p0 == f0 and p0          # where the rules coincide, the primary model is reused
+    assert {x["rotation"] for x in free} == {0, 1, 2, 3}
+    assert {x["strategy"] for x in free} == {"MIL-CREDA"}
+    rows = _csv(res / "A-nivel" / "tables" / "selection_rules.csv")
+    for row in rows:
+        mine = [x for x in free if x["transfer"] == row["transfer"]]
+        expected = st.pooled(mine)["balanced_accuracy"]
+        assert float(row["test BA, label-free rule"]) == pytest.approx(expected, abs=1e-4)
+        assert float(row["difference"]) == pytest.approx(
+            float(row["test BA, primary rule"]) - expected, abs=2e-4)
+        assert row["coinciding rotations"] == "1"
+    # nothing is trained twice
+    again = campaign.run_final(campaign.check_config(cfg), product)
+    assert again["trained_label_free"] == again["label_free_predictions"] == 0

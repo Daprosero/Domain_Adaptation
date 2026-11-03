@@ -1,4 +1,4 @@
-"""Experiments plan v42, Secs. 6.3 and 7.3: every final model saved, and refused on a foreign partition."""
+"""Experiments plan v43, Secs. 6.3 and 7.3: every final model saved, and refused on a foreign partition."""
 
 from __future__ import annotations
 

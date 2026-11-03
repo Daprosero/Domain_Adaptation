@@ -1,6 +1,6 @@
 """Every final model, saved per transfer, rotation, seed and group or strategy.
 
-Experiments plan v42, Sec. 7.3 (last paragraph of "Fase 2"), with Sec. 4.2's
+Experiments plan v43, Sec. 7.3 (last paragraph of "Fase 2"), with Sec. 4.2's
 partition rule. Saved: the selected phase-1 checkpoint of each of the four
 phase-1 groups (`GROUPS`), with its sigma for MIL-CREDA, and the selected
 phase-2 model of each of the nine strategies (`STRATEGIES`). Sec. 6.3 stores
@@ -63,7 +63,7 @@ from MIL_CREDA_EEG import partition, two_phase
 from MIL_CREDA_EEG.bag_data import REPOSITORY, default_partition_path
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md",
     "sections": ["4.2", "6.3", "7.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
