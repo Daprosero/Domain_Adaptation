@@ -1,4 +1,4 @@
-"""Experiments plan v40, Sec. 7.3: every final model saved, and refused on a foreign partition."""
+"""Experiments plan v42, Secs. 6.3 and 7.3: every final model saved, and refused on a foreign partition."""
 
 from __future__ import annotations
 
@@ -121,6 +121,22 @@ def test_every_final_model_has_its_own_path_per_transfer_rotation_seed_and_name(
     with pytest.raises(model_store.StoreError):
         model_store.model_path(root, LEVEL, 0, 1, 2, "common")        # not a strategy
     assert model_store.DEFAULT_ROOT.parts[-3:] == ("MIL-CREDA", "Models", "Balladeer")
+    # Sec. 6.3: the K3 variants are stored like the final models; the aggregation variants
+    # train both phases, the ablation variants only phase 2.
+    assert model_store.VARIANTS == {
+        "MIL-CREDA [own without consensus]": (1, 2), "MIL-CREDA [published attention]": (1, 2),
+        "MIL-CREDA [gated attention]": (1, 2), "MIL-CREDA [mean]": (1, 2),
+        "MIL-CREDA [global term only]": (2,), "MIL-CREDA [local term only]": (2,)}
+    variant_paths = {model_store.model_path(root, LEVEL, 0, 1, p, n)
+                     for n, phases in model_store.VARIANTS.items() for p in phases}
+    assert len(variant_paths) == 4 * 2 + 2
+    assert not variant_paths & {model_store.model_path(root, LEVEL, 0, 1, p, n)
+                                for p, names in ((1, model_store.GROUPS),
+                                                 (2, model_store.STRATEGIES)) for n in names}
+    with pytest.raises(model_store.StoreError):
+        model_store.model_path(root, LEVEL, 0, 1, 1, "MIL-CREDA [global term only]")
+    with pytest.raises(model_store.StoreError):
+        model_store.model_path(root, LEVEL, 0, 1, 2, "MIL-CREDA [max]")
 
 
 def test_an_unregistered_phase_one_group_cannot_be_rebuilt(tmp_path):
@@ -144,5 +160,43 @@ def test_the_code_version_covers_every_comparator_module(tmp_path, monkeypatch):
     monkeypatch.setattr(model_store, "_SRC", copy)
     before = model_store.code_version()
     edited = copy / comparators[-1]
+    edited.write_text(edited.read_text(encoding="utf-8") + "\n# edited\n", encoding="utf-8")
+    assert model_store.code_version() != before
+
+
+def test_the_k3_variant_models_are_stored_and_rebuilt(tmp_path):
+    from MIL_CREDA_EEG import aggregation_variants as av
+    path_p, sha = _partition(tmp_path)
+    hyper = av.variant_hyper("published attention", HYPER1)
+    torch.manual_seed(0)
+    published = av.build("published attention", 3, 3, hyper)
+    published.fix_sigma(0.9)
+    name = model_store.variant_name("published attention")
+    with pytest.raises(model_store.StoreError, match="sigma"):
+        _save(tmp_path / "Models", published, sha, name=name, hyper=hyper, sigma=None,
+              state=_phase_one_state(published))
+    path = _save(tmp_path / "Models", published, sha, name=name, hyper=hyper, sigma=0.9,
+                 state=_phase_one_state(published))
+    model, meta = model_store.load_model(path, partition_path=path_p)
+    assert isinstance(model, av.AggregationVariantModel) and model.sigma == 0.9
+    assert model.aggregation == "published attention" and meta["name"] == name
+    without = model_store.build_stored(model_store.variant_name("own without consensus"), 3, 3,
+                                       av.variant_hyper("own without consensus", HYPER1))
+    assert type(without) is MILCREDAModel and without.attention_gamma == 0.0
+    ablation = model_store.build_stored(model_store.variant_name("global term only"), 3, 3,
+                                        HYPER1)
+    assert type(ablation) is MILCREDAModel and ablation.attention_gamma == 0.3
+
+
+def test_the_code_version_covers_the_k3_variant_module(tmp_path, monkeypatch):
+    assert "MIL_CREDA_EEG/aggregation_variants.py" in model_store.CODE_FILES
+    import shutil
+    src, copy = model_store._SRC, tmp_path / "src"
+    for name in model_store.CODE_FILES:
+        (copy / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src / name, copy / name)
+    monkeypatch.setattr(model_store, "_SRC", copy)
+    before = model_store.code_version()
+    edited = copy / "MIL_CREDA_EEG" / "aggregation_variants.py"
     edited.write_text(edited.read_text(encoding="utf-8") + "\n# edited\n", encoding="utf-8")
     assert model_store.code_version() != before

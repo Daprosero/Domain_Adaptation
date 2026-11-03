@@ -1,6 +1,6 @@
 """The campaign: the plan's declared steps, wired to runnable local commands.
 
-Experiments plan v40, Secs. 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
+Experiments plan v42, Secs. 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
 The steps, in order (`STEPS`), each one a subcommand of
 `python -m MIL_CREDA_EEG.campaign <step> --config <file> [--product <dir>]`:
 
@@ -11,35 +11,43 @@ The steps, in order (`STEPS`), each one a subcommand of
    `search.run_phase_two_study`). An existing study is read back only when it
    holds exactly its budget of completed trials; an incomplete one is refused,
    never extended.
-2. `final` -- per transfer, rotation and report seed: the chosen phase-1
-   configuration of each group trained and stored, its source-only control on
-   the target test fold (`controls`; the device arm records `NA_RECORD`), the
-   chosen phase-2 configuration of each strategy trained from the checkpoint of
-   the same rotation and seed and stored, its target test predictions, and the
-   target-supervised upper bound with the common group's chosen `lr1`, `wd1`.
-   A model already stored is not trained again (an interrupted run resumes).
-3. `k3` -- Sec. 6.3 on the core transfers, per rotation and report seed: the
-   four aggregation variants (`aggregation_variants`) trained through both
-   phases and the two ablation variants (global term only, local term only)
+2. `final` -- per transfer and rotation, at the one report seed (Sec. 4.6, seed
+   1): the chosen phase-1 configuration of each group trained and stored, its
+   source-only control on the target test fold (`controls`; the device arm
+   records `NA_RECORD`), the chosen phase-2 configuration of each strategy
+   trained from the checkpoint of the same rotation and stored, its target test
+   predictions, and the target-supervised upper bound with the common group's
+   chosen `lr1`, `wd1`. A model already stored is not trained again (an
+   interrupted run resumes).
+3. `k3` -- Sec. 6.3 on the core transfers, per rotation at the report seed: the
+   four aggregation variants (`aggregation_variants`: the own attention without
+   consensus, the published and gated attentions and the mean) trained through
+   both phases and the two ablation variants (global term only, local term only)
    trained in phase 2 from full MIL-CREDA's stored phase-1 checkpoint, all with
    full MIL-CREDA's selected hyperparameters of the transfer and no search of
    their own (`mechanisms.train_aggregation_variant`,
-   `mechanisms.train_ablation_variant`). The own attention and "both terms" are
-   full MIL-CREDA itself, read from the `final` step's predictions, never trained
+   `mechanisms.train_ablation_variant`). Sec. 6.2's "without local term" is the
+   global-term-only variant, so it is also trained on a declared K2 transfer that
+   is not a core transfer (`k3_plan`). Every variant model is stored as the final
+   models are (`model_store.VARIANTS`), because K1 reads their attention and K2
+   the global-term-only model. The own attention and "both terms" are full
+   MIL-CREDA itself, read from the `final` step's predictions, never trained
    again. Per core pair, both directions pooled: the aggregation and ablation
-   tables, and the Sec. 4.6 contrasts of own vs published attention and of both
-   terms vs each single term, Holm over each table's bootstrap tests
+   tables, and the Sec. 4.6 contrasts of own vs own without consensus and of
+   both terms vs each single term, Holm over each table's bootstrap tests; the
+   published and gated attentions and the mean are reported without criterion
    (`Results/K3-ablacion/`, `Results/significance_K3-ablacion.json`). A variant
-   with predictions recorded is not trained again. Variant models are not stored
-   (the store's names are the nine strategies).
+   with its model stored and its predictions recorded is not trained again.
 4. `statistics` -- per arm, the core pair pooled over its two directions, the
    tables of Secs. 5.1-5.3, the Sec. 4.6 contrasts of MIL-CREDA against every
    rival present with Holm over the arm's bootstrap family, and the Friedman
    ranking (`statistics`, `results`).
-5. `mechanisms` -- K1 over the stored phase-2 models of the core transfers whose
-   target has an event stream, K2 over every transfer's probe subjects, and the
-   K3 implementation control of the term bounds from the recorded histories
-   (`mechanisms`).
+5. `mechanisms` -- K1 per arm over the stored models of its core transfers
+   (`mechanisms.k1_tests`: the level arm's three criterion tests, support in the
+   task and device arms, every other attention as a reference), K2 over every
+   transfer's probe subjects with its criterion contrast against the
+   global-term-only model, and the K3 implementation control of the term bounds
+   from the recorded histories (`mechanisms`).
 6. `results` -- the Sec. 5.4 outputs: the per-epoch histories
    (`Results/history_<experiment>.json`), the chosen hyperparameters, fANOVA
    importance, the two selection rules, and the declared figures through
@@ -57,20 +65,16 @@ step on a remote worker belongs to `remote-execution`, behind the operator.
 
 **Required inputs (no default, `CampaignError` when absent).** The schedule
 (`epochs1`, `patience1`, `epochs2`, `bagsPerStep`: the pilot fixes them,
-Sec. 7.6), the strategies and transfers to run, and `seedReduction`
-(`statistics.SEED_REDUCTIONS`), because the plan does not say how the three
-seeds become one prediction per subject in the bootstrap. For `mechanisms`:
-`k1.commonAttention` (which non-MIL comparator's model carries the common
-attention), `k1.bands` (the two bands of the clinical marker) and `k1.scope`.
-A strategy whose plan decision is still open (`PENDING_DECISIONS`) runs only
-when `pendingDecisions` names a resolution for every one of its open items;
-CASUAL additionally needs the resolution to name one of `search`'s generic
-distributions for its VAT radius, since `search.register_phase_two` admits no
-other.
+Sec. 7.6) and the strategies and transfers to run. Plan v42 resolved every
+decision the earlier inputs stood in for -- the seed reduction (one report
+seed), K1's common attention, band edges and scope (Sec. 6.1), and the open
+comparator decisions (Sec. 7.7) -- so those inputs are retired and refused when
+given (`RETIRED_INPUTS`), never silently ignored.
 
 **Overridable for a rehearsal, recorded in every summary.** `nTrials`
-(default `search.N_TRIALS`, 20), `reportSeeds` (default `search.REPORT_SEEDS`)
-and `bootstrapResamples` (default `statistics.BOOTSTRAP_RESAMPLES`). The core
+(default `search.N_TRIALS`, 20) and `bootstrapResamples` (default
+`statistics.BOOTSTRAP_RESAMPLES`). `reportSeeds` is not overridable: it is
+`REPORT_SEEDS`, the single seed 1, and any other value is refused. The core
 transfers come from the measured separability summary
 (`Results/separability/summary.json`) unless `core` gives them; the
 domain-shift ladder reads the measured separability table
@@ -96,9 +100,10 @@ from MIL_CREDA_EEG import bag_data, controls, mechanisms, model_store, partition
 from MIL_CREDA_EEG import search
 from MIL_CREDA_EEG import statistics as st
 from MIL_CREDA_EEG import two_phase
+from MIL_CREDA_EEG.mil_wrapper import COMPARATORS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3", "7.3",
                  "7.5", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
@@ -106,7 +111,7 @@ __provenance__ = {
     "invariants": [
         "the_steps_are_the_declared_ones_in_order",
         "required_inputs_have_no_default",
-        "a_strategy_with_an_open_plan_decision_refuses_without_its_resolution",
+        "every_strategy_runs_without_an_open_decision_guard",
         "the_campaign_never_launches_remote_work",
         "an_incomplete_study_is_refused_not_extended",
         "the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation",
@@ -115,17 +120,20 @@ __provenance__ = {
         "the_rehearsal_writes_the_dashboard_layout_end_to_end",
         "k3_trains_the_variants_and_writes_both_tables_with_holm_per_table",
         "k3_does_not_train_a_variant_again",
+        "k2_trains_the_global_term_only_variant_on_its_declared_transfers",
     ],
 }
 
 STEPS = ("search", "final", "k3", "statistics", "mechanisms", "results")
 K3 = "K3-ablacion"
+#: Sec. 6.2's "without local term": the Sec. 6.3 ablation's global-term-only variant.
+K2_GLOBAL_ONLY = "global term only"
 #: Sec. 6.3's tables: the row that is full MIL-CREDA, the variants trained here, and the
-#: rivals of the criterion contrasts (the max, the mean and the gated version are reported
-#: without a criterion).
+#: rivals of the criterion contrasts (the published and gated attentions and the mean are
+#: reported without a criterion).
 K3_TABLES = {
     "aggregation": {"full": "own", "trained": aggregation_variants.VARIANTS,
-                    "criterion": ("published attention",)},
+                    "criterion": (aggregation_variants.WITHOUT_CONSENSUS,)},
     "ablation": {"full": "both terms",
                   "trained": tuple(a for a in mechanisms.ABLATIONS if a != "both terms"),
                   "criterion": tuple(a for a in mechanisms.ABLATIONS if a != "both terms")},
@@ -134,15 +142,14 @@ NOT_APPLICABLE = "not applicable"
 DEFAULT_PRODUCT = bag_data.REPOSITORY / "MIL-CREDA"
 SEPARABILITY_SUMMARY = Path("Results") / "separability" / "summary.json"
 SEPARABILITY_TABLE = Path("Results") / "separability" / "tables" / "separability.csv"
-#: Plan decisions still owed to /experimental-deliberation, per strategy.
-PENDING_DECISIONS = {
-    "CLUST — variante source-free": ("clust-ema-range",),
-    "CASUAL": ("casual-vat-radius-range",),
-    "UDA-DDA": ("uda-dda-conditional-gating", "uda-dda-threshold-ordering"),
-    "CS+CCS": ("cs-ccs-prediction-kernel-width",),
+#: Sec. 4.6: one report seed, seed 1 (the search seed is 0, Sec. 7.7); one source of truth.
+REPORT_SEEDS = search.REPORT_SEEDS
+#: Inputs plan v42 retired: each stood in for a decision v42 now takes.
+RETIRED_INPUTS = {
+    "seedReduction": "one report seed, no reduction between seeds (Sec. 4.6)",
+    "k1": "K1's references, arms and contrasts are declared (Sec. 6.1); no band ratio",
+    "pendingDecisions": "the comparator decisions are resolved (Sec. 7.7)",
 }
-#: The generic distributions of `search` a CASUAL radius resolution may name.
-GENERIC_DISTRIBUTIONS = ("LOSS_WEIGHT", "KERNEL_MULTIPLIER", "CONFIDENCE_THRESHOLD")
 HISTORY_FILE = Path("runs") / "history.jsonl"
 
 
@@ -160,8 +167,12 @@ def _require(config: Mapping, key: str):
 
 
 def check_config(config: Mapping) -> dict:
-    """The required inputs, the rehearsal overrides and the open-decision guard."""
+    """The required inputs, the rehearsal overrides and the retired inputs."""
     cfg = dict(config)
+    retired = [k for k in RETIRED_INPUTS if k in cfg]
+    if retired:
+        raise CampaignError("plan v42 retired " + "; ".join(
+            f"{k!r} ({RETIRED_INPUTS[k]})" for k in retired) + ": remove it from the config")
     cfg["schedule"] = search.check_schedule(_require(cfg, "schedule"))
     strategies = list(_require(cfg, "strategies"))
     unknown = [s for s in strategies if s not in model_store.STRATEGIES]
@@ -174,45 +185,17 @@ def check_config(config: Mapping) -> dict:
     if any(t not in names for t in transfers):
         raise CampaignError(f"transfers are among {list(names)}; got {transfers}")
     cfg["transfers"] = transfers
-    reduction = _require(cfg, "seedReduction")
-    if reduction not in st.SEED_REDUCTIONS:
-        raise CampaignError(f"seedReduction is one of {list(st.SEED_REDUCTIONS)}")
-    decided = dict(cfg.get("pendingDecisions") or {})
-    for s in strategies:
-        open_items = [d for d in PENDING_DECISIONS.get(s, ()) if not decided.get(d)]
-        if open_items:
-            raise CampaignError(f"{s} has plan decisions still open {open_items}; resolve them "
-                                f"through /experimental-deliberation and name the resolution "
-                                f"in pendingDecisions")
-    if "CASUAL" in strategies:
-        radius = decided["casual-vat-radius-range"]
-        if not isinstance(radius, Mapping) or radius.get("distribution") not in \
-                GENERIC_DISTRIBUTIONS:
-            raise CampaignError("the CASUAL VAT radius resolution must name one of search's "
-                                f"generic distributions {list(GENERIC_DISTRIBUTIONS)}; any "
-                                f"other range needs a change to search.register_phase_two")
-    cfg["pendingDecisions"] = decided
     cfg.setdefault("nTrials", search.N_TRIALS)
-    cfg["reportSeeds"] = [int(s) for s in cfg.get("reportSeeds", search.REPORT_SEEDS)]
-    if search.SEARCH_SEED in cfg["reportSeeds"]:
+    seeds = [int(s) for s in cfg.get("reportSeeds", REPORT_SEEDS)]
+    if search.SEARCH_SEED in seeds:
         raise CampaignError("the search seed is never a report seed (Sec. 7.7)")
+    if seeds != list(REPORT_SEEDS):
+        raise CampaignError(f"Sec. 4.6 has one report seed, {list(REPORT_SEEDS)}; got {seeds}")
+    cfg["reportSeeds"] = seeds
     cfg.setdefault("bootstrapResamples", st.BOOTSTRAP_RESAMPLES)
     cfg.setdefault("device", "cpu")
     cfg.setdefault("synthetic", False)
     return cfg
-
-
-def check_mechanism_inputs(cfg: Mapping) -> dict:
-    k1 = dict(_require(cfg, "k1"))
-    for key in ("commonAttention", "bands", "scope"):
-        _require(k1, key)
-    from MIL_CREDA_EEG.mil_wrapper import COMPARATORS
-    if k1["commonAttention"] not in COMPARATORS:
-        raise CampaignError(f"k1.commonAttention is one of the non-MIL comparators "
-                            f"{list(COMPARATORS)}")
-    if k1["scope"] not in mechanisms.K1_SCOPES:
-        raise CampaignError(f"k1.scope is one of {list(mechanisms.K1_SCOPES)}")
-    return k1
 
 
 def transfers_of(cfg: Mapping) -> list[assignment_mod.Transfer]:
@@ -229,7 +212,7 @@ def core_transfers(cfg: Mapping, product: Path) -> dict[str, list[str]]:
     return {arm: list(v) for arm, v in json.loads(path.read_text())["core"].items()}
 
 
-def register(strategies: Sequence[str], decided: Mapping) -> None:
+def register(strategies: Sequence[str]) -> None:
     """Each comparator's own explicit registration (it changes global search state)."""
     from MIL_CREDA_EEG.comparators import adaptmil, clust, hasd
     from MIL_CREDA_EEG.comparators.casual import training as casual
@@ -241,8 +224,7 @@ def register(strategies: Sequence[str], decided: Mapping) -> None:
         "AdaptMIL": adaptmil.register, "HASD": hasd.register, "COT": cot.register,
         "CCA-LSC": cca_lsc.register, "UDA-DDA": uda_dda.register, "CS+CCS": cs_ccs.register,
         "CLUST — variante source-free": clust.register,
-        "CASUAL": lambda: casual.register(getattr(
-            search, decided["casual-vat-radius-range"]["distribution"])),
+        "CASUAL": casual.register,
     }
     for s in strategies:
         if s != "MIL-CREDA" and s not in search.PHASE_TWO_TRAINERS:
@@ -334,7 +316,7 @@ def read_history(product: Path, experiment: str) -> list[dict]:
 def run_search(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
     """Step 1: phase-1 studies, their search-seed checkpoints, phase-2 studies."""
     bags = bags or load_bags(cfg)
-    register(cfg["strategies"], cfg["pendingDecisions"])
+    register(cfg["strategies"])
     done = {}
     for transfer in transfers_of(cfg):
         data = search.search_data(transfer, bags)
@@ -371,7 +353,7 @@ def _predicted(product: Path, experiment: str) -> set:
 def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
     """Step 2: phase 1 and phase 2 at every report seed, with controls and upper bound."""
     bags = bags or load_bags(cfg)
-    register(cfg["strategies"], cfg["pendingDecisions"])
+    register(cfg["strategies"])
     device = torch.device(cfg["device"])
     counts = {"trained_phase1": 0, "trained_phase2": 0, "predictions": 0}
     for transfer in transfers_of(cfg):
@@ -486,8 +468,7 @@ def run_statistics(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
                       and m not in ("MIL-CREDA", results.UPPER_BOUND)]:
             rows += st.pair_contrast(pooled_pair["MIL-CREDA"], pooled_pair[rival],
                                      name_a="MIL-CREDA", name_b=results.METHOD_ROWS[rival],
-                                     scope=scope, reduction=cfg["seedReduction"],
-                                     test_train_ratio=ratio, hypothesis=experiment,
+                                     scope=scope, test_train_ratio=ratio, hypothesis=experiment,
                                      experiment=experiment,
                                      resamples=cfg["bootstrapResamples"])
         boot = [r for r in rows if r["test"] == st.TEST_BOOTSTRAP]
@@ -512,7 +493,7 @@ def run_statistics(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
                             results.secondary_table(pooled_pair, arm))
         results.write_table(root, experiment, "per_fold", results.per_fold_table(pooled_pair))
         results.write_table(root, experiment, "ranking", results.ranking_table(ranking))
-        summary = {"pair": scope, "core": core[arm], "seedReduction": cfg["seedReduction"],
+        summary = {"pair": scope, "core": core[arm],
                    "bootstrapResamples": cfg["bootstrapResamples"], "nTrials": cfg["nTrials"],
                    "reportSeeds": cfg["reportSeeds"], "partition_sha256": bags.partition_sha256,
                    "pooled_pair_subjects": len(pooled), "test_train_ratio": ratio,
@@ -548,12 +529,77 @@ def _k3_name(table: str, variant: str) -> str:
 
 
 def _variant_hyper_row(table: str, variant: str, transfer: str, hyper: Mapping) -> dict:
+    lacks = aggregation_variants.not_applicable(variant) if table == "aggregation" else ()
     row = {"table": table, "variant": variant, "transfer": transfer}
     for key in (*two_phase.PHASE_ONE_KEYS, *two_phase.PHASE_TWO_KEYS):
-        row[key] = (NOT_APPLICABLE if table == "aggregation"
-                    and key in aggregation_variants.NOT_APPLICABLE else hyper[key])
-    row["search"] = "none: full MIL-CREDA's selection for this transfer (Sec. 6.3)"
+        row[key] = NOT_APPLICABLE if key in lacks else hyper[key]
+    row["search"] = ("none: full MIL-CREDA's selection for this transfer, gamma = 0 "
+                     "(Sec. 6.3)" if variant == aggregation_variants.WITHOUT_CONSENSUS else
+                     "none: full MIL-CREDA's selection for this transfer (Sec. 6.3)")
     return row
+
+
+def k3_plan(cfg: Mapping, core: Mapping[str, Sequence[str]]) -> dict[str, dict]:
+    """Per transfer, the K3 variants the k3 step trains: both tables on a core transfer;
+    only the global-term-only variant on a declared K2 transfer that is not core (Sec. 6.2
+    reads it as MIL-CREDA without its local term)."""
+    declared = {t.name for t in mechanisms.K2_DECLARED.values()}
+    plan = {}
+    for transfer in transfers_of(cfg):
+        if transfer.name in core.get(transfer.arm, []):
+            plan[transfer.name] = {"aggregation": K3_TABLES["aggregation"]["trained"],
+                                   "ablation": K3_TABLES["ablation"]["trained"]}
+        elif transfer.name in declared:
+            plan[transfer.name] = {"aggregation": (), "ablation": (K2_GLOBAL_ONLY,)}
+    return plan
+
+
+def _save_variant(product: Path, data: search.SearchData, rotation: int, seed: int,
+                  phase: int, variant: str, state: Mapping, hyper: Mapping, channels: Mapping,
+                  sigma: float, checkpoint: Mapping) -> Path:
+    extra = {"variant": variant, "epoch": checkpoint.get("epoch"),
+             "valid_balanced_accuracy": checkpoint.get("valid_balanced_accuracy")}
+    return model_store.save(_models(product), transfer=data.transfer, rotation=rotation,
+                            seed=seed, phase=phase, name=model_store.variant_name(variant),
+                            state=state, hyper=hyper, partition_sha256=data.partition_sha256,
+                            channels=channels, sigma=sigma, extra=extra)
+
+
+def _k3_variant_model(product: Path, data: search.SearchData, rotation: int, seed: int,
+                      table: str, variant: str, phase_one: Mapping, phase_two: Mapping,
+                      cfg: Mapping, device: torch.device, owed: list) -> tuple:
+    """(model, history, trained): the stored variant, or trained and stored when absent."""
+    ppath = _partition_path(cfg)
+    name = model_store.variant_name(variant)
+    path2 = model_store.model_path(_models(product), data.transfer, rotation, seed, 2, name)
+    if path2.exists():
+        return mechanisms.load_phase_two(path2, partition_path=ppath)[0].to(device), [], False
+    if table == "aggregation":
+        path1 = model_store.model_path(_models(product), data.transfer, rotation, seed, 1,
+                                       name)
+        record = model_store.load(path1, partition_path=ppath) if path1.exists() else None
+        trained = mechanisms.train_aggregation_variant(
+            data, rotation, seed, variant, phase_one, phase_two, cfg["schedule"], device,
+            phase_one_record=record)
+        if record is None:
+            checkpoint = trained["phase1"]["checkpoint"]
+            _save_variant(product, data, rotation, seed, 1, variant, checkpoint["state"],
+                          trained["hyper"], trained["channels"], checkpoint["sigma"],
+                          checkpoint)
+    else:
+        path1 = model_store.model_path(_models(product), data.transfer, rotation, seed, 1,
+                                       two_phase.MODEL)
+        if not path1.exists():
+            owed.append(f"no stored MIL-CREDA phase-1 checkpoint for {data.transfer.name} "
+                        f"r{rotation} s{seed}: run the final step")
+            return None, [], False
+        trained = mechanisms.train_ablation_variant(
+            data, rotation, seed, model_store.load(path1, partition_path=ppath), phase_two,
+            cfg["schedule"], variant, device)
+    checkpoint = trained["result"]["checkpoint"]
+    _save_variant(product, data, rotation, seed, 2, variant, trained["model"].state_dict(),
+                  checkpoint["hyper"], trained["channels"], checkpoint["sigma"], checkpoint)
+    return trained["model"], trained["history"], True
 
 
 def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
@@ -562,12 +608,12 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
     device = torch.device(cfg["device"])
     core = core_transfers(cfg, product)
     root = _results(product)
-    ppath = _partition_path(cfg)
     counts = {"trained_aggregation": 0, "trained_ablation": 0, "predictions": 0}
     owed, hyper_rows = [], []
     done = _predicted(product, K3)
+    plan = k3_plan(cfg, core)
     for transfer in transfers_of(cfg):
-        if transfer.name not in core.get(transfer.arm, []):
+        if transfer.name not in plan:
             continue
         data = search.search_data(transfer, bags)
         a = assignment_mod.assign_from_bags(transfer, bags)
@@ -575,43 +621,35 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
                            cfg["nTrials"]).best_params
         phase_two = _study(search.study_path(product, transfer, 2, "MIL-CREDA"),
                            cfg["nTrials"]).best_params
-        hyper = mechanisms.aggregation_hyper(phase_one, phase_two, cfg["schedule"])
-        hyper_rows += [_variant_hyper_row("aggregation", v, transfer.name, hyper)
-                       for v in K3_TABLES["aggregation"]["trained"]]
+        hyper_rows += [_variant_hyper_row("aggregation", v, transfer.name,
+                                          mechanisms.aggregation_hyper(
+                                              phase_one, phase_two, cfg["schedule"], v))
+                       for v in plan[transfer.name]["aggregation"]]
         hyper_rows += [_variant_hyper_row("ablation", v, transfer.name,
                                           {**phase_one, **phase_two})
-                       for v in K3_TABLES["ablation"]["trained"]]
+                       for v in plan[transfer.name]["ablation"]]
         for r in sorted(data.rotations):
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
             for seed in cfg["reportSeeds"]:
                 out, history = [], []
-                for variant in K3_TABLES["aggregation"]["trained"]:
-                    name = _k3_name("aggregation", variant)
-                    if (name, transfer.name, r, seed) in done:
-                        continue
-                    trained = mechanisms.train_aggregation_variant(
-                        data, r, seed, variant, phase_one, phase_two, cfg["schedule"], device)
-                    history += _tag(trained["history"], name, transfer.name, r, seed)
-                    out += _tag(two_phase.predictions(trained["model"], test, transfer.name,
-                                                      device), name, transfer.name, r, seed)
-                    counts["trained_aggregation"] += 1
-                path1 = model_store.model_path(_models(product), transfer, r, seed, 1,
-                                               "MIL-CREDA")
-                for variant in K3_TABLES["ablation"]["trained"]:
-                    name = _k3_name("ablation", variant)
-                    if (name, transfer.name, r, seed) in done:
-                        continue
-                    if not path1.exists():
-                        owed.append(f"no stored MIL-CREDA phase-1 checkpoint for "
-                                    f"{transfer.name} r{r} s{seed}: run the final step")
-                        continue
-                    record = model_store.load(path1, partition_path=ppath)
-                    trained = mechanisms.train_ablation_variant(
-                        data, r, seed, record, phase_two, cfg["schedule"], variant, device)
-                    history += _tag(trained["history"], name, transfer.name, r, seed)
-                    out += _tag(two_phase.predictions(trained["model"], test, transfer.name,
-                                                      device), name, transfer.name, r, seed)
-                    counts["trained_ablation"] += 1
+                for table in K3_TABLES:
+                    for variant in plan[transfer.name][table]:
+                        name = _k3_name(table, variant)
+                        stored = model_store.model_path(_models(product), transfer, r, seed, 2,
+                                                        model_store.variant_name(variant))
+                        if (name, transfer.name, r, seed) in done and stored.exists():
+                            continue
+                        model, records, trained = _k3_variant_model(
+                            product, data, r, seed, table, variant, phase_one, phase_two, cfg,
+                            device, owed)
+                        if model is None:
+                            continue
+                        counts[f"trained_{table}"] += trained
+                        history += _tag(records, name, transfer.name, r, seed)
+                        if (name, transfer.name, r, seed) not in done:
+                            out += _tag(two_phase.predictions(model, test, transfer.name,
+                                                              device),
+                                        name, transfer.name, r, seed)
                 _append_history(product, K3, history)
                 results.append_predictions(root, K3, out)
                 counts["predictions"] += len(out)
@@ -621,23 +659,31 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
     history = read_history(product, K3)
     if history:
         results.write_history(root, K3, history)
+    recorded = results.read_predictions(root, K3)
     trained = {t: [v for v in spec["trained"] if any(
-        r["strategy"] == _k3_name(t, v) for r in results.read_predictions(root, K3))]
-        for t, spec in K3_TABLES.items()}
+        r["strategy"] == _k3_name(t, v) for r in recorded)] for t, spec in K3_TABLES.items()}
     summary = _merged_summary(root, K3)
     summary.update({
         "aggregation_variants": {"trained": trained["aggregation"],
                                  "full": "own = full MIL-CREDA (final step)",
-                                 "forms": aggregation_variants.FORMS,
-                                 "not_applicable": list(aggregation_variants.NOT_APPLICABLE),
-                                 "max_weights": aggregation_variants.MAX_WEIGHTS_RULE},
+                                 "forms": {**aggregation_variants.FORMS,
+                                           aggregation_variants.WITHOUT_CONSENSUS:
+                                               aggregation_variants.WITHOUT_CONSENSUS_FORM},
+                                 "criterion": list(K3_TABLES["aggregation"]["criterion"]),
+                                 "not_applicable": {
+                                     v: list(aggregation_variants.not_applicable(v))
+                                     for v in aggregation_variants.VARIANTS},
+                                 "excluded": {"max": "no per-instance weights for the bag "
+                                                     "kernel (Secs. 6.3 and 9)"}},
         "ablation_variants": {"trained": trained["ablation"],
                               "full": "both terms = full MIL-CREDA (final step)",
-                              "phase_one": "full MIL-CREDA's stored checkpoint"},
+                              "phase_one": "full MIL-CREDA's stored checkpoint",
+                              "k2_transfers": sorted(t for t, v in plan.items()
+                                                     if not v["aggregation"])},
+        "models": "stored per transfer, rotation and report seed (model_store.VARIANTS)",
         "hyperparameters": "full MIL-CREDA's selection per transfer; no search of their own",
-        "pairs": written, "seedReduction": cfg["seedReduction"],
-        "bootstrapResamples": cfg["bootstrapResamples"], "reportSeeds": cfg["reportSeeds"],
-        "owed": sorted(set(owed))})
+        "pairs": written, "reportSeeds": cfg["reportSeeds"],
+        "bootstrapResamples": cfg["bootstrapResamples"], "owed": sorted(set(owed))})
     results.write_summary(root, K3, summary, synthetic=cfg["synthetic"])
     return {**counts, "pairs": written, "owed": sorted(set(owed))}
 
@@ -679,8 +725,7 @@ def k3_tables(cfg: Mapping, product: Path, bags: bag_data.BagSet,
                             mechanisms.variant_table({v: predictions[v] for v in order})]
             contrasts[table] += mechanisms.k3_contrasts(
                 table, scope, spec["full"], predictions,
-                [v for v in spec["criterion"] if v in predictions],
-                reduction=cfg["seedReduction"], test_train_ratio=ratio,
+                [v for v in spec["criterion"] if v in predictions], test_train_ratio=ratio,
                 resamples=cfg["bootstrapResamples"])
         pairs.append(scope)
     significance = []
@@ -696,16 +741,31 @@ def k3_tables(cfg: Mapping, product: Path, bags: bag_data.BagSet,
     return pairs
 
 
+def _k1_models(product: Path, transfer, r: int, seed: int,
+               strategies: Sequence[str]) -> list[tuple[str, Path]]:
+    """Sec. 6.1's attentions on one core transfer and rotation: (K1 name, stored path)."""
+    models = [(mechanisms.K1_OWN, _phase_two_path(product, transfer, r, seed, "MIL-CREDA"))]
+    for name in (mechanisms.K1_WITHOUT_CONSENSUS, *mechanisms.K1_REFERENCE_VARIANTS):
+        models.append((name, _phase_two_path(product, transfer, r, seed, name)))
+    for strategy in strategies:
+        if strategy in COMPARATORS:
+            models.append((mechanisms.common_attention_name(strategy),
+                           _phase_two_path(product, transfer, r, seed, strategy)))
+        elif strategy in ("AdaptMIL", "HASD"):
+            models.append((strategy, _phase_two_path(product, transfer, r, seed, strategy)))
+    return models
+
+
 def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
     """Step 5: K1, K2 and the K3 bound control, from stored models and histories."""
-    k1 = check_mechanism_inputs(cfg)
     bags = bags or load_bags(cfg)
-    register(cfg["strategies"], cfg["pendingDecisions"])
+    register(cfg["strategies"])
     core = core_transfers(cfg, product)
     root = _results(product)
     ppath = _partition_path(cfg)
     owed, out = [], {}
-    k1_own, k1_common, k2_rows = [], [], []
+    k1_rows: dict[str, list] = {}
+    k2_full, k2_no_local, k2_other = [], [], []
     for transfer in transfers_of(cfg):
         a = assignment_mod.assign_from_bags(transfer, bags)
         is_core = transfer.name in core.get(transfer.arm, [])
@@ -717,55 +777,72 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
                     owed.append(f"no stored MIL-CREDA model for {transfer.name} r{r} s{seed}")
                     continue
                 model = mechanisms.load_phase_two(path, partition_path=ppath)[0]
-                if is_core and transfer.target in mechanisms.EVENT_CONDITIONS:
+                if is_core:
                     test = assignment_mod.side_bags(a, bags, "target", r, "test")
-                    k1_own += mechanisms.k1_subject_rows(
-                        model, test, model_name="MIL-CREDA", transfer=transfer, rotation=r,
-                        seed=seed, bands=k1["bands"])
-                    cpath = _phase_two_path(product, transfer, r, seed, k1["commonAttention"])
-                    if cpath.exists():
-                        common = mechanisms.load_phase_two(cpath, partition_path=ppath)[0]
-                        k1_common += mechanisms.k1_subject_rows(
-                            common, test, model_name=k1["commonAttention"], transfer=transfer,
-                            rotation=r, seed=seed, bands=k1["bands"])
-                    else:
-                        owed.append(f"no stored {k1['commonAttention']} model for K1's common "
-                                    f"attention at {transfer.name} r{r} s{seed}")
-                k2_rows += mechanisms.k2_subject_rows(model, a, bags, rotation=r, seed=seed,
+                    for name, mpath in _k1_models(product, transfer, r, seed,
+                                                  cfg["strategies"]):
+                        if not mpath.exists():
+                            owed.append(f"no stored {name} model for K1 at {transfer.name} "
+                                        f"r{r} s{seed}")
+                            continue
+                        attention = model if name == mechanisms.K1_OWN else \
+                            mechanisms.load_phase_two(mpath, partition_path=ppath)[0]
+                        k1_rows.setdefault(name, []).extend(mechanisms.k1_subject_rows(
+                            attention, test, model_name=name, transfer=transfer, rotation=r,
+                            seed=seed))
+                k2_full += mechanisms.k2_subject_rows(model, a, bags, rotation=r, seed=seed,
                                                       model_name="MIL-CREDA", metric="kernel")
+                npath = _phase_two_path(product, transfer, r, seed, mechanisms.K2_NO_LOCAL)
+                if npath.exists():
+                    k2_no_local += mechanisms.k2_subject_rows(
+                        mechanisms.load_phase_two(npath, partition_path=ppath)[0], a, bags,
+                        rotation=r, seed=seed, model_name=mechanisms.K2_NO_LOCAL,
+                        metric="kernel")
+                elif transfer.name in {t.name for t in mechanisms.K2_DECLARED.values()}:
+                    owed.append(f"no stored {mechanisms.K2_NO_LOCAL} model for K2 at "
+                                f"{transfer.name} r{r} s{seed}: run the k3 step")
                 for strategy in cfg["strategies"]:
                     spath = _phase_two_path(product, transfer, r, seed, strategy)
                     if strategy == "MIL-CREDA" or not spath.exists():
                         continue
                     other = mechanisms.load_phase_two(spath, partition_path=ppath)[0]
-                    k2_rows += mechanisms.k2_subject_rows(other, a, bags, rotation=r, seed=seed,
-                                                          model_name=strategy,
-                                                          metric="euclidean")
-    if k1_own:
-        own = mechanisms.average_over_seeds(k1_own, mechanisms.K1_VALUES)
-        common = mechanisms.average_over_seeds(k1_common, mechanisms.K1_VALUES)
-        if common:
-            rows = mechanisms.k1_tests(own, common, own="MIL-CREDA",
-                                       common=k1["commonAttention"], scope=k1["scope"])
-            results.write_significance(root, "K1-atencion", rows)
-            out["K1-atencion"] = len(rows)
-        results.write_table(root, "K1-atencion", "subjects", own + common)
+                    k2_other += mechanisms.k2_subject_rows(other, a, bags, rotation=r,
+                                                           seed=seed, model_name=strategy,
+                                                           metric="euclidean")
+    own = k1_rows.get(mechanisms.K1_OWN, [])
+    if own:
+        rows = mechanisms.k1_tests(k1_rows)
+        results.write_significance(root, "K1-atencion", rows)
+        out["K1-atencion"] = len(rows)
+        results.write_table(root, "K1-atencion", "subjects",
+                            [r for rs in k1_rows.values() for r in rs])
         results.write_summary(root, "K1-atencion", {
-            "subjects": len(own), "bands": k1["bands"], "scope": k1["scope"],
-            "commonAttention": k1["commonAttention"],
+            "subjects": {arm: sum(r["arm"] == arm for r in own)
+                         for arm in mechanisms.K1_CONTRASTS},
+            "contrasts": {a: list(c) for a, c in mechanisms.K1_CONTRASTS.items()},
+            "criterion": mechanisms.K1_CRITERION,
+            "criterion_rival": mechanisms.K1_WITHOUT_CONSENSUS,
+            "references": sorted(n for n in k1_rows
+                                 if n not in (mechanisms.K1_OWN,
+                                              mechanisms.K1_WITHOUT_CONSENSUS)),
+            "common_attention": "one reference per stored non-MIL comparator "
+                                "(mechanisms.common_attention_name)",
+            "excluded": mechanisms.K1_EXCLUDED, "reportSeeds": cfg["reportSeeds"],
             "event_marks_recorded": any(r["event_minus_rest"] is not None for r in own),
             "subjects_without_marked_windows": sum(r["marked_minus_clean"] is None
                                                    for r in own)}, synthetic=cfg["synthetic"])
-    if k2_rows:
-        averaged = mechanisms.average_over_seeds(k2_rows, mechanisms.K2_VALUES)
-        rows = mechanisms.k2_tests([r for r in averaged if r["model"] == "MIL-CREDA"], None)
+    if k2_full:
+        rows = mechanisms.k2_tests(k2_full, k2_no_local)
         results.write_significance(root, "K2-emparejamiento", rows)
-        results.write_table(root, "K2-emparejamiento", "separation", averaged)
+        results.write_table(root, "K2-emparejamiento", "separation",
+                            k2_full + k2_no_local + k2_other)
         results.write_summary(root, "K2-emparejamiento", {
-            "probe_subjects": len({(r["transfer"], r["subject"]) for r in averaged}),
+            "probe_subjects": len({(r["transfer"], r["subject"]) for r in k2_full}),
             "declared": {k: v.name for k, v in mechanisms.K2_DECLARED.items()},
-            "transfers": sorted({r["transfer"] for r in averaged}),
-            "no_local_variant": "not trained (owed)"}, synthetic=cfg["synthetic"])
+            "transfers": sorted({r["transfer"] for r in k2_full}),
+            "no_local_variant": mechanisms.K2_NO_LOCAL,
+            "no_local_transfers": sorted({r["transfer"] for r in k2_no_local}),
+            "reportSeeds": cfg["reportSeeds"]}, synthetic=cfg["synthetic"])
         out["K2-emparejamiento"] = len(rows)
     history = [h for arm in results.EXPERIMENT_OF_ARM.values()
                for h in read_history(product, arm)]
@@ -808,7 +885,7 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
                 primary = results._pooled(results._select(records, s, [transfer.name]))
                 selection.append(results.selection_rows(
                     study, s, transfer.name,
-                    test_primary=primary["balanced_accuracy"]["mean"] if primary else None))
+                    test_primary=primary["balanced_accuracy"] if primary else None))
                 try:
                     importance += results.importance_rows(study, s)
                 except (RuntimeError, ValueError) as error:
@@ -879,7 +956,7 @@ def run(step: str, config: Mapping, product: str | Path = DEFAULT_PRODUCT) -> di
 
 def write_synthetic_set(out: str | Path, *, seed: int = 0, subjects: int = 32,
                         windows: int = 4, channels: int = 3,
-                        conditions: tuple[str, str] = ("L1", "L11"),
+                        conditions: tuple[str, str] = ("L1", "L6"),
                         arm: str = "level") -> dict:
     """A tiny seeded SYNTHETIC processed set of one pair, its partition and a config."""
     out = Path(out)
@@ -917,16 +994,15 @@ def write_synthetic_set(out: str | Path, *, seed: int = 0, subjects: int = 32,
               "partitionPath": str(ppath),
               "schedule": {"epochs1": 2, "patience1": 1, "epochs2": 2, "bagsPerStep": 4},
               "strategies": ["MIL-CREDA", "COT", "HASD"], "transfers": pair,
-              "core": {arm: pair}, "seedReduction": "mean-probability",
-              "nTrials": 4, "reportSeeds": [1, 2], "bootstrapResamples": 500,
-              "k1": {"commonAttention": "COT", "bands": [[4, 8], [13, 30]], "scope": "pooled"}}
+              "core": {arm: pair}, "nTrials": 4, "reportSeeds": list(REPORT_SEEDS),
+              "bootstrapResamples": 500}
     (out / "config.json").write_text(json.dumps(config, indent=1, ensure_ascii=False))
     return config
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m MIL_CREDA_EEG.campaign",
-                                     description="The BALLADEER campaign of plan v40, local only.")
+                                     description="The BALLADEER campaign of plan v42, local only.")
     parser.add_argument("step", choices=(*STEPS, "all", "synthetic"))
     parser.add_argument("--config", help="campaign config (JSON)")
     parser.add_argument("--product", default=str(DEFAULT_PRODUCT),

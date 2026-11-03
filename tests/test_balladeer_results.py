@@ -1,4 +1,4 @@
-"""Experiments plan v40, Secs. 4.5, 5.1-5.4 and 6: the Results writers.
+"""Experiments plan v42, Secs. 4.5, 5.1-5.4 and 6: the Results writers.
 
 Every record here is synthetic (seeded), never a measured result.
 """
@@ -16,7 +16,7 @@ from MIL_CREDA_EEG import controls, model_store, ps_figures, results
 from MIL_CREDA_EEG import statistics as st
 
 
-def _records(strategy, transfer, *, n=12, seeds=(1, 2), shift=0.0, seed=0):
+def _records(strategy, transfer, *, n=12, seeds=(1,), shift=0.0, seed=0):
     rng = np.random.default_rng(seed)
     out = []
     for s in seeds:
@@ -48,7 +48,7 @@ def test_every_writer_lands_in_the_dashboard_layout(tmp_path):
                    "A-nivel/tables/comparison.csv", "A-nivel/tables/comparison.md",
                    "history_A-nivel.json", "significance_A-nivel.json"]
     summary = json.loads((root / "A-nivel" / "summary.json").read_text())
-    assert summary["synthetic"] is True and summary["revision"].endswith("v40.md")
+    assert summary["synthetic"] is True and summary["revision"].endswith("v42.md")
     with pytest.raises(results.ResultsError):
         results.write_table(root, "Z-unknown", "t", [])
 
@@ -76,10 +76,12 @@ def test_the_comparison_table_has_every_method_row_and_every_transfer_column():
     assert [r["method"] for r in table] == list(results.METHOD_ROWS.values())
     assert list(table[0]) == ["method", *results.ARM_TRANSFERS["level"], "average rank (core)"]
     mil = next(r for r in table if r["method"] == "MIL-CREDA")
-    per_seed = st.pooled_by_seed(records[:24])
-    values = [per_seed[s]["balanced_accuracy"] for s in (1, 2)]
-    assert mil["L1->L11"] == f"{np.mean(values):.3f} ± {np.std(values, ddof=1):.3f}"
+    # Sec. 4.6: one report seed, one pooled value per transfer, no reduction between seeds
+    assert mil["L1->L11"] == f"{st.pooled(records[:12])['balanced_accuracy']:.3f}"
     assert mil["L1->L6"] == ""
+    with pytest.raises(st.StatisticsError, match="one report seed"):
+        results.comparison_table(_records("MIL-CREDA", "L1->L11", seeds=(1, 2)), "level",
+                                 ["L1->L11", "L11->L1"], None)
 
 
 def test_the_device_arm_controls_print_the_na_record():
@@ -174,15 +176,14 @@ def test_the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_
     history = []
     for transfer in ("L1->L11", "L1->L6"):
         for model in ("MIL-CREDA:phase1", "MIL-CREDA:phase2"):
-            for seed in (1, 2):
-                for fold in range(2):
-                    for e in range(4):
-                        history.append({"epoch": e, "seed": seed, "fold": fold, "model": model,
-                                        "transfer": transfer, "loss": 1.0 / (e + 1),
-                                        "val_balanced_accuracy": [0.5, 0.7, 0.9, 0.9][e]
-                                        if seed == 1 else [0.5, 0.9, 0.6, 0.6][e],
-                                        "global": 0.5, "global_bound_low": 0.0,
-                                        "global_bound_high": 1.0})
+            for fold in range(4):
+                for e in range(4):
+                    history.append({"epoch": e, "seed": 1, "fold": fold, "model": model,
+                                    "transfer": transfer, "loss": 1.0 / (e + 1),
+                                    "val_balanced_accuracy": [0.5, 0.7, 0.9, 0.9][e]
+                                    if fold < 2 else [0.5, 0.9, 0.6, 0.6][e],
+                                    "global": 0.5, "global_bound_low": 0.0,
+                                    "global_bound_high": 1.0})
     assert results.selected_epoch([r for r in history if r["model"].endswith("phase2")
                                    and r["transfer"] == "L1->L11"]) == 1.5
     seen = []
@@ -191,7 +192,11 @@ def test_the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_
         seen.append((label, np.asarray(rows).shape)), real(ax, xs, rows, label, **k)))
     path = results.convergence_figure(tmp_path, "A-nivel", history, ["L1->L11"])
     assert path == tmp_path / "A-nivel" / "figures" / "convergence.pdf" and path.exists()
-    assert ("global term", (2, 4)) in seen and ("validation BA", (2, 4)) in seen
+    # Sec. 5.4: mean and sd over the four rotations, at the report seed
+    assert ("global term", (4, 4)) in seen and ("validation BA", (4, 4)) in seen
+    with pytest.raises(results.ResultsError, match="one report seed"):
+        results.convergence_figure(tmp_path, "A-nivel",
+                                   history + [{**history[0], "seed": 2}], ["L1->L11"])
     with pytest.raises(results.ResultsError, match="core"):
         results.convergence_figure(tmp_path, "A-nivel", history, ["L6->L1"])
 
@@ -231,7 +236,7 @@ def test_the_ladder_reads_each_strategys_own_source_only_control():
              "auc_rotation_mean": 0.95, "auc_rotation_sd": 0.01, "role": "core"}]
     points = results.ladder_points(records, rows)
     assert [(p["strategy"], p["transfer"]) for p in points] == [("COT", "L1->L11")]
-    mine = st.summarize_seeds(st.pooled_by_seed(records[:24]))["balanced_accuracy"]["mean"]
-    base = st.summarize_seeds(st.pooled_by_seed(records[24:]))["balanced_accuracy"]["mean"]
+    mine = st.pooled(records[:12])["balanced_accuracy"]
+    base = st.pooled(records[12:])["balanced_accuracy"]
     assert points[0]["gain"] == pytest.approx(mine - base)
     assert model_store.STRATEGIES[-1] == "MIL-CREDA"

@@ -1,6 +1,6 @@
 """Every measurement the plan declares, written where the dashboard reads it.
 
-Experiments plan v40, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
+Experiments plan v42, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 `experimental-implementation` skill's Results table, under the product folder
 `MIL-CREDA/Results/` (`DEFAULT_ROOT`), one folder per experiment
 (`EXPERIMENTS`):
@@ -27,9 +27,9 @@ Experiments plan v40, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 
 **Tables (what each one is).** Per performance arm (Secs. 5.1-5.3):
 `transfer_detail` (MIL-CREDA per transfer: balanced accuracy, AUC,
-sensitivity, specificity, pooled per seed, mean and sd over seeds),
+sensitivity, specificity, pooled at the one report seed of Sec. 4.6),
 `comparison` (one row per method, one column per transfer, each cell the
-pooled balanced accuracy as mean +/- sd over seeds, and the average rank of
+pooled balanced accuracy at the report seed, and the average rank of
 the nine adapted strategies over the core transfers; the source-only controls
 of the device arm print `controls.NA_RECORD`), `secondary` (kappa, AUC,
 sensitivity, specificity over the core pair), `per_fold` (the per-rotation
@@ -58,7 +58,7 @@ from MIL_CREDA_EEG import statistics as st
 from MIL_CREDA_EEG.two_phase import write_history as _write_history
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
@@ -209,7 +209,13 @@ def _select(records: Sequence[Mapping], method: str, transfers: Iterable[str]) -
 
 
 def _pooled(records: Sequence[Mapping]) -> dict:
-    return st.summarize_seeds(st.pooled_by_seed(records)) if records else {}
+    """The pooled metrics at the one report seed (Sec. 4.6); {} without records."""
+    return st.pooled(records) if records else {}
+
+
+def _value(summary: Mapping, metric: str) -> str:
+    v = summary.get(metric) if summary else None
+    return "" if v is None or not math.isfinite(v) else f"{v:.3f}"
 
 
 def _mean_sd(summary: Mapping, metric: str) -> str:
@@ -226,7 +232,7 @@ def transfer_detail(records: Sequence[Mapping], arm: str,
     rows = []
     for t in ARM_TRANSFERS[arm]:
         s = _pooled(_select(records, method, [t]))
-        rows.append({"transfer": t, **{m: _mean_sd(s, m) for m in
+        rows.append({"transfer": t, **{m: _value(s, m) for m in
                                        ("balanced_accuracy", "auc", "sensitivity",
                                         "specificity")}})
     return rows
@@ -240,7 +246,7 @@ def comparison_table(records: Sequence[Mapping], arm: str, core: Sequence[str],
         row = {"method": label}
         na = arm in controls.HETEROGENEOUS_ARMS and key in SOURCE_ONLY
         for t in ARM_TRANSFERS[arm]:
-            row[t] = controls.NA_RECORD if na else _mean_sd(
+            row[t] = controls.NA_RECORD if na else _value(
                 _pooled(_select(records, key, [t])), "balanced_accuracy")
         rank = (ranking or {}).get("average_rank", {}).get(key)
         row["average rank (core)"] = (controls.NA_RECORD if na else
@@ -250,13 +256,13 @@ def comparison_table(records: Sequence[Mapping], arm: str, core: Sequence[str],
 
 
 def ranking_scores(records: Sequence[Mapping], core: Sequence[str]) -> dict[str, list[float]]:
-    """Per adapted strategy, the pooled BA (mean over seeds) of each core transfer."""
+    """Per adapted strategy, the pooled BA at the report seed of each core transfer."""
     out = {}
     for s in model_store.STRATEGIES:
         values = []
         for t in core:
             summary = _pooled(_select(records, s, [t]))
-            values.append(summary["balanced_accuracy"]["mean"] if summary else float("nan"))
+            values.append(summary["balanced_accuracy"] if summary else float("nan"))
         if all(math.isfinite(v) for v in values):
             out[s] = values
     return out
@@ -267,7 +273,7 @@ def secondary_table(pooled_pair: Mapping[str, Sequence[Mapping]], arm: str) -> l
     for key, label in METHOD_ROWS.items():
         na = arm in controls.HETEROGENEOUS_ARMS and key in SOURCE_ONLY
         s = {} if na else _pooled(pooled_pair.get(key, []))
-        rows.append({"method": label, **{m: controls.NA_RECORD if na else _mean_sd(s, m)
+        rows.append({"method": label, **{m: controls.NA_RECORD if na else _value(s, m)
                                          for m in ("kappa", "auc", "sensitivity",
                                                    "specificity")}})
     return rows
@@ -396,25 +402,30 @@ CONVERGENCE_SERIES = {"loss": "loss", "val_balanced_accuracy": "validation BA",
 def convergence_figure(root: str | Path, experiment: str, history: Sequence[Mapping],
                        core: Sequence[str], name: str = "convergence") -> Path:
     """Sec. 5.4: one figure per arm on its core transfers, one panel per phase-1 group and
-    per phase-2 strategy; each curve the mean +/- sd over seeds of the rotation-averaged
-    value; the selected epoch marked; MIL-CREDA's global and local terms with their bounds."""
+    per phase-2 strategy; each curve the mean +/- sd over the four rotations, at the one
+    report seed, of the value averaged over the core transfers; the selected epoch marked;
+    MIL-CREDA's global and local terms with their bounds."""
     path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
     records = [r for r in history if r.get("transfer") in set(core)]
     if not records:
         raise ResultsError(f"no history of the core transfers {list(core)}")
+    seeds = sorted({r["seed"] for r in records})
+    if len(seeds) > 1:
+        raise ResultsError(f"Sec. 5.4 draws the one report seed of Sec. 4.6; the history "
+                           f"holds seeds {seeds}")
     models = sorted({r["model"] for r in records}, key=lambda m: (not m.endswith("phase1"), m))
     plt, fig, axes = _figure(len(models), 1, aspect=0.42 * len(models), sharex=False)
     for ax, model in zip(axes[:, 0], models):
         rs = [r for r in records if r["model"] == model]
         epochs = sorted({r["epoch"] for r in rs})
-        seeds = sorted({r["seed"] for r in rs})
+        folds = sorted({r["fold"] for r in rs})
         for key, label in CONVERGENCE_SERIES.items():
             if not any(key in r for r in rs):
                 continue
-            per_seed = [[np.nanmean([r[key] for r in rs if r["seed"] == s
+            per_fold = [[np.nanmean([r[key] for r in rs if r["fold"] == f
                                      and r["epoch"] == e and key in r] or [np.nan])
-                         for e in epochs] for s in seeds]
-            _band(ax, epochs, per_seed, label)
+                         for e in epochs] for f in folds]
+            _band(ax, epochs, per_fold, label)
         for term in ("global", "local"):
             if any(f"{term}_bound_high" in r for r in rs):
                 for bound in (rs[0][f"{term}_bound_low"], rs[0][f"{term}_bound_high"]):
@@ -507,7 +518,7 @@ def own_control(strategy: str) -> str:
 
 def ladder_points(records: Sequence[Mapping], separability_rows: Sequence[Mapping]) -> list[dict]:
     """Per strategy and level or task transfer: separability (reading `all`) and the gain
-    of the pooled BA (mean over seeds) over the strategy's own source-only control."""
+    of the pooled BA at the report seed over the strategy's own source-only control."""
     sep = {r["transfer"]: r for r in separability_rows if r["reading"] == "all"
            and r["arm"] in controls.SAME_CHANNEL_ARMS}
     points = []
@@ -520,8 +531,7 @@ def ladder_points(records: Sequence[Mapping], separability_rows: Sequence[Mappin
             points.append({"strategy": strategy, "transfer": transfer, "role": row.get("role"),
                            "separability": float(row["auc_rotation_mean"]),
                            "separability_sd": float(row["auc_rotation_sd"]),
-                           "gain": mine["balanced_accuracy"]["mean"]
-                           - base["balanced_accuracy"]["mean"],
+                           "gain": mine["balanced_accuracy"] - base["balanced_accuracy"],
                            "control": own_control(strategy)})
     return points
 

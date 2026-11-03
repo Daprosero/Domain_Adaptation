@@ -1,6 +1,6 @@
 """The report and variance design: subject-level metrics, pooled summaries and contrasts.
 
-Experiments plan v40, Secs. 4.4 and 4.6, with the significance tables of
+Experiments plan v42, Secs. 4.4 and 4.6, with the significance tables of
 Secs. 5.1-5.3 and the tests of Secs. 6.1-6.3. Every function here reads
 predictions that already exist (one record per target test subject, rotation,
 seed and strategy, as `two_phase.predictions` writes them); nothing here trains.
@@ -14,12 +14,13 @@ goes to class 0, as `torch.argmax` does).
 
 **Two summaries (Sec. 4.6).** The pooled one joins the test predictions of
 the four rotations, each subject predicted once, and computes one metric over
-the target pool (`pooled_by_seed`; the headline number). The per-fold mean and
+the target pool (`pooled`; the headline number). The per-fold mean and
 deviation (`per_fold`) is the evidence that the pooled number does not hang on
 one rotation, and the AUC is reported per fold too, because the pooled AUC
-mixes four models' probabilities. With three training seeds, the pooled value
-is computed per seed and reported as the mean and deviation across seeds
-(`summarize_seeds`).
+mixes four models' probabilities. There is one report seed (Sec. 4.6, seed 1):
+each transfer has a single pooled value, with no reduction between seeds, and
+every summary and contrast refuses records of more than one seed
+(`single_seed`).
 
 **The pair (Sec. 4.6).** The primary performance contrast is on each core pair
 with its two directions pooled: every assigned subject is target exactly once
@@ -37,7 +38,7 @@ information with binary responses). Holm adjusts the p values of a declared
 family (`holm`). The AUCs on the same subjects are compared with DeLong's test
 (`delong`, the structural-components algorithm of Sun and Xu 2014). The
 secondary contrast is Nadeau and Bengio's corrected resampled t test over the
-four rotations, with the three seeds averaged per rotation (`nadeau_bengio`).
+four rotations, one value per rotation at the report seed (`nadeau_bengio`).
 
 **The arm ranking (Secs. 5.1-5.3).** Friedman's test over the nine adapted
 strategies, blocks the core transfers, with the Nemenyi critical difference
@@ -56,9 +57,7 @@ Every other test is two-sided as well; the direction a hypothesis states is
 read from the sign of the effect, never from a one-sided p. The Nadeau-Bengio
 test-to-training ratio is an input (`test_train_ratio`): the campaign passes
 the target-test subjects over the subjects the models were fit on, summed over
-the two directions and averaged over rotations. The plan does not say how the
-three seeds become one prediction per subject for the bootstrap and DeLong;
-that is the required input `reduction` (`SEED_REDUCTIONS`), with no default.
+the two directions and averaged over rotations.
 
 Significance rows carry exactly the dashboard's keys (`SIGNIFICANCE_KEYS`)
 plus `hypothesis` and `experiment` and any extra key a table needs.
@@ -77,17 +76,17 @@ from sklearn.metrics import roc_auc_score
 from MIL_CREDA_EEG.two_phase import balanced_accuracy
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
     "sections": ["4.4", "4.6", "5.1", "5.2", "5.3", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
     "invariants": [
         "metrics_are_subject_level_and_balanced_accuracy_is_the_mean_recall",
         "a_subject_predicted_twice_in_one_seed_is_refused",
-        "the_pooled_summary_is_per_seed_then_mean_and_sd_across_seeds",
-        "the_per_fold_summary_averages_seeds_within_each_rotation",
+        "the_pooled_summary_is_one_value_from_the_one_report_seed",
+        "the_per_fold_summary_is_mean_and_sd_over_the_rotations",
         "a_pair_pools_each_subject_from_the_direction_where_it_is_target",
-        "the_seed_reduction_has_no_default",
+        "the_contrasts_read_one_report_seed_and_no_reduction",
         "the_bootstrap_is_paired_and_keeps_every_stratum_size",
         "the_bootstrap_reports_difference_interval_kappa_and_discordant_subjects",
         "identical_models_give_a_zero_difference_and_p_one",
@@ -104,8 +103,6 @@ ALPHA = 0.05
 POSITIVE_THRESHOLD = 0.5
 BOOTSTRAP_RESAMPLES = 10_000
 BOOTSTRAP_SEED = 20261102
-#: Required choice: how the three report seeds become one prediction per subject.
-SEED_REDUCTIONS = ("mean-probability", "per-seed")
 METRICS = ("balanced_accuracy", "kappa", "auc", "sensitivity", "specificity")
 #: The dashboard's significance schema (SKILL.md, the Results table).
 SIGNIFICANCE_KEYS = ("comparison", "test", "statistic", "p_value", "p_adjusted",
@@ -181,10 +178,19 @@ def _metrics_of(records: Sequence[Mapping]) -> dict:
     return subject_metrics([r["label"] for r in records], [r["probability"] for r in records])
 
 
-def pooled_by_seed(records: Iterable[Mapping]) -> dict[int, dict]:
-    """Per seed: one metric over every target subject of the four rotations."""
+def single_seed(records: Iterable[Mapping]) -> list[Mapping]:
+    """The records of the one report seed (Sec. 4.6); more than one seed is refused."""
     records = check_once(records)
-    return {int(seed): _metrics_of(rs) for seed, rs in _by(records, "seed").items()}
+    seeds = sorted({r.get("seed") for r in records}, key=str)
+    if len(seeds) > 1:
+        raise StatisticsError(f"Sec. 4.6 has one report seed and no reduction between seeds; "
+                              f"got seeds {seeds}")
+    return records
+
+
+def pooled(records: Iterable[Mapping]) -> dict:
+    """One metric over every target subject of the four rotations, at the report seed."""
+    return _metrics_of(single_seed(records))
 
 
 def _mean_sd(values: Sequence[float]) -> dict:
@@ -193,20 +199,12 @@ def _mean_sd(values: Sequence[float]) -> dict:
             "sd": float(v.std(ddof=1)) if len(v) > 1 else float("nan"), "n": int(len(v))}
 
 
-def summarize_seeds(by_seed: Mapping[int, Mapping]) -> dict:
-    """Mean and sample deviation across seeds of each pooled metric."""
-    return {m: _mean_sd([s[m] for s in by_seed.values()]) for m in METRICS}
-
-
 def per_fold(records: Iterable[Mapping]) -> dict:
-    """Per rotation the metric of each seed, averaged over seeds; then mean and sd."""
-    records = check_once(records)
+    """Per rotation the metric at the report seed; then mean and sd over the rotations."""
+    records = single_seed(records)
     rotations = {}
     for rotation, rs in _by(records, "rotation").items():
-        seeds = [_metrics_of(x) for x in _by(rs, "seed").values()]
-        rotations[int(rotation)] = {m: float(np.nanmean([s[m] for s in seeds]))
-                                    if any(math.isfinite(s[m]) for s in seeds)
-                                    else float("nan") for m in METRICS}
+        rotations[int(rotation)] = _metrics_of(rs)
     return {"rotations": rotations,
             **{m: _mean_sd([r[m] for r in rotations.values()]) for m in METRICS}}
 
@@ -229,30 +227,6 @@ def pool_pair(records: Iterable[Mapping], pooled: Mapping[str, str]) -> list[Map
             raise StatisticsError(f"seed {seed}: pooled subjects without a prediction: "
                                   f"{sorted(missing)[:5]}")
     return records
-
-
-def reduce_seeds(records: Iterable[Mapping], reduction: str) -> dict:
-    """Seeds -> predictions per subject: `{"all": [...]}` or `{seed: [...]}`."""
-    if reduction not in SEED_REDUCTIONS:
-        raise StatisticsError(f"the seed reduction is a required choice among "
-                              f"{list(SEED_REDUCTIONS)}; got {reduction!r}")
-    records = check_once(records)
-    by_seed = _by(records, "seed")
-    if reduction == "per-seed":
-        return {int(s): sorted(rs, key=lambda r: r["subject"]) for s, rs in by_seed.items()}
-    subjects = [{r["subject"] for r in rs} for rs in by_seed.values()]
-    if any(s != subjects[0] for s in subjects):
-        raise StatisticsError("mean-probability needs every seed to predict the same subjects")
-    out = []
-    for subject, rs in _by(records, "subject").items():
-        labels = {r["label"] for r in rs}
-        if len(labels) != 1:
-            raise StatisticsError(f"{subject}: two labels across seeds")
-        first = rs[0]
-        out.append({**{k: first[k] for k in ("subject", "direction", "label") if k in first},
-                    "probability": float(np.mean([r["probability"] for r in rs])),
-                    "seeds": sorted(int(r["seed"]) for r in rs)})
-    return {"all": out}
 
 
 # ------------------------------------------------------------------ the bootstrap
@@ -474,7 +448,7 @@ def apply_holm(rows: list[dict], family: str) -> list[dict]:
 
 
 def fold_differences(records_a: Sequence[Mapping], records_b: Sequence[Mapping]) -> list[float]:
-    """Per rotation: BA(A) - BA(B), each the mean over seeds of that rotation's BA."""
+    """Per rotation: BA(A) - BA(B) at the report seed."""
     fa, fb = per_fold(records_a)["rotations"], per_fold(records_b)["rotations"]
     if sorted(fa) != sorted(fb):
         raise StatisticsError(f"the two models cover different rotations: {sorted(fa)} vs "
@@ -483,60 +457,60 @@ def fold_differences(records_a: Sequence[Mapping], records_b: Sequence[Mapping])
 
 
 def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
-                  name_a: str, name_b: str, scope: str, reduction: str,
-                  test_train_ratio: float, hypothesis: str, experiment: str,
+                  name_a: str, name_b: str, scope: str, test_train_ratio: float,
+                  hypothesis: str, experiment: str,
                   resamples: int = BOOTSTRAP_RESAMPLES, seed: int = BOOTSTRAP_SEED) -> list[dict]:
     """Sec. 4.6 for one rival on one pooled scope: bootstrap, DeLong and Nadeau-Bengio rows.
 
-    `records_*` hold every seed's pooled test predictions (already `pool_pair`-ed
-    when the scope is a pair). The bootstrap strata are (class, direction).
+    `records_*` hold the report seed's pooled test predictions (already
+    `pool_pair`-ed when the scope is a pair). The bootstrap strata are (class,
+    direction).
     """
-    reduced_a, reduced_b = reduce_seeds(records_a, reduction), reduce_seeds(records_b,
-                                                                            reduction)
-    if sorted(reduced_a) != sorted(reduced_b):
-        raise StatisticsError("the two models do not share their seeds")
+    records_a, records_b = single_seed(records_a), single_seed(records_b)
+    seed_a = {r.get("seed") for r in records_a}
+    if seed_a != {r.get("seed") for r in records_b}:
+        raise StatisticsError("the two models are not at the same report seed")
+    report_seed = next(iter(seed_a), None)
     comparison = f"{experiment}:{scope}:{name_a} vs {name_b}"
     rows = []
-    for key in sorted(reduced_a, key=str):
-        ra = {r["subject"]: r for r in reduced_a[key]}
-        rb = {r["subject"]: r for r in reduced_b[key]}
-        if set(ra) != set(rb):
-            raise StatisticsError(f"{comparison}: the two models predict different subjects")
-        subjects = sorted(ra)
-        labels = [ra[s]["label"] for s in subjects]
-        if any(ra[s]["label"] != rb[s]["label"] for s in subjects):
-            raise StatisticsError(f"{comparison}: labels disagree between the two records")
-        pa, pb = [ra[s]["probability"] for s in subjects], [rb[s]["probability"] for s in subjects]
-        strata = [(ra[s]["label"], ra[s].get("direction")) for s in subjects]
-        label = comparison if key == "all" else f"{comparison} [seed {key}]"
-        boot = paired_bootstrap(labels, pa, pb, strata, resamples=resamples, seed=seed)
+    ra = {r["subject"]: r for r in records_a}
+    rb = {r["subject"]: r for r in records_b}
+    if set(ra) != set(rb):
+        raise StatisticsError(f"{comparison}: the two models predict different subjects")
+    subjects = sorted(ra)
+    labels = [ra[s]["label"] for s in subjects]
+    if any(ra[s]["label"] != rb[s]["label"] for s in subjects):
+        raise StatisticsError(f"{comparison}: labels disagree between the two records")
+    pa, pb = [ra[s]["probability"] for s in subjects], [rb[s]["probability"] for s in subjects]
+    strata = [(ra[s]["label"], ra[s].get("direction")) for s in subjects]
+    boot = paired_bootstrap(labels, pa, pb, strata, resamples=resamples, seed=seed)
+    rows.append(significance_row(
+        comparison=comparison, test=TEST_BOOTSTRAP, statistic=boot["difference"],
+        p_value=boot["p_value"], effect_size=boot["difference"],
+        effect_size_name=f"balanced accuracy difference ({name_a} - {name_b})",
+        ci_low=boot["ci_low"], ci_high=boot["ci_high"], n=boot["n"],
+        hypothesis=hypothesis, experiment=experiment,
+        kappa_difference=boot["kappa_difference"], kappa_ci_low=boot["kappa_ci_low"],
+        kappa_ci_high=boot["kappa_ci_high"], discordant=boot["discordant"],
+        resamples=boot["resamples"], bootstrap_seed=boot["seed"],
+        strata="class x direction", report_seed=report_seed,
+        information_note="with binary responses the bootstrap's information lies only "
+                         "in the discordant subjects"))
+    try:
+        dl = delong(labels, pa, pb)
         rows.append(significance_row(
-            comparison=label, test=TEST_BOOTSTRAP, statistic=boot["difference"],
-            p_value=boot["p_value"], effect_size=boot["difference"],
-            effect_size_name=f"balanced accuracy difference ({name_a} - {name_b})",
-            ci_low=boot["ci_low"], ci_high=boot["ci_high"], n=boot["n"],
-            hypothesis=hypothesis, experiment=experiment,
-            kappa_difference=boot["kappa_difference"], kappa_ci_low=boot["kappa_ci_low"],
-            kappa_ci_high=boot["kappa_ci_high"], discordant=boot["discordant"],
-            resamples=boot["resamples"], bootstrap_seed=boot["seed"],
-            strata="class x direction", seed_reduction=reduction,
-            information_note="with binary responses the bootstrap's information lies only "
-                             "in the discordant subjects"))
-        try:
-            dl = delong(labels, pa, pb)
-            rows.append(significance_row(
-                comparison=f"{label} (AUC)", test=TEST_DELONG, statistic=dl["z"],
-                p_value=dl["p_value"], effect_size=dl["difference"],
-                effect_size_name=f"AUC difference ({name_a} - {name_b})",
-                ci_low=dl["ci_low"], ci_high=dl["ci_high"], n=dl["n"],
-                hypothesis=hypothesis, experiment=experiment, auc_a=dl["auc_a"],
-                auc_b=dl["auc_b"], seed_reduction=reduction))
-        except StatisticsError as error:
-            rows.append(significance_row(
-                comparison=f"{label} (AUC)", test=TEST_DELONG, statistic=None, p_value=None,
-                effect_size=None, effect_size_name=f"AUC difference ({name_a} - {name_b})",
-                ci_low=None, ci_high=None, n=len(subjects), hypothesis=hypothesis,
-                experiment=experiment, not_computed=str(error)))
+            comparison=f"{comparison} (AUC)", test=TEST_DELONG, statistic=dl["z"],
+            p_value=dl["p_value"], effect_size=dl["difference"],
+            effect_size_name=f"AUC difference ({name_a} - {name_b})",
+            ci_low=dl["ci_low"], ci_high=dl["ci_high"], n=dl["n"],
+            hypothesis=hypothesis, experiment=experiment, auc_a=dl["auc_a"],
+            auc_b=dl["auc_b"], report_seed=report_seed))
+    except StatisticsError as error:
+        rows.append(significance_row(
+            comparison=f"{comparison} (AUC)", test=TEST_DELONG, statistic=None, p_value=None,
+            effect_size=None, effect_size_name=f"AUC difference ({name_a} - {name_b})",
+            ci_low=None, ci_high=None, n=len(subjects), hypothesis=hypothesis,
+            experiment=experiment, not_computed=str(error)))
     nb = nadeau_bengio(fold_differences(records_a, records_b), test_train_ratio)
     rows.append(significance_row(
         comparison=f"{comparison} (per-rotation)", test=TEST_NADEAU_BENGIO, statistic=nb["t"],
@@ -544,5 +518,5 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
         effect_size_name=f"mean per-rotation balanced accuracy difference ({name_a} - {name_b})",
         ci_low=nb["ci_low"], ci_high=nb["ci_high"], n=nb["n"], hypothesis=hypothesis,
         experiment=experiment, df=nb["df"], test_train_ratio=nb["test_train_ratio"],
-        seeds="averaged per rotation"))
+        report_seed=report_seed))
     return rows

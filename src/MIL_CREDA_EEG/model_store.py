@@ -1,9 +1,14 @@
 """Every final model, saved per transfer, rotation, seed and group or strategy.
 
-Experiments plan v40, Sec. 7.3 (last paragraph of "Fase 2"), with Sec. 4.2's
+Experiments plan v42, Sec. 7.3 (last paragraph of "Fase 2"), with Sec. 4.2's
 partition rule. Saved: the selected phase-1 checkpoint of each of the four
 phase-1 groups (`GROUPS`), with its sigma for MIL-CREDA, and the selected
-phase-2 model of each of the nine strategies (`STRATEGIES`). Beside each model
+phase-2 model of each of the nine strategies (`STRATEGIES`). Sec. 6.3 stores
+the K3 variants the same way (`VARIANTS`, named `MIL-CREDA [<variant>]`,
+`variant_name`), because Sec. 6.1 reads their attention and Sec. 6.2 the
+global-term-only model: the four aggregation variants train both phases and
+store both, the two ablation variants share full MIL-CREDA's phase 1 and store
+phase 2 only; every one carries its sigma. Beside each model
 go the chosen hyperparameters, the partition hash and the code version, so the
 mechanism experiments of Sec. 6 and any later test run on the saved models
 without training again, and an interrupted remote run resumes without losing
@@ -25,8 +30,9 @@ model (`ModelExists`).
 **Code version: this implementation's rule.** The plan names "the code
 version" without fixing it. It is the sha256 over the source bytes of the files
 that define the models and their training (`CODE_FILES`): the EEGNet trunk and
-head, the MIL-CREDA model, the common wrapper, the two-phase training and the
-`MIL_CREDA` package of the proposal's equations. A content digest, not a git
+head, the MIL-CREDA model, the K3 aggregation variants, the common wrapper, the
+two-phase training, every comparator and the `MIL_CREDA` package of the
+proposal's equations. A content digest, not a git
 commit, because a remote run executes a working tree, and the commit would not
 change when an uncommitted edit did.
 
@@ -35,8 +41,8 @@ change when an uncommitted edit did.
 
 **Rebuilding a phase-1 model.** `BUILDERS` maps each phase-1 group to the
 constructor of its architecture; `common` and `MIL-CREDA` are registered here,
-AdaptMIL and HASD are placeholders that their comparator unit registers. A
-builder takes `(source_channels, target_channels, hyper)` and returns a module
+AdaptMIL and HASD are placeholders that their comparator unit registers;
+`build_stored` rebuilds any stored name, K3 variants included. A builder takes `(source_channels, target_channels, hyper)` and returns a module
 whose `predict(bags, domain)` gives the bag predictions, as `two_phase.evaluate`
 reads them.
 """
@@ -51,13 +57,14 @@ from pathlib import Path
 
 import torch
 
+from MIL_CREDA_EEG import aggregation_variants
 from MIL_CREDA_EEG import assignment as assignment_mod
-from MIL_CREDA_EEG import partition
+from MIL_CREDA_EEG import partition, two_phase
 from MIL_CREDA_EEG.bag_data import REPOSITORY, default_partition_path
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
-    "sections": ["4.2", "7.3"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "sections": ["4.2", "6.3", "7.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
     "invariants": [
@@ -69,6 +76,8 @@ __provenance__ = {
         "a_state_that_changed_on_disk_is_refused",
         "every_final_model_has_its_own_path_per_transfer_rotation_seed_and_name",
         "an_unregistered_phase_one_group_cannot_be_rebuilt",
+        "the_k3_variant_models_are_stored_and_rebuilt",
+        "the_code_version_covers_the_k3_variant_module",
     ],
 }
 
@@ -80,11 +89,26 @@ STRATEGIES = ("AdaptMIL", "UDA-DDA", "CCA-LSC", "CASUAL", "COT", "CS+CCS",
               "CLUST — variante source-free", "HASD", "MIL-CREDA")
 #: Sec. 7.3: "con su sigma en el caso de MIL-CREDA".
 SIGMA_REQUIRED = "MIL-CREDA"
+
+
+def variant_name(variant: str) -> str:
+    """The stored name of a K3 variant, as its history tags it: `MIL-CREDA [<variant>]`."""
+    return f"{SIGMA_REQUIRED} [{variant}]"
+
+
+#: Sec. 6.3: K3 variant name -> the phases stored. The aggregation variants train both
+#: phases; the ablation variants share full MIL-CREDA's stored phase 1.
+AGGREGATION_VARIANTS = {variant_name(v): v for v in aggregation_variants.VARIANTS}
+ABLATION_VARIANTS = {variant_name(v): v for v in two_phase.TERM_SELECTIONS
+                     if v != two_phase.BOTH_TERMS}
+VARIANTS = {**{n: (1, 2) for n in AGGREGATION_VARIANTS},
+            **{n: (2,) for n in ABLATION_VARIANTS}}
 DEFAULT_ROOT = REPOSITORY / "MIL-CREDA" / "Models" / "Balladeer"
 _SRC = Path(__file__).resolve().parents[1]
 CODE_FILES = (
     *sorted(p.relative_to(_SRC).as_posix() for p in (_SRC / "MIL_CREDA").glob("*.py")),
     "MIL_CREDA_EEG/eegnet.py", "MIL_CREDA_EEG/mil_creda_model.py",
+    "MIL_CREDA_EEG/aggregation_variants.py",
     "MIL_CREDA_EEG/mil_wrapper.py", "MIL_CREDA_EEG/two_phase.py",
     # Every comparator's model and training code, so a checkpoint names the comparator
     # bytes that produced it too.
@@ -138,6 +162,17 @@ def build_model(group: str, source_channels: int, target_channels: int, hyper: M
     return require_registered(group)(source_channels, target_channels, hyper)
 
 
+def build_stored(name: str, source_channels: int, target_channels: int, hyper: Mapping):
+    """The architecture of a stored name: a phase-1 group's, a strategy's group's, or a
+    K3 variant's (an aggregation variant's own model; an ablation's is MIL-CREDA's)."""
+    if name in AGGREGATION_VARIANTS:
+        return aggregation_variants.build(AGGREGATION_VARIANTS[name], source_channels,
+                                          target_channels, hyper)
+    if name in ABLATION_VARIANTS:
+        return build_model(SIGMA_REQUIRED, source_channels, target_channels, hyper)
+    return build_model(name, source_channels, target_channels, hyper)
+
+
 def code_version() -> str:
     digest = hashlib.sha256()
     for name in CODE_FILES:
@@ -167,12 +202,16 @@ def name_slug(name: str) -> str:
 
 
 def _check_name(phase: int, name: str) -> None:
-    if phase == 1 and name not in GROUPS:
-        raise StoreError(f"phase 1 saves a group {list(GROUPS)}, not {name!r}")
-    if phase == 2 and name not in STRATEGIES:
-        raise StoreError(f"phase 2 saves a strategy {list(STRATEGIES)}, not {name!r}")
     if phase not in (1, 2):
         raise StoreError(f"phase must be 1 or 2, got {phase!r}")
+    if phase in VARIANTS.get(name, ()):
+        return
+    if phase == 1 and name not in GROUPS:
+        raise StoreError(f"phase 1 saves a group {list(GROUPS)} or an aggregation variant "
+                         f"{list(AGGREGATION_VARIANTS)}, not {name!r}")
+    if phase == 2 and name not in STRATEGIES:
+        raise StoreError(f"phase 2 saves a strategy {list(STRATEGIES)} or a K3 variant "
+                         f"{list(VARIANTS)}, not {name!r}")
 
 
 def model_path(root: str | Path, transfer: assignment_mod.Transfer, rotation: int, seed: int,
@@ -188,7 +227,7 @@ def save(root: str | Path, *, transfer: assignment_mod.Transfer, rotation: int, 
          extra: Mapping | None = None) -> Path:
     """Write the state dict and its sidecar; refuse to overwrite."""
     path = model_path(root, transfer, rotation, seed, phase, name)
-    if name == SIGMA_REQUIRED and sigma is None:
+    if (name == SIGMA_REQUIRED or name in VARIANTS) and sigma is None:
         raise StoreError(f"a {name} model is stored with its sigma (Sec. 7.3)")
     if not partition_sha256:
         raise StoreError("a model is stored with the hash of its partition (Sec. 7.3)")
@@ -239,8 +278,8 @@ def load_model(path: str | Path, *, partition_path: str | Path | None = None,
     if meta["phase"] != 1:
         raise StoreError("load_model rebuilds phase-1 checkpoints; phase-2 models are read "
                          "by the strategy that trained them")
-    model = build_model(meta["name"], meta["channels"]["source"], meta["channels"]["target"],
-                        meta["hyper"])
+    model = build_stored(meta["name"], meta["channels"]["source"], meta["channels"]["target"],
+                         meta["hyper"])
     missing, unexpected = model.load_state_dict(state, strict=False)
     if unexpected or any(not k.startswith("target_trunk.") for k in missing):
         raise StoreError(f"{path}: the state does not fit the {meta['name']} architecture "
