@@ -1,4 +1,4 @@
-"""Experiments plan v40, Secs. 4.4 and 4.6: metrics, summaries and contrasts.
+"""Experiments plan v42, Secs. 4.4 and 4.6: metrics, summaries and contrasts.
 
 Every number here is synthetic: seeded random predictions, never a measured result.
 """
@@ -15,7 +15,7 @@ from sklearn.metrics import cohen_kappa_score, roc_auc_score
 from MIL_CREDA_EEG import statistics as st
 
 
-def _records(n=24, seeds=(1, 2, 3), rotations=4, direction="A->B", strategy="M", rng=None,
+def _records(n=24, seeds=(1,), rotations=4, direction="A->B", strategy="M", rng=None,
              skill=0.3):
     rng = rng or np.random.default_rng(0)
     labels = np.array([i % 2 for i in range(n)])
@@ -56,31 +56,29 @@ def test_a_subject_predicted_twice_in_one_seed_is_refused():
     st.check_once(r + [{**r[0], "seed": 2}])
 
 
-def test_the_pooled_summary_is_per_seed_then_mean_and_sd_across_seeds():
+def test_the_pooled_summary_is_one_value_from_the_one_report_seed():
     r = _records()
-    by_seed = st.pooled_by_seed(r)
-    assert sorted(by_seed) == [1, 2, 3]
-    for seed, m in by_seed.items():
-        rs = [x for x in r if x["seed"] == seed]
-        assert m == st.subject_metrics([x["label"] for x in rs],
-                                       [x["probability"] for x in rs])
-    s = st.summarize_seeds(by_seed)
-    values = [by_seed[k]["balanced_accuracy"] for k in (1, 2, 3)]
-    assert s["balanced_accuracy"]["mean"] == pytest.approx(np.mean(values))
-    assert s["balanced_accuracy"]["sd"] == pytest.approx(np.std(values, ddof=1))
+    m = st.pooled(r)
+    assert m == st.subject_metrics([x["label"] for x in r], [x["probability"] for x in r])
+    # Sec. 4.6: one report seed, no reduction between seeds; a second seed is refused
+    with pytest.raises(st.StatisticsError, match="one report seed"):
+        st.pooled(_records(seeds=(1, 2)))
+    assert not hasattr(st, "pooled_by_seed") and not hasattr(st, "summarize_seeds")
 
 
-def test_the_per_fold_summary_averages_seeds_within_each_rotation():
+def test_the_per_fold_summary_is_mean_and_sd_over_the_rotations():
     r = _records()
     f = st.per_fold(r)
     assert sorted(f["rotations"]) == [0, 1, 2, 3]
-    expected = np.mean([st.subject_metrics(
-        [x["label"] for x in r if x["rotation"] == 2 and x["seed"] == s],
-        [x["probability"] for x in r if x["rotation"] == 2 and x["seed"] == s]
-    )["balanced_accuracy"] for s in (1, 2, 3)])
-    assert f["rotations"][2]["balanced_accuracy"] == pytest.approx(expected)
-    assert f["balanced_accuracy"]["sd"] == pytest.approx(
-        np.std([f["rotations"][k]["balanced_accuracy"] for k in range(4)], ddof=1))
+    expected = st.subject_metrics([x["label"] for x in r if x["rotation"] == 2],
+                                  [x["probability"] for x in r if x["rotation"] == 2])
+    assert f["rotations"][2]["balanced_accuracy"] == pytest.approx(
+        expected["balanced_accuracy"])
+    values = [f["rotations"][k]["balanced_accuracy"] for k in range(4)]
+    assert f["balanced_accuracy"]["mean"] == pytest.approx(np.mean(values))
+    assert f["balanced_accuracy"]["sd"] == pytest.approx(np.std(values, ddof=1))
+    with pytest.raises(st.StatisticsError, match="one report seed"):
+        st.per_fold(_records(seeds=(1, 2)))
 
 
 def test_a_pair_pools_each_subject_from_the_direction_where_it_is_target():
@@ -95,17 +93,22 @@ def test_a_pair_pools_each_subject_from_the_direction_where_it_is_target():
         st.pool_pair(a + b[1:], pooled)
 
 
-def test_the_seed_reduction_has_no_default():
+def test_the_contrasts_read_one_report_seed_and_no_reduction():
     import inspect
-    for fn in (st.reduce_seeds, st.pair_contrast):
-        assert inspect.signature(fn).parameters["reduction"].default is inspect.Parameter.empty
-    r = _records(n=4)
-    with pytest.raises(st.StatisticsError, match="required"):
-        st.reduce_seeds(r, "majority")
-    mean = st.reduce_seeds(r, "mean-probability")["all"]
-    s0 = [x for x in r if x["subject"] == "S000"]
-    assert mean[0]["probability"] == pytest.approx(np.mean([x["probability"] for x in s0]))
-    assert sorted(st.reduce_seeds(r, "per-seed")) == [1, 2, 3]
+    assert "reduction" not in inspect.signature(st.pair_contrast).parameters
+    assert not hasattr(st, "SEED_REDUCTIONS") and not hasattr(st, "reduce_seeds")
+    a = _records(n=8, strategy="A")
+    b = _records(n=8, strategy="B", rng=np.random.default_rng(1))
+    with pytest.raises(st.StatisticsError, match="one report seed"):
+        st.pair_contrast(_records(n=8, seeds=(1, 2)), b, name_a="A", name_b="B", scope="s",
+                         test_train_ratio=0.3, hypothesis="h", experiment="e", resamples=20)
+    with pytest.raises(st.StatisticsError, match="same report seed"):
+        st.pair_contrast(a, _records(n=8, seeds=(2,)), name_a="A", name_b="B", scope="s",
+                         test_train_ratio=0.3, hypothesis="h", experiment="e", resamples=20)
+    rows = st.pair_contrast(a, b, name_a="A", name_b="B", scope="s", test_train_ratio=0.3,
+                            hypothesis="h", experiment="e", resamples=20)
+    assert rows[0]["report_seed"] == 1 and "seed_reduction" not in rows[0]
+    assert "[seed" not in rows[0]["comparison"]
 
 
 def test_the_bootstrap_is_paired_and_keeps_every_stratum_size():
@@ -220,7 +223,7 @@ def test_significance_rows_carry_exactly_the_dashboard_keys():
     a = _records(strategy="MIL-CREDA", rng=np.random.default_rng(5))
     b = _records(strategy="X", rng=np.random.default_rng(6), skill=0.1)
     rows = st.pair_contrast(a, b, name_a="MIL-CREDA", name_b="X", scope="L1|L11",
-                            reduction="mean-probability", test_train_ratio=0.3,
+                            test_train_ratio=0.3,
                             hypothesis="A-nivel", experiment="A-nivel", resamples=200)
     assert [r["test"] for r in rows] == [st.TEST_BOOTSTRAP, st.TEST_DELONG,
                                          st.TEST_NADEAU_BENGIO]
@@ -230,7 +233,3 @@ def test_significance_rows_carry_exactly_the_dashboard_keys():
         assert r["experiment"] == "A-nivel"
         assert all(not (isinstance(v, float) and not math.isfinite(v)) for v in r.values())
     assert "discordant" in rows[0] and "kappa_difference" in rows[0]
-    per_seed = st.pair_contrast(a, b, name_a="MIL-CREDA", name_b="X", scope="L1|L11",
-                                reduction="per-seed", test_train_ratio=0.3,
-                                hypothesis="A-nivel", experiment="A-nivel", resamples=50)
-    assert len(per_seed) == 3 * 2 + 1

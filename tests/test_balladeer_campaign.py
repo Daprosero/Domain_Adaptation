@@ -1,4 +1,4 @@
-"""Experiments plan v40: the campaign entry point, rehearsed on a SYNTHETIC set on CPU.
+"""Experiments plan v42: the campaign entry point, rehearsed on a SYNTHETIC set on CPU.
 
 The synthetic set is seeded noise with a weak class signal; no number it yields is a
 measured result.
@@ -14,13 +14,13 @@ from pathlib import Path
 import optuna
 import pytest
 
-from MIL_CREDA_EEG import aggregation_variants, campaign, controls, model_store, results
+from MIL_CREDA_EEG import aggregation_variants, campaign, controls, mechanisms, model_store
+from MIL_CREDA_EEG import results
 from MIL_CREDA_EEG import search
 from MIL_CREDA_EEG import statistics as st
 
 BASE = {"schedule": {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4},
-        "strategies": ["MIL-CREDA"], "transfers": ["L1->L11"],
-        "seedReduction": "mean-probability"}
+        "strategies": ["MIL-CREDA"], "transfers": ["L1->L6"]}
 
 
 @pytest.fixture(scope="module")
@@ -35,7 +35,7 @@ def registries():
         getattr(m, name).update(value)
 
 
-def _rehearsal(tmp, conditions=("L1", "L11"), arm="level",
+def _rehearsal(tmp, conditions=("L1", "L6"), arm="level",
                strategies=("MIL-CREDA", "COT", "HASD")):
     cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24,
                                        conditions=conditions, arm=arm)
@@ -61,55 +61,45 @@ def test_the_steps_are_the_declared_ones_in_order():
 
 
 def test_required_inputs_have_no_default():
-    for key in ("schedule", "strategies", "transfers", "seedReduction"):
+    for key in ("schedule", "strategies", "transfers"):
         with pytest.raises((campaign.CampaignError, ValueError)):
             campaign.check_config({k: v for k, v in BASE.items() if k != key})
     with pytest.raises(ValueError, match="schedule"):
         campaign.check_config({**BASE, "schedule": {"epochs1": 1}})
     with pytest.raises(campaign.CampaignError, match="MIL-CREDA"):
         campaign.check_config({**BASE, "strategies": ["COT"]})
-    with pytest.raises(campaign.CampaignError, match="seedReduction"):
-        campaign.check_config({**BASE, "seedReduction": "majority"})
+    # Sec. 4.6: one report seed, seed 1; the search seed is never one
     with pytest.raises(campaign.CampaignError, match="report seed"):
         campaign.check_config({**BASE, "reportSeeds": [0, 1]})
+    with pytest.raises(campaign.CampaignError, match="one report seed"):
+        campaign.check_config({**BASE, "reportSeeds": [1, 2]})
     cfg = campaign.check_config(BASE)
     assert cfg["nTrials"] == search.N_TRIALS == 20
-    assert cfg["reportSeeds"] == list(search.REPORT_SEEDS)
+    assert cfg["reportSeeds"] == list(campaign.REPORT_SEEDS) == [1]
+    assert search.SEARCH_SEED == 0
     assert cfg["bootstrapResamples"] == st.BOOTSTRAP_RESAMPLES
-    with pytest.raises(campaign.CampaignError, match="k1"):
-        campaign.check_mechanism_inputs(cfg)
-    for missing in ("commonAttention", "bands", "scope"):
-        k1 = {"commonAttention": "COT", "bands": [[4, 8], [13, 30]], "scope": "pooled"}
-        k1.pop(missing)
-        with pytest.raises(campaign.CampaignError, match=missing):
-            campaign.check_mechanism_inputs({**cfg, "k1": k1})
-    with pytest.raises(campaign.CampaignError, match="non-MIL"):
-        campaign.check_mechanism_inputs({**cfg, "k1": {
-            "commonAttention": "AdaptMIL", "bands": [[4, 8], [13, 30]], "scope": "pooled"}})
+    # plan v42 retired these inputs: refused, never silently ignored
+    for key, value in (("seedReduction", "mean-probability"),
+                       ("k1", {"commonAttention": "COT", "bands": [[4, 8], [13, 30]],
+                               "scope": "pooled"}),
+                       ("pendingDecisions", {"clust-ema-range": "v42"})):
+        with pytest.raises(campaign.CampaignError, match="retired"):
+            campaign.check_config({**BASE, key: value})
+    assert not hasattr(campaign, "check_mechanism_inputs")
 
 
-def test_a_strategy_with_an_open_plan_decision_refuses_without_its_resolution():
-    assert campaign.PENDING_DECISIONS == {
-        "CLUST — variante source-free": ("clust-ema-range",),
-        "CASUAL": ("casual-vat-radius-range",),
-        "UDA-DDA": ("uda-dda-conditional-gating", "uda-dda-threshold-ordering"),
-        "CS+CCS": ("cs-ccs-prediction-kernel-width",)}
-    for strategy, items in campaign.PENDING_DECISIONS.items():
-        with pytest.raises(campaign.CampaignError, match=items[0]):
-            campaign.check_config({**BASE, "strategies": ["MIL-CREDA", strategy]})
-    partial = {"uda-dda-conditional-gating": "plan v41 Sec. 7.4"}
-    with pytest.raises(campaign.CampaignError, match="threshold-ordering"):
-        campaign.check_config({**BASE, "strategies": ["MIL-CREDA", "UDA-DDA"],
-                               "pendingDecisions": partial})
-    with pytest.raises(campaign.CampaignError, match="generic"):
-        campaign.check_config({**BASE, "strategies": ["MIL-CREDA", "CASUAL"],
-                               "pendingDecisions": {"casual-vat-radius-range": "[0.1, 5]"}})
-    ok = campaign.check_config({**BASE, "strategies": ["MIL-CREDA", "CASUAL"],
-                                "pendingDecisions": {"casual-vat-radius-range": {
-                                    "distribution": "LOSS_WEIGHT"}}})
-    assert ok["strategies"] == ["MIL-CREDA", "CASUAL"]
-    for free in ("AdaptMIL", "HASD", "COT", "CCA-LSC"):
-        campaign.check_config({**BASE, "strategies": ["MIL-CREDA", free]})
+def test_every_strategy_runs_without_an_open_decision_guard(registries, monkeypatch):
+    assert not hasattr(campaign, "PENDING_DECISIONS")
+    for strategy in model_store.STRATEGIES:
+        cfg = campaign.check_config({**BASE, "strategies": sorted({"MIL-CREDA", strategy})})
+        assert strategy in cfg["strategies"]
+    # CASUAL's v42 register() takes no argument (the VAT radius axis is its own, Sec. 7.7)
+    from MIL_CREDA_EEG.comparators.casual import training as casual
+    calls = []
+    monkeypatch.setattr(casual, "register", lambda *a, **k: calls.append((a, k)))
+    monkeypatch.delitem(search.PHASE_TWO_TRAINERS, "CASUAL", raising=False)
+    campaign.register(["MIL-CREDA", "CASUAL"])
+    assert calls == [((), {})]
 
 
 def test_the_campaign_never_launches_remote_work():
@@ -144,7 +134,7 @@ def test_an_incomplete_study_is_refused_not_extended(tmp_path):
 def test_the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation(level_run):
     cfg, product, outcome = level_run
     models = product / "Models" / "Balladeer"
-    for transfer in ("L1-to-L11", "L11-to-L1"):
+    for transfer in ("L1-to-L6", "L6-to-L1"):
         for r in range(4):
             for seed in (0, 1):
                 for name in ("phase1__common", "phase1__HASD", "phase1__MIL-CREDA"):
@@ -158,7 +148,7 @@ def test_the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation
     assert strategies == {"MIL-CREDA", "COT", "HASD", "source-only:common",
                           "source-only:HASD", "source-only:MIL-CREDA", "upper-bound"}
     st.check_once(records)
-    for transfer in ("L1->L11", "L11->L1"):
+    for transfer in ("L1->L6", "L6->L1"):
         for r in range(4):
             mine = {x["subject"] for x in records if x["transfer"] == transfer
                     and x["rotation"] == r and x["strategy"] == "MIL-CREDA"}
@@ -198,6 +188,7 @@ def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
         assert (root / rel).exists(), rel
     summary = json.loads((root / "A-nivel" / "summary.json").read_text())
     assert summary["synthetic"] is True and summary["nTrials"] == 1
+    assert summary["reportSeeds"] == [1] and "seedReduction" not in summary
     rows = json.loads((root / "significance_A-nivel.json").read_text())
     rivals = {r["comparison"].split(" vs ")[1] for r in rows
               if r["test"] == st.TEST_BOOTSTRAP}
@@ -206,6 +197,25 @@ def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
     assert all("holm" in r["correction"] for r in rows if r["test"] == st.TEST_BOOTSTRAP)
     k1 = json.loads((root / "significance_K1-atencion.json").read_text())
     assert any("event_window" in (r.get("not_computed") or "") for r in k1)
+    criterion = [r for r in k1 if r.get("criterion") == mechanisms.K1_CRITERION]
+    assert [r["comparison"] for r in criterion] == [
+        "K1-atencion:level:marked vs clean, MIL-CREDA",
+        "K1-atencion:level:marked vs clean, MIL-CREDA vs MIL-CREDA [own without consensus]",
+        "K1-atencion:level:event vs rest, MIL-CREDA"]
+    assert criterion[1]["n"] > 0 and criterion[1]["p_value"] is not None
+    references = {r["comparison"].split(", ", 1)[1] for r in k1
+                  if r.get("criterion", "").startswith("none (reference")}
+    assert references == {"MIL-CREDA [published attention]", "MIL-CREDA [gated attention]",
+                          "common attention [COT]", "HASD"}
+    assert not any("mean" in r["comparison"] or "band" in r["comparison"] for r in k1)
+    k1_summary = json.loads((root / "K1-atencion" / "summary.json").read_text())
+    assert k1_summary["excluded"] == mechanisms.K1_EXCLUDED
+    assert "bands" not in k1_summary and "scope" not in k1_summary
+    k2 = json.loads((root / "significance_K2-emparejamiento.json").read_text())
+    no_local = next(r for r in k2 if r["comparison"] ==
+                    "K2-emparejamiento:L1->L6 (smaller shift):MIL-CREDA vs "
+                    "MIL-CREDA [global term only]")
+    assert no_local["n"] > 0 and not no_local.get("not_computed")
     assert outcome["mechanisms"]["owed"] == []
     history = json.loads((root / "history_A-nivel.json").read_text())
     assert {"epoch", "seed", "fold", "model"} <= set(history[0])
@@ -248,7 +258,7 @@ def test_k3_trains_the_variants_and_writes_both_tables_with_holm_per_table(level
         assert (root / rel).exists(), rel
     aggregation = _csv(root / "K3-ablacion" / "tables" / "aggregation.csv")
     assert [r["variant"] for r in aggregation] == ["own", *aggregation_variants.VARIANTS]
-    assert {r["pair"] for r in aggregation} == {"L1|L11"}
+    assert {r["pair"] for r in aggregation} == {"L1|L6"}
     ablation = _csv(root / "K3-ablacion" / "tables" / "ablation.csv")
     assert [r["variant"] for r in ablation] == ["global term only", "local term only",
                                                 "both terms"]
@@ -257,20 +267,36 @@ def test_k3_trains_the_variants_and_writes_both_tables_with_holm_per_table(level
     boot = [r for r in rows if r["test"] == st.TEST_BOOTSTRAP]
     agg = [r for r in boot if ":aggregation:" in r["comparison"]]
     abl = [r for r in boot if ":ablation:" in r["comparison"]]
-    assert [r["comparison"] for r in agg] == ["K3-ablacion:aggregation:L1|L11:own vs "
-                                              "published attention"]
+    assert [r["comparison"] for r in agg] == ["K3-ablacion:aggregation:L1|L6:own vs "
+                                              "own without consensus"]
     assert [r["comparison"] for r in abl] == [
-        "K3-ablacion:ablation:L1|L11:both terms vs global term only",
-        "K3-ablacion:ablation:L1|L11:both terms vs local term only"]
+        "K3-ablacion:ablation:L1|L6:both terms vs global term only",
+        "K3-ablacion:ablation:L1|L6:both terms vs local term only"]
     assert all("aggregation" in r["correction"] and "m=1" in r["correction"] for r in agg)
     assert all("ablation" in r["correction"] and "m=2" in r["correction"] for r in abl)
     assert all(r["correction"] == "none" for r in rows if r["test"] != st.TEST_BOOTSTRAP)
     hyper = _csv(root / "K3-ablacion" / "tables" / "variant_hyperparameters.csv")
     for row in hyper:
-        if row["table"] == "aggregation":
+        if row["variant"] == "own without consensus":
+            assert float(row["attentionGamma"]) == 0.0
+            assert row["attentionTemperature"] not in ("", "not applicable")
+        elif row["table"] == "aggregation":
             assert row["attentionGamma"] == row["attentionTemperature"] == "not applicable"
         else:
             assert row["attentionGamma"] not in ("", "not applicable")
+    # Sec. 6.3: every variant model is stored, as the final models are (Sec. 6.1 reads them)
+    models = product / "Models" / "Balladeer"
+    for transfer in ("L1-to-L6", "L6-to-L1"):
+        for r in range(4):
+            folder = models / transfer / f"rotation{r}" / "seed1"
+            for v in aggregation_variants.VARIANTS:
+                slug = model_store.name_slug(model_store.variant_name(v))
+                assert (folder / f"phase1__{slug}.pt").exists()
+                assert (folder / f"phase2__{slug}.pt").exists()
+            for v in ("global term only", "local term only"):
+                slug = model_store.name_slug(model_store.variant_name(v))
+                assert (folder / f"phase2__{slug}.pt").exists()
+                assert not (folder / f"phase1__{slug}.pt").exists()
     summary = json.loads((root / "K3-ablacion" / "summary.json").read_text())
     assert summary["term_bounds"] and summary["aggregation_variants"]["trained"] == list(
         aggregation_variants.VARIANTS)
@@ -284,6 +310,21 @@ def test_k3_trains_the_variants_and_writes_both_tables_with_holm_per_table(level
 def test_k3_does_not_train_a_variant_again(level_run, registries):
     cfg, product, _ = level_run
     before = len(results.read_predictions(product / "Results", campaign.K3))
+    stored = sorted((product / "Models").rglob("*.pt"))
     again = campaign.run_k3(campaign.check_config(cfg), product)
     assert again["trained_aggregation"] == again["trained_ablation"] == 0
     assert len(results.read_predictions(product / "Results", campaign.K3)) == before
+    assert sorted((product / "Models").rglob("*.pt")) == stored
+
+
+def test_k2_trains_the_global_term_only_variant_on_its_declared_transfers():
+    cfg = campaign.check_config({**BASE, "transfers": ["L1->L11", "L11->L1", "L1->L6",
+                                                       "L6->L1", "L6->Robots"]})
+    core = {"level": ["L1->L11", "L11->L1"], "device": ["L6->Robots", "Robots->L6"]}
+    plan = campaign.k3_plan(cfg, core)
+    full = {"aggregation": aggregation_variants.VARIANTS,
+            "ablation": ("global term only", "local term only")}
+    # core transfers train both tables; the declared smaller shift (Sec. 6.2), not a core
+    # transfer, trains only the global-term-only variant; any other transfer, nothing
+    assert plan == {"L1->L11": full, "L11->L1": full, "L6->Robots": full,
+                    "L1->L6": {"aggregation": (), "ablation": ("global term only",)}}

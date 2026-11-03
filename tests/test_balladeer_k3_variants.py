@@ -1,4 +1,4 @@
-"""Experiments plan v40, Sec. 6.3 (K3): the ablation of the adaptation terms and the
+"""Experiments plan v42, Sec. 6.3 (K3): the ablation of the adaptation terms and the
 aggregation variants of MIL-CREDA, trained on tiny seeded synthetic bags on CPU.
 
 No number here is a measured result. The byte-for-byte witnesses compare the
@@ -280,15 +280,17 @@ def test_the_default_model_is_unchanged():
     assert torch.equal(model.predict([bag], "source"), expected)
 
 
-def _variant(aggregation: str, seed: int = 7) -> av.AggregationVariantModel:
+def _variant(aggregation: str, seed: int = 7):
     torch.manual_seed(seed)
-    model = av.AggregationVariantModel(3, 2, aggregation=aggregation)
+    model = av.build(aggregation, 3, 2, av.variant_hyper(aggregation, HYPER))
     model.fix_sigma(1.0)
     return model.eval()
 
 
 def test_each_aggregation_is_its_published_form():
-    assert av.VARIANTS == tuple(mech.AGGREGATIONS[1:])
+    assert av.VARIANTS == tuple(mech.AGGREGATIONS[1:]) == (
+        "own without consensus", "published attention", "gated attention", "mean")
+    assert tuple(av.FORMS) == ("published attention", "gated attention", "mean")
     published = _variant("published attention")
     D = published.source_trunk.output_dim
     H = torch.randn(5, D, dtype=torch.float64, generator=torch.Generator().manual_seed(3))
@@ -299,19 +301,36 @@ def test_each_aggregation_is_its_published_form():
     g = torch.softmax(gated.w @ (torch.tanh(gated.V @ H.T) * torch.sigmoid(gated.U @ H.T)),
                       dim=1).reshape(-1)                                                 # Eq. 9
     assert torch.allclose(gated.weights(H), g)
-    maximum = _variant("max")
-    assert torch.equal(maximum.represent(maximum.bag_pairs([H]))[0], H.max(dim=0).values)  # 5
     mean = _variant("mean")
     assert torch.allclose(mean.represent(mean.bag_pairs([H]))[0], H.mean(dim=0))         # 6
-    for model in (published, gated, maximum, mean):
+    for model in (published, gated, mean):
         w = model.weights(H)
         assert w.shape == (5,) and torch.all(w >= 0) and float(w.sum().detach()) == pytest.approx(1.0)
-    share = maximum.weights(H)
-    assert torch.equal(share, torch.bincount(H.argmax(dim=0), minlength=5).double() / D)
     for model in (published, gated):
         assert not any(name in dict(model.named_parameters()) for name in ("b_V", "b_U"))
-    with pytest.raises(av.UnknownAggregation):
-        av.AggregationVariantModel(3, 2, aggregation="own")
+    for name in ("own", "max", "own without consensus"):
+        with pytest.raises(av.UnknownAggregation):
+            av.AggregationVariantModel(3, 2, aggregation=name)
+    assert not hasattr(av, "MAX_WEIGHTS_RULE")
+
+
+def test_the_own_without_consensus_is_mil_creda_at_gamma_zero():
+    hyper = av.variant_hyper("own without consensus", HYPER)
+    assert hyper == {**HYPER, "attentionGamma": 0.0}
+    assert av.not_applicable("own without consensus") == ()
+    model = _variant("own without consensus")
+    assert type(model) is MILCREDAModel
+    assert model.attention_gamma == 0.0
+    assert model.attention_temperature == P1["attentionTemperature"]
+    torch.manual_seed(7)
+    full = MILCREDAModel(3, 2, attention_gamma=P1["attentionGamma"],
+                         attention_temperature=P1["attentionTemperature"])
+    assert _equal_states(model.state_dict(), full.state_dict())   # bias, constraint, width
+    H = torch.randn(5, model.source_trunk.output_dim, dtype=torch.float64,
+                    generator=torch.Generator().manual_seed(3))
+    logits = relevance_logits(H, model.V_R, model.b_R, model.v_R, 0.0, 1.0)
+    assert torch.allclose(model.bag_pairs([H])[0][1],
+                          bag_weights(logits, P1["attentionTemperature"]))
 
 
 def test_the_variants_differ_only_in_the_aggregation():
@@ -319,8 +338,9 @@ def test_the_variants_differ_only_in_the_aggregation():
     own = MILCREDAModel(3, 2, attention_gamma=0.5, attention_temperature=1.0)
     own_shapes = {k: v.shape for k, v in own.state_dict().items()
                   if k not in ("V_R", "b_R", "v_R")}
-    attention = {"published attention": {"V", "w"}, "gated attention": {"V", "U", "w"},
-                 "max": set(), "mean": set()}
+    attention = {"own without consensus": {"V_R", "b_R", "v_R"},
+                 "published attention": {"V", "w"}, "gated attention": {"V", "U", "w"},
+                 "mean": set()}
     for name in av.VARIANTS:
         model = _variant(name)
         state = model.state_dict()
@@ -336,24 +356,33 @@ def test_the_variants_differ_only_in_the_aggregation():
 
 def test_the_parameters_a_variant_lacks_are_not_applicable():
     assert av.NOT_APPLICABLE == ("attentionGamma", "attentionTemperature")
-    hyper = mech.aggregation_hyper(P1, P2, SCHEDULE)
-    assert all(math.isnan(hyper[k]) for k in av.NOT_APPLICABLE)
-    assert {k: hyper[k] for k in hyper if k not in av.NOT_APPLICABLE} == \
-        {k: v for k, v in HYPER.items() if k not in av.NOT_APPLICABLE}
+    for name in av.FORMS:
+        assert av.not_applicable(name) == av.NOT_APPLICABLE
+        hyper = mech.aggregation_hyper(P1, P2, SCHEDULE, name)
+        assert all(math.isnan(hyper[k]) for k in av.NOT_APPLICABLE)
+        assert {k: hyper[k] for k in hyper if k not in av.NOT_APPLICABLE} == \
+            {k: v for k, v in HYPER.items() if k not in av.NOT_APPLICABLE}
+    assert mech.aggregation_hyper(P1, P2, SCHEDULE, "own without consensus") == \
+        {**HYPER, "attentionGamma": 0.0}
     model = _variant("mean")
     assert model.attention_gamma is None and model.attention_temperature is None
     with pytest.raises(TypeError):
         av.AggregationVariantModel(3, 2, aggregation="mean", attention_gamma=0.5)
     with pytest.raises(mech.MechanismError, match="search of its own"):
-        mech.aggregation_hyper({**P1, "extra": 1.0}, P2, SCHEDULE)
+        mech.aggregation_hyper({**P1, "extra": 1.0}, P2, SCHEDULE, "mean")
 
 
 @pytest.mark.parametrize("aggregation", av.VARIANTS)
 def test_an_aggregation_variant_trains_both_phases(aggregation):
     data = _data()
     out = mech.train_aggregation_variant(data, 0, 1, aggregation, P1, P2, SCHEDULE)
-    assert out["variant"] == aggregation and out["not_applicable"] == list(av.NOT_APPLICABLE)
-    assert isinstance(out["model"], av.AggregationVariantModel)
+    assert out["variant"] == aggregation
+    assert out["not_applicable"] == list(av.not_applicable(aggregation))
+    if aggregation == "own without consensus":
+        assert type(out["model"]) is MILCREDAModel and out["model"].attention_gamma == 0.0
+        assert out["hyper"] == {**HYPER, "attentionGamma": 0.0}
+    else:
+        assert isinstance(out["model"], av.AggregationVariantModel)
     models = [h["model"] for h in out["history"]]
     assert set(models) == {f"MIL-CREDA [{aggregation}]:phase1",
                            f"MIL-CREDA [{aggregation}]:phase2"}
@@ -361,7 +390,7 @@ def test_an_aggregation_variant_trains_both_phases(aggregation):
     sigma = out["phase1"]["sigma"]
     assert sigma["sigmaMultiplier"] == P1["sigmaMultiplier"]
     assert out["model"].sigma == sigma["sigma"] == out["result"]["checkpoint"]["sigma"]
-    assert all(math.isnan(out["hyper"][k]) for k in av.NOT_APPLICABLE)
+    assert all(math.isnan(out["hyper"][k]) for k in av.not_applicable(aggregation))
     frozen = tp.phase_one_state(out["model"])
     assert _equal_states(frozen, {k: v for k, v in out["phase1"]["checkpoint"]["state"].items()})
     preds = tp.predictions(out["model"], data.rotations[0]["target_valid"], TRANSFER.name, CPU)
@@ -373,4 +402,30 @@ def test_the_variant_trainers_refuse_an_unknown_variant():
     with pytest.raises(av.UnknownAggregation):
         mech.train_aggregation_variant(data, 0, 1, "own", P1, P2, SCHEDULE)
     with pytest.raises(av.UnknownAggregation):
+        mech.train_aggregation_variant(data, 0, 1, "max", P1, P2, SCHEDULE)
+    with pytest.raises(av.UnknownAggregation):
         mech.train_aggregation_variant(data, 0, 1, "attention", P1, P2, SCHEDULE)
+
+
+def test_an_aggregation_variant_resumes_from_its_stored_phase_one():
+    data = _data()
+    first = mech.train_aggregation_variant(data, 0, 1, "own without consensus", P1, P2,
+                                           SCHEDULE)
+    checkpoint = first["phase1"]["checkpoint"]
+    record = (checkpoint["state"], {"phase": 1, "name": "MIL-CREDA [own without consensus]",
+                                    "transfer": data.transfer.name, "rotation": 0, "seed": 1,
+                                    "sigma": checkpoint["sigma"], "hyper": first["hyper"]})
+    again = mech.train_aggregation_variant(data, 0, 1, "own without consensus", P1, P2,
+                                           SCHEDULE, phase_one_record=record)
+    assert again["phase1"] is None
+    assert again["result"]["history"] == first["result"]["history"]
+    assert _equal_states(again["model"].state_dict(), first["model"].state_dict())
+    assert {h["model"] for h in again["history"]} == {
+        "MIL-CREDA [own without consensus]:phase2"}
+    with pytest.raises(mech.MechanismError, match="rotation"):
+        mech.train_aggregation_variant(data, 0, 1, "own without consensus", P1, P2, SCHEDULE,
+                                       phase_one_record=(record[0], {**record[1],
+                                                                     "rotation": 3}))
+    with pytest.raises(mech.MechanismError, match="name"):
+        mech.train_aggregation_variant(data, 0, 1, "mean", P1, P2, SCHEDULE,
+                                       phase_one_record=record)

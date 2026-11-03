@@ -1,27 +1,38 @@
 """The mechanism experiments, read from the stored models: K1, K2 and K3.
 
-Experiments plan v40, Secs. 6.1-6.3, over proposal r34 Eqs. 14-19 (attention
+Experiments plan v42, Secs. 6.1-6.3, over proposal r34 Eqs. 14-19 (attention
 and bag kernel), 28-31 (local alignment) and 34-38 (bounds of the normalized
 terms). K1 and K2 train nothing: they read a model that `model_store` saved
-(Sec. 7.3) or a history that training already recorded. K3 trains its variants
-(`train_ablation_variant`, `train_aggregation_variant`).
+(Secs. 6.3 and 7.3) or a history that training already recorded. K3 trains its
+variants (`train_ablation_variant`, `train_aggregation_variant`). There is one
+report seed (Sec. 4.6): every per-subject quantity is that seed's value, and a
+subject that appears twice for one model and transfer is refused, never
+averaged (`once_per_subject`).
 
-**K1, the attention selects something meaningful (Sec. 6.1).** Only in the
-conditions with an event stream (`EVENT_CONDITIONS`: the three high-density
-levels and Robots), on the target test bags of each rotation, with the saved
-phase-2 models. Per window: the attention weight (`attention_weights`, read
-from the model's own attention: Eqs. 15-16 for MIL-CREDA and the common
-wrapper, the native aggregator for AdaptMIL and HASD); whether it is marked by
-sample loss (Sec. 2.3, `integrity_mark`) or bad contact (Sec. 2.5, any
-channel's `contact_bad`), which `marked_windows` reads from the bag's own
-marks; whether it holds a behavioural event (`event_windows`); and the ratio of
-the clinical marker's two bands (`band_ratio`). Per subject: the mean weight
-of the marked windows minus that of the clean ones, the mean weight of the
-event windows minus that of the rest, and the Spearman correlation between
-weight and band ratio. Each is averaged over the seeds first and then tested
-with Wilcoxon over subjects (`k1_tests`), Holm over the three criterion tests;
-the spectral row has no criterion and no correction. Subjects without marked
-windows do not enter the first contrast and are counted.
+**K1, the attention selects something meaningful (Sec. 6.1).** Measured per
+arm on its core transfers, on the target test bags of each rotation, with the
+saved phase-2 models; each arm is analysed separately, so no subject enters
+one analysis twice. The level arm runs two contrasts, the task and device arms
+only the contact one (`K1_CONTRASTS`). Per window: the attention weight
+(`attention_weights`, read from the model's own attention: Eqs. 15-16 for
+MIL-CREDA, its variant without consensus and the common wrapper, the native
+aggregator for AdaptMIL and HASD); whether it is marked by sample loss
+(Sec. 2.3, `integrity_mark`) or bad contact (Sec. 2.5, any channel's
+`contact_bad`), which `marked_windows` reads from the bag's own marks; and, in
+the level arm, whether it holds a behavioural event (`event_windows`, the
+`event_window` mark that preprocessing writes from `k1_events`; refused as
+`NotRecorded` while it does not exist). Per subject: the mean weight of the
+marked windows minus that of the clean ones and, in the level arm, the mean
+weight of the event windows minus that of the rest. Tested with Wilcoxon over
+subjects (`k1_tests`). The criterion is the level arm's three tests, Holm over
+three: marked vs clean with MIL-CREDA, MIL-CREDA vs the own attention without
+consensus (Sec. 6.3, `K1_WITHOUT_CONSENSUS`) paired per subject, and event vs
+rest with MIL-CREDA. The task and device arms report the two contact tests as
+support, without criterion. Every other attention -- the published and gated
+attentions of Sec. 6.3, the common attention of Sec. 7.2, AdaptMIL and HASD --
+is reported with the same contrasts and without criterion. The mean is
+excluded (`K1_EXCLUDED`). Subjects without marked windows do not enter the
+contact contrast and are counted.
 
 **K2, local matching aligns compatible subjects (Sec. 6.2).** Over the probe
 subjects of each rotation (`assignment.Assignment.probe_subjects`: the test
@@ -30,12 +41,14 @@ subject's bag in the target condition through the target trunk, and its own
 source bag is its bag in the source condition through the source trunk; the
 condition the assignment did not read comes only through
 `assignment.probe_bag`. Distances are the bag-kernel (RKHS) distances at the
-frozen sigma (`kernel_distances`, Eqs. 17-19) for MIL-CREDA and Euclidean
-distances between bag representations for the comparators
-(`euclidean_distances`). Per subject the separation is the mean distance to
-the other probe subjects' source bags minus the distance to its own
-(`separation`), averaged over seeds and tested with Wilcoxon over the probe
-subjects on the two declared transfers (`K2_DECLARED`), with Holm over four.
+frozen sigma (`kernel_distances`, Eqs. 17-19) for MIL-CREDA and its
+global-term-only variant, and Euclidean distances between bag representations
+for the comparators (`euclidean_distances`). Per subject the separation is the
+mean distance to the other probe subjects' source bags minus the distance to
+its own (`separation`), tested with Wilcoxon over the probe subjects on the two
+declared transfers (`K2_DECLARED`): separation > 0 with MIL-CREDA, and
+MIL-CREDA vs the global-term-only variant of the Sec. 6.3 ablation
+(`K2_NO_LOCAL`) paired per subject, Holm over four.
 
 **K3, aggregation and ablation (Sec. 6.3).** The implementation control of
 the normalized terms reads the per-epoch minimum and maximum of the global
@@ -50,34 +63,30 @@ dropped, built exactly as `search.train_mil_creda_phase_two` builds full
 MIL-CREDA's phase 2 ("both terms" reproduces it bit for bit). The aggregation
 variants (`aggregation_variants`) change phase 1, so each trains both phases:
 phase 1 as `search.train_phase_one` trains the MIL-CREDA group, phase 2 from
-that checkpoint as full MIL-CREDA's, with `attentionGamma` and
-`attentionTemperature` recorded as not applicable (NaN in the hyperparameters,
-listed in `not_applicable`), never reused. Each variant's history is tagged
-`MIL-CREDA [<variant>]:phase<n>`, so the bound control of full MIL-CREDA never
-reads it.
+that checkpoint as full MIL-CREDA's. The own attention without consensus takes
+full MIL-CREDA's selection with gamma overridden to 0; the published poolings
+record `attentionGamma` and `attentionTemperature` as not applicable (NaN in the
+hyperparameters, listed in `not_applicable`), never reused. Each variant's
+history is tagged `MIL-CREDA [<variant>]:phase<n>`, so the bound control of full
+MIL-CREDA never reads it.
 
-**Implementation choices the plan does not fix.** The K1 band edges are a
-required input (`bands`), because Sec. 2.7 records two conventions for the
-high band and the plan does not pick one for the ratio. Which comparator's
-model carries "the common attention" in K1 is a required input too: in the
-device arm a phase-1 model cannot read the target, so a phase-2 model of one of
-the six non-MIL comparators is needed and the plan does not name one. Whether
-K1 pools its subjects over every K1 transfer or tests each core pair apart is a
-required input (`K1_SCOPES`); within one pair every assigned subject is
-target exactly once, across pairs a subject can repeat. The weight-ratio
-contrast is the per-subject Spearman correlation tested against zero.
+**Implementation choice the plan does not fix.** "The common attention of the
+non-MIL comparators" (Sec. 7.2) is frozen from the common phase-1 group, but its
+weights on a target bag go through each comparator's own phase-2 target trunk,
+so they differ by comparator and the plan names none. K1 reports one reference
+per non-MIL comparator whose phase-2 model is stored, named
+`common attention [<comparator>]` (`common_attention_name`), all without
+criterion; it never picks one.
 """
 
 from __future__ import annotations
 
-import math
-from collections import defaultdict
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
 import torch
-from scipy import stats as sps
 
 from MIL_CREDA.bag_kernel import bag_kernel_matrix
 from MIL_CREDA_EEG import aggregation_variants
@@ -88,48 +97,66 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.two_phase import EVAL_CHUNK
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
-    "sections": ["6.1", "6.2", "6.3", "7.3"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "sections": ["4.6", "6.1", "6.2", "6.3", "7.2", "7.3"],
     "experiments": ["K1-atencion", "K2-emparejamiento", "K3-ablacion"],
     "equations": ["14", "15", "16", "17", "18", "19", "37", "38"],
     "invariants": [
-        "k1_reads_only_conditions_with_an_event_stream",
+        "the_event_contrast_reads_only_the_slackline_levels_of_the_level_arm",
         "a_marked_window_is_an_integrity_or_contact_mark",
         "an_unrecorded_event_mark_is_refused_not_guessed",
         "the_attention_weights_are_the_models_own_and_sum_to_one",
         "the_weight_contrast_is_marked_minus_clean_and_skips_subjects_without_marks",
-        "the_band_ratio_reads_the_declared_bands_and_has_no_default",
-        "k1_averages_over_seeds_before_testing_and_holms_the_three_criterion_tests",
+        "k1_reads_one_report_seed_and_holms_the_three_level_criterion_tests",
         "k2_reads_the_other_condition_only_through_the_probe",
         "the_kernel_distance_is_the_rkhs_distance_at_the_frozen_sigma",
         "the_separation_is_others_minus_own",
         "k2_tests_the_two_declared_transfers_with_holm_over_four",
         "the_bound_control_reads_every_recorded_step",
         "a_stored_phase_two_model_is_rebuilt_with_every_parameter",
+        "a_stored_k3_variant_model_is_rebuilt_for_its_attention",
         "the_variant_trainers_refuse_an_unknown_variant",
         "the_both_terms_ablation_is_full_mil_creda",
         "the_ablation_starts_from_full_mil_credas_phase_one_and_its_hyperparameters",
         "the_parameters_a_variant_lacks_are_not_applicable",
         "an_aggregation_variant_trains_both_phases",
+        "an_aggregation_variant_resumes_from_its_stored_phase_one",
     ],
 }
 
-#: Sec. 6.1: the conditions with an event stream; CogniFit has none.
-EVENT_CONDITIONS = ("L1", "L6", "L11", "Robots")
-#: The per-window mark of a behavioural event; preprocessing does not produce it yet.
+#: Sec. 6.1: the conditions with timed behavioural events, the Slackline levels' TAGS.
+EVENT_CONDITIONS = ("L1", "L6", "L11")
+#: The per-window mark of a behavioural event (`k1_events`); preprocessing writes it.
 EVENT_MARK = "event_window"
 #: Sec. 2.3 and 2.5: the marks K1 reads.
 INTEGRITY_MARK = "integrity_mark"
 CONTACT_MARK = "contact_bad"
-RATE = 128.0
-K1_SCOPES = ("pooled", "per-pair")
+#: Sec. 6.1: the contrasts each arm runs; the criterion is the level arm's.
+K1_CONTRASTS = {"level": ("contact", "event"), "task": ("contact",), "device": ("contact",)}
+K1_CRITERION_ARM = "level"
+K1_CRITERION = "level arm, Holm over three (Sec. 6.1)"
+K1_OWN = two_phase.MODEL
+#: Sec. 6.1: the rival that carries the criterion, the K3 variant without consensus.
+K1_WITHOUT_CONSENSUS = model_store.variant_name(aggregation_variants.WITHOUT_CONSENSUS)
+#: Sec. 6.1: the K3 attentions reported without criterion.
+K1_REFERENCE_VARIANTS = tuple(model_store.variant_name(v) for v in
+                              ("published attention", "gated attention"))
+K1_EXCLUDED = {"mean": "its weights are uniform, so its contrast is zero by construction "
+                       "(Sec. 6.1)"}
 #: Sec. 6.2: chosen before any result, by structure.
 K2_DECLARED = {"smaller shift": assignment_mod.Transfer("level", "L1", "L6"),
                "larger shift": assignment_mod.Transfer("device", "L6", "Robots")}
+#: Sec. 6.2: MIL-CREDA without its local term is the Sec. 6.3 global-term-only variant.
+K2_NO_LOCAL = model_store.variant_name("global term only")
 #: Sec. 6.3.
 AGGREGATIONS = ("own", *aggregation_variants.VARIANTS)
 ABLATIONS = tuple(two_phase.TERM_SELECTIONS)
 TERMS = ("global", "local")
+
+
+def common_attention_name(comparator: str) -> str:
+    """K1's name for the common attention read through one non-MIL comparator's model."""
+    return f"common attention [{comparator}]"
 
 
 class MechanismError(RuntimeError):
@@ -155,9 +182,10 @@ def load_phase_two(path: str | Path, *, partition_path: str | Path | None = None
                                    allow_code_mismatch=allow_code_mismatch)
     if meta["phase"] != 2:
         raise MechanismError(f"{path} is not a phase-2 model")
-    group = search.PHASE_ONE_GROUP_OF[meta["name"]]
-    model = model_store.build_model(group, meta["channels"]["source"],
-                                    meta["channels"]["target"], meta["hyper"])
+    name = meta["name"]
+    group = name if name in model_store.VARIANTS else search.PHASE_ONE_GROUP_OF[name]
+    model = model_store.build_stored(group, meta["channels"]["source"],
+                                     meta["channels"]["target"], meta["hyper"])
     missing, unexpected = model.load_state_dict(state, strict=False)
     if missing:
         raise MechanismError(f"{path}: the stored state lacks {missing[:5]} of the {group} "
@@ -190,7 +218,8 @@ def marked_windows(bag: bag_data.Bag) -> np.ndarray:
 def event_windows(bag: bag_data.Bag) -> np.ndarray:
     """Per window: it contains the instant of a behavioural event (Sec. 6.1)."""
     if bag.condition not in EVENT_CONDITIONS:
-        raise MechanismError(f"{bag.condition} has no event stream (Sec. 6.1)")
+        raise MechanismError(f"{bag.condition} has no timed event stream (Sec. 6.1: only the "
+                             f"Slackline levels {list(EVENT_CONDITIONS)})")
     marks = bag.marks()
     if EVENT_MARK not in marks:
         raise NotRecorded(f"{bag.subject}/{bag.condition}: preprocessing records no "
@@ -229,81 +258,42 @@ def weight_contrast(weights: np.ndarray, mask: np.ndarray) -> float | None:
     return float(weights[mask].mean() - weights[~mask].mean())
 
 
-def band_ratio(windows: np.ndarray, bands: Sequence[Sequence[float]],
-               rate: float = RATE) -> np.ndarray:
-    """Per window: low-band power over high-band power (periodogram sums), channels averaged."""
-    if len(bands) != 2 or any(len(b) != 2 or not 0 <= b[0] < b[1] for b in bands):
-        raise MechanismError(f"bands is ((low_lo, low_hi), (high_lo, high_hi)); got {bands}")
-    x = np.asarray(windows, dtype=np.float64)
-    power = np.abs(np.fft.rfft(x - x.mean(axis=-1, keepdims=True), axis=-1)) ** 2
-    freqs = np.fft.rfftfreq(x.shape[-1], d=1.0 / rate)
-
-    def band(lo, hi):
-        sel = (freqs >= lo) & (freqs < hi)
-        if not sel.any():
-            raise MechanismError(f"no frequency bin in [{lo}, {hi}) Hz")
-        return power[..., sel].sum(axis=-1).mean(axis=-1)
-
-    low, high = band(*bands[0]), band(*bands[1])
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return low / high
-
-
 def k1_subject_rows(model, bags: Sequence[bag_data.Bag], *, model_name: str,
                     transfer: assignment_mod.Transfer, rotation: int, seed: int,
-                    bands: Sequence[Sequence[float]], domain: str = "target") -> list[dict]:
-    """Per target test subject: the three K1 quantities for one model, rotation and seed."""
-    if transfer.target not in EVENT_CONDITIONS:
-        raise MechanismError(f"K1 reads only targets with an event stream, not "
-                             f"{transfer.target}")
+                    domain: str = "target") -> list[dict]:
+    """Per target test subject: the arm's K1 quantities for one model and rotation."""
+    if transfer.arm not in K1_CONTRASTS:
+        raise MechanismError(f"K1 is measured per arm {list(K1_CONTRASTS)}; got {transfer.arm}")
+    with_events = "event" in K1_CONTRASTS[transfer.arm]
     rows = []
     for bag in bags:
-        windows = bag.windows()
-        weights = attention_weights(model, torch.from_numpy(np.ascontiguousarray(windows))
+        weights = attention_weights(model, torch.from_numpy(np.ascontiguousarray(bag.windows()))
                                     .float(), domain)
         marked = marked_windows(bag)
-        try:
-            event = weight_contrast(weights, event_windows(bag))
-            event_note = None
-        except NotRecorded as error:
-            event, event_note = None, str(error)
-        ratio = band_ratio(windows, bands)
-        finite = np.isfinite(ratio)
-        rho = (float(sps.spearmanr(weights[finite], ratio[finite]).statistic)
-               if finite.sum() > 2 else None)
-        rows.append({"model": model_name, "transfer": transfer.name,
+        event, event_note = None, None
+        if with_events:
+            try:
+                event = weight_contrast(weights, event_windows(bag))
+            except NotRecorded as error:
+                event_note = str(error)
+        rows.append({"model": model_name, "arm": transfer.arm, "transfer": transfer.name,
                      "pair": "|".join(transfer.pair), "rotation": int(rotation),
                      "seed": int(seed), "subject": bag.subject,
                      "marked_minus_clean": weight_contrast(weights, marked),
                      "n_marked": int(marked.sum()), "n_windows": int(len(marked)),
-                     "event_minus_rest": event, "event_not_recorded": event_note,
-                     "weight_ratio_spearman": rho if rho is None or math.isfinite(rho)
-                     else None})
+                     "event_minus_rest": event, "event_not_recorded": event_note})
     return rows
 
 
-def average_over_seeds(rows: Iterable[Mapping], values: Sequence[str],
-                       by: Sequence[str] = ("model", "transfer", "subject")) -> list[dict]:
-    """Mean of each value over the seeds of each unit, ignoring seeds where it is None."""
-    groups: dict = defaultdict(list)
-    for r in rows:
-        groups[tuple(r[k] for k in by)].append(r)
-    out = []
-    for key, rs in sorted(groups.items(), key=lambda kv: tuple(map(str, kv[0]))):
-        row = dict(zip(by, key))
-        row["pair"] = rs[0].get("pair")
-        row["seeds"] = sorted({int(r["seed"]) for r in rs})
-        notes = [r["event_not_recorded"] for r in rs if r.get("event_not_recorded")]
-        if notes:
-            row["event_not_recorded"] = notes[0]
-        for v in values:
-            xs = [r[v] for r in rs if r.get(v) is not None]
-            row[v] = float(np.mean(xs)) if xs else None
-        out.append(row)
-    return out
-
-
-K1_VALUES = ("marked_minus_clean", "event_minus_rest", "weight_ratio_spearman")
+def once_per_subject(rows: Iterable[Mapping]) -> list[Mapping]:
+    """Sec. 4.6: one report seed, so each (model, transfer, subject) appears once."""
+    rows = list(rows)
+    twice = [k for k, n in Counter((r.get("model"), r["transfer"], r["subject"])
+                                   for r in rows).items() if n > 1]
+    if twice:
+        raise MechanismError(f"a subject enters each model's analysis once (one report seed, "
+                             f"one test rotation); repeated: {twice[:5]}")
+    return rows
 
 
 def _wilcoxon_row(values: Sequence[float | None], *, comparison: str, name: str,
@@ -324,50 +314,68 @@ def _wilcoxon_row(values: Sequence[float | None], *, comparison: str, name: str,
                                n_nonzero=w["n_nonzero"], **(extra or {}))
 
 
-def k1_tests(own_rows: Sequence[Mapping], common_rows: Sequence[Mapping], *, own: str,
-             common: str, scope: str) -> list[dict]:
-    """Sec. 6.1's table from per-subject rows already averaged over seeds."""
-    if scope not in K1_SCOPES:
-        raise MechanismError(f"the K1 scope is a required choice among {list(K1_SCOPES)}")
+def _not_recorded(members: Sequence[Mapping]) -> str | None:
+    return next((r["event_not_recorded"] for r in members if r.get("event_not_recorded")),
+                None)
+
+
+def _k1_single(members: Sequence[Mapping], arm: str, model: str, criterion: str) -> list[dict]:
+    """The arm's one-model contrasts: marked vs clean and, in the level arm, event vs rest."""
     experiment = "K1-atencion"
-    groups = ({"all": list(own_rows)} if scope == "pooled"
-              else {p: [r for r in own_rows if r["pair"] == p]
-                    for p in sorted({r["pair"] for r in own_rows})})
-    common_by = {(r["transfer"], r["subject"]): r for r in common_rows}
-    rows = []
-    for label, members in groups.items():
-        prefix = f"{experiment}:{label}"
-        marked = [r["marked_minus_clean"] for r in members]
-        skipped = sum(v is None for v in marked)
-        paired = []
-        for r in members:
-            c = common_by.get((r["transfer"], r["subject"]))
-            if c is None:
-                raise MechanismError(f"{r['subject']} of {r['transfer']} has no {common} row")
-            if r["marked_minus_clean"] is not None and c["marked_minus_clean"] is not None:
-                paired.append(r["marked_minus_clean"] - c["marked_minus_clean"])
-        events = [r["event_minus_rest"] for r in members]
-        family = [
-            _wilcoxon_row(marked, comparison=f"{prefix}:marked vs clean, {own}",
+    prefix = f"{experiment}:{arm}"
+    marked = [r["marked_minus_clean"] for r in members]
+    rows = [_wilcoxon_row(marked, comparison=f"{prefix}:marked vs clean, {model}",
                           name="matched-pairs rank-biserial (marked - clean weight)",
                           experiment=experiment,
-                          extra={"subjects_without_marked_windows": skipped}),
-            _wilcoxon_row(paired, comparison=f"{prefix}:marked vs clean, {own} vs {common}",
-                          name=f"matched-pairs rank-biserial ({own} - {common})",
-                          experiment=experiment, extra={"common_attention_model": common}),
-            _wilcoxon_row(events, comparison=f"{prefix}:event vs rest, {own}",
-                          name="matched-pairs rank-biserial (event - rest weight)",
-                          experiment=experiment,
-                          extra={"not_computed": next((r["event_not_recorded"] for r in members
-                                                       if r.get("event_not_recorded")), None)}),
-        ]
-        rows += st.apply_holm(family, f"{prefix} criterion tests")
+                          extra={"criterion": criterion,
+                                 "subjects_without_marked_windows":
+                                     sum(v is None for v in marked)})]
+    if "event" in K1_CONTRASTS[arm]:
         rows.append(_wilcoxon_row(
-            [r["weight_ratio_spearman"] for r in members],
-            comparison=f"{prefix}:attention weight vs band ratio, {own}",
-            name="matched-pairs rank-biserial of per-subject Spearman rho",
-            experiment=experiment, extra={"criterion": "none (reported both ways)"}))
+            [r["event_minus_rest"] for r in members],
+            comparison=f"{prefix}:event vs rest, {model}",
+            name="matched-pairs rank-biserial (event - rest weight)", experiment=experiment,
+            extra={"criterion": criterion, "not_computed": _not_recorded(members)}))
     return rows
+
+
+def k1_tests(rows_by_model: Mapping[str, Sequence[Mapping]], *,
+             own: str = K1_OWN, without: str = K1_WITHOUT_CONSENSUS) -> list[dict]:
+    """Sec. 6.1's tables, per arm, from per-subject rows at the report seed."""
+    experiment = "K1-atencion"
+    by_model = {m: once_per_subject(rs) for m, rs in rows_by_model.items()}
+    out = []
+    for arm in [a for a in K1_CONTRASTS if any(r["arm"] == a for r in by_model.get(own, []))]:
+        members = [r for r in by_model[own] if r["arm"] == arm]
+        criterion = K1_CRITERION if arm == K1_CRITERION_ARM else "none (support, Sec. 6.1)"
+        family = _k1_single(members, arm, own, criterion)
+        rivals = [r for r in by_model.get(without, []) if r["arm"] == arm]
+        paired, note = [], None
+        if not rivals:
+            note = (f"the {without} model is not stored for the {arm} arm (Sec. 6.3 "
+                    f"aggregation table: run the k3 step)")
+        else:
+            rival_by = {(r["transfer"], r["subject"]): r for r in rivals}
+            for r in members:
+                c = rival_by.get((r["transfer"], r["subject"]))
+                if c is None:
+                    raise MechanismError(f"{r['subject']} of {r['transfer']} has no {without} "
+                                         f"row")
+                if r["marked_minus_clean"] is not None and c["marked_minus_clean"] is not None:
+                    paired.append(r["marked_minus_clean"] - c["marked_minus_clean"])
+        family.insert(1, _wilcoxon_row(
+            paired, comparison=f"{experiment}:{arm}:marked vs clean, {own} vs {without}",
+            name=f"matched-pairs rank-biserial ({own} - {without})", experiment=experiment,
+            extra={"criterion": criterion, "not_computed": note}))
+        if arm == K1_CRITERION_ARM:
+            out += st.apply_holm(family, f"{experiment}:{arm} criterion tests")
+        else:
+            out += family
+        for model in sorted(m for m in by_model if m not in (own, without)):
+            mine = [r for r in by_model[model] if r["arm"] == arm]
+            if mine:
+                out += _k1_single(mine, arm, model, "none (reference, Sec. 6.1)")
+    return out
 
 
 # ------------------------------------------------------------------ K2 (Sec. 6.2)
@@ -457,13 +465,12 @@ def k2_subject_rows(model, a: assignment_mod.Assignment, bags: bag_data.BagSet, 
              "metric": metric, **row} for row in separation(D, subjects)]
 
 
-K2_VALUES = ("own", "others", "separation")
-
-
 def k2_tests(full_rows: Sequence[Mapping], no_local_rows: Sequence[Mapping] | None, *,
-             full: str = "MIL-CREDA", no_local: str = "MIL-CREDA, global term only") -> list[dict]:
+             full: str = two_phase.MODEL, no_local: str = K2_NO_LOCAL) -> list[dict]:
     """Sec. 6.2: separation > 0 and full > no-local on the two declared transfers, Holm/4."""
     experiment = "K2-emparejamiento"
+    full_rows = once_per_subject(full_rows)
+    no_local_rows = once_per_subject(no_local_rows or [])
     family = []
     for label, transfer in K2_DECLARED.items():
         mine = [r for r in full_rows if r["transfer"] == transfer.name]
@@ -471,21 +478,15 @@ def k2_tests(full_rows: Sequence[Mapping], no_local_rows: Sequence[Mapping] | No
             [r["separation"] for r in mine],
             comparison=f"{experiment}:{transfer.name} ({label}):separation, {full}",
             name="matched-pairs rank-biserial (others - own distance)", experiment=experiment))
-        if no_local_rows is None:
-            family.append(_wilcoxon_row(
-                [], comparison=f"{experiment}:{transfer.name} ({label}):{full} vs {no_local}",
-                name=f"matched-pairs rank-biserial ({full} - {no_local} separation)",
-                experiment=experiment,
-                extra={"not_computed": "the global-term-only variant is not trained yet "
-                                       "(Sec. 6.3 ablation)"}))
-            continue
         other = {r["subject"]: r for r in no_local_rows if r["transfer"] == transfer.name}
         diffs = [r["separation"] - other[r["subject"]]["separation"] for r in mine
                  if r["subject"] in other]
+        note = None if other else (f"the global-term-only variant (Sec. 6.3 ablation) is not "
+                                   f"trained and stored for {transfer.name}")
         family.append(_wilcoxon_row(
             diffs, comparison=f"{experiment}:{transfer.name} ({label}):{full} vs {no_local}",
             name=f"matched-pairs rank-biserial ({full} - {no_local} separation)",
-            experiment=experiment))
+            experiment=experiment, extra={"not_computed": note} if note else None))
     return st.apply_holm(family, f"{experiment} criterion tests")
 
 
@@ -511,24 +512,24 @@ def bound_control(history: Iterable[Mapping], model: str = "MIL-CREDA:phase2") -
 
 
 def variant_table(predictions: Mapping[str, Sequence[Mapping]]) -> list[dict]:
-    """Per variant: pooled BA, AUC, sensitivity and specificity, mean and sd over seeds."""
+    """Per variant: pooled BA, AUC, sensitivity and specificity at the report seed."""
     rows = []
     for name, records in predictions.items():
-        summary = st.summarize_seeds(st.pooled_by_seed(records))
-        rows.append({"variant": name, **{f"{m}_{k}": summary[m][k] for m in
+        summary = st.pooled(records)
+        rows.append({"variant": name, **{m: summary[m] for m in
                                          ("balanced_accuracy", "auc", "sensitivity",
-                                          "specificity") for k in ("mean", "sd")}})
+                                          "specificity")}})
     return rows
 
 
 def k3_contrasts(table: str, pair: str, reference: str, predictions: Mapping[str, Sequence],
-                 rivals: Sequence[str], *, reduction: str, test_train_ratio: float,
+                 rivals: Sequence[str], *, test_train_ratio: float,
                  resamples: int = st.BOOTSTRAP_RESAMPLES) -> list[dict]:
     """The bootstrap contrasts of one table and core pair (Holm is applied per table)."""
     rows = []
     for rival in rivals:
         rows += st.pair_contrast(predictions[reference], predictions[rival], name_a=reference,
-                                 name_b=rival, scope=f"{table}:{pair}", reduction=reduction,
+                                 name_b=rival, scope=f"{table}:{pair}",
                                  test_train_ratio=test_train_ratio, hypothesis="K3-ablacion",
                                  experiment="K3-ablacion", resamples=resamples)
     return rows
@@ -611,46 +612,67 @@ def train_ablation_variant(data: search.SearchData, rotation: int, seed: int, re
             "history": _variant_history(out["result"]["history"], term_selection)}
 
 
-def aggregation_hyper(phase_one: Mapping, phase_two: Mapping, schedule: Mapping) -> dict:
-    """Full MIL-CREDA's selected hyperparameters, with what a variant lacks set to NaN."""
+def aggregation_hyper(phase_one: Mapping, phase_two: Mapping, schedule: Mapping,
+                      aggregation: str) -> dict:
+    """Full MIL-CREDA's selected hyperparameters as `aggregation` reads them: gamma 0 for
+    the own attention without consensus, NaN for what a published pooling lacks."""
+    aggregation_variants.check_aggregation(aggregation)
     phase_one = _exactly(phase_one, tuple(search.PHASE_ONE_SPACES[two_phase.MODEL]),
                          "phase-1 hyperparameters")
     phase_two = _exactly(phase_two, MIL_CREDA_PHASE_TWO, "phase-2 hyperparameters")
-    nan = float("nan")
-    return two_phase.check_hyper({**phase_one,
-                                  **{k: nan for k in aggregation_variants.NOT_APPLICABLE},
-                                  **phase_two, **search.check_schedule(schedule)})
+    return two_phase.check_hyper(aggregation_variants.variant_hyper(
+        aggregation, {**phase_one, **phase_two, **search.check_schedule(schedule)}))
 
 
 def train_aggregation_variant(data: search.SearchData, rotation: int, seed: int,
                               aggregation: str, phase_one: Mapping, phase_two: Mapping,
-                              schedule: Mapping, device: torch.device | str = "cpu") -> dict:
-    """Sec. 6.3's aggregation table: one variant, both phases, at full MIL-CREDA's choice."""
+                              schedule: Mapping, device: torch.device | str = "cpu", *,
+                              phase_one_record=None) -> dict:
+    """Sec. 6.3's aggregation table: one variant, both phases, at full MIL-CREDA's choice.
+
+    `phase_one_record` is the variant's own stored phase-1 checkpoint `(state, meta)`
+    of this transfer, rotation and seed; given, phase 1 is not trained again and phase 2
+    runs from it exactly as it would have run from the fresh checkpoint.
+    """
     aggregation_variants.check_aggregation(aggregation)
-    hyper = aggregation_hyper(phase_one, phase_two, schedule)
+    hyper = aggregation_hyper(phase_one, phase_two, schedule, aggregation)
     device = torch.device(device)
     channels = data.channels()
     d = search._rotation(data, rotation)
 
     def build():
-        return aggregation_variants.AggregationVariantModel(
-            channels["source"], channels["target"], aggregation=aggregation).to(device)
+        return aggregation_variants.build(aggregation, channels["source"], channels["target"],
+                                          hyper).to(device)
 
+    if phase_one_record is None:
+        torch.manual_seed(seed)
+        generator = torch.Generator().manual_seed(seed)
+        model = build()
+        phase1 = two_phase.train_source_phase(model, d["source_train"], d["source_valid"],
+                                              hyper, generator, device, seed=seed,
+                                              fold=rotation, transfer=data.transfer.name)
+        state, sigma = phase1["checkpoint"]["state"], phase1["checkpoint"]["sigma"]
+    else:
+        state, meta = phase_one_record
+        expected = {"phase": 1, "name": model_store.variant_name(aggregation),
+                    "transfer": data.transfer.name, "rotation": int(rotation),
+                    "seed": int(seed)}
+        wrong = {k: meta.get(k) for k, v in expected.items() if meta.get(k) != v}
+        if wrong or meta.get("sigma") is None:
+            raise MechanismError(f"the {aggregation} phase 2 starts from its own phase-1 "
+                                 f"checkpoint of {data.transfer.name}, rotation {rotation}, "
+                                 f"seed {seed}, with its sigma; the record differs in {wrong}")
+        phase1, sigma = None, float(meta["sigma"])
     torch.manual_seed(seed)
-    generator = torch.Generator().manual_seed(seed)
     model = build()
-    phase1 = two_phase.train_source_phase(model, d["source_train"], d["source_valid"], hyper,
-                                          generator, device, seed=seed, fold=rotation,
-                                          transfer=data.transfer.name)
-    checkpoint = phase1["checkpoint"]
-    torch.manual_seed(seed)
-    model = build()
-    out = _adapt_from_phase_one(model, checkpoint["state"], checkpoint["sigma"], data,
-                                rotation, seed, hyper, device, two_phase.BOTH_TERMS)
+    out = _adapt_from_phase_one(model, state, sigma, data, rotation, seed, hyper, device,
+                                two_phase.BOTH_TERMS)
     return {"variant": aggregation, "aggregation": aggregation,
-            "form": aggregation_variants.FORMS[aggregation], "model": model, "hyper": hyper,
-            "not_applicable": list(aggregation_variants.NOT_APPLICABLE),
+            "form": aggregation_variants.FORMS.get(
+                aggregation, aggregation_variants.WITHOUT_CONSENSUS_FORM),
+            "model": model, "hyper": hyper,
+            "not_applicable": list(aggregation_variants.not_applicable(aggregation)),
             "channels": channels, "phase1": phase1, "result": out["result"],
             "layer_copy": out["layer_copy"],
-            "history": _variant_history(phase1["history"] + out["result"]["history"],
-                                        aggregation)}
+            "history": _variant_history((phase1["history"] if phase1 else [])
+                                        + out["result"]["history"], aggregation)}

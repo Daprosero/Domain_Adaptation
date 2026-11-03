@@ -1,11 +1,10 @@
-"""Experiments plan v40, Secs. 6.1-6.3: the mechanism analyses over stored models.
+"""Experiments plan v42, Secs. 6.1-6.3: the mechanism analyses over stored models.
 
 Synthetic bags and untrained models only: no number here is a measured result.
 """
 
 from __future__ import annotations
 
-import inspect
 import json
 
 import numpy as np
@@ -41,15 +40,31 @@ def _model(sigma=2.0):
     return m.eval()
 
 
-def test_k1_reads_only_conditions_with_an_event_stream(tmp_path):
-    assert mech.EVENT_CONDITIONS == ("L1", "L6", "L11", "Robots")
-    bag = _bag(tmp_path, "S1", "CogniFit")
-    with pytest.raises(mech.MechanismError, match="event stream"):
-        mech.event_windows(bag)
-    with pytest.raises(mech.MechanismError, match="event stream"):
-        mech.k1_subject_rows(_model(), [bag], model_name="M",
-                             transfer=assignment.Transfer("task", "Robots", "CogniFit"),
-                             rotation=0, seed=1, bands=((4, 8), (13, 30)))
+def test_the_event_contrast_reads_only_the_slackline_levels_of_the_level_arm(tmp_path):
+    assert mech.EVENT_CONDITIONS == ("L1", "L6", "L11")
+    assert mech.K1_CONTRASTS == {"level": ("contact", "event"), "task": ("contact",),
+                                 "device": ("contact",)}
+    for condition in ("CogniFit", "Robots"):
+        with pytest.raises(mech.MechanismError, match="event stream"):
+            mech.event_windows(_bag(tmp_path, "S1", condition))
+    events = {"integrity_mark": np.array([True, False, False, False]),
+              "event_window": np.array([0, 1, 0, 0], bool)}
+    # the task and device arms run only the contact contrast, even with a Slackline target
+    for transfer in (assignment.Transfer("task", "Robots", "CogniFit"),
+                     assignment.Transfer("device", "Robots", "L6")):
+        bag = _bag(tmp_path, "S2", transfer.target, windows=4, marks=events)
+        rows = mech.k1_subject_rows(_model(), [bag], model_name="M", transfer=transfer,
+                                    rotation=0, seed=1)
+        assert rows[0]["arm"] == transfer.arm and rows[0]["marked_minus_clean"] is not None
+        assert rows[0]["event_minus_rest"] is None and rows[0]["event_not_recorded"] is None
+    level = mech.k1_subject_rows(_model(), [_bag(tmp_path, "S3", "L6", windows=4,
+                                                 marks=events)], model_name="M",
+                                 transfer=assignment.Transfer("level", "L1", "L6"), rotation=0,
+                                 seed=1)
+    assert level[0]["event_minus_rest"] is not None
+    assert "weight_ratio_spearman" not in level[0]
+    assert not hasattr(mech, "band_ratio") and "bands" not in str(
+        __import__("inspect").signature(mech.k1_subject_rows))
 
 
 def test_a_marked_window_is_an_integrity_or_contact_mark(tmp_path):
@@ -70,7 +85,7 @@ def test_an_unrecorded_event_mark_is_refused_not_guessed(tmp_path):
         mech.event_windows(bag)
     rows = mech.k1_subject_rows(_model(), [bag], model_name="M",
                                 transfer=assignment.Transfer("level", "L11", "L1"), rotation=0,
-                                seed=1, bands=((4, 8), (13, 30)))
+                                seed=1)
     assert rows[0]["event_minus_rest"] is None and "event_window" in rows[0]["event_not_recorded"]
     events = _bag(tmp_path, "S2", "L1", windows=4,
                   marks={"integrity_mark": np.zeros(4, bool),
@@ -104,41 +119,58 @@ def test_the_weight_contrast_is_marked_minus_clean_and_skips_subjects_without_ma
     assert mech.weight_contrast(w, [True] * 4) is None
 
 
-def test_the_band_ratio_reads_the_declared_bands_and_has_no_default():
-    assert inspect.signature(mech.band_ratio).parameters["bands"].default is \
-        inspect.Parameter.empty
-    t = np.arange(512) / 128.0
-    theta = np.sin(2 * np.pi * 6 * t)
-    beta = 0.5 * np.sin(2 * np.pi * 20 * t)
-    windows = np.stack([np.stack([theta + beta] * 2), np.stack([beta] * 2)])
-    ratio = mech.band_ratio(windows, ((4, 8), (13, 30)))
-    assert ratio[0] == pytest.approx(4.0, rel=1e-6)          # power ratio (1 / 0.5)^2
-    assert ratio[1] == pytest.approx(0.0, abs=1e-12)
-    with pytest.raises(mech.MechanismError):
-        mech.band_ratio(windows, ((8, 4), (13, 30)))
+def _k1_rows(model, arm, transfer, *, shift=0.0, n=8):
+    return [{"model": model, "arm": arm, "transfer": transfer, "pair": "x", "seed": 1,
+             "rotation": i % 4, "subject": f"{transfer}:S{i}",
+             "marked_minus_clean": -0.1 * (i + 1) + shift,
+             "event_minus_rest": 0.05 * (i + 1) if arm == "level" else None,
+             "event_not_recorded": None} for i in range(n)]
 
 
-def test_k1_averages_over_seeds_before_testing_and_holms_the_three_criterion_tests():
-    rows = []
-    for seed, shift in ((1, 0.0), (2, 0.2)):
-        for i in range(8):
-            rows.append({"model": "M", "transfer": "L11->L1", "pair": "L1|L11", "seed": seed,
-                         "subject": f"S{i}", "marked_minus_clean": -0.1 * (i + 1) + shift,
-                         "event_minus_rest": 0.05 * (i + 1), "weight_ratio_spearman": 0.1})
-    own = mech.average_over_seeds(rows, mech.K1_VALUES)
-    assert own[0]["marked_minus_clean"] == pytest.approx(np.mean([-0.1, 0.1]))
-    assert own[0]["seeds"] == [1, 2]
-    common = [{**r, "model": "C", "marked_minus_clean": 0.0} for r in own]
-    with pytest.raises(mech.MechanismError, match="scope"):
-        mech.k1_tests(own, common, own="M", common="C", scope=None)
-    table = mech.k1_tests(own, common, own="M", common="C", scope="pooled")
-    assert len(table) == 4
-    criterion = table[:3]
+def test_k1_reads_one_report_seed_and_holms_the_three_level_criterion_tests():
+    without = "MIL-CREDA [own without consensus]"
+    assert mech.K1_WITHOUT_CONSENSUS == without
+    assert set(mech.K1_EXCLUDED) == {"mean"} and "uniform" in mech.K1_EXCLUDED["mean"]
+    by_model = {
+        "MIL-CREDA": _k1_rows("MIL-CREDA", "level", "L1->L11")
+        + _k1_rows("MIL-CREDA", "task", "Robots->CogniFit"),
+        without: _k1_rows(without, "level", "L1->L11", shift=0.05)
+        + _k1_rows(without, "task", "Robots->CogniFit", shift=0.05),
+        "MIL-CREDA [published attention]": _k1_rows("MIL-CREDA [published attention]",
+                                                    "level", "L1->L11", shift=0.1)}
+    table = mech.k1_tests(by_model)
+    level = [r for r in table if r["comparison"].startswith("K1-atencion:level:")]
+    criterion = [r for r in level if r["criterion"] == mech.K1_CRITERION]
+    assert [r["comparison"] for r in criterion] == [
+        "K1-atencion:level:marked vs clean, MIL-CREDA",
+        f"K1-atencion:level:marked vs clean, MIL-CREDA vs {without}",
+        "K1-atencion:level:event vs rest, MIL-CREDA"]
     assert st.holm([r["p_value"] for r in criterion]) == [r["p_adjusted"] for r in criterion]
-    assert table[3]["p_adjusted"] is None and table[3]["criterion"].startswith("none")
+    assert all("m=3" in r["correction"] for r in criterion)
+    task = [r for r in table if r["comparison"].startswith("K1-atencion:task:")]
+    assert [r["comparison"] for r in task] == [
+        "K1-atencion:task:marked vs clean, MIL-CREDA",
+        f"K1-atencion:task:marked vs clean, MIL-CREDA vs {without}"]
+    assert all(r["p_adjusted"] is None and r["criterion"].startswith("none") for r in task)
+    references = [r for r in table if "published attention" in r["comparison"]]
+    assert [r["comparison"] for r in references] == [
+        "K1-atencion:level:marked vs clean, MIL-CREDA [published attention]",
+        "K1-atencion:level:event vs rest, MIL-CREDA [published attention]"]
+    assert all(r["p_adjusted"] is None and r["criterion"].startswith("none")
+               for r in references)
     assert all(r["experiment"] == "K1-atencion" for r in table)
-    per_pair = mech.k1_tests(own, common, own="M", common="C", scope="per-pair")
-    assert {r["comparison"].split(":")[1] for r in per_pair} == {"L1|L11"}
+    # the paired contrast is MIL-CREDA minus the variant without consensus, per subject
+    paired = criterion[1]
+    assert paired["n"] == 8 and paired["median"] == pytest.approx(-0.05)
+    # one report seed: a subject twice for one model is refused, never averaged
+    twice = {**by_model, "MIL-CREDA": by_model["MIL-CREDA"] + by_model["MIL-CREDA"][:1]}
+    with pytest.raises(mech.MechanismError, match="once"):
+        mech.k1_tests(twice)
+    assert not hasattr(mech, "average_over_seeds") and not hasattr(mech, "K1_SCOPES")
+    # without the variant's model the paired contrast is not computed, and says why
+    alone = mech.k1_tests({"MIL-CREDA": by_model["MIL-CREDA"]})
+    row = next(r for r in alone if r["comparison"].endswith(f"vs {without}"))
+    assert row["p_value"] is None and "not stored" in row["not_computed"]
 
 
 def _assignment(tmp_path):
@@ -201,16 +233,27 @@ def test_the_separation_is_others_minus_own():
 def test_k2_tests_the_two_declared_transfers_with_holm_over_four():
     assert {k: v.name for k, v in mech.K2_DECLARED.items()} == {
         "smaller shift": "L1->L6", "larger shift": "L6->Robots"}
-    rows = [{"transfer": t, "subject": f"S{i}", "separation": 0.1 * (i + 1)}
-            for t in ("L1->L6", "L6->Robots") for i in range(8)]
+    assert mech.K2_NO_LOCAL == "MIL-CREDA [global term only]"
+    rows = [{"model": "MIL-CREDA", "transfer": t, "subject": f"S{i}",
+             "separation": 0.1 * (i + 1)} for t in ("L1->L6", "L6->Robots") for i in range(8)]
     out = mech.k2_tests(rows, None)
     assert len(out) == 4
     assert out[1]["p_value"] is None and "not trained" in out[1]["not_computed"]
     assert out[0]["p_adjusted"] == pytest.approx(min(1.0, 2 * out[0]["p_value"]))
-    weaker = [{**r, "separation": r["separation"] / 2} for r in rows]
+    weaker = [{**r, "model": mech.K2_NO_LOCAL, "separation": r["separation"] / 2}
+              for r in rows]
     full = mech.k2_tests(rows, weaker)
     assert all(r["p_value"] is not None for r in full)
     assert "m=4" in full[0]["correction"]
+    assert full[1]["comparison"] == ("K2-emparejamiento:L1->L6 (smaller shift):MIL-CREDA vs "
+                                     "MIL-CREDA [global term only]")
+    assert full[1]["median"] == pytest.approx(np.median([0.05 * (i + 1) for i in range(8)]))
+    # a declared transfer without the variant is not computed, and says so
+    half = mech.k2_tests(rows, [r for r in weaker if r["transfer"] == "L1->L6"])
+    assert half[1]["p_value"] is not None
+    assert half[3]["p_value"] is None and "not trained" in half[3]["not_computed"]
+    with pytest.raises(mech.MechanismError, match="once"):
+        mech.k2_tests(rows + rows[:1], weaker)
 
 
 def test_the_bound_control_reads_every_recorded_step():
@@ -257,9 +300,34 @@ def test_a_stored_phase_two_model_is_rebuilt_with_every_parameter(tmp_path):
 def test_the_variant_trainers_refuse_an_unknown_variant():
     from MIL_CREDA_EEG import aggregation_variants, two_phase
     assert mech.ABLATIONS == ("global term only", "local term only", "both terms")
-    assert mech.AGGREGATIONS == ("own", "published attention", "gated attention", "max",
-                                 "mean")
+    assert mech.AGGREGATIONS == ("own", "own without consensus", "published attention",
+                                 "gated attention", "mean")
     with pytest.raises(two_phase.UnknownTermSelection):
         mech.train_ablation_variant(None, 0, 1, None, {}, {}, "no local term")
     with pytest.raises(aggregation_variants.UnknownAggregation):
         mech.train_aggregation_variant(None, 0, 1, "own", {}, {}, {})
+    with pytest.raises(aggregation_variants.UnknownAggregation):
+        mech.train_aggregation_variant(None, 0, 1, "max", {}, {}, {})
+
+
+def test_a_stored_k3_variant_model_is_rebuilt_for_its_attention(tmp_path):
+    from MIL_CREDA_EEG import aggregation_variants as av
+    doc = {"format": "tiny"}
+    doc[partition.HASH_FIELD] = partition.partition_hash(doc)
+    ppath = tmp_path / "p.json"
+    ppath.write_text(json.dumps(doc))
+    transfer = assignment.Transfer("level", "L1", "L11")
+    hyper = av.variant_hyper("own without consensus",
+                             {"attentionGamma": 0.5, "attentionTemperature": 0.8})
+    torch.manual_seed(0)
+    model = av.build("own without consensus", CHANNELS, CHANNELS, hyper)
+    model.fix_sigma(1.5)
+    path = model_store.save(tmp_path / "M", transfer=transfer, rotation=0, seed=1, phase=2,
+                            name=mech.K1_WITHOUT_CONSENSUS, state=model.state_dict(),
+                            hyper=hyper, partition_sha256=doc[partition.HASH_FIELD],
+                            channels={"source": CHANNELS, "target": CHANNELS}, sigma=1.5)
+    rebuilt, meta, extra = mech.load_phase_two(path, partition_path=ppath)
+    assert type(rebuilt) is MILCREDAModel and rebuilt.attention_gamma == 0.0
+    assert rebuilt.attention_temperature == 0.8 and rebuilt.sigma == 1.5 and extra == []
+    x = torch.randn(5, CHANNELS, 512)
+    assert np.allclose(mech.attention_weights(rebuilt, x), mech.attention_weights(model, x))
