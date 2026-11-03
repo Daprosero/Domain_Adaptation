@@ -18,15 +18,29 @@ The steps, in order (`STEPS`), each one a subcommand of
    the same rotation and seed and stored, its target test predictions, and the
    target-supervised upper bound with the common group's chosen `lr1`, `wd1`.
    A model already stored is not trained again (an interrupted run resumes).
-3. `statistics` -- per arm, the core pair pooled over its two directions, the
+3. `k3` -- Sec. 6.3 on the core transfers, per rotation and report seed: the
+   four aggregation variants (`aggregation_variants`) trained through both
+   phases and the two ablation variants (global term only, local term only)
+   trained in phase 2 from full MIL-CREDA's stored phase-1 checkpoint, all with
+   full MIL-CREDA's selected hyperparameters of the transfer and no search of
+   their own (`mechanisms.train_aggregation_variant`,
+   `mechanisms.train_ablation_variant`). The own attention and "both terms" are
+   full MIL-CREDA itself, read from the `final` step's predictions, never trained
+   again. Per core pair, both directions pooled: the aggregation and ablation
+   tables, and the Sec. 4.6 contrasts of own vs published attention and of both
+   terms vs each single term, Holm over each table's bootstrap tests
+   (`Results/K3-ablacion/`, `Results/significance_K3-ablacion.json`). A variant
+   with predictions recorded is not trained again. Variant models are not stored
+   (the store's names are the nine strategies).
+4. `statistics` -- per arm, the core pair pooled over its two directions, the
    tables of Secs. 5.1-5.3, the Sec. 4.6 contrasts of MIL-CREDA against every
    rival present with Holm over the arm's bootstrap family, and the Friedman
    ranking (`statistics`, `results`).
-4. `mechanisms` -- K1 over the stored phase-2 models of the core transfers whose
+5. `mechanisms` -- K1 over the stored phase-2 models of the core transfers whose
    target has an event stream, K2 over every transfer's probe subjects, and the
    K3 implementation control of the term bounds from the recorded histories
    (`mechanisms`).
-5. `results` -- the Sec. 5.4 outputs: the per-epoch histories
+6. `results` -- the Sec. 5.4 outputs: the per-epoch histories
    (`Results/history_<experiment>.json`), the chosen hyperparameters, fANOVA
    importance, the two selection rules, and the declared figures through
    `ps_figures`: per arm the convergence curves, the optimization history,
@@ -76,6 +90,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from MIL_CREDA_EEG import aggregation_variants
 from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, controls, mechanisms, model_store, partition, results
 from MIL_CREDA_EEG import search
@@ -98,10 +113,24 @@ __provenance__ = {
         "a_stored_model_is_not_trained_again",
         "the_device_arm_source_only_controls_are_never_numbers",
         "the_rehearsal_writes_the_dashboard_layout_end_to_end",
+        "k3_trains_the_variants_and_writes_both_tables_with_holm_per_table",
+        "k3_does_not_train_a_variant_again",
     ],
 }
 
-STEPS = ("search", "final", "statistics", "mechanisms", "results")
+STEPS = ("search", "final", "k3", "statistics", "mechanisms", "results")
+K3 = "K3-ablacion"
+#: Sec. 6.3's tables: the row that is full MIL-CREDA, the variants trained here, and the
+#: rivals of the criterion contrasts (the max, the mean and the gated version are reported
+#: without a criterion).
+K3_TABLES = {
+    "aggregation": {"full": "own", "trained": aggregation_variants.VARIANTS,
+                    "criterion": ("published attention",)},
+    "ablation": {"full": "both terms",
+                  "trained": tuple(a for a in mechanisms.ABLATIONS if a != "both terms"),
+                  "criterion": tuple(a for a in mechanisms.ABLATIONS if a != "both terms")},
+}
+NOT_APPLICABLE = "not applicable"
 DEFAULT_PRODUCT = bag_data.REPOSITORY / "MIL-CREDA"
 SEPARABILITY_SUMMARY = Path("Results") / "separability" / "summary.json"
 SEPARABILITY_TABLE = Path("Results") / "separability" / "tables" / "separability.csv"
@@ -434,7 +463,7 @@ def _pair_of(core: Sequence[str]) -> tuple[str, str]:
 
 
 def run_statistics(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
-    """Step 3: per arm, the tables of Secs. 5.1-5.3 and the contrasts of Sec. 4.6."""
+    """Step 4: per arm, the tables of Secs. 5.1-5.3 and the contrasts of Sec. 4.6."""
     bags = bags or load_bags(cfg)
     core = core_transfers(cfg, product)
     assignments = _assignments(cfg, bags)
@@ -504,8 +533,171 @@ def _phase_two_path(product: Path, transfer, r: int, seed: int, strategy: str) -
     return model_store.model_path(_models(product), transfer, r, seed, 2, strategy)
 
 
+def _merged_summary(root: Path, experiment: str) -> dict:
+    """An experiment's summary on disk without the keys `write_summary` adds itself."""
+    path = root / experiment / "summary.json"
+    if not path.exists():
+        return {}
+    current = json.loads(path.read_text(encoding="utf-8"))
+    return {k: v for k, v in current.items() if k not in ("experiment", "revision",
+                                                          "synthetic")}
+
+
+def _k3_name(table: str, variant: str) -> str:
+    return f"{table}:{variant}"
+
+
+def _variant_hyper_row(table: str, variant: str, transfer: str, hyper: Mapping) -> dict:
+    row = {"table": table, "variant": variant, "transfer": transfer}
+    for key in (*two_phase.PHASE_ONE_KEYS, *two_phase.PHASE_TWO_KEYS):
+        row[key] = (NOT_APPLICABLE if table == "aggregation"
+                    and key in aggregation_variants.NOT_APPLICABLE else hyper[key])
+    row["search"] = "none: full MIL-CREDA's selection for this transfer (Sec. 6.3)"
+    return row
+
+
+def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
+    """Step 3: Sec. 6.3's variants on the core transfers, their tables and contrasts."""
+    bags = bags or load_bags(cfg)
+    device = torch.device(cfg["device"])
+    core = core_transfers(cfg, product)
+    root = _results(product)
+    ppath = _partition_path(cfg)
+    counts = {"trained_aggregation": 0, "trained_ablation": 0, "predictions": 0}
+    owed, hyper_rows = [], []
+    done = _predicted(product, K3)
+    for transfer in transfers_of(cfg):
+        if transfer.name not in core.get(transfer.arm, []):
+            continue
+        data = search.search_data(transfer, bags)
+        a = assignment_mod.assign_from_bags(transfer, bags)
+        phase_one = _study(search.study_path(product, transfer, 1, "MIL-CREDA"),
+                           cfg["nTrials"]).best_params
+        phase_two = _study(search.study_path(product, transfer, 2, "MIL-CREDA"),
+                           cfg["nTrials"]).best_params
+        hyper = mechanisms.aggregation_hyper(phase_one, phase_two, cfg["schedule"])
+        hyper_rows += [_variant_hyper_row("aggregation", v, transfer.name, hyper)
+                       for v in K3_TABLES["aggregation"]["trained"]]
+        hyper_rows += [_variant_hyper_row("ablation", v, transfer.name,
+                                          {**phase_one, **phase_two})
+                       for v in K3_TABLES["ablation"]["trained"]]
+        for r in sorted(data.rotations):
+            test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
+            for seed in cfg["reportSeeds"]:
+                out, history = [], []
+                for variant in K3_TABLES["aggregation"]["trained"]:
+                    name = _k3_name("aggregation", variant)
+                    if (name, transfer.name, r, seed) in done:
+                        continue
+                    trained = mechanisms.train_aggregation_variant(
+                        data, r, seed, variant, phase_one, phase_two, cfg["schedule"], device)
+                    history += _tag(trained["history"], name, transfer.name, r, seed)
+                    out += _tag(two_phase.predictions(trained["model"], test, transfer.name,
+                                                      device), name, transfer.name, r, seed)
+                    counts["trained_aggregation"] += 1
+                path1 = model_store.model_path(_models(product), transfer, r, seed, 1,
+                                               "MIL-CREDA")
+                for variant in K3_TABLES["ablation"]["trained"]:
+                    name = _k3_name("ablation", variant)
+                    if (name, transfer.name, r, seed) in done:
+                        continue
+                    if not path1.exists():
+                        owed.append(f"no stored MIL-CREDA phase-1 checkpoint for "
+                                    f"{transfer.name} r{r} s{seed}: run the final step")
+                        continue
+                    record = model_store.load(path1, partition_path=ppath)
+                    trained = mechanisms.train_ablation_variant(
+                        data, r, seed, record, phase_two, cfg["schedule"], variant, device)
+                    history += _tag(trained["history"], name, transfer.name, r, seed)
+                    out += _tag(two_phase.predictions(trained["model"], test, transfer.name,
+                                                      device), name, transfer.name, r, seed)
+                    counts["trained_ablation"] += 1
+                _append_history(product, K3, history)
+                results.append_predictions(root, K3, out)
+                counts["predictions"] += len(out)
+    written = k3_tables(cfg, product, bags, core, owed)
+    if hyper_rows:
+        results.write_table(root, K3, "variant_hyperparameters", hyper_rows)
+    history = read_history(product, K3)
+    if history:
+        results.write_history(root, K3, history)
+    trained = {t: [v for v in spec["trained"] if any(
+        r["strategy"] == _k3_name(t, v) for r in results.read_predictions(root, K3))]
+        for t, spec in K3_TABLES.items()}
+    summary = _merged_summary(root, K3)
+    summary.update({
+        "aggregation_variants": {"trained": trained["aggregation"],
+                                 "full": "own = full MIL-CREDA (final step)",
+                                 "forms": aggregation_variants.FORMS,
+                                 "not_applicable": list(aggregation_variants.NOT_APPLICABLE),
+                                 "max_weights": aggregation_variants.MAX_WEIGHTS_RULE},
+        "ablation_variants": {"trained": trained["ablation"],
+                              "full": "both terms = full MIL-CREDA (final step)",
+                              "phase_one": "full MIL-CREDA's stored checkpoint"},
+        "hyperparameters": "full MIL-CREDA's selection per transfer; no search of their own",
+        "pairs": written, "seedReduction": cfg["seedReduction"],
+        "bootstrapResamples": cfg["bootstrapResamples"], "reportSeeds": cfg["reportSeeds"],
+        "owed": sorted(set(owed))})
+    results.write_summary(root, K3, summary, synthetic=cfg["synthetic"])
+    return {**counts, "pairs": written, "owed": sorted(set(owed))}
+
+
+def k3_tables(cfg: Mapping, product: Path, bags: bag_data.BagSet,
+              core: Mapping[str, Sequence[str]], owed: list) -> list[str]:
+    """Per core pair, both directions pooled: the two tables and their contrasts."""
+    root = _results(product)
+    records = results.read_predictions(root, K3)
+    assignments = _assignments(cfg, bags)
+    rows = {t: [] for t in K3_TABLES}
+    contrasts = {t: [] for t in K3_TABLES}
+    pairs = []
+    for arm in sorted({t.arm for t in transfers_of(cfg)}):
+        if arm not in core:
+            continue
+        first, second = _pair_of(core[arm])
+        if first not in assignments or second not in assignments:
+            continue
+        full = results._select(results.read_predictions(root, results.EXPERIMENT_OF_ARM[arm]),
+                               "MIL-CREDA", (first, second))
+        if not full:
+            owed.append(f"no full MIL-CREDA predictions for {first} and {second}: run the "
+                        f"final step")
+            continue
+        pooled = assignment_mod.pair_pool(assignments[first], assignments[second])
+        scope = "|".join(assignments[first].transfer.pair)
+        ratio = test_train_ratio(assignments[first], assignments[second])
+        for table, spec in K3_TABLES.items():
+            predictions = {}
+            for variant in (*spec["trained"], spec["full"]):
+                mine = full if variant == spec["full"] else results._select(
+                    records, _k3_name(table, variant), (first, second))
+                if mine:
+                    predictions[variant] = st.pool_pair(mine, pooled)
+            order = [v for v in (mechanisms.AGGREGATIONS if table == "aggregation"
+                                 else mechanisms.ABLATIONS) if v in predictions]
+            rows[table] += [{"pair": scope, **row} for row in
+                            mechanisms.variant_table({v: predictions[v] for v in order})]
+            contrasts[table] += mechanisms.k3_contrasts(
+                table, scope, spec["full"], predictions,
+                [v for v in spec["criterion"] if v in predictions],
+                reduction=cfg["seedReduction"], test_train_ratio=ratio,
+                resamples=cfg["bootstrapResamples"])
+        pairs.append(scope)
+    significance = []
+    for table, spec in K3_TABLES.items():
+        boot = [r for r in contrasts[table] if r["test"] == st.TEST_BOOTSTRAP]
+        st.apply_holm(boot, f"{K3} {table}: {spec['full']} vs "
+                            f"{', '.join(spec['criterion'])}, bootstrap")
+        significance += contrasts[table]
+        if rows[table]:
+            results.write_table(root, K3, table, rows[table])
+    if significance:
+        results.write_significance(root, K3, significance)
+    return pairs
+
+
 def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
-    """Step 4: K1, K2 and the K3 bound control, from stored models and histories."""
+    """Step 5: K1, K2 and the K3 bound control, from stored models and histories."""
     k1 = check_mechanism_inputs(cfg)
     bags = bags or load_bags(cfg)
     register(cfg["strategies"], cfg["pendingDecisions"])
@@ -580,9 +772,13 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
     try:
         bounds = mechanisms.bound_control(history)
         results.write_table(root, "K3-ablacion", "term_bounds", bounds)
+        current = _merged_summary(root, "K3-ablacion")      # the k3 step's keys survive
         results.write_summary(root, "K3-ablacion", {
-            "term_bounds": bounds, "aggregation_variants": "not trained (owed)",
-            "ablation_variants": "not trained (owed)"}, synthetic=cfg["synthetic"])
+            "term_bounds": bounds,
+            "aggregation_variants": current.pop("aggregation_variants", "not trained (owed)"),
+            "ablation_variants": current.pop("ablation_variants", "not trained (owed)"),
+            **{k: v for k, v in current.items() if k != "term_bounds"}},
+            synthetic=cfg["synthetic"])
         out["K3-ablacion"] = len(bounds)
     except mechanisms.NotRecorded as error:
         owed.append(str(error))
@@ -594,7 +790,7 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
 
 
 def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
-    """Step 5: Sec. 5.4's figures and tables, and Sec. 4.5's two selection rules."""
+    """Step 6: Sec. 5.4's figures and tables, and Sec. 4.5's two selection rules."""
     root = _results(product)
     core = core_transfers(cfg, product)
     written, owed = [], []
@@ -664,8 +860,8 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
     return {"written": [str(p) for p in written], "owed": sorted(set(owed))}
 
 
-RUNNERS = {"search": run_search, "final": run_final, "statistics": run_statistics,
-           "mechanisms": run_mechanisms, "results": run_results}
+RUNNERS = {"search": run_search, "final": run_final, "k3": run_k3,
+           "statistics": run_statistics, "mechanisms": run_mechanisms, "results": run_results}
 
 
 def run(step: str, config: Mapping, product: str | Path = DEFAULT_PRODUCT) -> dict:
