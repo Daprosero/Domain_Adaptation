@@ -31,7 +31,8 @@ model (`ModelExists`).
 version" without fixing it. It is the sha256 over the source bytes of the files
 that define the models and their training (`CODE_FILES`): the EEGNet trunk and
 head, the MIL-CREDA model, the K3 aggregation variants, the common wrapper, the
-two-phase training, every comparator and the `MIL_CREDA` package of the
+two-phase training, the selection code (`search`, `campaign`), every comparator
+and the `MIL_CREDA` package of the
 proposal's equations. A content digest, not a git
 commit, because a remote run executes a working tree, and the commit would not
 change when an uncommitted edit did.
@@ -63,8 +64,8 @@ from MIL_CREDA_EEG import partition, two_phase
 from MIL_CREDA_EEG.bag_data import REPOSITORY, default_partition_path
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md",
-    "sections": ["4.2", "6.3", "7.3"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "sections": ["4.2", "4.5", "6.3", "7.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
     "invariants": [
@@ -78,6 +79,7 @@ __provenance__ = {
         "an_unregistered_phase_one_group_cannot_be_rebuilt",
         "the_k3_variant_models_are_stored_and_rebuilt",
         "the_code_version_covers_the_k3_variant_module",
+        "the_code_version_covers_the_selection_code",
     ],
 }
 
@@ -110,6 +112,9 @@ CODE_FILES = (
     "MIL_CREDA_EEG/eegnet.py", "MIL_CREDA_EEG/mil_creda_model.py",
     "MIL_CREDA_EEG/aggregation_variants.py",
     "MIL_CREDA_EEG/mil_wrapper.py", "MIL_CREDA_EEG/two_phase.py",
+    # The selection code (Sec. 4.5): the configuration and the epoch a stored model was
+    # selected with, so a change to the selection marks stored records stale.
+    "MIL_CREDA_EEG/search.py", "MIL_CREDA_EEG/campaign.py",
     # Every comparator's model and training code, so a checkpoint names the comparator
     # bytes that produced it too.
     *sorted(p.relative_to(_SRC).as_posix()

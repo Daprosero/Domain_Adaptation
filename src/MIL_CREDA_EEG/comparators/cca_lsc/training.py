@@ -15,7 +15,7 @@ from .losses import (CentroidMemory, calibrated_pseudo, calibration_weights,
                      estimate_prior, label_shift)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cca_phase_two_freezes_common_predictor", "cca_target_training_labels_are_unread",
@@ -88,7 +88,7 @@ def adaptation_step(model, auxiliary, source, target, weights, params, device):
 def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_valid,
           params: Mapping, schedule: Mapping, *, seed: int, fold: int = 0,
           transfer: str = "", warmup_epochs: int = WARMUP_EPOCHS,
-          device: torch.device | str = "cpu") -> dict:
+          device: torch.device | str = "cpu", label_free: bool = False) -> dict:
     """Adapt a selected common phase-1 model; CPU/GPU placement belongs to caller.
 
     target_train labels are never read. No target test input exists. Warmup uses
@@ -129,6 +129,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     weights = torch.ones(model.classes, dtype=torch.float64, device=device)
     target_prior, history, best_state, best_aux = None, [], None, None
     best, best_epoch = -math.inf, -1
+    keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         if epoch == warmup_epochs:
             # evaluate restores modes; reads windows only, no target labels.
@@ -161,6 +162,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
             best, best_epoch = accuracy, epoch
             best_state = copy.deepcopy(model.target_trunk.state_dict())
             best_aux = copy.deepcopy(auxiliary.state_dict())
+        keeper.offer(epoch, score, model)
     final_state = copy.deepcopy(model.target_trunk.state_dict())
     model.target_trunk.load_state_dict(best_state)
     auxiliary.load_state_dict(best_aux)
@@ -170,7 +172,8 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     restored = two_phase.evaluate(model, target_valid, "target", device)
     if two_phase.balanced_accuracy([b.label for b in target_valid], restored.argmax(1).tolist()) != best:
         raise two_phase.RestoreFailed("CCA-LSC restored validation score differs")
-    return {"checkpoint": {"target_state": best_state, "auxiliary_state": best_aux,
+    return two_phase.with_label_free({
+            "checkpoint": {"target_state": best_state, "auxiliary_state": best_aux,
                             "epoch": best_epoch, "valid_balanced_accuracy": best,
                             "label_free_score": history[best_epoch]["label_free_score"],
                             "hyper": {**params, **schedule, "warmup_epochs": warmup_epochs}},
@@ -180,10 +183,12 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
             "layer_copy": joint["layer_copy"],
             "selection": {"primary": "target-validation balanced accuracy",
                           "best_label_free_epoch": max(range(len(history)),
-                                                       key=lambda i: history[i]["label_free_score"])}}
+                                                       key=lambda i: history[i]["label_free_score"])}},
+        keeper)
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
+                    label_free=False):
     """Shared search trainer hook; reject a checkpoint from a different rotation/group."""
     state, meta = record
     expected = {"phase": 1, "name": "common", "transfer": data.transfer.name,
@@ -198,7 +203,9 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
         raise search.SearchError("incompatible common phase-1 state")
     d = data.rotations[rotation]
     result = adapt(model, d["source_train"], d["target_train"], d["target_valid"], params,
-                   schedule, seed=seed, fold=rotation, transfer=data.transfer.name, device=device)
+                   schedule, seed=seed, fold=rotation, transfer=data.transfer.name, device=device,
+                   label_free=label_free)
+
     return {"strategy": NAME, "model": model, "result": result,
             "hyper": result["checkpoint"]["hyper"], "channels": channels,
             "layer_copy": result["layer_copy"]}

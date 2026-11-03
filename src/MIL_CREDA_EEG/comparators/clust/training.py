@@ -18,7 +18,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from . import losses
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_adaptation_never_reads_training_labels_or_source_bags",
@@ -118,7 +118,7 @@ def adaptation_step(model, target_bags, params, device):
 
 
 def adapt_target_phase(model, target_train, target_valid, params, schedule, generator,
-                       device="cpu", *, seed=0, fold=0, transfer=""):
+                       device="cpu", *, seed=0, fold=0, transfer="", label_free=False):
     """Full phase-2 cap; labels only read for reserved validation selection.
 
     Caller supplies a bridged, phase-1 common model. Independent primary and
@@ -145,6 +145,7 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
     history, seconds = [], []
     best, best_free, primary, secondary = -math.inf, -math.inf, None, None
     labels = [b.label for b in target_valid]  # selection only, never adaptation
+    keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(int(epochs)):
         started = time.perf_counter()
         two_phase.set_phase_two_modes(model)
@@ -181,6 +182,7 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
                         "label_free_score": free, "alpha": float(model.clust_auxiliary.alpha)})
         if ba > best:
             best, primary = ba, {"epoch": epoch, "state": clone_state(model)}
+        keeper.offer(epoch, free, model)
         if free > best_free:
             best_free, secondary = free, {"epoch": epoch, "state": clone_state(model)}
     model.load_state_dict(primary["state"])
@@ -189,7 +191,8 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
         raise two_phase.FrozenPartsMoved("CLUST changed frozen phase-one state")
     model.eval()
     chosen = history[primary["epoch"]]
-    return {"checkpoint": {"state": primary["state"], "epoch": primary["epoch"],
+    return two_phase.with_label_free({
+            "checkpoint": {"state": primary["state"], "epoch": primary["epoch"],
                            "valid_balanced_accuracy": best,
                            "label_free_score": chosen["label_free_score"],
                            "hyper": params},
@@ -199,7 +202,9 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
             "best_epoch": primary["epoch"], "epochs": len(history), "history": history,
             "seconds": seconds, "seconds_per_epoch": sum(seconds) / len(seconds),
             "selection": {"primary": "target-validation balanced accuracy",
-                          "secondary": "label-free score", "best_label_free_epoch": secondary["epoch"]}}
+                          "secondary": "label-free score", "best_label_free_epoch": secondary["epoch"]}},
+        keeper)
+
 
 
 def restore_model(state, source_channels, target_channels, device="cpu"):

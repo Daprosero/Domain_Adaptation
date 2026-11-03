@@ -1,4 +1,4 @@
-"""Experiments plan v43: the campaign entry point, rehearsed on a SYNTHETIC set on CPU.
+"""Experiments plan v44: the campaign entry point, rehearsed on a SYNTHETIC set on CPU.
 
 The synthetic set is seeded noise with a weak class signal; no number it yields is a
 measured result.
@@ -13,10 +13,11 @@ from pathlib import Path
 
 import optuna
 import pytest
+import torch
 
 from MIL_CREDA_EEG import aggregation_variants, campaign, controls, mechanisms, model_store
 from MIL_CREDA_EEG import results
-from MIL_CREDA_EEG import search
+from MIL_CREDA_EEG import search, two_phase
 from MIL_CREDA_EEG import statistics as st
 
 BASE = {"schedule": {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4},
@@ -170,7 +171,7 @@ def test_stale_predictions_are_refused_naming_what_differs(tmp_path, monkeypatch
 
 
 def test_every_changed_module_answers_to_one_plan_revision():
-    assert campaign.REVISION.endswith("v43.md")
+    assert campaign.REVISION.endswith("v44.md")
     for module in (search, results, model_store):
         assert module.__provenance__["revision"] == campaign.REVISION
 
@@ -261,6 +262,15 @@ def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
     assert rivals == {"COT", "HASD", "Source only, common attention", "Source only, HASD",
                       "Source only, MIL-CREDA"}
     assert all("holm" in r["correction"] for r in rows if r["test"] == st.TEST_BOOTSTRAP)
+    # v44 Sec. 4.6: primary and secondary families, Holm within each metric; no row of the
+    # arm is reported uncorrected, and the per-arm Friedman is gone (Sec. 5.4 is global).
+    assert {r["test"] for r in rows} == set(st.CONTRAST_TESTS)
+    assert all(r["correction"] != "none" and "holm" in r["correction"] for r in rows)
+    for rel in ("A-nivel/tables/significance.csv", "K1-atencion/tables/tests.csv",
+                "K2-emparejamiento/tables/tests.csv"):
+        assert (root / rel).exists(), rel
+    assert any("global critical-difference" in o for o in outcome["results"]["owed"])
+    assert "mil_creda_top_three" in summary
     k1 = json.loads((root / "significance_K1-atencion.json").read_text())
     assert any("event_window" in (r.get("not_computed") or "") for r in k1)
     criterion = [r for r in k1 if r.get("criterion") == mechanisms.K1_CRITERION]
@@ -288,8 +298,11 @@ def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
     assert {h["model"] for h in history} >= {"MIL-CREDA:phase1", "MIL-CREDA:phase2",
                                               "common:phase1"}
     written = {Path(w).relative_to(root).as_posix() for w in outcome["results"]["written"]}
-    assert {"A-nivel/figures/convergence.pdf", "A-nivel/figures/optimization_history.pdf",
-            "A-nivel/figures/critical_difference.pdf"} <= written
+    assert {"A-nivel/figures/convergence.pdf", "A-nivel/figures/optimization_history.pdf"
+            } <= written
+    # v44 Sec. 5.4: the critical-difference diagram is global, over the ten transfers; a
+    # rehearsal on one arm owes it instead of drawing a per-arm one.
+    assert "A-nivel/figures/critical_difference.pdf" not in written
     for w in written:
         if w.endswith(".pdf"):
             assert (root / w).with_suffix(".png").exists()
@@ -340,7 +353,7 @@ def test_k3_trains_the_variants_and_writes_both_tables_with_holm_per_table(level
         "K3-ablacion:ablation:L1|L6:both terms vs local term only"]
     assert all("aggregation" in r["correction"] and "m=1" in r["correction"] for r in agg)
     assert all("ablation" in r["correction"] and "m=2" in r["correction"] for r in abl)
-    assert all(r["correction"] == "none" for r in rows if r["test"] != st.TEST_BOOTSTRAP)
+    assert all(r["correction"] != "none" for r in rows)
     hyper = _csv(root / "K3-ablacion" / "tables" / "variant_hyperparameters.csv")
     for row in hyper:
         if row["variant"] == "own without consensus":
@@ -459,10 +472,14 @@ def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, 
     assert outcome["final"]["final"]["trained_label_free"] == 3 * 2
     root = product / "Models" / "Balladeer" / campaign.LABEL_FREE_MODELS
     for slug in ("L1-to-L6", "L6-to-L1"):
-        assert not (root / slug / "rotation0").exists()
-        for r in (1, 2, 3):
+        for r in (0, 1, 2, 3):
             meta = _sidecar(root / slug / f"rotation{r}" / "seed1" / "phase2__MIL-CREDA.pt")
             assert meta["selection"]["rule"] == "label-free"
+            # v44 Sec. 4.5: the rule uses no target labels, so even where the rules choose
+            # the same configuration its epoch is the label-free one of that same run.
+            assert meta["selection"]["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
+        coinciding = _sidecar(root / slug / "rotation0" / "seed1" / "phase2__MIL-CREDA.pt")
+        assert coinciding["selection"]["sameRunAsPrimary"] is True
     res = product / "Results"
     primary = results.read_predictions(res, "A-nivel")
     free = results.read_predictions(res, "A-nivel", rule="label-free")
@@ -470,7 +487,7 @@ def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, 
     p0 = sorted((key(x), x["probability"]) for x in primary
                 if x["strategy"] == "MIL-CREDA" and x["rotation"] == 0)
     f0 = sorted((key(x), x["probability"]) for x in free if x["rotation"] == 0)
-    assert p0 == f0 and p0          # where the rules coincide, the primary model is reused
+    assert p0 and f0                # where the rules coincide, the primary run is reused
     assert {x["rotation"] for x in free} == {0, 1, 2, 3}
     assert {x["strategy"] for x in free} == {"MIL-CREDA"}
     rows = _csv(res / "A-nivel" / "tables" / "selection_rules.csv")
@@ -484,3 +501,102 @@ def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, 
     # nothing is trained twice
     again = campaign.run_final(campaign.check_config(cfg), product)
     assert again["trained_label_free"] == again["label_free_predictions"] == 0
+
+
+@pytest.fixture(scope="module")
+def label_free_run(tmp_path_factory, registries):
+    """Search, final, results and mechanisms with the label-free rule choosing another
+    trial than the primary rule in every rotation, so every label-free model is its own."""
+    real = search.select_per_rotation
+
+    def other_trial(study, rotations, rule="primary"):
+        chosen = real(study, rotations, rule)
+        if rule != "label-free":
+            return chosen
+        primary = real(study, rotations, "primary")
+        for r in chosen:
+            n = 1 - primary[r]["trial"]
+            chosen[r] = {**chosen[r], "trial": n, "params": dict(study.trials[n].params)}
+        return chosen
+
+    tmp = tmp_path_factory.mktemp("label-free")
+    cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24)
+    cfg.update({"strategies": ["MIL-CREDA", "HASD"], "nTrials": 2, "bootstrapResamples": 200,
+                "schedule": {"epochs1": 3, "patience1": 3, "epochs2": 4, "bagsPerStep": 4}})
+    product = tmp / "product"
+    product.mkdir()
+    read_by_bounds = []
+    real_bounds = mechanisms.bound_control
+
+    def recording_bounds(history, *args, **kwargs):
+        history = list(history)
+        read_by_bounds.extend(history)
+        return real_bounds(history, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(search, "select_per_rotation", other_trial)
+        patch.setattr(mechanisms, "bound_control", recording_bounds)
+        for step in ("search", "final", "results", "mechanisms"):
+            campaign.run(step, cfg, product)
+    return cfg, product, read_by_bounds
+
+
+def test_the_label_free_final_models_keep_their_label_free_epoch(label_free_run):
+    """Sec. 4.5 and 7.7: a label-free final model keeps the epoch with the best label-free
+    score of its own training, and its sidecar says which epoch and by which rule."""
+    from MIL_CREDA_EEG import two_phase
+    cfg, product, _ = label_free_run
+    history = campaign.read_history(product, "A-nivel", rule="label-free")
+    assert history and {h["selectionRule"] for h in history} == {"label-free"}
+    root = product / "Models" / "Balladeer" / campaign.LABEL_FREE_MODELS
+    bags = campaign.load_bags(cfg)
+    checked = 0
+    for path in sorted(root.rglob("phase2__*.pt")):
+        meta = _sidecar(path)
+        mine = [h for h in history if h["model"] == f"{meta['name']}:phase2"
+                and h["transfer"] == meta["transfer"] and h["fold"] == meta["rotation"]
+                and h["seed"] == meta["seed"]]
+        scores = [h["label_free_score"] for h in sorted(mine, key=lambda h: h["epoch"])]
+        assert len(scores) == cfg["schedule"]["epochs2"]
+        assert meta["epoch"] == scores.index(max(scores))
+        assert meta["selection"]["epoch"] == meta["epoch"]
+        assert meta["selection"]["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
+        assert meta["label_free_score"] == max(scores)
+        model = mechanisms.load_phase_two(path, partition_path=campaign._partition_path(cfg))[0]
+        transfer = next(t for t in campaign.transfers_of(cfg) if t.name == meta["transfer"])
+        a = campaign.assignment_mod.assign_from_bags(transfer, bags)
+        valid = two_phase.bag_tensors(campaign.assignment_mod.side_bags(
+            a, bags, "target", meta["rotation"], "validation"))
+        G = two_phase.evaluate(model, valid, "target", torch.device("cpu"))
+        assert two_phase.label_free_score(G) == pytest.approx(max(scores), rel=1e-6,
+                                                              abs=1e-12)
+        checked += 1
+    assert checked == 2 * 2 * 4            # two strategies, two directions, four rotations
+
+
+def test_the_label_free_histories_are_written_apart_from_the_strategies(label_free_run):
+    """The label-free models' per-epoch records land in their own files, in the primary
+    layout, read by the convergence output and the K3 bound control, never by the
+    primary history the statistics step reads."""
+    cfg, product, read_by_bounds = label_free_run
+    res = product / "Results"
+    runs = res / "A-nivel" / "runs"
+    assert (runs / "history_label_free.jsonl").exists()
+    primary = campaign.read_history(product, "A-nivel")
+    assert primary and all("selectionRule" not in h for h in primary)
+    free = json.loads((res / "history_A-nivel_label_free.json").read_text())
+    assert free == campaign.read_history(product, "A-nivel", rule="label-free")
+    assert set(free[0]) - {"selectionRule"} == set(
+        next(h for h in primary if h["model"] == free[0]["model"]))
+    assert (res / "A-nivel" / "figures" / "convergence_label_free.pdf").exists()
+    summary = json.loads((res / "K3-ablacion" / "summary.json").read_text())
+    bounds = {r["term"]: r for r in summary["term_bounds"]}
+    assert bounds
+    mil = [h for h in primary + free if h["model"] == "MIL-CREDA:phase2"]
+    assert [h for h in read_by_bounds if h.get("selectionRule") == "label-free"
+            and h["model"] == "MIL-CREDA:phase2"]
+    for term, row in bounds.items():
+        assert float(row["observed_max"]) == pytest.approx(
+            max(h[f"{term}_max"] for h in mil), rel=1e-6)
+        assert float(row["observed_min"]) == pytest.approx(
+            min(h[f"{term}_min"] for h in mil), rel=1e-6)

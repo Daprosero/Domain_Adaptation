@@ -111,7 +111,7 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, mil_wrapper, model_store, partition, two_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -129,6 +129,7 @@ __provenance__ = {
         "the_excluded_rotation_is_derived_from_the_frozen_partition",
         "the_selection_is_per_test_rotation_by_mean_minus_sd_over_three_rotations",
         "the_label_free_rule_applies_the_same_exclusion",
+        "the_label_free_final_models_keep_their_label_free_epoch",
         "the_labels_of_r_test_subjects_cannot_change_r_selection",
         "the_study_records_each_rotations_folds_from_the_partition",
         "an_interrupted_study_of_the_same_identity_continues_to_its_declared_count",
@@ -284,9 +285,10 @@ def register_phase_two(strategy: str, extra: Mapping[str, BaseDistribution],
     """Wire a comparator's phase 2: its own parameters under the generic rule, plus
     only the Sec. 7.7 axes `OWN_AXES` assigns to this strategy.
 
-    `trainer(data, rotation, seed, record, params, schedule, device)` returns
-    `{"result": {"checkpoint": {"valid_balanced_accuracy", "label_free_score"},
-    "history": [{"label_free_score"}, ...]}}`, as `train_mil_creda_phase_two`.
+    `trainer(data, rotation, seed, record, params, schedule, device, *, label_free=False)`
+    returns `{"result": {"checkpoint": {"valid_balanced_accuracy", "label_free_score"},
+    "history": [{"label_free_score"}, ...]}}`, as `train_mil_creda_phase_two`, and with
+    `label_free=True` also `result["label_free_best"]` (`two_phase.LabelFreeBest`).
     """
     if strategy not in model_store.STRATEGIES or strategy == "MIL-CREDA":
         raise SearchError(f"{strategy!r} is not a comparator")
@@ -469,7 +471,8 @@ def save_phase_one(root: str | Path, group: str, data: SearchData, rotation: int
 
 def train_mil_creda_phase_two(data: SearchData, rotation: int, seed: int, record,
                               params: Mapping, schedule: Mapping,
-                              device: torch.device | str = "cpu") -> dict:
+                              device: torch.device | str = "cpu", *,
+                              label_free: bool = False) -> dict:
     """MIL-CREDA's phase 2 from its stored phase-1 checkpoint, at that checkpoint's sigma."""
     state, meta = record
     sigma1 = meta.get("sigma")
@@ -494,7 +497,7 @@ def train_mil_creda_phase_two(data: SearchData, rotation: int, seed: int, record
     result = two_phase.adapt_target_phase(
         model, {"checkpoint": {"sigma": sigma1}}, joint["frozen_state"], d["source_train"],
         d["target_train"], d["target_valid"], hyper, generator, device, seed=seed,
-        fold=rotation, transfer=data.transfer.name)
+        fold=rotation, transfer=data.transfer.name, label_free=label_free)
     return {"strategy": "MIL-CREDA", "model": model, "result": result, "hyper": hyper,
             "channels": channels, "layer_copy": joint["layer_copy"]}
 
@@ -505,16 +508,38 @@ PHASE_TWO_TRAINERS: dict[str, Callable] = {"MIL-CREDA": train_mil_creda_phase_tw
 
 def train_phase_two(strategy: str, data: SearchData, rotation: int, seed: int, record,
                     params: Mapping, schedule: Mapping,
-                    device: torch.device | str = "cpu") -> dict:
+                    device: torch.device | str = "cpu", *, label_free: bool = False) -> dict:
+    """One phase-2 training. `label_free=True` also returns, under
+    `result["label_free_best"]`, the model state of the epoch Sec. 4.5's secondary
+    rule keeps (`two_phase.LabelFreeBest`); the default result is unchanged."""
     space = phase_two_space(strategy)
     if set(params) != set(space):
         raise SearchError(f"the {strategy} phase-2 parameters are exactly {list(space)}; "
                           f"got {sorted(params)}")
     return PHASE_TWO_TRAINERS[strategy](data, rotation, seed, record, params, schedule,
-                                        device)
+                                        device, label_free=label_free)
+
+
+def label_free_trained(trained: Mapping) -> dict:
+    """The model Sec. 4.5's secondary rule keeps from a training run with `label_free=True`:
+    the same run, at the epoch with the best label-free score, never the epoch the
+    target-validation balanced accuracy chose. The model is set to that epoch's state."""
+    kept = trained["result"].get("label_free_best")
+    if kept is None:
+        raise SearchError("this training kept no label-free state; train with label_free=True")
+    trained["model"].load_state_dict(kept["state"])
+    row = next(h for h in trained["result"]["history"] if h["epoch"] == kept["epoch"])
+    # The primary epoch's states are not this model's; only its hyperparameters carry over.
+    primary = {k: v for k, v in trained["result"]["checkpoint"].items()
+               if not k.endswith("state")}
+    checkpoint = {**primary, "epoch": kept["epoch"],
+                  "valid_balanced_accuracy": row["val_balanced_accuracy"],
+                  "label_free_score": kept["label_free_score"]}
+    return {**trained, "result": {**trained["result"], "checkpoint": checkpoint}}
 
 
 def save_phase_two(root: str | Path, strategy: str, data: SearchData, rotation: int,
+
                    seed: int, trained: Mapping, selection: Mapping | None = None) -> Path:
     """Store a selected phase-2 model whole (frozen parts and the selected target trunk),
     with the Sec. 4.5 selection that chose its configuration when one is given."""

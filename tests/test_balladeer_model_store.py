@@ -164,6 +164,26 @@ def test_the_code_version_covers_every_comparator_module(tmp_path, monkeypatch):
     assert model_store.code_version() != before
 
 
+@pytest.mark.parametrize("selection_module", ["MIL_CREDA_EEG/search.py",
+                                              "MIL_CREDA_EEG/campaign.py"])
+def test_the_code_version_covers_the_selection_code(tmp_path, monkeypatch,
+                                                    selection_module):
+    """Sec. 4.5: the code that selects a stored model's configuration and epoch is part of
+    the code version, so a change to the selection marks stored records stale."""
+    assert selection_module in model_store.CODE_FILES
+    src = model_store._SRC
+    import shutil
+    copy = tmp_path / "src"
+    for name in model_store.CODE_FILES:
+        (copy / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src / name, copy / name)
+    monkeypatch.setattr(model_store, "_SRC", copy)
+    before = model_store.code_version()
+    edited = copy / selection_module
+    edited.write_text(edited.read_text(encoding="utf-8") + "\n# edited\n", encoding="utf-8")
+    assert model_store.code_version() != before
+
+
 def test_the_k3_variant_models_are_stored_and_rebuilt(tmp_path):
     from MIL_CREDA_EEG import aggregation_variants as av
     path_p, sha = _partition(tmp_path)

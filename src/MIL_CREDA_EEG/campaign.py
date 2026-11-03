@@ -21,8 +21,11 @@ The steps, in order (`STEPS`), each one a subcommand of
    stored with the selection that chose it, its target test predictions, and the
    target-supervised upper bound with the common group's chosen `lr1`, `wd1`.
    Where the label-free rule selects another configuration for a rotation, that
-   one is trained and stored too (`Models/Balladeer/label-free-rule/`) and its
-   test predictions are recorded apart (`runs/predictions_label_free.jsonl`);
+   one is trained and stored too (`Models/Balladeer/label-free-rule/`) at the
+   epoch with the best label-free score of its own run, never the epoch the
+   target-validation accuracy chose (Sec. 4.5, 7.7; its sidecar names the epoch
+   and the rule), its per-epoch records go to `runs/history_label_free.jsonl` and
+   its test predictions are recorded apart (`runs/predictions_label_free.jsonl`);
    where the rules coincide the primary model's predictions are recorded for it.
    A model already stored is not trained again (an interrupted run resumes).
 3. `k3` -- Sec. 6.3 on the core transfers, per rotation at the report seed: the
@@ -104,6 +107,7 @@ listed as owed when there is none.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import sys
 from collections.abc import Mapping, Sequence
@@ -122,7 +126,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.mil_wrapper import COMPARATORS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3", "7.3",
                  "7.5", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
@@ -140,6 +144,8 @@ __provenance__ = {
         "the_rehearsal_summaries_say_so",
         "phase_two_is_selected_per_test_rotation_and_phase_one_once",
         "the_label_free_rule_is_measured_on_the_test_fold",
+        "the_label_free_final_models_keep_their_label_free_epoch",
+        "the_label_free_histories_are_written_apart_from_the_strategies",
         "the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation",
         "a_stored_model_is_not_trained_again",
         "the_device_arm_source_only_controls_are_never_numbers",
@@ -177,6 +183,10 @@ RETIRED_INPUTS = {
     "pendingDecisions": "the comparator decisions are resolved (Sec. 7.7)",
 }
 HISTORY_FILE = Path("runs") / "history.jsonl"
+#: The label-free final models' per-epoch records: the primary layout in their own file,
+#: so nothing that reads the strategies' history takes them for a strategy.
+LABEL_FREE_HISTORY_FILE = Path("runs") / "history_label_free.jsonl"
+HISTORY_FILES = {"primary": HISTORY_FILE, "label-free": LABEL_FREE_HISTORY_FILE}
 #: The one plan revision every result, study and model of this campaign answers to.
 REVISION = __provenance__["revision"]
 #: Sec. 4.5's secondary rule: where its configuration differs from the primary one, its
@@ -379,18 +389,19 @@ def _phase_one_checkpoint(group: str, data: search.SearchData, rotation: int, se
     return path, trained["result"]["history"]
 
 
-def _append_history(product: Path, experiment: str, records: Sequence[Mapping]) -> None:
+def _append_history(product: Path, experiment: str, records: Sequence[Mapping],
+                    rule: str = "primary") -> None:
     if not records:
         return
-    path = _results(product) / experiment / HISTORY_FILE
+    path = _results(product) / experiment / HISTORY_FILES[rule]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         for r in records:
             handle.write(json.dumps(results._plain(r), allow_nan=False) + "\n")
 
 
-def read_history(product: Path, experiment: str) -> list[dict]:
-    path = _results(product) / experiment / HISTORY_FILE
+def read_history(product: Path, experiment: str, rule: str = "primary") -> list[dict]:
+    path = _results(product) / experiment / HISTORY_FILES[rule]
     if not path.exists():
         return []
     return [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x]
@@ -453,17 +464,42 @@ def _selection_record(selection: Mapping) -> dict:
 
 def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int, seed: int,
                      record, selection: Mapping, cfg: Mapping, device: torch.device,
-                     ppath: Path) -> tuple:
-    """(model, history): the stored phase-2 model of this selection, or trained and stored."""
+                     ppath: Path, label_free_root: Path | None = None,
+                     label_free_selection: Mapping | None = None) -> tuple:
+    """(model, history): the stored phase-2 model of this selection, or trained and stored.
+
+    A label-free selection keeps the epoch with the best label-free score of its own run
+    (Sec. 4.5 and 7.7, `search.label_free_trained`), and its sidecar names that epoch and
+    the rule; a stored one that does not is stale.
+
+    With `label_free_root`, a primary run trained here also stores the label-free rule's
+    model from that same run (the rules chose the same configuration): the run is reused,
+    its epoch is the label-free one, and no target label chooses it (Sec. 4.5)."""
+    label_free = selection["rule"] == "label-free"
+    also_free = label_free_root is not None
+    expect = {"rule": selection["rule"], "trial": selection["trial"]}
+    if label_free:
+        expect["epochRule"] = two_phase.LABEL_FREE_EPOCH_RULE
     path = model_store.model_path(root, data.transfer, r, seed, 2, strategy)
     if path.exists():
-        _reuse(path, identity(data.partition_sha256),
-               {"rule": selection["rule"], "trial": selection["trial"]})
+        _reuse(path, identity(data.partition_sha256), expect)
         return mechanisms.load_phase_two(path, partition_path=ppath)[0].to(device), None
     trained = search.train_phase_two(strategy, data, r, seed, record, selection["params"],
-                                     cfg["schedule"], device)
-    search.save_phase_two(root, strategy, data, r, seed, trained,
-                          selection=_selection_record(selection))
+                                     cfg["schedule"], device,
+                                     label_free=label_free or also_free)
+    chosen = _selection_record(selection)
+    if also_free and not label_free:
+        free = search.label_free_trained({**trained, "model": copy.deepcopy(trained["model"])})
+        free_chosen = _selection_record(label_free_selection)
+        free_chosen.update(epoch=free["result"]["checkpoint"]["epoch"],
+                           epochRule=two_phase.LABEL_FREE_EPOCH_RULE, sameRunAsPrimary=True)
+        search.save_phase_two(label_free_root, strategy, data, r, seed, free,
+                              selection=free_chosen)
+    if label_free:
+        trained = search.label_free_trained(trained)
+        chosen.update(epoch=trained["result"]["checkpoint"]["epoch"],
+                      epochRule=two_phase.LABEL_FREE_EPOCH_RULE)
+    search.save_phase_two(root, strategy, data, r, seed, trained, selection=chosen)
     return trained["model"], trained["result"]["history"]
 
 
@@ -521,10 +557,13 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                     group = search.PHASE_ONE_GROUP_OF[strategy]
                     record = model_store.load(model_store.model_path(
                         _models(product), transfer, r, seed, 1, group), partition_path=ppath)
+                    free_root = _models(product) / LABEL_FREE_MODELS
                     if need or coincide:
                         model, history = _phase_two_model(
                             _models(product), strategy, data, r, seed, record,
-                            primary[strategy][r], cfg, device, ppath)
+                            primary[strategy][r], cfg, device, ppath,
+                            label_free_root=free_root if need_free and coincide else None,
+                            label_free_selection=free[strategy][r])
                         if history is not None:
                             _append_history(product, experiment, [
                                 {**h, "model": h.get("model", f"{strategy}:phase2")}
@@ -533,14 +572,34 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                         tagged = _tag(two_phase.predictions(model, test, transfer.name, device),
                                       strategy, transfer.name, r, seed)
                         out += tagged if need else []
-                        if need_free and coincide:
-                            out_free += [{**x, "labelFreeModel": "primary model (the rules "
-                                                                  "coincide)"} for x in tagged]
+                    if need_free and coincide:
+                        # The same configuration: the label-free model is the primary run at
+                        # its label-free epoch, stored above when that run was trained here;
+                        # a primary run read from disk gets its label-free model trained once.
+                        free_model, free_history = _phase_two_model(
+                            free_root, strategy, data, r, seed, record, free[strategy][r],
+                            cfg, device, ppath)
+                        counts["trained_label_free"] += free_history is not None
+                        if free_history is not None:
+                            _append_history(product, experiment, [
+                                {**h, "model": h.get("model", f"{strategy}:phase2"),
+                                 "selectionRule": "label-free"}
+                                for h in free_history], rule="label-free")
+                        out_free += [{**x, "labelFreeModel": "the primary run at its "
+                                                              "label-free epoch"} for x in _tag(
+                            two_phase.predictions(free_model, test, transfer.name, device),
+                            strategy, transfer.name, r, seed)]
                     if need_free and not coincide:
                         model, history = _phase_two_model(
                             _models(product) / LABEL_FREE_MODELS, strategy, data, r, seed,
                             record, free[strategy][r], cfg, device, ppath)
                         counts["trained_label_free"] += history is not None
+                        if history is not None:
+                            _append_history(product, experiment, [
+                                {**h, "model": h.get("model", f"{strategy}:phase2"),
+                                 "selectionRule": "label-free"}
+                                for h in history],
+                                rule="label-free")
                         out_free += [{**x, "labelFreeModel": "its own"} for x in _tag(
                             two_phase.predictions(model, test, transfer.name, device),
                             strategy, transfer.name, r, seed)]
@@ -612,20 +671,12 @@ def run_statistics(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
                                      scope=scope, test_train_ratio=ratio, hypothesis=experiment,
                                      experiment=experiment,
                                      resamples=cfg["bootstrapResamples"])
-        boot = [r for r in rows if r["test"] == st.TEST_BOOTSTRAP]
-        st.apply_holm(boot, f"{experiment} MIL-CREDA vs rivals, bootstrap")
-        scores = results.ranking_scores(records, core[arm])
-        ranking = st.friedman_nemenyi(scores) if len(scores) >= 3 else None
-        if ranking:
-            rows.append(st.significance_row(
-                comparison=f"{experiment}:{scope}:ranking of the adapted strategies",
-                test=st.TEST_FRIEDMAN, statistic=ranking["statistic"],
-                p_value=ranking["p_value"], effect_size=ranking["average_rank"]["MIL-CREDA"],
-                effect_size_name="MIL-CREDA average rank (1 = best)", ci_low=None,
-                ci_high=None, n=ranking["blocks"], hypothesis=experiment,
-                experiment=experiment, critical_difference=ranking["critical_difference"],
-                methods=ranking["k"], mil_creda_position=ranking["position"]["MIL-CREDA"]))
+        # Sec. 4.6: primary and secondary families, Holm within each metric.
+        st.apply_contrast_families(rows, f"{experiment} MIL-CREDA vs rivals")
+        # Secs. 5.1-5.3: the arm's ranks are descriptive; the test is global (Sec. 5.4).
+        ranking = results.arm_ranking(records, core[arm])
         results.write_significance(root, experiment, rows)
+        results.write_table(root, experiment, "significance", results.significance_table(rows))
         results.write_table(root, experiment, "transfer_detail",
                             results.transfer_detail(records, arm))
         results.write_table(root, experiment, "comparison",
@@ -642,6 +693,7 @@ def run_statistics(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
                        m: results._pooled(rs)["balanced_accuracy"]
                        for m, rs in pooled_pair.items()},
                    "mil_creda_position": ranking["position"]["MIL-CREDA"] if ranking else None,
+                   "mil_creda_top_three": ranking["top_three"]["MIL-CREDA"] if ranking else None,
                    "methods_present": methods}
         results.write_summary(root, experiment, summary, synthetic=cfg["synthetic"],
                               rehearsal=cfg["rehearsal"])
@@ -885,9 +937,8 @@ def k3_tables(cfg: Mapping, product: Path, bags: bag_data.BagSet,
         pairs.append(scope)
     significance = []
     for table, spec in K3_TABLES.items():
-        boot = [r for r in contrasts[table] if r["test"] == st.TEST_BOOTSTRAP]
-        st.apply_holm(boot, f"{K3} {table}: {spec['full']} vs "
-                            f"{', '.join(spec['criterion'])}, bootstrap")
+        st.apply_contrast_families(contrasts[table], f"{K3} {table}: {spec['full']} vs "
+                                                     f"{', '.join(spec['criterion'])}")
         significance += contrasts[table]
         if rows[table]:
             results.write_table(root, K3, table, rows[table])
@@ -968,6 +1019,7 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
     if own:
         rows = mechanisms.k1_tests(k1_rows)
         results.write_significance(root, "K1-atencion", rows)
+        results.write_table(root, "K1-atencion", "tests", mechanisms.k1_test_table(rows))
         out["K1-atencion"] = len(rows)
         results.write_table(root, "K1-atencion", "subjects",
                             [r for rs in k1_rows.values() for r in rs])
@@ -990,6 +1042,7 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
     if k2_full:
         rows = mechanisms.k2_tests(k2_full, k2_no_local)
         results.write_significance(root, "K2-emparejamiento", rows)
+        results.write_table(root, "K2-emparejamiento", "tests", mechanisms.k2_test_table(rows))
         results.write_table(root, "K2-emparejamiento", "separation",
                             k2_full + k2_no_local + k2_other)
         results.write_summary(root, "K2-emparejamiento", {
@@ -1001,8 +1054,10 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
             "reportSeeds": cfg["reportSeeds"]}, synthetic=cfg["synthetic"],
             rehearsal=cfg["rehearsal"])
         out["K2-emparejamiento"] = len(rows)
-    history = [h for arm in results.EXPERIMENT_OF_ARM.values()
-               for h in read_history(product, arm)]
+    # The label-free final models train MIL-CREDA's phase 2 too: their steps are read.
+    history = [h for arm in results.EXPERIMENT_OF_ARM.values() for rule in HISTORY_FILES
+               for h in read_history(product, arm, rule)]
+
     try:
         bounds = mechanisms.bound_control(history)
         results.write_table(root, "K3-ablacion", "term_bounds", bounds)
@@ -1072,6 +1127,16 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
         history = read_history(product, experiment)
         if history:
             written.append(results.write_history(root, experiment, history))
+        free_history = read_history(product, experiment, rule="label-free")
+        if free_history:
+            written.append(results.write_history(root, f"{experiment}_label_free",
+                                                 free_history))
+            try:
+                written.append(results.convergence_figure(root, experiment, free_history,
+                                                          core[arm],
+                                                          name="convergence_label_free"))
+            except results.ResultsError as error:
+                owed.append(f"{experiment} label-free convergence: {error}")
         try:
             written.append(results.convergence_figure(root, experiment, history, core[arm]))
         except results.ResultsError as error:
@@ -1087,13 +1152,15 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
             else:
                 owed.append(f"{experiment} contour: no fANOVA ranking of two hyperparameters "
                             f"for {study.study_name}")
-        scores = results.ranking_scores(records, core.get(arm, []))
-        if len(scores) >= 3:
-            written.append(results.critical_difference_figure(
-                root, experiment, st.friedman_nemenyi(scores)))
-        else:
-            owed.append(f"{experiment} critical-difference diagram: {len(scores)} adapted "
-                        f"strategies with predictions on every core transfer; Friedman needs 3")
+    # Sec. 5.4: one Friedman test with Nemenyi over the ten transfers, nine strategies.
+    every = [r for e in ("A-nivel", "B-tarea", "C-dispositivo")
+             for r in _read_predictions(product, e, current)]
+    ranking = results.global_ranking(every)
+    if ranking:
+        written += results.write_global_ranking(root, ranking)
+    else:
+        owed.append("global critical-difference diagram: not all nine strategies have "
+                    "predictions on all ten transfers")
     table = Path(cfg.get("separabilityTable") or product / SEPARABILITY_TABLE)
     if table.exists():
         rows = pd.read_csv(table).to_dict("records")

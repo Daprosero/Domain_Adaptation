@@ -21,7 +21,7 @@ from MIL_CREDA_EEG import eegnet, mil_wrapper, model_store, search, two_phase
 from .divergences import ccs_divergence, cs_divergence, median_bandwidth, normalise
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -129,7 +129,8 @@ def adaptation_step(model, source, target, params, bandwidths, device) -> dict:
 
 def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_valid,
           params: Mapping, schedule: Mapping, *, seed: int, fold: int = 0,
-          transfer: str = "", device: torch.device | str = "cpu") -> dict:
+          transfer: str = "", device: torch.device | str = "cpu",
+          label_free: bool = False) -> dict:
     """Phase 2 of a common phase-1 model; CPU/GPU placement belongs to the caller."""
     if not isinstance(model, mil_wrapper.CommonMILModel):
         raise ValueError("CS+CCS requires the shared common MIL phase-1 architecture")
@@ -152,6 +153,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     hyper = {**params, **schedule, **bandwidths, "momentum": MOMENTUM}
     valid_labels = [b.label for b in target_valid]
     history, primary, secondary = [], None, None
+    keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
         sums = dict.fromkeys(HISTORY_KEYS, 0.)
@@ -178,6 +180,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
                       "label_free_score": free, "hyper": hyper}
         if primary is None or accuracy > primary["valid_balanced_accuracy"]:
             primary = {**checkpoint, "target_state": copy.deepcopy(model.target_trunk.state_dict())}
+        keeper.offer(epoch, free, model)
         if secondary is None or free > secondary["label_free_score"]:
             secondary = {**checkpoint,
                          "target_state": copy.deepcopy(model.target_trunk.state_dict())}
@@ -191,14 +194,15 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     if (two_phase.balanced_accuracy(valid_labels, restored.argmax(1).tolist())
             != primary["valid_balanced_accuracy"]):
         raise two_phase.RestoreFailed("CS+CCS restored validation score differs")
-    return {"checkpoint": primary, "secondary_checkpoint": secondary,
+    return two_phase.with_label_free({
+            "checkpoint": primary, "secondary_checkpoint": secondary,
             "best_epoch": primary["epoch"], "epochs": len(history), "history": history,
             "bandwidths": bandwidths, "final_target_state": final_state,
             "layer_copy": joint["layer_copy"],
             "selection": {"primary": "target-validation balanced accuracy (Sec. 4.5)",
                           "secondary": "entropy of the mean prediction minus mean per-bag "
                                        "entropy (Sec. 4.5)",
-                          "best_label_free_epoch": secondary["epoch"]}}
+                          "best_label_free_epoch": secondary["epoch"]}}, keeper)
 
 
 def check_record(data, rotation, seed, record) -> dict:
@@ -214,7 +218,8 @@ def check_record(data, rotation, seed, record) -> dict:
     return state
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
+                    label_free=False):
     """Shared search trainer hook (`search.register_phase_two`)."""
     state = check_record(data, rotation, seed, record)
     torch.manual_seed(seed)
@@ -227,7 +232,8 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     d = data.rotations[rotation]
     result = adapt(model, d["source_train"], d["target_train"], d["target_valid"], params,
                    schedule, seed=seed, fold=rotation, transfer=data.transfer.name,
-                   device=device)
+                   device=device, label_free=label_free)
+
     return {"strategy": NAME, "model": model, "result": result,
             "hyper": result["checkpoint"]["hyper"], "channels": channels,
             "layer_copy": result["layer_copy"]}

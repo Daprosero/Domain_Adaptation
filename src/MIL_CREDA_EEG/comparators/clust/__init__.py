@@ -13,7 +13,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from .training import NAME, PARAMETERS, adapt_target_phase, restore_model
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_search_reuses_common_checkpoint_and_never_reads_source_data",
@@ -22,7 +22,8 @@ __provenance__ = {
 }
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
+                    label_free=False):
     """Shared search trainer protocol; only target train/validation accessed."""
     state, meta = record
     expected = {"phase": 1, "name": "common", "rotation": rotation, "seed": seed,
@@ -40,7 +41,9 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     d = data.rotations[rotation]
     result = adapt_target_phase(model, d["target_train"], d["target_valid"], params,
                                 search.check_schedule(schedule), generator, device,
-                                seed=seed, fold=rotation, transfer=data.transfer.name)
+                                seed=seed, fold=rotation, transfer=data.transfer.name,
+                                label_free=label_free)
+
     return {"strategy": NAME, "model": model, "result": result, "hyper": dict(params),
             "channels": channels, "layer_copy": joint["layer_copy"]}
 

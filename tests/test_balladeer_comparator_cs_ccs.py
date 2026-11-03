@@ -373,9 +373,13 @@ def test_cs_ccs_package_is_a_controlled_variant(registries):
     assert (dict(search.PHASE_TWO_TRAINERS), dict(search.PHASE_TWO_EXTRA),
             dict(model_store.BUILDERS)) == before
     assert "controlled" in package.__doc__ and "not a reproduction" in package.__doc__
-    for module in ("", ".divergences", ".training", ".smoke"):
+    # The trainer answers to v44 (Sec. 4.5: the label-free epoch); the rest of the package
+    # is unchanged since v42.
+    for module, revision in (("", "v42"), (".divergences", "v42"), (".training", "v44"),
+                             (".smoke", "v42")):
         prov = importlib.import_module("MIL_CREDA_EEG.comparators.cs_ccs" + module).__provenance__
-        assert prov["revision"] == "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md"
+        assert prov["revision"] == (
+            f"experiments-plan-experimental-mil-creda-sobre-balladeer-{revision}.md")
     assert "CS+CCS" in mil_wrapper.COMPARATORS and "CS+CCS" in model_store.STRATEGIES
 
 
