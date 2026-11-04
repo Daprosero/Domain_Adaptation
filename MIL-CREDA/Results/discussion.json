@@ -94,7 +94,7 @@
     }
   ],
   "novelty": {
-    "claim": "MIL-CREDA extends Conditional Rényi $\\alpha$-Entropy Domain Adaptation (CREDA) to multiple-instance learning: each subject is a bag of EEG windows, the label is observed only at the bag level, and adaptation runs between labelled source bags and unlabelled target bags (r35, opening paragraph). The protocol (v45) tests it on the EEG modality of the BALLADEER ADHD dataset across level, task and device shifts against eight external comparators. No campaign result exists yet; every hypothesis below is pending.",
+    "claim": "MIL-CREDA extends Conditional Rényi $\\alpha$-Entropy Domain Adaptation (CREDA) to multiple-instance learning: each subject is a bag of EEG windows, the label is observed only at the bag level, and adaptation runs between labelled source bags and unlabelled target bags (r38, opening paragraph). The protocol (v45) tests it on the EEG modality of the BALLADEER ADHD dataset across level, task and device shifts against eight external comparators. No campaign result exists yet; every hypothesis below is pending.",
     "verdict": "pending",
     "evidence": [],
     "rationale": "This is the existing proposal, not an empirically justified novelty verdict."
