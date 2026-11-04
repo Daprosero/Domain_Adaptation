@@ -79,7 +79,11 @@ study's sampler is seeded with `SAMPLER_SEED` plus the trials it already holds,
 so it does not replay the seeded first draws; an interrupted-and-continued study
 is therefore not the same sequence of trials as an uninterrupted one, and records
 where it was continued (`resumedAfter`). Trials left running by a killed process
-stay as they are: they are neither counted nor re-run.
+stay as they are: they are neither counted nor re-run. `should_stop(study)`, when
+given, is asked before the first trial and after each one; once it answers true the
+study stops between trials, holding what it completed, and the next call continues it
+(`remote_units` asks it against the session deadline). Without it a study runs its
+remaining count in one `optimize` call, as before.
 
 **Implementation choices the plan does not fix.** The deviation is the sample
 standard deviation (`SD_DDOF` = 1) over the four rotations. The seeds:
@@ -137,6 +141,7 @@ __provenance__ = {
         "a_study_records_the_identity_it_is_checked_against",
         "unwired_groups_and_strategies_refuse_before_creating_storage",
         "a_two_trial_smoke_study_completes_and_writes_its_sqlite",
+        "a_study_stops_between_trials_when_asked_and_the_rerun_completes_it",
     ],
 }
 
@@ -663,6 +668,22 @@ def open_study(path: str | Path, identity: Mapping) -> tuple[optuna.Study, int]:
     return study, complete
 
 
+def _optimize(study: optuna.Study, objective: Callable, remaining: int,
+              should_stop: Callable[[optuna.Study], bool] | None) -> None:
+    """`remaining` trials, or fewer when `should_stop` answers true between two of them."""
+    if should_stop is None:
+        study.optimize(objective, n_trials=remaining)
+        return
+    if remaining <= 0 or should_stop(study):
+        return
+
+    def check(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
+        if should_stop(study):
+            study.stop()
+
+    study.optimize(objective, n_trials=remaining, callbacks=[check])
+
+
 def _summary(values: Sequence[float]) -> dict:
     return {"rotationValues": [float(v) for v in values], "mean": float(np.mean(values)),
             "sd": float(np.std(values, ddof=SD_DDOF))}
@@ -670,7 +691,9 @@ def _summary(values: Sequence[float]) -> dict:
 
 def run_phase_one_study(group: str, data: SearchData, schedule: Mapping, *,
                         root: str | Path = DEFAULT_ROOT, n_trials: int = N_TRIALS,
-                        device: torch.device | str = "cpu") -> optuna.Study:
+                        device: torch.device | str = "cpu",
+                        should_stop: Callable[[optuna.Study], bool] | None = None
+                        ) -> optuna.Study:
     """One phase-1 study: `n_trials` configurations, each over the four rotations."""
     schedule = check_schedule(schedule)
     if group not in PHASE_ONE_SPACES:
@@ -694,14 +717,16 @@ def run_phase_one_study(group: str, data: SearchData, schedule: Mapping, *,
             trial.set_user_attr(key, value)
         return robust(values)
 
-    study.optimize(objective, n_trials=n_trials - complete)
+    _optimize(study, objective, n_trials - complete, should_stop)
     return study
 
 
 def run_phase_two_study(strategy: str, data: SearchData, phase_one: Mapping,
                         schedule: Mapping, *, root: str | Path = DEFAULT_ROOT,
                         n_trials: int = N_TRIALS,
-                        device: torch.device | str = "cpu") -> optuna.Study:
+                        device: torch.device | str = "cpu",
+                        should_stop: Callable[[optuna.Study], bool] | None = None
+                        ) -> optuna.Study:
     """One phase-2 study; `phase_one` maps each rotation to its stored (state, meta)."""
     space = phase_two_space(strategy)
     schedule = check_schedule(schedule)
@@ -737,5 +762,5 @@ def run_phase_two_study(strategy: str, data: SearchData, phase_one: Mapping,
             raise SearchError(f"a rotation returned a non-finite validation score: {primary}")
         return robust(primary)
 
-    study.optimize(objective, n_trials=n_trials - complete)
+    _optimize(study, objective, n_trials - complete, should_stop)
     return study
