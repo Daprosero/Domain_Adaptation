@@ -3,21 +3,21 @@
 r25's global term trace-normalized each of the three structures separately and
 normalized the score by ends derived from CARDINALITY alone. r29 replaces both,
 and replaces the aggregation's weights with a confidence gate. Four changes land
-in `src/MIL_CREDA/global_term.py`, all inside Section 5:
+in `src/MIL_CREDA/global_term.py`, all inside Section 4:
 
-1. **Eq. 32 -- the trace balance becomes a congruence.** The joint is
+1. **Eq. 28 -- the trace balance becomes a congruence.** The joint is
    `K_mix = (1/2) Q K Q` with `Q = diag(tr(K_s)^-1/2 I, tr(K~_t)^-1/2 I)`, so
    positive semidefiniteness survives (a congruence by a positive diagonal) and
    the trace is exactly `1/2 + 1/2 = 1`. Each domain contributes half the mass
    whatever its bag count and whatever the COMMON level of the confidences; the
    RELATIVE confidences keep acting inside `K~_t` and `K~_st`, and a bag whose
    confidence vanishes is withdrawn.
-2. **Eqs. 34/35 -- the bounds.** `L_c = -ln 2` and
+2. **Eqs. 30/31 -- the bounds.** `L_c = -ln 2` and
    `U_c = 2 ln cosh((H_2(K~_t) - H_2(K_s)) / 4)`, both read off the same
    normalized matrices that build `J_c`.
-3. **Eq. 36 -- the span carries no gradient.** The denominator `U_c - L_c` is a
+3. **Eq. 32 -- the span carries no gradient.** The denominator `U_c - L_c` is a
    constant in each step; the numerator `U_c - J_c` keeps its graph.
-4. **Eq. 37 -- the weights become a confidence gate.**
+4. **Eq. 33 -- the weights become a confidence gate.**
    `omega_c = q_c / sum_c' n_c'^t` with `q_c = sum_{j in T_c} w_j^t`, so the
    weights are SUB-convex: `sum omega_c <= 1`, with equality only when every
    routed confidence is one.
@@ -91,7 +91,7 @@ def _joint_blocks(
     """Three conditional blocks that are jointly PSD, because they share a Gram.
 
     Drawing the three blocks independently would produce a `K_mix` that is not
-    positive semidefinite, and Eq. 32's claim is that the congruence PRESERVES
+    positive semidefinite, and Eq. 28's claim is that the congruence PRESERVES
     positive semidefiniteness -- which says nothing at all about an input that
     never had it. So the blocks are read off one Gram matrix over stacked
     source and target features, exactly as `conditional_blocks` reads them off
@@ -116,11 +116,11 @@ def _confidences(n_target: int, seed: int = 29) -> torch.Tensor:
     return 0.2 + 0.8 * torch.rand(n_target, generator=generator, dtype=DTYPE)
 
 
-# ------------------------------------------------- 1. Eq. 32, the trace balance
+# ------------------------------------------------- 1. Eq. 28, the trace balance
 
 
 class R29BalancedMixtureTests(unittest.TestCase):
-    """Eq. 32: the balance is a congruence, and what that buys."""
+    """Eq. 28: the balance is a congruence, and what that buys."""
 
     def setUp(self) -> None:
         self.n_source, self.n_target = 4, 7
@@ -130,7 +130,7 @@ class R29BalancedMixtureTests(unittest.TestCase):
         self.K_st_w, self.K_t_w = weighted_blocks(K_st, K_t, self.w)
 
     def test_balanced_mixture_is_a_unit_trace_congruence(self) -> None:
-        """Eq. 32: `(1/2) Q K Q` -- positive semidefinite, and trace exactly 1.
+        """Eq. 28: `(1/2) Q K Q` -- positive semidefinite, and trace exactly 1.
 
         Three claims r29 states in one sentence, so they are measured together:
         the returned joint equals `(1/2) Q K Q` for the Q the equation writes,
@@ -152,7 +152,7 @@ class R29BalancedMixtureTests(unittest.TestCase):
         self.assertAlmostEqual(float(torch.trace(breve_s)), 1.0, places=12)
         self.assertAlmostEqual(float(torch.trace(breve_t)), 1.0, places=12)
 
-        # Against Eq. 32's own right-hand side, assembled here from Q.
+        # Against Eq. 28's own right-hand side, assembled here from Q.
         trace_s = torch.trace(self.K_s)
         trace_t = torch.trace(self.K_t_w)
         Q = torch.diag(
@@ -176,7 +176,7 @@ class R29BalancedMixtureTests(unittest.TestCase):
         )
 
     def test_balanced_mixture_halves_the_mass_of_each_domain(self) -> None:
-        """Eq. 32: half the mass each, whatever the counts and the common level.
+        """Eq. 28: half the mass each, whatever the counts and the common level.
 
         Both poles. The balanced joint puts exactly `1/2` on each diagonal
         block for every pair of cardinalities and every uniform rescaling of
@@ -212,7 +212,7 @@ class R29BalancedMixtureTests(unittest.TestCase):
             self.assertNotAlmostEqual(share, 0.5, places=2)
 
     def test_balanced_mixture_withdraws_a_bag_whose_confidence_vanishes(self) -> None:
-        """Eq. 32: "una bolsa con `w_j^t -> 0` equivale a retirarla".
+        """Eq. 28: "una bolsa con `w_j^t -> 0` equivale a retirarla".
 
         Measured as the limit it is: the balanced joint built over all target
         bags with one confidence driven to zero converges to the balanced joint
@@ -249,10 +249,10 @@ class R29BalancedMixtureTests(unittest.TestCase):
             self.assertLess(later, earlier)
 
     def test_balanced_score_is_invariant_to_the_common_confidence_scale(self) -> None:
-        """Eq. 32/37: the normalization cancels the confidences' common scale.
+        """Eq. 28/33: the normalization cancels the confidences' common scale.
 
-        This is the premise Eq. 37's gate rests on -- "la normalizacion por
-        traza (Ec. 32) cancela dentro de la puntuacion la escala comun de las
+        This is the premise Eq. 33's gate rests on -- "la normalizacion por
+        traza (Ec. 28) cancela dentro de la puntuacion la escala comun de las
         confianzas, de modo que su nivel absoluto entra aqui, fuera de ella".
         If the score already moved with the common level, the gate outside it
         would be counting the same thing twice.
@@ -312,7 +312,7 @@ class R29BalancedMixtureTests(unittest.TestCase):
         self.assertGreater(faded[1], 0.0)
 
 
-# ----------------------------------------------------- 2. Eqs. 34/35, the bounds
+# ----------------------------------------------------- 2. Eqs. 30/31, the bounds
 
 
 class _StubEncoder(nn.Module):
@@ -353,14 +353,14 @@ def _pool(seed: int) -> wiring.Pool:
 
 
 def _retired_r25_score(K_s_c, K_t_w, K_mix) -> float:
-    """r25's Eq. (33) contrast, reconstructed HERE.
+    """r25's Eq. (29) contrast, reconstructed HERE.
 
     `dependency_score` computed this until 2026-10-18 and was removed with the
     ends that bounded it: `H_2` of the trace-normalized source and target
     blocks, halved and summed, minus `H_2` of the trace-normalized mixture.
     Traceable to `proposals/research-concept-r25.md`; a reader for a retired
     score, never an assertion about the current one, which is
-    `balanced_dependency_score` over Eq. (32)'s balanced congruence.
+    `balanced_dependency_score` over Eq. (28)'s balanced congruence.
     """
     h_s = quadratic_entropy(trace_normalize(K_s_c))
     h_t = quadratic_entropy(trace_normalize(K_t_w))
@@ -369,7 +369,7 @@ def _retired_r25_score(K_s_c, K_t_w, K_mix) -> float:
 
 
 def _retired_r25_loss(score, n_source: int, n_target: int) -> float:
-    """r25's Eq. (35)/(36) over one score, reconstructed HERE.
+    """r25's Eq. (31)/(32) over one score, reconstructed HERE.
 
     `conservative_bounds` and `class_global_loss` computed this until
     2026-10-18 and were removed from both packages: r33 states one pair of
@@ -396,7 +396,7 @@ def _density(matrix: torch.Tensor) -> torch.Tensor:
 def _assemble(
     breve_s: torch.Tensor, breve_st: torch.Tensor, breve_t: torch.Tensor
 ) -> torch.Tensor:
-    """Eq. 32's joint, from three blocks that are already densities.
+    """Eq. 28's joint, from three blocks that are already densities.
 
     `balanced_mixture` takes UNNORMALIZED blocks and normalizes them; these
     tests need to place a chosen `K̆_s`, `K̆̃_t` and cross block directly, which
@@ -408,12 +408,12 @@ def _assemble(
 
 
 class R29EntropyCoshBoundsTests(unittest.TestCase):
-    """Eqs. 34/35: the two ends, and the collapse they exist to outlaw."""
+    """Eqs. 30/31: the two ends, and the collapse they exist to outlaw."""
 
     def test_entropy_cosh_bounds_are_the_two_ends_of_equation_thirty_five(
         self,
     ) -> None:
-        """Eq. 35: `L_c = -ln 2`, `U_c = 2 ln cosh((H_t - H_s)/4)`.
+        """Eq. 31: `L_c = -ln 2`, `U_c = 2 ln cosh((H_t - H_s)/4)`.
 
         Four claims r29 attaches to that pair: the lower end is the constant
         `-ln 2`; the upper end is the stated `cosh` expression; `U_c >= 0`
@@ -448,10 +448,10 @@ class R29EntropyCoshBoundsTests(unittest.TestCase):
             )
 
     def test_balanced_dependency_score_within_the_entropy_cosh_bounds(self) -> None:
-        """Eq. 34: `-ln 2 <= J_c <= 2 ln cosh((H_t - H_s)/4)`, every time.
+        """Eq. 30: `-ln 2 <= J_c <= 2 ln cosh((H_t - H_s)/4)`, every time.
 
         Over the real path -- blocks read off one Gram, weighted by Eq. 26, and
-        balanced by Eq. 32 -- across cardinality pairs on both sides of
+        balanced by Eq. 28 -- across cardinality pairs on both sides of
         `n_s = n_t` and several confidence levels, because the upper end is a
         function of the two marginal entropies and nothing here should depend on
         the two domains contributing the same number of bags.
@@ -470,12 +470,12 @@ class R29EntropyCoshBoundsTests(unittest.TestCase):
                 self.assertLessEqual(float(score), float(upper) + TOL)
 
     def test_the_global_loss_is_zero_exactly_at_alignment(self) -> None:
-        """Eq. 35/36: perfect alignment gives `U_c = 0 = J_c`, so the loss is 0.
+        """Eq. 31/32: perfect alignment gives `U_c = 0 = J_c`, so the loss is 0.
 
         r29: equality in the cross block's Cauchy-Schwarz bound holds "solo
         cuando las dos estructuras normalizadas coinciden; en ese caso las
         entropias marginales son iguales, `U_c = 0 = J_c`, y la perdida por
-        clase (Ec. 36) vale `l_glob,c = 0`". So the configuration is identical
+        clase (Ec. 32) vale `l_glob,c = 0`". So the configuration is identical
         normalized blocks with the cross block saturating, which is
         `K̆_s = K̆̃_t = K̆̃_st = A`.
 
@@ -514,7 +514,7 @@ class R29EntropyCoshBoundsTests(unittest.TestCase):
         self.assertGreater(float(misaligned), 0.01)
 
     def test_entropy_cosh_bounds_order_alignment_above_the_collapse(self) -> None:
-        """Eq. 35's reason for existing: r29's own counterexample, at n_s = 43.
+        """Eq. 31's reason for existing: r29's own counterexample, at n_s = 43.
 
         **This is the test that carries change 2.** r29 states that `J_c` alone
         does not reach its maximum at alignment when the marginal entropies
@@ -597,7 +597,7 @@ class R29EntropyCoshBoundsTests(unittest.TestCase):
         self.assertLessEqual(float(collapse_score), float(upper_29) + TOL)
 
     def test_cardinality_bounds_the_upper_end_without_being_attained(self) -> None:
-        """Eq. 35: `U_c <= 2 ln cosh((1/4) ln max(n_s, n_t))`, never reached.
+        """Eq. 31: `U_c <= 2 ln cosh((1/4) ln max(n_s, n_t))`, never reached.
 
         r29 keeps cardinality only as "una observacion a priori": since
         `0 <= H_2 <= ln N`, the entropy difference is bounded by
@@ -630,9 +630,9 @@ class R29EntropyCoshBoundsTests(unittest.TestCase):
         `class_global_loss_cosh` for its r28 fork, and the dependency may only
         point that way: CREDA is the baseline MIL-CREDA is measured against, so
         a CREDA module importing `MIL_CREDA` would contaminate the comparison at
-        the import line. Implementing Eq. 35 here rather than importing it keeps
+        the import line. Implementing Eq. 31 here rather than importing it keeps
         `global_term.py`'s provenance truthful -- it is the one place
-        MIL-CREDA's Section 5 global term lives -- at the cost of two
+        MIL-CREDA's Section 4 global term lives -- at the cost of two
         implementations that could drift.
 
         This test is what pays that cost: it crosses the join instead of
@@ -658,11 +658,11 @@ class R29EntropyCoshBoundsTests(unittest.TestCase):
                 )
 
 
-# ------------------------------------- 3. Eq. 36, and the span that left it
+# ------------------------------------- 3. Eq. 32, and the span that left it
 
 
 class R29DetachedSpanTests(unittest.TestCase):
-    """Eq. 36's denominator, and the two tests that were retired from here.
+    """Eq. 32's denominator, and the two tests that were retired from here.
 
     **r29 read: "el denominador `U_c - L_c` se trata como una constante".**
     Two tests in this class held exactly that -- that the gradient of
@@ -691,7 +691,7 @@ class R29DetachedSpanTests(unittest.TestCase):
 
     What stays here is `test_the_gradient_reaches_the_blocks_through_the_whole`
     `_term`, which `test_r31_ec36.py` does not cover: it crosses the
-    Eq. 32 -> Eq. 33 -> Eq. 36 join rather than testing Eq. 36 alone, and the
+    Eq. 28 -> Eq. 29 -> Eq. 32 join rather than testing Eq. 32 alone, and the
     join is the only thing the wiring is about.
     """
 
@@ -699,7 +699,7 @@ class R29DetachedSpanTests(unittest.TestCase):
         """The same rule crossing the join, not stated about the function alone.
 
         `class_global_loss_cosh` tested alone proves the function; this proves
-        Eq. 32 -> Eq. 33 -> Eq. 36 composes with a graph attached all the way
+        Eq. 28 -> Eq. 29 -> Eq. 32 composes with a graph attached all the way
         back to the kernel blocks, which is the only thing the wiring is about.
         """
         n_source, n_target = 4, 7
@@ -718,11 +718,11 @@ class R29DetachedSpanTests(unittest.TestCase):
         self.assertTrue(bool(torch.isfinite(K_t.grad).all()))
 
 
-# --------------------------------------------- 4. Eq. 37, the confidence gate
+# --------------------------------------------- 4. Eq. 33, the confidence gate
 
 
 class R33AggregationTests(unittest.TestCase):
-    """Eq. (37)'s weights are the observed source proportions, and an inactive
+    """Eq. (33)'s weights are the observed source proportions, and an inactive
     class costs the maximum.
 
     **This class replaced `R29ConfidenceGateTests` on 2026-10-18, and it
@@ -806,7 +806,7 @@ class R29WiringTests(unittest.TestCase):
     Every claim above is about `global_term.py`. A module can hold r29's
     mathematics perfectly while the one place that runs the per-class loop keeps
     calling r25's functions, and nothing read separately would say so: the
-    module declares Section 5, the arm declares Section 5, and both documents
+    module declares Section 4, the arm declares Section 4, and both documents
     come back clean. So this crosses the join -- it asks the wiring what it
     actually computed and holds the answer against BOTH paths built by hand.
     """
@@ -840,7 +840,7 @@ class R29WiringTests(unittest.TestCase):
         wiring produces. Without that half, a wiring that never moved would
         pass: the r33 reconstruction would simply be a second wrong number
         nobody compared against anything. Both paths now go through r33's
-        Eq. (37) aggregation, so the comparison isolates the MAP, which is what
+        Eq. (33) aggregation, so the comparison isolates the MAP, which is what
         it is about.
         """
         embeddings, y, target, measured = self._run()
@@ -860,7 +860,7 @@ class R29WiringTests(unittest.TestCase):
         w_t = confidences(G_t)
         pseudo = torch.tensor([pseudolabel(g) for g in G_t], device=K_ss.device)
 
-        # r33 Eq. (37) sums over EVERY class, so both reconstructions carry one
+        # r33 Eq. (33) sums over EVERY class, so both reconstructions carry one
         # entry per class with `None` for the inactive ones, and the source
         # counts come along as the weights.
         r33_losses, r25_losses, source_counts = [], [], []
@@ -937,13 +937,13 @@ class R29WiringTests(unittest.TestCase):
         """`weighting` is the ladder's confidence axis, and `E` declares it off.
 
         `config.ARMS` declares `E` (`MIL-CREDA**`) as the arm that lacks the
-        local term AND the weighting, and Eq. 37's weights are built from the
+        local term AND the weighting, and Eq. 33's weights are built from the
         same `w_j^t` (Eq. 24) that Eq. 26's `D` is. So an arm that declares no
         weighting leaves Eq. (26)'s blocks RAW, and an arm that declares it
         weights them.
 
         **The axis stopped reaching the aggregation on 2026-10-18.** r29 built
-        Eq. (37)'s weights from the same `w_j^t` as Eq. (26)'s `D`, so this call
+        Eq. (33)'s weights from the same `w_j^t` as Eq. (26)'s `D`, so this call
         site sat behind `spec["weighting"]` too -- gating `E` there would have
         left it carrying confidence through the aggregation while declaring it
         does not. r32 replaced those weights with the observed source
@@ -954,7 +954,7 @@ class R29WiringTests(unittest.TestCase):
         Measured rather than read off the source: the same step is run on `E`
         and on `F`, which differ in exactly that flag, and `E`'s term is
         asserted to equal its own reconstruction from UNWEIGHTED blocks -- put
-        through the same Eq. (37) aggregation the weighted arms use.
+        through the same Eq. (33) aggregation the weighted arms use.
         """
         self.assertFalse(config.ARMS_BY_ID["E"]["weighting"])
         self.assertTrue(config.ARMS_BY_ID["F"]["weighting"])

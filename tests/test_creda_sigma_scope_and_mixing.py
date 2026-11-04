@@ -61,7 +61,7 @@ def _one_class_batch(seed: int = 0):
 
 # **The two `normalize_by_bounds=True` rows gained keywords on 2026-10-18.**
 # `bounds_form` now has one legal value, `entropy-cosh`, whose bound is proved
-# on Eq. (32)'s balanced mixture built from Eq. (26)'s TWO weighted blocks --
+# on Eq. (28)'s balanced mixture built from Eq. (26)'s TWO weighted blocks --
 # so turning the normalizer on requires `balance_mix_blocks=True`,
 # `balance_mass='trace'` and, while `use_entropy_weighting` is on,
 # `weight_cross_block=True`. r25's `conservative` map assumed nothing about
@@ -185,7 +185,7 @@ def test_mixing_with_no_valid_class_returns_the_marginal_half():
     logits = torch.full((20, CLASSES), -20.0)
     logits[:, 1] = 20.0                              # target only in class 1
     g_t = torch.softmax(logits, dim=1)
-    # **`== 0.0` became `== 1.0` on 2026-10-18.** r33's Eq. (37) charges
+    # **`== 0.0` became `== 1.0` on 2026-10-18.** r33's Eq. (33) charges
     # `l~_c = 1` for every class the routing abandoned, and with none active
     # the weights still sum to one, so the per-class half is exactly 1 where
     # r31 answered 0 -- which told a collapsed encoder it had converged.
@@ -271,7 +271,7 @@ def test_a_per_class_bandwidth_measures_the_classes_at_different_resolutions():
     """The second defect, separate from the monotonicity one.
 
     A per-class median gives each class its own bandwidth, so the `creda_c`
-    values that Eq. (37) then averages were measured at different resolutions.
+    values that Eq. (33) then averages were measured at different resolutions.
     With one class displaced, `class-pooled` hands that class nearly double the
     bandwidth of the others -- the misaligned class is read at half the
     resolution, and then its score is averaged in as if comparable. The two

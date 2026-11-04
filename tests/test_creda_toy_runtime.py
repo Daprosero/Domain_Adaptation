@@ -311,7 +311,7 @@ def test_the_effective_classes_refuse_an_empty_or_out_of_range_routing():
         T.clases_efectivas(np.array([0, T.CLASES]))
 
 
-# ================== 5. the uniform-confidence invariance (Eq. 32), with the toy's
+# ================== 5. the uniform-confidence invariance (Eq. 28), with the toy's
 #                       own declared bounds map and balanced mass
 
 

@@ -20,16 +20,16 @@ architectures should read their own papers, not this revision.
 pseudo-label with `argmax`, Eq. 23's per-class index sets as masks, Eq. 24's
 confidence weights, Eq. 25's `D_c^t` as an outer product, Eq. 26's weighted
 target block (and, under `weight_cross_block`, its cross block), Eq. 27's
-concatenated mixture, and Eq. 33's score from three Eq. 10 entropies.
-`_mix_kernel_concat` implements Eq. 32's balanced mixture under
-`balance_mix_blocks`. Eqs. 35 and 36 are APPLIED here, per class and on the
+concatenated mixture, and Eq. 29's score from three Eq. 10 entropies.
+`_mix_kernel_concat` implements Eq. 28's balanced mixture under
+`balance_mix_blocks`. Eqs. 31-32 are APPLIED here, per class and on the
 marginal block, through `CREDA.bounds`, which implements them and declares them
 too; `normalize_by_bounds` is off by default, so the published numbers were
-taken without them. `_eq37_aggregate` implements Eq. 37 at sample level.
+taken without them. `_eq37_aggregate` implements Eq. 33 at sample level.
 
-**Eq. 37 joined the list on 2026-10-18, and that is a change of kind.** Until
+**Eq. 33 joined the list on 2026-10-18, and that is a change of kind.** Until
 then this paragraph said the equation was NOT implemented, because `forward`
-reduced with a plain mean while r31's Eq. 37 was a sub-convex combination
+reduced with a plain mean while r31's Eq. 33 was a sub-convex combination
 weighted by the pseudo-label confidences -- the mean was a simplification of it
 and declaring it would have overclaimed. r32 replaced those weights with the
 observed source proportions `n_c^s / N_s` and charged an inactive class
@@ -39,13 +39,13 @@ same substitution Eq. 21 already makes. So the equation is now implemented
 rather than approximated. The two agree exactly when every class is active and
 the source batch is balanced, which is how the toyset runs.
 
-**One thing the declaration still does not claim.** Eq. 32's leading one-half
+**One thing the declaration still does not claim.** Eq. 28's leading one-half
 is deliberately not written; `_mix_kernel_concat`'s docstring says why it is a
 no-op here.
 
-**Why `revision` says `research-concept-r34.md`.** It said r28 until
-2026-10-17, r31 and then r33 until 2026-10-18. The r31 -> r33 rebind DID change
-arithmetic here, unlike the other two: r32 rewrote Eq. 37, which
+**Why `revision` says `research-concept-r35.md`.** It said r28 until
+2026-10-17, r31 and then r33 until 2026-10-18, and r34 until 2026-11-04. The r31 -> r33 rebind DID change
+arithmetic here, unlike the other two: r32 rewrote Eq. 33, which
 `_eq37_aggregate` now implements, and r33 scoped Eq. 26's confidence weighting
 to the class-conditional blocks, which took the weighting out of
 `_marginal_score`. The r33 -> r34 rebind changed nothing here, and the reason is
@@ -53,7 +53,9 @@ narrow: r34 moved Eq. 15's consensus term to a leave-one-out average, and Eq. 15
 is MIL-CREDA's attention over the instances of a bag. This module is the
 SAMPLE-level method -- it has no bags and no attention -- so it implements no
 equation r34 touched, and every equation it does implement is byte-identical in
-r33 and r34. The paragraph below is the first rebind's reasoning, kept because
+r33 and r34. The r34 -> r35 rebind moved numbers and no arithmetic: r35
+reordered the global and local sections and renumbered Eqs. 28-37 (the global
+term is now Eqs. 28-33), every equation body byte-identical. The paragraph below is the first rebind's reasoning, kept because
 it is the one that explains why a declaration can move without a number
 moving.
 
@@ -61,21 +63,21 @@ moving.
 housekeeping and it was not an upgrade either: measured equation by equation against the two revisions, this module
 implements nine of them -- 10, 22, 23, 24, 25, 26, 27, 32, 33 -- and EIGHT are
 byte-identical in `research-concept-r28.md` and `research-concept-r31.md`. The
-ninth is Eq. 32, and it moved by renaming the congruence matrix `B_c` to
+ninth is Eq. 28, and it moved by renaming the congruence matrix `B_c` to
 `Q_c`: the same mathematics under a different letter, and a letter this file
 never writes, so there is nothing here to rename. So `r28` had stopped naming
 a binding and was naming the date of the last edit, which is the drift a
 declaration exists to make visible rather than to accumulate.
 
 Those are the nine the module's arithmetic answers for. What the rebind is NOT
-is a claim that r31 left everything else alone: r31 narrowed Eq. 35 to its
-upper end, rewrote Eq. 36's denominator, and split section 5 into five
+is a claim that r31 left everything else alone: r31 narrowed Eq. 31 to its
+upper end, rewrote Eq. 32's denominator, and split section 5 into five
 subsections, so a comment here pointing at "r28 section 5" points into a
 structure that moved. Those mentions are kept as the history they are and are
 not silently renumbered.
 
 **What the r31 declaration claims about its own default, and what the default
-used to make it claim.** Eqs. 35 and 36 are in `equations` because they are
+used to make it claim.** Eqs. 31-32 are in `equations` because they are
 APPLIED here, and they are applied through ONE map: `entropy_cosh_bounds`/
 `class_global_loss_cosh`, reached when `normalize_by_bounds` is on.
 `BOUNDS_FORMS` holds a single admissible value and `bounds_form` survives only
@@ -87,14 +89,14 @@ state wrongly, four times over.** It read that `bounds_form` "selects r25's
 `conservative_bounds`/`class_global_loss` or r31's"; both r25 symbols were
 removed on 2026-10-18 and neither exists under `src/`. It read that
 "**`entropy-cosh` is the default**, so the path a caller gets without asking
-computes r31's Eq. 36"; `normalize_by_bounds` defaults to `False`, so no default
-path applies Eq. 36 at all -- `bounds_form` names which map would be used if the
+computes r31's Eq. 32"; `normalize_by_bounds` defaults to `False`, so no default
+path applies Eq. 32 at all -- `bounds_form` names which map would be used if the
 normalization were on, which is a different claim. It read that `train_creda`
 "asks for `bounds_form='conservative', balance_mass='cardinality'` by name";
 `training_pipeline.py` passes `balance_mass='cardinality'` and nothing else. And
 it read that `CREDA.bounds` "carries the same r25/r31 split in its own
 `__provenance__` -- which stays at r25"; that module declares
-`research-concept-r34.md` and holds one pair of ends.
+`research-concept-r35.md` and holds one pair of ends.
 
 **What the superseded paragraph was protecting is still real.** Every number
 published out of this repository was measured under some specific pair of flags,
@@ -105,10 +107,10 @@ moves. That is why the two reachable sets are named rather than defaulted:
 `CREDA.toy_experiment`, which names `NORMALIZAR_POR_COTAS`/`FORMA_DE_COTAS`/
 `BALANCE_DE_MASA`. Those two namings are what the campaign's numbers rest on,
 and `normalize_by_bounds`'s own default is a separate open question recorded
-beside Eq. 37's aggregation.
+beside Eq. 33's aggregation.
 
 Nothing in this file implements either equation: neither the subtraction
-Eq. 36's numerator is, nor either denominator any revision gave it, is written
+Eq. 32's numerator is, nor either denominator any revision gave it, is written
 anywhere in it -- `test_models_says_which_of_its_equations_it_only_applies`
 searches for them by their literal text, which is also why this paragraph
 describes them instead of quoting them. So the statement above cannot quietly
@@ -144,7 +146,7 @@ import timm
 
 # Eq. (24), IMPORTED and not copied, which is the one exception to the rule
 # the next paragraph states. The rule protects a BASELINE: CREDA is the control
-# MIL-CREDA is measured against, so a copied Eq. (35)-(36) keeps prior work from
+# MIL-CREDA is measured against, so a copied Eq. (31)-(32) keeps prior work from
 # depending on the method it controls. Eq. (24) is not prior work. It is the
 # METHOD's own confidence weight -- the toy's two arms differ in exactly this
 # flag, so it is the treatment, not the control -- and a treatment has no claim
@@ -154,14 +156,14 @@ import timm
 # second one drifted (it kept an epsilon the first one lost on 2026-10-18).
 from MIL_CREDA.confidence import confidences
 
-# Eqs. (35)-(36), copied onto the CREDA side rather than imported from
+# Eqs. (31)-(32), copied onto the CREDA side rather than imported from
 # `MIL_CREDA` -- `CREDA.bounds`' own module docstring says why, and
 # `tests/test_creda_sample.py` is what holds each copy equal to its original.
 # Read only by `CREDALoss.normalize_by_bounds`, which is off by default.
 #
 # Two revisions arrive on that line. `conservative_bounds`/`class_global_loss`
 # are r25's ends; `entropy_cosh_bounds`/`class_global_loss_cosh` are r31's
-# (introduced at r28, and r31 rewrote Eq. (36)'s denominator under them), and
+# (introduced at r28, and r31 rewrote Eq. (32)'s denominator under them), and
 # `bounds_form` is which of the two a run uses. Both are reachable on purpose,
 # and r31's is the default: every number already published out of this
 # repository was measured under r25's, and `training_pipeline.train_creda` --
@@ -179,12 +181,12 @@ from CREDA.bounds import class_global_loss_cosh
 #: for why `revision` moved from r28 to r31 without a line of arithmetic
 #: changing in this file.
 __provenance__ = {
-    "revision": "research-concept-r34.md",
-    "sections": ["2", "3", "5"],
-    "equations": ["10", "22", "23", "24", "25", "26", "27", "32", "33",
-                  "35", "36", "37"],
+    "revision": "research-concept-r35.md",
+    "sections": ["2", "3", "4"],
+    "equations": ["10", "22", "23", "24", "25", "26", "27", "28", "29",
+                  "31", "32", "33"],
     "invariants": [
-        # The default composition, pinned numerically: Eqs. 22-27 and 33 as
+        # The default composition, pinned numerically: Eqs. 22-27 and 29 as
         # `forward` assembles them, against means read off a run from before
         # the three forks existed.
         "the_pinned_pre_fork_means_still_come_out_of_the_default_path",
@@ -192,10 +194,10 @@ __provenance__ = {
         "normalize_kernel_embedding_bounds_what_the_kernels_see",
         # Eq. 26's second half, the one the class used to leave raw.
         "weight_cross_block_multiplies_the_cross_block_by_d_from_the_right",
-        # Eq. 27's plain concatenation, and what Eq. 32's balance repairs in it.
+        # Eq. 27's plain concatenation, and what Eq. 28's balance repairs in it.
         "balance_mix_blocks_off_is_the_plain_concatenation",
         "balance_mix_blocks_closes_the_cardinality_exploit_the_default_leaves_open",
-        # Eq. 37 at sample level: the weights are the observed source
+        # Eq. 33 at sample level: the weights are the observed source
         # proportions, an abandoned class costs the maximum, and the charge
         # carries no gradient.
         "eq37_weights_are_the_observed_source_proportions",
@@ -203,16 +205,16 @@ __provenance__ = {
         "eq37_inactive_charge_carries_no_gradient",
         # r33 scopes Eq. 26's `D` to the class-conditional blocks only.
         "the_marginal_block_is_not_confidence_weighted",
-        # Eq. 32: trace against cardinality, where they agree and where they
+        # Eq. 28: trace against cardinality, where they agree and where they
         # part company.
         "the_two_balances_agree_exactly_when_every_weight_is_one",
         "the_two_balances_differ_by_a_real_margin_once_weights_bite",
-        # Eqs. 35-36 as applied here, and the hypothesis that pairing rests on.
+        # Eqs. 31-32 as applied here, and the hypothesis that pairing rests on.
         "normalize_by_bounds_maps_each_class_onto_its_own_unit_interval",
         "the_trace_balance_never_leaves_the_unit_interval",
         "entropy_cosh_refuses_an_unbalanced_mixture",
         "entropy_cosh_refuses_the_cardinality_balance",
-        # Section 5's active-class rule, which runs under every setting.
+        # Section 4's active-class rule, which runs under every setting.
         "the_collapsed_class_does_reach_the_per_class_reduction",
         "the_collapsed_class_produces_no_nan_and_no_inf",
         "the_membership_test_is_positive_trace_and_nothing_else",
@@ -460,7 +462,7 @@ SIGMA_SCOPES = ('class-pooled', 'class-source', 'batch-pooled', 'batch-source')
 #: The maps `CREDALoss.bounds_form` accepts, read only when
 #: `normalize_by_bounds` is on.
 #:
-#: `conservative` is r25's Eq. (35) -- `L_c = -ln(n_s + n_t)` and
+#: `conservative` is r25's Eq. (31) -- `L_c = -ln(n_s + n_t)` and
 #: `U_c = (ln n_s + ln n_t)/2`, both functions of cardinality alone. It was the
 #: default until 2026-10-17, because every number already published out of this
 #: repository was measured under it; it is now asked for BY NAME at the one
@@ -469,8 +471,8 @@ SIGMA_SCOPES = ('class-pooled', 'class-source', 'batch-pooled', 'batch-source')
 #:
 #: `entropy-cosh` is the entropy-dependent map r28 introduced and r31 still
 #: states, and it is the default, so a caller that does not ask computes what
-#: the repository currently states: `U_c = 2 ln cosh((H_2(K~_t) - H_2(K_s))/4)` from Eq. (35), with
-#: `L_c = -ln 2` from Eq. (34), both evaluated on the same trace-normalized
+#: the repository currently states: `U_c = 2 ln cosh((H_2(K~_t) - H_2(K_s))/4)` from Eq. (31), with
+#: `L_c = -ln 2` from Eq. (30), both evaluated on the same trace-normalized
 #: matrices that build the score. The difference is not a tightening. r25's
 #: ends are CONSTANTS once the counts are fixed, and an affine map with
 #: constant ends preserves the order of what it maps -- so it inherits the one
@@ -496,10 +498,10 @@ SIGMA_SCOPES = ('class-pooled', 'class-source', 'batch-pooled', 'batch-source')
 #: Neither figure is quoted from memory. `tests/test_r31_ec36.py` rebuilds this
 #: configuration, measures it, reproduces the superseded 0.1773 to prove the
 #: fixture is the one this comment means, and holds the number written above to
-#: what the module returns -- so the next revision that touches Eq. (36)
+#: what the module returns -- so the next revision that touches Eq. (32)
 #: reddens this paragraph instead of aging it a third time.
 #: **2026-10-18: `'conservative'` left this tuple, and the parameter stayed.**
-#: r33's Eq. (35) states one pair of ends, the `cosh` pair, and r25's
+#: r33's Eq. (31) states one pair of ends, the `cosh` pair, and r25's
 #: cardinality pair is no longer anywhere in the formulation -- so
 #: `conservative_bounds` and `class_global_loss` were removed from
 #: `CREDA.bounds` rather than kept behind a name. The keyword survives with a
@@ -518,7 +520,7 @@ BOUNDS_FORMS = ('entropy-cosh',)
 #: for by name at `training_pipeline.train_creda`, the one place that reaches
 #: those numbers -- see `BOUNDS_FORMS` above for why a name beats a default.
 #:
-#: `trace` is the default, and it is r28's Eq. (32): the same congruence, with
+#: `trace` is the default, and it is r28's Eq. (28): the same congruence, with
 #: each block's own trace
 #: in place of its count. On the source side the two agree exactly, because the
 #: Gaussian kernel has 1 on its diagonal and so `tr(K_s) = n_s`. On the target
@@ -542,7 +544,7 @@ BALANCE_MASSES = ('cardinality', 'trace')
 #: necesita bajo a `torch.finfo(torch.float32).tiny` --- treinta y dos ordenes de
 #: magnitud por debajo del que habia.
 #:
-#: Lo que fija el valor es la formulacion. La Ec. (37) admite "aquellas para las
+#: Lo que fija el valor es la formulacion. La Ec. (33) admite "aquellas para las
 #: cuales existen sujetos en ambos dominios y las tres matrices que deben
 #: normalizarse poseen traza POSITIVA", y positiva es `> 0`.
 #: `MIL_CREDA.global_term.is_active` ya lo leia asi, de modo que los dos
@@ -592,7 +594,7 @@ class CREDALoss(nn.Module):
         because without it there is no `D`.
 
     `normalize_by_bounds`
-        Eqs. (35)-(36): map each class's score affinely onto [0, 1] by its own
+        Eqs. (31)-(32): map each class's score affinely onto [0, 1] by its own
         conservative bounds, so classes of different cardinality land on a
         common scale. `creda_c = h_mix - 0.5 (h_s + h_t)` here and MIL's
         `J_c = 0.5 (H_s + H_t) - H_mix` are the same quantity with opposite
@@ -601,7 +603,7 @@ class CREDALoss(nn.Module):
         bag counts become sample counts here with no change to the equation.
 
     `bounds_form`
-        WHICH Eq. (35) `normalize_by_bounds` applies -- r25's constants or
+        WHICH Eq. (31) `normalize_by_bounds` applies -- r25's constants or
         r31's entropy-dependent ends. `entropy-cosh`, r31's, is the default;
         `conservative` is r25's and reproduces every published number, and the
         one path that reaches those numbers asks for it by name. See
@@ -612,7 +614,7 @@ class CREDALoss(nn.Module):
 
     `balance_mass`
         WHICH quantity `balance_mix_blocks` equalizes between the two domains
-        -- each block's cardinality or, as r28 Eq. (32) writes it, each
+        -- each block's cardinality or, as r28 Eq. (28) writes it, each
         block's trace. `trace` is the default; `cardinality` is the pre-r28
         arithmetic and is asked for by name at the same place. The two agree
         exactly when every confidence weight is 1 and part company as soon as
@@ -634,7 +636,7 @@ class CREDALoss(nn.Module):
     target trace has collapsed is skipped rather than divided by, because the
     score is not defined there. It used to produce a finite number anyway, out
     of `_renyi_entropy_order_2`'s epsilon, which is a number that was never
-    about the data. The test is POSITIVE TRACE, which is what Eq. (37) states;
+    about the data. The test is POSITIVE TRACE, which is what Eq. (33) states;
     the `1e-6` floor that stood here until 2026-10-18 was the removed epsilon's
     own tolerance and outlived it.
 
@@ -667,12 +669,12 @@ class CREDALoss(nn.Module):
         if not 0.0 <= float(class_mixing) <= 1.0:
             raise ValueError(
                 f"class_mixing is a convex coefficient in [0, 1], not {class_mixing!r}")
-        # Eq. 35's ends are a THEOREM about Eq. 32's balanced mixture, and this
+        # Eq. 31's ends are a THEOREM about Eq. 28's balanced mixture, and this
         # is where that stops being two independent axes.
         #
         # r28 line 1010 states the hypothesis outright: "Las cotas de la
         # puntuacion se derivan de la estructura por bloques de la conjunta
-        # BALANCEADA." The derivation needs all of Eq. 32: the identity
+        # BALANCEADA." The derivation needs all of Eq. 28: the identity
         # `rho_mix = rho_s/4 + rho_t/4 + ||K_st||_F^2 / 2` comes from the
         # leading 1/2 together with the trace-normalized diagonal blocks, and
         # Cauchy-Schwarz on those same blocks is what bounds the cross block by
@@ -696,7 +698,7 @@ class CREDALoss(nn.Module):
         # become unreachable. `conservative` is deliberately NOT narrowed --
         # r25's ends are constants, so they assume nothing about the mixture,
         # and every number already published here was taken with them.
-        # Las cotas de las Ecs. 35-36 se prueban sobre la mezcla balanceada
+        # Las cotas de las Ecs. 31-32 se prueban sobre la mezcla balanceada
         # con los TRES bloques compartiendo el normalizador por traza. El
         # estadistico U le da a cada bloque el suyo --- `S^2 - sum u_j^2`, que
         # depende de los pesos de ESE bloque --- asi que esa hipotesis se
@@ -706,13 +708,13 @@ class CREDALoss(nn.Module):
         if normalize_by_bounds and bounds_form == 'entropy-cosh':
             if not balance_mix_blocks:
                 raise ValueError(
-                    "bounds_form='entropy-cosh' is Eq. 35, proved on Eq. 32's "
+                    "bounds_form='entropy-cosh' is Eq. 31, proved on Eq. 28's "
                     "balanced mixture, so it requires balance_mix_blocks=True; "
                     "with the raw Eq. 27 concatenation about 160 of 300 random "
                     "configurations give a loss outside [0, 1], some negative")
             if balance_mass != 'trace':
                 raise ValueError(
-                    "bounds_form='entropy-cosh' is Eq. 35, proved on Eq. 32's "
+                    "bounds_form='entropy-cosh' is Eq. 31, proved on Eq. 28's "
                     f"balanced mixture, so it requires balance_mass='trace', "
                     f"not {balance_mass!r}; under the cardinality balance about "
                     "190 of 300 random configurations give a loss outside "
@@ -721,9 +723,9 @@ class CREDALoss(nn.Module):
             # Ec. 26 sopesa LOS DOS bloques que tocan bolsas objetivo:
             # `K~_c^t = D K_c^t D` y `K~_c^st = K_c^st D`. Con
             # `weight_cross_block=False` solo se sopesa el primero, de modo que la
-            # mezcla de la Ec. 27 no es la que el teorema de la Ec. 35 demuestra:
+            # mezcla de la Ec. 27 no es la que el teorema de la Ec. 31 demuestra:
             # el bloque cruzado queda grande frente a un bloque objetivo
-            # encogido, `J_c` pasa `U_c` y la Ec. 36 da negativo.
+            # encogido, `J_c` pasa `U_c` y la Ec. 32 da negativo.
             #
             # MEDIDO sobre 600 configuraciones aleatorias (1769 lecturas por
             # clase), re-medido el 2026-10-18 despues de que salieran los
@@ -747,7 +749,7 @@ class CREDALoss(nn.Module):
                 raise ValueError(
                     "bounds_form='entropy-cosh' with use_entropy_weighting=True "
                     "requires weight_cross_block=True: Eq. 26 weights BOTH blocks "
-                    "that touch target bags, and Eq. 35's bound is proved on that "
+                    "that touch target bags, and Eq. 31's bound is proved on that "
                     "mixture. Re-measured on 2026-10-18 after the entropy "
                     "epsilons came out, over 600 random configurations: 956 of "
                     "1769 per-class readings fall outside [0, 1] with the cross "
@@ -891,7 +893,7 @@ class CREDALoss(nn.Module):
         saca los pares `j = k` del numerador Y del denominador. Se retiro por
         tres razones acumuladas.
 
-        **No esta en la formulacion.** r34 declara UNA entropia, la Ec. (10),
+        **No esta en la formulacion.** r35 declara UNA entropia, la Ec. (10),
         escrita con el mismo `tr(A^T A)` que la linea de abajo. Un estadistico U
         de la pureza no aparece en el documento, y la declaracion del toyset lo
         rotulaba `# Instrumento`.
@@ -906,7 +908,7 @@ class CREDALoss(nn.Module):
         guarda lo rechazaba junto con `bounds_form='entropy-cosh'`, que es el
         unico valor admisible, de modo que lo unico alcanzable era con la
         normalizacion por cotas apagada. Rederivar los extremos de las
-        Ecs. (35)-(36) para ese estimador es deliberacion y no una bandera.
+        Ecs. (31)-(32) para ese estimador es deliberacion y no una bandera.
 
         Su cuenta llevaba un cuarto epsilon, `+1e-6` dentro del logaritmo, y era
         el UNICO de los cuatro que tapaba un caso alcanzable: el estadistico U
@@ -939,13 +941,13 @@ class CREDALoss(nn.Module):
         # una cantidad de la que derivar.
         if bool(tr_K <= 0.0):
             # La Ec. (9) solo define la entropia para traza positiva. El portal
-            # de actividad de la Ec. (37) pide lo MISMO --- traza positiva ---
+            # de actividad de la Ec. (33) pide lo MISMO --- traza positiva ---
             # asi que excluye exactamente estas clases antes de llegar aca y
             # esto es el respaldo y no la via normal. Las dos condiciones
             # coinciden a proposito desde que el piso `1e-6` se retiro: un
             # portal mas laxo que el estimador dejaria pasar casos que el
             # estimador refuta, y uno mas estricto excluiria clases que la
-            # Ec. (37) admite ---
+            # Ec. (33) admite ---
             # pero refuta, porque un epsilon aqui devolveria un numero que es
             # del epsilon y la clase se reportaria con una entropia medida.
             # Misma disciplina que `MIL_CREDA.renyi.trace_normalize`: la
@@ -1004,7 +1006,7 @@ class CREDALoss(nn.Module):
         `H2(K/n) - H2(K)` is 1e-6, the epsilon inside that function. So this fork
         is one method and not three.
 
-        **`balance_mass` chooses WHICH mass is equalized**, and r28 Eq. (32)
+        **`balance_mass` chooses WHICH mass is equalized**, and r28 Eq. (28)
         says trace rather than cardinality. The congruence is the same shape
         either way -- `D K_mix D` with `D = diag(a^-1/2 I, b^-1/2 I)` -- so
         positive semidefiniteness survives both; what changes is `a` and `b`.
@@ -1018,7 +1020,7 @@ class CREDALoss(nn.Module):
         `D_t K_t D_t` -- so its diagonal is `w_j^2` and
         `tr(K~_t) = sum_j w_j^2`. Dividing by `n_t` therefore gives the target
         domain the mass of its COUNT while r28 gives it the mass it earned:
-        Eq. (32) equalizes `tr(K_s)` against `sum_j w_j^2 ||Psi(B_j)||^2`, and
+        Eq. (28) equalizes `tr(K_s)` against `sum_j w_j^2 ||Psi(B_j)||^2`, and
         a sample with `w_j -> 0` is equivalent to withdrawing it. Under
         `cardinality` that withdrawal never reaches the mixture's proportions.
         Measured on a 129-sample batch with softmax pseudo-labels,
@@ -1026,7 +1028,7 @@ class CREDALoss(nn.Module):
         while `tr(K_s)` was exactly `n_s` in all three, so this is a 20-55%
         misstatement of the target's mass and not a rounding difference.
 
-        **Eq. (32)'s leading 1/2 is deliberately NOT written.** r28 multiplies
+        **Eq. (28)'s leading 1/2 is deliberately NOT written.** r28 multiplies
         the balanced block matrix by 1/2 so that its trace is exactly 1 and it
         is a valid density for Eq. (9). Here that factor is a no-op:
         `_renyi_entropy_order_2` divides by the trace of whatever it is handed,
@@ -1090,7 +1092,7 @@ class CREDALoss(nn.Module):
         # signature rather than being ignored inside it, so no caller can hand
         # it something this block would silently drop.
         K_mix = self._mix_kernel_concat(K_s, K_t, K_st)
-        # Hoisted into names rather than written inline as before: Eq. (35)'s
+        # Hoisted into names rather than written inline as before: Eq. (31)'s
         # upper end is a function of these same two entropies, so the bounds
         # need them separately. Same operations in the same order, so the score
         # is the same bits it was.
@@ -1126,7 +1128,7 @@ class CREDALoss(nn.Module):
         # read once after the loop and never guessed from the contents.
         bounds_per_class = []
         valid_class_count = 0
-        # r33 Eq. (37)'s weights and its charge for an abandoned class.
+        # r33 Eq. (33)'s weights and its charge for an abandoned class.
         # `unique_classes` already runs over exactly the classes with
         # `n_c^s > 0`, so a class absent from the source batch weighs
         # `0 / N_s` and is correctly never seen here. `N_s` is every source
@@ -1186,12 +1188,12 @@ class CREDALoss(nn.Module):
             # `~1e-6 * C / ln C`, que crece con el numero de clases. Un peso
             # que deberia anular una bolsa le dejaba peso.
             #
-            # Y alimentaba el porton de `C_act` (Ec. 37), que mira
+            # Y alimentaba el porton de `C_act` (Ec. 33), que mira
             # `tr(K~_c^t) = sum_j w_j^2`: un peso espurio ahi mueve la traza
             # que decide si la clase entra en la suma.
             # Computed by `MIL_CREDA.confidence.confidences`, which is this
             # equation's single implementation; the import at the top of the
-            # module says why this one is imported and Eqs. (35)-(36) are not.
+            # module says why this one is imported and Eqs. (31)-(32) are not.
             # Two differences from the three lines that used to sit here, both
             # measured. `ln C` is now evaluated in double rather than float32,
             # which moves `w` by 1.4e-8 relative -- 70 times less than the
@@ -1212,7 +1214,7 @@ class CREDALoss(nn.Module):
             f_t_c = f_t[y_t_pseudo == c]
 
             if f_s_c.shape[0] == 0 or f_t_c.shape[0] == 0:
-                # Not in C_act: Eq. (37) charges `l~_c = 1`, weighted by this
+                # Not in C_act: Eq. (33) charges `l~_c = 1`, weighted by this
                 # class's own `n_c^s`. r31 dropped the class from the sum
                 # instead, so a routing that abandoned classes reported a
                 # SMALLER term for it.
@@ -1251,7 +1253,7 @@ class CREDALoss(nn.Module):
             # written out rather than inferred, because that implication rests
             # on Eq. (27)'s block structure and not on anything checked here.
             #
-            # Skipped and not clamped: r34 says the score is not defined for
+            # Skipped and not clamped: r35 says the score is not defined for
             # such a class.
             #
             # **The test is POSITIVE TRACE and nothing else, since 2026-10-18.**
@@ -1263,7 +1265,7 @@ class CREDALoss(nn.Module):
             # floor outlived its reason by thirty-two orders of magnitude.
             #
             # What settles the value is the formulation and not a tolerance:
-            # Eq. (37) admits "aquellas para las cuales existen sujetos en ambos
+            # Eq. (33) admits "aquellas para las cuales existen sujetos en ambos
             # dominios y las tres matrices que deben normalizarse poseen traza
             # POSITIVA". Positive is `> 0`. `MIL_CREDA.global_term.is_active`
             # already read it that way, so the two packages disagreed on which
@@ -1274,7 +1276,7 @@ class CREDALoss(nn.Module):
             trace_t = torch.trace(K_t_c)
             if (trace_s <= 0.0 or trace_t <= 0.0
                     or trace_s + trace_t <= 0.0):
-                # The other half of Eq. (37)'s membership, and so the other
+                # The other half of Eq. (33)'s membership, and so the other
                 # place the charge of `1` is owed. Same reasoning as the count
                 # check above.
                 inactive_source_mass += int(f_s_c.shape[0])
@@ -1294,7 +1296,7 @@ class CREDALoss(nn.Module):
             losses_per_class.append(creda_c)
             active_source_counts.append(int(f_s_c.shape[0]))
             if self.normalize_by_bounds:
-                # Eq. (34)/(35)'s ends are functions of the two entropies this
+                # Eq. (30)/(31)'s ends are functions of the two entropies this
                 # class already computed, not of its counts -- which is exactly
                 # the property that makes them reachable. r28 introduced them
                 # and r33 still states `U_c` this way.
@@ -1302,8 +1304,8 @@ class CREDALoss(nn.Module):
             valid_class_count += 1
 
         if valid_class_count == 0:
-            # **Eq. (37) answers 1 here, not 0, and r31 answered 0.** No class
-            # is active, so every `l~_c` is Eq. (37)'s charge and the weights
+            # **Eq. (33) answers 1 here, not 0, and r31 answered 0.** No class
+            # is active, so every `l~_c` is Eq. (33)'s charge and the weights
             # still sum to one. The per-class half is therefore DEFINED in this
             # case and equals exactly 1; r31 returned zero, which told a
             # collapsed encoder it had converged.
@@ -1323,7 +1325,7 @@ class CREDALoss(nn.Module):
             # exacto, su gradiente es cero exacto, y no depende del CONTENIDO
             # de `f_t` --- con un inf o un NaN adentro, el producto daria NaN y
             # el paso envenenaria los pesos en vez de no moverlos. Sumarle el 1
-            # de la Ec. 37 no cambia nada de eso: el 1 es literal y no aporta
+            # de la Ec. 33 no cambia nada de eso: el 1 es literal y no aporta
             # gradiente, que es exactamente lo que la ecuacion pide.
             #
             # El camino estaba vivo y nunca se recorria: el unico piso que
@@ -1336,7 +1338,7 @@ class CREDALoss(nn.Module):
             per_class = 1.0 + f_t[:0].sum()
             if reduction == 'none':
                 # No row to report: `reduction='none'` decomposes by ACTIVE
-                # class and there is none. Eq. (37)'s charge is not a per-class
+                # class and there is none. Eq. (33)'s charge is not a per-class
                 # reading, it is what the aggregation pays for their absence.
                 return self.lambda_creda * f_t[:0].sum().reshape(0)
             if self.class_mixing < 1.0:
@@ -1350,20 +1352,20 @@ class CREDALoss(nn.Module):
             return self.lambda_creda * per_class
 
         if self.normalize_by_bounds:
-            # Fork 3: Eqs. (35)-(36). `-creda_c` is J_c, the same quantity with
+            # Fork 3: Eqs. (31)-(32). `-creda_c` is J_c, the same quantity with
             # the opposite sign -- see the class docstring.
             assert len(bounds_per_class) == len(losses_per_class), (
                 f"{len(bounds_per_class)} classes normalized against "
                 f"{len(losses_per_class)} per-class losses: the bounds have "
                 f"desynchronized from the scores they belong to")
-            # r31's Eqs. (35)-(36). Same sign convention: `-creda_c` is
+            # r31's Eqs. (31)-(32). Same sign convention: `-creda_c` is
             # `J_c`.
             #
             # **2026-10-17: until today this comment asserted that the
             # denominator was excluded from the gradient inside
             # `class_global_loss_cosh`, and called that the bound
             # revision's own rule.** It was true of r29 and is now false of
-            # the code it sits beside. r29's Eq. (36) divided by the
+            # the code it sits beside. r29's Eq. (32) divided by the
             # per-class span `U_c` minus `L_c` and excluded it from the
             # gradient by design; r30
             # proved the span of the corrected score is bounded by `ln 2`
@@ -1393,7 +1395,7 @@ class CREDALoss(nn.Module):
                     "reduction='none' cannot report it")
             # The ACTIVE classes' `l_glob,c`, which is what a caller asking
             # for the decomposition wants to look at. It is not a summand list
-            # for the reduced term: that one also carries Eq. (37)'s charge for
+            # for the reduced term: that one also carries Eq. (33)'s charge for
             # the classes this vector has no row for, so its mean is not what
             # `reduction='mean'` returns.
             return self.lambda_creda * losses
@@ -1413,14 +1415,14 @@ class CREDALoss(nn.Module):
 
     @staticmethod
     def _eq37_aggregate(losses, active_counts, inactive_mass, n_source):
-        """Implement Eq. (37) at sample level: `sum_c (n_c^s / N_s) l~_c`.
+        """Implement Eq. (33) at sample level: `sum_c (n_c^s / N_s) l~_c`.
 
         `losses` holds `l_glob,c` for the active classes and `active_counts`
         their `n_c^s` in the same order; `inactive_mass` is the total `n_c^s`
         of the classes the target routing abandoned, each of which contributes
         `l~_c = 1`; `n_source` is `N_s`.
 
-        **This was `losses.mean()` until 2026-10-18**, which is r31's Eq. (37)
+        **This was `losses.mean()` until 2026-10-18**, which is r31's Eq. (33)
         read at sample level: a uniform average over the ACTIVE classes alone.
         The two agree exactly when every class is active and the source batch
         is balanced -- then `n_c^s / N_s` is `1 / |C|`, which is what the mean
@@ -1435,7 +1437,7 @@ class CREDALoss(nn.Module):
         in the loss rather than rewarded by it.
         """
         if n_source <= 0:
-            raise ValueError("N_s is zero: Eq. (37)'s weights are undefined")
+            raise ValueError("N_s is zero: Eq. (33)'s weights are undefined")
         # `(sum_c n_c^s l_c + inactive_mass) / N_s`, and NOT
         # `sum_c (n_c^s / N_s) * l_c`. The two are the same equation and not the
         # same arithmetic: forming each weight first multiplies by an inexact

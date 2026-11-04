@@ -14,7 +14,7 @@ from pathlib import Path
 
 # ------------------------------------------------------------------- material
 
-REVISION = "research-concept-r34.md"
+REVISION = "research-concept-r35.md"
 
 #: The domain codes a run has bound, and what each is called. Empty at rest:
 #: `toy_run.material_bound` adds the two codes of the family it binds and
@@ -268,7 +268,7 @@ ATTENTION_GAMMA = 0.0
 #: tunable and is not asserted as the last word on it.
 ATTENTION_TEMPERATURE = 1.0
 
-#: The local temperature of Eq. (28). Also without a counterpart in CREDA, so it
+#: The local temperature of Eq. (34). Also without a counterpart in CREDA, so it
 #: is fixed at one and reported as fixed rather than chosen.
 TAU_LOCAL = 1.0
 
@@ -282,7 +282,7 @@ TAU_LOCAL = 1.0
 #: (K_ss, K_st, K_tt) -- the three blocks of a class's mixed matrix are
 #: defined there, not at Eqs.
 #: (17)-(18), which define the bag kernel and its representation in general --
-#: and the local correspondence's own kernel evaluations (Eq. 28, 31). Every
+#: and the local correspondence's own kernel evaluations (Eq. 34, 37). Every
 #: caller passes this explicitly, with no default anywhere in the call
 #: chain -- a constant carries no gradient, so there is no question of it
 #: being learned, and the value below is not asserted as final.
@@ -460,7 +460,7 @@ NORMALIZE_LOCAL_BY_DISPERSION = False
 #: coefficient was spread across places nobody read together.
 
 #: How far. One is the neutral of Eq. (39), and from r17 that is a statement about
-#: the objective rather than about this setting. Eq. (36) normalizes the global
+#: the objective rather than about this setting. Eq. (32) normalizes the global
 #: score by the conservative bounds, Eq. (38) bounds the local term, and Eq. (21)
 #: is divided by its own supremum B_src — so all three terms live in [0, 1) and a
 #: coefficient of one weighs them equally, which is what the normalization is for.
@@ -551,7 +551,7 @@ CEILING_LOCAL_RANGE = (1e-4, 1.0)
 # The search covers eight dimensions now, not six: the two ramp ceilings above
 # (`CEILING_RANGE`/`CEILING_LOCAL_RANGE`), the two ramp growth rates below
 # (`RAMP_DELTA_RANGE`/`RAMP_DELTA_LOCAL_RANGE`), and the four that follow them.
-# Every one is an Eq. (39)/Eq. (15)/Eq. (16)/Eq. (28) constant this file
+# Every one is an Eq. (39)/Eq. (15)/Eq. (16)/Eq. (34) constant this file
 # otherwise declares fixed.
 #
 # `lambda_glob`/`lambda_loc` used NOT to be among them, on the premise that both
@@ -616,7 +616,7 @@ ATTENTION_GAMMA_RANGE = (0.0, 1.0)
 #: flatter, and the neutral sits at the geometric range's own centre.
 ATTENTION_TEMPERATURE_RANGE = (0.1, 10.0)
 
-#: The local temperature of Eq. (28). `TAU_LOCAL`'s own docstring declares one
+#: The local temperature of Eq. (34). `TAU_LOCAL`'s own docstring declares one
 #: the fixed neutral, with no counterpart in CREDA to measure a range from --
 #: it plays the identical role Eq. (16)'s temperature plays, scaling a softmax
 #: rather than a kernel bandwidth or a mixing weight, so it is given the same
@@ -641,7 +641,7 @@ RAMP_DELTA = 20
 #: and it is not searched -- the ceiling search's six dimensions
 #: (`RAMP_CEILING`, `RAMP_DELTA`, `KERNEL_SIGMA`, `ATTENTION_GAMMA`,
 #: `ATTENTION_TEMPERATURE`, `TAU_LOCAL`) are all Eq. (39)/Eq. (15)/Eq. (16)/
-#: Eq. (28) constants; the optimizer's own rate is not one of them.
+#: Eq. (34) constants; the optimizer's own rate is not one of them.
 LR = 1e-3
 
 #: Held equal across the two units. One bag per class covers every class in every

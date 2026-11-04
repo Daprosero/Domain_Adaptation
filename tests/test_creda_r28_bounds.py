@@ -7,17 +7,17 @@ both ends and the balance that feeds them. Three changes land here:
 1. **One bandwidth for every class.** r28 line 732: a single sigma governs the
    three blocks, because the three derive from the same instance kernel. The
    toyset freezes one source-only bandwidth (`sigma_de_la_fuente`) instead.
-2. **The mix balances by TRACE, not by cardinality** (Eq. 32). The Gaussian
+2. **The mix balances by TRACE, not by cardinality** (Eq. 28). The Gaussian
    kernel has 1 on its diagonal, so `tr(K_s) = n_s` and the source side does
    not move; but `K~_t` arrives already weighted (`D K_t D`), so its diagonal
    is `w_j^2` and `tr(K~_t) = sum_j w_j^2`, which equals `n_t` only when every
    weight is exactly 1. Balancing by cardinality therefore drops the confidence
    weighting from the mass each domain contributes to the mixture. That is the
    defect `balance_mass='trace'` repairs.
-3. **The normalization bounds are replaced** (Eq. 35): `L_c = -ln 2` and
+3. **The normalization bounds are replaced** (Eq. 31): `L_c = -ln 2` and
    `U_c = 2 ln cosh((H_2(K~_t) - H_2(K_s)) / 4)`, both evaluated on the SAME
    normalized matrices that build `J_c`. `bounds_form='entropy-cosh'` selects
-   them, and Eq. 36 keeps its form with the span detached.
+   them, and Eq. 32 keeps its form with the span detached.
 
 Plus the active-class rule r28 §5 states: a class is active when both domains
 contribute AND the three matrices that must be normalized have positive trace.
@@ -62,11 +62,11 @@ DIM = 6
 PER_CLASS = 43
 SEED = 20261009
 
-#: `-ln 2`, Eq. 35's lower end. Written out rather than imported so that a
+#: `-ln 2`, Eq. 31's lower end. Written out rather than imported so that a
 #: change to the module's constant does not silently change what is asserted.
 LOWER_END = -math.log(2.0)
-#: r31 Eq. (36)'s denominator. Numerically `-LOWER_END` and a different
-#: claim: `LOWER_END` bounds `J_c` (Eq. 34), this bounds `U_c - J_c`.
+#: r31 Eq. (32)'s denominator. Numerically `-LOWER_END` and a different
+#: claim: `LOWER_END` bounds `J_c` (Eq. 30), this bounds `U_c - J_c`.
 DENOMINATOR = math.log(2.0)
 
 
@@ -139,7 +139,7 @@ def _read(form: str, configuration, **overrides) -> float:
 
 
 def _read_retired_r25(configuration, **overrides) -> float:
-    """r25's Eq. (35)/(36) over the same raw score, reconstructed HERE.
+    """r25's Eq. (31)/(32) over the same raw score, reconstructed HERE.
 
     `bounds_form='conservative'` read this until 2026-10-18, when
     `conservative_bounds` and `class_global_loss` were removed from both
@@ -209,11 +209,11 @@ def _blocks(loss: CREDALoss, f_s: torch.Tensor, f_t: torch.Tensor,
     return K_s, K_t, K_st
 
 
-# ------------------------------------------------------- 1. Eq. 35's two ends
+# ------------------------------------------------------- 1. Eq. 31's two ends
 
 
 class R28EntropyCoshBoundsTests(unittest.TestCase):
-    """`entropy_cosh_bounds` against Eq. 35, end by end."""
+    """`entropy_cosh_bounds` against Eq. 31, end by end."""
 
     def test_the_lower_end_is_exactly_minus_log_two(self) -> None:
         """`L_c = -ln 2`, and it does not depend on either entropy.
@@ -245,7 +245,7 @@ class R28EntropyCoshBoundsTests(unittest.TestCase):
     def test_the_upper_end_is_symmetric_in_the_sign_of_the_difference(self) -> None:
         """`cosh` is even, so swapping the two entropies cannot move `U_c`.
 
-        The ORDER still matters and is asserted elsewhere -- Eq. 35 writes
+        The ORDER still matters and is asserted elsewhere -- Eq. 31 writes
         target minus source -- but it cannot be read off `U_c`, which is why
         this test says only what it can see.
         """
@@ -276,7 +276,7 @@ class R28EntropyCoshBoundsTests(unittest.TestCase):
                 self.assertAlmostEqual(float(upper), expected, places=12)
 
 
-# --------------------------------------- 2. zero at perfect alignment, Eq. 36
+# --------------------------------------- 2. zero at perfect alignment, Eq. 32
 
 
 class R28NormalizedLossTests(unittest.TestCase):
@@ -360,7 +360,7 @@ class R28NormalizedLossTests(unittest.TestCase):
         self.assertLess(old_collapsed, old_aligned - 0.05)
 
 
-# ------------------------------------------------------- 3. Eq. 32's balance
+# ------------------------------------------------------- 3. Eq. 28's balance
 
 
 class R28TraceBalanceTests(unittest.TestCase):
@@ -425,7 +425,7 @@ class R28TraceBalanceTests(unittest.TestCase):
         self.assertTrue(torch.equal(plain._mix_kernel_concat(K_s, K_t, K_st), expected))
 
 
-# ------------------------------------------------ 4. Eq. 36's detached span
+# ------------------------------------------------ 4. Eq. 32's detached span
 
 
 class R28DetachedSpanTests(unittest.TestCase):
@@ -446,7 +446,7 @@ class R28DetachedSpanTests(unittest.TestCase):
         return leaf.grad.clone()
 
     def test_class_global_loss_cosh_divides_by_the_constant_span(self) -> None:
-        """r31 Eq. (36): `(U_c - J_c) / ln 2`, against three references.
+        """r31 Eq. (32): `(U_c - J_c) / ln 2`, against three references.
 
         **This test asserted the opposite through r29 and the change is the
         point.** It was `test_class_global_loss_cosh_detaches_only_the_span`,
@@ -510,7 +510,7 @@ class R28DetachedSpanTests(unittest.TestCase):
         self.assertGreater(float((r31 - attached).abs().max()), 1e-3)
 
     def test_the_value_moved_by_exactly_the_ratio_of_the_denominators(self) -> None:
-        """r31 changed the NUMBER too, which r29's change to Eq. (36) did not.
+        """r31 changed the NUMBER too, which r29's change to Eq. (32) did not.
 
         This test was `test_the_value_is_unchanged_by_the_detach`, and under
         r29 it was right: detaching a denominator moves the gradient and never
@@ -586,7 +586,7 @@ class R28ActiveClassTests(unittest.TestCase):
 
         **This asserted the opposite until 2026-10-18, and the change is the
         formulation's and not a repair.** With the `1e-6` floor the collapsed
-        class was excluded and Eq. (37) charged it one; with Eq. (37)'s own
+        class was excluded and Eq. (33) charged it one; with Eq. (33)'s own
         test -- positive trace -- it is active and gets measured. Both
         behaviours are written down here because the trade is real and a reader
         is owed it:
@@ -595,7 +595,7 @@ class R28ActiveClassTests(unittest.TestCase):
             `> 0`       ->  3 active; the collapsed class reads  0.00059861,  L_glob = 0.00053086
 
         So following the letter makes a class with no target evidence read as
-        near-perfect alignment. That is a genuine tension inside Eq. (37),
+        near-perfect alignment. That is a genuine tension inside Eq. (33),
         whose charge of one exists so abandonment reads as a HIGHER loss -- and
         the operator ruled on 2026-10-18 that the implementation follows the
         formulation and the tension is the formulation's to resolve, not the
@@ -637,7 +637,7 @@ class R28ActiveClassTests(unittest.TestCase):
         is exact in float32 down to `1.175e-38`, so what it needs is thirty-two
         orders of magnitude lower.
 
-        What decides the value is Eq. (37), which admits the classes whose three
+        What decides the value is Eq. (33), which admits the classes whose three
         matrices have POSITIVE trace -- and positive is `> 0`.
         `MIL_CREDA.global_term.is_active` already read it that way, so until the
         floor went the two packages disagreed about which classes enter the sum
@@ -840,11 +840,11 @@ class R28BoundsProvenanceTests(unittest.TestCase):
 
         **It declared r25 until 2026-10-18, and the reason was real while it
         lasted**: `conservative_bounds` and `class_global_loss` implemented
-        r25's Eq. 35/36 and sat in this same file, and a declaration is a claim
+        r25's Eq. 31/32 and sat in this same file, and a declaration is a claim
         about everything it covers, so the older half decided the stamp. Both
         were removed because r33 states one pair of ends. What is left --
         `entropy_cosh_bounds`, `class_global_loss_cosh`, `source_bound`,
-        `source_loss` -- answers Eqs. 34, 35, 36 and 21 as r33 writes them,
+        `source_loss` -- answers Eqs. 21 and 30-32 as r33 writes them,
         and Eq. 21 is byte-identical from r25 forward.
 
         **It reads r34 since 2026-10-18 and no arithmetic moved with it.** r34
@@ -854,12 +854,12 @@ class R28BoundsProvenanceTests(unittest.TestCase):
         """
         from CREDA import bounds
         self.assertEqual(bounds.__provenance__['revision'],
-                         'research-concept-r34.md')
+                         'research-concept-r35.md')
         declared = bounds.__provenance__['invariants']
         for retired in ('conservative_bounds_copy_agrees_with_the_original',
                         'class_global_loss_copy_agrees_with_the_original'):
             self.assertNotIn(retired, declared)
-        self.assertIn('research-concept-r34.md', bounds.__provenance__['revision'])
+        self.assertIn('research-concept-r35.md', bounds.__provenance__['revision'])
         self.assertIn('entropy_cosh_bounds', bounds.__doc__)
 
 
@@ -914,7 +914,7 @@ class R28ToyWiringTests(unittest.TestCase):
 
         Two places name it: the flag's own block, and the comment that fixes
         the validation batch to the training batch's size because the bounds
-        "depend on cardinality". Under Eq. 35 they depend on the two marginal
+        "depend on cardinality". Under Eq. 31 they depend on the two marginal
         entropies instead, so that reason has to be restated rather than
         deleted -- the batch sizes still have to match, for a different reason.
         """
@@ -922,8 +922,8 @@ class R28ToyWiringTests(unittest.TestCase):
         self.assertNotIn('cotas que dependen de la cardinalidad', source)
 
 
-# ------------------------------------- 10. Eq. 35's bounds are a THEOREM about
-#                                           the balanced mix of Eq. 32
+# ------------------------------------- 10. Eq. 31's bounds are a THEOREM about
+#                                           the balanced mix of Eq. 28
 
 
 class R28BoundHypothesisTests(unittest.TestCase):
@@ -931,7 +931,7 @@ class R28BoundHypothesisTests(unittest.TestCase):
 
     r28 line 1010 states the hypothesis in one sentence: "Las cotas de la
     puntuacion se derivan de la estructura por bloques de la conjunta
-    **balanceada**." The derivation needs the whole of Eq. 32 -- the identity
+    **balanceada**." The derivation needs the whole of Eq. 28 -- the identity
     `rho_mix = rho_s/4 + rho_t/4 + ||K_st||_F^2 / 2` comes from the leading 1/2
     together with the trace-normalized diagonal blocks, and Cauchy-Schwarz on
     those blocks is what gives `||K_st||_F^2 <= sqrt(rho_s rho_t)`. From those
@@ -974,13 +974,13 @@ class R28BoundHypothesisTests(unittest.TestCase):
         return f_s, f_t, weights, sigma
 
     def _normalized(self, loss: CREDALoss, configuration) -> float:
-        """Eq. 33 then Eq. 36, by hand, so a REFUSED pairing can still be read."""
+        """Eq. 29 then Eq. 32, by hand, so a REFUSED pairing can still be read."""
         f_s, f_t, weights, sigma = configuration
         with torch.no_grad():
             K_s = loss._gaussian_kernel(f_s, f_s, sigma)
             K_t = loss._gaussian_kernel(f_t, f_t, sigma) * torch.outer(weights, weights)
             K_st = loss._gaussian_kernel(f_s, f_t, sigma) * weights.unsqueeze(0)
-            # Eq. (37)'s own test, since the `1e-6` floor was retired.
+            # Eq. (33)'s own test, since the `1e-6` floor was retired.
             if float(torch.trace(K_t)) <= 0.0:
                 return 0.0
             h_s = loss._renyi_entropy_order_2(K_s)
@@ -1036,7 +1036,7 @@ class R28BoundHypothesisTests(unittest.TestCase):
 
     def test_entropy_cosh_refuses_a_raw_cross_block(self) -> None:
         """Eq. 26 weights BOTH blocks that touch target bags, so leaving the
-        cross block raw breaks Eq. 35's hypothesis.
+        cross block raw breaks Eq. 31's hypothesis.
 
         **Found by a test, not by reading.** Moving
         `test_creda_sample.py`'s sign-chain measurement from r25's map to r33's
@@ -1084,7 +1084,7 @@ class R28BoundHypothesisTests(unittest.TestCase):
             CREDALoss(normalize_by_bounds=True, bounds_form='entropy-cosh',
                       balance_mix_blocks=True, balance_mass='cardinality')
         message = str(raised.exception)
-        for fragment in ('entropy-cosh', '32', 'trace'):
+        for fragment in ('entropy-cosh', '28', 'trace'):
             self.assertIn(fragment, message)
 
     def test_the_r28_pairing_itself_constructs(self) -> None:

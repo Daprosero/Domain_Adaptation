@@ -1,6 +1,6 @@
 """The mechanism experiments, read from the stored models: K1, K2 and K3.
 
-Experiments plan v44, Secs. 6.1-6.3, over proposal r34 Eqs. 14-19 (attention
+Experiments plan v44, Secs. 6.1-6.3, over proposal r35 Eqs. 14-19 (attention
 and bag kernel), 28-31 (local alignment) and 34-38 (bounds of the normalized
 terms). K1 and K2 train nothing: they read a model that `model_store` saved
 (Secs. 6.3 and 7.3) or a history that training already recorded. K3 trains its
@@ -111,7 +111,7 @@ __provenance__ = {
     "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.6", "6.1", "6.2", "6.3", "7.2", "7.3"],
     "experiments": ["K1-atencion", "K2-emparejamiento", "K3-ablacion"],
-    "equations": ["14", "15", "16", "17", "18", "19", "37", "38"],
+    "equations": ["14", "15", "16", "17", "18", "19", "33", "38"],
     "invariants": [
         "the_event_contrast_reads_only_the_slackline_levels_of_the_level_arm",
         "a_marked_window_is_an_integrity_or_contact_mark",

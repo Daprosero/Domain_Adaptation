@@ -433,9 +433,9 @@ TOY_ARMS = [
         "attention": "learned", "selection": None, "normalization": "shared",
         "why": ("what this toyset exists to find out: whether MIL-CREDA works "
                 "at all under the conditions CREDA uses. Phase 2 computes BOTH "
-                "declared terms -- the global one (Eqs. 32-37) and the local "
-                "correspondence (Eqs. 30-31, aggregated by Eq. 38) -- with the "
-                "confidence weighting ON: Eq. (26)'s `D`, Eq. (37)'s `omega_c` "
+                "declared terms -- the global one (Eqs. 28-33) and the local "
+                "correspondence (Eqs. 36-37, aggregated by Eq. 38) -- with the "
+                "confidence weighting ON: Eq. (26)'s `D`, Eq. (33)'s `omega_c` "
                 "and Eq. (38)'s own aggregation all run, and nothing about the "
                 "confidence is switched off anywhere. What IS off is Eq. (39)'s "
                 "pair of balance coefficients, which the operator's `sin "
@@ -798,7 +798,7 @@ def embedding_scales(model: wiring.Arm, bagset: bags.BagSet,
     numerically off while every flag says it is on.
 
     - `withinBag` is what Eq. (14) and so Eq. (15)'s consensus evaluate.
-    - `betweenBags` is what the bag Gram of Eqs. (32-37) evaluates.
+    - `betweenBags` is what the bag Gram of Eqs. (28-33) evaluates.
     - `pooled` is every instance against every instance, reported because it is
       what a naive calibration would have used.
 

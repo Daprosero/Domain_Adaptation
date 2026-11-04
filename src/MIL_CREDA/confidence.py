@@ -16,7 +16,7 @@ down.
 
 This is not a defect. A target label is unobservable, so no term here can
 penalize having gone to the wrong class; the same blindness is why the local
-term of Section 4 lowers its loss for any coherent source neighbourhood rather
+term of Section 5 lowers its loss for any coherent source neighbourhood rather
 than for the right one. It is written down because without it "confidence"
 reads as "correctness", and pinned by `confidence_is_blind_to_the_true_label`
 because a property nothing asserts is a sentence, not a guarantee.
@@ -37,7 +37,7 @@ import torch
 from MIL_CREDA import as_matrix, as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r34.md",
+    "revision": "research-concept-r35.md",
     "sections": ["3"],
     "equations": ["22", "24"],
     "invariants": [

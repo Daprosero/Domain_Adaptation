@@ -1832,7 +1832,7 @@ def test_the_adapted_arm_declares_the_weighting_and_all_three_mechanisms_run(
     - **Eq. (26)'s `D`:** `conditional.weighted_blocks` IS reached, and what it
       built is read: the `D` is not the identity and it moves both blocks. A
       call alone would not distinguish "applied" from "applied as `I`".
-    - **Eq. (37)'s weights:** `global_loss` is given SOURCE COUNTS, and those
+    - **Eq. (33)'s weights:** `global_loss` is given SOURCE COUNTS, and those
       counts are read: non-negative, summing to the source batch, and they
       arrive on the twin too, because r33's weights come from the observed
       labels and not from the confidences.
@@ -1840,9 +1840,9 @@ def test_the_adapted_arm_declares_the_weighting_and_all_three_mechanisms_run(
       ONE argument: the confidences have no way in.
 
     **Only the first of the three is gated by this flag, since 2026-10-18.**
-    This test used to declare all three: r29 built Eq. (37)'s weights from the
+    This test used to declare all three: r29 built Eq. (33)'s weights from the
     same `w_j^t` as Eq. (26)'s `D`, and Eq. (38) aggregated by those
-    confidences too, so the axis reached every one. r32 replaced Eq. (37)'s
+    confidences too, so the axis reached every one. r32 replaced Eq. (33)'s
     weights with `n_c^s / N_s` and made Eq. (38) the uniform mean -- a weight
     the model computes can be lowered instead of earned -- so two of the three
     stopped being confidence mechanisms at all and the axis means exactly one
@@ -1921,7 +1921,7 @@ def test_the_adapted_arm_declares_the_weighting_and_all_three_mechanisms_run(
     assert float((K_t_w - K_t_c).abs().max()) > 0.0
     assert float((K_st_w - K_st_c).abs().max()) > 0.0
 
-    # Eq. (37): called with SOURCE COUNTS, one per class, summing to the source
+    # Eq. (33): called with SOURCE COUNTS, one per class, summing to the source
     # batch -- the weights come from the observed labels, so `w_t` is nowhere
     # in them. One entry per class in C, with `None` for every class the
     # routing abandoned, which is what makes the charge of 1 reachable.
@@ -1948,7 +1948,7 @@ def test_the_adapted_arm_declares_the_weighting_and_all_three_mechanisms_run(
     assert calls["weighted_blocks"] == [], (
         "Eq. (26)'s D was applied by an arm declaring no weighting")
     # And the two that are NOT gated fire on the twin too, with the same source
-    # counts: r33's Eq. (37) weights are the observed labels' and Eq. (38) is
+    # counts: r33's Eq. (33) weights are the observed labels' and Eq. (38) is
     # behind `spec["local"]`, so switching this flag reaches neither.
     assert calls["global_loss"], "the global aggregation was never reached"
     assert calls["global_loss"][0][1] == weighted_counts, (

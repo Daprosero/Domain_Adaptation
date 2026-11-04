@@ -33,9 +33,9 @@ missing. What remains declared is what the toyset still exercises.
 __benchmark__ = {
     "arms": {
         "B": {"sections": ["3"]},
-        "E": {"sections": ["1", "2", "3", "5"]},
-        "F": {"sections": ["1", "2", "3", "5"]},
-        "G": {"sections": ["1", "2", "3", "4", "5"]},
+        "E": {"sections": ["1", "2", "3", "4", "6"]},
+        "F": {"sections": ["1", "2", "3", "4", "6"]},
+        "G": {"sections": ["1", "2", "3", "4", "5", "6"]},
         # `GN` is retired. It declared exactly G's sections -- it exercised the
         # same equations, and the single axis that separated it (the target
         # forward normalized with the current source-batch statistics instead

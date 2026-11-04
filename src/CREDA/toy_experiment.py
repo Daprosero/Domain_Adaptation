@@ -232,14 +232,14 @@ def sigma_de_la_fuente(H):
     """
     return float(_HEURISTICO_DE_SIGMA._median_pairwise(torch.as_tensor(H)))
 
-#: Si el puntaje por clase se mapea a [0,1] por la Ec. 36. ACA SI, desde que
+#: Si el puntaje por clase se mapea a [0,1] por la Ec. 32. ACA SI, desde que
 #: r28 cambio las cotas; el divisor es el de r31 (ver el cierre del bloque).
 #:
 #: El mapa de r25 estuvo APAGADO aca, y las mediciones que lo apagaron siguen
 #: siendo ciertas. Son la evidencia sobre la que r28 reemplazo la ecuacion, asi
 #: que se conservan; lo que ya no se sostiene es la conclusion:
 #:
-#:   Ec. 35 (r25)   L = -ln(n_s+n_t)   U = (ln n_s + ln n_t)/2
+#:   Ec. 31 (r25)   L = -ln(n_s+n_t)   U = (ln n_s + ln n_t)/2
 #:   con n=43 por clase: L=-4.4543, U=3.7612, ancho 8.2155
 #:   y `creda_c` vive, medido, en [0, 0.4231] --- el 5.1% de ese ancho
 #:
@@ -253,7 +253,7 @@ def sigma_de_la_fuente(H):
 #: and possibly not tight: the three matrices are not independent and their
 #: extremes need not be reachable at once".
 #:
-#: La Ec. 35 de r28 toma los extremos de la PROPIA cota del puntaje (Ec. 34),
+#: La Ec. 31 de r28 toma los extremos de la PROPIA cota del puntaje (Ec. 30),
 #: evaluada sobre las mismas matrices normalizadas con las que se construye
 #: J_c: L = -ln 2 y U = 2 ln cosh((H2(K~_t) - H2(K_s))/4). Los dos son
 #: alcanzables, y eso es la diferencia entera. Medido aca con n=43 por clase,
@@ -282,7 +282,7 @@ def sigma_de_la_fuente(H):
 #: **2026-10-17: la columna `r28` de arriba es historia fechada y NO es lo que
 #: esta bandera computa hoy.** Las dos columnas estan rotuladas por la revision
 #: bajo la que se midieron, asi que ninguna es falsa; lo que faltaba es que
-#: r31 reemplazo el divisor de la Ec. 36. r28 y r29 dividian por el span por
+#: r31 reemplazo el divisor de la Ec. 32. r28 y r29 dividian por el span por
 #: clase `U_c - L_c`; r31 divide por el literal `ln 2`, sobre el teorema de r30
 #: `0 <= U_c - J_c <= ln 2`. La relacion entre las dos lecturas es exacta y
 #: sale de las dos ecuaciones, no de una medicion:
@@ -300,8 +300,8 @@ def sigma_de_la_fuente(H):
 #: no lo guardo. Quedan como lo que son, cinco lecturas de r28.
 NORMALIZAR_POR_COTAS = True
 
-#: Cual de las dos Ecs. 35 usa `NORMALIZAR_POR_COTAS`, y cual masa iguala el
-#: balance de la Ec. 32. Declarados aca y no clavados en la construccion de la
+#: Cual de las dos Ecs. 31 usa `NORMALIZAR_POR_COTAS`, y cual masa iguala el
+#: balance de la Ec. 28. Declarados aca y no clavados en la construccion de la
 #: perdida, porque son las dos elecciones que deciden en que escala viven todos
 #: los numeros de la fase 2 y un lector tiene que poder verlas sin leer el
 #: bucle del cuaderno.

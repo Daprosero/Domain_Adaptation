@@ -17,7 +17,7 @@ protects is a BASELINE, and Eq. (24) is not part of one. It is the method's
 treatment: the toy's two arms differ in exactly that weight, so a run with it
 off is the control and a run with it on is the thing being measured. A
 treatment has no independence to lose by depending on the method that proposes
-it. Eqs. (21), (35), (36) and the plumbing below are the baseline's own
+it. Eqs. (21, 31-32) and the plumbing below are the baseline's own
 arithmetic and stay copies.
 
 **What keeps a copy from drifting is a test, not a promise.**
@@ -30,7 +30,7 @@ nobody dares touch, which is why this paragraph exists.
 
 **Where the originals say "bag", this says "unit" or "sample".** Eq. (21) is
 where that substitution lives: one row of `Y_source` per labelled unit, and at
-sample level that unit is a sample. Eq. (35)'s ends no longer read a count at
+sample level that unit is a sample. Eq. (31)'s ends no longer read a count at
 all -- they are functions of the two marginal entropies -- so nothing is
 substituted there.
 
@@ -39,13 +39,14 @@ same test treatment: they are `MIL_CREDA.__init__`'s plumbing, and importing
 plumbing would re-establish exactly the dependency this module exists to
 avoid.
 
-**One revision lives here, and `__provenance__` names it: r34.** r34 moved
-Eq. 15's consensus term to a leave-one-out average, which is MIL-CREDA's
-attention over the instances of a bag; this module holds Eqs. 21, 35 and 36,
+**One revision lives here, and `__provenance__` names it: r35.** r35 reordered
+the global and local sections and renumbered Eqs. 28-37 without touching a
+body; before it, r34 moved Eq. 15's consensus term to a leave-one-out average, which is MIL-CREDA's
+attention over the instances of a bag; this module holds Eqs. 21 and 31-32,
 all three byte-identical in r33 and r34, so the rebind moved no arithmetic and
-every claim below about r33 holds at r34 unchanged. It named r25
+every claim below about r33 holds at r34 and r35 unchanged. It named r25
 until 2026-10-18, because `conservative_bounds` and `class_global_loss` sat
-beside the two functions below and implemented Eq. (35)/(36) as r25 wrote them:
+beside the two functions below and implemented Eq. (31)/(32) as r25 wrote them:
 ends from cardinality alone, `L_c = -ln(n_s + n_t)` and
 `U_c = (1/2)(ln n_s + ln n_t)`, and a loss divided by the per-class span
 `U_c - L_c`. A declaration is a claim about everything it covers, so while both
@@ -56,25 +57,25 @@ could move.** r33 states one pair of ends and r25's pair is nowhere in the
 formulation, so keeping code for it meant declaring a revision whose
 mathematics the module no longer held. What is left implements r33:
 
-- `entropy_cosh_bounds` -- Eqs. (34)-(35)'s two ends, the ones that REPLACED
+- `entropy_cosh_bounds` -- Eqs. (30)-(31)'s two ends, the ones that REPLACED
   the cardinality pair. r28 introduced them, deriving the upper end from the
   two marginal entropies of the same normalized matrices that build the score,
   and r33 states it unchanged.
-- `class_global_loss_cosh` -- Eq. (36) over that upper end:
+- `class_global_loss_cosh` -- Eq. (32) over that upper end:
   `(U_c - J_c) / ln 2`, dividing by the constant r30 proved bounds the span.
 - `source_bound` and `source_loss` -- Eq. (21), byte-identical in r25 and r33,
   and still held equal to `src/MIL_CREDA/objective.py`'s originals by
   `tests/test_creda_sample.py`.
 
 **The r33 pair arrived in two steps, and the scale is the second one.** r28
-introduced both functions with Eq. (36) still dividing by the per-class span
+introduced both functions with Eq. (32) still dividing by the per-class span
 `U_c - L_c` and that span explicitly excluded from the gradient. r30 proved
 `0 <= U_c - J_c <= ln 2`, and r31 therefore divides by `ln 2` and drops the
 gradient exception, because a literal constant has nothing to detach. That is
 the step that made the loss comparable across batches: with `U_c - L_c` in the
 denominator the scale moved with every class's own entropies, so the same value
 meant a different degree of alignment in two classes. The lower end
-`L_c = -ln 2` did not disappear from the formulation -- Eq. (34) still states it
+`L_c = -ln 2` did not disappear from the formulation -- Eq. (30) still states it
 and `entropy_cosh_bounds` still returns it -- it left the denominator.
 `GLOBAL_LOSS_SPAN` carries the theorem; `ENTROPY_COSH_LOWER` carries the lower
 end, and they are separate names on purpose.
@@ -99,20 +100,20 @@ import torch
 #: are checked near 1e-12 and single precision cannot resolve them.
 DTYPE = torch.float64
 
-#: Eq. (34)'s lower end, `L_c = -ln 2`. A constant, unlike r25's
+#: Eq. (30)'s lower end, `L_c = -ln 2`. A constant, unlike r25's
 #: `-ln(n_s + n_t)`: it is the value `J_c` approaches when the cross block
 #: vanishes with the two purities equal, and that configuration says nothing
 #: about how many units either domain contributed.
 #:
-#: **r31 removed this from Eq. (36) and did not remove it from the formulation.**
+#: **r31 removed this from Eq. (32) and did not remove it from the formulation.**
 #: It is still the lower end `entropy_cosh_bounds` returns and still the bound
-#: Eq. (34) states on `J_c`; what it stopped being is Eq. (36)'s denominator.
+#: Eq. (30) states on `J_c`; what it stopped being is Eq. (32)'s denominator.
 ENTROPY_COSH_LOWER = -math.log(2.0)
 
-#: r31 Eq. (36)'s denominator, `ln 2`. **Not `-ENTROPY_COSH_LOWER`, though it
+#: r31 Eq. (32)'s denominator, `ln 2`. **Not `-ENTROPY_COSH_LOWER`, though it
 #: is the same number.** This one is the bound r30 proved on the SPAN of the
 #: corrected score: with `r_c = ln(rho_s / rho_t)`, the lower bound on
-#: `rho_c^mix` gives `J_c >= ln cosh(r_c/2) - ln 2`, Eq. (35) is
+#: `rho_c^mix` gives `J_c >= ln cosh(r_c/2) - ln 2`, Eq. (31) is
 #: `U_c = 2 ln cosh(r_c/4)`, and `cosh(r_c/2) = 2 cosh^2(r_c/4) - 1 >=
 #: cosh^2(r_c/4)`, so `0 <= U_c - J_c <= ln 2`.
 #:
@@ -125,14 +126,14 @@ ENTROPY_COSH_LOWER = -math.log(2.0)
 GLOBAL_LOSS_SPAN = math.log(2.0)
 
 __provenance__ = {
-    "revision": "research-concept-r34.md",
-    "sections": ["3", "5"],
+    "revision": "research-concept-r35.md",
+    "sections": ["3", "4"],
     # La 34 estaba CALCULADA y no declarada: `entropy_cosh_bounds` devuelve
-    # `L_c = -ln 2`, que es el extremo inferior de la Ec. 34 y no de la 35 ---
+    # `L_c = -ln 2`, que es el extremo inferior de la Ec. 30 y no de la 35 ---
     # su propio docstring lo dice desde que r31 angosto la 35 a `U_c` sola. Una
     # ecuacion que el modulo computa y su declaracion omite es exactamente lo
     # que la declaracion existe para hacer visible.
-    "equations": ["21", "34", "35", "36"],
+    "equations": ["21", "30", "31", "32"],
     "invariants": [
         "source_bound_copy_agrees_with_the_original",
         "source_loss_copy_agrees_with_the_original",
@@ -161,23 +162,23 @@ def as_matrix(value: object) -> torch.Tensor:
     return tensor.reshape(1, -1) if tensor.dim() < 2 else tensor
 
 
-# ------------------------------- Eq. (35), byte-identical from revision 33 on
+# ------------------------------- Eq. (31), byte-identical from revision 33 on
 def entropy_cosh_bounds(
     h_source: torch.Tensor, h_target: torch.Tensor
 ) -> tuple[float, torch.Tensor]:
-    """Return Eq. (35)'s `U_c = 2 ln cosh((H_t - H_s)/4)` and Eq. (34)'s `L_c`.
+    """Return Eq. (31)'s `U_c = 2 ln cosh((H_t - H_s)/4)` and Eq. (30)'s `L_c`.
 
     **The two ends come from two equations, and r31 is why that is worth a
-    sentence.** r28's Eq. (35) stated both: `L_c = -ln 2` and the `cosh` upper
-    end, together. r31 narrowed Eq. (35) to the upper end alone, because `L_c`
-    had stopped being needed where Eq. (35) was used -- Eq. (36) divides by the
+    sentence.** r28's Eq. (31) stated both: `L_c = -ln 2` and the `cosh` upper
+    end, together. r31 narrowed Eq. (31) to the upper end alone, because `L_c`
+    had stopped being needed where Eq. (31) was used -- Eq. (32) divides by the
     literal `ln 2` now, not by the span. The lower end did not leave the
-    formulation: Eq. (34), byte-identical in r28 and r31, still states
+    formulation: Eq. (30), byte-identical in r28 and r31, still states
     `-ln 2 <= J_c <= 2 ln cosh((H_t - H_s)/4)`.
 
     So this function keeps returning BOTH ends and its signature is unchanged.
     What changed is the attribution, and the attribution is the whole content
-    of a docstring like this one: a reader sent to Eq. (35) in r31 looking for
+    of a docstring like this one: a reader sent to Eq. (31) in r31 looking for
     `L_c` does not find it there and has no way to tell whether the code or the
     equation is wrong. See `ENTROPY_COSH_LOWER` for the constant itself.
 
@@ -195,7 +196,7 @@ def entropy_cosh_bounds(
 
     `U_c` depending on the two marginal entropies is what removes it, because
     `U_c - J_c >= 0` with equality only at alignment. The ends are evaluated on
-    the SAME trace-normalized matrices that build `J_c` (Eq. 32), which is what
+    the SAME trace-normalized matrices that build `J_c` (Eq. 28), which is what
     makes that statement about the score actually computed rather than about a
     bound on a different object.
 
@@ -217,7 +218,7 @@ def entropy_cosh_bounds(
     return ENTROPY_COSH_LOWER, upper
 
 
-# ------------------------------- Eq. (36), byte-identical from revision 33 on
+# ------------------------------- Eq. (32), byte-identical from revision 33 on
 
 
 def class_global_loss_cosh(
@@ -225,7 +226,7 @@ def class_global_loss_cosh(
     h_source: torch.Tensor,
     h_target: torch.Tensor,
 ) -> torch.Tensor:
-    """Implement r31's Eq. (36): l_glob,c = (U_c - J_c) / ln 2, in [0, 1].
+    """Implement r31's Eq. (32): l_glob,c = (U_c - J_c) / ln 2, in [0, 1].
 
     `score` is `J_c`, the quantity that is MAXIMIZED, and that is why
     `CREDALoss` passes it `-creda_c`: this repository computes

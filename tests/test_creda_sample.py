@@ -214,7 +214,7 @@ def _class_cardinalities(y_s, g_t) -> list[tuple[int, int]]:
 
 
 def test_eq37_weights_are_the_observed_source_proportions() -> None:
-    """r33 Sec. 5, Eq. (37) at sample level: `sum_c (n_c^s / N_s) l~_c`.
+    """r33 Sec. 5, Eq. (33) at sample level: `sum_c (n_c^s / N_s) l~_c`.
 
     The weights come from `y_s`, which is OBSERVED, and not from the routing or
     the confidences -- the revision's reason being that a weight based on those
@@ -315,7 +315,7 @@ def test_the_retired_copies_are_gone_from_both_sides() -> None:
 
     `test_conservative_bounds_copy_agrees_with_the_original` and
     `test_class_global_loss_copy_agrees_with_the_original` held
-    `CREDA.bounds`' copies of Eq. (35)/(36) byte-equal to
+    `CREDA.bounds`' copies of Eq. (31)/(32) byte-equal to
     `MIL_CREDA.global_term`'s originals. That pin is what made the copies safe,
     and it is also what made `CREDA.bounds` declare r25 for as long as they
     existed. r33 states ONE pair of ends -- `L_c = -ln 2` and
@@ -439,7 +439,7 @@ def test_the_default_leaves_every_path_bit_identical_to_before_the_fork(
                                        reduction="none")
     if reduction == "none":
         # The PER-CLASS values are still bit-identical, and that is the half of
-        # this claim r33 did not touch: Eq. (37) is an aggregation, so every
+        # this claim r33 did not touch: Eq. (33) is an aggregation, so every
         # `creda_c` the pre-fork body computes must come out unchanged.
         assert torch.equal(actual, per_class), (
             f"the per-class default path moved: {actual!r} against the "
@@ -448,15 +448,15 @@ def test_the_default_leaves_every_path_bit_identical_to_before_the_fork(
         return
 
     # **The REDUCED value moved on 2026-10-18, by design, and this is where.**
-    # The pre-fork body reduced with `losses.mean()`, which is r31's Eq. (37)
+    # The pre-fork body reduced with `losses.mean()`, which is r31's Eq. (33)
     # read at sample level: a uniform average over the ACTIVE classes. r33's
-    # Eq. (37) is `sum_c (n_c^s / N_s) l~_c` with `l~_c = 1` for an inactive
+    # Eq. (33) is `sum_c (n_c^s / N_s) l~_c` with `l~_c = 1` for an inactive
     # class. So this comparison is no longer against the pre-fork MEAN; it is
     # against the pre-fork per-class values put through r33's aggregation.
     #
     # That is a stronger pin than a re-measured constant would be, not a weaker
     # one. A re-measured number says "it is what it is today". This says the
-    # per-class half is untouched and the aggregation is exactly Eq. (37), so
+    # per-class half is untouched and the aggregation is exactly Eq. (33), so
     # any drift in either half still reddens -- and it cannot be satisfied by
     # the implementation drifting, because the reference reduces a vector the
     # reference itself computed.
@@ -473,7 +473,7 @@ def test_the_default_leaves_every_path_bit_identical_to_before_the_fork(
                                  dtype=per_class.dtype)
     expected = (source_counts @ per_class) / f_s.shape[0]
     assert torch.equal(actual, expected), (
-        f"the reduced default path is not Eq. (37) over the pre-fork "
+        f"the reduced default path is not Eq. (33) over the pre-fork "
         f"per-class values: {actual!r} against {expected!r}, "
         f"use_entropy_weighting={use_entropy_weighting!r}")
 
@@ -489,7 +489,7 @@ def test_the_pinned_pre_fork_means_still_come_out_of_the_default_path() -> None:
     f_s, f_t, y_s, g_t = _fixture()
     # **The two numbers below are r33's, measured 2026-10-18, and the two they
     # replace are kept beside them.** The pin from before the three forks read
-    # `-0.309462308883667` and `0.13413619995117188`; r33's Eq. (37) reduces
+    # `-0.309462308883667` and `0.13413619995117188`; r33's Eq. (33) reduces
     # with `sum_c (n_c^s / N_s) l~_c` where the pre-fork body used
     # `losses.mean()`, and on this fixture -- every class active, so the two
     # agree mathematically -- what separates them is float32 rounding, about
@@ -499,7 +499,7 @@ def test_the_pinned_pre_fork_means_still_come_out_of_the_default_path() -> None:
     #
     # `test_the_default_leaves_every_path_bit_identical_to_before_the_fork` is
     # what holds the per-class half unchanged and the aggregation equal to
-    # Eq. (37); these two are the independent tripwire beside it.
+    # Eq. (33); these two are the independent tripwire beside it.
     # Measured, not guessed: the `False` arm did NOT move. Its mantissas make
     # `(4 * sum_c l_c) / 12` and `sum_c l_c / 3` land on the same float32; the
     # `True` arm's do not. One of the two is bit-identical and the other moved
@@ -529,7 +529,7 @@ def test_the_pinned_pre_fork_means_still_come_out_of_the_default_path() -> None:
             f"default path produced {value!r}; r33's pinned value is "
             f"{expected!r} (the pre-fork one was "
             f"{superseded[use_entropy_weighting]!r})")
-        # **The bound here was `1e-6` and its stated reason was Eq. (37)'s
+        # **The bound here was `1e-6` and its stated reason was Eq. (33)'s
         # rounding; that reason no longer covers the move.** Removing
         # `_renyi_entropy_order_2`'s two epsilons is a change to the ESTIMATOR
         # rather than to the aggregation, and it shifts the `True` arm by
@@ -671,7 +671,7 @@ def test_weight_cross_block_multiplies_the_cross_block_by_d_from_the_right() -> 
 
 
 def test_normalize_by_bounds_maps_each_class_onto_its_own_unit_interval() -> None:
-    """Fork 3 puts each class's score onto [0, 1] through Eq. (36), and the
+    """Fork 3 puts each class's score onto [0, 1] through Eq. (32), and the
     SIGN CHAIN comes out increasing in `creda_c`.
 
     **Moved from r25's map to r33's on 2026-10-18.** It used to build its own
@@ -680,15 +680,15 @@ def test_normalize_by_bounds_maps_each_class_onto_its_own_unit_interval() -> Non
     happens to default to". Those two functions were removed -- r33 states one
     pair of ends -- so the claim moved to the map that is left rather than
     being deleted, because the claim was never about r25. The ends now come
-    from the two marginal entropies (Eq. 34/35) and the denominator is the
-    literal `ln 2` (Eq. 36).
+    from the two marginal entropies (Eq. 30/31) and the denominator is the
+    literal `ln 2` (Eq. 32).
 
     Two claims, checked in two steps because a single end-to-end reading cannot
     tell a correct chain from two compensating errors.
 
     First, every value lands in [0, 1].
 
-    Second, the sign chain. Eq. (36) is DECREASING in its own argument, and the
+    Second, the sign chain. Eq. (32) is DECREASING in its own argument, and the
     argument the implementation passes is `-creda_c`, so the composition is
     INCREASING in `creda_c`: minimizing the bounded form and minimizing CREDA's
     raw per-class score push the encoder the same way, and a single missing
@@ -697,11 +697,11 @@ def test_normalize_by_bounds_maps_each_class_onto_its_own_unit_interval() -> Non
     read off the implementation, by rebuilding what it must have computed.
     """
     f_s, f_t, y_s, g_t = _fixture()
-    # `entropy-cosh` is proved on Eq. (32)'s BALANCED mixture, and `CREDALoss`
+    # `entropy-cosh` is proved on Eq. (28)'s BALANCED mixture, and `CREDALoss`
     # refuses the pairing without it -- so both losses carry the balance and
     # the only difference between them is the normalizer.
     # `weight_cross_block=True` because Eq. 26 weights BOTH blocks that touch
-    # target bags, and Eq. 35's bound is proved on that mixture -- measured,
+    # target bags, and Eq. 31's bound is proved on that mixture -- measured,
     # 956 of 1769 per-class readings leave [0, 1] with the cross block raw,
     # re-measured 2026-10-18 after the entropy epsilons came out (it read
     # 1378 of 1733 before).
@@ -744,22 +744,22 @@ def test_normalize_by_bounds_maps_each_class_onto_its_own_unit_interval() -> Non
         for i, (h_s, h_t) in enumerate(entropies)
     ])
     assert torch.allclose(actual, expected, rtol=0.0, atol=1e-6), (
-        f"the bounded per-class values are not Eq. (36) of `-creda_c`: "
+        f"the bounded per-class values are not Eq. (32) of `-creda_c`: "
         f"{actual!r} against {expected!r}")
     assert not torch.equal(actual, raw), (
         "the flag changed nothing, so this test is measuring a no-op")
 
     assert float(actual.min()) >= 0.0 and float(actual.max()) <= 1.0, (
-        f"a normalized class loss left [0, 1]: {actual!r}; Eq. (36) sends "
+        f"a normalized class loss left [0, 1]: {actual!r}; Eq. (32) sends "
         f"U_c to zero and L_c to one and the score lies between them")
 
-    # Link one: Eq. (36) decreases in its argument, at a FIXED pair of ends.
+    # Link one: Eq. (32) decreases in its argument, at a FIXED pair of ends.
     h_s, h_t = entropies[0]
     _lower, upper = bounds.entropy_cosh_bounds(h_s, h_t)
     assert float(bounds.class_global_loss_cosh(upper, h_s, h_t)) == 0.0
     assert (float(bounds.class_global_loss_cosh(float(upper) - 1.0, h_s, h_t))
             > float(bounds.class_global_loss_cosh(float(upper) - 0.5, h_s, h_t))), (
-        "Eq. (36) came out increasing in J_c, which would make the whole "
+        "Eq. (32) came out increasing in J_c, which would make the whole "
         "chain below read correctly for the wrong reason")
 
     # Link two: the argument is `-creda_c`. Read off the implementation rather

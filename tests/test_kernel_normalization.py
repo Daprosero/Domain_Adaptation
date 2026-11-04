@@ -121,7 +121,7 @@ def test_the_default_leaves_every_path_bit_identical_to_before_the_fork(encoder)
     `contributionGlobal` and `contribution` read the adaptation term, so they
     move whenever the formulation legitimately moves -- and then this test
     reddens with a message naming this flag, which is false. It happened: the
-    r25 -> r29 re-binding of the global term (Eqs. 32, 34-36 and 37) moved all
+    r25 -> r29 re-binding of the global term (Eqs. 28 and 30-33) moved all
     four, and NONE of the other eight. A red here is therefore read in two
     steps: if `supervised`, `contributionLocal`, the three kernel means and the
     two confidence readings are all still bit-identical, the default path of
@@ -166,7 +166,7 @@ def test_the_default_leaves_every_path_bit_identical_to_before_the_fork(encoder)
     result = arm.training_step(x, y, 0.5, torch.Generator().manual_seed(3))
 
     pinned = {
-        # **Five of these moved on 2026-10-18 and r33's Eq. (37) is why.** This
+        # **Five of these moved on 2026-10-18 and r33's Eq. (33) is why.** This
         # step has `activeClasses == 2` of 3, and the abandoned class holds 4 of
         # the 10 source bags: r31 dropped it from the sum, so the global term
         # read 8.4e-07 while a third of the classes were being abandoned, and

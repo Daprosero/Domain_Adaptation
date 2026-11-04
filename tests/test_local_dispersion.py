@@ -132,7 +132,7 @@ def test_the_flag_off_is_bit_identical(encoder) -> None:
     `contributionGlobal` and `contribution` read the adaptation term, so they
     move whenever the formulation legitimately moves -- and then this test
     reddens with a message naming this flag, which is false. It happened: the
-    r25 -> r29 re-binding of the global term (Eqs. 32, 34-36 and 37) moved all
+    r25 -> r29 re-binding of the global term (Eqs. 28 and 30-33) moved all
     four, and NONE of the other eight. A red here is therefore read in two
     steps: if `supervised`, `contributionLocal`, the three kernel means and the
     two confidence readings are all still bit-identical, the default path of
@@ -152,10 +152,10 @@ def test_the_flag_off_is_bit_identical(encoder) -> None:
     arm = wiring.build("G", CLASSES, _pool(1), _pool(2))
     result = _step(arm, torch.Generator().manual_seed(3))
 
-    # **Six of these twelve moved on 2026-10-18, and r33's Eq. (37) is why.**
+    # **Six of these twelve moved on 2026-10-18, and r33's Eq. (33) is why.**
     # This step has `activeClasses == 2` of 3 (asserted below, and it always
     # did): the target routing abandoned one class, and that class holds 4 of
-    # the 10 source bags in the batch. r31's Eq. (37) dropped an inactive class
+    # the 10 source bags in the batch. r31's Eq. (33) dropped an inactive class
     # from the sum, so the global term read 8.4e-07 -- essentially nothing --
     # while a third of the classes were being abandoned. r33 charges
     # `l~_c = 1` for it, weighted by its own `n_c^s / N_s = 0.4`, so the term
@@ -175,7 +175,7 @@ def test_the_flag_off_is_bit_identical(encoder) -> None:
     # `supervised` did NOT move, and that is the half worth naming: Eq. (21)
     # reads the source alone, so no aggregation change can reach it. Nor did
     # the three kernel means, the two confidence readings or the bag entropy --
-    # Eq. (37) is an aggregation and touches no block.
+    # Eq. (33) is an aggregation and touches no block.
     #
     # `contributionLocal` moved by 4.8e-08, which is Eq. (38) going from the
     # confidence-weighted quotient to the uniform mean. It is small HERE
@@ -239,7 +239,7 @@ def test_the_flag_on_changes_only_the_local_half(encoder, monkeypatch) -> None:
 
     assert torch.equal(global_off, global_on), (
         "the global half must be bit-identical whether the probe flag is "
-        "on or off -- the flag has no business touching Eqs. (36)/(37)'s "
+        "on or off -- the flag has no business touching Eqs. (32)/(33)'s "
         "own computation"
     )
     assert float(local_off.detach()) != pytest.approx(float(local_on.detach())), (

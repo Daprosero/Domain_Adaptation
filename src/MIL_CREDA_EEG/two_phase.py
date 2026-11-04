@@ -1,13 +1,13 @@
 """MIL-CREDA's two-phase training on EEG, for one transfer, rotation and seed.
 
-Experiments plan v40, Secs. 4.5, 7.3 and 7.7, over proposal r34 Eqs. 21 and
+Experiments plan v40, Secs. 4.5, 7.3 and 7.7, over proposal r35 Eqs. 21 and
 32-39. The phase mechanics follow the retired toy-set runner (git history,
 `src/MIL_CREDA_Benchmark/toy_run.py` before 9b733d7) as a reference; nothing of
 it is imported or restored, and the plan's rules govern where the two differ.
 
 **Phase 1, supervised in the source (Sec. 7.3).** Source trunk, attention and
 head are trained on the source training bags with Eq. 21 normalized by B_src,
-the supervised term of r34's objective (`mil_creda_model.source_term`). The
+the supervised term of r35's objective (`mil_creda_model.source_term`). The
 stop is early stopping with `patience1` on the balanced accuracy of the source
 validation bags, never on a test fold; the weights of the best epoch (BatchNorm
 statistics included) are restored and the restore is proved: every tensor is
@@ -37,7 +37,7 @@ attention and the head are frozen: `requires_grad` off and the source trunk in
 
 **Phase 2, adaptation (Secs. 7.3, 7.7).** The optimizer holds the target trunk
 only. The loss is `lambda_glob * L_glob + lambda_loc * L_loc` with both
-coefficients 1 and no ramp (r34 Eqs. 32-38; Eq. 39 with its supervised summand
+coefficients 1 and no ramp (r35 Eqs. 28-33, 38; Eq. 39 with its supervised summand
 dropped, `objective.total_objective` with a zero first argument). Eq. 21 over
 the source batch is computed and recorded on every step and summed into
 nothing: with theta_s, phi and psi frozen it carries no gradient to theta_t.
@@ -64,7 +64,7 @@ before the selection existed, so every existing caller is unchanged.
 does not fix. Phase 1 takes one class-interleaved pass over the source training
 bags per epoch. Phase 2 takes one shuffled pass over the target training bags
 per epoch, each step paired with a source batch drawn with equal numbers per
-class from per-class queues, so every class is in the source batch, as r34's
+class from per-class queues, so every class is in the source batch, as r35's
 local correspondence requires (S_c non-empty). The source side of phase 2 is
 encoded without gradient: it is frozen, so the target trunk's gradient is the
 same and memory is not spent on a graph nobody differentiates.
@@ -99,7 +99,7 @@ __provenance__ = {
     "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
-    "equations": ["21", "32", "33", "34", "35", "36", "37", "38", "39"],
+    "equations": ["21", "28", "29", "30", "31", "32", "33", "38", "39"],
     "invariants": [
         "the_hyperparameters_are_exactly_the_declared_ones",
         "phase_one_restores_the_best_epochs_weights_and_proves_it",
