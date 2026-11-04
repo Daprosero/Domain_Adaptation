@@ -53,14 +53,14 @@ COPIES = {
         "test_creda_sample.test_source_loss_copy_agrees_with_the_original."
     ),
     "entropy_cosh_bounds": (
-        "Eq. (35)'s two ends. Baseline arithmetic, so it stays a copy; "
+        "Eq. (31)'s two ends. Baseline arithmetic, so it stays a copy; "
         "test_r31_ec36 parametrizes the SAME properties over both "
         "implementations (its IMPLEMENTATIONS tuple), which is weaker than an "
         "equality -- two implementations can satisfy every declared property "
         "and still differ on a value no property names."
     ),
     "class_global_loss_cosh": (
-        "Eq. (36)'s per-class loss. Same ruling and same weaker net as "
+        "Eq. (32)'s per-class loss. Same ruling and same weaker net as "
         "entropy_cosh_bounds, through the same parametrization."
     ),
     "as_tensor": (

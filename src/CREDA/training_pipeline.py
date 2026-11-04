@@ -174,10 +174,10 @@ def get_lambda(epoch, total_epochs, delta):
     return (1 - np.exp(-delta * p)) / (1 + np.exp(-delta * p))
 
 def entropy(p):
-    """Shannon's `H(p) = -sum_c p_c ln p_c`, for the BASELINES and not for r34.
+    """Shannon's `H(p) = -sum_c p_c ln p_c`, for the BASELINES and not for r35.
 
     **Not one of the formulation's estimators, and the `1e-5` is not one of its
-    epsilons.** r34 states a single entropy, Eq. (10)'s quadratic Renyi; this
+    epsilons.** r35 states a single entropy, Eq. (10)'s quadratic Renyi; this
     one belongs to the entropy-conditioning the CDAN and ADDA comparators
     published, which `train_cdan` reads at lines 451 and 466. Its `1e-5` guards
     a zero that IS reachable --- a confident softmax underflows to exactly zero
@@ -524,7 +524,7 @@ def train_creda(model, src_loader, tgt_loader, val_loader_src, val_loader_tgt, d
     # protection is written here instead.
     #
     # **2026-10-18: `bounds_form='conservative'` was a third keyword here and
-    # is gone.** r33's Eq. (35) states one pair of ends and r25's cardinality
+    # is gone.** r33's Eq. (31) states one pair of ends and r25's cardinality
     # pair is nowhere in the formulation, so `conservative_bounds` and
     # `class_global_loss` were removed from `CREDA.bounds` rather than kept
     # behind a name -- see `models.BOUNDS_FORMS`. This path therefore CANNOT be

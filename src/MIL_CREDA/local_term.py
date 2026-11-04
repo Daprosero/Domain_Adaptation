@@ -1,11 +1,11 @@
 """Local alignment: each target subject against a source reference built for it.
 
 The global term aligns aggregated conditional distributions but leaves every
-source bag of a class interchangeable. Section 4 resolves the subject-to-subject
-correspondence with the SAME bag kernel: Eq. (28) spreads relevance among the
-source bags of one class, Eq. (29) weights those distributions by the target's
-own class scores so the total mass is one, Eq. (30) builds a personalized
-reference in H_I, and Eq. (31) measures the squared RKHS distance to it using
+source bag of a class interchangeable. Section 5 resolves the subject-to-subject
+correspondence with the SAME bag kernel: Eq. (34) spreads relevance among the
+source bags of one class, Eq. (35) weights those distributions by the target's
+own class scores so the total mass is one, Eq. (36) builds a personalized
+reference in H_I, and Eq. (37) measures the squared RKHS distance to it using
 kernel evaluations alone. Eq. (38) normalizes it and takes the uniform mean.
 """
 
@@ -16,9 +16,9 @@ import torch
 from MIL_CREDA import as_index, as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r34.md",
-    "sections": ["4", "5"],
-    "equations": ["28", "29", "30", "31", "38"],
+    "revision": "research-concept-r35.md",
+    "sections": ["5"],
+    "equations": ["34", "35", "36", "37", "38"],
     "invariants": [
         "correspondence_simplex_per_class",
         "correspondence_order_preserving",
@@ -34,7 +34,7 @@ __provenance__ = {
 def class_correspondence(
     similarities: torch.Tensor, source_idx: torch.Tensor, tau: float | torch.Tensor
 ) -> torch.Tensor:
-    """Implement Eq. (28): pi_{ji|c}, softmax over the source bags of one class.
+    """Implement Eq. (34): pi_{ji|c}, softmax over the source bags of one class.
 
     `similarities` holds kappa^B(B_i^s, B_j^t) for every source bag i and this
     one target bag j. Normalization happens strictly inside S_c. The class
@@ -56,7 +56,7 @@ def total_correspondence(
     target_scores: torch.Tensor,
     tau: float | torch.Tensor,
 ) -> torch.Tensor:
-    """Implement Eq. (29): pi_{ji} = g_{j,c_i} * pi_{ji|c_i}, over all source bags.
+    """Implement Eq. (35): pi_{ji} = g_{j,c_i} * pi_{ji|c_i}, over all source bags.
 
     Hierarchical by construction: the classifier's affinity fixes each class's
     total mass and the within-class correspondence distributes it among that
@@ -89,7 +89,7 @@ def local_distance(
     source_gram: torch.Tensor,
     pi: torch.Tensor,
 ) -> torch.Tensor:
-    """Implement Eq. (31): d_j^2 = ||Psi(B_j^t) - mu_j^s||^2, expanded in the kernel.
+    """Implement Eq. (37): d_j^2 = ||Psi(B_j^t) - mu_j^s||^2, expanded in the kernel.
 
     The three terms are the target's self-similarity, its weighted approach to
     the compatible source subjects, and the internal geometry of the source
@@ -134,7 +134,7 @@ def local_loss(squared_distances: torch.Tensor) -> torch.Tensor:
     `eps_loc` went with the denominator it stabilized; nothing reads it now.
 
     The pseudo-label's uncertainty did not leave the term, it moved inside it:
-    `total_correspondence` (Eq. 29) keeps the whole `g_j^t`, so a subject with
+    `total_correspondence` (Eq. 35) keeps the whole `g_j^t`, so a subject with
     an uncertain prediction is compared against a reference that mixes the
     classes in proportion to that uncertainty. Aggregation still acts only at
     this external level, leaving beta and pi untouched inside `d_j^2`.

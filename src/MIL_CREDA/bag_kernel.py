@@ -6,7 +6,7 @@ relevance-weighted mean of its instances' images, and Eq. (18) evaluates the
 inner product of two such representations as a double sum over instance pairs.
 
 The same kernel feeds the global term (Eq. 23) and the local correspondence
-(Eq. 28), so both operate on one geometry rather than two.
+(Eq. 34), so both operate on one geometry rather than two.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from MIL_CREDA import DTYPE, as_tensor
 from MIL_CREDA.kernels import gaussian_kernel
 
 __provenance__ = {
-    "revision": "research-concept-r34.md",
+    "revision": "research-concept-r35.md",
     "sections": ["3"],
     "equations": ["17", "18"],
     "invariants": [
@@ -81,7 +81,7 @@ def _empty(bags_rows: list[Bag], bags_cols: list[Bag]) -> torch.Tensor:
     """The correctly shaped matrix when one side contributes no bag at all.
 
     A class present in one domain and absent from the other reaches Eq. (23)
-    this way; Eq. (37) then excludes it. The dtype and device follow whichever
+    this way; Eq. (33) then excludes it. The dtype and device follow whichever
     side does have a bag, so an empty block still composes with the rest.
     """
     reference = next((as_tensor(H) for H, _ in bags_rows + bags_cols), None)

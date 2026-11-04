@@ -1,6 +1,6 @@
 """The common MIL wrapper of the non-MIL comparators, on EEG.
 
-Experiments plan v43, Secs. 7.2 and 7.3, over proposal r34, Eqs. 15, 16, 19
+Experiments plan v43, Secs. 7.2 and 7.3, over proposal r35, Eqs. 15, 16, 19
 and 20. The six comparators that are not MIL methods (UDA-DDA, CCA-LSC,
 CASUAL, COT, CS+CCS and CLUST in its source-free variant) all receive the same
 attention wrapper, and this is it: each window is encoded by the EEGNet-8,2

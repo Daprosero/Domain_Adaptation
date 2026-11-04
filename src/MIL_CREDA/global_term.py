@@ -1,13 +1,13 @@
 """The global dependency score and the bounded loss it becomes.
 
-Section 5 contrasts, class by class, the conditional geometry of both domains.
-Eq. (32) builds three density matrices -- the two trace-normalized marginals
+Section 4 contrasts, class by class, the conditional geometry of both domains.
+Eq. (28) builds three density matrices -- the two trace-normalized marginals
 and the BALANCED joint, a congruence that puts half the mass on each domain;
-Eq. (33) averages the two marginal entropies against the joint's; Eqs. (34)-(35)
+Eq. (29) averages the two marginal entropies against the joint's; Eqs. (30)-(31)
 bound that score by `-ln 2` below and `2 ln cosh((H_t - H_s)/4)` above, both read
-off the same matrices; and Eq. (36) divides the corrected score `U_c - J_c` by
+off the same matrices; and Eq. (32) divides the corrected score `U_c - J_c` by
 the constant `ln 2` that r30 proved bounds it, so minimizing the loss maximizes
-`J_c - U_c`. Eq. (37) aggregates over EVERY class with the observed source
+`J_c - U_c`. Eq. (33) aggregates over EVERY class with the observed source
 proportions `n_c^s / N_s`, which are non-negative and sum to one, so `L_glob` is
 a CONVEX combination; a class with no active pair is charged the maximum loss of
 one rather than skipped, and an empty active set therefore reads one and not
@@ -22,17 +22,17 @@ below has implemented r32's form since; the three clauses above it survived
 their own mechanism, which is the defect this repository keeps finding in prose
 rather than in code.
 
-**What r31 changed here, and what it did not.** Eq. (36)'s denominator was the
+**What r31 changed here, and what it did not.** Eq. (32)'s denominator was the
 per-class span `U_c - L_c` through r29, with that span explicitly excluded from
 the gradient. r30 proved `0 <= U_c - J_c <= ln 2`, so r31 divides by `ln 2` and
 drops the gradient exception -- a literal constant has nothing to detach. The
-lower end `L_c = -ln 2` stays in the formulation as Eq. (34)'s bound on `J_c`
+lower end `L_c = -ln 2` stays in the formulation as Eq. (30)'s bound on `J_c`
 and `entropy_cosh_bounds` still returns it; it left the denominator only.
 Minimizing `l_glob,c` now reads as maximizing `J_c - U_c`, where r29 wrote
 maximizing `J_c`.
 
 **One revision lives here, and `__provenance__` names it.** r29 replaced
-Eq. (32)'s normalization and Eqs. (34)-(35)'s ends, and the functions that
+Eq. (28)'s normalization and Eqs. (30)-(31)'s ends, and the functions that
 answer them -- `balanced_mixture`, `balanced_dependency_score`,
 `entropy_cosh_bounds`, `class_global_loss_cosh` -- are what every consumer in
 this repository calls.
@@ -59,21 +59,21 @@ import torch
 from MIL_CREDA import DTYPE, as_tensor
 from MIL_CREDA.renyi import quadratic_entropy, trace_normalize
 
-#: Eq. (34)'s lower end, `L_c = -ln 2`. A constant, unlike r25's
+#: Eq. (30)'s lower end, `L_c = -ln 2`. A constant, unlike r25's
 #: `-ln(n_s + n_t)`: it is the value `J_c` approaches when the cross block
 #: vanishes with the two purities equal, and that configuration says nothing
 #: about how many bags either domain contributed.
 #:
-#: **r31 removed this from Eq. (36) and did not remove it from the formulation.**
-#: Eq. (34) still states it as the lower bound on `J_c` and
-#: `entropy_cosh_bounds` still returns it; what it stopped being is Eq. (36)'s
+#: **r31 removed this from Eq. (32) and did not remove it from the formulation.**
+#: Eq. (30) still states it as the lower bound on `J_c` and
+#: `entropy_cosh_bounds` still returns it; what it stopped being is Eq. (32)'s
 #: denominator.
 ENTROPY_COSH_LOWER = -math.log(2.0)
 
-#: r31 Eq. (36)'s denominator, `ln 2`. **Not `-ENTROPY_COSH_LOWER`, though it
+#: r31 Eq. (32)'s denominator, `ln 2`. **Not `-ENTROPY_COSH_LOWER`, though it
 #: is the same number.** This one is the bound r30 proved on the SPAN of the
 #: corrected score: with `r_c = ln(rho_c^s / rho_c^t)`, the lower bound on
-#: `rho_c^mix` gives `J_c >= ln cosh(r_c/2) - ln 2`, Eq. (35) is
+#: `rho_c^mix` gives `J_c >= ln cosh(r_c/2) - ln 2`, Eq. (31) is
 #: `U_c = 2 ln cosh(r_c/4)`, and `cosh(r_c/2) = 2 cosh^2(r_c/4) - 1 >=
 #: cosh^2(r_c/4)`, so `0 <= U_c - J_c <= ln 2`.
 #:
@@ -86,19 +86,19 @@ ENTROPY_COSH_LOWER = -math.log(2.0)
 GLOBAL_LOSS_SPAN = math.log(2.0)
 
 __provenance__ = {
-    "revision": "research-concept-r34.md",
-    "sections": ["5"],
-    "equations": ["32", "33", "34", "35", "36", "37"],
+    "revision": "research-concept-r35.md",
+    "sections": ["4"],
+    "equations": ["28", "29", "30", "31", "32", "33"],
     "invariants": [
-        # r31 Eq. (32) -- the trace balance as a congruence, introduced at
+        # r31 Eq. (28) -- the trace balance as a congruence, introduced at
         # r29 and unchanged since.
         "balanced_mixture_is_a_unit_trace_congruence",
         "balanced_mixture_halves_the_mass_of_each_domain",
         "balanced_mixture_withdraws_a_bag_whose_confidence_vanishes",
         "balanced_score_is_invariant_to_the_common_confidence_scale",
-        # r31 Eqs. (33)-(35) -- the score and the entropy-cosh ends. r29
-        # introduced them; r31 narrowed Eq. (35) to its upper end, and the
-        # lower end these invariants also cover is Eq. (34)'s.
+        # r31 Eqs. (29)-(31) -- the score and the entropy-cosh ends. r29
+        # introduced them; r31 narrowed Eq. (31) to its upper end, and the
+        # lower end these invariants also cover is Eq. (30)'s.
         "entropy_cosh_bounds_are_the_two_ends_of_equation_thirty_five",
         "balanced_dependency_score_within_the_entropy_cosh_bounds",
         "the_global_loss_is_zero_exactly_at_alignment",
@@ -113,9 +113,9 @@ __provenance__ = {
         # rather than left as the mere absence of an alternative.
         "the_balance_is_credas_trace_mass_and_not_its_cardinality_one",
         "the_bounds_are_credas_entropy_cosh_choice_and_not_r25s_pair",
-        # r31 Eq. (36) -- the denominator is the constant `ln 2`.
+        # r31 Eq. (32) -- the denominator is the constant `ln 2`.
         "class_global_loss_cosh_divides_by_the_constant_span",
-        # r33 Eq. (37) -- the aggregation weights are the observed source
+        # r33 Eq. (33) -- the aggregation weights are the observed source
         # proportions, and a class the routing abandoned costs the maximum.
         "global_loss_is_convex_combination_of_source_proportions",
         "global_loss_charges_one_for_an_inactive_class",
@@ -127,11 +127,11 @@ __provenance__ = {
 def is_active(
     K_s_c: torch.Tensor, K_t_weighted: torch.Tensor, K_mix_weighted: torch.Tensor
 ) -> bool:
-    """The membership test for C_act of Eq. (37).
+    """The membership test for C_act of Eq. (33).
 
     A class participates only when bags exist in both domains and all three
     matrices that must be normalized have positive trace; otherwise the score
-    is undefined for it and Eq. (37) excludes it rather than defaulting it.
+    is undefined for it and Eq. (33) excludes it rather than defaulting it.
 
     Returns a Python bool, not a tensor: membership of C_act selects which terms
     enter the sum, and a selection is not a quantity to differentiate.
@@ -143,7 +143,7 @@ def is_active(
 def balanced_mixture(
     K_s_c: torch.Tensor, K_st_weighted: torch.Tensor, K_t_weighted: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Implement Eq. (32): the three density matrices the global term works on.
+    """Implement Eq. (28): the three density matrices the global term works on.
 
     Returns `(K̆_s, K̆̃_t, K̆̃_mix)`, which is the triple r29 itself names --
     "en suma, el término global opera sobre tres matrices de densidad: las dos
@@ -176,7 +176,7 @@ def balanced_mixture(
     derivation, which reads
     `ρ_mix = ¼ρ_s + ¼ρ_t + ½‖K̆̃_st‖_F²` -- precisely the Frobenius norm of a
     matrix carrying it. Dropping it would leave the trace at 2, which is not a
-    density, and would move every bound in Eqs. (34)-(35).
+    density, and would move every bound in Eqs. (30)-(31).
 
     **What survives the balance, and what does not.** The common level of the
     confidences cancels: `K̃_t = D K_t D` and its trace both scale by the square
@@ -185,7 +185,7 @@ def balanced_mixture(
     which keeps acting inside `K̆̃_t` and `K̆̃_st` -- so a bag whose confidence
     goes to zero is withdrawn, exactly as r29 states, while a uniform drop
     changes nothing the score can see. That absolute level enters OUTSIDE the
-    score instead, through Eq. (37)'s weights.
+    score instead, through Eq. (33)'s weights.
 
     Positive semidefiniteness survives because `Q` is a positive diagonal and a
     congruence `Q K Q` preserves the sign of the spectrum; the trace is
@@ -224,11 +224,11 @@ def balanced_dependency_score(
     *,
     detach_target_entropy: bool = False,
 ) -> torch.Tensor:
-    """Implement Eq. (33) over Eq. (32)'s densities: J_c = (H_s + H_t)/2 - H_mix.
+    """Implement Eq. (29) over Eq. (28)'s densities: J_c = (H_s + H_t)/2 - H_mix.
 
     The same contrast r25's `dependency_score` USED TO compute -- that function
     was removed on 2026-10-18 and nothing under `src/` defines it any more --
-    over the three matrices Eq. (32) now defines rather than three independent
+    over the three matrices Eq. (28) now defines rather than three independent
     trace normalizations. The signature is why this replaced it rather than
     becoming a keyword on it: the r25 function's third argument was the
     ASSEMBLED mixed matrix, and the balance cannot be applied to one — it needs
@@ -241,7 +241,7 @@ def balanced_dependency_score(
     information: the joint structure is the conditional mixed matrix, not a
     Hadamard product of paired marginals. Both marginals carry the same sign
     and the same coefficient, so neither is privileged. It is MAXIMIZED, and
-    Eq. (36)'s decreasing map is what turns it into something to minimize.
+    Eq. (32)'s decreasing map is what turns it into something to minimize.
 
     **`detach_target_entropy` is an axis, and it used to be pinned here with no
     name.** `False` -- the default -- is what r29 introduced, what r31 still
@@ -250,7 +250,7 @@ def balanced_dependency_score(
     carries the DISPERSIVE force the target block exerts on itself. `True`
     turns that force off and leaves everything else intact: `H_mix` still
     carries the target inside it, so the alignment the term asks for is
-    untouched, and Eq. (35)'s ends read `H_2(K̆̃_t)` through `h_target` of
+    untouched, and Eq. (31)'s ends read `H_2(K̆̃_t)` through `h_target` of
     `class_global_loss_cosh` rather than through here, so the bounds are
     untouched as well. It is an instrument, not a correction, and the parameter
     exists so a run can say which setting produced its numbers.
@@ -282,14 +282,14 @@ def balanced_dependency_score(
 def entropy_cosh_bounds(
     h_source: torch.Tensor, h_target: torch.Tensor
 ) -> tuple[float, torch.Tensor]:
-    """Return Eq. (35)'s `U_c = 2 ln cosh((H_t - H_s)/4)` and Eq. (34)'s `L_c`.
+    """Return Eq. (31)'s `U_c = 2 ln cosh((H_t - H_s)/4)` and Eq. (30)'s `L_c`.
 
     **The two ends come from two equations, and r31 is why that is worth a
-    sentence.** r28's Eq. (35) stated both: `L_c = -ln 2` and the `cosh` upper
-    end, together. r31 narrowed Eq. (35) to the upper end alone, because `L_c`
-    had stopped being needed where Eq. (35) was used -- Eq. (36) divides by the
+    sentence.** r28's Eq. (31) stated both: `L_c = -ln 2` and the `cosh` upper
+    end, together. r31 narrowed Eq. (31) to the upper end alone, because `L_c`
+    had stopped being needed where Eq. (31) was used -- Eq. (32) divides by the
     literal `ln 2` now, not by the span. The lower end did not leave the
-    formulation: Eq. (34), byte-identical in r28 and r31, still states
+    formulation: Eq. (30), byte-identical in r28 and r31, still states
     `-ln 2 <= J_c <= 2 ln cosh((H_t - H_s)/4)`.
 
     So this function keeps returning BOTH ends and its signature is unchanged;
@@ -311,7 +311,7 @@ def entropy_cosh_bounds(
 
     `U_c` depending on the two marginal entropies is what removes it, because
     `U_c - J_c >= 0` with equality only at alignment. Both ends are evaluated on
-    the SAME normalized matrices that build `J_c` (Eq. 32), which is what makes
+    the SAME normalized matrices that build `J_c` (Eq. 28), which is what makes
     that a statement about the score actually computed rather than about a bound
     on some other object.
 
@@ -324,7 +324,7 @@ def entropy_cosh_bounds(
     gives the upper, with `ln(ρ_s/ρ_t) = H_2(K̆̃_t) - H_2(K̆_s)`.
 
     **The order of the subtraction is the target's minus the source's**, as
-    Eq. (35) writes it. `cosh` is even, so the two orders return the same number
+    Eq. (31) writes it. `cosh` is even, so the two orders return the same number
     and no test reading `U_c` alone can see the difference; the order is kept
     because the equation states it, not because this function would misbehave.
 
@@ -343,7 +343,7 @@ def entropy_cosh_bounds(
     forces coinciding structures and hence equal entropies -- so it is not used
     to normalize anything.
 
-    **Which Eq. (35) a run uses is a LAW here, and the law is asserted.** Here
+    **Which Eq. (31) a run uses is a LAW here, and the law is asserted.** Here
     the normalization ALWAYS happens: this package carries one pair of ends and
     no flag selects another, which is why `wiring.py` reaches
     `class_global_loss_cosh` unconditionally.
@@ -370,14 +370,14 @@ def class_global_loss_cosh(
     h_source: torch.Tensor,
     h_target: torch.Tensor,
 ) -> torch.Tensor:
-    """Implement r31's Eq. (36): l_glob,c = (U_c - J_c) / ln 2, in [0, 1].
+    """Implement r31's Eq. (32): l_glob,c = (U_c - J_c) / ln 2, in [0, 1].
 
     `score` is `J_c`, the quantity that is MAXIMIZED. That was the convention
     r25's `class_global_loss` took too, and it is stated here rather than by
     reference because that function was removed on 2026-10-18 and a reader can
     no longer check the convention against it. `h_source` and `h_target` are
     `H_2` of
-    Eq. (32)'s two trace-normalized marginals, which is exactly what
+    Eq. (28)'s two trace-normalized marginals, which is exactly what
     `balanced_mixture` returns as its first two values.
 
     **The denominator is a literal constant, and that is the whole change.**
@@ -392,7 +392,7 @@ def class_global_loss_cosh(
     cardinalidades: un mismo valor representa la misma diferencia `U_c - J_c`
     en cualquier caso". Under r29 two classes with the same corrected score and
     different marginal entropies reported different losses, so the per-class
-    normalization made the numbers incomparable across the very axis Eq. (37)
+    normalization made the numbers incomparable across the very axis Eq. (33)
     then summed over. Second, the top of the interval becomes reachable: under
     r29 the worst case evaluated to `ln 2 / (U_c + ln 2)`, strictly below 1
     whenever the marginal entropies differ.
@@ -413,7 +413,7 @@ def global_loss(
     class_losses: Sequence[torch.Tensor | float | None],
     source_counts: Sequence[int],
 ) -> torch.Tensor:
-    """Implement Eq. (37): the convex aggregation over EVERY class.
+    """Implement Eq. (33): the convex aggregation over EVERY class.
 
     One entry per class in `C`, both arguments in the same class order.
     `class_losses[c]` is that class's `l_glob,c` when `c` is in `C_act`, and
@@ -439,7 +439,7 @@ def global_loss(
     Its whole job is the VALUE, so collapse is visible in the loss rather than
     rewarded by it.
 
-    A class with `n_c^s = 0` cannot be active -- Eq. (37)'s membership asks for
+    A class with `n_c^s = 0` cannot be active -- Eq. (33)'s membership asks for
     bags on both sides -- and its weight is `0 / N_s`, so it contributes
     nothing either way and needs no special case.
 
@@ -453,14 +453,14 @@ def global_loss(
             f"one source count per class is required: {len(class_losses)} "
             f"losses against {len(source_counts)} counts")
     if len(class_losses) == 0:
-        raise ValueError("Eq. (37) sums over C, which is never empty")
+        raise ValueError("Eq. (33) sums over C, which is never empty")
     counts = [int(n) for n in source_counts]
     if any(n < 0 for n in counts):
         raise ValueError("a source bag count is non-negative")
     total = sum(counts)
     if total == 0:
         raise ValueError(
-            "N_s is zero: the batch holds no source bag, so Eq. (37)'s weights "
+            "N_s is zero: the batch holds no source bag, so Eq. (33)'s weights "
             "are undefined")
     present = [loss for loss in class_losses if loss is not None]
     if not present:
@@ -488,7 +488,7 @@ def global_loss(
 def _stack(values: Sequence[float] | torch.Tensor) -> torch.Tensor:
     """One flat tensor out of a per-class sequence, however the caller built it.
 
-    Each class loss arrives as its own 0-dim tensor when Eq. (36) is applied
+    Each class loss arrives as its own 0-dim tensor when Eq. (32) is applied
     class by class, so the sequence has to be stacked rather than cast: casting
     would drop every one of those gradients on the floor.
     """

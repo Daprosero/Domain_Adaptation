@@ -3,7 +3,7 @@ the trace-normalized UNCONDITIONAL target bag Gram, and the two readings it
 must never be confused with.
 
 r25 declares a failure mode left "al terreno empirico": `theta_t` receives
-gradient only through Eqs. 37-38, so a target encoder that concentrates its
+gradient only through Eqs. 33, 38, so a target encoder that concentrates its
 instances in an arbitrarily small region can drive Eq. (24)'s confidence
 weights to zero (or to a confidently wrong single class) before Eq. 38 stops
 penalizing -- a collapse invisible in `targetAccuracy` alone. The same

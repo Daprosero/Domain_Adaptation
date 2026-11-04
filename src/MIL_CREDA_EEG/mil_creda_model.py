@@ -1,6 +1,6 @@
 """MIL-CREDA on EEG: two EEGNet trunks, one shared attention, one common head.
 
-Experiments plan v40, Secs. 3, 7.2 and 7.3, over proposal r34, Eqs. 13-39.
+Experiments plan v40, Secs. 3, 7.2 and 7.3, over proposal r35, Eqs. 13-39.
 This module wires the proposal's objects to the EEG instance encoder; it does
 not re-implement any of them. Every equation is called from `MIL_CREDA`:
 
@@ -19,8 +19,8 @@ not re-implement any of them. Every equation is called from `MIL_CREDA`:
   (`objective.source_loss`), pseudo-labels and confidences
   (`confidence.pseudolabel`, `confidence.confidences`), the conditional blocks
   with the confidence weighting of Eqs. 25-27 (`conditional.*`), the balanced
-  global term of Eqs. 32-37 (`global_term.*`, `renyi.quadratic_entropy`) and the
-  local term of Eqs. 28-31 and 38 (`local_term.*`).
+  global term of Eqs. 28-33 (`global_term.*`, `renyi.quadratic_entropy`) and the
+  local term of Eqs. 34-38 (`local_term.*`).
 
 **One bandwidth, a fixed number.** The instance kernel of Eq. 14 that the
 attention's consensus and the bag kernel both read uses one `sigma`, a Python
@@ -35,8 +35,8 @@ double-precision tolerances. The attention and the head live in float64.
 **Implementation choices the plan does not fix.** The selector's intermediate
 width `d_R` is 128, the toy-set precedent (`MIL_CREDA_Benchmark.config.
 ATTENTION_WIDTH`); the instance embeddings enter the kernel as they leave the
-trunk, with no extra normalization (r34 states none); the confidence weight
-enters the cross block too (`conditional.weighted_blocks` default, r34 Eq. 26).
+trunk, with no extra normalization (r35 states none); the confidence weight
+enters the cross block too (`conditional.weighted_blocks` default, r35 Eq. 26).
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ CLASSES = ("no", "yes")
 ATTENTION_WIDTH = 128
 #: Eq. 21's stabilizer, as in the toy set (`MIL_CREDA_Benchmark.config.EPSILON`).
 EPSILON_SOURCE = 1e-8
-#: Declared ranges of the normalized terms (Eqs. 21, 37, 38).
+#: Declared ranges of the normalized terms (Eqs. 21, 33, 38).
 TERM_BOUNDS = {"source": (0.0, 1.0), "global": (0.0, 1.0), "local": (0.0, 1.0)}
 DOMAINS = ("source", "target")
 
@@ -99,7 +99,7 @@ class SigmaAlreadyFixed(RuntimeError):
 
 
 class SourceBatchMissingClass(ValueError):
-    """r34 Sec. 4: the local correspondence needs S_c non-empty for every class."""
+    """r35 Sec. 5: the local correspondence needs S_c non-empty for every class."""
 
 
 class MILCREDAModel(nn.Module):
@@ -227,7 +227,7 @@ def adaptation_terms(model: MILCREDAModel,
                      tau_local: float) -> dict:
     """Eqs. 22-38 over one source batch and one target batch.
 
-    Returns the global term (Eq. 37), the local term (Eq. 38), the target
+    Returns the global term (Eq. 33), the local term (Eq. 38), the target
     predictions they read, and the per-class routing. Both terms keep their
     graph back to the target trunk; nothing here sums them, since Eq. 39
     carries a coefficient for each.
@@ -238,7 +238,7 @@ def adaptation_terms(model: MILCREDAModel,
                for c, n in enumerate(source_counts) if n == 0]
     if missing:
         raise SourceBatchMissingClass(
-            f"the source batch holds no bag of class(es) {missing}; Eq. 28 is undefined")
+            f"the source batch holds no bag of class(es) {missing}; Eq. 34 is undefined")
     sigma = model.sigma
     K_ss = bag_kernel_matrix(pairs_s, pairs_s, sigma)
     K_st = bag_kernel_matrix(pairs_s, pairs_t, sigma)
@@ -261,17 +261,17 @@ def adaptation_terms(model: MILCREDAModel,
         if not is_active(K_s_c, K_t_w, mixed_matrix(K_s_c, K_st_w, K_t_w)):       # Eq. 27
             class_losses.append(None)
             continue
-        breve_s, breve_t, _ = balanced_mixture(K_s_c, K_st_w, K_t_w)              # Eq. 32
-        score = balanced_dependency_score(K_s_c, K_st_w, K_t_w)                   # Eq. 33
-        class_losses.append(class_global_loss_cosh(                                # Eq. 36
+        breve_s, breve_t, _ = balanced_mixture(K_s_c, K_st_w, K_t_w)              # Eq. 28
+        score = balanced_dependency_score(K_s_c, K_st_w, K_t_w)                   # Eq. 29
+        class_losses.append(class_global_loss_cosh(                                # Eq. 32
             score, quadratic_entropy(breve_s), quadratic_entropy(breve_t)))
-    global_value = global_loss(class_losses, source_counts)                       # Eq. 37
+    global_value = global_loss(class_losses, source_counts)                       # Eq. 33
 
     distances = []
     for j in range(len(pairs_t)):
         cross = K_st[:, j]
-        pi = total_correspondence(cross, labels_dev, G_t[j], tau_local)           # Eq. 29
-        distances.append(local_distance(K_tt[j, j], cross, K_ss, pi))             # Eq. 31
+        pi = total_correspondence(cross, labels_dev, G_t[j], tau_local)           # Eq. 35
+        distances.append(local_distance(K_tt[j, j], cross, K_ss, pi))             # Eq. 37
     local_value = local_loss(torch.stack(distances))                              # Eq. 38
 
     return {"global": global_value.to(G_t.device), "local": local_value, "G_target": G_t,

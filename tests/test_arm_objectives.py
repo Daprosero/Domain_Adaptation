@@ -614,7 +614,7 @@ def test_an_adapted_arms_target_forward_carries_gradient_to_both_encoders(
     coefficient, so neither is privileged"), `local_term.py:85-101` (the
     target bag is measured against the SOURCE prototype, so the source
     encoder's gradient does not depend on the target forward existing), and
-    r25:1087 (read-only, parent forge): "La discrepancia local (Ec. 31) no
+    r25:1087 (read-only, parent forge): "La discrepancia local (Ec. 37) no
     cede por concentrarse: mu_j^s se construye con representaciones fuente."
 
     Isolated from the supervised term by capturing `_milcreda_term`'s own

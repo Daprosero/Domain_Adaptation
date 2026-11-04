@@ -56,7 +56,7 @@ class ElInstrumentoRetirado(unittest.TestCase):
     3. **Y estaba refutado donde se podía pedir.** Las clases que este archivo
        tenía medían 109 de 600 configuraciones fuera de `[0, 1]`, en un rango
        de `-0.7631` a `1.0517`, y una guarda lo rechazaba junto con el único
-       `bounds_form` admisible. Rederivar los extremos de las Ecs. (35)-(36)
+       `bounds_form` admisible. Rederivar los extremos de las Ecs. (31)-(32)
        para ese estimador es deliberación y no una bandera.
 
     Lo que SOBREVIVE de este archivo es `LaInvarianciaDeEscala`, que es sobre

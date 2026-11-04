@@ -79,8 +79,8 @@ def test_kernel_unit_diagonal_and_bounded(rng: Sampler) -> None:
     """r16 Sec. 1, Eq. (2): 0 < kappa_sigma <= 1 with kappa_sigma(x, x) = 1.
 
     The unit diagonal is what gives every image unit norm in the RKHS, which
-    Section 5 later uses to bound the bag representations and the local
-    distance.
+    Sections 4 and 5 later use to bound the bag representations and the
+    local distance.
     """
     X = rng.normal(size=(9, 4))
     K = gram(X, SIGMA)
@@ -178,7 +178,7 @@ def test_h2_bounded_by_log_n(rng: Sampler) -> None:
     """r16 Sec. 2: 0 <= H_2(A) <= ln N for a unit-trace positive semidefinite A.
 
     The rank-one spectrum reaches the minimum and the uniform spectrum the
-    maximum. Section 5 builds the conservative bounds of Eq. (34) on this.
+    maximum. Section 4 builds the conservative bounds of Eq. (30) on this.
     """
     for size in (2, 5, 9):
         A = trace_normalize(gram(rng.normal(size=(size, 3)), SIGMA))
@@ -653,7 +653,7 @@ def test_attention_logits_depend_only_on_own_bag(rng: Sampler) -> None:
 
 
 def test_consensus_component_in_unit_interval(rng: Sampler) -> None:
-    """r34 Sec. 3 (consensus term preceding Eq. 15): consensus in (0, 1].
+    """r35 Sec. 3 (consensus term preceding Eq. 15): consensus in (0, 1].
 
     kappa^I is strictly positive and at most one everywhere (Eq. 14), so an
     average of its off-diagonal entries cannot reach zero and cannot exceed
@@ -711,7 +711,7 @@ def test_consensus_component_in_unit_interval(rng: Sampler) -> None:
 
 
 def test_consensus_component_bandwidth_limits(rng: Sampler) -> None:
-    """r34 Sec. 3: 'si sigma -> 0, el kernel se anula entre embeddings
+    """r35 Sec. 3: 'si sigma -> 0, el kernel se anula entre embeddings
     distintos y los consensos de la bolsa tienden a cero; si sigma ->
     infinito, el kernel tiende a uno y los consensos tambien.'
 
@@ -740,7 +740,7 @@ def test_consensus_component_bandwidth_limits(rng: Sampler) -> None:
 
 
 def test_consensus_component_excludes_the_instance_itself(rng: Sampler) -> None:
-    """r34 Sec. 3, Eq. (15): the average runs over a' != a, divided by (m-1).
+    """r35 Sec. 3, Eq. (15): the average runs over a' != a, divided by (m-1).
 
     Asserted as a VALUE against an independently built pair, not as a property
     that both forms happen to share: the leave-one-out average must equal
@@ -776,7 +776,7 @@ def test_consensus_component_excludes_the_instance_itself(rng: Sampler) -> None:
 
 
 def test_consensus_component_omits_the_term_for_a_singleton_bag() -> None:
-    """r34 Sec. 3: 'en una bolsa con una sola instancia el termino se omite, lo
+    """r35 Sec. 3: 'en una bolsa con una sola instancia el termino se omite, lo
     que no altera nada, porque esa bolsa recibe peso uno (Ec. 16).'
 
     Both halves are asserted, because the first alone would let the omission
@@ -933,7 +933,7 @@ def test_effective_bag_size_in_range(rng: Sampler) -> None:
 
 
 def test_mean_consensus_in_range(rng: Sampler) -> None:
-    """r34 Sec. 3 (diagnostic pair following Eq. 16): the mean consensus
+    """r35 Sec. 3 (diagnostic pair following Eq. 16): the mean consensus
     c_bar(B) is in (0, 1], equal to 1 only when every embedding of the bag
     coincides, and tending to zero as they disperse.
 
@@ -1282,7 +1282,7 @@ def _global_term_over_bags(
     weight_cross_block: bool = True,
     detach_target_entropy: bool = False,
 ):
-    """One class's whole global term, Eq. (32) through Eq. (36), as a scalar."""
+    """One class's whole global term, Eq. (28) through Eq. (32), as a scalar."""
     K_s_c, K_st_w, K_t_w = _class_blocks_over_bags(
         source, target, confidence, weight_cross_block=weight_cross_block
     )
@@ -1330,7 +1330,7 @@ def test_source_block_never_weighted(rng: Sampler) -> None:
 def test_mixed_matrix_symmetric_psd(rng: Sampler) -> None:
     """r16 Sec. 3, Eq. (27): the mixed matrix is symmetric positive semidefinite.
 
-    It has to be: Eq. (32) trace-normalizes it and Eq. (9) needs a density with
+    It has to be: Eq. (28) trace-normalizes it and Eq. (9) needs a density with
     non-negative spectrum. It is the congruence M K M of the joint bag Gram with
     M = diag(I, D), which preserves positive semidefiniteness.
     """
@@ -1388,8 +1388,8 @@ def test_weight_cross_block_freezes_a_zero_confidence_bag(rng: Sampler) -> None:
     and the term can still move it.
 
     The gradient travels the whole path a training step travels -- Eq. (14)'s
-    bag kernel, Eq. (23)'s blocks, Eq. (26)'s weighting, Eq. (32)'s balance,
-    Eq. (33)'s score, Eq. (36)'s map -- because a gradient only exists at the
+    bag kernel, Eq. (23)'s blocks, Eq. (26)'s weighting, Eq. (28)'s balance,
+    Eq. (29)'s score, Eq. (32)'s map -- because a gradient only exists at the
     end of one, and the claim is about where it arrives.
 
     The bags the gate KEPT are the control: they receive gradient under both
@@ -1419,11 +1419,11 @@ def test_weight_cross_block_freezes_a_zero_confidence_bag(rng: Sampler) -> None:
 
 
 # --------------------------------------------------------------------------
-# global_term.py - Section 5, Eqs. (32)-(37)
+# global_term.py - Section 4, Eqs. (28)-(33)
 # --------------------------------------------------------------------------
 # **r25's two retained claims lived here and were removed on 2026-10-18.**
 # `test_score_within_conservative_bounds` and
-# `test_class_global_loss_in_unit_interval` asserted Eq. (34)/(36) over r25's
+# `test_class_global_loss_in_unit_interval` asserted Eq. (30)/(32) over r25's
 # cardinality ends, and said so: they were kept "because `src/CREDA/bounds.py`
 # copies the latter and `tests/test_creda_sample.py` pins the copy to it". r33
 # states one pair of ends, `conservative_bounds` and `class_global_loss` were
@@ -1435,30 +1435,30 @@ def test_weight_cross_block_freezes_a_zero_confidence_bag(rng: Sampler) -> None:
 def test_detach_target_entropy_removes_the_dispersive_force_and_not_the_value(
     rng: Sampler,
 ) -> None:
-    """r29 Sec. 5, Eq. (33): `detach_target_entropy` moves gradient, never value.
+    """r29 Sec. 5, Eq. (29): `detach_target_entropy` moves gradient, never value.
 
     **The value cannot see this axis, and that is why the test reads the
     gradient.** `x.detach()` and `x` are the same number, so `J_c` and every
     loss built on it come out bit-identical under both poles -- a test
-    asserting on the score or on Eq. (36)'s loss would pass with the axis on
+    asserting on the score or on Eq. (32)'s loss would pass with the axis on
     AND with the axis broken. It is asserted here as an equality to the last
     bit, because it is the trap and not a tolerance.
 
     What the axis removes is the DISPERSIVE force the target block exerts on
     itself. Everything else is left intact: `H_mix` still carries the target
-    inside, so the alignment is untouched, and Eq. (35)'s ends read
+    inside, so the alignment is untouched, and Eq. (31)'s ends read
     `H_2(K~_t)` through `class_global_loss_cosh`'s own argument and not through
     the score, so the bounds are untouched too.
 
     The removal is exact rather than merely non-zero, which is what makes this
     a measurement of the axis and not of the fact that two gradients differ.
-    r31's Eq. (36) is `(U_c - J_c) / ln 2` -- a CONSTANT denominator, where r29
+    r31's Eq. (32) is `(U_c - J_c) / ln 2` -- a CONSTANT denominator, where r29
     divided by the per-class span `U_c - L_c` and detached it -- and `H_2(K~_t)`
     enters `J_c` with coefficient `1/2`, so detaching it must move the gradient
     by exactly `-(1/2) grad H_2(K~_t) / ln 2` and by nothing else.
 
-    **The denominator here follows Eq. (36) and is not a free constant.** It
-    was `float((upper - lower).detach())` while that was Eq. (36)'s
+    **The denominator here follows Eq. (32) and is not a free constant.** It
+    was `float((upper - lower).detach())` while that was Eq. (32)'s
     denominator; under r31 that value is `U_c + ln 2`, which differs from
     `ln 2` by `U_c` -- measured at this fixture, 0.694154 against 0.693147 --
     so leaving it would have pinned r29's map inside a test about a different
@@ -1489,7 +1489,7 @@ def test_detach_target_entropy_removes_the_dispersive_force_and_not_the_value(
     K_s_c, K_st_w, K_t_w = _class_blocks_over_bags(source, target, w)
     breve_s, breve_t, _ = balanced_mixture(K_s_c, K_st_w, K_t_w)
     h_source, h_target = quadratic_entropy(breve_s), quadratic_entropy(breve_t)
-    # r31 Eq. (36)'s denominator, read from the module rather than recomputed,
+    # r31 Eq. (32)'s denominator, read from the module rather than recomputed,
     # so a later change to the equation cannot leave this reference behind.
     denominator = GLOBAL_LOSS_SPAN
     # And it really is the constant and not the old span: the two differ here.
@@ -1503,7 +1503,7 @@ def test_detach_target_entropy_removes_the_dispersive_force_and_not_the_value(
             attached - held, (-0.5 / denominator) * force, atol=1e-14, rtol=0.0
         )
 def test_global_loss_is_convex_combination_of_source_proportions() -> None:
-    """r33 Sec. 5, Eq. (37): the weights are `n_c^s / N_s`, they sum to exactly
+    """r33 Sec. 5, Eq. (33): the weights are `n_c^s / N_s`, they sum to exactly
     one, and the term is a convex combination of values in [0, 1].
 
     **This replaced a SUB-convex claim.** r31's weights were
@@ -1536,11 +1536,11 @@ def test_global_loss_is_convex_combination_of_source_proportions() -> None:
     with pytest.raises(ValueError):
         global_loss(losses, [0, 0, 0, 0, 0])         # N_s = 0, weights undefined
     with pytest.raises(ValueError):
-        global_loss([], [])                          # Eq. (37) sums over C
+        global_loss([], [])                          # Eq. (33) sums over C
 
 
 def test_global_loss_charges_one_for_an_inactive_class() -> None:
-    """r33 Sec. 5, Eq. (37): `l~_c = 1` for `c` not in `C_act`, so abandoning a
+    """r33 Sec. 5, Eq. (33): `l~_c = 1` for `c` not in `C_act`, so abandoning a
     class RAISES the term.
 
     **r31 answered 0 with `C_act` empty and excluded inactive classes from the
@@ -1571,7 +1571,7 @@ def test_global_loss_charges_one_for_an_inactive_class() -> None:
 
 
 def test_global_loss_inactive_charge_carries_no_gradient() -> None:
-    """r33 Sec. 5, Eq. (37): the charge is a literal and the weights are counts,
+    """r33 Sec. 5, Eq. (33): the charge is a literal and the weights are counts,
     so an inactive class contributes no gradient.
 
     Eq. (22)'s routing is an `argmax`, so there is no path to differentiate in
@@ -1588,12 +1588,12 @@ def test_global_loss_inactive_charge_carries_no_gradient() -> None:
 
 
 # --------------------------------------------------------------------------
-# local_term.py - Sections 4-5, Eqs. (28)-(31), (38)
+# local_term.py - Sections 4-5, Eqs. (34-38)
 # --------------------------------------------------------------------------
 
 
 def test_correspondence_simplex_per_class(rng: Sampler) -> None:
-    """r16 Sec. 4, Eq. (28): pi_{ji|c} > 0 and sums to one over S_c alone.
+    """r16 Sec. 4, Eq. (34): pi_{ji|c} > 0 and sums to one over S_c alone.
 
     A class with no source bag has no denominator, and the proposal states
     there is no default value that replaces it.
@@ -1608,7 +1608,7 @@ def test_correspondence_simplex_per_class(rng: Sampler) -> None:
 
 
 def test_correspondence_order_preserving(rng: Sampler) -> None:
-    """r16 Sec. 4, Eq. (28): a more similar source subject receives a larger weight.
+    """r16 Sec. 4, Eq. (34): a more similar source subject receives a larger weight.
 
     The exponential normalization is monotone, so within one class the ordering
     of the kernel values is the ordering of the correspondence weights.
@@ -1622,7 +1622,7 @@ def test_correspondence_order_preserving(rng: Sampler) -> None:
 
 
 def test_total_correspondence_sums_to_one(rng: Sampler) -> None:
-    """r16 Sec. 4, Eq. (29): sum_i pi_{ji} = 1 over ALL source bags.
+    """r16 Sec. 4, Eq. (35): sum_i pi_{ji} = 1 over ALL source bags.
 
     The class scores fix each class's mass and the within-class distributions
     are already normalized, so no second global normalization is needed. This
@@ -1637,7 +1637,7 @@ def test_total_correspondence_sums_to_one(rng: Sampler) -> None:
 
 
 def test_local_distance_bounded_by_two(rng: Sampler) -> None:
-    """r16 Sec. 5, Eq. (31): 0 <= d_j^2 < 2, the tight bound the revision derives.
+    """r16 Sec. 5, Eq. (37): 0 <= d_j^2 < 2, the tight bound the revision derives.
 
     Non-negative because it is a squared norm. Bounded by two, not four: the
     triangle inequality alone would give four, but kappa_sigma^I > 0 makes every
@@ -1668,7 +1668,7 @@ def test_local_distance_bounded_by_two(rng: Sampler) -> None:
 
 
 def test_local_distance_zero_iff_reference_matches(rng: Sampler) -> None:
-    """r16 Sec. 4, Eq. (31): d_j^2 = 0 exactly when Psi(B_j^t) equals mu_j^s.
+    """r16 Sec. 4, Eq. (37): d_j^2 = 0 exactly when Psi(B_j^t) equals mu_j^s.
 
     Concentrating the correspondence on a source bag identical to the target
     makes the reference coincide with the target representation; any other
@@ -1728,7 +1728,7 @@ def test_local_loss_is_the_uniform_mean_and_ignores_confidence(
     value, bit for bit.
 
     The pseudo-label's uncertainty did not leave the term, it moved inside it:
-    Eq. (29) keeps the whole `g_j^t`, so an uncertain subject is compared
+    Eq. (35) keeps the whole `g_j^t`, so an uncertain subject is compared
     against a reference that mixes the classes in proportion to it. What this
     pins is that aggregation is where it no longer acts.
     """

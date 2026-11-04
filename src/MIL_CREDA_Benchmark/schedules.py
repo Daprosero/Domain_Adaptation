@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from CREDA.schedules import creda_ramp
 
-#: MIL-CREDA's own ceiling. One is the neutral of Eq. (39): Eq. (36) normalizes
+#: MIL-CREDA's own ceiling. One is the neutral of Eq. (39): Eq. (32) normalizes
 #: the global score by the conservative bounds, Eq. (38) bounds the local term,
 #: and Eq. (21) is divided by its own supremum B_src, so all three terms live in
 #: [0, 1) and a coefficient of one weighs them equally. It is not a value chosen

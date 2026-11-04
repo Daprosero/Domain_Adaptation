@@ -46,7 +46,7 @@ class ElCeroSinClaseActivaDeriva(unittest.TestCase):
     def test_the_value_is_exactly_one(self):
         """**Era cero hasta 2026-10-18, y r33 lo cambia a proposito.**
 
-        La Ec. 37 de r31 excluia las clases inactivas de la suma y daba 0 con
+        La Ec. 33 de r31 excluia las clases inactivas de la suma y daba 0 con
         `C_act` vacio, de modo que un codificador colapsado hasta dejar una
         sola clase reportaba MENOS por haber abandonado las demas. r32 le cobra
         `l~_c = 1` a cada clase abandonada, y con todas abandonadas los pesos

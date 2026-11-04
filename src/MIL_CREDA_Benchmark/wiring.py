@@ -760,7 +760,7 @@ class Arm(nn.Module):
         pseudo = torch.tensor([pseudolabel(g) for g in G_t],      # Eq. (22)
                               device=K_ss.device)
 
-        # r33 Eq. (37) sums over EVERY class, not only the active ones, so
+        # r33 Eq. (33) sums over EVERY class, not only the active ones, so
         # these two lists carry one entry per class in `C` rather than one per
         # active class: `None` marks a class the aggregation charges `1` for,
         # and `source_counts` carries its `n_c^s`. Both are built here because
@@ -771,14 +771,14 @@ class Arm(nn.Module):
         for class_id in range(self.classes):
             s_idx = torch.nonzero(source_labels == class_id, as_tuple=False).reshape(-1)
             t_idx = torch.nonzero(pseudo == class_id, as_tuple=False).reshape(-1)
-            # `n_c^s` for Eq. (37)'s weight, recorded for every class before
+            # `n_c^s` for Eq. (33)'s weight, recorded for every class before
             # any exclusion: a class with no source bag weighs `0 / N_s`, so it
             # contributes nothing whichever branch it takes and needs no
             # special case. A class the SOURCE batch has and the target routing
             # abandoned is the one the charge below is for.
             source_counts.append(int(s_idx.numel()))
             if s_idx.numel() == 0 or t_idx.numel() == 0:
-                class_losses.append(None)       # not in C_act (Eq. 37)
+                class_losses.append(None)       # not in C_act (Eq. 33)
                 continue
             K_s_c, K_st_c, K_t_c = conditional_blocks(K_ss, K_st, K_tt, s_idx, t_idx)
             if self.spec["weighting"]:
@@ -786,14 +786,14 @@ class Arm(nn.Module):
             else:
                 K_st_w, K_t_w = K_st_c, K_t_c
             K_mix = mixed_matrix(K_s_c, K_st_w, K_t_w)
-            # Unchanged under r29: Eq. (37)'s active set still asks that the
+            # Unchanged under r29: Eq. (33)'s active set still asks that the
             # three matrices which must be normalized have positive trace, and
-            # Eq. (32) divides by `tr(K_s)`, `tr(K~_t)` and their geometric
+            # Eq. (28) divides by `tr(K_s)`, `tr(K~_t)` and their geometric
             # mean -- the same two traces this already reads.
             if not is_active(K_s_c, K_t_w, K_mix):
-                class_losses.append(None)       # not in C_act (Eq. 37)
+                class_losses.append(None)       # not in C_act (Eq. 33)
                 continue
-            # r29 Eqs. (32)-(35): the balanced congruence, the score over its
+            # r29 Eqs. (28)-(31): the balanced congruence, the score over its
             # three densities, and the ends read off the same two marginals.
             # This replaces r25's `dependency_score`/`conservative_bounds`
             # pair, whose constant ends ordered a collapsed target ABOVE
@@ -823,7 +823,7 @@ class Arm(nn.Module):
             # onset a mean over ten bags would hide.
             "targetConfidenceMean": float(w_t.mean().detach()),
             "targetConfidenceMin": float(w_t.min().detach()),
-            # |C_act| (Eq. 37) -- r25's third named observable, already
+            # |C_act| (Eq. 33) -- r25's third named observable, already
             # computed as the length of this loop's own accumulator.
             "activeClasses": sum(1 for loss in class_losses if loss is not None),
             # Decision 10: whether one sigma still describes both clouds,
@@ -840,7 +840,7 @@ class Arm(nn.Module):
             "targetDispersion": float("nan"),
         }
 
-        # r33 Eq. (37): `L_glob = sum_{c in C} (n_c^s / N_s) * l~_c`, with
+        # r33 Eq. (33): `L_glob = sum_{c in C} (n_c^s / N_s) * l~_c`, with
         # `l~_c = 1` for every class that is not active. Not gated on the arm's
         # confidence axis, and that is the change: r29's weights were built
         # from `w_j^t` and this call sat behind `spec["weighting"]` for that
@@ -857,7 +857,7 @@ class Arm(nn.Module):
         # meant to: it makes the collapse visible in the value.
         global_term = global_loss(class_losses, source_counts)
         # **The gate the ablation needs, symmetric to `local` below.** An arm
-        # that declares `global: False` computes Eq. (37) and then drops it,
+        # that declares `global: False` computes Eq. (33) and then drops it,
         # rather than skipping the class loop: the loop is also what fills
         # `self._diagnostics`, so skipping it would leave a local-only arm
         # reporting `nan` for every kernel reading and the ablation could not
@@ -877,7 +877,7 @@ class Arm(nn.Module):
                 cross = K_st[:, column]
                 pi = total_correspondence(cross, source_labels, G_t[column],
                                           self.tau_local)
-                # The local term's own kernel evaluation (Eq. 31's
+                # The local term's own kernel evaluation (Eq. 37's
                 # self-similarity term): the kernel's view, not the raw one --
                 # `bags_t[column]` would hand `bag_kernel` the same raw `H`
                 # `Z_t` above hands the head, which is exactly the consumer

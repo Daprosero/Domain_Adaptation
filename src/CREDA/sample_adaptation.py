@@ -50,8 +50,8 @@ from CREDA.models import CREDALoss
 from CREDA.schedules import CREDA_CEILING, creda_ramp
 
 __provenance__ = {
-    "revision": "research-concept-r34.md",
-    "sections": ["3", "5"],
+    "revision": "research-concept-r35.md",
+    "sections": ["3", "6"],
     "equations": ["21", "39"],
     "invariants": [
         "the_generator_is_consumed_identically_whether_or_not_alignment_is_on",

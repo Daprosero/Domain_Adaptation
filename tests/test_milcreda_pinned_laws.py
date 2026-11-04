@@ -1,7 +1,7 @@
 """The settings MIL-CREDA pins with no flag, asserted to be CREDA's choices.
 
 Four of CREDA's axes are LAW here. `normalize_by_bounds` is always on,
-`bounds_form` is always Eq. 35's entropy-cosh, `balance_mix_blocks` is always
+`bounds_form` is always Eq. 31's entropy-cosh, `balance_mix_blocks` is always
 on and `balance_mass` is always the trace: `src/MIL_CREDA/global_term.py` has
 no conservative branch, no unbalanced branch and no cardinality branch to
 select. That is correct and it stays -- an axis nobody intends to sweep is a
@@ -25,14 +25,14 @@ The same file carries the two axes T4 named -- `weight_cross_block` and
 is asserted about them is narrower: that the DEFAULT each one takes is the
 value CREDA's `HP_2` declares, and that the default is what the body actually
 does rather than only what the signature says. Their mathematics is in
-`tests/test_invariants.py`, where the claims about Eqs. (26) and (33) live.
+`tests/test_invariants.py`, where the claims about Eqs. (26, 29) live.
 
-**One difference is declared and is not a disagreement.** Eq. 32's leading
+**One difference is declared and is not a disagreement.** Eq. 28's leading
 `1/2` is written in `balanced_mixture` and deliberately NOT written in CREDA's
 `_mix_kernel_concat`: CREDA divides by the trace of whatever it is handed, so
 the factor is a no-op there, while this package returns a matrix that is
 already a density. Every comparison below therefore reads CREDA's matrix times
-`1/2`, which is Eq. 32's own right-hand side.
+`1/2`, which is Eq. 28's own right-hand side.
 """
 
 from __future__ import annotations
@@ -168,7 +168,7 @@ class AxisDefaultsTests(unittest.TestCase):
     def test_detach_target_entropy_defaults_to_the_axis_value_creda_declares(
         self,
     ) -> None:
-        """Eq. (33): the default is CREDA's `RHO_T_SIN_GRAD`.
+        """Eq. (29): the default is CREDA's `RHO_T_SIN_GRAD`.
 
         The same two halves. The control cannot be a value, because this axis
         moves no value -- that is the whole of why its own invariant in
@@ -206,7 +206,7 @@ class PinnedLawTests(unittest.TestCase):
     def test_the_balance_is_credas_trace_mass_and_not_its_cardinality_one(
         self,
     ) -> None:
-        """Eq. (32): the pin is `balance_mix_blocks` on with `balance_mass` trace.
+        """Eq. (28): the pin is `balance_mix_blocks` on with `balance_mass` trace.
 
         Three claims, none of them with an expected value typed into this file.
 
@@ -283,7 +283,7 @@ class PinnedLawTests(unittest.TestCase):
     def test_the_bounds_are_credas_entropy_cosh_choice_and_not_r25s_pair(
         self,
     ) -> None:
-        """Eqs. (35)-(36): the pin is `normalize_by_bounds` on, `entropy-cosh`.
+        """Eqs. (31)-(32): the pin is `normalize_by_bounds` on, `entropy-cosh`.
 
         Three claims again, and again nothing typed here.
 
@@ -347,7 +347,7 @@ class PinnedLawTests(unittest.TestCase):
                     )
                 )
                 cosh = float(by_cosh._marginal_score(f_source, f_target))
-                # r25's Eq. (35)/(36) over the SAME score the cosh map reads,
+                # r25's Eq. (31)/(32) over the SAME score the cosh map reads,
                 # written out here because no code computes it any more.
                 lower_25 = -math.log(n_source + n_target)
                 upper_25 = 0.5 * (math.log(n_source) + math.log(n_target))

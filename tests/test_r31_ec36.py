@@ -1,4 +1,4 @@
-"""r31's Eq. (36): the denominator becomes the constant `ln 2`.
+"""r31's Eq. (32): the denominator becomes the constant `ln 2`.
 
 r29 normalized the corrected score by the span it could occupy,
 `l_glob,c = (U_c - J_c) / (U_c - L_c)` with `L_c = -ln 2`, and excluded that
@@ -9,7 +9,7 @@ and r31 writes the division against the constant instead:
     r31:  l_glob,c = (U_c - J_c) / ln 2
 
 The theorem that licenses it, r31 Section 5.3: with `r_c = ln(rho_s / rho_t)`,
-the lower bound on `rho_c^mix` gives `J_c >= ln cosh(r_c/2) - ln 2`, Eq. (35)
+the lower bound on `rho_c^mix` gives `J_c >= ln cosh(r_c/2) - ln 2`, Eq. (31)
 is `U_c = 2 ln cosh(r_c/4)`, and `cosh(r_c/2) = 2 cosh^2(r_c/4) - 1 >=
 cosh^2(r_c/4)`, so
 
@@ -33,7 +33,7 @@ and the quotient lands in [0, 1] without ever reading the span.
    something equal to NEITHER of r29's two references.
 
 Every test here was observed RED against the r29 tree before the code moved.
-Both packages are asserted, because Eq. (36) is implemented twice -- once in
+Both packages are asserted, because Eq. (32) is implemented twice -- once in
 `src/MIL_CREDA/global_term.py` and once, deliberately copied, in
 `src/CREDA/bounds.py` -- and a change applied to one is invisible to a test
 that only reads the other.
@@ -54,13 +54,13 @@ from MIL_CREDA.global_term import entropy_cosh_bounds as mil_bounds
 DTYPE = torch.float64
 LN2 = math.log(2.0)
 
-#: The two implementations of Eq. (36), by the package that owns each.
+#: The two implementations of Eq. (32), by the package that owns each.
 IMPLEMENTATIONS = (("MIL_CREDA", mil_loss, mil_bounds),
                    ("CREDA", creda_loss, creda_bounds))
 
 
 def _upper(h_source: torch.Tensor, h_target: torch.Tensor) -> torch.Tensor:
-    """Eq. (35) written out here, from the equation and not from the module."""
+    """Eq. (31) written out here, from the equation and not from the module."""
     return 2.0 * torch.log(torch.cosh((h_target - h_source) / 4.0))
 
 
@@ -246,7 +246,7 @@ def test_the_loss_stays_in_the_unit_interval_over_the_theorems_range(
     test's arithmetic, not the module's -- the module divides by a literal and
     cannot overshoot by construction. Asserting a flat `<= 1` would therefore
     be asserting that `U_c - (U_c - ln 2) == ln 2` exactly, which is false in
-    float64 and has nothing to do with Eq. (36).
+    float64 and has nothing to do with Eq. (32).
 
     So the assertion is on the SIZE of the worst excursion. Red stays
     reachable with room to spare: any denominator other than `ln 2` moves the
@@ -330,7 +330,7 @@ def test_the_ends_of_the_theorem_map_to_the_ends_of_the_interval(
 #
 # Two of these assertions do more than match a string. The collapse figure is
 # RECOMPUTED from the configuration its own comment names and the written
-# number is held to the measurement, so the next revision that moves Eq. (36)
+# number is held to the measurement, so the next revision that moves Eq. (32)
 # reddens the prose instead of aging it quietly; and the declaration test reads
 # the equations the module implements out of the revisions themselves.
 
@@ -414,18 +414,18 @@ def test_models_declares_the_revision_its_own_equations_are_bound_to() -> None:
 
     Not a rebind for its own sake. Every equation this module IMPLEMENTS --
     10, 22-27, 32, 33 -- is byte-identical in r28 and r31; the one that moved
-    between them, Eq. (32), moved only by renaming the congruence matrix
+    between them, Eq. (28), moved only by renaming the congruence matrix
     `B_c` to `Q_c`, a symbol this module never writes. So `r28` had stopped
     naming a binding and was naming the date of the last edit instead, which
     is exactly the drift a declaration exists to make visible.
 
     **The r33 -> r34 step is the same kind of rebind and the r31 -> r33 one was
-    not.** r33 rewrote Eq. 37 and rescoped Eq. 26's weighting, both of which
+    not.** r33 rewrote Eq. 33 and rescoped Eq. 26's weighting, both of which
     moved arithmetic here. r34 moved Eq. 15 -- MIL-CREDA's attention over the
     instances of a bag -- and this module is the SAMPLE-level method, with no
     bags and no attention, so it implements no equation r34 touched.
     """
-    assert creda_models.__provenance__['revision'] == 'research-concept-r34.md'
+    assert creda_models.__provenance__['revision'] == 'research-concept-r35.md'
 
 
 def test_models_says_which_of_its_equations_it_only_applies() -> None:
@@ -437,20 +437,20 @@ def test_models_says_which_of_its_equations_it_only_applies() -> None:
 
     **The r25 half of this claim ended on 2026-10-18.** The docstring had to
     name r25 because `bounds_form` defaulted to `conservative` and a bare r31
-    would have read as a claim that the DEFAULT path computed r31's Eq. (36).
+    would have read as a claim that the DEFAULT path computed r31's Eq. (32).
     There is one map now -- r25's pair was removed from both packages -- so
     what the docstring owes instead is the HISTORY: that the pair existed and
     where its numbers went, which is what a reader meeting `r25` in an
     artefact needs.
     """
     doc = creda_models.__doc__
-    assert 'research-concept-r34.md' in doc
+    assert 'research-concept-r35.md' in doc
     assert 'r25' in doc, "what happened to r25's pair has to be named"
     declared = creda_models.__provenance__['equations']
-    assert '35' in declared and '36' in declared
-    # And Eq. 37 is now IMPLEMENTED here rather than approximated, which is
+    assert '31' in declared and '32' in declared
+    # And Eq. 33 is now IMPLEMENTED here rather than approximated, which is
     # the one addition to that list.
-    assert '37' in declared
+    assert '33' in declared
 
     # Read the CODE and not the file. The paragraphs above discuss both
     # denominators by name -- that is their job -- so a substring search over
@@ -535,7 +535,7 @@ def test_the_pin_has_nothing_left_to_pin_on_the_bounds_axis() -> None:
 
     It measured that the pinned values and the moved defaults computed
     DIFFERENT numbers on the `bounds_form` axis, and that the pinned side was
-    r25's Eq. (36) recomputed from `conservative_bounds` -- the map the
+    r25's Eq. (32) recomputed from `conservative_bounds` -- the map the
     published numbers were measured under. A pin naming the same map the
     defaults already select would have been a comment, and that was the point.
 
@@ -637,7 +637,7 @@ def test_no_prose_in_models_claims_the_span_is_detached() -> None:
     # The anchor moved on 2026-10-18: the `bounds_form` fork was collapsed when
     # r25's map was removed, so `if self.bounds_form == ...` is no longer in
     # this file. `# Fork 3` is the surviving landmark for the same block.
-    block = _block(source, '# Fork 3: Eqs. (35)-(36).',
+    block = _block(source, '# Fork 3: Eqs. (31)-(32).',
                    'losses = torch.stack(losses_per_class)')
     assert 'r31' in block
     assert 'ln 2' in block
@@ -650,7 +650,7 @@ def test_the_detach_that_does_exist_is_not_the_one_r29_removed() -> None:
 
     The sweep that removed the span sentence must not take this with it: this
     one detaches `h_t` inside the SCORE, is a declared keyword, defaults off,
-    and has nothing to do with Eq. (36)'s denominator.
+    and has nothing to do with Eq. (32)'s denominator.
     """
     signature = inspect.signature(creda_models.CREDALoss.__init__)
     assert signature.parameters['detach_target_entropy'].default is False
@@ -674,7 +674,7 @@ def _collapse_configuration():
     n = 43
     h_source = h2(torch.eye(n, dtype=DTYPE))
     h_target = h2(torch.ones(n, n, dtype=DTYPE))
-    # `J_c` at that configuration, from Eq. (34)'s own closed form.
+    # `J_c` at that configuration, from Eq. (30)'s own closed form.
     score = torch.tensor(0.5173, dtype=DTYPE)
     return h_source, h_target, score
 
@@ -685,7 +685,7 @@ def test_the_collapse_figure_in_the_prose_is_the_one_r31_computes() -> None:
     This is the assertion that stops the figure from aging silently a third
     time. It was 0.1773 under r29's per-class denominator -- reproduced below
     to prove the configuration is the one the comment means -- and r31's
-    constant denominator moves it. Whatever Eq. (36) becomes next, this
+    constant denominator moves it. Whatever Eq. (32) becomes next, this
     reddens rather than drifting.
     """
     h_source, h_target, score = _collapse_configuration()
@@ -755,30 +755,30 @@ def test_the_bounds_banners_name_the_revision_each_function_implements() -> None
     assert ', revision 33' not in source, (
         "a banner names r33 as a binding rather than as the origin of a form "
         "that is byte-identical from there on")
-    assert 'Eq. (35), byte-identical from revision 33 on' in source
-    assert 'Eq. (36), byte-identical from revision 33 on' in source
+    assert 'Eq. (31), byte-identical from revision 33 on' in source
+    assert 'Eq. (32), byte-identical from revision 33 on' in source
     # Eq. (21) carries no revision because it has not changed since r25, and
     # its banner says that rather than naming the current one.
     assert 'Eq. (21), byte-identical from revision 25 on' in source
 
 
 def test_eq_thirty_five_no_longer_claims_to_state_the_lower_end() -> None:
-    """r31 narrowed Eq. (35) to `U_c` alone; `L_c` is Eq. (34)'s.
+    """r31 narrowed Eq. (31) to `U_c` alone; `L_c` is Eq. (30)'s.
 
-    Measured on the revisions: r28's Eq. (35) block carries `L_c = - \\ln 2`
-    and r31's does not, while Eq. (34) is byte-identical in both and states
+    Measured on the revisions: r28's Eq. (31) block carries `L_c = - \\ln 2`
+    and r31's does not, while Eq. (30) is byte-identical in both and states
     `- \\ln 2 \\leq J_c`. `entropy_cosh_bounds` still RETURNS both ends -- that
     is its signature and nothing here changes it -- but it may not attribute
     the lower one to an equation that stopped stating it.
     """
     doc = creda_bounds_module.entropy_cosh_bounds.__doc__
-    assert "r28's Eq. (35): L_c = -ln 2" not in doc
+    assert "r28's Eq. (31): L_c = -ln 2" not in doc
     # The SUMMARY line is the attribution a reader gets from `help()` and from
-    # an editor's tooltip, so that is the line held to it. Asserting `Eq. (34)`
+    # an editor's tooltip, so that is the line held to it. Asserting `Eq. (30)`
     # anywhere in the docstring passed while the body said `Eq. (99)`.
     summary = doc.splitlines()[0]
-    assert "Eq. (35)'s" in summary and "Eq. (34)'s `L_c`" in summary, summary
-    assert 'Eq. (34), byte-identical in r28 and r31' in doc
+    assert "Eq. (31)'s" in summary and "Eq. (30)'s `L_c`" in summary, summary
+    assert 'Eq. (30), byte-identical in r28 and r31' in doc
     assert 'r31' in doc
     # The function's behaviour is unchanged, and that is asserted and not assumed.
     lower, _upper = creda_bounds_module.entropy_cosh_bounds(
@@ -793,11 +793,11 @@ def test_neither_package_attributes_the_lower_end_to_equation_thirty_five() -> N
     `CREDA.bounds` deliberately copies it -- and every arithmetic test in this
     file is parametrized over both for exactly that reason. The prose test
     above is not: it reads `CREDA.bounds` alone, and the `MIL_CREDA` twin kept
-    attributing `L_c = -ln 2` to Eq. (35) long after r31 narrowed that equation
+    attributing `L_c = -ln 2` to Eq. (31) long after r31 narrowed that equation
     to its upper end. A defect fixed in one copy and left standing in the other
     reads as fixed, which is worse than reading as broken.
 
-    Reachable red: restoring either summary to `Eq. (35): L_c = -ln 2` reddens
+    Reachable red: restoring either summary to `Eq. (31): L_c = -ln 2` reddens
     its own entry below, and the `and` makes neither entry able to carry the
     other.
     """
@@ -806,12 +806,12 @@ def test_neither_package_attributes_the_lower_end_to_equation_thirty_five() -> N
         'CREDA': creda_bounds.__doc__.splitlines()[0],
     }
     for package, summary in summaries.items():
-        assert 'Eq. (35)' in summary, (package, summary)
-        assert "Eq. (34)" in summary, (
+        assert 'Eq. (31)' in summary, (package, summary)
+        assert "Eq. (30)" in summary, (
             f"{package}: the summary line does not say which equation states "
             f"the lower end it returns: {summary!r}")
-        assert 'Eq. (35): L_c' not in summary, (
-            f"{package}: the lower end is attributed to Eq. (35), which r31 "
+        assert 'Eq. (31): L_c' not in summary, (
+            f"{package}: the lower end is attributed to Eq. (31), which r31 "
             f"narrowed to its upper end: {summary!r}")
     # And both functions still RETURN the lower end, so the correction is about
     # the attribution and never about the behaviour.
@@ -843,7 +843,7 @@ def test_the_toy_block_dates_the_denominator_it_was_measured_under() -> None:
     # And the block says which revision the live flag computes, AS the claim
     # and not as a loose token: `r31` appeared three times in this block while
     # the sentence carrying the correction said "una revision posterior".
-    assert 'r31 reemplazo el divisor de la Ec. 36' in block
+    assert 'r31 reemplazo el divisor de la Ec. 32' in block
     assert 'r31 divide por el literal `ln 2`' in block
     assert 'r31 = r28 * (U_c + ln 2) / ln 2' in block
     # And it admits what it did NOT recompute, rather than implying all five.
@@ -857,7 +857,7 @@ def test_every_r28_mention_left_in_creda_is_history_and_not_a_live_rule() -> Non
     happened. It is a defect when it says what the code does NOW. This cannot
     be told apart mechanically in general, so what is asserted is the narrow
     mechanical part: no file may name r28 as the revision it implements or is
-    bound to, and no file may still attribute Eq. (36)'s denominator to a
+    bound to, and no file may still attribute Eq. (32)'s denominator to a
     span.
     """
     everything = dict(SOURCES, toy_experiment=_toy_source())
@@ -873,5 +873,5 @@ def test_every_r28_mention_left_in_creda_is_history_and_not_a_live_rule() -> Non
     # held `conservative_bounds`/`class_global_loss`; those were removed, so
     # every equation it holds is r33's and the stamp could finally move -- and
     # r34 moved only Eq. 15, which neither module implements.
-    assert creda_bounds_module.__provenance__['revision'] == 'research-concept-r34.md'
-    assert creda_models.__provenance__['revision'] == 'research-concept-r34.md'
+    assert creda_bounds_module.__provenance__['revision'] == 'research-concept-r35.md'
+    assert creda_models.__provenance__['revision'] == 'research-concept-r35.md'

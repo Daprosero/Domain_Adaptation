@@ -18,8 +18,8 @@ import torch
 from MIL_CREDA import as_matrix, as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r34.md",
-    "sections": ["3", "5"],
+    "revision": "research-concept-r35.md",
+    "sections": ["3", "6"],
     "equations": ["21", "39"],
     "invariants": [
         "source_loss_matches_negative_log_likelihood_of_the_observed_class",

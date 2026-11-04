@@ -17,7 +17,7 @@ import torch
 from MIL_CREDA import as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r34.md",
+    "revision": "research-concept-r35.md",
     "sections": ["2"],
     "equations": ["7", "8", "9", "10", "11", "12"],
     "invariants": [
@@ -51,7 +51,7 @@ def trace_normalize(K: torch.Tensor) -> torch.Tensor:
     """Turn a Gram matrix into the unit-trace matrix A = K / tr(K) of Eq. (9).
 
     The proposal only defines the entropy for a matrix with positive trace; a
-    class whose trace vanishes is excluded from the active set instead (Eq. 37).
+    class whose trace vanishes is excluded from the active set instead (Eq. 33).
     """
     K = as_tensor(K)
     trace = torch.trace(K)
@@ -92,7 +92,7 @@ def joint_normalized(K_x: torch.Tensor, K_y: torch.Tensor) -> torch.Tensor:
     """Implement the joint matrix of Eq. (11): (K_x . K_y) / tr(K_x . K_y).
 
     The Hadamard product requires both marginals to have the same size and to
-    be paired sample by sample. Section 5 states explicitly that the global
+    be paired sample by sample. Section 4 states explicitly that the global
     term does NOT use this construction: across domains no such pairing exists,
     so the mixed matrix of Eq. (27) takes its place.
     """
@@ -104,7 +104,7 @@ def matrix_mutual_information(
 ) -> torch.Tensor:
     """Implement Eq. (12): I = H(K_x) + H(K_y) - H(K_x, K_y).
 
-    Kept as the informational antecedent Section 5 cites for the shape of the
+    Kept as the informational antecedent Section 4 cites for the shape of the
     global score. It is not evaluated as a loss anywhere in the formulation.
     """
     return (

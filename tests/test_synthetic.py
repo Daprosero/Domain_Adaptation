@@ -27,11 +27,11 @@ SIGMA = 1.3
 
 def test_aligned_domains_score_better_than_shifted_ones() -> None:
     """Expectation: with source and target drawn from the SAME distribution, the
-    per-class global loss of Eq. (36) is lower than when the target is displaced.
+    per-class global loss of Eq. (32) is lower than when the target is displaced.
 
-    Stated before running: the score of Eq. (33) grows when the joint structure
+    Stated before running: the score of Eq. (29) grows when the joint structure
     is more ordered relative to the marginals, and the decreasing affine map of
-    Eq. (36) turns that into a smaller loss. A shift between domains breaks that
+    Eq. (32) turns that into a smaller loss. A shift between domains breaks that
     joint order, so the shifted pair must score worse.
     """
     rng = Sampler(SEED)
@@ -94,7 +94,7 @@ def test_the_local_aggregate_ignores_the_confidences() -> None:
 
 
 def test_correspondence_concentrates_on_the_most_similar_subject() -> None:
-    """Expectation: as tau_loc shrinks, pi_{ji|c} of Eq. (28) concentrates on the
+    """Expectation: as tau_loc shrinks, pi_{ji|c} of Eq. (34) concentrates on the
     source subject whose bag kernel value with the target is largest.
 
     Stated before running: the temperature controls concentration; small values
@@ -116,7 +116,7 @@ def test_correspondence_concentrates_on_the_most_similar_subject() -> None:
 
 def test_target_matching_its_reference_has_no_local_penalty() -> None:
     """Expectation: when the correspondence puts all mass on a source subject whose
-    bag is a copy of the target's, Eq. (31) gives d_j^2 = 0 and Eq. (38) gives no
+    bag is a copy of the target's, Eq. (37) gives d_j^2 = 0 and Eq. (38) gives no
     penalty for that subject.
 
     Stated before running: d_j^2 vanishes exactly when the target representation

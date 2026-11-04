@@ -3,7 +3,7 @@
 A bag is pure: `INSTANCES_PER_BAG` instances of one class. The label belongs to
 the bag; no instance carries one. The draw is stratified and balanced --
 `BAGS_PER_CLASS` bags of every class in every domain -- because the local
-correspondence of Section 4 is undefined for a class with no source bag.
+correspondence of Section 5 is undefined for a class with no source bag.
 
 Which dataset a domain code resolves to is decided at one seam,
 `_raw_dataset`, which `toy_run.material_bound` replaces with the family it
