@@ -24,7 +24,9 @@ changed on disk.
 partition in force is refused through `partition.check_result`
 (`PartitionMismatch`); a model written by other code is refused
 (`CodeVersionMismatch`) unless the caller passes `allow_code_mismatch=True`,
-and then the sidecar returned says so. The store never overwrites a saved
+and then the sidecar returned says so. A model written under another plan
+revision than the one in force is refused (`RevisionMismatch`), always: that
+flag covers the code version only. The store never overwrites a saved
 model (`ModelExists`).
 
 **Code version: this implementation's rule.** The plan names "the code
@@ -72,6 +74,7 @@ __provenance__ = {
         "a_saved_model_round_trips_bit_identically",
         "load_refuses_a_foreign_partition_hash",
         "load_refuses_a_code_version_mismatch_unless_allowed",
+        "load_refuses_a_model_written_under_another_plan_revision",
         "a_mil_creda_model_is_stored_with_its_sigma",
         "the_store_never_overwrites_a_saved_model",
         "a_state_that_changed_on_disk_is_refused",
@@ -132,6 +135,10 @@ class ModelExists(StoreError):
 
 class CodeVersionMismatch(StoreError):
     """The model was written by other code than the code that would read it."""
+
+
+class RevisionMismatch(StoreError):
+    """The model was written under another plan revision than the one in force."""
 
 
 class GroupNotRegistered(StoreError):
@@ -261,6 +268,10 @@ def load(path: str | Path, *, partition_path: str | Path | None = None,
     path = Path(path)
     meta = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
     partition.check_result(meta, partition_path or default_partition_path())
+    if meta.get("revision") != __provenance__["revision"]:
+        raise RevisionMismatch(f"{path} was written under plan revision "
+                               f"{meta.get('revision')!r} and the revision in force is "
+                               f"{__provenance__['revision']!r}")
     current = code_version()
     if meta.get("code_version") != current:
         if not allow_code_mismatch:
