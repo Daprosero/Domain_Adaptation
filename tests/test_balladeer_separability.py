@@ -1,4 +1,4 @@
-"""Experiments plan v40, Sec. 5.1: domain separability re-measured, and the core rule."""
+"""Experiments plan v50, Secs. 4.3 and 5.1: domain separability re-measured, and the core rule."""
 
 from __future__ import annotations
 
@@ -241,3 +241,17 @@ def test_the_eligibility_report_adds_the_pooled_target_totals(tmp_path):
     assert summary["transfers"]["level:L1->L6"]["min_per_fold"]["target"] == {"no": 3, "yes": 3}
     assert summary["pairs"]["level:L1|L6"]["pooled_target"] == {"no": 24, "yes": 24}
     assert summary["pairs"]["level:L1|L6"]["by_direction"]["L6->L1"] == {"no": 12, "yes": 12}
+
+
+def test_the_per_fold_minimum_is_a_declared_limitation_with_no_verdict(tmp_path):
+    bags, _ = _world(tmp_path, 0.0)
+    transfers = [assignment.Transfer("level", "L1", "L6"), assignment.Transfer("level", "L6", "L1")]
+    assignments = [assignment.assign_from_bags(t, bags) for t in transfers]
+    summary = separability.eligibility_summary(assignments)
+    entry = summary["transfers"]["level:L1->L6"]
+    assert set(entry) == {"transfer", "arm", "min_per_fold", "pooled_target"}
+    assert "passes" not in entry and "failing" not in entry and "minimum" not in entry
+    assert entry["min_per_fold"]["source"] == {"no": 3, "yes": 3}
+    assert summary["limitation"] == (
+        "El mínimo por fold queda como limitación declarada de la selección.")
+    assert separability.__provenance__["revision"].endswith("v50.md")

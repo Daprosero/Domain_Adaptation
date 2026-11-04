@@ -1,6 +1,7 @@
 """Domain separability re-measured on the assigned subjects, and the core rule.
 
-Experiments plan v40, Sec. 5.1 (and 5.2, 5.3 for their arms). The audit's
+Experiments plan v50, Sec. 5.1 (and 5.2, 5.3 for their arms; Sec. 4.3 for the
+eligibility report). The audit's
 separabilities were provisional: same subjects on both sides, no reading
 within class, and both Emotiv models together. They are measured again with
 the audit's own instrument (`audit_domains`: the same log band-power features,
@@ -48,6 +49,13 @@ each pair with both directions, `pooled_pair`, Sec. 4.6) and `summary.json`,
 which records the same eligibility and the partition hash `load_results`
 checks with `partition.check_result`. The rotations are the partition's: four
 under the current four-fold partition (`partition.PARTITION_RELATIVE`).
+
+**Eligibility is a declared limitation, not a verdict (Sec. 4.3).** No group of
+subjects of the transfer arms is excluded by its number of subjects per class
+and fold. The eligibility report gives, per transfer, side and class, the
+minimum over the folds (`min_per_fold`) and the pooled target totals, with
+`ELIGIBILITY_LIMITATION`; it carries no pass/fail field and no threshold
+(`eligibility_summary` drops the ones `assignment.eligibility` computes).
 """
 
 from __future__ import annotations
@@ -68,7 +76,7 @@ from MIL_CREDA_EEG.bag_data import REPOSITORY, Bag, BagSet
 from MIL_CREDA_EEG.modality import CGX_CHANNELS, EMOTIV_CHANNELS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["5.1", "5.2", "5.3", "4.3", "4.6"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -87,6 +95,7 @@ __provenance__ = {
         "a_result_with_another_partition_hash_is_refused_on_load",
         "separability_is_measured_over_the_four_rotations",
         "the_eligibility_report_adds_the_pooled_target_totals",
+        "the_per_fold_minimum_is_a_declared_limitation_with_no_verdict",
     ],
 }
 
@@ -100,6 +109,10 @@ CHANNELS: dict[str, list[str]] = {
     "device": audit_domains.common_channels(),
 }
 RESULTS_RELATIVE = Path("MIL-CREDA") / "Results" / "separability"
+#: Sec. 4.3: the per-fold minimum is reported as a limitation of the selection, verbatim.
+ELIGIBILITY_LIMITATION = "El mínimo por fold queda como limitación declarada de la selección."
+#: What `assignment.eligibility` computes against the retired threshold; never reported.
+_VERDICT_FIELDS = ("passes", "failing", "minimum", "min_count", "table")
 
 
 class SeparabilityError(RuntimeError):
@@ -283,17 +296,18 @@ def eligibility_table(assignments: Iterable[Assignment]) -> pd.DataFrame:
 
 
 def eligibility_summary(assignments: Iterable[Assignment]) -> dict:
-    """Eligibility per transfer (per side and fold, pooled target) and pooled per pair."""
+    """Per transfer the class minimums per side over the folds and the pooled target
+    totals, and the pooled totals per pair; a declared limitation, no verdict."""
     assignments = list(assignments)
     transfers = {f"{a.transfer.arm}:{a.transfer.name}": {
-        k: v for k, v in assignment.eligibility(a).items() if k != "table"}
+        k: v for k, v in assignment.eligibility(a).items() if k not in _VERDICT_FIELDS}
         for a in assignments}
     pairs = {}
     for a, b in assignment.pairs(assignments):
         totals = assignment.pair_totals(a, b)
         pairs[f"{totals['arm']}:{totals['pair']}"] = {k: v for k, v in totals.items()
                                                       if k not in ("arm", "pair")}
-    return {"transfers": transfers, "pairs": pairs}
+    return {"transfers": transfers, "pairs": pairs, "limitation": ELIGIBILITY_LIMITATION}
 
 
 def write_assignment_tables(assignments: Iterable[Assignment],
@@ -333,6 +347,7 @@ def run(bags: BagSet, out_dir: str | Path | None = None,
     paths.update(write_results(rows, out_dir, bags.partition_sha256, extra={
         "eligibility": eligible["transfers"],
         "pairs_pooled": eligible["pairs"],
+        "eligibility_limitation": eligible["limitation"],
         "timing": {"wall_seconds": round(wall, 1), "workers": int(workers),
                    "seconds_per_transfer": {k: round(v, 1) for k, v in seconds.items()}},
     }))

@@ -1,4 +1,4 @@
-"""Experiments plan v42, Secs. 4.4 and 4.6: metrics, summaries and contrasts.
+"""Experiments plan v50, Secs. 4.4 and 4.6: metrics, summaries and contrasts.
 
 Every number here is synthetic: seeded random predictions, never a measured result.
 """
@@ -24,7 +24,8 @@ def _records(n=24, seeds=(1,), rotations=4, direction="A->B", strategy="M", rng=
         noise = rng.normal(scale=0.3, size=n)
         p = np.clip(0.5 + skill * (labels - 0.5) * 2 * 0.5 + noise * 0.5, 0.01, 0.99)
         for i in range(n):
-            out.append({"strategy": strategy, "seed": seed, "rotation": i % rotations,
+            # both classes in every rotation, as the class-stratified partition gives
+            out.append({"strategy": strategy, "seed": seed, "rotation": (i // 2) % rotations,
                         "subject": f"S{i:03d}", "direction": direction,
                         "probability": float(p[i]), "label": int(labels[i])})
     return out
@@ -59,7 +60,8 @@ def test_a_subject_predicted_twice_in_one_seed_is_refused():
 def test_the_pooled_summary_is_one_value_from_the_one_report_seed():
     r = _records()
     m = st.pooled(r)
-    assert m == st.subject_metrics([x["label"] for x in r], [x["probability"] for x in r])
+    assert m == st.subject_metrics([x["label"] for x in r], [x["probability"] for x in r],
+                                   [st.cell_of(x) for x in r])
     # Sec. 4.6: one report seed, no reduction between seeds; a second seed is refused
     with pytest.raises(st.StatisticsError, match="one report seed"):
         st.pooled(_records(seeds=(1, 2)))
@@ -147,35 +149,7 @@ def test_identical_models_give_a_zero_difference_and_p_one():
     p = rng.uniform(size=20)
     out = st.paired_bootstrap(y, p, p, y, resamples=300, seed=0)
     assert out["difference"] == 0 and out["discordant"] == 0 and out["p_value"] == 1.0
-    assert st.delong(y, p, p)["p_value"] == 1.0
-
-
-def test_delong_matches_its_structural_components_definition():
-    rng = np.random.default_rng(4)
-    y = np.array([0] * 9 + [1] * 11)
-    a = rng.normal(size=20) + y
-    b = rng.normal(size=20) + 0.5 * y
-    a[3] = a[12]                                              # a tie across classes
-    out = st.delong(y, a, b)
-
-    def psi(x, z):
-        return 1.0 if x > z else 0.5 if x == z else 0.0
-
-    def components(s):
-        pos, neg = s[y == 1], s[y == 0]
-        v10 = np.array([np.mean([psi(x, z) for z in neg]) for x in pos])
-        v01 = np.array([np.mean([psi(x, z) for x in pos]) for z in neg])
-        return v10, v01
-
-    (a10, a01), (b10, b01) = components(a), components(b)
-    m, n = 11, 9
-    var = (np.var(a10, ddof=1) + np.var(b10, ddof=1) - 2 * np.cov(a10, b10)[0, 1]) / m \
-        + (np.var(a01, ddof=1) + np.var(b01, ddof=1) - 2 * np.cov(a01, b01)[0, 1]) / n
-    assert out["auc_a"] == pytest.approx(roc_auc_score(y, a))
-    assert out["auc_b"] == pytest.approx(roc_auc_score(y, b))
-    assert out["variance"] == pytest.approx(var)
-    z = (out["auc_a"] - out["auc_b"]) / math.sqrt(var)
-    assert out["p_value"] == pytest.approx(2 * sps.norm.sf(abs(z)))
+    assert out["auc_difference"] == 0 and out["auc_p_value"] == 1.0
 
 
 def test_nadeau_bengio_reduces_to_the_one_sample_t_at_zero_ratio():
@@ -225,7 +199,7 @@ def test_significance_rows_carry_exactly_the_dashboard_keys():
     rows = st.pair_contrast(a, b, name_a="MIL-CREDA", name_b="X", scope="L1|L11",
                             test_train_ratio=0.3,
                             hypothesis="A-nivel", experiment="A-nivel", resamples=200)
-    assert [r["test"] for r in rows] == [st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_DELONG,
+    assert [r["test"] for r in rows] == [st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_AUC_AVG,
                                          st.TEST_NADEAU_BENGIO]
     for r in rows:
         assert set(st.SIGNIFICANCE_KEYS) | set(st.OPTIONAL_KEYS) <= set(r)
@@ -235,12 +209,12 @@ def test_significance_rows_carry_exactly_the_dashboard_keys():
     assert "discordant" in rows[0] and "kappa_difference" in rows[0]
 
 
-# ------------------------------------------------------------------ plan v44
+# ------------------------------------------------------------------ plan v50
 
 
-def test_the_provenance_binds_plan_v44():
+def test_the_provenance_binds_plan_v50():
     assert st.__provenance__["revision"] == (
-        "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md")
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md")
 
 
 def test_hodges_lehmann_and_its_exact_wilcoxon_interval_on_one_to_eight():
@@ -307,14 +281,16 @@ def test_pair_contrast_emits_the_primary_and_the_three_secondary_rows():
     rows = st.pair_contrast(a, b, name_a="MIL-CREDA", name_b="X", scope="L1|L11",
                             test_train_ratio=0.3, hypothesis="A-nivel", experiment="A-nivel",
                             resamples=200)
-    assert [r["test"] for r in rows] == [st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_DELONG,
+    assert [r["test"] for r in rows] == [st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_AUC_AVG,
                                          st.TEST_NADEAU_BENGIO]
     assert [r["family"] for r in rows] == [st.FAMILY_PRIMARY] + [st.FAMILY_SECONDARY] * 3
     boot = st.paired_bootstrap(
         [r["label"] for r in sorted(a, key=lambda r: r["subject"])],
         [r["probability"] for r in sorted(a, key=lambda r: r["subject"])],
         [r["probability"] for r in sorted(b, key=lambda r: r["subject"])],
-        [(r["label"], r["direction"]) for r in sorted(a, key=lambda r: r["subject"])],
+        [(r["label"], r["direction"], r["rotation"])
+         for r in sorted(a, key=lambda r: r["subject"])],
+        cells=[st.cell_of(r) for r in sorted(a, key=lambda r: r["subject"])],
         resamples=200)
     kappa = rows[1]
     assert kappa["p_value"] == pytest.approx(boot["kappa_p_value"])
@@ -322,6 +298,10 @@ def test_pair_contrast_emits_the_primary_and_the_three_secondary_rows():
     assert (kappa["ci_low"], kappa["ci_high"]) == (pytest.approx(boot["kappa_ci_low"]),
                                                    pytest.approx(boot["kappa_ci_high"]))
     assert len({r["contrast"] for r in rows}) == 1
+    # the balanced-accuracy row reads the same replicates, unchanged by the AUC_avg one
+    assert rows[0]["p_value"] == pytest.approx(boot["p_value"])
+    assert rows[0]["effect_size"] == pytest.approx(boot["difference"])
+    assert rows[0]["strata"] == rows[2]["strata"] == "class x direction x rotation"
 
 
 def test_holm_runs_within_each_metric_and_no_row_stays_uncorrected():
@@ -336,7 +316,7 @@ def test_holm_runs_within_each_metric_and_no_row_stays_uncorrected():
     st.apply_holm(primary_only, "A-nivel MIL-CREDA vs rivals, bootstrap")
     st.apply_contrast_families(rows, "A-nivel MIL-CREDA vs rivals")
     assert all(r["correction"] != "none" for r in rows)
-    for test in (st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_DELONG, st.TEST_NADEAU_BENGIO):
+    for test in (st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_AUC_AVG, st.TEST_NADEAU_BENGIO):
         family = [r for r in rows if r["test"] == test]
         assert len(family) == 3
         assert [r["p_adjusted"] for r in family] == pytest.approx(
@@ -375,3 +355,23 @@ def test_the_global_ranking_joins_strategies_whose_rank_gap_does_not_exceed_the_
     assert st.nemenyi_groups(ranks, 3.5) == [["A", "B", "C"], ["B", "C", "D"]]
     assert st.nemenyi_groups(ranks, 0.5) == [["C", "D"]]
     assert st.nemenyi_groups(ranks, 0.1) == []
+
+
+def test_the_balanced_accuracy_and_kappa_contrast_without_cells_is_unchanged():
+    # touched behavior: paired_bootstrap called as before (no cells) gives the same BA
+    # and kappa replicates as a direct recomputation on the same index
+    rng = np.random.default_rng(12)
+    y = np.array([i % 2 for i in range(20)])
+    pa, pb = rng.uniform(size=20), rng.uniform(size=20)
+    strata = [(int(v), "d") for v in y]
+    out = st.paired_bootstrap(y, pa, pb, strata, resamples=300, seed=5)
+    groups = st._strata_index(strata)
+    rng2 = np.random.default_rng(5)
+    index = np.concatenate([g[rng2.integers(0, len(g), size=(300, len(g)))] for g in groups],
+                           axis=1)
+    ba_a, k_a = st._ba_kappa(y[index], st.predicted_labels(pa)[index])
+    ba_b, k_b = st._ba_kappa(y[index], st.predicted_labels(pb)[index])
+    assert np.allclose(out["replicates"], ba_a - ba_b)
+    assert out["kappa_p_value"] == pytest.approx(st._bootstrap_p((k_a - k_b)[
+        np.isfinite(k_a - k_b)]))
+    assert out["auc_a"] == pytest.approx(roc_auc_score(y, pa)) and out["cells"] == 1
