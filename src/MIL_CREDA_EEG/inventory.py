@@ -1,6 +1,6 @@
 """What the BALLADEER release holds: subjects, tasks, sessions, files, labels.
 
-Experiments plan v02, Secs. 1, 3.2 and 10.1. Before any audit step measures a
+Experiments plan v50, Secs. 1, 3.2 and 10.3. Before any audit step measures a
 record, something has to say which records exist and whom they belong to. This
 module walks the release tree `<subject>/<task>/<session>/<file>` without
 opening a single data file, and reads `users_demographics.json`, the source of
@@ -9,7 +9,7 @@ the label.
 A **condition** is the plan's recording context (Sec. 3.2): task, level and
 device family. A subject has up to five EEG conditions, and the overlap between
 them decides how many subjects each subject-disjoint partition can hold
-(Sec. 10.1).
+(Sec. 10.3).
 
 The label is `diagnosed` (`yes` / `no` / `undetermined`), not `group`: the
 data paper assigns `group` by the psychologists' criterion, and the release
@@ -26,9 +26,9 @@ from pathlib import Path
 import pandas as pd
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v02.md",
-    "sections": ["3.2", "10.1"],
-    "experiments": ["3.2", "10.1"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["3.2", "10.3"],
+    "experiments": ["3.2", "10.3"],
     "invariants": [
         "index_has_one_row_per_session_file_and_skips_finder_debris",
         "indeterminate_count_and_the_group_it_landed_in",
