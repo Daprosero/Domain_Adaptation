@@ -1,16 +1,22 @@
 """Duration audit: how long each record really is, against its nominal length.
 
-Experiments plan v02, Sec. 2.6. Three defects are declared: a duration below
-the declared fraction of the nominal (a truncated session), one above it (a
-restarted or concatenated session), and one that does not reach the bag
-cardinality floor.
+Experiments plan v50, Sec. 2.6. The duration is measured and excludes nothing
+here. A truncated session only contributes fewer windows; whether they reach a
+bag is decided by the bag cardinality floor, which belongs to the bag
+definition of Sec. 3.2 and not to this step. A restarted or concatenated
+session is marked and reported, never excluded. This module reports the real
+duration, its ratio to the nominal, the number of complete four-second windows
+-- the instances a bag would get (Sec. 3.1) -- and that one mark.
 
-**None of the three numbers is instantiated in v02**: neither fraction nor the
-floor. So this module measures and marks nothing: it reports the real duration,
-its ratio to the nominal, and the number of complete four-second windows --
-the instances a bag would get (Sec. 3.1). Sec. 10.1 asks for exactly these:
-the real duration of every record, because the body derived bag cardinalities
-from nominal durations, and the duration of the task with no event stream.
+**The restart mark reads only unambiguous evidence.** v50 gives no numeric
+rule for a restarted or concatenated session, so no gap or excess threshold is
+invented here (assumption, recorded as such): a record is marked
+`restarted_or_concatenated` when its timestamps step backwards at least once,
+which a single continuous acquisition cannot produce. The sample counter is
+not read for this mark: both devices count modulo a power of two
+(`audit_integrity`), so a counter reset is indistinguishable from a wrap plus
+lost samples. A duration far above the nominal is measured and reported in
+`ratio_to_nominal`, not marked by itself.
 
 **Where each nominal comes from.**
 
@@ -28,12 +34,14 @@ from __future__ import annotations
 import numpy as np
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v02.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["2.6"],
     "experiments": ["2.6"],
     "invariants": [
         "nominal_duration_of_each_task_comes_from_its_own_source",
         "duration_reports_ratio_and_window_count_without_a_cut",
+        "a_backward_timestamp_marks_a_restarted_or_concatenated_session",
+        "the_mark_excludes_nothing_and_the_floor_is_not_pending_here",
     ],
 }
 
@@ -42,6 +50,8 @@ WINDOW_S = 4.0
 FLAG_DISPLAY_S = 2.0
 #: Data paper, Environment 2: 14 rows, "a 20-second timeframe per line".
 ROBOTS_ROWS, ROBOTS_ROW_S = 14, 20.0
+#: Sec. 2.6: the one mark this step can set.
+RESTART_MARK = "restarted_or_concatenated"
 
 
 def nominal_duration(task: str, level: int | None, flags_info: dict) -> float | None:
@@ -57,16 +67,25 @@ def nominal_duration(task: str, level: int | None, flags_info: dict) -> float | 
     return None
 
 
+def backward_timestamp_steps(timestamps: np.ndarray) -> int:
+    """Times the clock steps back: evidence of a restart or a concatenation."""
+    timestamps = np.asarray(timestamps, dtype=float)
+    return int(np.sum(np.diff(timestamps) < 0)) if len(timestamps) > 1 else 0
+
+
 def audit_duration(timestamps: np.ndarray, rate: float, nominal: float | None,
                    window_s: float = WINDOW_S) -> dict:
-    """Real duration, its ratio to the nominal and complete windows. No cut."""
+    """Real duration, its ratio to the nominal, complete windows and the
+    restart mark. No cut, no exclusion."""
     timestamps = np.asarray(timestamps, dtype=float)
     duration = float(timestamps[-1] - timestamps[0]) + 1.0 / rate
+    backward = backward_timestamp_steps(timestamps)
     return {
         "duration_s": duration,
         "nominal_s": float(nominal) if nominal is not None else None,
         "ratio_to_nominal": duration / nominal if nominal else None,
         "n_windows": int(np.floor(duration / window_s + 1e-9)),
-        "marks": [],
-        "pending": ["truncation_fraction", "excess_fraction", "bag_cardinality_floor"],
+        "n_backward_timestamp_steps": backward,
+        "marks": [RESTART_MARK] if backward else [],
+        "pending": [],
     }

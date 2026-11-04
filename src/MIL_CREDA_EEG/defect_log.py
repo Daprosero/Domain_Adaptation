@@ -1,27 +1,37 @@
-"""The defect log: the step that keeps the nine before it honest.
+"""The defect log: the audit pass and the per-record log of its marks.
 
-Experiments plan v02, Sec. 2.10. One flow table per device cohort, from the
-initial number of subjects to the final one, broken down by step; and three
-checks over the accumulated marks: are they correlated with the label, with
-sex, with age. Sex starts unbalanced in this release -- far more boys among
-the diagnosed than among the controls -- so the sex check is not a formality.
+Experiments plan v50, Sec. 2.10. The plan's flow table -- initial, rate (2.2),
+record without EEG (2.4), contact (2.5), undetermined diagnosis and EPOC+
+records (2.10), bag floor (3.2), final -- and its crosses by exclusion type are
+produced by `exclusions`, which applies those exclusions. This module is the
+audit that feeds them: the defects of the earlier steps, measured once per
+record, and the checks of every mark against label, sex and age
+(`cross_with_demographics`, which `exclusions` reuses for its crosses). Sex
+starts unbalanced in this release -- far more boys among the diagnosed than
+among the controls -- so the sex check is not a formality.
 
 Hard defects and incompatibilities are reported apart, each with its own cross
 table: a corrupt file is plausibly random; a sound record incompatible with the
 working configuration is plausibly systematic, because it tends to come from a
 different period or montage. Mixing them ruins the reading.
 
-**What is excluded here: nothing.** The flow table states how many subjects
-WOULD remain if the hard defects whose rule the plan fully declares were
-applied (an unreadable file; a rate outside the menu or different from the
-nominal, Sec. 2.2). Every other column is a mark. A mark is counted only when
-its definition needs no number the plan has not given ("any window", "any
-sample"), and the continuous distributions behind every mark are crossed with
-the label as well, so a later cut can be chosen without looking at accuracy.
+**What is excluded here: nothing.** `flow_table` is the audit's own mark table,
+one row per audit step: it states how many subjects WOULD remain if the hard
+defects whose rule the audit reads directly were applied (an unreadable file;
+a rate outside the menu or different from the nominal, Sec. 2.2). Every other
+row is a mark: a gap longer than a window (2.3), a marked or missing channel
+(2.4), a contact window below the maximum (2.5), and a restarted or
+concatenated session (2.6, `audit_duration`), which v50 marks and reports and
+never excludes. A mark is counted only when its definition needs no number the
+plan has not given, and the continuous distributions behind every mark are
+crossed with the label as well, so a later cut can be chosen without looking at
+accuracy.
 
 This module also drives the single pass over the release: each EEG record is
 read once, every audit step runs on it, and its summary is cached as JSON under
-`MIL-CREDA/Results/audit/records/`, so a notebook never re-reads 58 GB.
+`MIL-CREDA/Results/audit/records/`, so a notebook never re-reads 58 GB. Its
+`records.csv` is the per-record table Sec. 2.6 cites and `exclusions` checks
+its excluded sets against.
 """
 
 from __future__ import annotations
@@ -42,24 +52,27 @@ from MIL_CREDA_EEG.audit_channels import (
     missing_vs_cohort, reference_metrics,
 )
 from MIL_CREDA_EEG.audit_contact import emotiv_quality, line_noise_ratio
-from MIL_CREDA_EEG.audit_duration import audit_duration, nominal_duration
+from MIL_CREDA_EEG.audit_duration import RESTART_MARK, audit_duration, nominal_duration
 from MIL_CREDA_EEG.audit_integrity import audit_integrity
 from MIL_CREDA_EEG.audit_rate import CGX_MENU, EMOTIV_MENU, audit_rate
 from MIL_CREDA_EEG.modality import emotiv_export_streams, read_record
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v02.md",
-    "sections": ["2.10"],
-    "experiments": ["2.10"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["2.6", "2.10"],
+    "experiments": ["2.6", "2.10"],
     "invariants": [
         "hard_defects_and_incompatibilities_are_kept_apart",
         "flow_table_counts_subjects_left_after_declared_hard_defects",
         "cross_with_label_counts_marked_subjects_per_group",
         "audit_record_of_an_unreadable_file_is_a_hard_defect_not_a_crash",
+        "flow_table_counts_the_restart_mark_and_excludes_nothing_for_it",
+        "records_frame_carries_the_duration_mark",
     ],
 }
 
-#: Steps of the flow table, in plan order.
+#: Steps of the audit's own mark table, in plan order (the v50 flow table of
+#: exclusions is `exclusions.STEPS`).
 STEPS = ("inicial", "lectura", "2.2 tasa", "2.3 integridad", "2.4 canales",
          "2.5 contacto", "2.6 duración")
 
@@ -202,6 +215,8 @@ def records_frame(records: list[dict]) -> pd.DataFrame:
                     integ["windows_touched_by_interpolation"],
                 "n_windows": dur["n_windows"], "duration_s": dur["duration_s"],
                 "nominal_s": dur["nominal_s"], "ratio_to_nominal": dur["ratio_to_nominal"],
+                "duration_marks": ";".join(dur.get("marks", [])),
+                "restarted_or_concatenated": RESTART_MARK in dur.get("marks", []),
                 "n_flat_channels": sum("flat" in m for m in marks.values()),
                 "n_saturated_channels": sum("saturated" in m for m in marks.values()),
                 "n_marked_channels": sum(bool(m) for m in marks.values()),
@@ -293,10 +308,12 @@ def step_marks(frame: pd.DataFrame) -> dict[str, tuple[pd.Series, pd.Series]]:
         (frame["n_missing_vs_cohort"].fillna(0) > 0)
     contact = (_truthy(frame["quality_any_window_below"])
                if "quality_any_window_below" in frame else none)
+    restart = (_truthy(frame["restarted_or_concatenated"])
+               if "restarted_or_concatenated" in frame else none)
     return {"lectura": (unreadable, unreadable), "2.2 tasa": (rate, rate),
             "2.3 integridad": (_truthy(frame["gap_exceeds_window"]), none),
             "2.4 canales": (channels, none), "2.5 contacto": (contact, none),
-            "2.6 duración": (none, none)}
+            "2.6 duración": (restart, none)}
 
 
 def flow_table(frame: pd.DataFrame, family: str) -> pd.DataFrame:
