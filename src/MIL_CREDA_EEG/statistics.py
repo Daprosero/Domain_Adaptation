@@ -1,13 +1,14 @@
 """The report and variance design: subject-level metrics, pooled summaries and contrasts.
 
-Experiments plan v44, Secs. 4.4 and 4.6, with the significance tables of
+Experiments plan v50, Secs. 4.4 and 4.6, with the significance tables of
 Secs. 5.1-5.3, the global ranking of Sec. 5.4 and the tests of Secs. 6.1-6.3. Every function here reads
 predictions that already exist (one record per target test subject, rotation,
 seed and strategy, as `two_phase.predictions` writes them); nothing here trains.
 
 **Metrics (Sec. 4.4).** Subject level only, because the bag is the subject:
 balanced accuracy (primary, `two_phase.balanced_accuracy`), Cohen's kappa,
-the area under the ROC curve, sensitivity and specificity. A bag is predicted
+the area under the ROC curve (AUC_avg, below), sensitivity and specificity.
+A bag is predicted
 positive when its probability of the positive class exceeds 0.5, which is the
 argmax of the two-class prediction that training and selection read (a tie
 goes to class 0, as `torch.argmax` does).
@@ -16,11 +17,21 @@ goes to class 0, as `torch.argmax` does).
 the four rotations, each subject predicted once, and computes one metric over
 the target pool (`pooled`; the headline number). The per-fold mean and
 deviation (`per_fold`) is the evidence that the pooled number does not hang on
-one rotation, and the AUC is reported per fold too, because the pooled AUC
-mixes four models' probabilities. There is one report seed (Sec. 4.6, seed 1):
+one rotation. There is one report seed (Sec. 4.6, seed 1):
 each transfer has a single pooled value, with no reduction between seeds, and
 every summary and contrast refuses records of more than one seed
 (`single_seed`).
+
+**AUC_avg (Sec. 4.6).** The AUC is never computed on the pooled
+predictions: pooling the probabilities of the four rotations' models, which may
+be calibrated differently, penalizes a classifier whose calibration changes
+between folds even when it orders the subjects well inside each one. It is
+computed in each test cell, one per rotation and direction, and averaged over
+the cells (`auc_avg`; Forman and Scholz 2010, AUC_avg); each cell's AUC is
+reported too (`auc_cells`). Balanced accuracy, kappa, sensitivity and
+specificity stay on the pooled hard predictions (pooled counts). A cell without
+both classes has no AUC and leaves the average (`auc_cells_undefined` counts
+it); the declared partition never produces one.
 
 **The pair (Sec. 4.6).** The primary performance contrast is on each core pair
 with its two directions pooled: every assigned subject is target exactly once
@@ -30,13 +41,15 @@ it is target. `pool_pair` asserts it against `assignment.pair_pool`.
 **The primary contrast (Sec. 4.6).** A paired, class-stratified subject
 bootstrap (Koehn 2004 for the pairing, Robin et al. 2011 for the
 stratification): each replicate resamples subjects with replacement inside
-every (class, direction) stratum, scores both models on the same replicate,
-and recomputes the whole balanced accuracy and kappa. Reported: the difference,
-its 95% percentile interval, a p value, the kappa difference with its own p
-value and the number of subjects on which the two models disagree (the only
-subjects that carry information with binary responses). The AUCs on the same
-subjects are compared with DeLong's test (`delong`, the structural-components
-algorithm of Sun and Xu 2014), and the four rotations with Nadeau and Bengio's
+every (class, direction, rotation) stratum, scores both models on the same
+replicate, and recomputes the whole balanced accuracy and kappa. Reported: the
+difference, its 95% percentile interval, a p value, the kappa difference with
+its own p value and the number of subjects on which the two models disagree (the
+only subjects that carry information with binary responses). Every stratum lies
+inside one rotation-and-direction cell, so the same replicates resample within
+each cell, and on them the AUC of every cell and its average are recomputed for
+both models: the AUC_avg difference with its percentile interval and p value
+(`TEST_AUC_AVG`). The four rotations are compared with Nadeau and Bengio's
 corrected resampled t test, one value per rotation at the report seed
 (`nadeau_bengio`).
 
@@ -46,10 +59,21 @@ read) is the balanced-accuracy bootstrap, Holm over the rivals of each core
 pair. The secondary family (`FAMILY_SECONDARY`, support, no criterion) is the
 kappa difference through the same paired, stratified bootstrap with its own p
 value, computed from the same replicates exactly as the balanced-accuracy one
-(`TEST_KAPPA`), DeLong's AUC test and the Nadeau-Bengio t; Holm runs within
+(`TEST_KAPPA`), the AUC_avg difference from the same replicates
+(`TEST_AUC_AVG`) and the Nadeau-Bengio t; Holm runs within
 each metric over the same rivals. `pair_contrast` emits the four rows of one
 rival, each carrying its `family` and the `contrast` it belongs to, and
 `apply_contrast_families` adjusts all of them at once (`holm`, `apply_holm`).
+
+**Expected precision (Sec. 4.6).** Before any run, the precision the core
+pairs' contrasts can give, from the pooled target counts per class
+(`expected_precision`): normal approximation, alpha 0.05 two-sided, power 0.8,
+no Holm adjustment. The 95% half-width of balanced accuracy at a BA level takes
+sensitivity = specificity = BA, so Var(BA) = (BA(1-BA)/n_cases +
+BA(1-BA)/n_controls) / 4; the minimum detectable paired BA difference at a
+discordance d (the fraction of subjects on which the two models disagree, an
+assumption) takes the per-class variance of the recall difference as d / n_c,
+so it is (z_{1-alpha/2} + z_power) sqrt((d/n_cases + d/n_controls) / 4).
 
 **The ranking (Secs. 5.1-5.4).** The arm rankings are descriptive
 (`descriptive_ranking`): the average rank of the nine adapted strategies over
@@ -84,8 +108,8 @@ reaches 0.95 and the interval is not reported (`None`, with a note).
 `BOOTSTRAP_RESAMPLES` = 10000 replicates from `BOOTSTRAP_SEED`; its p value is
 two-sided, twice the smaller tail of the replicate differences at zero with
 the (1 + count) / (1 + replicates) convention, so it is never exactly zero.
-The kappa p value applies the same formula to the kappa differences of the
-same replicates; a replicate whose kappa is undefined (one predicted and true
+The kappa and AUC_avg p values apply the same formula to the kappa and
+AUC_avg differences of the same replicates; a replicate whose kappa is undefined (one predicted and true
 class only, impossible while both classes are present in every stratum)
 leaves the count, and the replicates are the finite ones. A Nemenyi group is
 joined while the rank gap is at most the critical difference, the plan's
@@ -103,17 +127,17 @@ plus `hypothesis` and `experiment` and any extra key a table needs.
 from __future__ import annotations
 
 import math
+import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
 from scipy import stats as sps
-from sklearn.metrics import roc_auc_score
 
 from MIL_CREDA_EEG.two_phase import balanced_accuracy
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.4", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
@@ -129,7 +153,12 @@ __provenance__ = {
         "the_kappa_p_value_comes_from_the_same_replicates_as_the_balanced_accuracy_one",
         "every_contrast_row_belongs_to_a_holm_family_within_its_metric",
         "identical_models_give_a_zero_difference_and_p_one",
-        "delong_matches_its_structural_components_definition",
+        "auc_avg_is_the_mean_of_the_rotation_and_direction_cell_aucs",
+        "balanced_accuracy_and_kappa_stay_on_pooled_hard_predictions",
+        "the_auc_avg_contrast_resamples_within_cells_on_the_balanced_accuracy_replicates",
+        "a_bootstrap_stratum_never_spans_two_cells",
+        "no_delong_test_remains",
+        "expected_precision_reproduces_the_plans_core_pair_numbers",
         "nadeau_bengio_reduces_to_the_one_sample_t_at_zero_ratio",
         "holm_is_the_step_down_adjustment",
         "friedman_ranks_with_one_as_best_and_nemenyi_gives_the_critical_difference",
@@ -156,7 +185,8 @@ NEMENYI_Q05 = {2: 1.960, 3: 2.343, 4: 2.569, 5: 2.728, 6: 2.850, 7: 2.949, 8: 3.
                9: 3.102, 10: 3.164}
 TEST_BOOTSTRAP = "paired class-stratified subject bootstrap (balanced accuracy)"
 TEST_KAPPA = "paired class-stratified subject bootstrap (Cohen's kappa)"
-TEST_DELONG = "DeLong (paired AUC)"
+TEST_AUC_AVG = ("paired class-stratified subject bootstrap within rotation-and-direction "
+                "cells (AUC_avg)")
 TEST_NADEAU_BENGIO = "Nadeau-Bengio corrected resampled t (per-rotation balanced accuracy)"
 TEST_WILCOXON = "Wilcoxon signed-rank over subjects"
 TEST_FRIEDMAN = "Friedman over core transfers, Nemenyi critical difference"
@@ -164,9 +194,15 @@ TEST_FRIEDMAN_GLOBAL = "Friedman over the ten transfers, Nemenyi critical differ
 #: Sec. 4.6: the two declared families of the performance contrasts.
 FAMILY_PRIMARY = "primary (confirmatory)"
 FAMILY_SECONDARY = "secondary (support, no criterion)"
-CONTRAST_TESTS = (TEST_BOOTSTRAP, TEST_KAPPA, TEST_DELONG, TEST_NADEAU_BENGIO)
+CONTRAST_TESTS = (TEST_BOOTSTRAP, TEST_KAPPA, TEST_AUC_AVG, TEST_NADEAU_BENGIO)
 METRIC_OF_TEST = {TEST_BOOTSTRAP: "balanced accuracy", TEST_KAPPA: "kappa",
-                  TEST_DELONG: "AUC", TEST_NADEAU_BENGIO: "Nadeau-Bengio"}
+                  TEST_AUC_AVG: "AUC_avg", TEST_NADEAU_BENGIO: "Nadeau-Bengio"}
+#: Sec. 4.6: the bootstrap strata; each lies inside one rotation-and-direction cell.
+STRATA = "class x direction x rotation"
+#: Sec. 4.6, the expected-precision grid of the core pairs.
+PRECISION_BA_LEVELS = (0.6, 0.7, 0.8)
+PRECISION_DISCORDANCES = (0.1, 0.2, 0.3)
+PRECISION_POWER = 0.8
 #: Sec. 5.4: the arm success criteria read the top three by average rank.
 TOP_RANKS = 3
 #: Sec. 5.4, the limitation the plan declares for the global ranking, verbatim.
@@ -188,23 +224,63 @@ def predicted_labels(probabilities: Sequence[float]) -> np.ndarray:
     return (np.asarray(probabilities, dtype=float) > POSITIVE_THRESHOLD).astype(int)
 
 
-def subject_metrics(labels: Sequence[int], probabilities: Sequence[float]) -> dict:
-    """Balanced accuracy, kappa, AUC, sensitivity and specificity over subjects."""
+def _auc_rows(y: np.ndarray, s: np.ndarray) -> np.ndarray:
+    """Row-wise AUC (Mann-Whitney with midranks for ties); NaN without both classes."""
+    ranks = sps.rankdata(s, axis=-1)
+    m = (y == 1).sum(axis=-1)
+    n = (y == 0).sum(axis=-1)
+    u = np.where(y == 1, ranks, 0.0).sum(axis=-1) - m * (m + 1) / 2.0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return np.where((m > 0) & (n > 0), u / (m * n), np.nan)
+
+
+def _cell_index(cells: Sequence) -> dict:
+    groups: dict = defaultdict(list)
+    for i, c in enumerate(cells):
+        groups[c].append(i)
+    return {c: np.asarray(v) for c, v in sorted(groups.items(), key=lambda kv: str(kv[0]))}
+
+
+def auc_avg(labels: Sequence[int], probabilities: Sequence[float],
+            cells: Sequence | None = None) -> dict:
+    """Sec. 4.6: the AUC of each test cell and their mean (Forman and Scholz 2010).
+
+    `cells` names each subject's cell (one per rotation and direction); None is
+    one cell, the plain AUC. A cell without both classes has no AUC and leaves
+    the mean.
+    """
+    y = np.asarray(labels, dtype=int)
+    p = np.asarray(probabilities, dtype=float)
+    cells = [None] * len(y) if cells is None else list(cells)
+    if len(cells) != len(y):
+        raise StatisticsError("one cell per subject")
+    per_cell = {c: float(_auc_rows(y[i][None, :], p[i][None, :])[0])
+                for c, i in _cell_index(cells).items()}
+    finite = [v for v in per_cell.values() if math.isfinite(v)]
+    return {"auc": float(np.mean(finite)) if finite else float("nan"), "cells": per_cell,
+            "undefined": len(per_cell) - len(finite)}
+
+
+def subject_metrics(labels: Sequence[int], probabilities: Sequence[float],
+                    cells: Sequence | None = None) -> dict:
+    """Balanced accuracy, kappa, sensitivity and specificity on the pooled hard
+    predictions, and AUC_avg over `cells` (None: one cell, the plain AUC)."""
     y = np.asarray(labels, dtype=int)
     p = np.asarray(probabilities, dtype=float)
     if y.shape != p.shape or y.ndim != 1:
         raise StatisticsError("labels and probabilities must be one value per subject")
     yhat = predicted_labels(p)
-    both = len(np.unique(y)) == 2
+    auc = auc_avg(y, p, cells)
     sensitivity = float(np.mean(yhat[y == 1] == 1)) if (y == 1).any() else float("nan")
     specificity = float(np.mean(yhat[y == 0] == 0)) if (y == 0).any() else float("nan")
     kappa = float(_ba_kappa(y[None, :], yhat[None, :])[1][0]) if len(y) else float("nan")
     return {"balanced_accuracy": balanced_accuracy(y, yhat),
             "kappa": kappa if math.isfinite(kappa) else float("nan"),
-            "auc": float(roc_auc_score(y, p)) if both else float("nan"),
-            "sensitivity": sensitivity, "specificity": specificity,
+            "auc": auc["auc"], "sensitivity": sensitivity, "specificity": specificity,
             "n": int(len(y)), "n_positive": int((y == 1).sum()),
-            "n_negative": int((y == 0).sum())}
+            "n_negative": int((y == 0).sum()),
+            **({} if cells is None else {"auc_cells": auc["cells"],
+                                         "auc_cells_undefined": auc["undefined"]})}
 
 
 def _key(record: Mapping) -> tuple:
@@ -232,8 +308,14 @@ def _by(records: Iterable[Mapping], field: str) -> dict:
     return dict(sorted(out.items()))
 
 
+def cell_of(record: Mapping) -> str:
+    """The test cell of a prediction (Sec. 4.6): its rotation and direction."""
+    return f"rotation {record.get('rotation')}, {record.get('direction')}"
+
+
 def _metrics_of(records: Sequence[Mapping]) -> dict:
-    return subject_metrics([r["label"] for r in records], [r["probability"] for r in records])
+    return subject_metrics([r["label"] for r in records], [r["probability"] for r in records],
+                           [cell_of(r) for r in records])
 
 
 def single_seed(records: Iterable[Mapping]) -> list[Mapping]:
@@ -325,15 +407,46 @@ def _bootstrap_p(replicates: np.ndarray) -> float | None:
     return float(min(1.0, 2 * min(lower, upper)))
 
 
+def _auc_avg_replicates(y: np.ndarray, sa: np.ndarray, sb: np.ndarray, index: np.ndarray,
+                        cell_ids: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Per replicate row of `index`: AUC_avg of both models over the cells.
+
+    A column of `index` is drawn inside one stratum, so inside one cell: the
+    cell of a column is the cell of its first row.
+    """
+    column_cell = cell_ids[index[0]]
+    aa, ab = [], []
+    for c in np.unique(cell_ids):
+        cols = index[:, column_cell == c]
+        aa.append(_auc_rows(y[cols], sa[cols]))
+        ab.append(_auc_rows(y[cols], sb[cols]))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)     # a replicate with no cell AUC
+        return np.nanmean(np.stack(aa), axis=0), np.nanmean(np.stack(ab), axis=0)
+
+
 def paired_bootstrap(labels: Sequence[int], prob_a: Sequence[float], prob_b: Sequence[float],
-                     strata: Sequence, *, resamples: int = BOOTSTRAP_RESAMPLES,
+                     strata: Sequence, *, cells: Sequence | None = None,
+                     resamples: int = BOOTSTRAP_RESAMPLES,
                      seed: int = BOOTSTRAP_SEED) -> dict:
-    """Sec. 4.6's primary contrast: A minus B, on the same resampled subjects."""
+    """Sec. 4.6's contrasts: A minus B, on the same resampled subjects.
+
+    Balanced accuracy and kappa on the pooled hard predictions; AUC_avg over
+    `cells` (None: one cell) on the same replicates, each stratum inside one cell.
+    """
     y = np.asarray(labels, dtype=int)
-    a, b = predicted_labels(prob_a), predicted_labels(prob_b)
-    if not (len(y) == len(a) == len(b) == len(strata)):
-        raise StatisticsError("labels, both predictions and strata must align per subject")
+    sa, sb = np.asarray(prob_a, dtype=float), np.asarray(prob_b, dtype=float)
+    a, b = predicted_labels(sa), predicted_labels(sb)
+    cells = [None] * len(y) if cells is None else list(cells)
+    if not (len(y) == len(a) == len(b) == len(strata) == len(cells)):
+        raise StatisticsError("labels, both predictions, strata and cells must align per "
+                              "subject")
     groups = _strata_index(strata)
+    cell_names = {c: k for k, c in enumerate(_cell_index(cells))}
+    cell_ids = np.asarray([cell_names[c] for c in cells])
+    spanning = [str(strata[g[0]]) for g in groups if len(set(cell_ids[g])) > 1]
+    if spanning:
+        raise StatisticsError(f"a bootstrap stratum spans more than one cell: {spanning[:3]}")
     rng = np.random.default_rng(seed)
     index = np.concatenate([g[rng.integers(0, len(g), size=(resamples, len(g)))]
                             for g in groups], axis=1)
@@ -345,62 +458,52 @@ def paired_bootstrap(labels: Sequence[int], prob_a: Sequence[float], prob_b: Seq
     observed = float(obs_a[0] - obs_b[0])
     lo, hi = np.percentile(diff, [2.5, 97.5])
     klo, khi = np.nanpercentile(kdiff, [2.5, 97.5])
+    auc_a, auc_b = auc_avg(y, sa, cells), auc_avg(y, sb, cells)
+    rep_a, rep_b = _auc_avg_replicates(y, sa, sb, index, cell_ids)
+    adiff = rep_a - rep_b
+    afinite = adiff[np.isfinite(adiff)]
+    alo, ahi = (np.percentile(afinite, [2.5, 97.5]) if len(afinite)
+                else (float("nan"), float("nan")))
     return {"difference": observed, "ci_low": float(lo), "ci_high": float(hi),
             "p_value": _bootstrap_p(diff),
             "kappa_difference": float(obs_ka[0] - obs_kb[0]),
             "kappa_ci_low": float(klo), "kappa_ci_high": float(khi),
             "kappa_p_value": _bootstrap_p(kdiff[np.isfinite(kdiff)]),
+            "auc_a": auc_a["auc"], "auc_b": auc_b["auc"],
+            "auc_difference": float(auc_a["auc"] - auc_b["auc"]),
+            "auc_ci_low": float(alo), "auc_ci_high": float(ahi),
+            "auc_p_value": _bootstrap_p(afinite), "auc_cells_a": auc_a["cells"],
+            "auc_cells_b": auc_b["cells"], "cells": len(cell_names),
+            "auc_replicates": adiff,
             "discordant": int(np.sum(a != b)), "n": int(len(y)),
             "strata_sizes": [int(len(g)) for g in groups], "resamples": int(resamples),
             "seed": int(seed), "replicates": diff}
 
 
-# ------------------------------------------------------------------ DeLong
+# ------------------------------------------------------------------ expected precision
 
 
-def _midrank(x: np.ndarray) -> np.ndarray:
-    order = np.argsort(x, kind="mergesort")
-    z = x[order]
-    n = len(x)
-    ranks = np.empty(n)
-    i = 0
-    while i < n:
-        j = i
-        while j < n and z[j] == z[i]:
-            j += 1
-        ranks[i:j] = 0.5 * (i + j - 1) + 1
-        i = j
-    out = np.empty(n)
-    out[order] = ranks
-    return out
-
-
-def delong(labels: Sequence[int], prob_a: Sequence[float], prob_b: Sequence[float]) -> dict:
-    """DeLong's test of two correlated AUCs (fast structural components, Sun and Xu 2014)."""
-    y = np.asarray(labels, dtype=int)
-    scores = np.vstack([np.asarray(prob_a, float), np.asarray(prob_b, float)])
-    pos, neg = scores[:, y == 1], scores[:, y == 0]
-    m, n = pos.shape[1], neg.shape[1]
-    if m < 2 or n < 2:
-        raise StatisticsError("DeLong needs at least two subjects of each class")
-    tx = np.vstack([_midrank(r) for r in pos])
-    ty = np.vstack([_midrank(r) for r in neg])
-    tz = np.vstack([_midrank(r) for r in np.hstack([pos, neg])])
-    aucs = tz[:, :m].sum(axis=1) / (m * n) - (m + 1.0) / (2.0 * n)
-    v10 = (tz[:, :m] - tx) / n
-    v01 = 1.0 - (tz[:, m:] - ty) / m
-    cov = np.cov(v10) / m + np.cov(v01) / n
-    diff = float(aucs[0] - aucs[1])
-    var = float(cov[0, 0] + cov[1, 1] - 2 * cov[0, 1])
-    if var <= 0:
-        z, p = (0.0, 1.0) if diff == 0 else (math.copysign(math.inf, diff), 0.0)
-    else:
-        z = diff / math.sqrt(var)
-        p = float(2 * sps.norm.sf(abs(z)))
-    half = 1.959963984540054 * math.sqrt(max(var, 0.0))
-    return {"auc_a": float(aucs[0]), "auc_b": float(aucs[1]), "difference": diff,
-            "variance": var, "z": float(z), "p_value": p, "ci_low": diff - half,
-            "ci_high": diff + half, "n": int(len(y)), "covariance": cov}
+def expected_precision(n_controls: int, n_cases: int, *,
+                       ba_levels: Sequence[float] = PRECISION_BA_LEVELS,
+                       discordances: Sequence[float] = PRECISION_DISCORDANCES,
+                       alpha: float = ALPHA, power: float = PRECISION_POWER) -> dict:
+    """Sec. 4.6: BA 95% half-width per BA level and minimum detectable paired BA
+    difference per discordance, normal approximation, two-sided, no Holm."""
+    if n_controls < 1 or n_cases < 1:
+        raise StatisticsError("expected precision needs at least one subject of each class")
+    inverse = 1.0 / n_cases + 1.0 / n_controls
+    z_alpha = float(sps.norm.ppf(1 - alpha / 2))
+    z_power = float(sps.norm.ppf(power))
+    return {"n_controls": int(n_controls), "n_cases": int(n_cases),
+            "ba_levels": [float(v) for v in ba_levels],
+            "ci_half_width": [z_alpha * math.sqrt(v * (1 - v) * inverse / 4)
+                              for v in ba_levels],
+            "discordances": [float(d) for d in discordances],
+            "minimum_detectable_difference": [(z_alpha + z_power) * math.sqrt(d * inverse / 4)
+                                              for d in discordances],
+            "alpha": alpha, "power": power, "holm": False,
+            "approximation": "normal; sensitivity = specificity = BA; per-class variance of "
+                             "the paired recall difference = discordance / n"}
 
 
 # ------------------------------------------------------------------ Nadeau-Bengio
@@ -586,7 +689,7 @@ def apply_holm(rows: list[dict], family: str) -> list[dict]:
 def apply_contrast_families(rows: list[dict], family: str) -> list[dict]:
     """Sec. 4.6: Holm within each metric over the rivals of `rows` (one core pair).
 
-    The balanced-accuracy rows are the primary family; kappa, DeLong and
+    The balanced-accuracy rows are the primary family; kappa, AUC_avg and
     Nadeau-Bengio are each a secondary family of their own. Rows of any other
     test are left as they are.
     """
@@ -610,11 +713,13 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
                   name_a: str, name_b: str, scope: str, test_train_ratio: float,
                   hypothesis: str, experiment: str,
                   resamples: int = BOOTSTRAP_RESAMPLES, seed: int = BOOTSTRAP_SEED) -> list[dict]:
-    """Sec. 4.6 for one rival on one pooled scope: bootstrap, DeLong and Nadeau-Bengio rows.
+    """Sec. 4.6 for one rival on one pooled scope: bootstrap and Nadeau-Bengio rows.
 
     `records_*` hold the report seed's pooled test predictions (already
     `pool_pair`-ed when the scope is a pair). The bootstrap strata are (class,
-    direction).
+    direction, rotation), each inside one rotation-and-direction cell, so the
+    AUC_avg contrast resamples within each cell on the balanced-accuracy
+    replicates.
     """
     records_a, records_b = single_seed(records_a), single_seed(records_b)
     seed_a = {r.get("seed") for r in records_a}
@@ -632,8 +737,14 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
     if any(ra[s]["label"] != rb[s]["label"] for s in subjects):
         raise StatisticsError(f"{comparison}: labels disagree between the two records")
     pa, pb = [ra[s]["probability"] for s in subjects], [rb[s]["probability"] for s in subjects]
-    strata = [(ra[s]["label"], ra[s].get("direction")) for s in subjects]
-    boot = paired_bootstrap(labels, pa, pb, strata, resamples=resamples, seed=seed)
+    if any(cell_of(ra[s]) != cell_of(rb[s]) for s in subjects):
+        raise StatisticsError(f"{comparison}: a subject sits in different cells in the two "
+                              f"records")
+    strata = [(ra[s]["label"], ra[s].get("direction"), ra[s].get("rotation"))
+              for s in subjects]
+    cells = [cell_of(ra[s]) for s in subjects]
+    boot = paired_bootstrap(labels, pa, pb, strata, cells=cells, resamples=resamples,
+                            seed=seed)
     common = {"contrast": comparison, "rival": name_b, "scope": scope,
               "report_seed": report_seed}
     rows.append(significance_row(
@@ -645,7 +756,7 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
         kappa_difference=boot["kappa_difference"], kappa_ci_low=boot["kappa_ci_low"],
         kappa_ci_high=boot["kappa_ci_high"], discordant=boot["discordant"],
         resamples=boot["resamples"], bootstrap_seed=boot["seed"],
-        strata="class x direction", family=FAMILY_PRIMARY, **common,
+        strata=STRATA, family=FAMILY_PRIMARY, **common,
         information_note="with binary responses the bootstrap's information lies only "
                          "in the discordant subjects"))
     rows.append(significance_row(
@@ -656,23 +767,18 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
         ci_low=boot["kappa_ci_low"], ci_high=boot["kappa_ci_high"], n=boot["n"],
         hypothesis=hypothesis, experiment=experiment, discordant=boot["discordant"],
         resamples=boot["resamples"], bootstrap_seed=boot["seed"],
-        strata="class x direction", family=FAMILY_SECONDARY, **common))
-    try:
-        dl = delong(labels, pa, pb)
-        rows.append(significance_row(
-            comparison=f"{comparison} (AUC)", test=TEST_DELONG, statistic=dl["z"],
-            p_value=dl["p_value"], effect_size=dl["difference"],
-            effect_size_name=f"AUC difference ({name_a} - {name_b})",
-            ci_low=dl["ci_low"], ci_high=dl["ci_high"], n=dl["n"],
-            hypothesis=hypothesis, experiment=experiment, auc_a=dl["auc_a"],
-            auc_b=dl["auc_b"], family=FAMILY_SECONDARY, **common))
-    except StatisticsError as error:
-        rows.append(significance_row(
-            comparison=f"{comparison} (AUC)", test=TEST_DELONG, statistic=None, p_value=None,
-            effect_size=None, effect_size_name=f"AUC difference ({name_a} - {name_b})",
-            ci_low=None, ci_high=None, n=len(subjects), hypothesis=hypothesis,
-            experiment=experiment, not_computed=str(error), family=FAMILY_SECONDARY,
-            **common))
+        strata=STRATA, family=FAMILY_SECONDARY, **common))
+    rows.append(significance_row(
+        comparison=f"{comparison} (AUC_avg)", test=TEST_AUC_AVG,
+        statistic=boot["auc_difference"], p_value=boot["auc_p_value"],
+        effect_size=boot["auc_difference"],
+        effect_size_name=f"AUC_avg difference ({name_a} - {name_b})",
+        ci_low=boot["auc_ci_low"], ci_high=boot["auc_ci_high"], n=boot["n"],
+        hypothesis=hypothesis, experiment=experiment, auc_a=boot["auc_a"],
+        auc_b=boot["auc_b"], auc_cells_a=boot["auc_cells_a"],
+        auc_cells_b=boot["auc_cells_b"], cells=boot["cells"], discordant=boot["discordant"],
+        resamples=boot["resamples"], bootstrap_seed=boot["seed"], strata=STRATA,
+        family=FAMILY_SECONDARY, **common))
     nb = nadeau_bengio(fold_differences(records_a, records_b), test_train_ratio)
     rows.append(significance_row(
         comparison=f"{comparison} (per-rotation)", test=TEST_NADEAU_BENGIO, statistic=nb["t"],

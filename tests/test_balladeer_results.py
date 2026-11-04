@@ -1,4 +1,4 @@
-"""Experiments plan v43, Secs. 4.5, 5.1-5.4 and 6: the Results writers.
+"""Experiments plan v50, Secs. 4.5, 5.1-5.4 and 6: the Results writers.
 
 Every record here is synthetic (seeded), never a measured result.
 """
@@ -23,7 +23,7 @@ def _records(strategy, transfer, *, n=12, seeds=(1,), shift=0.0, seed=0):
         for i in range(n):
             label = i % 2
             out.append({"strategy": strategy, "transfer": transfer, "direction": transfer,
-                        "rotation": i % 4, "seed": s, "subject": f"{transfer}:{i}",
+                        "rotation": (i // 2) % 4, "seed": s, "subject": f"{transfer}:{i}",
                         "label": label, "probability": float(np.clip(
                             0.5 + (label - 0.5) * 0.4 + shift + rng.normal(0, 0.2), 0, 1))})
     return out
@@ -53,7 +53,7 @@ def test_every_writer_lands_in_the_dashboard_layout(tmp_path):
                    "A-nivel/tables/comparison.csv", "A-nivel/tables/comparison.md",
                    "history_A-nivel.json", "significance_A-nivel.json"]
     summary = json.loads((root / "A-nivel" / "summary.json").read_text())
-    assert summary["synthetic"] is True and summary["revision"].endswith("v44.md")
+    assert summary["synthetic"] is True and summary["revision"].endswith("v50.md")
     assert summary["rehearsal"] is False
     results.write_summary(root, "A-nivel", {"n": 3}, synthetic=False, rehearsal=True)
     assert json.loads((root / "A-nivel" / "summary.json").read_text())["rehearsal"] is True
@@ -142,6 +142,8 @@ def test_the_selection_table_reads_both_rules_from_the_same_trials():
     assert [(d["rule"], d["rotation"], d["trial"]) for d in detail][:2] == [
         ("primary", 0, 1), ("primary", 1, 1)]
     assert detail[0]["selection rotations"] == "0, 1, 2" and detail[0]["excluded rotation"] == 3
+    assert detail[0]["score (pooled inner balanced accuracy)"] == 0.5
+    assert not any("mean - sd" in k for k in detail[0])
     with pytest.raises(results.ResultsError, match="rotations"):
         results.selection_rows("MIL-CREDA", "L1->L11", primary, {0: free[0]})
 
@@ -327,12 +329,12 @@ def test_the_ladder_reads_each_strategys_own_source_only_control():
     assert model_store.STRATEGIES[-1] == "MIL-CREDA"
 
 
-# ------------------------------------------------------------------ plan v44
+# ------------------------------------------------------------------ plan v50
 
 
-def test_the_provenance_binds_plan_v44():
+def test_the_provenance_binds_plan_v50():
     assert results.__provenance__["revision"] == (
-        "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md")
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md")
 
 
 def _all_ten(strategies=model_store.STRATEGIES):
@@ -379,8 +381,8 @@ def test_the_arm_significance_table_carries_both_families_with_the_plans_headers
         "Contraste", "Transferencia núcleo", "Diferencia de exactitud balanceada",
         "Intervalo bootstrap al 95 %", "Valor de p crudo", "Valor de p ajustado por Holm",
         "Diferencia de kappa", "Valor de p de la kappa ajustado por Holm",
-        "Valor de p de DeLong ajustado por Holm", "Valor de p de Nadeau-Bengio ajustado por Holm",
-        "Sujetos en que discrepan"]
+        "Valor de p del AUC promedio ajustado por Holm",
+        "Valor de p de Nadeau-Bengio ajustado por Holm", "Sujetos en que discrepan"]
     assert len(table) == 2 and all(list(r) == list(results.SIGNIFICANCE_TABLE_COLUMNS)
                                    for r in table)
     by_test = {(r["rival"], r["test"]): r for r in rows}
@@ -389,8 +391,8 @@ def test_the_arm_significance_table_carries_both_families_with_the_plans_headers
     assert first["Valor de p de la kappa ajustado por Holm"] == by_test[
         ("COT", st.TEST_KAPPA)]["p_adjusted"]
     assert first["Diferencia de kappa"] == by_test[("COT", st.TEST_KAPPA)]["effect_size"]
-    assert first["Valor de p de DeLong ajustado por Holm"] == by_test[
-        ("COT", st.TEST_DELONG)]["p_adjusted"]
+    assert first["Valor de p del AUC promedio ajustado por Holm"] == by_test[
+        ("COT", st.TEST_AUC_AVG)]["p_adjusted"]
     assert first["Valor de p ajustado por Holm"] == by_test[("COT", st.TEST_BOOTSTRAP)][
         "p_adjusted"]
     assert first["Sujetos en que discrepan"] == by_test[("COT", st.TEST_BOOTSTRAP)]["discordant"]
@@ -448,3 +450,18 @@ def test_the_global_ranking_refuses_a_strategy_missing_a_transfer():
     ranking = results.global_ranking(records)
     assert ranking is None          # the plan ranks the nine; eight is not its test
     assert results.global_ranking(_all_ten(model_store.STRATEGIES[:2])) is None
+
+
+def test_the_auc_columns_read_auc_avg_and_the_per_fold_table_reports_each_cell():
+    a = _records("MIL-CREDA", "L1->L11", n=24) + _records("MIL-CREDA", "L11->L1", n=24, seed=1)
+    detail = results.transfer_detail(a, "level")
+    one = [r for r in a if r["transfer"] == "L1->L11"]
+    by = {d["transfer"]: d for d in detail}
+    expected = st.auc_avg([r["label"] for r in one], [r["probability"] for r in one],
+                          [st.cell_of(r) for r in one])
+    assert by["L1->L11"]["auc"] == f"{expected['auc']:.3f}" and len(expected["cells"]) == 4
+    secondary = {r["method"]: r for r in results.secondary_table({"MIL-CREDA": a}, "level")}
+    assert secondary["MIL-CREDA"]["auc"] == f"{st.pooled(a)['auc']:.3f}"
+    assert st.pooled(a)["auc"] == pytest.approx(np.mean(list(st.pooled(a)["auc_cells"].values())))
+    per_fold = results.per_fold_table({"MIL-CREDA": a})
+    assert per_fold[0]["auc per cell"].count("rotation 0") == 2      # both directions

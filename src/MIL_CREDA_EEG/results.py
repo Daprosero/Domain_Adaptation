@@ -1,6 +1,6 @@
 """Every measurement the plan declares, written where the dashboard reads it.
 
-Experiments plan v44, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
+Experiments plan v50, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 `experimental-implementation` skill's Results table, under the product folder
 `MIL-CREDA/Results/` (`DEFAULT_ROOT`), one folder per experiment
 (`EXPERIMENTS`):
@@ -30,23 +30,26 @@ Experiments plan v44, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 
 **Tables (what each one is).** Per performance arm (Secs. 5.1-5.3):
 `transfer_detail` (MIL-CREDA per transfer: balanced accuracy, AUC,
-sensitivity, specificity, pooled at the one report seed of Sec. 4.6),
+sensitivity, specificity at the one report seed of Sec. 4.6; balanced accuracy,
+sensitivity and specificity on the pooled predictions, the AUC as AUC_avg, the
+mean over the rotation-and-direction test cells, `statistics.auc_avg`),
 `comparison` (one row per method, one column per transfer, each cell the
 pooled balanced accuracy at the report seed, and the average rank of
 the nine adapted strategies over the core transfers; the source-only controls
-of the device arm print `controls.NA_RECORD`), `secondary` (kappa, AUC,
+of the device arm print `controls.NA_RECORD`), `secondary` (kappa, AUC_avg,
 sensitivity, specificity over the core pair), `per_fold` (the per-rotation
-summary, AUC included, Sec. 4.6), `ranking` (the descriptive arm ranking of
+summary, Sec. 4.6, with each test cell's AUC), `ranking` (the descriptive arm ranking of
 Secs. 5.1-5.3 under the plan's headers: MIL-CREDA's average rank and position
 among the nine, no test, `arm_ranking`), `significance` (the arm's significance
 table under the plan's headers, `significance_table`: per rival the
 balanced-accuracy difference with its interval and raw and Holm p values, the
-kappa difference with its Holm p value, DeLong's and Nadeau-Bengio's Holm p
-values and the discordant subjects), `selection_rules` (Sec. 4.5: per strategy and transfer, the trial
+kappa difference with its Holm p value, the Holm p values of the AUC_avg
+difference and of Nadeau-Bengio and the discordant subjects), `selection_rules` (Sec. 4.5: per strategy and transfer, the trial
 each rule chose for each test rotation, in how many rotations they coincide, and
 the pooled test balanced accuracy of each choice with their difference),
-`selected_configurations` (per rule and test rotation, the trial and the three
-rotations it was selected over) and `hyperparameters` (Sec. 5.4: phase 1's one
+`selected_configurations` (per rule and test rotation, the trial, the
+rotations it was selected over and its selection score, the balanced accuracy
+from the subject-level counts pooled over the inner splits, Sec. 4.5) and `hyperparameters` (Sec. 5.4: phase 1's one
 configuration, phase 2's configuration per test rotation). K1, K2 and K3 write the tables of Secs. 6.1-6.3.
 
 **The global ranking (Sec. 5.4)** spans the arms, so it lands beside the
@@ -80,7 +83,7 @@ from MIL_CREDA_EEG import statistics as st
 from MIL_CREDA_EEG.two_phase import write_history as _write_history
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
@@ -98,6 +101,8 @@ __provenance__ = {
         "the_critical_difference_diagram_draws_every_rank_and_the_cd_bar",
         "the_arm_ranking_is_descriptive_under_the_plans_headers",
         "the_arm_significance_table_carries_both_families_under_the_plans_headers",
+        "the_auc_columns_read_auc_avg_and_the_per_fold_table_reports_each_cell",
+        "the_selection_score_is_labelled_the_pooled_inner_balanced_accuracy",
         "the_global_ranking_is_one_friedman_over_the_ten_transfers_and_the_nine",
         "predictions_round_trip_through_the_runs_file",
         "every_prediction_carries_the_identity_it_was_written_under",
@@ -138,7 +143,8 @@ SIGNIFICANCE_TABLE_COLUMNS = (
     "Contraste", "Transferencia núcleo", "Diferencia de exactitud balanceada",
     "Intervalo bootstrap al 95 %", "Valor de p crudo", "Valor de p ajustado por Holm",
     "Diferencia de kappa", "Valor de p de la kappa ajustado por Holm",
-    "Valor de p de DeLong ajustado por Holm", "Valor de p de Nadeau-Bengio ajustado por Holm",
+    "Valor de p del AUC promedio ajustado por Holm",
+    "Valor de p de Nadeau-Bengio ajustado por Holm",
     "Sujetos en que discrepan")
 #: Sec. 5.4, the global ranking's two tables, headers verbatim.
 GLOBAL_RANKING_COLUMNS = ("Ranking global", "Estadístico de Friedman", "Valor de p",
@@ -146,6 +152,9 @@ GLOBAL_RANKING_COLUMNS = ("Ranking global", "Estadístico de Friedman", "Valor d
 GLOBAL_RANKING_ROW = "Nueve estrategias adaptadas, diez transferencias"
 GLOBAL_STRATEGY_COLUMNS = ("Estrategia, ranking global",
                            "Ranking promedio sobre las diez transferencias")
+#: Sec. 4.5: the selection score, the balanced accuracy from the subject-level confusion
+#: counts pooled over the three inner splits.
+SELECTION_SCORE = "pooled inner balanced accuracy"
 FIGURE_BODY_PT = 10
 FIGURE_WIDTH_FRACTION = 0.8
 
@@ -365,14 +374,18 @@ def secondary_table(pooled_pair: Mapping[str, Sequence[Mapping]], arm: str) -> l
 
 
 def per_fold_table(pooled_pair: Mapping[str, Sequence[Mapping]]) -> list[dict]:
+    """Per rotation: BA and AUC_avg over the rotation's cells, and each cell's AUC."""
     rows = []
     for key, records in pooled_pair.items():
         if not records:
             continue
         f = st.per_fold(records)
         for r, m in sorted(f["rotations"].items()):
+            cells = m.get("auc_cells", {})
             rows.append({"method": METHOD_ROWS.get(key, key), "rotation": r,
-                         "balanced_accuracy": m["balanced_accuracy"], "auc": m["auc"]})
+                         "balanced_accuracy": m["balanced_accuracy"], "auc": m["auc"],
+                         "auc per cell": "; ".join(f"{c}: {_value(cells, c)}"
+                                                   for c in cells)})
         rows.append({"method": METHOD_ROWS.get(key, key), "rotation": "mean ± sd",
                      "balanced_accuracy": _mean_sd(f, "balanced_accuracy"),
                      "auc": _mean_sd(f, "auc")})
@@ -414,7 +427,7 @@ def significance_table(rows: Sequence[Mapping]) -> list[dict]:
         out.append(dict(zip(SIGNIFICANCE_TABLE_COLUMNS, (
             name, boot.get("scope"), boot["effect_size"], interval, boot["p_value"],
             boot["p_adjusted"], kappa.get("effect_size"), kappa.get("p_adjusted"),
-            parts.get(st.TEST_DELONG, {}).get("p_adjusted"),
+            parts.get(st.TEST_AUC_AVG, {}).get("p_adjusted"),
             parts.get(st.TEST_NADEAU_BENGIO, {}).get("p_adjusted"), boot.get("discordant")))))
     return out
 
@@ -510,7 +523,8 @@ def selected_configuration_rows(strategy: str, transfer: str,
              "test fold": sel["testFold"], "trial": sel["trial"],
              "configuration": json.dumps(sel["params"], sort_keys=True),
              "selection rotations": ", ".join(str(q) for q in sel["selectionRotations"]),
-             "excluded rotation": sel["excludedRotation"], "score (mean - sd)": sel["score"]}
+             "excluded rotation": sel["excludedRotation"],
+             f"score ({SELECTION_SCORE})": sel["score"]}
             for rule, chosen in selections.items() for r, sel in sorted(chosen.items())]
 
 
@@ -637,7 +651,8 @@ def convergence_figure(root: str | Path, experiment: str, history: Sequence[Mapp
 def optimization_history_figure(root: str | Path, experiment: str,
                                 studies: Mapping[str, object],
                                 name: str = "optimization_history") -> Path:
-    """Sec. 5.4: best mean - sd so far against the trial number, one line per strategy."""
+    """Sec. 5.4: best selection score so far against the trial number, one line per
+    strategy."""
     path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
     plt, fig, axes = _figure()
     ax = axes[0, 0]
@@ -648,7 +663,7 @@ def optimization_history_figure(root: str | Path, experiment: str,
             ax.plot(range(1, len(values) + 1), np.maximum.accumulate(values), label=label,
                     linewidth=2 if label.startswith("MIL-CREDA") else 1)
     ax.set_xlabel("trial")
-    ax.set_ylabel("best mean - sd")
+    ax.set_ylabel(f"best {SELECTION_SCORE}")
     ax.legend(loc="best")
     return _save(plt, fig, path)
 
@@ -672,7 +687,7 @@ def contour_figure(root: str | Path, experiment: str, study, parameters: Sequenc
         except (ValueError, RuntimeError):
             pass                                   # collinear trials: points alone
     points = ax.scatter(xs, ys, c=zs)
-    fig.colorbar(points, ax=ax, label="mean - sd")
+    fig.colorbar(points, ax=ax, label=SELECTION_SCORE)
     ax.set_xlabel(parameters[0])
     ax.set_ylabel(parameters[1])
     return _save(plt, fig, path)
