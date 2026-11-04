@@ -288,7 +288,7 @@ def test_pair_contrast_emits_the_primary_and_the_three_secondary_rows():
         [r["label"] for r in sorted(a, key=lambda r: r["subject"])],
         [r["probability"] for r in sorted(a, key=lambda r: r["subject"])],
         [r["probability"] for r in sorted(b, key=lambda r: r["subject"])],
-        [(r["label"], r["direction"], r["rotation"])
+        [(r["label"], r["direction"])
          for r in sorted(a, key=lambda r: r["subject"])],
         cells=[st.cell_of(r) for r in sorted(a, key=lambda r: r["subject"])],
         resamples=200)
@@ -301,7 +301,8 @@ def test_pair_contrast_emits_the_primary_and_the_three_secondary_rows():
     # the balanced-accuracy row reads the same replicates, unchanged by the AUC_avg one
     assert rows[0]["p_value"] == pytest.approx(boot["p_value"])
     assert rows[0]["effect_size"] == pytest.approx(boot["difference"])
-    assert rows[0]["strata"] == rows[2]["strata"] == "class x direction x rotation"
+    assert rows[0]["strata"] == "class x direction"
+    assert rows[2]["strata"] == "class x rotation-and-direction cell"
 
 
 def test_holm_runs_within_each_metric_and_no_row_stays_uncorrected():
