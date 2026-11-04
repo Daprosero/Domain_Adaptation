@@ -1,6 +1,6 @@
 """The mechanism experiments, read from the stored models: K1, K2 and K3.
 
-Experiments plan v44, Secs. 6.1-6.3, over proposal r35 Eqs. 14-19 (attention
+Experiments plan v44, Secs. 6.1-6.3, over proposal r38 Eqs. 14-19 (attention
 and bag kernel), 28-31 (local alignment) and 34-38 (bounds of the normalized
 terms). K1 and K2 train nothing: they read a model that `model_store` saved
 (Secs. 6.3 and 7.3) or a history that training already recorded. K3 trains its

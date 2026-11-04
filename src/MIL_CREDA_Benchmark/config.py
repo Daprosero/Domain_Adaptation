@@ -14,7 +14,7 @@ from pathlib import Path
 
 # ------------------------------------------------------------------- material
 
-REVISION = "research-concept-r35.md"
+REVISION = "research-concept-r38.md"
 
 #: The domain codes a run has bound, and what each is called. Empty at rest:
 #: `toy_run.material_bound` adds the two codes of the family it binds and

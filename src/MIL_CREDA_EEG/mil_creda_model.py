@@ -1,6 +1,6 @@
 """MIL-CREDA on EEG: two EEGNet trunks, one shared attention, one common head.
 
-Experiments plan v40, Secs. 3, 7.2 and 7.3, over proposal r35, Eqs. 13-39.
+Experiments plan v40, Secs. 3, 7.2 and 7.3, over proposal r38, Eqs. 13-39.
 This module wires the proposal's objects to the EEG instance encoder; it does
 not re-implement any of them. Every equation is called from `MIL_CREDA`:
 
@@ -35,8 +35,8 @@ double-precision tolerances. The attention and the head live in float64.
 **Implementation choices the plan does not fix.** The selector's intermediate
 width `d_R` is 128, the toy-set precedent (`MIL_CREDA_Benchmark.config.
 ATTENTION_WIDTH`); the instance embeddings enter the kernel as they leave the
-trunk, with no extra normalization (r35 states none); the confidence weight
-enters the cross block too (`conditional.weighted_blocks` default, r35 Eq. 26).
+trunk, with no extra normalization (r38 states none); the confidence weight
+enters the cross block too (`conditional.weighted_blocks` default, r38 Eq. 26).
 """
 
 from __future__ import annotations
@@ -99,7 +99,7 @@ class SigmaAlreadyFixed(RuntimeError):
 
 
 class SourceBatchMissingClass(ValueError):
-    """r35 Sec. 5: the local correspondence needs S_c non-empty for every class."""
+    """r38 Sec. 5: the local correspondence needs S_c non-empty for every class."""
 
 
 class MILCREDAModel(nn.Module):

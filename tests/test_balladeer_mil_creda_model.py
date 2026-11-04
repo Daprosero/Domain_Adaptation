@@ -1,4 +1,4 @@
-"""Proposal r35 Eqs. 13-39 on EEG: two trunks, one attention, one head."""
+"""Proposal r38 Eqs. 13-39 on EEG: two trunks, one attention, one head."""
 
 from __future__ import annotations
 
