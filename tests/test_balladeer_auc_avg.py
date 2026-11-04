@@ -69,7 +69,7 @@ def test_balanced_accuracy_and_kappa_stay_on_pooled_hard_predictions():
         assert summary[metric] == pytest.approx(plain[metric])
 
 
-def test_the_auc_contrast_is_the_cell_bootstrap_of_auc_avg_on_the_ba_replicates():
+def test_the_auc_avg_contrast_resamples_by_class_within_each_cell():
     a = _miscalibrated("MIL-CREDA", rng_seed=1, separation=1.4)
     b = _miscalibrated("X", rng_seed=2, separation=0.6)
     rows = st.pair_contrast(a, b, name_a="MIL-CREDA", name_b="X", scope="A|B",
@@ -85,7 +85,8 @@ def test_the_auc_contrast_is_the_cell_bootstrap_of_auc_avg_on_the_ba_replicates(
     assert auc_row["family"] == st.FAMILY_SECONDARY
     assert auc_row["cells"] == 8 and auc_row["resamples"] == 400
 
-    # recompute: the same strata (class x rotation x direction) and the same index as BA
+    # recompute: BA on class x direction strata, AUC_avg on its own class x cell
+    # draws with the same seed
     ra = {r["subject"]: r for r in a}
     rb = {r["subject"]: r for r in b}
     subjects = sorted(ra)
@@ -93,7 +94,7 @@ def test_the_auc_contrast_is_the_cell_bootstrap_of_auc_avg_on_the_ba_replicates(
     pa = np.array([ra[s]["probability"] for s in subjects])
     pb = np.array([rb[s]["probability"] for s in subjects])
     cells = [(ra[s]["rotation"], ra[s]["direction"]) for s in subjects]
-    strata = [(ra[s]["label"], ra[s]["direction"], ra[s]["rotation"]) for s in subjects]
+    strata = [(ra[s]["label"], ra[s]["direction"]) for s in subjects]
     boot = st.paired_bootstrap(y, pa, pb, strata, cells=cells, resamples=400)
     assert auc_row["p_value"] == pytest.approx(boot["auc_p_value"])
     groups = st._strata_index(strata)
@@ -103,9 +104,15 @@ def test_the_auc_contrast_is_the_cell_bootstrap_of_auc_avg_on_the_ba_replicates(
     ba_a, _ = st._ba_kappa(y[index], st.predicted_labels(pa)[index])
     ba_b, _ = st._ba_kappa(y[index], st.predicted_labels(pb)[index])
     assert np.allclose(boot["replicates"], ba_a - ba_b)
+    cell_ids = {c: i for i, c in enumerate(sorted(set(cells), key=str))}
+    auc_groups = st._strata_index([(int(y[i]), cell_ids[c]) for i, c in enumerate(cells)])
+    auc_rng = np.random.default_rng(st.BOOTSTRAP_SEED)
+    auc_index = np.concatenate([g[auc_rng.integers(0, len(g), size=(400, len(g)))]
+                                for g in auc_groups], axis=1)
     cell_of = np.array([hash(c) for c in cells])
     for k in (0, 17, 399):
-        row = index[k]
+        row = auc_index[k]
+        assert all(len({cells[i] for i in g}) == 1 for g in auc_groups)
         diffs = []
         for c in set(cells):
             cols = row[cell_of[row] == hash(c)]
@@ -115,11 +122,12 @@ def test_the_auc_contrast_is_the_cell_bootstrap_of_auc_avg_on_the_ba_replicates(
     assert (auc_row["ci_low"], auc_row["ci_high"]) == (pytest.approx(lo), pytest.approx(hi))
 
 
-def test_a_stratum_spanning_two_cells_is_refused():
+def test_a_balanced_accuracy_stratum_may_span_cells():
+    """Class x direction strata cross rotations; only AUC_avg draws inside cells."""
     y = [0, 1, 0, 1]
-    with pytest.raises(st.StatisticsError, match="cell"):
-        st.paired_bootstrap(y, [0.2, 0.8, 0.3, 0.7], [0.4, 0.6, 0.5, 0.5], y,
-                            cells=["c1", "c1", "c2", "c2"], resamples=10)
+    boot = st.paired_bootstrap(y, [0.2, 0.8, 0.3, 0.7], [0.4, 0.6, 0.5, 0.5], y,
+                               cells=["c1", "c1", "c2", "c2"], resamples=10)
+    assert boot["cells"] == 2 and boot["strata_sizes"] == [2, 2]
 
 
 def test_the_cell_auc_handles_ties_as_midranks():
@@ -134,3 +142,29 @@ def test_no_delong_test_remains():
     assert all("DeLong" not in t for t in st.CONTRAST_TESTS)
     assert all("DeLong" not in c for c in results.SIGNIFICANCE_TABLE_COLUMNS)
     assert "DeLong" not in (st.__doc__ or "") and "DeLong" not in (results.__doc__ or "")
+
+
+def test_the_balanced_accuracy_bootstrap_is_stratified_by_class_and_direction_only():
+    """v50 Sec. 4.6: the primary contrast resamples by class and direction; the
+    AUC_avg contrast draws its own replicates by class inside each cell."""
+    a = _miscalibrated("A", rng_seed=1)
+    b = _miscalibrated("B", rng_seed=2, separation=0.6)
+    rows = st.pair_contrast(a, b, name_a="A", name_b="B", scope="pair",
+                            test_train_ratio=1 / 3, hypothesis="H", experiment="E",
+                            resamples=300)
+    order = sorted(range(len(a)), key=lambda i: a[i]["subject"])
+    labels = [a[i]["label"] for i in order]
+    pa = [a[i]["probability"] for i in order]
+    pb = [{r["subject"]: r for r in b}[a[i]["subject"]]["probability"] for i in order]
+    plain = st.paired_bootstrap(labels, pa, pb,
+                                [(a[i]["label"], a[i]["direction"]) for i in order],
+                                resamples=300)
+    primary = rows[0]
+    assert primary["strata"] == "class x direction"
+    assert primary["p_value"] == pytest.approx(plain["p_value"])
+    assert (primary["ci_low"], primary["ci_high"]) == (pytest.approx(plain["ci_low"]),
+                                                       pytest.approx(plain["ci_high"]))
+    assert rows[1]["strata"] == "class x direction"
+    auc_row = rows[2]
+    assert auc_row["test"] == st.TEST_AUC_AVG
+    assert auc_row["strata"] == "class x rotation-and-direction cell"

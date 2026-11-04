@@ -155,8 +155,8 @@ __provenance__ = {
         "identical_models_give_a_zero_difference_and_p_one",
         "auc_avg_is_the_mean_of_the_rotation_and_direction_cell_aucs",
         "balanced_accuracy_and_kappa_stay_on_pooled_hard_predictions",
-        "the_auc_avg_contrast_resamples_within_cells_on_the_balanced_accuracy_replicates",
-        "a_bootstrap_stratum_never_spans_two_cells",
+        "the_balanced_accuracy_bootstrap_is_stratified_by_class_and_direction_only",
+        "the_auc_avg_contrast_resamples_by_class_within_each_cell",
         "no_delong_test_remains",
         "expected_precision_reproduces_the_plans_core_pair_numbers",
         "nadeau_bengio_reduces_to_the_one_sample_t_at_zero_ratio",
@@ -198,7 +198,8 @@ CONTRAST_TESTS = (TEST_BOOTSTRAP, TEST_KAPPA, TEST_AUC_AVG, TEST_NADEAU_BENGIO)
 METRIC_OF_TEST = {TEST_BOOTSTRAP: "balanced accuracy", TEST_KAPPA: "kappa",
                   TEST_AUC_AVG: "AUC_avg", TEST_NADEAU_BENGIO: "Nadeau-Bengio"}
 #: Sec. 4.6: the bootstrap strata; each lies inside one rotation-and-direction cell.
-STRATA = "class x direction x rotation"
+STRATA = "class x direction"
+AUC_STRATA = "class x rotation-and-direction cell"
 #: Sec. 4.6, the expected-precision grid of the core pairs.
 PRECISION_BA_LEVELS = (0.6, 0.7, 0.8)
 PRECISION_DISCORDANCES = (0.1, 0.2, 0.3)
@@ -431,8 +432,10 @@ def paired_bootstrap(labels: Sequence[int], prob_a: Sequence[float], prob_b: Seq
                      seed: int = BOOTSTRAP_SEED) -> dict:
     """Sec. 4.6's contrasts: A minus B, on the same resampled subjects.
 
-    Balanced accuracy and kappa on the pooled hard predictions; AUC_avg over
-    `cells` (None: one cell) on the same replicates, each stratum inside one cell.
+    Balanced accuracy and kappa on the pooled hard predictions, resampled within
+    `strata` (Sec. 4.6: class and direction). AUC_avg over `cells` (None: one
+    cell) on its own replicates, drawn with the same seed by class inside each
+    cell, so every AUC stratum sits in one cell.
     """
     y = np.asarray(labels, dtype=int)
     sa, sb = np.asarray(prob_a, dtype=float), np.asarray(prob_b, dtype=float)
@@ -444,12 +447,13 @@ def paired_bootstrap(labels: Sequence[int], prob_a: Sequence[float], prob_b: Seq
     groups = _strata_index(strata)
     cell_names = {c: k for k, c in enumerate(_cell_index(cells))}
     cell_ids = np.asarray([cell_names[c] for c in cells])
-    spanning = [str(strata[g[0]]) for g in groups if len(set(cell_ids[g])) > 1]
-    if spanning:
-        raise StatisticsError(f"a bootstrap stratum spans more than one cell: {spanning[:3]}")
     rng = np.random.default_rng(seed)
     index = np.concatenate([g[rng.integers(0, len(g), size=(resamples, len(g)))]
                             for g in groups], axis=1)
+    auc_groups = _strata_index(list(zip(y.tolist(), cell_ids.tolist())))
+    auc_rng = np.random.default_rng(seed)
+    auc_index = np.concatenate([g[auc_rng.integers(0, len(g), size=(resamples, len(g)))]
+                                for g in auc_groups], axis=1)
     ba_a, k_a = _ba_kappa(y[index], a[index])
     ba_b, k_b = _ba_kappa(y[index], b[index])
     diff, kdiff = ba_a - ba_b, k_a - k_b
@@ -459,7 +463,7 @@ def paired_bootstrap(labels: Sequence[int], prob_a: Sequence[float], prob_b: Seq
     lo, hi = np.percentile(diff, [2.5, 97.5])
     klo, khi = np.nanpercentile(kdiff, [2.5, 97.5])
     auc_a, auc_b = auc_avg(y, sa, cells), auc_avg(y, sb, cells)
-    rep_a, rep_b = _auc_avg_replicates(y, sa, sb, index, cell_ids)
+    rep_a, rep_b = _auc_avg_replicates(y, sa, sb, auc_index, cell_ids)
     adiff = rep_a - rep_b
     afinite = adiff[np.isfinite(adiff)]
     alo, ahi = (np.percentile(afinite, [2.5, 97.5]) if len(afinite)
@@ -716,10 +720,9 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
     """Sec. 4.6 for one rival on one pooled scope: bootstrap and Nadeau-Bengio rows.
 
     `records_*` hold the report seed's pooled test predictions (already
-    `pool_pair`-ed when the scope is a pair). The bootstrap strata are (class,
-    direction, rotation), each inside one rotation-and-direction cell, so the
-    AUC_avg contrast resamples within each cell on the balanced-accuracy
-    replicates.
+    `pool_pair`-ed when the scope is a pair). Balanced accuracy and kappa
+    resample by class and direction (Sec. 4.6); the AUC_avg contrast resamples
+    by class inside each rotation-and-direction cell, with the same seed.
     """
     records_a, records_b = single_seed(records_a), single_seed(records_b)
     seed_a = {r.get("seed") for r in records_a}
@@ -740,8 +743,7 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
     if any(cell_of(ra[s]) != cell_of(rb[s]) for s in subjects):
         raise StatisticsError(f"{comparison}: a subject sits in different cells in the two "
                               f"records")
-    strata = [(ra[s]["label"], ra[s].get("direction"), ra[s].get("rotation"))
-              for s in subjects]
+    strata = [(ra[s]["label"], ra[s].get("direction")) for s in subjects]
     cells = [cell_of(ra[s]) for s in subjects]
     boot = paired_bootstrap(labels, pa, pb, strata, cells=cells, resamples=resamples,
                             seed=seed)
@@ -777,7 +779,7 @@ def pair_contrast(records_a: Sequence[Mapping], records_b: Sequence[Mapping], *,
         hypothesis=hypothesis, experiment=experiment, auc_a=boot["auc_a"],
         auc_b=boot["auc_b"], auc_cells_a=boot["auc_cells_a"],
         auc_cells_b=boot["auc_cells_b"], cells=boot["cells"], discordant=boot["discordant"],
-        resamples=boot["resamples"], bootstrap_seed=boot["seed"], strata=STRATA,
+        resamples=boot["resamples"], bootstrap_seed=boot["seed"], strata=AUC_STRATA,
         family=FAMILY_SECONDARY, **common))
     nb = nadeau_bengio(fold_differences(records_a, records_b), test_train_ratio)
     rows.append(significance_row(
