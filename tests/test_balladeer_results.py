@@ -148,6 +148,31 @@ def test_the_selection_table_reads_both_rules_from_the_same_trials():
         results.selection_rows("MIL-CREDA", "L1->L11", primary, {0: free[0]})
 
 
+def test_the_selection_score_is_labelled_the_pooled_inner_balanced_accuracy(tmp_path,
+                                                                           monkeypatch):
+    assert results.SELECTION_SCORE == "pooled inner balanced accuracy"
+    primary = _selection([1, 0, 2, 1], "primary")
+    detail = results.selected_configuration_rows("MIL-CREDA", "L1->L11", {"primary": primary})
+    assert [d["score (pooled inner balanced accuracy)"] for d in detail] == [
+        primary[r]["score"] for r in sorted(primary)]
+    assert not any("mean" in k or "sd" in k.split() for k in detail[0])
+    import matplotlib.axes
+    import matplotlib.figure
+    ylabels, colorbars = [], []
+    real_ylabel, real_colorbar = matplotlib.axes.Axes.set_ylabel, matplotlib.figure.Figure.colorbar
+    monkeypatch.setattr(matplotlib.axes.Axes, "set_ylabel", lambda self, label, *a, **k: (
+        ylabels.append(label), real_ylabel(self, label, *a, **k))[1])
+    monkeypatch.setattr(matplotlib.figure.Figure, "colorbar", lambda self, *a, **k: (
+        colorbars.append(k.get("label")), real_colorbar(self, *a, **k))[1])
+    study = optuna.create_study(direction="maximize", sampler=optuna.samplers.RandomSampler(0))
+    study.optimize(lambda t: t.suggest_float("lr2", 1e-5, 1e-2, log=True)
+                   - t.suggest_float("wd2", 1e-7, 1e-2, log=True), n_trials=6)
+    results.optimization_history_figure(tmp_path, "A-nivel", {"MIL-CREDA": study})
+    assert ylabels == ["best pooled inner balanced accuracy"]
+    results.contour_figure(tmp_path, "A-nivel", study, ["lr2", "wd2"])
+    assert colorbars == ["pooled inner balanced accuracy"]
+
+
 def test_the_hyperparameter_table_carries_phase_two_per_test_rotation():
     study = optuna.create_study(direction="maximize")
     study.optimize(lambda t: t.suggest_float("lr1", 1e-4, 1e-1, log=True), n_trials=2)
@@ -345,7 +370,7 @@ def _all_ten(strategies=model_store.STRATEGIES):
     return records
 
 
-def test_the_arm_ranking_table_is_descriptive_with_the_plans_headers():
+def test_the_arm_ranking_is_descriptive_under_the_plans_headers():
     records = []
     for k, s in enumerate(("MIL-CREDA", "COT", "HASD")):
         for t in ("L1->L11", "L11->L1"):
@@ -367,7 +392,7 @@ def test_the_arm_ranking_table_is_descriptive_with_the_plans_headers():
         "Ranking promedio de MIL-CREDA"] is None
 
 
-def test_the_arm_significance_table_carries_both_families_with_the_plans_headers():
+def test_the_arm_significance_table_carries_both_families_under_the_plans_headers():
     a = _records("MIL-CREDA", "L1->L11", n=24, shift=0.1)
     rows = []
     for k, rival in enumerate(("COT", "HASD")):
@@ -398,7 +423,8 @@ def test_the_arm_significance_table_carries_both_families_with_the_plans_headers
     assert first["Sujetos en que discrepan"] == by_test[("COT", st.TEST_BOOTSTRAP)]["discordant"]
 
 
-def test_the_global_ranking_is_one_friedman_over_the_ten_transfers(tmp_path, monkeypatch):
+def test_the_global_ranking_is_one_friedman_over_the_ten_transfers_and_the_nine(tmp_path,
+                                                                                  monkeypatch):
     assert len(results.GLOBAL_TRANSFERS) == 10
     assert set(results.GLOBAL_TRANSFERS) == {t for ts in results.ARM_TRANSFERS.values()
                                              for t in ts}

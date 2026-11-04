@@ -1,6 +1,6 @@
 """The mechanism experiments, read from the stored models: K1, K2 and K3.
 
-Experiments plan v44, Secs. 6.1-6.3, over proposal r38 Eqs. 14-19 (attention
+Experiments plan v50, Secs. 6.1-6.3, over proposal r38 Eqs. 14-19 (attention
 and bag kernel), 28-31 (local alignment) and 34-38 (bounds of the normalized
 terms). K1 and K2 train nothing: they read a model that `model_store` saved
 (Secs. 6.3 and 7.3) or a history that training already recorded. K3 trains its
@@ -108,7 +108,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.two_phase import EVAL_CHUNK
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.6", "6.1", "6.2", "6.3", "7.2", "7.3"],
     "experiments": ["K1-atencion", "K2-emparejamiento", "K3-ablacion"],
     "equations": ["14", "15", "16", "17", "18", "19", "33", "38"],

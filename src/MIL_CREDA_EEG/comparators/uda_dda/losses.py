@@ -4,7 +4,7 @@ Tang et al., Neurocomputing 658 (2025) 131715: marginal MMD (Eqs. 2-5),
 conditional CMMD (Eq. 6), the dynamic confidence threshold (Eq. 7), the
 source cross-entropy (Eq. 8) and the MMD weight schedule from tau_h to tau_l
 (Sec. 3.4). The CMMD weight beta of Eq. 9, a gate on the source loss, is not
-implemented: plan v42 Sec. 7.7 removes it. Every epoch boundary of the paper is
+implemented: plan v50 Sec. 7.7 removes it. Every epoch boundary of the paper is
 read on its own 100-epoch scale and rescaled to the phase-2 budget (plan 7.4).
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ import torch
 from torch.nn import functional as F
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["7.1", "7.2", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["uda_mmd_is_eq5_and_the_eq4_trace_form", "uda_cmmd_is_eq6_per_class",
