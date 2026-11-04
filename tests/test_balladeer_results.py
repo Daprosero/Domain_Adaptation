@@ -234,6 +234,28 @@ def test_the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_
         results.convergence_figure(tmp_path, "A-nivel", history, ["L6->L1"])
 
 
+def test_the_label_free_convergence_figure_marks_the_label_free_epoch(tmp_path, monkeypatch):
+    """Validation BA peaks at epoch 1, the label-free score at epoch 3: the primary figure
+    marks 1, the label-free one 3 (Sec. 4.5's secondary rule reads no target label)."""
+    history = [{"epoch": e, "seed": 1, "fold": fold, "model": "MIL-CREDA:phase2",
+                "transfer": "L1->L11", "loss": 1.0 / (e + 1),
+                "val_balanced_accuracy": [0.5, 0.9, 0.6, 0.7][e],
+                "label_free_score": [0.1, 0.2, 0.3, 0.4][e]}
+               for fold in range(4) for e in range(4)]
+    marked = []
+    import matplotlib.axes
+    real = matplotlib.axes.Axes.axvline
+    monkeypatch.setattr(matplotlib.axes.Axes, "axvline", lambda self, x=0, *a, **k: (
+        marked.append(x), real(self, x, *a, **k))[1])
+    results.convergence_figure(tmp_path, "A-nivel", history, ["L1->L11"])
+    assert marked == [1.0]
+    marked.clear()
+    path = results.convergence_figure(tmp_path, "A-nivel", history, ["L1->L11"],
+                                      name="convergence_label_free",
+                                      epoch_key="label_free_score")
+    assert marked == [3.0] and path.name == "convergence_label_free.pdf"
+
+
 def test_the_critical_difference_diagram_draws_every_rank_and_the_cd_bar(tmp_path,
                                                                          monkeypatch):
     texts = []

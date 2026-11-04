@@ -154,6 +154,113 @@ def test_a_stale_study_is_refused_naming_what_differs(tmp_path, monkeypatch):
         campaign._study(path, 1, "x" * 64)
 
 
+def _light_data(sha="x" * 64):
+    """A SearchData that carries only what an identity reads: transfer, partition, folds."""
+    return search.SearchData(transfer=campaign.assignment_mod.TRANSFERS[0],
+                             partition_sha256=sha, rotations={},
+                             folds={r: {"test_fold": r, "validation_fold": (r + 1) % 4}
+                                    for r in range(4)})
+
+
+def _lowest(space):
+    return {k: getattr(d, "low", None) if hasattr(d, "low") else d.choices[0]
+            for k, d in space.items()}
+
+
+def test_a_stored_study_is_reused_only_under_its_full_identity(tmp_path):
+    """Partition, plan revision, code version, search space, schedule, sampler seed and
+    trial budget: a stored study differing in any is refused naming the field."""
+    data = _light_data()
+    cfg = {"schedule": BASE["schedule"], "nTrials": 1}
+    path = search.study_path(tmp_path, data.transfer, 1, "MIL-CREDA")
+    path.parent.mkdir(parents=True)
+    full = search.study_identity(data, 1, "MIL-CREDA", cfg["schedule"], 1, "objective")
+
+    def stored(attrs):
+        path.unlink(missing_ok=True)
+        study = optuna.create_study(study_name=path.stem, storage=f"sqlite:///{path}")
+        for key, value in attrs.items():
+            study.set_user_attr(key, value)
+        study.optimize(lambda t: t.suggest_float("x", 0, 1), n_trials=1)
+
+    stored(full)
+    assert len(campaign._stored_study(tmp_path, data, 1, "MIL-CREDA", cfg).trials) == 1
+    for field, value in (("partition_sha256", "y" * 64),
+                         ("revision", "experiments-plan-v43.md"),
+                         ("code_version", "0" * 64),
+                         ("space", {**full["space"], "lr1": "another distribution"}),
+                         ("schedule", {**full["schedule"], "epochs2": 2}),
+                         ("samplerSeed", full["samplerSeed"] + 1),
+                         ("nTrials", 2)):
+        stored({**full, field: value})
+        with pytest.raises(campaign.CampaignError, match=f"stale.*{field}"):
+            campaign._stored_study(tmp_path, data, 1, "MIL-CREDA", cfg)
+
+
+def _stored_sidecar(path: Path, meta: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"")
+    path.with_suffix(".json").write_text(json.dumps(meta), encoding="utf-8")
+
+
+def test_a_stored_phase_one_checkpoint_is_reused_only_under_its_hyperparameters(tmp_path):
+    data = _light_data()
+    cfg = {"schedule": BASE["schedule"], "nTrials": 1, "device": "cpu"}
+    params = _lowest(search.PHASE_ONE_SPACES["MIL-CREDA"])
+    hyper = search.phase_one_hyper("MIL-CREDA", params, cfg["schedule"])
+    hyper = {k: hyper[k] for k in (*two_phase.PHASE_ONE_KEYS, *two_phase.SCHEDULE_KEYS)}
+    path = model_store.model_path(campaign._models(tmp_path), data.transfer, 0, 1, 1,
+                                  "MIL-CREDA")
+    meta = {**campaign.identity(data.partition_sha256), "hyper": hyper}
+    _stored_sidecar(path, meta)
+    assert campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, params, cfg,
+                                          tmp_path) == (path, [])
+    for key in ("lr1", "epochs1"):              # a searched value, a schedule value
+        _stored_sidecar(path, {**meta, "hyper": {**hyper, key: hyper[key] * 2}})
+        with pytest.raises(campaign.CampaignError, match=f"stale.*hyper {key}"):
+            campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, params, cfg, tmp_path)
+    _stored_sidecar(path, {**meta, "revision": "experiments-plan-v43.md"})
+    with pytest.raises(campaign.CampaignError, match="stale.*revision"):
+        campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, params, cfg, tmp_path)
+
+
+def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
+        tmp_path, monkeypatch):
+    data = _light_data()
+    cfg = {"schedule": BASE["schedule"], "nTrials": 1, "device": "cpu"}
+    params = _lowest(search.phase_two_space("MIL-CREDA"))
+    selection = {"rule": "primary", "trial": 0, "params": params, "testFold": 0,
+                 "selectionRotations": [0, 2, 3], "excludedRotation": 1, "score": 0.5}
+    root = campaign._models(tmp_path)
+    path = model_store.model_path(root, data.transfer, 0, 1, 2, "MIL-CREDA")
+    meta = {**campaign.identity(data.partition_sha256),
+            "hyper": {**params, **cfg["schedule"]},
+            "selection": {"rule": "primary", "trial": 0, "params": params,
+                          "schedule": cfg["schedule"]}}
+    loaded = torch.nn.Identity()
+    monkeypatch.setattr(mechanisms, "load_phase_two", lambda p, **k: (loaded, {}, []))
+
+    def reuse():
+        return campaign._phase_two_model(root, "MIL-CREDA", data, 0, 1, None, selection, cfg,
+                                         torch.device("cpu"), None)
+
+    _stored_sidecar(path, meta)
+    model, history, free_history = reuse()
+    assert model is loaded and history is None and free_history is None
+    lr2 = {**params, "lr2": params["lr2"] * 2}
+    schedule = {**cfg["schedule"], "epochs2": 2}
+    for change, field in (
+            ({"selection": {**meta["selection"], "params": lr2}}, "selection params"),
+            ({"selection": {**meta["selection"], "schedule": schedule}}, "selection schedule"),
+            ({"hyper": {**meta["hyper"], "lr2": lr2["lr2"]}}, "hyper lr2"),
+            ({"hyper": {**meta["hyper"], "epochs2": 2}}, "hyper epochs2"),
+            ({"selection": {"rule": "primary", "trial": 0}}, "selection params"),
+            ({"code_version": "0" * 64}, "code_version")):
+        _stored_sidecar(path, {**meta, **change})
+        with pytest.raises(campaign.CampaignError, match=f"stale.*{field}"):
+            reuse()
+
+
 def test_stale_predictions_are_refused_naming_what_differs(tmp_path, monkeypatch):
     root = tmp_path / "Results"
     results.append_predictions(root, "A-nivel", [{"strategy": "MIL-CREDA", "transfer": "t",
@@ -480,6 +587,19 @@ def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, 
             assert meta["selection"]["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
         coinciding = _sidecar(root / slug / "rotation0" / "seed1" / "phase2__MIL-CREDA.pt")
         assert coinciding["selection"]["sameRunAsPrimary"] is True
+    # the coinciding rotation's label-free history is the primary run's own, tagged with
+    # the rule and the label-free epoch its stored model keeps
+    free_history = campaign.read_history(product, "A-nivel", rule="label-free")
+    primary_history = campaign.read_history(product, "A-nivel")
+    for transfer, slug in (("L1->L6", "L1-to-L6"), ("L6->L1", "L6-to-L1")):
+        meta = _sidecar(root / slug / "rotation0" / "seed1" / "phase2__MIL-CREDA.pt")
+        run = lambda h: (h["model"] == "MIL-CREDA:phase2" and h["transfer"] == transfer  # noqa: E731
+                         and h["fold"] == 0 and h["seed"] == 1)
+        mine = [h for h in free_history if run(h)]
+        assert mine and {h["selectionRule"] for h in mine} == {"label-free"}
+        assert {h["labelFreeEpoch"] for h in mine} == {meta["epoch"]}
+        assert [{k: v for k, v in h.items() if k not in ("selectionRule", "labelFreeEpoch")}
+                for h in mine] == [h for h in primary_history if run(h)]
     res = product / "Results"
     primary = results.read_predictions(res, "A-nivel")
     free = results.read_predictions(res, "A-nivel", rule="label-free")
@@ -525,8 +645,14 @@ def label_free_run(tmp_path_factory, registries):
                 "schedule": {"epochs1": 3, "patience1": 3, "epochs2": 4, "bagsPerStep": 4}})
     product = tmp / "product"
     product.mkdir()
-    read_by_bounds = []
+    read_by_bounds, figures = [], []
     real_bounds = mechanisms.bound_control
+    real_figure = results.convergence_figure
+
+    def recording_figure(root, experiment, history, core, **kwargs):
+        path = real_figure(root, experiment, history, core, **kwargs)
+        figures.append((path.stem, kwargs.get("epoch_key", "val_balanced_accuracy")))
+        return path
 
     def recording_bounds(history, *args, **kwargs):
         history = list(history)
@@ -536,16 +662,17 @@ def label_free_run(tmp_path_factory, registries):
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(search, "select_per_rotation", other_trial)
         patch.setattr(mechanisms, "bound_control", recording_bounds)
+        patch.setattr(results, "convergence_figure", recording_figure)
         for step in ("search", "final", "results", "mechanisms"):
             campaign.run(step, cfg, product)
-    return cfg, product, read_by_bounds
+    return cfg, product, read_by_bounds, figures
 
 
 def test_the_label_free_final_models_keep_their_label_free_epoch(label_free_run):
     """Sec. 4.5 and 7.7: a label-free final model keeps the epoch with the best label-free
     score of its own training, and its sidecar says which epoch and by which rule."""
     from MIL_CREDA_EEG import two_phase
-    cfg, product, _ = label_free_run
+    cfg, product, _, _ = label_free_run
     history = campaign.read_history(product, "A-nivel", rule="label-free")
     assert history and {h["selectionRule"] for h in history} == {"label-free"}
     root = product / "Models" / "Balladeer" / campaign.LABEL_FREE_MODELS
@@ -560,6 +687,7 @@ def test_the_label_free_final_models_keep_their_label_free_epoch(label_free_run)
         assert len(scores) == cfg["schedule"]["epochs2"]
         assert meta["epoch"] == scores.index(max(scores))
         assert meta["selection"]["epoch"] == meta["epoch"]
+        assert {h["labelFreeEpoch"] for h in mine} == {meta["epoch"]}
         assert meta["selection"]["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
         assert meta["label_free_score"] == max(scores)
         model = mechanisms.load_phase_two(path, partition_path=campaign._partition_path(cfg))[0]
@@ -578,7 +706,7 @@ def test_the_label_free_histories_are_written_apart_from_the_strategies(label_fr
     """The label-free models' per-epoch records land in their own files, in the primary
     layout, read by the convergence output and the K3 bound control, never by the
     primary history the statistics step reads."""
-    cfg, product, read_by_bounds = label_free_run
+    cfg, product, read_by_bounds, figures = label_free_run
     res = product / "Results"
     runs = res / "A-nivel" / "runs"
     assert (runs / "history_label_free.jsonl").exists()
@@ -586,9 +714,12 @@ def test_the_label_free_histories_are_written_apart_from_the_strategies(label_fr
     assert primary and all("selectionRule" not in h for h in primary)
     free = json.loads((res / "history_A-nivel_label_free.json").read_text())
     assert free == campaign.read_history(product, "A-nivel", rule="label-free")
-    assert set(free[0]) - {"selectionRule"} == set(
+    assert set(free[0]) - {"selectionRule", "labelFreeEpoch"} == set(
         next(h for h in primary if h["model"] == free[0]["model"]))
     assert (res / "A-nivel" / "figures" / "convergence_label_free.pdf").exists()
+    # the label-free figure marks the label-free epoch; the primary one, max validation BA
+    assert ("convergence_label_free", "label_free_score") in figures
+    assert ("convergence", "val_balanced_accuracy") in figures
     summary = json.loads((res / "K3-ablacion" / "summary.json").read_text())
     bounds = {r["term"]: r for r in summary["term_bounds"]}
     assert bounds

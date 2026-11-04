@@ -81,6 +81,30 @@ def test_load_refuses_a_code_version_mismatch_unless_allowed(tmp_path, monkeypat
                                              "current": "0" * 64}
 
 
+def test_load_refuses_a_model_written_under_another_plan_revision(tmp_path):
+    path_p, sha = _partition(tmp_path)
+    path = _save(tmp_path / "Models", _model(), sha)
+    # a model of the revision in force loads, and through load_model too
+    assert model_store.load(path, partition_path=path_p)[1]["revision"] == \
+        model_store.__provenance__["revision"]
+    model_store.load_model(path, partition_path=path_p)
+    sidecar = path.with_suffix(".json")
+    meta = json.loads(sidecar.read_text(encoding="utf-8"))
+    for stored in ("experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md", None):
+        if stored is None:
+            meta.pop("revision")
+        else:
+            meta["revision"] = stored
+        sidecar.write_text(json.dumps(meta), encoding="utf-8")
+        # allow_code_mismatch covers the code version only, never the revision
+        for allow in (False, True):
+            with pytest.raises(model_store.RevisionMismatch, match="revision"):
+                model_store.load(path, partition_path=path_p, allow_code_mismatch=allow)
+            with pytest.raises(model_store.RevisionMismatch, match="revision"):
+                model_store.load_model(path, partition_path=path_p,
+                                       allow_code_mismatch=allow)
+
+
 def test_a_mil_creda_model_is_stored_with_its_sigma(tmp_path):
     _, sha = _partition(tmp_path)
     with pytest.raises(model_store.StoreError, match="sigma"):

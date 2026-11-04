@@ -94,6 +94,7 @@ __provenance__ = {
         "the_selection_table_reads_both_rules_from_the_same_trials",
         "every_figure_goes_through_the_shipped_helper_with_a_png_preview",
         "the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_epoch",
+        "the_label_free_convergence_figure_marks_the_label_free_epoch",
         "the_critical_difference_diagram_draws_every_rank_and_the_cd_bar",
         "the_arm_ranking_is_descriptive_under_the_plans_headers",
         "the_arm_significance_table_carries_both_families_under_the_plans_headers",
@@ -570,7 +571,8 @@ def _band(ax, xs, rows: Sequence[Sequence[float]], label: str, **style) -> None:
 
 def selected_epoch(records: Sequence[Mapping], key: str = "val_balanced_accuracy") -> float | None:
     """Median over runs (transfer, seed, fold) of the first epoch of maximal `key`: the
-    epoch phase 1 restores and phase 2 selects (Sec. 4.5's primary rule)."""
+    epoch phase 1 restores and phase 2 selects (Sec. 4.5's primary rule); with
+    `key="label_free_score"`, the epoch the label-free rule keeps (`two_phase.LabelFreeBest`)."""
     runs: dict = {}
     for r in records:
         if key in r:
@@ -588,11 +590,14 @@ CONVERGENCE_SERIES = {"loss": "loss", "val_balanced_accuracy": "validation BA",
 
 
 def convergence_figure(root: str | Path, experiment: str, history: Sequence[Mapping],
-                       core: Sequence[str], name: str = "convergence") -> Path:
+                       core: Sequence[str], name: str = "convergence",
+                       epoch_key: str = "val_balanced_accuracy") -> Path:
     """Sec. 5.4: one figure per arm on its core transfers, one panel per phase-1 group and
     per phase-2 strategy; each curve the mean +/- sd over the four rotations, at the one
     report seed, of the value averaged over the core transfers; the selected epoch marked;
-    MIL-CREDA's global and local terms with their bounds."""
+    MIL-CREDA's global and local terms with their bounds. The selected epoch is the one of
+    maximal `epoch_key`: validation BA for the primary rule, `label_free_score` for the
+    label-free models' figure, whose epoch no target label chooses (Sec. 4.5)."""
     path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
     records = [r for r in history if r.get("transfer") in set(core)]
     if not records:
@@ -618,10 +623,11 @@ def convergence_figure(root: str | Path, experiment: str, history: Sequence[Mapp
             if any(f"{term}_bound_high" in r for r in rs):
                 for bound in (rs[0][f"{term}_bound_low"], rs[0][f"{term}_bound_high"]):
                     ax.axhline(bound, linestyle=":", linewidth=0.6, color="grey")
-        chosen = selected_epoch(rs)
+        chosen = selected_epoch(rs, epoch_key)
         if chosen is not None:
             ax.axvline(chosen, linestyle="--", linewidth=0.8, color="black",
-                       label="selected epoch (median)")
+                       label="selected epoch (median)" if epoch_key == "val_balanced_accuracy"
+                       else "label-free epoch (median)")
         ax.set_ylabel(model.replace(":phase", ", phase "))
         ax.legend(loc="best")
     axes[-1, 0].set_xlabel("epoch")

@@ -84,8 +84,13 @@ given (`RETIRED_INPUTS`), never silently ignored.
 
 **Reuse is checked.** A stored study, model or prediction is reused only when it
 was produced under the partition in force, this plan revision (`REVISION`) and the
-current code version (`identity`), and a stored phase-2 model only for the
-selection now in force; a stale one is refused, naming what differs.
+current code version (`identity`). A stored study must carry its full identity
+(`_study_identity`: also its search space, schedule, sampler seed and trial
+budget); a stored phase-1 checkpoint, the hyperparameters and schedule now
+requested; a stored phase-2 model, the selection now in force with its
+hyperparameters and schedule. A stale one is refused, naming what differs. The
+model store itself refuses a model of another plan revision on every load
+(`model_store.RevisionMismatch`).
 
 **Full protocol unless rehearsing.** A config that is neither `synthetic` nor
 `"rehearsal": true` must cover every strategy (Sec. 7.1), every transfer
@@ -138,6 +143,9 @@ __provenance__ = {
         "the_campaign_never_launches_remote_work",
         "an_incomplete_study_is_refused_not_extended",
         "a_stale_study_is_refused_naming_what_differs",
+        "a_stored_study_is_reused_only_under_its_full_identity",
+        "a_stored_phase_one_checkpoint_is_reused_only_under_its_hyperparameters",
+        "a_stored_phase_two_model_is_reused_only_under_the_requested_selection",
         "stale_predictions_are_refused_naming_what_differs",
         "every_changed_module_answers_to_one_plan_revision",
         "a_reduced_run_is_refused_outside_rehearsal_mode",
@@ -319,13 +327,15 @@ def _bags_identity(bags: bag_data.BagSet) -> dict:
     return identity(bags.partition_sha256)
 
 
-def _study(path: Path, n_trials: int, partition_sha256: str):
-    """A completed study of the current identity, read back; anything else is refused."""
+def _study(path: Path, n_trials: int, partition_sha256: str, expect: Mapping | None = None):
+    """A completed study of the current identity, read back; anything else is refused.
+    `expect` is the full identity to match (`_study_identity`); without it, the partition,
+    plan revision and code version."""
     import optuna
     if not path.exists():
         raise CampaignError(f"{path} does not exist: run the search step first")
     study = optuna.load_study(study_name=path.stem, storage=f"sqlite:///{path}")
-    differ = search.identity_differences(study.user_attrs, identity(partition_sha256))
+    differ = search.identity_differences(study.user_attrs, expect or identity(partition_sha256))
     if differ:
         raise CampaignError(f"{path} is stale and is not reused: " + "; ".join(differ)
                             + "; remove it to search again")
@@ -336,15 +346,44 @@ def _study(path: Path, n_trials: int, partition_sha256: str):
     return study
 
 
-def _reuse(path: Path, current: Mapping, expect: Mapping | None = None) -> Path:
-    """A stored model is reused only when its sidecar answers to the current identity and,
-    for a phase-2 model, to the selection now in force."""
+def _study_identity(data: search.SearchData, phase: int, name: str, cfg: Mapping) -> dict:
+    """The identity a stored study must carry to be read back: every field the search step
+    records (`search.study_identity`) -- transfer, partition, plan revision, code version,
+    search space, schedule, sampler and its seed, trial budget, rotation folds -- except
+    the objective's wording, which the search step alone states."""
+    expected = search.study_identity(data, phase, name, cfg["schedule"], cfg["nTrials"], "")
+    expected.pop("objective")
+    return expected
+
+
+def _stored_study(product: Path, data: search.SearchData, phase: int, name: str,
+                  cfg: Mapping):
+    """The completed study of `name`, refused unless its full identity is the current one."""
+    return _study(search.study_path(product, data.transfer, phase, name), cfg["nTrials"],
+                  data.partition_sha256, _study_identity(data, phase, name, cfg))
+
+
+def _same(a, b) -> bool:
+    """Equal as stored JSON (NaN equals NaN, the way a sidecar records it)."""
+    return json.dumps(a, sort_keys=True, default=str) == json.dumps(b, sort_keys=True,
+                                                                   default=str)
+
+
+def _reuse(path: Path, current: Mapping, expect: Mapping | None = None,
+           hyper: Mapping | None = None) -> Path:
+    """A stored model is reused only when its sidecar answers to the current identity, to
+    the selection now in force (`expect`, read from the sidecar's `selection`) and to the
+    hyperparameters and schedule now requested (`hyper`, read from its `hyper`)."""
     meta = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
     differ = search.identity_differences(meta, current)
     for key, value in (expect or {}).items():
         stored = (meta.get("selection") or {}).get(key)
-        if stored != value:
+        if not _same(stored, value):
             differ.append(f"selection {key}: stored {stored!r}, current {value!r}")
+    for key, value in (hyper or {}).items():
+        stored = (meta.get("hyper") or {}).get(key)
+        if not _same(stored, value):
+            differ.append(f"hyper {key}: stored {stored!r}, current {value!r}")
     if differ:
         raise CampaignError(f"{path} is stale and is not reused: " + "; ".join(differ)
                             + "; remove it to train again")
@@ -354,8 +393,7 @@ def _reuse(path: Path, current: Mapping, expect: Mapping | None = None) -> Path:
 def _phase_two_selection(product: Path, data: search.SearchData, strategy: str,
                          cfg: Mapping, rule: str = "primary") -> dict[int, dict]:
     """Sec. 4.5: the configuration chosen for each test rotation by `rule`."""
-    study = _study(search.study_path(product, data.transfer, 2, strategy), cfg["nTrials"],
-                   data.partition_sha256)
+    study = _stored_study(product, data, 2, strategy, cfg)
     return search.select_per_rotation(study, data.folds, rule)
 
 
@@ -381,9 +419,10 @@ def _phase_one_checkpoint(group: str, data: search.SearchData, rotation: int, se
                           params: Mapping, cfg: Mapping, product: Path) -> tuple[Path, list]:
     """The stored phase-1 checkpoint of `group` at `seed`; trained once when absent."""
     path = model_store.model_path(_models(product), data.transfer, rotation, seed, 1, group)
-    if path.exists():
-        return _reuse(path, identity(data.partition_sha256)), []
     hyper = search.phase_one_hyper(group, params, cfg["schedule"])
+    if path.exists():
+        stored = {k: hyper[k] for k in (*two_phase.PHASE_ONE_KEYS, *two_phase.SCHEDULE_KEYS)}
+        return _reuse(path, identity(data.partition_sha256), hyper=stored), []
     trained = search.train_phase_one(group, data, rotation, seed, hyper, cfg["device"])
     search.save_phase_one(_models(product), group, data, rotation, seed, trained)
     return path, trained["result"]["history"]
@@ -456,17 +495,29 @@ def _predicted(product: Path, experiment: str, current: Mapping,
             for r in _read_predictions(product, experiment, current, rule)}
 
 
-def _selection_record(selection: Mapping) -> dict:
-    """What a stored phase-2 model records of the selection that chose it (Sec. 4.5)."""
-    return {k: selection[k] for k in ("rule", "trial", "testFold", "selectionRotations",
-                                      "excludedRotation", "score")}
+def _selection_record(selection: Mapping, schedule: Mapping) -> dict:
+    """What a stored phase-2 model records of the selection that chose it (Sec. 4.5), with
+    the hyperparameters and schedule it was trained at, which its reuse is checked against."""
+    return {**{k: selection[k] for k in ("rule", "trial", "params", "testFold",
+                                         "selectionRotations", "excludedRotation", "score")},
+            "schedule": dict(schedule)}
+
+
+def _label_free_history(history: Sequence[Mapping], strategy: str, epoch: int) -> list[dict]:
+    """A label-free model's per-epoch records: its run's history, tagged with the rule and
+    the label-free epoch the stored model keeps."""
+    return [{**h, "model": h.get("model", f"{strategy}:phase2"), "selectionRule": "label-free",
+             "labelFreeEpoch": int(epoch)} for h in history]
 
 
 def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int, seed: int,
                      record, selection: Mapping, cfg: Mapping, device: torch.device,
                      ppath: Path, label_free_root: Path | None = None,
                      label_free_selection: Mapping | None = None) -> tuple:
-    """(model, history): the stored phase-2 model of this selection, or trained and stored.
+    """(model, history, label-free history): the stored phase-2 model of this selection, or
+    trained and stored. A reused model has neither history (None, None); a trained one has
+    its run's history, and the label-free history (`_label_free_history`) when this call
+    stored a label-free model, else None.
 
     A label-free selection keeps the epoch with the best label-free score of its own run
     (Sec. 4.5 and 7.7, `search.label_free_trained`), and its sidecar names that epoch and
@@ -474,33 +525,45 @@ def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int,
 
     With `label_free_root`, a primary run trained here also stores the label-free rule's
     model from that same run (the rules chose the same configuration): the run is reused,
-    its epoch is the label-free one, and no target label chooses it (Sec. 4.5)."""
+    its epoch is the label-free one, and no target label chooses it (Sec. 4.5); that run's
+    history is returned as the label-free model's history too."""
     label_free = selection["rule"] == "label-free"
     also_free = label_free_root is not None
-    expect = {"rule": selection["rule"], "trial": selection["trial"]}
+    schedule = cfg["schedule"]
+    expect = {"rule": selection["rule"], "trial": selection["trial"],
+              "params": selection["params"], "schedule": dict(schedule)}
     if label_free:
         expect["epochRule"] = two_phase.LABEL_FREE_EPOCH_RULE
     path = model_store.model_path(root, data.transfer, r, seed, 2, strategy)
     if path.exists():
-        _reuse(path, identity(data.partition_sha256), expect)
-        return mechanisms.load_phase_two(path, partition_path=ppath)[0].to(device), None
+        stored = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        # the stored hyperparameters must agree on every requested key they hold (a
+        # comparator may store its own parameters only)
+        requested = {**selection["params"], **schedule}
+        _reuse(path, identity(data.partition_sha256), expect,
+               hyper={k: v for k, v in requested.items() if k in (stored.get("hyper") or {})})
+        return mechanisms.load_phase_two(path, partition_path=ppath)[0].to(device), None, None
     trained = search.train_phase_two(strategy, data, r, seed, record, selection["params"],
-                                     cfg["schedule"], device,
-                                     label_free=label_free or also_free)
-    chosen = _selection_record(selection)
+                                     schedule, device, label_free=label_free or also_free)
+    history = trained["result"]["history"]
+    chosen = _selection_record(selection, schedule)
+    free_history = None
     if also_free and not label_free:
         free = search.label_free_trained({**trained, "model": copy.deepcopy(trained["model"])})
-        free_chosen = _selection_record(label_free_selection)
-        free_chosen.update(epoch=free["result"]["checkpoint"]["epoch"],
-                           epochRule=two_phase.LABEL_FREE_EPOCH_RULE, sameRunAsPrimary=True)
+        free_epoch = free["result"]["checkpoint"]["epoch"]
+        free_chosen = _selection_record(label_free_selection, schedule)
+        free_chosen.update(epoch=free_epoch, epochRule=two_phase.LABEL_FREE_EPOCH_RULE,
+                           sameRunAsPrimary=True)
         search.save_phase_two(label_free_root, strategy, data, r, seed, free,
                               selection=free_chosen)
+        free_history = _label_free_history(history, strategy, free_epoch)
     if label_free:
         trained = search.label_free_trained(trained)
         chosen.update(epoch=trained["result"]["checkpoint"]["epoch"],
                       epochRule=two_phase.LABEL_FREE_EPOCH_RULE)
+        free_history = _label_free_history(history, strategy, chosen["epoch"])
     search.save_phase_two(root, strategy, data, r, seed, trained, selection=chosen)
-    return trained["model"], trained["result"]["history"]
+    return trained["model"], history, free_history
 
 
 def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
@@ -524,8 +587,7 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
         experiment = results.EXPERIMENT_OF_ARM[transfer.arm]
         data = search.search_data(transfer, bags)
         a = assignment_mod.assign_from_bags(transfer, bags)
-        best_one = {g: _study(search.study_path(product, transfer, 1, g), cfg["nTrials"],
-                              data.partition_sha256).best_params
+        best_one = {g: _stored_study(product, data, 1, g, cfg).best_params
                     for g in _groups(cfg["strategies"])}
         primary = {s: _phase_two_selection(product, data, s, cfg) for s in cfg["strategies"]}
         free = {s: _phase_two_selection(product, data, s, cfg, "label-free")
@@ -559,7 +621,7 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                         _models(product), transfer, r, seed, 1, group), partition_path=ppath)
                     free_root = _models(product) / LABEL_FREE_MODELS
                     if need or coincide:
-                        model, history = _phase_two_model(
+                        model, history, same_run = _phase_two_model(
                             _models(product), strategy, data, r, seed, record,
                             primary[strategy][r], cfg, device, ppath,
                             label_free_root=free_root if need_free and coincide else None,
@@ -569,6 +631,8 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                                 {**h, "model": h.get("model", f"{strategy}:phase2")}
                                 for h in history])
                             counts["trained_phase2"] += 1
+                        # the label-free model stored from this same run has its history
+                        _append_history(product, experiment, same_run or [], rule="label-free")
                         tagged = _tag(two_phase.predictions(model, test, transfer.name, device),
                                       strategy, transfer.name, r, seed)
                         out += tagged if need else []
@@ -576,30 +640,23 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                         # The same configuration: the label-free model is the primary run at
                         # its label-free epoch, stored above when that run was trained here;
                         # a primary run read from disk gets its label-free model trained once.
-                        free_model, free_history = _phase_two_model(
+                        free_model, _, free_history = _phase_two_model(
                             free_root, strategy, data, r, seed, record, free[strategy][r],
                             cfg, device, ppath)
                         counts["trained_label_free"] += free_history is not None
-                        if free_history is not None:
-                            _append_history(product, experiment, [
-                                {**h, "model": h.get("model", f"{strategy}:phase2"),
-                                 "selectionRule": "label-free"}
-                                for h in free_history], rule="label-free")
+                        _append_history(product, experiment, free_history or [],
+                                        rule="label-free")
                         out_free += [{**x, "labelFreeModel": "the primary run at its "
                                                               "label-free epoch"} for x in _tag(
                             two_phase.predictions(free_model, test, transfer.name, device),
                             strategy, transfer.name, r, seed)]
                     if need_free and not coincide:
-                        model, history = _phase_two_model(
+                        model, _, free_history = _phase_two_model(
                             _models(product) / LABEL_FREE_MODELS, strategy, data, r, seed,
                             record, free[strategy][r], cfg, device, ppath)
-                        counts["trained_label_free"] += history is not None
-                        if history is not None:
-                            _append_history(product, experiment, [
-                                {**h, "model": h.get("model", f"{strategy}:phase2"),
-                                 "selectionRule": "label-free"}
-                                for h in history],
-                                rule="label-free")
+                        counts["trained_label_free"] += free_history is not None
+                        _append_history(product, experiment, free_history or [],
+                                        rule="label-free")
                         out_free += [{**x, "labelFreeModel": "its own"} for x in _tag(
                             two_phase.predictions(model, test, transfer.name, device),
                             strategy, transfer.name, r, seed)]
@@ -817,8 +874,7 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
             continue
         data = search.search_data(transfer, bags)
         a = assignment_mod.assign_from_bags(transfer, bags)
-        phase_one = _study(search.study_path(product, transfer, 1, "MIL-CREDA"),
-                           cfg["nTrials"], data.partition_sha256).best_params
+        phase_one = _stored_study(product, data, 1, "MIL-CREDA", cfg).best_params
         # Sec. 6.3: full MIL-CREDA's selection for each test rotation (Sec. 4.5)
         selected = _phase_two_selection(product, data, "MIL-CREDA", cfg)
         for r in sorted(data.rotations):
@@ -1092,10 +1148,12 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
         hp, importance, selection, detail, studies = [], [], [], [], {}
         for transfer in [t for t in transfers_of(cfg) if t.arm == arm]:
             folds = search.rotation_folds(bags.rotations)
-            one = {g: _study(search.study_path(product, transfer, 1, g), cfg["nTrials"],
-                             bags.partition_sha256) for g in _groups(cfg["strategies"])}
-            two = {s: _study(search.study_path(product, transfer, 2, s), cfg["nTrials"],
-                             bags.partition_sha256) for s in cfg["strategies"]}
+            # what a study's identity reads, without loading any bag tensor
+            known = search.SearchData(transfer=transfer, partition_sha256=bags.partition_sha256,
+                                      rotations={}, folds=folds)
+            one = {g: _stored_study(product, known, 1, g, cfg)
+                   for g in _groups(cfg["strategies"])}
+            two = {s: _stored_study(product, known, 2, s, cfg) for s in cfg["strategies"]}
             chosen = {s: {rule: search.select_per_rotation(study, folds, rule)
                           for rule in search.RULES} for s, study in two.items()}
             hp += results.hyperparameter_rows(
@@ -1134,7 +1192,8 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
             try:
                 written.append(results.convergence_figure(root, experiment, free_history,
                                                           core[arm],
-                                                          name="convergence_label_free"))
+                                                          name="convergence_label_free",
+                                                          epoch_key="label_free_score"))
             except results.ResultsError as error:
                 owed.append(f"{experiment} label-free convergence: {error}")
         try:

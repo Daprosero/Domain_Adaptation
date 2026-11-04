@@ -297,6 +297,30 @@ def test_a_stored_phase_two_model_is_rebuilt_with_every_parameter(tmp_path):
         mech.load_phase_two(path2, partition_path=ppath)
 
 
+def test_a_phase_two_model_of_another_plan_revision_is_refused_on_load(tmp_path):
+    doc = {"format": "tiny"}
+    doc[partition.HASH_FIELD] = partition.partition_hash(doc)
+    ppath = tmp_path / "p.json"
+    ppath.write_text(json.dumps(doc))
+    model = _model(sigma=1.5)
+    path = model_store.save(tmp_path / "M", transfer=assignment.Transfer("level", "L1", "L11"),
+                            rotation=0, seed=1, phase=2, name="MIL-CREDA",
+                            state=model.state_dict(),
+                            hyper={"attentionGamma": 0.5, "attentionTemperature": 1.0},
+                            partition_sha256=doc[partition.HASH_FIELD],
+                            channels={"source": CHANNELS, "target": CHANNELS}, sigma=1.5)
+    assert mech.load_phase_two(path, partition_path=ppath)[1]["revision"] == \
+        model_store.__provenance__["revision"]
+    sidecar = path.with_suffix(".json")
+    meta = json.loads(sidecar.read_text(encoding="utf-8"))
+    meta["revision"] = "experiments-plan-experimental-mil-creda-sobre-balladeer-v43.md"
+    sidecar.write_text(json.dumps(meta), encoding="utf-8")
+    with pytest.raises(model_store.RevisionMismatch, match="v43"):
+        mech.load_phase_two(path, partition_path=ppath)
+    with pytest.raises(model_store.RevisionMismatch):
+        mech.load_phase_two(path, partition_path=ppath, allow_code_mismatch=True)
+
+
 def test_the_variant_trainers_refuse_an_unknown_variant():
     from MIL_CREDA_EEG import aggregation_variants, two_phase
     assert mech.ABLATIONS == ("global term only", "local term only", "both terms")
