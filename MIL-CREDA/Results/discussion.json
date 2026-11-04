@@ -104,7 +104,9 @@
   "limitations": [
     "No campaign hypothesis has been empirically decided.",
     "The source filename classifies this record as full, but Experimental_AGREED.md remains an unapproved placeholder.",
-    "The existing timing probe names v40 and explicitly defers canonical timing.json until epoch caps are fixed."
+    "The existing timing probe names v40 and explicitly defers canonical timing.json until epoch caps are fixed.",
+    "Declared limitation (plausibility screening, sota-pool/screening-report-2026-11-03.md, tension C4-T): class-conditional alignment can degrade when target class proportions differ from the source, because target pseudo-labels become unreliable (SPDIM 2411.07249; CCA-LSC 2412.20337). The global term weights target bags by pseudo-label confidence; no experiment isolates this case.",
+    "Declared limitation (tension C6-T): EEG multiple-instance learning is more sensitive to subject scarcity than to instance scarcity (BridgeMIL 2607.27274), and the bag-level terms are estimated over few bags (31 source training bags in L1->L11, Results/timing_probe.json); no experiment varies the number of subjects."
   ],
   "next_steps": [
     "Obtain the missing explicit full-experiments approval before launch.",
