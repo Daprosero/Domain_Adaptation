@@ -432,3 +432,32 @@ def test_a_study_records_the_identity_it_is_checked_against(tmp_path, monkeypatc
     assert study.user_attrs["partition_sha256"] == data.partition_sha256
     assert study.user_attrs["revision"] == search.__provenance__["revision"]
     assert study.user_attrs["revision"].endswith("v44.md")
+
+
+def test_a_study_stops_between_trials_when_asked_and_the_rerun_completes_it(
+        tmp_path, monkeypatch):
+    """A deadline hook stops a study between trials; the next call continues it."""
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one())
+    asked = []
+
+    def stop_after_one(study):
+        asked.append(len(study.trials))
+        return len(study.trials) >= 1
+
+    study = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3,
+                                       should_stop=stop_after_one)
+    states = [t.state for t in study.trials]
+    assert states == [optuna.trial.TrialState.COMPLETE]
+    assert asked == [0, 1], "asked before the first trial and after each one"
+    # a hook that stops at once runs no trial at all
+    held = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3,
+                                      should_stop=lambda s: True)
+    assert len(held.trials) == 1
+    done = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3)
+    assert sum(t.state == optuna.trial.TrialState.COMPLETE for t in done.trials) == 3
+    # no hook: the study runs its declared count in one call, as before
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    whole = search.run_phase_one_study("common", data, SCHEDULE, root=fresh, n_trials=2)
+    assert "resumedAfter" not in whole.user_attrs and len(whole.trials) == 2

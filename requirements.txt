@@ -1,18 +1,22 @@
 # Canonical runtime dependencies for the generator notebooks.
 # cuML remains optional: Plots_Generator uses it when provided by the CUDA/RAPIDS runtime.
+# The remaining runtime dependencies are pinned to the target venv's versions too
+# (code review: unpinned torchvision/timm/torchcam). jupyter, gdown and torchcam are
+# not installed in that venv, so no installed version can be read for them; they
+# stay unpinned until they are installed and measured. Only notebooks import them.
 jupyter
-ipykernel
+ipykernel==7.3.0
 gdown
-matplotlib
-# NumPy 1.26.4 and pandas 2.2.3 provide compatible CPython 3.11/3.12 wheels.
+matplotlib==3.11.1
+# NumPy and pandas are pinned to the target venv's installed versions, the ones the suite runs under.
 # La busqueda de v2 elige el techo con Optuna y su GPSampler. GPSampler
 # necesita torch y scipy, que ya estan; se declara igual porque un
 # requisito que se cumple por casualidad deja de cumplirse sin aviso.
 # Pinned to the target venv's versions (code review: split reproducibility; the
 # forge checklist asks one pinned requirements file for every remote account).
 optuna==4.9.0
-numpy==1.26.4
-pandas==2.2.3
+numpy==2.5.2
+pandas==3.0.5
 # Y scipy se declara por la misma razon que el comentario de arriba enuncia, que
 # es la razon por la que este renglon existe: la frase estaba escrita y scipy no
 # estaba en la lista. Llegaba transitivamente por scikit-image/scikit-learn, o
@@ -23,11 +27,11 @@ pandas==2.2.3
 # dia que alguno de los dos scikit saliera de esta lista, todos dejarian de importar
 # y nada en el archivo diria por que.
 scipy==1.18.0
-scikit-image
-scikit-learn
-timm
+scikit-image==0.26.0
+scikit-learn==1.9.0
+timm==1.0.28
 torch==2.13.0
 torchcam
-torchvision
-tqdm
-umap-learn
+torchvision==0.28.0
+tqdm==4.70.0
+umap-learn==0.5.12

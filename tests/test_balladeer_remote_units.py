@@ -11,13 +11,17 @@ import importlib.metadata
 import json
 import os
 import shutil
+import sqlite3
 import time
 from pathlib import Path
 
 import pytest
 import torch
 
-from MIL_CREDA_EEG import campaign, model_store, remote_units, search
+import numpy as np
+import pandas as pd
+
+from MIL_CREDA_EEG import campaign, model_store, preprocess, remote_units, search
 
 SCHEDULE = {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4}
 
@@ -51,7 +55,7 @@ def torch_flags():
 def _config(tmp: Path, strategies=("MIL-CREDA", "COT", "HASD")) -> dict:
     cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24)
     cfg.update({"strategies": list(strategies), "nTrials": 1, "schedule": dict(SCHEDULE),
-                "bootstrapResamples": 200})
+                "bootstrapResamples": 200, "device": "cpu"})
     return cfg
 
 
@@ -136,7 +140,7 @@ def test_mounted_data_must_match_the_repository_manifest(tmp_path):
 
 
 def _fake(calls: list):
-    def execute(unit, cfg, product, bags_of):
+    def execute(unit, cfg, product, bags_of, guard=None):
         calls.append((unit.id, torch.are_deterministic_algorithms_enabled()))
         models = product / "Models" / "Balladeer"
         models.mkdir(parents=True, exist_ok=True)
@@ -153,6 +157,7 @@ def _fake(calls: list):
 
 
 def _run(cfg, product, tmp, ids, calls, **kwargs):
+    kwargs.setdefault("estimate", lambda unit: 0.0)
     return remote_units.run_units(cfg, product, units=ids, workdir=tmp / "work",
                                   execute=_fake(calls), environ={}, **kwargs)
 
@@ -199,7 +204,8 @@ def test_the_deadline_stops_before_a_unit_and_writes_partial(tmp_path, torch_fla
     calls.clear()
     env_deadline = {remote_units.DEADLINE_ENV: "0"}
     outcome = remote_units.run_units(cfg, product, units=ids[1:], workdir=tmp_path / "w2",
-                                     execute=_fake(calls), environ=env_deadline)
+                                     execute=_fake(calls), environ=env_deadline,
+                                     estimate=lambda unit: 0.0)
     assert calls == [] and outcome["remaining"] == ids[1:]
 
 
@@ -252,8 +258,8 @@ def _edit_stamp(path: Path, **environment) -> None:
 
 
 def test_merge_writes_the_product_layout_once(tmp_path, torch_flags):
-    _, product, ids, _ = _two_shards(tmp_path)
-    outcome = remote_units.merge(product)
+    cfg, product, ids, _ = _two_shards(tmp_path)
+    outcome = remote_units.merge(product, config=cfg)
     assert outcome["merged"] == ids
     for i in ids:
         assert (product / "Models" / "Balladeer" / f"{i}.pt").read_bytes() == i.encode()
@@ -261,41 +267,41 @@ def test_merge_writes_the_product_layout_once(tmp_path, torch_flags):
     assert [json.loads(x)["unit"] for x in lines] == ids
     assert not (product / "Results/A-nivel/tables").exists()
     with pytest.raises(remote_units.MergeError, match="already merged"):
-        remote_units.merge(product)
+        remote_units.merge(product, config=cfg)
 
 
 def test_merge_refuses_an_environment_mismatch_and_writes_nothing(tmp_path, torch_flags):
-    _, product, ids, shards = _two_shards(tmp_path)
+    cfg, product, ids, shards = _two_shards(tmp_path)
     for field, value in (("commit", "0" * 40), ("partitionSha256", "x"),
                          ("dataChecksum", "y"), ("torch", "0.0")):
         path = shards / ids[1] / "shard.json"
         saved = path.read_text()
         _edit_stamp(path, **{field: value})
         with pytest.raises(remote_units.MergeError, match=field):
-            remote_units.merge(product)
+            remote_units.merge(product, config=cfg)
         assert not (product / "Models").exists()
         path.write_text(saved)
 
 
 def test_merge_refuses_a_duplicate_unit(tmp_path, torch_flags):
-    _, product, ids, shards = _two_shards(tmp_path)
+    cfg, product, ids, shards = _two_shards(tmp_path)
     shutil.copytree(shards / ids[0], tmp_path / "fetched" / "again" / ids[0])
     with pytest.raises(remote_units.MergeError, match="duplicate"):
-        remote_units.merge(product, roots=[shards, tmp_path / "fetched"])
+        remote_units.merge(product, roots=[shards, tmp_path / "fetched"], config=cfg)
     assert not (product / "Models").exists()
 
 
 def test_merge_refuses_a_missing_field_or_a_tampered_output(tmp_path, torch_flags):
-    _, product, ids, shards = _two_shards(tmp_path)
+    cfg, product, ids, shards = _two_shards(tmp_path)
     _edit_stamp(shards / ids[0] / "shard.json", commit=None)
     with pytest.raises(remote_units.MergeError, match="commit"):
-        remote_units.merge(product)
+        remote_units.merge(product, config=cfg)
     _edit_stamp(shards / ids[0] / "shard.json",
                 commit=json.loads((shards / ids[1] / "shard.json").read_text())
                 ["environment"]["commit"])
     (shards / ids[1] / "outputs" / "Models" / "Balladeer" / f"{ids[1]}.pt").write_bytes(b"x")
     with pytest.raises(remote_units.MergeError, match="sha256"):
-        remote_units.merge(product)
+        remote_units.merge(product, config=cfg)
     assert not (product / "Models").exists()
 
 
@@ -319,9 +325,9 @@ def test_units_run_the_campaign_functions_with_the_plans_seeds(tmp_path, registr
     ids = [u.id for u in remote_units.enumerate_units(cfg, product)
            if u.step in ("search", "final")]
     outcome = remote_units.run_units(cfg, product, units=ids, workdir=tmp_path / "work",
-                                     environ={})
+                                     environ={}, estimate=lambda unit: 0.0)
     assert outcome["ran"] == ids
-    remote_units.merge(product)
+    remote_units.merge(product, config=cfg)
     assert _predictions(product) == _predictions(direct)
     seeds = {json.loads(x)["seed"] for x in _predictions(product)}
     assert seeds == set(search.REPORT_SEEDS)
@@ -339,3 +345,320 @@ def test_requirements_pin_torch_optuna_and_scipy_to_the_installed_versions():
     lines = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text().splitlines()
     for name in ("torch", "optuna", "scipy"):
         assert f"{name}=={importlib.metadata.version(name)}" in lines, name
+
+
+# ------------------------------------------------------------------ R1: estimate and deadline
+
+
+def test_a_unit_without_a_measured_duration_estimate_is_refused_naming_what_to_measure(
+        tmp_path, torch_flags):
+    cfg, product, calls = _config(tmp_path), _product(tmp_path), []
+    ids = ["search.phase1.L1-to-L6.common"]
+    with pytest.raises(remote_units.UnitError, match="timing.json") as refused:
+        remote_units.run_units(cfg, product, units=ids, workdir=tmp_path / "work",
+                               execute=_fake(calls), environ={})
+    assert "timing probe" in str(refused.value) and "pilot" in str(refused.value)
+    assert calls == []
+    # the measured record, once it exists, is the estimate source
+    record = {"schema": 1, "measurements": [
+        {"measuredAt": "2026-11-03T00:00:00+00:00", "host": "local", "device": "cpu",
+         "arm": "level", "unit": "epoch", "secondsPerUnit": 0.5, "unitsMeasured": 1}]}
+    (product / "Results").mkdir(parents=True)
+    (product / "Results" / "timing.json").write_text(json.dumps(record))
+    outcome = remote_units.run_units(cfg, product, units=ids, workdir=tmp_path / "work",
+                                     execute=_fake(calls), environ={})
+    assert outcome["ran"] == ids
+    estimate = remote_units.timing_estimate(product / "Results" / "timing.json", cfg, product)
+    units = {u.id: u for u in remote_units.enumerate_units(cfg, product)}
+    # one trial trains the four rotations for at most epochs1 epochs each
+    assert estimate(units[ids[0]]) == 4 * SCHEDULE["epochs1"] * 0.5
+    (product / "Results" / "timing.json").write_text(json.dumps({"schema": 1}))
+    with pytest.raises(remote_units.UnitError, match="timing.json"):
+        remote_units.timing_estimate(product / "Results" / "timing.json", cfg, product)
+
+
+def _complete_trials(db: Path) -> int:
+    if not db.exists():
+        return 0
+    with sqlite3.connect(db) as conn:
+        return conn.execute("select count(*) from trials where state = 'COMPLETE'"
+                            ).fetchone()[0]
+
+
+def test_the_deadline_stops_a_study_between_trials_and_the_rerun_completes_it(
+        tmp_path, registries, torch_flags):
+    """Controlled clock: the deadline arrives once the first trial is stored."""
+    cfg = {**_config(tmp_path, strategies=("MIL-CREDA",)), "nTrials": 3}
+    product = _product(tmp_path)
+    uid = "search.phase1.L1-to-L6.MIL-CREDA"
+    shards = product / remote_units.SHARDS_RELATIVE
+    working = shards / remote_units.PROGRESS_DIR / uid / "product"
+    db = working / "Results" / "hpo" / "L1-to-L6__phase1__MIL-CREDA.db"
+
+    def clock():
+        return 1000.0 if _complete_trials(db) >= 1 else 0.0
+
+    outcome = remote_units.run_units(cfg, product, units=[uid], workdir=tmp_path / "work",
+                                     environ={}, deadline=100.0, estimate=lambda u: 10.0,
+                                     clock=clock)
+    assert outcome["ran"] == [] and outcome["remaining"] == [uid]
+    marker = json.loads((tmp_path / "work" / remote_units.PARTIAL_MARKER).read_text())
+    assert marker == {"remaining": [uid],
+                      "progress": {uid: {"completedTrials": 1, "nTrials": 3}}}
+    assert not (shards / uid).exists(), "an unfinished unit leaves no shard"
+    assert _complete_trials(db) == 1, "the study's progress outlives the session"
+    outcome = remote_units.run_units(cfg, product, units=[uid], workdir=tmp_path / "w2",
+                                     environ={}, estimate=lambda u: 10.0)
+    assert outcome["ran"] == [uid] and outcome["remaining"] == []
+    assert not (tmp_path / "w2" / remote_units.PARTIAL_MARKER).exists()
+    stored = shards / uid / "outputs" / "Results" / "hpo" / db.name
+    assert _complete_trials(stored) == 3
+    assert not (shards / remote_units.PROGRESS_DIR / uid).exists()
+    import optuna
+    study = optuna.load_study(study_name=stored.stem, storage=f"sqlite:///{stored}")
+    assert study.user_attrs["resumedAfter"] == [1]
+
+
+def _search_then(cfg, product, tmp_path):
+    ids = [u.id for u in remote_units.enumerate_units(cfg, product) if u.step == "search"]
+    remote_units.run_units(cfg, product, units=ids, workdir=tmp_path / "s",
+                           environ={}, estimate=lambda u: 0.0)
+
+
+def test_the_deadline_stops_final_between_rotations_and_the_rerun_completes_it(
+        tmp_path, registries, torch_flags):
+    """Controlled clock: the deadline arrives once rotation 0's predictions are stored;
+    the continued unit gives the campaign's own predictions."""
+    cfg = _config(tmp_path, strategies=("MIL-CREDA",))
+    cfg["transfers"] = cfg["transfers"][:1]
+    direct = tmp_path / "direct"
+    direct.mkdir()
+    campaign.run("search", cfg, direct)
+    campaign.run("final", cfg, direct)
+    product = _product(tmp_path)
+    _search_then(cfg, product, tmp_path)
+    uid = "final.L1-to-L6"
+    working = (product / remote_units.SHARDS_RELATIVE / remote_units.PROGRESS_DIR / uid
+               / "product")
+    predictions = working / "Results" / "A-nivel" / "runs" / "predictions.jsonl"
+
+    def clock():
+        return 1000.0 if predictions.exists() else 0.0
+
+    outcome = remote_units.run_units(cfg, product, units=[uid], workdir=tmp_path / "work",
+                                     environ={}, deadline=100.0, estimate=lambda u: 10.0,
+                                     clock=clock)
+    assert outcome["remaining"] == [uid]
+    marker = json.loads((tmp_path / "work" / remote_units.PARTIAL_MARKER).read_text())
+    assert marker == {"remaining": [uid], "progress": {
+        uid: {"completedRotations": [0], "rotations": [0, 1, 2, 3]}}}
+    assert {json.loads(x)["rotation"] for x in predictions.read_text().splitlines()} == {0}
+    outcome = remote_units.run_units(cfg, product, units=[uid], workdir=tmp_path / "w2",
+                                     environ={}, estimate=lambda u: 10.0)
+    assert outcome["ran"] == [uid]
+    remote_units.merge(product, config=cfg)
+    assert _predictions(product) == _predictions(direct)
+
+
+def test_the_deadline_before_a_unit_with_no_time_left_writes_partial_and_runs_nothing(
+        tmp_path, torch_flags):
+    """The unit-level check still holds: an arrived deadline runs no unit."""
+    cfg, product, calls = _config(tmp_path), _product(tmp_path), []
+    ids = ["search.phase1.L1-to-L6.common"]
+    outcome = _run(cfg, product, tmp_path, ids, calls, deadline=0.0, clock=lambda: 1.0)
+    assert calls == [] and outcome["remaining"] == ids
+    marker = json.loads((tmp_path / "work" / remote_units.PARTIAL_MARKER).read_text())
+    assert marker["remaining"] == ids
+
+
+# ------------------------------------------------------------------ R2: currency
+
+
+def test_merge_refuses_a_shard_whose_stamp_is_not_the_current_campaigns(
+        tmp_path, torch_flags):
+    """Shards that agree with each other but carry a stale commit are refused."""
+    cfg, product, ids, shards = _two_shards(tmp_path)
+    for field, value in (("commit", "0" * 40), ("codeVersion", "stale"),
+                         ("requirementsDigest", "stale"), ("revision", "v1.md"),
+                         ("configDigest", "stale"), ("dataPreparationVersion", "stale")):
+        saved = {i: (shards / i / "shard.json").read_text() for i in ids}
+        for i in ids:
+            _edit_stamp(shards / i / "shard.json", **{field: value})
+        with pytest.raises(remote_units.MergeError, match=field):
+            remote_units.merge(product, config=cfg)
+        assert not (product / "Models").exists()
+        for i in ids:
+            (shards / i / "shard.json").write_text(saved[i])
+    # another configuration is another campaign
+    with pytest.raises(remote_units.MergeError, match="configDigest"):
+        remote_units.merge(product, config={**cfg, "nTrials": 2})
+    assert remote_units.merge(product, config=cfg)["merged"] == ids
+
+
+def test_resume_refuses_a_completed_shard_whose_stamp_is_not_the_current_campaigns(
+        tmp_path, torch_flags):
+    cfg, product, ids, shards = _two_shards(tmp_path)
+    _edit_stamp(shards / ids[0] / "shard.json", commit="0" * 40)
+    calls = []
+    with pytest.raises(remote_units.UnitError, match="commit"):
+        _run(cfg, product, tmp_path, ids + ["search.phase1.L1-to-L6.MIL-CREDA"], calls)
+    assert calls == []
+
+
+# ------------------------------------------------------------------ R3: data authentication
+
+
+def _authenticated_set(tmp_path, monkeypatch):
+    cfg = {**_config(tmp_path), "synthetic": False, "rehearsal": True}
+    root = Path(cfg["processedRoot"])
+    rows = [{"file": rel, "bytes": p.stat().st_size, "sha256": preprocess.file_sha256(p)}
+            for rel, p in sorted((p.relative_to(root).as_posix(), p)
+                                 for p in root.rglob("*") if p.is_file())]
+    sha = tmp_path / "processed_sha256.csv"
+    pd.DataFrame(rows).to_csv(sha, index=False)
+    monkeypatch.setattr(remote_units, "SHA_MANIFEST", sha)
+    remote_units._VERIFIED.clear()
+    return cfg, root
+
+
+def test_every_consumed_processed_file_is_verified_against_the_recorded_sha256(
+        tmp_path, monkeypatch):
+    cfg, root = _authenticated_set(tmp_path, monkeypatch)
+    identity = remote_units.data_identity(cfg)
+    assert identity["dataChecksum"] == preprocess.file_sha256(root / "manifest.csv")
+    tampered = tmp_path / "tampered"
+    shutil.copytree(root, tampered)
+    npz = sorted((tampered / "signals").glob("*.npz"))[3]
+    with np.load(npz) as z:
+        arrays = {k: z[k] for k in z.files}
+    arrays["signal"] = arrays["signal"] + np.float32(1.0)
+    np.savez(npz, **arrays)
+    with pytest.raises(remote_units.InputUnavailable, match=f"signals/{npz.name}"):
+        remote_units.data_identity({**cfg, "processedRoot": str(tampered)})
+    # a consumed file the record does not list is refused too
+    pd.read_csv(remote_units.SHA_MANIFEST).iloc[1:].to_csv(remote_units.SHA_MANIFEST,
+                                                           index=False)
+    remote_units._VERIFIED.clear()
+    with pytest.raises(remote_units.InputUnavailable, match="not recorded"):
+        remote_units.data_identity(cfg)
+
+
+def test_the_processed_files_are_verified_once_per_session(tmp_path, monkeypatch):
+    cfg, _ = _authenticated_set(tmp_path, monkeypatch)
+    remote_units.data_identity(cfg)
+    hashed = []
+    real = preprocess.file_sha256
+    monkeypatch.setattr(preprocess, "file_sha256", lambda p, *a: hashed.append(p) or real(p))
+    remote_units.data_identity(cfg)
+    names = {Path(p).name for p in hashed}
+    assert not any(n.endswith(".npz") for n in names), "no NPZ is hashed twice in a session"
+
+
+def test_a_run_on_tampered_signals_is_refused_before_any_unit(tmp_path, monkeypatch,
+                                                               torch_flags):
+    cfg, root = _authenticated_set(tmp_path, monkeypatch)
+    npz = sorted((root / "signals").glob("*.npz"))[0]
+    with np.load(npz) as z:
+        arrays = {k: z[k] for k in z.files}
+    arrays["signal"] = arrays["signal"] * np.float32(2.0)
+    np.savez(npz, **arrays)
+    calls = []
+    with pytest.raises(remote_units.InputUnavailable, match=npz.name):
+        _run(cfg, _product(tmp_path), tmp_path, ["search.phase1.L1-to-L6.common"], calls)
+    assert calls == []
+
+
+# ------------------------------------------------------------------ R4: smoke evidence
+
+
+def test_the_smoke_writes_the_rehearsal_shard_json_in_its_working_directory(
+        tmp_path, registries, torch_flags, monkeypatch):
+    cfg = _config(tmp_path, strategies=("MIL-CREDA",))
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(cfg))
+    product = _product(tmp_path)
+    work = tmp_path / "runner-cwd"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    outcome = remote_units.smoke(config=str(config_path), product=str(product),
+                                 environ={"FORGE_RUN_MODE": "smoke"},
+                                 estimate=lambda u: 0.0)
+    uid = "search.phase1.L1-to-L6.MIL-CREDA"
+    assert outcome["ran"] == [uid]
+    stamp = json.loads((work / "shard.json").read_text())
+    assert stamp["mode"] == "smoke"
+    assert stamp["evidence"]["commit"] == remote_units.source_commit()
+    assert stamp["evidence"]["sourcesDigest"] == model_store.code_version()
+    assert stamp["evidence"]["unit"] == uid and stamp["evidence"]["complete"] is True
+    assert stamp["environment"]["device"]["kind"] == "cpu"
+    assert stamp["environment"]["device"]["name"]
+    assert stamp["environment"]["accelerator"] == "cpu"
+    unit_stamp = json.loads((product / remote_units.SHARDS_RELATIVE / uid / "shard.json")
+                            .read_text())
+    for field in remote_units.IDENTICAL_FIELDS:
+        assert stamp["environment"][field] == unit_stamp["environment"][field], field
+    assert unit_stamp["format"] == remote_units.FORMAT, "the per-unit stamp stays its own"
+    # outside the runner the smoke leaves no rehearsal stamp
+    (work / "shard.json").unlink()
+    shutil.rmtree(product / remote_units.SHARDS_RELATIVE)
+    remote_units.smoke(config=str(config_path), product=str(product), environ={},
+                       estimate=lambda u: 0.0)
+    assert not (work / "shard.json").exists()
+
+
+# ------------------------------------------------------------------ device
+
+
+def test_a_remote_run_must_declare_its_device(tmp_path, torch_flags):
+    cfg, product, calls = _config(tmp_path), _product(tmp_path), []
+    del cfg["device"]
+    with pytest.raises(remote_units.UnitError, match="declare"):
+        remote_units.run_units(cfg, product, units=["search.phase1.L1-to-L6.common"],
+                               workdir=tmp_path / "work", execute=_fake(calls),
+                               environ={remote_units.DEADLINE_ENV: "1e12"},
+                               estimate=lambda u: 0.0)
+    assert calls == []
+    # a local run keeps the campaign's default
+    _run(cfg, product, tmp_path, ["search.phase1.L1-to-L6.common"], calls)
+    assert len(calls) == 1
+
+
+@pytest.mark.skipif(torch.cuda.is_available(), reason="needs a machine without CUDA")
+def test_a_declared_cuda_device_that_is_not_placed_on_cuda_is_refused_before_training(
+        tmp_path, torch_flags):
+    cfg, product, calls = {**_config(tmp_path), "device": "cuda"}, _product(tmp_path), []
+    with pytest.raises(remote_units.UnitError, match="cuda"):
+        _run(cfg, product, tmp_path, ["search.phase1.L1-to-L6.common"], calls)
+    assert calls == []
+
+
+def test_the_stamp_records_the_actual_device_placement(tmp_path, torch_flags):
+    cfg, product, calls = _config(tmp_path), _product(tmp_path), []
+    uid = "search.phase1.L1-to-L6.common"
+    _run(cfg, product, tmp_path, [uid], calls)
+    env = json.loads((product / remote_units.SHARDS_RELATIVE / uid / "shard.json")
+                     .read_text())["environment"]
+    assert env["device"]["declared"] == "cpu" and env["device"]["kind"] == "cpu"
+    assert env["accelerator"] == "cpu"
+
+
+# ------------------------------------------------------------------ the remaining pins
+
+
+def test_requirements_pin_every_installed_runtime_dependency_to_its_installed_version():
+    lines = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text().splitlines()
+    for name in ("torchvision", "timm", "tqdm", "matplotlib", "scikit-image", "scikit-learn",
+                 "umap-learn", "ipykernel"):
+        assert f"{name}=={importlib.metadata.version(name)}" in lines, name
+
+
+def test_every_pinned_requirement_equals_its_installed_version():
+    """A pin describes the environment the suite runs in: each `name==version` line
+    names the version importlib.metadata reads in this venv."""
+    lines = (Path(__file__).resolve().parents[1] / "requirements.txt").read_text().splitlines()
+    pins = dict(line.split("==", 1) for line in lines
+                if "==" in line and not line.lstrip().startswith("#"))
+    assert {"torch", "optuna", "scipy", "numpy", "pandas"} <= set(pins)
+    wrong = {n: (v, importlib.metadata.version(n)) for n, v in pins.items()
+             if importlib.metadata.version(n) != v}
+    assert wrong == {}
