@@ -16,7 +16,7 @@ from MIL_CREDA_EEG.comparators.adaptmil import model as model_module
 from MIL_CREDA_EEG.comparators.adaptmil import objectives as obj
 from MIL_CREDA_EEG.comparators.adaptmil import training as tr
 
-SCHEDULE = {"epochs1": 2, "patience1": 1, "epochs2": 2, "bagsPerStep": 2}
+SCHEDULE = {"epochs1": 2, "epochs2": 2, "bagsPerStep": 2}
 PARAMS1 = {"lr1": 1e-3, "wd1": 1e-5}
 PARAMS2 = {"lr2": 1e-3, "wd2": 1e-5, "mmdWeight": 2.5, "kernelMultiplier": 1.0}
 
@@ -258,9 +258,9 @@ def test_adaptmil_mmd_refuses_invalid_inputs(sigma):
         obj.multi_kernel_mmd(torch.full((2, 3), float("nan")), torch.zeros(2, 3), 1)
 
 
-def test_adaptmil_source_pretraining_restores_best_native_checkpoint(monkeypatch):
+def test_adaptmil_source_pretraining_runs_its_epochs_and_keeps_the_last(monkeypatch):
     model = adaptmil.AdaptMILModel(14, 14)
-    # Make a later epoch worse; prove restoration does not retain the final epoch.
+    # A later epoch is worse; v50 has no early stopping: the last epoch is kept.
     snapshots = []
     answers = [torch.tensor([[.9, .1], [.1, .9]]),
                torch.tensor([[.1, .9], [.9, .1]]),
@@ -273,12 +273,20 @@ def test_adaptmil_source_pretraining_restores_best_native_checkpoint(monkeypatch
     out = tr.train_source_phase(model, bags("s"), bags("v", seed=1),
                                  search.phase_one_hyper("AdaptMIL", PARAMS1, SCHEDULE),
                                  torch.Generator().manual_seed(0), "cpu")
-    assert out["best_epoch"] == 0 and out["epochs"] == 2
+    assert out["best_epoch"] == 1 == out["checkpoint"]["epoch"] and out["epochs"] == 2
     assert not equal(snapshots[0], snapshots[1])
-    assert equal(two_phase.phase_one_state(model), snapshots[0])
+    assert equal(two_phase.phase_one_state(model), snapshots[1])
+    assert equal(out["checkpoint"]["state"], snapshots[1])
     assert equal(target, state(model.target_trunk))
-    assert out["restored_valid_balanced_accuracy"] == 1
+    assert [h["val_balanced_accuracy"] for h in out["history"]] == [1.0, 0.0]
+    assert [v["epoch"] for v in out["validation"]] == [0, 1]
     assert set(out["history"][0]) >= {"epoch", "fold", "seed", "model", "loss"}
+    # the refit: no validation bags, exactly the epochs given, nothing evaluated
+    refit = tr.train_source_phase(adaptmil.AdaptMILModel(14, 14), bags("s"), [],
+                                  search.phase_one_hyper("AdaptMIL", PARAMS1, SCHEDULE),
+                                  torch.Generator().manual_seed(0), "cpu")
+    assert refit["epochs"] == SCHEDULE["epochs1"] and refit["validation"] == []
+    assert len(snapshots) == 2
 
 
 @pytest.mark.parametrize("channels", [(14, 14), (29, 14), (14, 29)])
@@ -332,7 +340,7 @@ def test_adaptmil_adaptation_updates_only_target_with_label_blind_loss():
     assert all(math.isfinite(row["loss"]) for row in a["history"])
 
 
-def test_adaptmil_validation_selects_both_rules_without_training_on_labels(monkeypatch):
+def test_adaptmil_validation_is_recorded_per_epoch_without_training_on_labels(monkeypatch):
     model = adaptmil.AdaptMILModel(14, 14)
     tr.bridge(model)
     primary_snapshots = []
@@ -342,13 +350,15 @@ def test_adaptmil_validation_selects_both_rules_without_training_on_labels(monke
         primary_snapshots.append(state(model.target_trunk))
         return answers[len(primary_snapshots)-1]
     monkeypatch.setattr(two_phase, "evaluate", evaluate)
-    out = tr.adapt_target_phase(model, bags("s"), bags("t", seed=2), bags("u", seed=3),
+    valid = bags("u", seed=3)
+    out = tr.adapt_target_phase(model, bags("s"), bags("t", seed=2), valid,
                                 PARAMS2, SCHEDULE, torch.Generator().manual_seed(0), "cpu")
-    assert out["checkpoint"]["epoch"] == 0
-    assert out["secondary_checkpoint"]["epoch"] == 1
+    assert out["checkpoint"]["epoch"] == 1 == out["best_epoch"]
+    assert "secondary_checkpoint" not in out
     assert not equal(primary_snapshots[0], primary_snapshots[1])
-    assert equal(state(model.target_trunk), primary_snapshots[0])
-    assert equal(out["secondary_checkpoint"]["target_state"], primary_snapshots[1])
+    assert equal(state(model.target_trunk), primary_snapshots[1])     # the last, kept
+    assert [v["probabilities"] for v in out["validation"]] == [a.tolist() for a in answers]
+    assert [v["labels"] for v in out["validation"]] == [[b.label for b in valid]] * 2
 
 
 def test_adaptmil_search_hook_restarts_from_matching_phase_one_state():

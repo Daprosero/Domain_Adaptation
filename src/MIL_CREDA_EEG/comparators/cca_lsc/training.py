@@ -1,4 +1,12 @@
-"""Controlled CCA-LSC variant: common checkpoint -> warmup -> calibrated bag adaptation."""
+"""Controlled CCA-LSC variant: common checkpoint -> warmup -> calibrated bag adaptation.
+
+Plan v50 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
+early stopping, no restore). With target validation bags (an inner split) every
+epoch's validation predictions are recorded for the search's pooled selection;
+without them (the refit) nothing is evaluated. A search cap must leave at least
+one calibrated epoch after the warmup; a refit runs exactly the selected E2, which
+may end inside the warmup when the search selected such an epoch.
+"""
 from __future__ import annotations
 
 import copy
@@ -15,12 +23,13 @@ from .losses import (CentroidMemory, calibrated_pseudo, calibration_weights,
                      estimate_prior, label_shift)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cca_phase_two_freezes_common_predictor", "cca_target_training_labels_are_unread",
                    "cca_warmup_precedes_fixed_prior", "cca_search_hook_uses_common_checkpoint",
-                   "cca_selection_restores_best_epoch", "cca_invalid_inputs_fail_closed",
+                   "cca_keeps_the_last_epoch_and_records_validation_per_epoch",
+                   "cca_invalid_inputs_fail_closed",
                    "cca_objective_weights_are_effective"],
 }
 
@@ -103,10 +112,11 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     two_phase.check_hyper({**mil_wrapper.COMMON_PHASE_ONE_FIXED, "lr1": 1., "wd1": 0.,
                           "lr2": params["lr2"], "wd2": params["wd2"], "tauLocal": 1.,
                           **schedule})
-    if int(warmup_epochs) != warmup_epochs or warmup_epochs < 1 or schedule["epochs2"] <= warmup_epochs:
+    if int(warmup_epochs) != warmup_epochs or warmup_epochs < 1 or (
+            target_valid and schedule["epochs2"] <= warmup_epochs):
         raise ValueError("phase 2 must include positive warmup and at least one calibrated epoch")
-    if not source_train or not target_train or not target_valid:
-        raise ValueError("source training, target training and target validation bags required")
+    if not source_train or not target_train:
+        raise ValueError("source training and target training bags required")
     # Enforce split separation without reading target training labels.
     s = {b.subject for b in source_train}
     t = {b.subject for b in target_train}
@@ -127,8 +137,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     counts = torch.bincount(labels, minlength=model.classes).to(torch.float64)
     source_prior = counts / counts.sum()  # original train bags, NOT balanced draws
     weights = torch.ones(model.classes, dtype=torch.float64, device=device)
-    target_prior, history, best_state, best_aux = None, [], None, None
-    best, best_epoch = -math.inf, -1
+    target_prior, history, validation = None, [], []
     keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         if epoch == warmup_epochs:
@@ -152,38 +161,36 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
             eegnet.apply_max_norm(model.target_trunk)
             for k in sums:
                 sums[k] += float(terms[k].detach()) / len(batches)
-        prediction = two_phase.evaluate(model, target_valid, "target", device)
-        accuracy = two_phase.balanced_accuracy([b.label for b in target_valid], prediction.argmax(1).tolist())
-        score = two_phase.label_free_score(prediction)
+        accuracy, score = math.nan, math.nan
+        if target_valid:
+            prediction = two_phase.evaluate(model, target_valid, "target", device)
+            accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
+                                                   prediction.argmax(1).tolist())
+            score = two_phase.label_free_score(prediction)
+            validation.append(two_phase.validation_record(epoch, target_valid, prediction))
         history.append({"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
                         "model": f"{NAME}:phase2", **sums, "calibrated": epoch >= warmup_epochs,
                         "val_balanced_accuracy": accuracy, "label_free_score": score})
-        if accuracy > best:
-            best, best_epoch = accuracy, epoch
-            best_state = copy.deepcopy(model.target_trunk.state_dict())
-            best_aux = copy.deepcopy(auxiliary.state_dict())
         keeper.offer(epoch, score, model)
-    final_state = copy.deepcopy(model.target_trunk.state_dict())
-    model.target_trunk.load_state_dict(best_state)
-    auxiliary.load_state_dict(best_aux)
     if not all(torch.equal(v, two_phase.phase_one_state(model)[k])
                for k, v in joint["frozen_state"].items()):
         raise two_phase.FrozenPartsMoved("CCA-LSC changed a frozen phase-1 part")
-    restored = two_phase.evaluate(model, target_valid, "target", device)
-    if two_phase.balanced_accuracy([b.label for b in target_valid], restored.argmax(1).tolist()) != best:
-        raise two_phase.RestoreFailed("CCA-LSC restored validation score differs")
+    last = len(history) - 1
+    final_state = copy.deepcopy(model.target_trunk.state_dict())
     return two_phase.with_label_free({
-            "checkpoint": {"target_state": best_state, "auxiliary_state": best_aux,
-                            "epoch": best_epoch, "valid_balanced_accuracy": best,
-                            "label_free_score": history[best_epoch]["label_free_score"],
-                            "hyper": {**params, **schedule, "warmup_epochs": warmup_epochs}},
-            "best_epoch": best_epoch, "epochs": len(history), "history": history,
-            "source_prior": source_prior.detach().cpu(), "target_prior": target_prior.detach().cpu(),
+            "checkpoint": {"target_state": final_state,
+                           "auxiliary_state": copy.deepcopy(auxiliary.state_dict()),
+                           "epoch": last, "valid_balanced_accuracy": accuracy,
+                           "label_free_score": score,
+                           "hyper": {**params, **schedule, "warmup_epochs": warmup_epochs}},
+            "best_epoch": last, "epochs": len(history), "history": history,
+            "validation": validation,
+            "source_prior": source_prior.detach().cpu(),
+            "target_prior": None if target_prior is None else target_prior.detach().cpu(),
             "calibration_weights": weights.detach().cpu(), "final_target_state": final_state,
             "layer_copy": joint["layer_copy"],
-            "selection": {"primary": "target-validation balanced accuracy",
-                          "best_label_free_epoch": max(range(len(history)),
-                                                       key=lambda i: history[i]["label_free_score"])}},
+            "selection": {"primary": "pooled target-validation balanced accuracy, chosen "
+                                     "by the search"}},
         keeper)
 
 

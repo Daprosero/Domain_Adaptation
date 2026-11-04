@@ -1,4 +1,4 @@
-"""Experiments plan v43, Secs. 4.2, 4.6, 7.3 and 7.7: the shard-aware remote units.
+"""Experiments plan v50, Secs. 4.2, 4.5, 4.6, 7.3 and 7.7: the shard-aware remote units.
 
 Everything runs locally on temporary folders and fake FORGE_* variables; nothing here
 contacts a remote service. The synthetic set is seeded noise; no number it yields is a
@@ -23,7 +23,7 @@ import pandas as pd
 
 from MIL_CREDA_EEG import campaign, model_store, preprocess, remote_units, search
 
-SCHEDULE = {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4}
+SCHEDULE = {"epochs1": 1, "epochs2": 1, "bagsPerStep": 4}
 
 
 @pytest.fixture
@@ -71,29 +71,46 @@ def _product(tmp: Path) -> Path:
 def test_units_are_enumerated_in_a_deterministic_order_with_stable_ids(tmp_path):
     cfg = _config(tmp_path)
     ids = [u.id for u in remote_units.enumerate_units(cfg, _product(tmp_path))]
-    assert ids == [
-        "search.phase1.L1-to-L6.common", "search.phase1.L1-to-L6.HASD",
-        "search.phase1.L1-to-L6.MIL-CREDA",
-        "search.phase1.L6-to-L1.common", "search.phase1.L6-to-L1.HASD",
-        "search.phase1.L6-to-L1.MIL-CREDA",
-        "search.phase2.L1-to-L6.COT", "search.phase2.L1-to-L6.HASD",
-        "search.phase2.L1-to-L6.MIL-CREDA",
-        "search.phase2.L6-to-L1.COT", "search.phase2.L6-to-L1.HASD",
-        "search.phase2.L6-to-L1.MIL-CREDA",
-        "final.L1-to-L6", "final.L6-to-L1", "k3.L1-to-L6", "k3.L6-to-L1"]
+    groups, strategies = ("common", "HASD", "MIL-CREDA"), ("COT", "HASD", "MIL-CREDA")
+    transfers = ("L1-to-L6", "L6-to-L1")
+    assert ids == (
+        [f"search.phase1.{t}.{g}.outer{r}" for t in transfers for r in range(4) for g in groups]
+        + [f"search.phase2.{t}.{s}.outer{r}" for t in transfers for r in range(4)
+           for s in strategies]
+        + ["final.L1-to-L6", "final.L6-to-L1", "k3.L1-to-L6", "k3.L6-to-L1"])
     shuffled = {**cfg, "strategies": ["HASD", "MIL-CREDA", "COT"],
                 "transfers": list(reversed(cfg["transfers"]))}
     assert [u.id for u in remote_units.enumerate_units(shuffled, _product(tmp_path))] == ids
 
 
+def test_the_search_units_are_one_per_study_and_outer_fold(tmp_path):
+    """Sec. 7.7: 4 phase-1 groups and 9 strategies per transfer and outer fold, ten
+    transfers: 520 studies, each one search unit carrying its outer fold."""
+    full = {**_config(tmp_path), "strategies": list(model_store.STRATEGIES),
+            "transfers": [t.name for t in campaign.assignment_mod.TRANSFERS],
+            "core": {"level": ["L1->L6", "L6->L1"], "task": [], "device": []}}
+    units = remote_units.enumerate_units(full, _product(tmp_path))
+    found = [u for u in units if u.step == "search"]
+    assert len(found) == 520
+    assert sum(u.phase == 1 for u in found) == 160 and sum(u.phase == 2 for u in found) == 360
+    for u in found:
+        assert u.id.endswith(f".outer{u.rotation}") and u.rotation in range(4)
+    assert len({(u.transfer, u.phase, u.name, u.rotation) for u in found}) == 520
+
+
 def test_units_name_their_dependencies(tmp_path):
     units = {u.id: u for u in remote_units.enumerate_units(_config(tmp_path),
                                                             _product(tmp_path))}
-    assert units["search.phase1.L1-to-L6.common"].after == ()
-    assert units["search.phase2.L1-to-L6.COT"].after == ("search.phase1.L1-to-L6.common",)
-    assert units["search.phase2.L1-to-L6.HASD"].after == ("search.phase1.L1-to-L6.HASD",)
+    assert units["search.phase1.L1-to-L6.common.outer0"].after == ()
+    for r in range(4):
+        # a phase-2 study starts from its own outer fold's phase-1 checkpoint
+        assert units[f"search.phase2.L1-to-L6.COT.outer{r}"].after == (
+            f"search.phase1.L1-to-L6.common.outer{r}",)
+        assert units[f"search.phase2.L1-to-L6.HASD.outer{r}"].after == (
+            f"search.phase1.L1-to-L6.HASD.outer{r}",)
     assert set(units["final.L1-to-L6"].after) == {
         i for i in units if i.startswith("search.") and ".L1-to-L6." in i}
+    assert len(units["final.L1-to-L6"].after) == 2 * 3 * 4
     assert units["k3.L6-to-L1"].after == ("final.L6-to-L1",)
 
 
@@ -101,7 +118,7 @@ def test_selected_units_come_from_forge_run_units(tmp_path):
     units = remote_units.enumerate_units(_config(tmp_path), _product(tmp_path))
     every = [u.id for u in units]
     assert [u.id for u in remote_units.select_units(units, environ={})] == every
-    pick = ["final.L6-to-L1", "search.phase1.L1-to-L6.HASD"]
+    pick = ["final.L6-to-L1", "search.phase1.L1-to-L6.HASD.outer0"]
     env = {remote_units.UNITS_ENV: json.dumps(pick)}
     assert [u.id for u in remote_units.select_units(units, environ=env)] == pick
     assert remote_units.select_units(units, environ={remote_units.UNITS_ENV: "[]"}) == []
@@ -165,7 +182,7 @@ def _run(cfg, product, tmp, ids, calls, **kwargs):
 def test_each_unit_writes_isolated_outputs_with_completion_and_environment_stamps(
         tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common", "search.phase1.L1-to-L6.HASD"]
+    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.HASD.outer0"]
     outcome = _run(cfg, product, tmp_path, ids, calls)
     assert outcome["ran"] == ids and outcome["remaining"] == []
     assert not (product / "Models").exists(), "a unit never writes the product itself"
@@ -193,8 +210,8 @@ def test_each_unit_writes_isolated_outputs_with_completion_and_environment_stamp
 
 def test_the_deadline_stops_before_a_unit_and_writes_partial(tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common", "search.phase1.L1-to-L6.HASD",
-           "search.phase1.L1-to-L6.MIL-CREDA"]
+    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.HASD.outer0",
+           "search.phase1.L1-to-L6.MIL-CREDA.outer0"]
     outcome = _run(cfg, product, tmp_path, ids, calls, deadline=time.time() + 3600,
                    estimate=lambda unit: 0.0 if unit.id == ids[0] else 1e9)
     assert [c[0] for c in calls] == ids[:1]
@@ -211,7 +228,7 @@ def test_the_deadline_stops_before_a_unit_and_writes_partial(tmp_path, torch_fla
 
 def test_completed_units_are_skipped_on_resume(tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common", "search.phase1.L1-to-L6.HASD"]
+    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.HASD.outer0"]
     _run(cfg, product, tmp_path, ids[:1], calls)
     outcome = _run(cfg, product, tmp_path, ids, calls)
     assert [c[0] for c in calls] == ids
@@ -221,8 +238,8 @@ def test_completed_units_are_skipped_on_resume(tmp_path, torch_flags):
 def test_a_unit_whose_dependencies_are_absent_is_refused_before_anything_runs(
         tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    with pytest.raises(remote_units.UnitError, match="search.phase1.L1-to-L6.common"):
-        _run(cfg, product, tmp_path, ["search.phase2.L1-to-L6.COT"], calls)
+    with pytest.raises(remote_units.UnitError, match="search.phase1.L1-to-L6.common.outer0"):
+        _run(cfg, product, tmp_path, ["search.phase2.L1-to-L6.COT.outer0"], calls)
     assert calls == []
 
 
@@ -237,8 +254,8 @@ def test_deterministic_flags_are_set_before_any_unit(tmp_path, torch_flags):
                      "cudnnDeterministic": True, "cublasWorkspaceConfig": ":4096:8"}
     torch.use_deterministic_algorithms(False)
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    _run(cfg, product, tmp_path, ["search.phase1.L1-to-L6.common"], calls)
-    assert calls == [("search.phase1.L1-to-L6.common", True)]
+    _run(cfg, product, tmp_path, ["search.phase1.L1-to-L6.common.outer0"], calls)
+    assert calls == [("search.phase1.L1-to-L6.common.outer0", True)]
 
 
 # ------------------------------------------------------------------ merge
@@ -246,7 +263,7 @@ def test_deterministic_flags_are_set_before_any_unit(tmp_path, torch_flags):
 
 def _two_shards(tmp_path):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common", "search.phase1.L1-to-L6.HASD"]
+    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.HASD.outer0"]
     _run(cfg, product, tmp_path, ids, calls)
     return cfg, product, ids, product / remote_units.SHARDS_RELATIVE
 
@@ -353,7 +370,7 @@ def test_requirements_pin_torch_optuna_and_scipy_to_the_installed_versions():
 def test_a_unit_without_a_measured_duration_estimate_is_refused_naming_what_to_measure(
         tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common"]
+    ids = ["search.phase1.L1-to-L6.common.outer0"]
     with pytest.raises(remote_units.UnitError, match="timing.json") as refused:
         remote_units.run_units(cfg, product, units=ids, workdir=tmp_path / "work",
                                execute=_fake(calls), environ={})
@@ -370,8 +387,9 @@ def test_a_unit_without_a_measured_duration_estimate_is_refused_naming_what_to_m
     assert outcome["ran"] == ids
     estimate = remote_units.timing_estimate(product / "Results" / "timing.json", cfg, product)
     units = {u.id: u for u in remote_units.enumerate_units(cfg, product)}
-    # one trial trains the four rotations for at most epochs1 epochs each
-    assert estimate(units[ids[0]]) == 4 * SCHEDULE["epochs1"] * 0.5
+    # one trial trains the three inner splits of its outer fold for at most epochs1 each,
+    # so a study of nTrials trials trains nTrials x 3 times
+    assert estimate(units[ids[0]]) == 3 * SCHEDULE["epochs1"] * 0.5
     (product / "Results" / "timing.json").write_text(json.dumps({"schema": 1}))
     with pytest.raises(remote_units.UnitError, match="timing.json"):
         remote_units.timing_estimate(product / "Results" / "timing.json", cfg, product)
@@ -390,10 +408,10 @@ def test_the_deadline_stops_a_study_between_trials_and_the_rerun_completes_it(
     """Controlled clock: the deadline arrives once the first trial is stored."""
     cfg = {**_config(tmp_path, strategies=("MIL-CREDA",)), "nTrials": 3}
     product = _product(tmp_path)
-    uid = "search.phase1.L1-to-L6.MIL-CREDA"
+    uid = "search.phase1.L1-to-L6.MIL-CREDA.outer0"
     shards = product / remote_units.SHARDS_RELATIVE
     working = shards / remote_units.PROGRESS_DIR / uid / "product"
-    db = working / "Results" / "hpo" / "L1-to-L6__phase1__MIL-CREDA.db"
+    db = working / "Results" / "hpo" / "L1-to-L6__phase1__MIL-CREDA__outer0.db"
 
     def clock():
         return 1000.0 if _complete_trials(db) >= 1 else 0.0
@@ -464,7 +482,7 @@ def test_the_deadline_before_a_unit_with_no_time_left_writes_partial_and_runs_no
         tmp_path, torch_flags):
     """The unit-level check still holds: an arrived deadline runs no unit."""
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common"]
+    ids = ["search.phase1.L1-to-L6.common.outer0"]
     outcome = _run(cfg, product, tmp_path, ids, calls, deadline=0.0, clock=lambda: 1.0)
     assert calls == [] and outcome["remaining"] == ids
     marker = json.loads((tmp_path / "work" / remote_units.PARTIAL_MARKER).read_text())
@@ -501,7 +519,7 @@ def test_resume_refuses_a_completed_shard_whose_stamp_is_not_the_current_campaig
     _edit_stamp(shards / ids[0] / "shard.json", commit="0" * 40)
     calls = []
     with pytest.raises(remote_units.UnitError, match="commit"):
-        _run(cfg, product, tmp_path, ids + ["search.phase1.L1-to-L6.MIL-CREDA"], calls)
+        _run(cfg, product, tmp_path, ids + ["search.phase1.L1-to-L6.MIL-CREDA.outer0"], calls)
     assert calls == []
 
 
@@ -564,7 +582,7 @@ def test_a_run_on_tampered_signals_is_refused_before_any_unit(tmp_path, monkeypa
     np.savez(npz, **arrays)
     calls = []
     with pytest.raises(remote_units.InputUnavailable, match=npz.name):
-        _run(cfg, _product(tmp_path), tmp_path, ["search.phase1.L1-to-L6.common"], calls)
+        _run(cfg, _product(tmp_path), tmp_path, ["search.phase1.L1-to-L6.common.outer0"], calls)
     assert calls == []
 
 
@@ -583,7 +601,7 @@ def test_the_smoke_writes_the_rehearsal_shard_json_in_its_working_directory(
     outcome = remote_units.smoke(config=str(config_path), product=str(product),
                                  environ={"FORGE_RUN_MODE": "smoke"},
                                  estimate=lambda u: 0.0)
-    uid = "search.phase1.L1-to-L6.MIL-CREDA"
+    uid = "search.phase1.L1-to-L6.MIL-CREDA.outer0"
     assert outcome["ran"] == [uid]
     stamp = json.loads((work / "shard.json").read_text())
     assert stamp["mode"] == "smoke"
@@ -613,13 +631,13 @@ def test_a_remote_run_must_declare_its_device(tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
     del cfg["device"]
     with pytest.raises(remote_units.UnitError, match="declare"):
-        remote_units.run_units(cfg, product, units=["search.phase1.L1-to-L6.common"],
+        remote_units.run_units(cfg, product, units=["search.phase1.L1-to-L6.common.outer0"],
                                workdir=tmp_path / "work", execute=_fake(calls),
                                environ={remote_units.DEADLINE_ENV: "1e12"},
                                estimate=lambda u: 0.0)
     assert calls == []
     # a local run keeps the campaign's default
-    _run(cfg, product, tmp_path, ["search.phase1.L1-to-L6.common"], calls)
+    _run(cfg, product, tmp_path, ["search.phase1.L1-to-L6.common.outer0"], calls)
     assert len(calls) == 1
 
 
@@ -628,13 +646,13 @@ def test_a_declared_cuda_device_that_is_not_placed_on_cuda_is_refused_before_tra
         tmp_path, torch_flags):
     cfg, product, calls = {**_config(tmp_path), "device": "cuda"}, _product(tmp_path), []
     with pytest.raises(remote_units.UnitError, match="cuda"):
-        _run(cfg, product, tmp_path, ["search.phase1.L1-to-L6.common"], calls)
+        _run(cfg, product, tmp_path, ["search.phase1.L1-to-L6.common.outer0"], calls)
     assert calls == []
 
 
 def test_the_stamp_records_the_actual_device_placement(tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    uid = "search.phase1.L1-to-L6.common"
+    uid = "search.phase1.L1-to-L6.common.outer0"
     _run(cfg, product, tmp_path, [uid], calls)
     env = json.loads((product / remote_units.SHARDS_RELATIVE / uid / "shard.json")
                      .read_text())["environment"]

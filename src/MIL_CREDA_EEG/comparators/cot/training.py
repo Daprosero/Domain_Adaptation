@@ -1,4 +1,10 @@
-"""COT Algorithm 1 under plan v40 §§4.5, 7.2–7.4, 7.7 (controlled variant)."""
+"""COT Algorithm 1 under plan v50 §§4.5, 7.2–7.4, 7.7 (controlled variant).
+
+Phase 2 runs its `epochs2` whole and keeps the last epoch (no early stopping, no
+restore); with target validation bags every epoch's validation predictions are
+recorded for the search's pooled selection, and without them (the refit) nothing
+is evaluated.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +21,7 @@ from MIL_CREDA_EEG.comparators.cot.losses import (
 from MIL_CREDA_EEG.comparators.cot.model import COTModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.5", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -26,7 +32,7 @@ __provenance__ = {
         "cot_search_registration_is_explicit_and_restorable",
         "cot_saved_state_round_trips_with_auxiliaries_and_digest",
         "cot_synthetic_two_phase_smoke",
-        "cot_selection_can_choose_different_primary_and_secondary_epochs",
+        "cot_keeps_the_last_epoch_and_records_validation_per_epoch",
         "cot_rejects_leaking_roles_and_empty_batches",
     ],
 }
@@ -81,7 +87,8 @@ def _validate_record(data, rotation, seed, record):
 
 
 def _check_roles(d):
-    for key in ("source_train", "source_valid", "target_train", "target_valid"):
+    # A refit (v50 §4.5) has no validation bags; the training roles are never empty.
+    for key in ("source_train", "target_train"):
         if not d[key]:
             raise ValueError(f"empty {key}")
     source = {b.subject for key in ("source_train", "source_valid") for b in d[key]}
@@ -99,8 +106,8 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     """Existing search trainer hook; target-training labels are never accessed.
 
     Phase one is the shared common-group trainer/checkpoint, not retrained here.
-    Only validation labels select the primary epoch. Full states for both rules
-    are retained so the secondary rule does not require training again.
+    Exactly `epochs2` epochs run and the last is kept; validation labels are only
+    recorded for the search's pooled selection. An empty validation role is a refit.
     """
     hyper = _params(params, schedule)
     state = _validate_record(data, rotation, seed, record)
@@ -122,7 +129,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     frozen = {k: model.state_dict()[k].clone() for k in frozen_keys}
     optimizer = torch.optim.SGD([*model.target_trunk.parameters(), model.target_centers],
                                 lr=params["lr2"], weight_decay=params["wd2"], momentum=.9)
-    history, primary, secondary = [], None, None
+    history, validation = [], []
     keeper = two_phase.LabelFreeBest(label_free)
     valid_labels = [b.label for b in d["target_valid"]]
     for epoch in range(schedule["epochs2"]):
@@ -168,31 +175,31 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
                           ot_share=abs(params["alphaOT"]*values["ot"])/max(denom, 1e-30))
             for k in sums:
                 sums[k] += values[k]
-        G = two_phase.evaluate(model, d["target_valid"], "target", device)
-        accuracy = two_phase.balanced_accuracy(valid_labels, G.argmax(1).tolist())
-        free = two_phase.label_free_score(G)
+        accuracy, free = math.nan, math.nan
+        if d["target_valid"]:
+            G = two_phase.evaluate(model, d["target_valid"], "target", device)
+            accuracy = two_phase.balanced_accuracy(valid_labels, G.argmax(1).tolist())
+            free = two_phase.label_free_score(G)
+            validation.append(two_phase.validation_record(epoch, d["target_valid"], G))
         row = {"epoch": epoch, "seed": seed, "fold": rotation, "model": "COT:phase2",
                "transfer": data.transfer.name, **{k: v/len(batches) for k, v in sums.items()},
                "val_balanced_accuracy": accuracy, "label_free_score": free}
         history.append(row)
-        checkpoint = {"epoch": epoch, "valid_balanced_accuracy": accuracy,
-                      "label_free_score": free, "hyper": hyper}
-        if primary is None or accuracy > primary["valid_balanced_accuracy"]:
-            primary = {**checkpoint, "state": _snapshot(model)}
         keeper.offer(epoch, free, model)
-        if secondary is None or free > secondary["label_free_score"]:
-            secondary = {**checkpoint, "state": _snapshot(model)}
         if any(not torch.equal(model.state_dict()[k], v) for k, v in frozen.items()):
             raise two_phase.FrozenPartsMoved("COT phase two changed a common frozen tensor")
-    model.load_state_dict(primary["state"])
     two_phase.set_phase_two_modes(model)
+    last = len(history) - 1
+    checkpoint = {"epoch": last, "valid_balanced_accuracy": accuracy, "label_free_score": free,
+                  "hyper": hyper, "state": _snapshot(model)}
     return {"strategy": "COT", "model": model, "channels": channels, "hyper": hyper,
             "layer_copy": joint["layer_copy"], "result": two_phase.with_label_free({
-                "checkpoint": primary, "secondary_checkpoint": secondary,
-                "best_epoch": primary["epoch"], "epochs": len(history), "history": history,
-                "selection": {"primary": "target-validation balanced accuracy",
-                              "secondary": "entropy of mean minus mean entropy",
-                              "best_label_free_epoch": secondary["epoch"]}}, keeper)}
+                "checkpoint": checkpoint, "best_epoch": last, "epochs": len(history),
+                "history": history, "validation": validation,
+                "selection": {"primary": "pooled target-validation balanced accuracy, "
+                                         "chosen by the search",
+                              "secondary": "pooled entropy of mean minus mean entropy, "
+                                           "chosen by the search"}}, keeper)}
 
 
 

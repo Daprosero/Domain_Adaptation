@@ -1,4 +1,12 @@
-"""Controlled UDA-DDA variant: common checkpoint -> target-only MMD + CMMD adaptation."""
+"""Controlled UDA-DDA variant: common checkpoint -> target-only MMD + CMMD adaptation.
+
+Plan v50 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
+early stopping, no restore). With target validation bags (an inner split) every
+epoch's validation predictions are recorded for the search's pooled selection;
+without them (the refit) nothing is evaluated. The paper's MMD-weight and
+confidence schedules are rescaled to the epochs this run trains, so a refit of
+E2 epochs spans its schedule over E2 epochs.
+"""
 from __future__ import annotations
 
 import copy
@@ -11,12 +19,13 @@ from MIL_CREDA_EEG import eegnet, mil_wrapper, model_store, search, two_phase
 from . import losses
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["uda_phase_two_freezes_common_predictor", "uda_target_training_labels_are_unread",
                    "uda_bandwidth_is_the_detached_step_median", "uda_search_hook_uses_common_checkpoint",
-                   "uda_selection_restores_best_epoch", "uda_invalid_inputs_fail_closed",
+                   "uda_keeps_the_last_epoch_and_records_validation_per_epoch",
+                   "uda_invalid_inputs_fail_closed",
                    "uda_objective_weights_are_effective", "uda_cmmd_has_no_source_loss_gate",
                    "uda_confidence_thresholds_are_sorted_so_the_schedule_never_inverts"],
 }
@@ -96,7 +105,9 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     """Adapt a selected common phase-1 model; target_train labels are never read.
 
     Only the target trunk trains (plan 7.3); the paper's epoch schedules are
-    rescaled from 100 epochs to `epochs2` (plan 7.4). Selection: plan 4.5.
+    rescaled from 100 epochs to `epochs2` (plan 7.4). Exactly `epochs2` epochs run and
+    the last is kept; the selection is the search's (plan 4.5). An empty `target_valid`
+    is a refit.
     """
     if not isinstance(model, mil_wrapper.CommonMILModel):
         raise ValueError("UDA-DDA requires the shared common MIL phase-1 architecture")
@@ -106,8 +117,8 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     two_phase.check_hyper({**mil_wrapper.COMMON_PHASE_ONE_FIXED, "lr1": 1., "wd1": 0.,
                           "lr2": params["lr2"], "wd2": params["wd2"], "tauLocal": 1.,
                           **schedule})
-    if not source_train or not target_train or not target_valid:
-        raise ValueError("source training, target training and target validation bags required")
+    if not source_train or not target_train:
+        raise ValueError("source training and target training bags required")
     s = {b.subject for b in source_train}
     t = {b.subject for b in target_train}
     v = {b.subject for b in target_valid}
@@ -123,7 +134,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
                                  weight_decay=params["wd2"])
     epochs = schedule["epochs2"]
     middle, late = ordered_thresholds(params)
-    history, best_state, best, best_epoch = [], None, -math.inf, -1
+    history, validation = [], []
     keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(epochs):
         alpha = losses.mmd_weight_schedule(epoch, epochs)
@@ -143,37 +154,33 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
             eegnet.apply_max_norm(model.target_trunk)
             for k in sums:
                 sums[k] += float(terms[k].detach()) / len(batches)
-        prediction = two_phase.evaluate(model, target_valid, "target", device)
-        accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
-                                               prediction.argmax(1).tolist())
+        accuracy, free = math.nan, math.nan
+        if target_valid:
+            prediction = two_phase.evaluate(model, target_valid, "target", device)
+            accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
+                                                   prediction.argmax(1).tolist())
+            free = two_phase.label_free_score(prediction)
+            validation.append(two_phase.validation_record(epoch, target_valid, prediction))
         history.append({"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
                         "model": f"{NAME}:phase2", **sums, "stage": losses.stage(epoch, epochs),
                         "threshold": threshold,
-                        "val_balanced_accuracy": accuracy,
-                        "label_free_score": two_phase.label_free_score(prediction)})
-        if accuracy > best:
-            best, best_epoch = accuracy, epoch
-            best_state = copy.deepcopy(model.target_trunk.state_dict())
-        keeper.offer(epoch, history[-1]["label_free_score"], model)
+                        "val_balanced_accuracy": accuracy, "label_free_score": free})
+        keeper.offer(epoch, free, model)
     final_state = copy.deepcopy(model.target_trunk.state_dict())
-    model.target_trunk.load_state_dict(best_state)
     if not all(torch.equal(v, two_phase.phase_one_state(model)[k])
                for k, v in joint["frozen_state"].items()):
         raise two_phase.FrozenPartsMoved("UDA-DDA changed a frozen phase-1 part")
-    restored = two_phase.evaluate(model, target_valid, "target", device)
-    if two_phase.balanced_accuracy([b.label for b in target_valid], restored.argmax(1).tolist()) != best:
-        raise two_phase.RestoreFailed("UDA-DDA restored validation score differs")
+    last = len(history) - 1
     return two_phase.with_label_free({
-            "checkpoint": {"target_state": best_state, "epoch": best_epoch,
-                            "valid_balanced_accuracy": best,
-                            "label_free_score": history[best_epoch]["label_free_score"],
-                            "hyper": {**params, **schedule},
-                            "thresholds": {"middle": middle, "late": late}},
-            "best_epoch": best_epoch, "epochs": len(history), "history": history,
+            "checkpoint": {"target_state": final_state, "epoch": last,
+                           "valid_balanced_accuracy": accuracy, "label_free_score": free,
+                           "hyper": {**params, **schedule},
+                           "thresholds": {"middle": middle, "late": late}},
+            "best_epoch": last, "epochs": len(history), "history": history,
+            "validation": validation,
             "final_target_state": final_state, "layer_copy": joint["layer_copy"],
-            "selection": {"primary": "target-validation balanced accuracy",
-                          "best_label_free_epoch": max(range(len(history)),
-                                                       key=lambda i: history[i]["label_free_score"])}},
+            "selection": {"primary": "pooled target-validation balanced accuracy, chosen "
+                                     "by the search"}},
         keeper)
 
 

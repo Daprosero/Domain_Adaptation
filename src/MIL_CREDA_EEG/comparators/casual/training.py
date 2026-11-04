@@ -6,6 +6,11 @@ window L2 norm, log-uniform in [0.01, 1] (`search.VAT_RADIUS_FRACTION`). The
 plan does not say how "typical" is measured; here it is the median L2 norm of
 the target-training windows of the rotation, measured once at the start of
 phase 2 (`typical_window_norm`), an unspecified choice (REPLICATION.md).
+
+Plan v50 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
+early stopping, no restore). With target validation bags (an inner split) every
+epoch's validation predictions are recorded for the search's pooled selection;
+without them (the refit on every non-test fold) nothing is evaluated.
 """
 from __future__ import annotations
 
@@ -25,12 +30,12 @@ from .losses import (adaptation_objective, classification_loss, conditional_entr
                      virtual_adversarial_loss)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["casual_alternation_updates_only_allowed_parameters",
                    "casual_checkpoint_identity_is_checked",
-                   "casual_selection_runs_full_budget_and_keeps_both_states",
+                   "casual_runs_full_budget_keeps_the_last_epoch_and_records_validation",
                    "casual_training_does_not_read_target_labels",
                    "casual_search_hook_uses_common_group_and_the_radius_fraction_axis",
                    "casual_vat_radius_is_the_fraction_of_the_median_target_training_window_norm",
@@ -128,17 +133,17 @@ def alternating_step(model, discriminator, source, target, params, target_optimi
 
 def adapt_target_phase(model, source_train, target_train, target_valid, params, schedule,
                        *, seed=0, fold=0, transfer="", device="cpu", label_free=False):
-    """Full phase-2 budget; validate only after training, restore primary best.
+    """Exactly `epochs2` epochs, the last kept; validation recorded per epoch when given.
 
-    Caller has loaded the common phase-1 state and called shared bridge(). Both
-    primary and label-free selected states are retained for subsequent evaluation.
+    Caller has loaded the common phase-1 state and called shared bridge(). An empty
+    `target_valid` is a refit: nothing is evaluated.
     """
     params = check_params(params)
     schedule = search.check_schedule(schedule)
     two_phase.check_hyper({**COMMON_PHASE_ONE_FIXED, "lr1": 0.001, "wd1": 0.,
                            "lr2": params["lr2"], "wd2": params["wd2"], "tauLocal": 1., **schedule})
-    if not source_train or not target_train or not target_valid:
-        raise ValueError("CASUAL needs nonempty source train, target train and target validation")
+    if not source_train or not target_train:
+        raise ValueError("CASUAL needs nonempty source train and target train")
     if any(p.requires_grad for p in [*model.source_trunk.parameters(), *model.attention_parameters(), *model.head.parameters()]):
         raise ValueError("call the shared two_phase.bridge before CASUAL adaptation")
     frozen = two_phase.phase_one_state(model)
@@ -150,7 +155,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     discriminator = DomainDiscriminator(model.source_trunk.output_dim * model.classes).to(device)
     optimizer = torch.optim.Adam(model.target_trunk.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
     dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
-    history, selected, free_selected = [], None, None
+    history, validation = [], []
     keeper = two_phase.LabelFreeBest(label_free)
     size = schedule["bagsPerStep"]
     for epoch in range(schedule["epochs2"]):
@@ -161,32 +166,34 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
             totals.append(alternating_step(model, discriminator, [source_train[i] for i in s],
                                           [target_train[i] for i in batch], params, optimizer,
                                           dis_optimizer, device, vat_radius=vat_radius))
-        probabilities = two_phase.evaluate(model, target_valid, "target", device)
-        ba = two_phase.balanced_accuracy([b.label for b in target_valid], probabilities.argmax(1).tolist())
-        free = two_phase.label_free_score(probabilities)
+        ba, free = math.nan, math.nan
+        if target_valid:
+            probabilities = two_phase.evaluate(model, target_valid, "target", device)
+            ba = two_phase.balanced_accuracy([b.label for b in target_valid],
+                                             probabilities.argmax(1).tolist())
+            free = two_phase.label_free_score(probabilities)
+            validation.append(two_phase.validation_record(epoch, target_valid, probabilities))
         row = {"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
                "model": "CASUAL:phase2", "val_balanced_accuracy": ba, "label_free_score": free,
                "typical_window_norm": typical, "vat_radius": vat_radius,
                **{k: sum(r[k] for r in totals) / len(totals) for k in totals[0]}}
         history.append(row)
-        if selected is None or ba > selected["valid_balanced_accuracy"]:
-            selected = {"target_state": _state(model.target_trunk), "epoch": epoch,
-                        "valid_balanced_accuracy": ba, "label_free_score": free,
-                        "hyper": params, "discriminator_state": _state(discriminator)}
         keeper.offer(epoch, free, model)
-        if free_selected is None or free > free_selected["label_free_score"]:
-            free_selected = {"target_state": _state(model.target_trunk), "epoch": epoch,
-                             "label_free_score": free, "hyper": params}
     if model_store.state_digest(two_phase.phase_one_state(model)) != model_store.state_digest(frozen):
         raise two_phase.FrozenPartsMoved("CASUAL changed frozen source/attention/head state")
-    model.target_trunk.load_state_dict(selected["target_state"])
     model.eval()
+    last = history[-1]
+    checkpoint = {"target_state": _state(model.target_trunk), "epoch": last["epoch"],
+                  "valid_balanced_accuracy": last["val_balanced_accuracy"],
+                  "label_free_score": last["label_free_score"], "hyper": params,
+                  "discriminator_state": _state(discriminator)}
     return two_phase.with_label_free({
-            "checkpoint": selected, "label_free_checkpoint": free_selected, "history": history,
-            "best_epoch": selected["epoch"], "epochs": len(history),
-            "selection": {"primary": "target-validation balanced accuracy",
-                          "secondary": "entropy of mean minus mean entropy",
-                          "best_label_free_epoch": free_selected["epoch"]}}, keeper)
+            "checkpoint": checkpoint, "history": history, "validation": validation,
+            "best_epoch": last["epoch"], "epochs": len(history),
+            "selection": {"primary": "pooled target-validation balanced accuracy, chosen "
+                                     "by the search",
+                          "secondary": "pooled entropy of mean minus mean entropy, chosen "
+                                       "by the search"}}, keeper)
 
 
 def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Mapping, device="cpu",

@@ -43,7 +43,7 @@ def params(**over):
 
 
 def schedule(epochs=3):
-    return {"epochs1": 1, "patience1": 1, "epochs2": epochs, "bagsPerStep": 4}
+    return {"epochs1": 1, "epochs2": epochs, "bagsPerStep": 4}
 
 
 def search_data(source_channels=29, target_channels=14, seed=11):
@@ -309,32 +309,28 @@ def test_cs_ccs_objective_is_eq_90_with_frozen_source_ce():
         assert any(g is not None and g.abs().sum() > 0 for g in grads)
 
 
-def test_cs_ccs_selection_restores_best_epoch_and_keeps_secondary(monkeypatch):
+def test_cs_ccs_keeps_the_last_epoch_and_records_validation_per_epoch(monkeypatch):
     model, source, _, target, valid = fixture()
-    scores = iter([0.25, 0.75, 0.5, 0.75])
-    frees = iter([0.6, 0.1, 0.2, 0.3])
+    scores = iter([0.25, 0.75, 0.5])
+    frees = iter([0.6, 0.1, 0.2])
     monkeypatch.setattr(training.two_phase, "balanced_accuracy",
                         lambda *a: next(scores))
     monkeypatch.setattr(training.two_phase, "label_free_score", lambda *a: next(frees))
     result = training.adapt(model, source, target, valid, params(), schedule(3), seed=11)
-    assert result["best_epoch"] == 1 and result["selection"]["best_label_free_epoch"] == 0
-    assert result["secondary_checkpoint"]["epoch"] == 0
-    restored = model.target_trunk.state_dict()
-    assert all(torch.equal(v, restored[k]) for k, v in result["checkpoint"]["target_state"].items())
-    assert any(not torch.equal(v, restored[k]) for k, v in result["final_target_state"].items())
-    # The restore check reads the same scorer once more: a different value refuses.
+    # v50: no early stopping, no restore: the last epoch is kept whatever scored best
+    assert result["best_epoch"] == 2 == result["checkpoint"]["epoch"]
+    assert "secondary_checkpoint" not in result
+    final = model.target_trunk.state_dict()
+    assert all(torch.equal(v, final[k]) for k, v in result["checkpoint"]["target_state"].items())
+    assert all(torch.equal(v, final[k]) for k, v in result["final_target_state"].items())
+    assert result["checkpoint"]["valid_balanced_accuracy"] == 0.5
+    assert [v["epoch"] for v in result["validation"]] == [0, 1, 2]
+    # the refit: no validation bags, nothing scored, exactly the epochs given
     model2, *_ = fixture()
-    scores2 = iter([0.25, 0.75, 0.5, 0.9])
-    monkeypatch.setattr(training.two_phase, "balanced_accuracy", lambda *a: next(scores2))
-    monkeypatch.setattr(training.two_phase, "label_free_score", lambda *a: 0.)
-    with pytest.raises(two_phase.RestoreFailed):
-        training.adapt(model2, source, target, valid, params(), schedule(3), seed=11)
-    # Ties keep the earliest epoch (strict improvement only).
-    model3, *_ = fixture()
-    scores3 = iter([0.5, 0.5, 0.25, 0.5])
-    monkeypatch.setattr(training.two_phase, "balanced_accuracy", lambda *a: next(scores3))
-    assert training.adapt(model3, source, target, valid, params(), schedule(3),
-                          seed=11)["best_epoch"] == 0
+    monkeypatch.setattr(training.two_phase, "balanced_accuracy",
+                        lambda *a: (_ for _ in ()).throw(AssertionError("scored")))
+    refit = training.adapt(model2, source, target, [], params(), schedule(2), seed=11)
+    assert refit["epochs"] == 2 and refit["validation"] == []
 
 
 def test_cs_ccs_invalid_inputs_fail_closed():
@@ -350,8 +346,9 @@ def test_cs_ccs_invalid_inputs_fail_closed():
                        {**schedule(), "bagsPerStep": 1}, seed=11)
     overlap = [replace(target[0], subject=source[0].subject), *target[1:]]
     leak = [replace(valid[0], subject=target[0].subject), *valid[1:]]
+    # an empty validation role is a refit (v50 Sec. 4.5), not an error
     for args in ((source, overlap, valid), (source, target, leak), ([], target, valid),
-                 (source, [], valid), (source, target, [])):
+                 (source, [], valid)):
         with pytest.raises(ValueError):
             training.adapt(copy.deepcopy(model), *args, params(), schedule(), seed=11)
     native = model_store.build_model("MIL-CREDA", 29, 14, {
@@ -373,10 +370,10 @@ def test_cs_ccs_package_is_a_controlled_variant(registries):
     assert (dict(search.PHASE_TWO_TRAINERS), dict(search.PHASE_TWO_EXTRA),
             dict(model_store.BUILDERS)) == before
     assert "controlled" in package.__doc__ and "not a reproduction" in package.__doc__
-    # The trainer answers to v44 (Sec. 4.5: the label-free epoch); the rest of the package
-    # is unchanged since v42.
-    for module, revision in (("", "v42"), (".divergences", "v42"), (".training", "v44"),
-                             (".smoke", "v42")):
+    # The trainer and its smoke answer to v50 (Secs. 4.5, 7.7: fixed epochs, no patience);
+    # the rest of the package is unchanged since v42.
+    for module, revision in (("", "v42"), (".divergences", "v42"), (".training", "v50"),
+                             (".smoke", "v50")):
         prov = importlib.import_module("MIL_CREDA_EEG.comparators.cs_ccs" + module).__provenance__
         assert prov["revision"] == (
             f"experiments-plan-experimental-mil-creda-sobre-balladeer-{revision}.md")

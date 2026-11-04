@@ -1,6 +1,9 @@
-"""Controlled source-first / target-only training (plan §§4.5,7.3–7.4).
+"""Controlled source-first / target-only training (plan v50 §§4.5,7.3–7.4,7.7).
 
-Not the paper's align-first / attention-second schedule. Shared partition,
+Not the paper's align-first / attention-second schedule. Both phases run their
+epoch count whole and keep the last epoch (no patience, no restore, v50 §7.7);
+with validation bags every epoch's validation predictions are recorded for the
+search's pooled selection, and without them (a refit) nothing is evaluated. Shared partition,
 assignment, batching, metrics, bridge and model-store machinery are reused.
 """
 from __future__ import annotations
@@ -15,13 +18,13 @@ from .model import AdaptMILModel
 from .objectives import alignment_objective, median_bandwidth, stage_two_objective
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.5", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
-    "invariants": ["adaptmil_source_pretraining_restores_best_native_checkpoint",
+    "invariants": ["adaptmil_source_pretraining_runs_its_epochs_and_keeps_the_last",
                    "adaptmil_bridge_freezes_all_but_target_and_preserves_buffers",
                    "adaptmil_adaptation_updates_only_target_with_label_blind_loss",
-                   "adaptmil_validation_selects_both_rules_without_training_on_labels",
+                   "adaptmil_validation_is_recorded_per_epoch_without_training_on_labels",
                    "adaptmil_search_hook_restarts_from_matching_phase_one_state",
                    "adaptmil_store_checks_comparator_code_identity",
                    "adaptmil_training_guards_hyperparameters_and_roles"],
@@ -43,10 +46,14 @@ def _state(module):
     return {k: v.detach().clone() for k, v in module.state_dict().items()}
 
 
-def _roles(*roles):
+def _roles(*roles, optional=()):
+    """Disjoint roles; the training ones nonempty. A validation role named in `optional`
+    may be empty: a refit has no validation bags (v50 §4.5)."""
     sets = []
-    for role in roles:
+    for k, role in enumerate(roles):
         if not role:
+            if k in optional:
+                continue
             raise ValueError("training and validation roles must be nonempty")
         subjects = {b.subject for b in role}
         if len(subjects) != len(role):
@@ -69,18 +76,18 @@ def _record(epoch, phase, seed, fold, transfer, **values):
 
 def train_source_phase(model, source_train, source_valid, hyper, generator, device,
                        *, seed=0, fold=0, transfer=""):
-    """Plan phase1: native source-bag CE, source-validation patience + restore.
+    """Plan phase1: native source-bag CE for exactly `epochs1` epochs, the last kept.
 
     Accepts the shared phase-one hyper schema; phase-two placeholder NaNs and
     neutral common-group attention/sigma fields are unread by this trainer.
     """
     hyper = two_phase.check_hyper(hyper)
-    _roles(source_train, source_valid)
+    _roles(source_train, source_valid, optional=(1,))
     device = torch.device(device)
     optimizer = _optimizer([*model.source_trunk.parameters(),
                             *model.attention_parameters(), *model.head.parameters()],
                            hyper["lr1"], hyper["wd1"])
-    history, best, best_epoch, best_state = [], -math.inf, -1, None
+    history, validation = [], []
     for epoch in range(hyper["epochs1"]):
         model.train()
         losses = []
@@ -94,29 +101,22 @@ def train_source_phase(model, source_train, source_valid, hyper, generator, devi
             optimizer.step()
             model.constrain("source_trunk", "head")
             losses.append(float(loss.detach()))
-        predictions = two_phase.evaluate(model, source_valid, "source", device)
-        labels = [b.label for b in source_valid]
-        accuracy = two_phase.balanced_accuracy(labels, predictions.argmax(1).tolist())
+        accuracy = math.nan
+        if source_valid:
+            predictions = two_phase.evaluate(model, source_valid, "source", device)
+            labels = [b.label for b in source_valid]
+            accuracy = two_phase.balanced_accuracy(labels, predictions.argmax(1).tolist())
+            validation.append(two_phase.validation_record(epoch, source_valid, predictions))
         history.append(_record(epoch, 1, seed, fold, transfer,
                                loss=sum(losses) / len(losses),
                                val_balanced_accuracy=accuracy))
-        if accuracy > best:
-            best, best_epoch, best_state = accuracy, epoch, two_phase.phase_one_state(model)
-        if epoch - best_epoch >= hyper["patience1"]:
-            break
-    model.load_state_dict(best_state, strict=False)
     model.eval()
-    restored = two_phase.balanced_accuracy(
-        [b.label for b in source_valid],
-        two_phase.evaluate(model, source_valid, "source", device).argmax(1).tolist())
-    if (restored != best or model_store.state_digest(two_phase.phase_one_state(model))
-            != model_store.state_digest(best_state)):
-        raise two_phase.RestoreFailed("AdaptMIL phase1 restore failed")
-    return {"checkpoint": {"state": best_state, "sigma": None, "epoch": best_epoch,
-                           "valid_balanced_accuracy": best, "hyper": dict(hyper)},
-            "best_epoch": best_epoch, "epochs": len(history), "history": history,
-            "best_valid_balanced_accuracy": best,
-            "restored_valid_balanced_accuracy": restored}
+    last = len(history) - 1
+    return {"checkpoint": {"state": two_phase.phase_one_state(model), "sigma": None,
+                           "epoch": last, "valid_balanced_accuracy": accuracy,
+                           "hyper": dict(hyper)},
+            "best_epoch": last, "epochs": len(history), "history": history,
+            "best_valid_balanced_accuracy": accuracy, "validation": validation}
 
 
 def bridge(model):
@@ -154,7 +154,7 @@ def _bandwidth(model, source_train, target_train, multiplier, device):
 
 def adapt_target_phase(model, source_train, target_train, target_valid, params, schedule,
                        generator, device, *, seed=0, fold=0, transfer="", label_free=False):
-    """Fixed-cap mean-pool MMD; primary + label-free selected target snapshots."""
+    """Mean-pool MMD for exactly `epochs2` epochs, the last kept; validation per epoch."""
     schedule = search.check_schedule(schedule)
     # Reuse the shared schedule guards without treating AdaptMIL as MIL-CREDA.
     two_phase.check_hyper({**dict.fromkeys(two_phase.PHASE_ONE_KEYS, float("nan")),
@@ -165,7 +165,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     if (not math.isfinite(params["mmdWeight"]) or params["mmdWeight"] < 0
             or params["kernelMultiplier"] not in (0.5, 0.75, 1.0, 1.5)):
         raise ValueError("invalid mmdWeight or kernelMultiplier")
-    _roles(source_train, target_train, target_valid)
+    _roles(source_train, target_train, target_valid, optional=(2,))
     if (not model._adaptation or any(p.requires_grad != name.startswith("target_trunk.")
                                      for name, p in model.named_parameters())):
         raise ValueError("AdaptMIL bridge must run before phase2; only target parameters train")
@@ -174,8 +174,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     optimizer = _optimizer(model.target_trunk.parameters(), params["lr2"], params["wd2"])
     sigma = _bandwidth(model, source_train, target_train, params["kernelMultiplier"], device)
     queues = two_phase.ClassQueues(source_train, model.classes, generator)
-    best, free_best = -math.inf, -math.inf
-    history, primary, secondary = [], None, None
+    history, validation = [], []
     keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         model.train()
@@ -192,36 +191,32 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
             model.constrain("target_trunk")
             losses.append(float(terms["objective"].detach()))
             mmds.append(float(terms["mmd"].detach()))
-        predictions = two_phase.evaluate(model, target_valid, "target", device)
-        accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
-                                               predictions.argmax(1).tolist())
-        score = two_phase.label_free_score(predictions)
+        accuracy, score = math.nan, math.nan
+        if target_valid:
+            predictions = two_phase.evaluate(model, target_valid, "target", device)
+            accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
+                                                   predictions.argmax(1).tolist())
+            score = two_phase.label_free_score(predictions)
+            validation.append(two_phase.validation_record(epoch, target_valid, predictions))
         history.append(_record(epoch, 2, seed, fold, transfer, loss=sum(losses)/len(losses),
                                mmd=sum(mmds)/len(mmds), sigma=sigma,
                                val_balanced_accuracy=accuracy, label_free_score=score,
                                mmd_weight=params["mmdWeight"]))
-        if accuracy > best:
-            best = accuracy
-            primary = {"target_state": _state(model.target_trunk), "epoch": epoch,
-                       "valid_balanced_accuracy": accuracy, "label_free_score": score}
         keeper.offer(epoch, score, model)
-        if score > free_best:
-            free_best = score
-            secondary = {"target_state": _state(model.target_trunk), "epoch": epoch,
-                         "valid_balanced_accuracy": accuracy, "label_free_score": score}
-    model.target_trunk.load_state_dict(primary["target_state"])
     model.eval()
     if model_store.state_digest(two_phase.phase_one_state(model)) != model_store.state_digest(frozen):
         raise two_phase.FrozenPartsMoved("AdaptMIL phase2 changed frozen parameters/buffers")
-    if model_store.state_digest(_state(model.target_trunk)) != model_store.state_digest(primary["target_state"]):
-        raise two_phase.RestoreFailed("AdaptMIL phase2 restore failed")
+    last = len(history) - 1
     return two_phase.with_label_free({
-            "checkpoint": {**primary, "sigma": sigma, "hyper": {**params, **schedule}},
-            "secondary_checkpoint": {**secondary, "sigma": sigma,
-                                     "hyper": {**params, **schedule}},
-            "history": history, "best_epoch": primary["epoch"], "epochs": len(history),
-            "selection": {"primary": "target-validation balanced accuracy",
-                          "secondary": "H(mean prediction) - mean H(prediction)"}}, keeper)
+            "checkpoint": {"target_state": _state(model.target_trunk), "epoch": last,
+                           "valid_balanced_accuracy": accuracy, "label_free_score": score,
+                           "sigma": sigma, "hyper": {**params, **schedule}},
+            "history": history, "best_epoch": last, "epochs": len(history),
+            "validation": validation,
+            "selection": {"primary": "pooled target-validation balanced accuracy, chosen "
+                                     "by the search",
+                          "secondary": "pooled H(mean prediction) - mean H(prediction), "
+                                       "chosen by the search"}}, keeper)
 
 
 def train_phase_one(data, rotation, seed, params, schedule, device="cpu"):

@@ -1,6 +1,6 @@
 """The campaign's units of work, run one remote session at a time and merged back.
 
-Experiments plan v43, Secs. 4.2, 4.6, 7.3, 7.6 and 7.7, under the forge's remote
+Experiments plan v50, Secs. 4.2, 4.5, 4.6, 7.3, 7.6 and 7.7, under the forge's remote
 contract (`remote-execution`: the session-chain rule, job inputs and the shard
 stamp; `remote-parallelism`: the reproducibility checklist). Code review blocker
 B5: the campaign had no shard-aware contract; the second review's R1-R4 (an active
@@ -10,19 +10,22 @@ outside the data identity, no rehearsal stamp) and its device and pin items.
 **Units** (`enumerate_units`), in one deterministic order, each with a stable id
 and the ids it needs first (`after`):
 
-1. `search.phase1.<transfer>.<group>` -- one phase-1 study of Sec. 7.7 and its
-   search-seed checkpoint in every rotation (`campaign.phase_one_study`, then the
-   checkpoint `campaign.run_search` stores);
-2. `search.phase2.<transfer>.<strategy>` -- one phase-2 study, from the search-seed
-   checkpoints of the strategy's group (`campaign.phase_two_study`);
+1. `search.phase1.<transfer>.<group>.outer<r>` -- one phase-1 study of Sec. 7.7
+   for outer fold r and its search-seed refit checkpoint
+   (`campaign.phase_one_study`, then the checkpoint `campaign.run_search` stores);
+2. `search.phase2.<transfer>.<strategy>.outer<r>` -- one phase-2 study of outer fold
+   r, from that fold's search-seed checkpoint of the strategy's group
+   (`campaign.phase_two_study`);
 3. `final.<transfer>` -- the `final` step on that transfer (`campaign.run_final`):
    the report-seed models of Sec. 7.3, the controls and the upper bound;
 4. `k3.<transfer>` -- the `k3` step on that transfer (`campaign.run_k3`).
 
 Transfers follow `assignment.TRANSFERS`, groups `model_store.GROUPS` and strategies
-`model_store.STRATEGIES`, whatever order the config lists them in. A study trains
-every rotation inside each trial (its objective is mean - sd over the four), so a
-search unit is never split by rotation. `statistics`, `mechanisms`, `results` and
+`model_store.STRATEGIES`, whatever order the config lists them in, and the outer
+folds their order. A study belongs to one outer fold and trains its three inner
+splits inside each trial (its objective pools them), so a search unit is one
+study: 4 groups and 9 strategies per transfer and outer fold, 520 search units
+over the ten transfers (Sec. 7.7). `statistics`, `mechanisms`, `results` and
 the K3 tables read every transfer at once: they run after the merge, as campaign
 steps, and train nothing that a merged unit already stored.
 
@@ -122,12 +125,13 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, campaign, model_store, partition, preprocess, results, search
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
-    "sections": ["4.2", "4.6", "7.3", "7.6", "7.7"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["4.2", "4.5", "4.6", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "invariants": [
         "units_are_enumerated_in_a_deterministic_order_with_stable_ids",
         "units_name_their_dependencies",
+        "the_search_units_are_one_per_study_and_outer_fold",
         "selected_units_come_from_forge_run_units",
         "inputs_resolve_from_forge_input_datasets",
         "mounted_data_must_match_the_repository_manifest",
@@ -250,18 +254,21 @@ class Unit:
     phase: int | None = None
     name: str | None = None
     after: tuple[str, ...] = ()
+    #: The outer fold of a search unit (Sec. 4.5: one study per outer fold).
+    rotation: int | None = None
 
 
 # ------------------------------------------------------------------ enumeration
 
 
-def _phase_one_id(transfer: assignment_mod.Transfer, group: str) -> str:
-    return f"search.phase1.{model_store.transfer_slug(transfer)}.{model_store.name_slug(group)}"
+def _phase_one_id(transfer: assignment_mod.Transfer, group: str, rotation: int) -> str:
+    return (f"search.phase1.{model_store.transfer_slug(transfer)}."
+            f"{model_store.name_slug(group)}.outer{int(rotation)}")
 
 
-def _phase_two_id(transfer: assignment_mod.Transfer, strategy: str) -> str:
+def _phase_two_id(transfer: assignment_mod.Transfer, strategy: str, rotation: int) -> str:
     return (f"search.phase2.{model_store.transfer_slug(transfer)}."
-            f"{model_store.name_slug(strategy)}")
+            f"{model_store.name_slug(strategy)}.outer{int(rotation)}")
 
 
 def enumerate_units(config: Mapping, product: str | Path) -> list[Unit]:
@@ -273,19 +280,21 @@ def enumerate_units(config: Mapping, product: str | Path) -> list[Unit]:
     groups = [g for g in model_store.GROUPS
               if any(search.PHASE_ONE_GROUP_OF[s] == g for s in strategies)]
     k3 = campaign.k3_plan(cfg, campaign.core_transfers(cfg, Path(product)))
+    outer = range(partition.N_FOLDS)
     specs: list[dict] = []
     for t in transfers:
-        specs += [dict(id=_phase_one_id(t, g), step="search", transfer=t.name, phase=1, name=g)
-                  for g in groups]
+        specs += [dict(id=_phase_one_id(t, g, r), step="search", transfer=t.name, phase=1,
+                       name=g, rotation=r) for r in outer for g in groups]
     for t in transfers:
-        specs += [dict(id=_phase_two_id(t, s), step="search", transfer=t.name, phase=2, name=s,
-                       after=(_phase_one_id(t, search.PHASE_ONE_GROUP_OF[s]),))
-                  for s in strategies]
+        specs += [dict(id=_phase_two_id(t, s, r), step="search", transfer=t.name, phase=2,
+                       name=s, rotation=r,
+                       after=(_phase_one_id(t, search.PHASE_ONE_GROUP_OF[s], r),))
+                  for r in outer for s in strategies]
     for t in transfers:
         specs.append(dict(id=f"final.{model_store.transfer_slug(t)}", step="final",
                           transfer=t.name,
-                          after=tuple(_phase_one_id(t, g) for g in groups)
-                          + tuple(_phase_two_id(t, s) for s in strategies)))
+                          after=tuple(_phase_one_id(t, g, r) for r in outer for g in groups)
+                          + tuple(_phase_two_id(t, s, r) for r in outer for s in strategies)))
     for t in transfers:
         if t.name in k3:
             slug = model_store.transfer_slug(t)
@@ -465,11 +474,14 @@ def timing_estimate(path: str | Path, config: Mapping,
 
     A step is one trial (search) or one rotation (final, k3). The epoch time is the
     largest `secondsPerUnit` the record measured (`unit` `epoch`); the step's epochs
-    are their caps, so the estimate bounds the step from above: a trial trains every
-    rotation for `epochs1` (phase 1) or `epochs2` (phase 2) epochs, and so does a
-    phase-1 checkpoint pass; a final rotation trains each phase-1 group and the upper
-    bound for `epochs1` and each strategy twice (primary and label-free) for `epochs2`;
-    a K3 rotation trains each planned variant for `epochs1 + epochs2`.
+    are their caps, so the estimate bounds the step from above: a trial trains the
+    three inner splits of its outer fold for `epochs1` (phase 1) or `epochs2` (phase 2)
+    epochs each, so a study of `nTrials` trials trains 20 x 3 = 60 times at the
+    declared budget, and a phase-1 refit pass at most `epochs1`; a final rotation
+    refits each phase-1 group for at most `epochs1`, trains the upper bound on the
+    three inner splits and refits it (4 x `epochs1`), and refits each strategy twice
+    (primary and label-free) for at most `epochs2`; a K3 rotation refits each planned
+    variant for at most `epochs1 + epochs2`.
     """
     path, product = Path(path), Path(product)
     if not path.is_file():
@@ -489,15 +501,15 @@ def timing_estimate(path: str | Path, config: Mapping,
     per_epoch = max(float(m["secondsPerUnit"]) for m in rows)
     cfg = campaign.check_config(config)
     schedule = cfg["schedule"]
-    rotations = len(partition.load_partition(campaign._partition_path(cfg))["rotations"])
+    partition.load_partition(campaign._partition_path(cfg))      # refused when absent
     strategies = list(cfg["strategies"])
     groups = {search.PHASE_ONE_GROUP_OF[s] for s in strategies}
 
     def epochs(unit: Unit) -> int:
         if unit.step == "search":
-            return rotations * schedule["epochs1" if unit.phase == 1 else "epochs2"]
+            return search.N_INNER * schedule["epochs1" if unit.phase == 1 else "epochs2"]
         if unit.step == "final":
-            return ((len(groups) + 1) * schedule["epochs1"]
+            return ((len(groups) + search.N_INNER + 1) * schedule["epochs1"]
                     + 2 * len(strategies) * schedule["epochs2"])
         plan = campaign.k3_plan(cfg, campaign.core_transfers(cfg, product))[unit.transfer]
         return (sum(len(v) for v in plan.values())
@@ -760,27 +772,23 @@ def execute_unit(unit: Unit, cfg: Mapping, product: Path,
     n_trials = cfg["nTrials"]
     common = dict(root=product, n_trials=n_trials, device=cfg["device"],
                   should_stop=lambda study: guard())
+    r = unit.rotation
     if unit.phase == 1:
-        study = search.run_phase_one_study(unit.name, data, cfg["schedule"], **common)
+        study = search.run_phase_one_study(unit.name, data, r, cfg["schedule"], **common)
         if _completed_trials(study) < n_trials:
             raise DeadlineReached({"completedTrials": _completed_trials(study),
                                    "nTrials": n_trials})
-        rotations = sorted(data.rotations)
-        for position, r in enumerate(rotations):
-            path = model_store.model_path(campaign._models(product), transfer, r,
-                                          search.SEARCH_SEED, 1, unit.name)
-            if not path.exists() and guard():
-                raise DeadlineReached({"completedTrials": n_trials, "nTrials": n_trials,
-                                       "completedCheckpoints": list(rotations[:position]),
-                                       "rotations": list(rotations)})
-            campaign._phase_one_checkpoint(unit.name, data, r, search.SEARCH_SEED,
-                                           study.best_params, cfg, product)
+        path = model_store.model_path(campaign._models(product), transfer, r,
+                                      search.SEARCH_SEED, 1, unit.name)
+        if not path.exists() and guard():
+            raise DeadlineReached({"completedTrials": n_trials, "nTrials": n_trials,
+                                   "completedCheckpoints": [], "rotations": [r]})
+        campaign._phase_one_checkpoint(unit.name, data, r, search.SEARCH_SEED,
+                                       search.select(study), cfg, product)
         return {"bestValue": study.best_value}
-    group = search.PHASE_ONE_GROUP_OF[unit.name]
-    records = {r: model_store.load(model_store.model_path(
-        campaign._models(product), transfer, r, search.SEARCH_SEED, 1, group),
-        partition_path=campaign._partition_path(cfg)) for r in sorted(data.rotations)}
-    study = search.run_phase_two_study(unit.name, data, records, cfg["schedule"], **common)
+    record = campaign._phase_one_record(product, data, search.PHASE_ONE_GROUP_OF[unit.name], r,
+                                        search.SEARCH_SEED, cfg)
+    study = search.run_phase_two_study(unit.name, data, r, record, cfg["schedule"], **common)
     if _completed_trials(study) < n_trials:
         raise DeadlineReached({"completedTrials": _completed_trials(study),
                                "nTrials": n_trials})

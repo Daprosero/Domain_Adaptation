@@ -81,7 +81,7 @@ def test_the_common_wrapper_is_the_phase_one_architecture_of_the_six_non_mil_com
             for i in range(6)]
     hyper = {**mil_wrapper.COMMON_PHASE_ONE_FIXED, "lr1": 1e-2, "wd1": 1e-4,
              "lr2": float("nan"), "wd2": float("nan"), "tauLocal": float("nan"),
-             "epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 2}
+             "epochs1": 1, "epochs2": 1, "bagsPerStep": 2}
     out = tp.train_source_phase(model, bags[:4], bags[4:], hyper,
                                 torch.Generator().manual_seed(0), CPU)
     assert set(out["checkpoint"]["state"]) == set(tp.phase_one_state(model))

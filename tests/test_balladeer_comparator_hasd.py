@@ -206,20 +206,22 @@ def test_hasd_target_training_labels_are_never_read():
     assert [b.label for b in target] != [b.label for b in changed]
 
 
-def test_hasd_shared_phase_one_restores_checkpoint_and_phase_two_records_selection():
+def test_hasd_phase_two_keeps_the_last_epoch_and_records_validation_per_epoch():
     model = HASDModel(14, 14)
-    schedule = {"epochs1": 2, "patience1": 1, "epochs2": 2, "bagsPerStep": 2}
+    schedule = {"epochs1": 2, "epochs2": 2, "bagsPerStep": 2}
     hyper = search.phase_one_hyper("HASD", {"lr1": .001, "wd1": 1e-6}, schedule)
     train, valid = bags(), bags()
     phase1 = two_phase.train_source_phase(model, train, valid, hyper,
                     torch.Generator().manual_seed(0), torch.device("cpu"))
-    assert phase1["best_valid_balanced_accuracy"] == phase1["restored_valid_balanced_accuracy"]
+    assert phase1["epochs"] == 2 and phase1["checkpoint"]["epoch"] == 1
     context = begin_adaptation(model)
     result = train_phase_two(model, context, train, bags(poison=True), valid,
                             params(), schedule, seed=0, fold=0, transfer="synthetic")
-    assert len(result["history"]) == 2
-    best = max(h["val_balanced_accuracy"] for h in result["history"])
-    assert result["checkpoint"]["valid_balanced_accuracy"] == best
+    assert len(result["history"]) == 2 == len(result["validation"])
+    # v50: the last epoch is kept (no early stopping, no restore)
+    assert result["checkpoint"]["epoch"] == 1 == result["best_epoch"]
+    assert result["checkpoint"]["valid_balanced_accuracy"] == \
+        result["history"][-1]["val_balanced_accuracy"]
     for row in result["history"]:
         assert {"epoch", "seed", "fold", "model", "label_free_score", "loss"} <= row.keys()
         assert row["model"] == "HASD:phase2"
@@ -273,7 +275,7 @@ def test_hasd_search_adapter_and_checkpoint_roundtrip(tmp_path):
     transfer = assignment.Transfer("level", "L1", "L6")
     channels = {"source": 14, "target": 14}
     model = HASDModel(14, 14).eval()
-    schedule = {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 2}
+    schedule = {"epochs1": 1, "epochs2": 1, "bagsPerStep": 2}
     hyper = search.phase_one_hyper("HASD", {"lr1": .001, "wd1": 1e-6}, schedule)
     state = two_phase.phase_one_state(model)
     path = model_store.save(tmp_path / "Models", transfer=transfer, rotation=0, seed=0,
@@ -346,7 +348,7 @@ def test_hasd_runner_uses_shared_assignment_and_heldout_test(tmp_path):
     rotations = {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
                          "train_folds": [(r + 2) % 4, (r + 3) % 4]} for r in range(4)}
     cohort = bag_data.BagSet(tuple(items), "synthetic-hash-not-a-real-partition", rotations)
-    schedule = {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 2}
+    schedule = {"epochs1": 1, "epochs2": 1, "bagsPerStep": 2}
     hyper = search.phase_one_hyper("HASD", {"lr1": .001, "wd1": 1e-6}, schedule)
     transfer = assignment.Transfer("level", "L1", "L6")
     out = run_transfer_rotation(transfer, 0, 7, hyper, params(), schedule, bags=cohort)

@@ -1,4 +1,4 @@
-"""Experiments plan v44: the campaign entry point, rehearsed on a SYNTHETIC set on CPU.
+"""Experiments plan v50: the campaign entry point, rehearsed on a SYNTHETIC set on CPU.
 
 The synthetic set is seeded noise with a weak class signal; no number it yields is a
 measured result.
@@ -20,7 +20,7 @@ from MIL_CREDA_EEG import results
 from MIL_CREDA_EEG import search, two_phase
 from MIL_CREDA_EEG import statistics as st
 
-BASE = {"schedule": {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4},
+BASE = {"schedule": {"epochs1": 1, "epochs2": 1, "bagsPerStep": 4},
         "strategies": ["MIL-CREDA"], "transfers": ["L1->L6"], "rehearsal": True}
 FULL = {"schedule": BASE["schedule"], "strategies": list(model_store.STRATEGIES),
         "transfers": [t.name for t in campaign.assignment_mod.TRANSFERS]}
@@ -44,7 +44,7 @@ def _rehearsal(tmp, conditions=("L1", "L6"), arm="level",
                                        conditions=conditions, arm=arm)
     cfg.update({"strategies": list(strategies), "nTrials": 1, "reportSeeds": [1],
                 "bootstrapResamples": 200,
-                "schedule": {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4}})
+                "schedule": {"epochs1": 1, "epochs2": 1, "bagsPerStep": 4}})
     product = tmp / "product"
     product.mkdir()
     return cfg, product, campaign.run("all", cfg, product)
@@ -158,8 +158,8 @@ def _light_data(sha="x" * 64):
     """A SearchData that carries only what an identity reads: transfer, partition, folds."""
     return search.SearchData(transfer=campaign.assignment_mod.TRANSFERS[0],
                              partition_sha256=sha, rotations={},
-                             folds={r: {"test_fold": r, "validation_fold": (r + 1) % 4}
-                                    for r in range(4)})
+                             folds=search.rotation_folds({str(r): {"test_fold": r}
+                                                          for r in range(4)}))
 
 
 def _lowest(space):
@@ -168,13 +168,14 @@ def _lowest(space):
 
 
 def test_a_stored_study_is_reused_only_under_its_full_identity(tmp_path):
-    """Partition, plan revision, code version, search space, schedule, sampler seed and
-    trial budget: a stored study differing in any is refused naming the field."""
+    """Partition, plan revision, code version, search space, schedule, sampler seed, trial
+    budget, outer fold and inner splits: a stored study differing in any is refused naming
+    the field."""
     data = _light_data()
     cfg = {"schedule": BASE["schedule"], "nTrials": 1}
-    path = search.study_path(tmp_path, data.transfer, 1, "MIL-CREDA")
+    path = search.study_path(tmp_path, data.transfer, 1, "MIL-CREDA", 2)
     path.parent.mkdir(parents=True)
-    full = search.study_identity(data, 1, "MIL-CREDA", cfg["schedule"], 1, "objective")
+    full = search.study_identity(data, 1, "MIL-CREDA", 2, cfg["schedule"], 1, "objective")
 
     def stored(attrs):
         path.unlink(missing_ok=True)
@@ -184,8 +185,10 @@ def test_a_stored_study_is_reused_only_under_its_full_identity(tmp_path):
         study.optimize(lambda t: t.suggest_float("x", 0, 1), n_trials=1)
 
     stored(full)
-    assert len(campaign._stored_study(tmp_path, data, 1, "MIL-CREDA", cfg).trials) == 1
-    for field, value in (("partition_sha256", "y" * 64),
+    assert len(campaign._stored_study(tmp_path, data, 1, "MIL-CREDA", 2, cfg).trials) == 1
+    for field, value in (("outerFold", 3), ("testFold", 3),
+                         ("innerSplits", full["innerSplits"][::-1]),
+                         ("partition_sha256", "y" * 64),
                          ("revision", "experiments-plan-v43.md"),
                          ("code_version", "0" * 64),
                          ("space", {**full["space"], "lr1": "another distribution"}),
@@ -194,7 +197,7 @@ def test_a_stored_study_is_reused_only_under_its_full_identity(tmp_path):
                          ("nTrials", 2)):
         stored({**full, field: value})
         with pytest.raises(campaign.CampaignError, match=f"stale.*{field}"):
-            campaign._stored_study(tmp_path, data, 1, "MIL-CREDA", cfg)
+            campaign._stored_study(tmp_path, data, 1, "MIL-CREDA", 2, cfg)
 
 
 def _stored_sidecar(path: Path, meta: dict) -> None:
@@ -207,21 +210,29 @@ def test_a_stored_phase_one_checkpoint_is_reused_only_under_its_hyperparameters(
     data = _light_data()
     cfg = {"schedule": BASE["schedule"], "nTrials": 1, "device": "cpu"}
     params = _lowest(search.PHASE_ONE_SPACES["MIL-CREDA"])
-    hyper = search.phase_one_hyper("MIL-CREDA", params, cfg["schedule"])
+    # the selected configuration and its E1, refit on the non-test folds (Sec. 4.5)
+    selection = {"params": params, "epochs": 1}
+    hyper = search.phase_one_hyper("MIL-CREDA", params,
+                                   search.refit_schedule(cfg["schedule"], 1, 1))
     hyper = {k: hyper[k] for k in (*two_phase.PHASE_ONE_KEYS, *two_phase.SCHEDULE_KEYS)}
     path = model_store.model_path(campaign._models(tmp_path), data.transfer, 0, 1, 1,
                                   "MIL-CREDA")
     meta = {**campaign.identity(data.partition_sha256), "hyper": hyper}
     _stored_sidecar(path, meta)
-    assert campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, params, cfg,
+    assert campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, selection, cfg,
                                           tmp_path) == (path, [])
-    for key in ("lr1", "epochs1"):              # a searched value, a schedule value
+    for key in ("lr1", "epochs1"):              # a searched value, the selected E1
         _stored_sidecar(path, {**meta, "hyper": {**hyper, key: hyper[key] * 2}})
         with pytest.raises(campaign.CampaignError, match=f"stale.*hyper {key}"):
-            campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, params, cfg, tmp_path)
+            campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, selection, cfg,
+                                           tmp_path)
+    _stored_sidecar(path, meta)
+    with pytest.raises(campaign.CampaignError, match="stale.*hyper epochs1"):
+        campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, {**selection, "epochs": 2},
+                                       cfg, tmp_path)
     _stored_sidecar(path, {**meta, "revision": "experiments-plan-v43.md"})
     with pytest.raises(campaign.CampaignError, match="stale.*revision"):
-        campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, params, cfg, tmp_path)
+        campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, selection, cfg, tmp_path)
 
 
 def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
@@ -229,14 +240,16 @@ def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
     data = _light_data()
     cfg = {"schedule": BASE["schedule"], "nTrials": 1, "device": "cpu"}
     params = _lowest(search.phase_two_space("MIL-CREDA"))
-    selection = {"rule": "primary", "trial": 0, "params": params, "testFold": 0,
-                 "selectionRotations": [0, 2, 3], "excludedRotation": 1, "score": 0.5}
+    selection = {"rule": "primary", "trial": 0, "params": params, "epoch": 0, "epochs": 1,
+                 "testFold": 0, "selectionRotations": [1, 2, 3], "excludedRotation": 0,
+                 "score": 0.5}
+    refit = search.refit_schedule(cfg["schedule"], 2, 1)
     root = campaign._models(tmp_path)
     path = model_store.model_path(root, data.transfer, 0, 1, 2, "MIL-CREDA")
     meta = {**campaign.identity(data.partition_sha256),
-            "hyper": {**params, **cfg["schedule"]},
-            "selection": {"rule": "primary", "trial": 0, "params": params,
-                          "schedule": cfg["schedule"]}}
+            "hyper": {**params, **refit},
+            "selection": {"rule": "primary", "trial": 0, "params": params, "epoch": 0,
+                          "schedule": refit}}
     loaded = torch.nn.Identity()
     monkeypatch.setattr(mechanisms, "load_phase_two", lambda p, **k: (loaded, {}, []))
 
@@ -245,11 +258,12 @@ def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
                                          torch.device("cpu"), None)
 
     _stored_sidecar(path, meta)
-    model, history, free_history = reuse()
-    assert model is loaded and history is None and free_history is None
+    model, history = reuse()
+    assert model is loaded and history is None
     lr2 = {**params, "lr2": params["lr2"] * 2}
-    schedule = {**cfg["schedule"], "epochs2": 2}
+    schedule = {**refit, "epochs2": 2}
     for change, field in (
+            ({"selection": {**meta["selection"], "epoch": 1}}, "selection epoch"),
             ({"selection": {**meta["selection"], "params": lr2}}, "selection params"),
             ({"selection": {**meta["selection"], "schedule": schedule}}, "selection schedule"),
             ({"hyper": {**meta["hyper"], "lr2": lr2["lr2"]}}, "hyper lr2"),
@@ -278,7 +292,7 @@ def test_stale_predictions_are_refused_naming_what_differs(tmp_path, monkeypatch
 
 
 def test_every_changed_module_answers_to_one_plan_revision():
-    assert campaign.REVISION.endswith("v44.md")
+    assert campaign.REVISION.endswith("v50.md")
     for module in (search, results, model_store):
         assert module.__provenance__["revision"] == campaign.REVISION
 
@@ -520,32 +534,35 @@ def _sidecar(path: Path) -> dict:
     return json.loads(path.with_suffix(".json").read_text())
 
 
-def test_phase_two_is_selected_per_test_rotation_and_phase_one_once(level_run):
+def test_both_phases_are_selected_per_outer_fold_and_refit_for_their_epochs(level_run):
     cfg, product, _ = level_run
     models = product / "Models" / "Balladeer"
     bags = campaign.load_bags(campaign.check_config(cfg))
     for transfer in campaign.transfers_of(campaign.check_config(cfg)):
         data = search.search_data(transfer, bags)
-        # phase 1: one configuration over the four rotations, the study's best (Sec. 7.3)
-        one = campaign._study(search.study_path(product, transfer, 1, "MIL-CREDA"),
-                              cfg["nTrials"], data.partition_sha256)
+        slug = model_store.transfer_slug(transfer)
         for r in range(4):
-            meta = _sidecar(models / model_store.transfer_slug(transfer) / f"rotation{r}"
-                            / "seed1" / "phase1__MIL-CREDA.pt")
-            assert {k: meta["hyper"][k] for k in one.best_params} == one.best_params
-        for strategy in ("MIL-CREDA", "COT"):
-            study = campaign._study(search.study_path(product, transfer, 2, strategy),
-                                    cfg["nTrials"], data.partition_sha256)
-            chosen = search.select_per_rotation(study, data.folds)
-            for r in range(4):
-                meta = _sidecar(models / model_store.transfer_slug(transfer) / f"rotation{r}"
-                                / "seed1" / f"phase2__{strategy}.pt")
-                assert meta["selection"]["trial"] == chosen[r]["trial"]
-                assert meta["selection"]["selectionRotations"] == \
-                    search.selection_rotations(data.folds, r)
-                assert meta["selection"]["excludedRotation"] == chosen[r]["excludedRotation"]
-                assert {k: meta["hyper"][k] for k in chosen[r]["params"]} == \
-                    chosen[r]["params"]
+            # phase 1: the configuration and E1 selected in outer fold r's own study
+            one = search.select(campaign._study(
+                search.study_path(product, transfer, 1, "MIL-CREDA", r), cfg["nTrials"],
+                data.partition_sha256))
+            for seed in (0, 1):
+                meta = _sidecar(models / slug / f"rotation{r}" / f"seed{seed}"
+                                / "phase1__MIL-CREDA.pt")
+                assert {k: meta["hyper"][k] for k in one["params"]} == one["params"]
+                assert meta["hyper"]["epochs1"] == one["epochs"]
+            for strategy in ("MIL-CREDA", "COT"):
+                study = campaign._study(search.study_path(product, transfer, 2, strategy, r),
+                                        cfg["nTrials"], data.partition_sha256)
+                chosen = search.select(study)
+                meta = _sidecar(models / slug / f"rotation{r}" / "seed1"
+                                / f"phase2__{strategy}.pt")
+                assert (meta["selection"]["trial"], meta["selection"]["epoch"]) == \
+                    (chosen["trial"], chosen["epoch"])
+                assert meta["selection"]["testFold"] == r == meta["selection"]["excludedRotation"]
+                assert meta["selection"]["selectionRotations"] == [f for f in range(4) if f != r]
+                assert meta["selection"]["schedule"]["epochs2"] == chosen["epochs"]
+                assert {k: meta["hyper"][k] for k in chosen["params"]} == chosen["params"]
     detail = _csv(product / "Results" / "A-nivel" / "tables" / "selected_configurations.csv")
     assert {(d["strategy"], d["transfer"], d["rule"], d["rotation"]) for d in detail} == {
         (s, t, rule, str(r)) for s in cfg["strategies"] for t in cfg["transfers"]
@@ -554,52 +571,63 @@ def test_phase_two_is_selected_per_test_rotation_and_phase_one_once(level_run):
     assert {d["rotation"] for d in k3} == {"0", "1", "2", "3"}
 
 
-def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, monkeypatch):
-    real = search.select_per_rotation
+def test_one_phase_one_checkpoint_per_group_and_outer_fold(level_run):
+    """Sec. 4.5: the phase-1 refit leaves one checkpoint per group and outer fold, at each
+    seed, with no checkpoint per inner split; every phase-2 study of that fold starts
+    from it."""
+    cfg, product, _ = level_run
+    models = product / "Models" / "Balladeer"
+    group_files = {f"phase1__{model_store.name_slug(g)}.pt" for g in model_store.GROUPS}
+    stored = sorted(p.relative_to(models).as_posix() for p in models.rglob("phase1__*.pt")
+                    if p.name in group_files)        # the K3 variants store their own
+    groups = ("common", "HASD", "MIL-CREDA")          # the groups COT, HASD, MIL-CREDA use
+    assert stored == sorted(f"{t}/rotation{r}/seed{s}/phase1__{g}.pt"
+                            for t in ("L1-to-L6", "L6-to-L1") for r in range(4)
+                            for s in (0, 1) for g in groups)
+    for path in (models / x for x in stored):
+        meta = _sidecar(path)
+        assert "validation" not in meta and meta["epoch"] == meta["hyper"]["epochs1"] - 1
 
-    def other_trial(study, rotations, rule="primary"):
-        chosen = real(study, rotations, rule)
-        if rule != "label-free":
+
+def _other_choice(real):
+    """`search.select` with the label-free rule moved off the primary (trial, epoch) in the
+    phase-2 studies of the outer folds `differ` names, and onto it elsewhere."""
+    def choose(study, rule="primary", differ=(0, 1, 2, 3)):
+        chosen = real(study, rule)
+        if rule != "label-free" or study.user_attrs.get("phase") != 2:
             return chosen
-        primary = real(study, rotations, "primary")
-        for r in (1, 2, 3):         # rotation 0 coincides, the other three differ
-            n = 1 - primary[r]["trial"]
-            chosen[r] = {**chosen[r], "trial": n, "params": dict(study.trials[n].params)}
-        chosen[0] = {**chosen[0], "trial": primary[0]["trial"],
-                     "params": dict(primary[0]["params"])}
-        return chosen
+        primary = real(study, "primary")
+        if study.user_attrs["outerFold"] not in differ:
+            return {**chosen, **{k: primary[k] for k in ("trial", "params", "epoch",
+                                                         "epochs")}}
+        n = 1 - primary["trial"]
+        return {**chosen, "trial": n, "params": dict(study.trials[n].params),
+                "epoch": 0, "epochs": 1}
+    return choose
 
-    monkeypatch.setattr(search, "select_per_rotation", other_trial)
+
+def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, monkeypatch):
+    choose = _other_choice(search.select)
+    monkeypatch.setattr(search, "select",
+                        lambda study, rule="primary": choose(study, rule, differ=(1, 2, 3)))
     cfg = campaign.write_synthetic_set(tmp_path / "synthetic", seed=0, subjects=24)
     cfg.update({"strategies": ["MIL-CREDA"], "nTrials": 2, "bootstrapResamples": 200,
-                "schedule": {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 4}})
+                "schedule": {"epochs1": 1, "epochs2": 1, "bagsPerStep": 4}})
     product = tmp_path / "product"
     product.mkdir()
     outcome = {s: campaign.run(s, cfg, product) for s in ("search", "final", "results")}
+    # rotation 0 coincides (same trial and epoch): the primary model is reused, no refit
     assert outcome["final"]["final"]["trained_label_free"] == 3 * 2
     root = product / "Models" / "Balladeer" / campaign.LABEL_FREE_MODELS
     for slug in ("L1-to-L6", "L6-to-L1"):
-        for r in (0, 1, 2, 3):
+        assert not (root / slug / "rotation0").exists()
+        for r in (1, 2, 3):
             meta = _sidecar(root / slug / f"rotation{r}" / "seed1" / "phase2__MIL-CREDA.pt")
             assert meta["selection"]["rule"] == "label-free"
-            # v44 Sec. 4.5: the rule uses no target labels, so even where the rules choose
-            # the same configuration its epoch is the label-free one of that same run.
             assert meta["selection"]["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
-        coinciding = _sidecar(root / slug / "rotation0" / "seed1" / "phase2__MIL-CREDA.pt")
-        assert coinciding["selection"]["sameRunAsPrimary"] is True
-    # the coinciding rotation's label-free history is the primary run's own, tagged with
-    # the rule and the label-free epoch its stored model keeps
-    free_history = campaign.read_history(product, "A-nivel", rule="label-free")
-    primary_history = campaign.read_history(product, "A-nivel")
-    for transfer, slug in (("L1->L6", "L1-to-L6"), ("L6->L1", "L6-to-L1")):
-        meta = _sidecar(root / slug / "rotation0" / "seed1" / "phase2__MIL-CREDA.pt")
-        run = lambda h: (h["model"] == "MIL-CREDA:phase2" and h["transfer"] == transfer  # noqa: E731
-                         and h["fold"] == 0 and h["seed"] == 1)
-        mine = [h for h in free_history if run(h)]
-        assert mine and {h["selectionRule"] for h in mine} == {"label-free"}
-        assert {h["labelFreeEpoch"] for h in mine} == {meta["epoch"]}
-        assert [{k: v for k, v in h.items() if k not in ("selectionRule", "labelFreeEpoch")}
-                for h in mine] == [h for h in primary_history if run(h)]
+            primary = _sidecar(product / "Models" / "Balladeer" / slug / f"rotation{r}"
+                               / "seed1" / "phase2__MIL-CREDA.pt")
+            assert meta["selection"]["trial"] != primary["selection"]["trial"]
     res = product / "Results"
     primary = results.read_predictions(res, "A-nivel")
     free = results.read_predictions(res, "A-nivel", rule="label-free")
@@ -607,7 +635,7 @@ def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, 
     p0 = sorted((key(x), x["probability"]) for x in primary
                 if x["strategy"] == "MIL-CREDA" and x["rotation"] == 0)
     f0 = sorted((key(x), x["probability"]) for x in free if x["rotation"] == 0)
-    assert p0 and f0                # where the rules coincide, the primary run is reused
+    assert p0 and f0 == p0          # where the rules coincide, the primary model is reused
     assert {x["rotation"] for x in free} == {0, 1, 2, 3}
     assert {x["strategy"] for x in free} == {"MIL-CREDA"}
     rows = _csv(res / "A-nivel" / "tables" / "selection_rules.csv")
@@ -626,23 +654,13 @@ def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, 
 @pytest.fixture(scope="module")
 def label_free_run(tmp_path_factory, registries):
     """Search, final, results and mechanisms with the label-free rule choosing another
-    trial than the primary rule in every rotation, so every label-free model is its own."""
-    real = search.select_per_rotation
-
-    def other_trial(study, rotations, rule="primary"):
-        chosen = real(study, rotations, rule)
-        if rule != "label-free":
-            return chosen
-        primary = real(study, rotations, "primary")
-        for r in chosen:
-            n = 1 - primary[r]["trial"]
-            chosen[r] = {**chosen[r], "trial": n, "params": dict(study.trials[n].params)}
-        return chosen
+    trial than the primary rule in every outer fold, so every label-free model is its own."""
+    other_trial = _other_choice(search.select)
 
     tmp = tmp_path_factory.mktemp("label-free")
     cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24)
     cfg.update({"strategies": ["MIL-CREDA", "HASD"], "nTrials": 2, "bootstrapResamples": 200,
-                "schedule": {"epochs1": 3, "patience1": 3, "epochs2": 4, "bagsPerStep": 4}})
+                "schedule": {"epochs1": 3, "epochs2": 4, "bagsPerStep": 4}})
     product = tmp / "product"
     product.mkdir()
     read_by_bounds, figures = [], []
@@ -660,7 +678,7 @@ def label_free_run(tmp_path_factory, registries):
         return real_bounds(history, *args, **kwargs)
 
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(search, "select_per_rotation", other_trial)
+        patch.setattr(search, "select", other_trial)
         patch.setattr(mechanisms, "bound_control", recording_bounds)
         patch.setattr(results, "convergence_figure", recording_figure)
         for step in ("search", "final", "results", "mechanisms"):
@@ -668,36 +686,31 @@ def label_free_run(tmp_path_factory, registries):
     return cfg, product, read_by_bounds, figures
 
 
-def test_the_label_free_final_models_keep_their_label_free_epoch(label_free_run):
-    """Sec. 4.5 and 7.7: a label-free final model keeps the epoch with the best label-free
-    score of its own training, and its sidecar says which epoch and by which rule."""
-    from MIL_CREDA_EEG import two_phase
+def test_the_label_free_final_models_are_refit_at_their_trial_and_epoch(label_free_run):
+    """Sec. 4.5: a label-free final model is the label-free rule's (trial, epoch) refit on
+    the non-test folds for exactly that many epochs, and its sidecar says which and by
+    which rule."""
     cfg, product, _, _ = label_free_run
     history = campaign.read_history(product, "A-nivel", rule="label-free")
     assert history and {h["selectionRule"] for h in history} == {"label-free"}
     root = product / "Models" / "Balladeer" / campaign.LABEL_FREE_MODELS
-    bags = campaign.load_bags(cfg)
     checked = 0
     for path in sorted(root.rglob("phase2__*.pt")):
         meta = _sidecar(path)
         mine = [h for h in history if h["model"] == f"{meta['name']}:phase2"
                 and h["transfer"] == meta["transfer"] and h["fold"] == meta["rotation"]
                 and h["seed"] == meta["seed"]]
-        scores = [h["label_free_score"] for h in sorted(mine, key=lambda h: h["epoch"])]
-        assert len(scores) == cfg["schedule"]["epochs2"]
-        assert meta["epoch"] == scores.index(max(scores))
-        assert meta["selection"]["epoch"] == meta["epoch"]
-        assert {h["labelFreeEpoch"] for h in mine} == {meta["epoch"]}
-        assert meta["selection"]["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
-        assert meta["label_free_score"] == max(scores)
-        model = mechanisms.load_phase_two(path, partition_path=campaign._partition_path(cfg))[0]
-        transfer = next(t for t in campaign.transfers_of(cfg) if t.name == meta["transfer"])
-        a = campaign.assignment_mod.assign_from_bags(transfer, bags)
-        valid = two_phase.bag_tensors(campaign.assignment_mod.side_bags(
-            a, bags, "target", meta["rotation"], "validation"))
-        G = two_phase.evaluate(model, valid, "target", torch.device("cpu"))
-        assert two_phase.label_free_score(G) == pytest.approx(max(scores), rel=1e-6,
-                                                              abs=1e-12)
+        chosen = meta["selection"]
+        assert chosen["rule"] == "label-free"
+        assert chosen["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
+        assert len(mine) == chosen["epochs"] == chosen["epoch"] + 1 == meta["epoch"] + 1
+        assert meta["hyper"]["epochs2"] == chosen["epochs"]
+        assert {h["labelFreeEpoch"] for h in mine} == {chosen["epoch"]}
+        assert not any("val_balanced_accuracy" in h for h in mine)   # a refit validates nothing
+        primary = _sidecar(path.parents[4] / meta["transfer"].replace("->", "-to-")
+                           / f"rotation{meta['rotation']}" / f"seed{meta['seed']}"
+                           / path.name)
+        assert chosen["trial"] != primary["selection"]["trial"]
         checked += 1
     assert checked == 2 * 2 * 4            # two strategies, two directions, four rotations
 

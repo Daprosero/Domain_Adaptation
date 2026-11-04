@@ -13,8 +13,8 @@ from .model import HASDModel
 from .training import begin_adaptation, train_phase_two
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
-    "sections": ["7.3", "7.4"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["hasd_synthetic_smoke_executes_both_phases"],
 }
@@ -31,7 +31,7 @@ def run(seed: int = 20261102) -> dict:
     source, source_valid = bags(29, "s"), bags(29, "sv")
     target, target_valid = bags(14, "t", False), bags(14, "tv")
     model = HASDModel(29, 14)
-    schedule = {"epochs1": 2, "patience1": 1, "epochs2": 3, "bagsPerStep": 2}
+    schedule = {"epochs1": 2, "epochs2": 3, "bagsPerStep": 2}
     hyper1 = search.phase_one_hyper("HASD", {"lr1": .001, "wd1": 1e-6}, schedule)
     phase1 = two_phase.train_source_phase(model, source, source_valid, hyper1,
                                          torch.Generator().manual_seed(seed), torch.device("cpu"))

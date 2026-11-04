@@ -8,8 +8,8 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel, COMMON_PHASE_ONE_FIXED
 from .training import adapt_target_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
-    "sections": ["7.2", "7.3", "7.4"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["casual_smoke_runs_common_phase_one_and_cpu_adaptation"],
 }
@@ -28,7 +28,7 @@ def run(seed=20261102):
     source, source_valid = bags(29, "s"), bags(29, "sv")
     target, target_valid = bags(14, "t"), bags(14, "tv")
     model = CommonMILModel(29, 14)
-    schedule = dict(epochs1=1, patience1=1, epochs2=3, bagsPerStep=2)
+    schedule = dict(epochs1=1, epochs2=3, bagsPerStep=2)
     phase1 = two_phase.train_source_phase(model, source, source_valid,
         {**COMMON_PHASE_ONE_FIXED, **schedule, "lr1": 0.001, "wd1": 1e-5,
          "lr2": 0.001, "wd2": 1e-5, "tauLocal": 1.}, generator, device, seed=seed)

@@ -1,4 +1,5 @@
-"""Experiments plan v40, Sec. 7.5: source-only controls and the target-supervised upper bound."""
+"""Experiments plan v50, Secs. 4.5 and 7.5: source-only controls and the target-supervised
+upper bound."""
 
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from MIL_CREDA_EEG.mil_creda_model import MILCREDAModel
 CPU = torch.device("cpu")
 LEVEL = assignment.Transfer("level", "L1", "L11")
 DEVICE = assignment.Transfer("device", "L6", "Robots")
-SCHEDULE = {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 2}
+SCHEDULE = {"epochs1": 1, "epochs2": 1, "bagsPerStep": 2}
 
 
 def _bagset(root, sha: str = "x" * 64) -> bag_data.BagSet:
@@ -139,17 +140,20 @@ def test_the_upper_bound_never_sees_source_labels_nor_target_test_labels(tmp_pat
     calls = []
     real = assignment.side_bags
 
-    def spy(a_, bags_, side, r, role):
-        calls.append((side, role))
-        return real(a_, bags_, side, r, role)
+    def spy(a_, bags_, side, r, role, **kwargs):
+        calls.append((side, role, kwargs.get("split")))
+        return real(a_, bags_, side, r, role, **kwargs)
 
     monkeypatch.setattr(controls.assignment_mod, "side_bags", spy)
     out = controls.train_upper_bound(a, bags, rotation, 3, {"lr1": 1e-2, "wd1": 1e-4},
                                      SCHEDULE, CPU)
-    assert sorted(calls) == [("target", "train"), ("target", "validation")]
+    assert sorted(calls) == sorted([("target", "inner_train", i) for i in range(3)]
+                                   + [("target", "inner_validation", i) for i in range(3)]
+                                   + [("target", "nontest", None)])
     assert out["in_ranking"] is False and out["reference"] == "target-supervised upper bound"
-    assert out["subjects"]["train"] == sorted(view["target_train"])
-    assert out["subjects"]["validation"] == sorted(view["target_validation"])
+    non_test = view["target_train"] | view["target_validation"]
+    assert out["subjects"]["train"] == sorted(non_test)
+    assert sorted(out["subjects"]["inner_validation"]) == sorted(non_test)
 
 
 def test_the_upper_bound_is_the_common_architecture_on_the_target_channels(tmp_path):
@@ -165,3 +169,32 @@ def test_the_upper_bound_is_the_common_architecture_on_the_target_channels(tmp_p
     with pytest.raises(ValueError, match="schedule"):
         controls.train_upper_bound(a, bags, 0, 3, {"lr1": 1e-2, "wd1": 1e-4},
                                    {"epochs1": 1}, CPU)
+
+
+def test_the_upper_bound_epochs_are_chosen_on_the_pooled_inner_splits_and_refit_without_validation(
+        tmp_path, monkeypatch):
+    bags = _bagset(tmp_path)
+    a = assignment.assign_from_bags(LEVEL, bags)
+    runs = []
+    real = tp.train_source_phase
+
+    def spy(model, train, valid, hyper, generator, device, **kwargs):
+        out = real(model, train, valid, hyper, generator, device, **kwargs)
+        runs.append({"valid": len(valid), "epochs": hyper["epochs1"],
+                     "seed": kwargs["seed"], "ran": out["epochs"]})
+        return out
+
+    monkeypatch.setattr(controls.two_phase, "train_source_phase", spy)
+    pooled = [0.5, 0.75, 0.75]
+    monkeypatch.setattr(controls.search, "pooled_series",
+                        lambda per_split, label_free: {"pooledBalancedAccuracy": pooled})
+    out = controls.train_upper_bound(a, bags, 2, 3, {"lr1": 1e-2, "wd1": 1e-4},
+                                     {**SCHEDULE, "epochs1": 3}, CPU)
+    # three inner splits at the search seed over the whole cap, each with validation ...
+    assert [(r["epochs"], r["seed"], r["ran"]) for r in runs[:3]] == [(3, 0, 3)] * 3
+    assert all(r["valid"] > 0 for r in runs[:3])
+    # ... then one refit at the report seed, the earliest best epoch count, no validation
+    assert runs[3] == {"valid": 0, "epochs": 2, "seed": 3, "ran": 2} and len(runs) == 4
+    assert out["best_epoch"] == 1 and out["selection"]["epochs"] == 2
+    assert out["hyper"]["epochs1"] == 2 and out["best_valid_balanced_accuracy"] == 0.75
+    assert len(out["history"]) == 2

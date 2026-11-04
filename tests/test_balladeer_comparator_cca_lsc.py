@@ -25,7 +25,7 @@ def params():
 
 
 def schedule():
-    return {"epochs1": 1, "patience1": 1, "epochs2": 4, "bagsPerStep": 4}
+    return {"epochs1": 1, "epochs2": 4, "bagsPerStep": 4}
 
 
 def test_cca_calibration_uses_raw_confidence():
@@ -201,9 +201,10 @@ def test_cca_search_hook_uses_common_checkpoint():
         search.PHASE_TWO_TRAINERS.clear(); search.PHASE_TWO_TRAINERS.update(old_trainers)
 
 
-def test_cca_selection_restores_best_epoch(monkeypatch):
+def test_cca_keeps_the_last_epoch_and_records_validation_per_epoch(monkeypatch):
     model, source, _, target, valid = fixture()
-    # Actual epoch weights snapshotted at the real validation seam; force epoch 1 winner.
+    # Actual epoch weights snapshotted at the real validation seam; epoch 1 scores best,
+    # and v50 still keeps the last epoch (no early stopping, no restore).
     snapshots = []
     real_eval = two_phase.evaluate
     def evaluate(m, bags, domain, device):
@@ -215,10 +216,13 @@ def test_cca_selection_restores_best_epoch(monkeypatch):
     monkeypatch.setattr(two_phase, "evaluate", evaluate)
     monkeypatch.setattr(two_phase, "balanced_accuracy", lambda *_: next(scores))
     out = training.adapt(model, source, target, valid, params(), schedule(), seed=11)
-    assert out["best_epoch"] == 1
-    assert all(torch.equal(v, model.target_trunk.state_dict()[k]) for k, v in snapshots[1].items())
-    assert any(not torch.equal(v, snapshots[3][k]) for k, v in snapshots[1].items())
-    assert out["checkpoint"]["label_free_score"] == out["history"][1]["label_free_score"]
+    last = schedule()["epochs2"] - 1
+    assert out["best_epoch"] == last == out["checkpoint"]["epoch"]
+    assert all(torch.equal(v, model.target_trunk.state_dict()[k])
+               for k, v in snapshots[last].items())
+    assert any(not torch.equal(v, snapshots[last][k]) for k, v in snapshots[1].items())
+    assert out["checkpoint"]["label_free_score"] == out["history"][last]["label_free_score"]
+    assert [v["epoch"] for v in out["validation"]] == list(range(schedule()["epochs2"]))
 
 
 @pytest.mark.parametrize("change", [{"lr2": -1}, {"wd2": -1}, {"centroidWeight": -1},
@@ -233,6 +237,10 @@ def test_cca_short_schedule_and_leakage_refuse():
     model, s, _, t, v = fixture()
     with pytest.raises(ValueError, match="calibrated epoch"):
         training.adapt(model, s, t, v, params(), {**schedule(), "epochs2": 3}, seed=11)
+    # a refit runs exactly the selected E2, which may end inside the warm-up
+    refit = training.adapt(fixture()[0], s, t, [], params(), {**schedule(), "epochs2": 2},
+                           seed=11)
+    assert refit["epochs"] == 2 and refit["validation"] == [] and refit["target_prior"] is None
     with pytest.raises(ValueError, match="disjoint"):
         training.adapt(model, s, t, [replace(v[0], subject=t[0].subject)], params(), schedule(), seed=11)
 

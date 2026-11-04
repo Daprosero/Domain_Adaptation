@@ -312,17 +312,22 @@ def test_the_other_condition_is_reached_only_through_the_probe_accessor(tmp_path
         assignment.probe_bag(a, bags, train_common, 0)
 
 
-def test_the_eligibility_rule_is_evaluated_and_reported():
+def test_the_per_fold_class_minimum_is_reported_without_a_verdict():
+    """Plan v50 Sec. 4.3: the per-fold class minimum is a declared limitation of the
+    selection, reported as counts; no group passes or fails on it."""
     rich = _assign(_population(n_per_cell_common=10, singles_a=0, singles_b=0))
     poor = _assign(_population(n_per_cell_common=6, singles_a=0, singles_b=0))
-    ok, short = assignment.eligibility(rich), assignment.eligibility(poor)
-    assert assignment.MIN_PER_CLASS_PER_FOLD == 5
-    assert ok["passes"] and ok["min_count"] == 5
-    assert not short["passes"] and short["min_count"] == 3
-    table = short["table"]
-    assert set(table.columns) >= {"side", "fold", "label", "n"}
-    assert len(table) == 2 * partition.N_FOLDS * 2
-    assert short["failing"]  # names every (side, fold, label) under the minimum
+    assert not hasattr(assignment, "MIN_PER_CLASS_PER_FOLD")
+    for a, low in ((rich, 5), (poor, 3)):
+        e = assignment.eligibility(a)
+        assert not {"passes", "failing", "minimum", "min_count"} & set(e)
+        table = e["table"]
+        assert set(table.columns) >= {"side", "fold", "label", "n"}
+        assert len(table) == 2 * partition.N_FOLDS * 2
+        assert min(n for side in e["min_per_fold"].values() for n in side.values()) == low
+        assert e["pooled_target"] == dict(Counter(a.labels[s] for s in a.subjects("target")))
+    with pytest.raises(TypeError):
+        assignment.eligibility(rich, 5)            # no threshold is taken any more
 
 
 def test_the_size_table_reports_every_rotation():
