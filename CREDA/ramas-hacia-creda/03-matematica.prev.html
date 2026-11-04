@@ -1,0 +1,87 @@
+<div id="panel-matematica" role="tabpanel" aria-labelledby="tab-matematica" hidden style="display:flex;flex-direction:column;gap:20px">
+
+<p class="note">Notación de la revisión r29; los números de ecuación remiten a ella. <b>[verificado]</b> la fuente se leyó; <b>[derivado]</b> álgebra propia, comprobada numéricamente con kernel gaussiano; <b>[no abierto]</b> referencia estándar citada de memoria.</p>
+
+<section class="math-sec">
+  <span class="eyebrow">Apartado A · Justificación frente a la MMD</span>
+  <h2>No nos alejamos en lo que se mira, sino en cómo se combina</h2>
+
+  <h3>A.1 Los tres potenciales de información de cada clase</h3>
+  <p>Para cada clase \(c\), la r29 normaliza por traza la Gram de la fuente, la Gram ponderada del objetivo y el bloque cruzado (Ec. 32). Sus normas de Frobenius al cuadrado son tres potenciales de información:</p>
+  <div class="disp">$$\rho^s_c=\big\lVert\breve{\mathbf K}^s_c\big\rVert_F^2,\qquad \rho^t_c=\big\lVert\breve{\widetilde{\mathbf K}}{}^t_c\big\rVert_F^2,\qquad \rho^\times_c=\big\lVert\breve{\widetilde{\mathbf K}}{}^{st}_c\big\rVert_F^2=\frac{\lVert\mathbf K^{st}_c\mathbf D^t_c\rVert_F^2}{\operatorname{tr}\mathbf K^s_c\,\operatorname{tr}\widetilde{\mathbf K}^t_c}$$</div>
+  <p>\(\rho^s_c\) y \(\rho^t_c\) son las <b>purezas</b>: valen 1 si todas las bolsas de la clase coinciden y bajan cuanto más dispersa está la clase. \(\rho^\times_c\) es el <b>solapamiento</b> entre dominios. Son el análogo matricial de \(\hat V_2\propto\mathbf 1^\top\mathbf K\mathbf 1\) de la Ec. 8. En términos de operadores, con \(\Sigma^s_c\) y \(\Sigma^t_c\) las covarianzas no centradas de traza 1 de cada clase sobre \(\mathcal H_I\):</p>
+  <div class="disp">$$\rho^s_c=\lVert\Sigma^s_c\rVert_{HS}^2,\qquad \rho^t_c=\lVert\Sigma^t_c\rVert_{HS}^2,\qquad \rho^\times_c=\langle\Sigma^s_c,\Sigma^t_c\rangle_{HS},\qquad e^{-D_{CS,c}}=\frac{\rho^\times_c}{\sqrt{\rho^s_c\rho^t_c}}$$</div>
+  <p class="hint">La bolsa objetivo \(j\) entra en \(\Sigma^t_c\) con peso \((w^t_j)^2\). <span class="tag">[derivado]</span></p>
+
+  <h3>A.2 La MMD los combina de forma lineal</h3>
+  <p>Como \(\Psi\otimes\Psi\) es el mapa de rasgos de \((\kappa^B_\sigma)^2\), la MMD entre los mismos operadores es</p>
+  <div class="disp">$$\mathrm{MMD}^2_c=\lVert\Sigma^s_c-\Sigma^t_c\rVert_{HS}^2=\rho^s_c+\rho^t_c-2\rho^\times_c=\rho^s_c+\rho^t_c-2\sqrt{\rho^s_c\rho^t_c}\;e^{-D_{CS,c}}$$</div>
+
+  <h3>A.3 El estimador de información los combina como logaritmo de cocientes</h3>
+  <p>Con \(H_2(\mathbf A)=-\ln\lVert\mathbf A\rVert_F^2\) (Ec. 10), la mezcla equilibrada de la Ec. 32 tiene \(\lVert\breve{\widetilde{\mathbf K}}{}^{\mathrm{mix}}_c\rVert_F^2=\tfrac14(\rho^s_c+\rho^t_c+2\rho^\times_c)\), y la Ec. 33 queda</p>
+  <div class="disp">$$J_c=\tfrac12\big[-\ln\rho^s_c-\ln\rho^t_c\big]+\ln\tfrac14\big(\rho^s_c+\rho^t_c+2\rho^\times_c\big)=\ln\!\Big(\tfrac12r_c+\tfrac12e^{-D_{CS,c}}\Big),\qquad r_c=\frac{\rho^s_c+\rho^t_c}{2\sqrt{\rho^s_c\rho^t_c}}\ge1$$</div>
+  <p class="hint">\(r_c=\cosh\big(\tfrac12[H_2(\breve{\widetilde{\mathbf K}}{}^t_c)-H_2(\breve{\mathbf K}^s_c)]\big)\) mide el <b>desajuste de purezas</b>; \(D_{CS,c}\) mide el <b>solapamiento</b>. <span class="tag">[derivado; comprobado numéricamente]</span></p>
+
+  <h3>A.4 Lo que gana separar dispersión y solapamiento</h3>
+  <p>La MMD mezcla en un solo número cuán dispersa está la clase y cuánto se solapan los dominios. Con el mismo solapamiento (\(D_{CS}=0{,}4\)) y purezas iguales \(\rho^s=\rho^t=\rho\), la MMD vale \(2\rho(1-e^{-D_{CS}})\):</p>
+  <div class="tablewrap"><table style="min-width:420px">
+    <thead><tr><th>Pureza ρ</th><th>MMD²</th><th>\(\ell_{\mathrm{glob},c}\) (Ec. 36)</th></tr></thead>
+    <tbody><tr><td>0,9</td><td>0,593</td><td>0,260</td></tr><tr><td>0,3</td><td>0,198</td><td>0,260</td></tr><tr><td>0,05</td><td>0,033</td><td>0,260</td></tr></tbody>
+  </table></div>
+  <ul>
+    <li><b>La MMD premia dispersar la clase.</b> Baja casi veinte veces sin que nada se haya alineado. Nuestra medida responde solo al solapamiento. <span class="tag">[derivado]</span></li>
+    <li><b>Invariancia a la amplitud del kernel.</b> La MMD usual, sin normalizar por traza, escala con la amplitud: \(\kappa\to c\,\kappa\) la multiplica por \(c^2\) bajo \((\kappa^B)^2\). En \(J_c\) los tres potenciales ya están normalizados por traza (Ec. 32) y entran como cocientes, así que la amplitud se cancela. Ojo: la MMD de A.2 entre operadores de traza 1 también es invariante; la ventaja es frente a la MMD tal como se usa. <span class="tag">[derivado]</span></li>
+    <li><b>Costo con α = 2.</b> \(H_2\) es una norma de Frobenius: \(O(n^2)\), sin descomposición espectral. <span class="tag">[verificado]</span></li>
+  </ul>
+
+  <h3>A.5 Lo que no gana</h3>
+  <ul>
+    <li><b>No hay información extra.</b> \(J_c\) es función de los mismos tres números que la MMD bajo \((\kappa^B)^2\). La diferencia está en cómo se combinan, no en qué se mira. <span class="tag">[derivado]</span></li>
+    <li><b>Tiene su propio atajo.</b> Mientras la clase no está alineada, la pérdida baja si aumenta el desajuste de purezas (apartado B.4). <span class="tag">[derivado]</span></li>
+    <li><b>Sin prueba de dos muestras y con sesgo.</b> La MMD tiene estimador insesgado y prueba con nivel garantizado; aquí no se encontró ninguna, y el logaritmo sesga el estimador. Tampoco hay una demostración de que \(\alpha=2\) sea el orden óptimo. <span class="tag">[verificado]</span></li>
+  </ul>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Apartado B · La formulación de la r29</span>
+  <h2>De dónde salen los tres potenciales</h2>
+
+  <h3>B.1 Enrutamiento y peso desde la salida del clasificador</h3>
+  <div class="disp">$$\widetilde y_j^t=\mathfrak a(\mathbf g_j^t)\ (22),\qquad T_c=\{j:\widetilde y_j^t=c\},\qquad w_j^t=1-\frac{\widehat H_2(\mathbf g_j^t)}{\ln C},\quad \widehat H_2(\mathbf g)=-\ln\textstyle\sum_cg_c^2\ (24)$$</div>
+  <p>\(\mathbf g_j^t=\mathcal G_\psi(\mathbf z_j^t)\) (Ec. 20) no es un embedding: es la salida del clasificador sobre el embedding de bolsa. Decide a qué clase va cada bolsa objetivo y cuánto pesa.</p>
+
+  <h3>B.2 Gram por clase y mezcla por congruencia</h3>
+  <div class="disp">$$[\mathbf K_c^s]_{ii'}=\kappa^B_\sigma(B_i^s,B_{i'}^s),\quad [\mathbf K_c^t]_{jj'}=\kappa^B_\sigma(B_j^t,B_{j'}^t),\quad [\mathbf K_c^{st}]_{ij}=\kappa^B_\sigma(B_i^s,B_j^t)\ (23)$$</div>
+  <div class="disp">$$\mathbf D_c^t=\operatorname{diag}(w_j^t)_{j\in T_c}\ (25),\qquad \widetilde{\mathbf K}_c^t=\mathbf D_c^t\mathbf K_c^t\mathbf D_c^t,\quad \widetilde{\mathbf K}_c^{st}=\mathbf K_c^{st}\mathbf D_c^t\ (26)$$</div>
+  <div class="disp">$$\widetilde{\mathbf K}_c^{\mathrm{mix}}=\operatorname{diag}(\mathbf I,\mathbf D_c^t)\,\mathbf K_c\,\operatorname{diag}(\mathbf I,\mathbf D_c^t)\ (27),\qquad \breve{\widetilde{\mathbf K}}{}_c^{\mathrm{mix}}=\tfrac12\,\mathbf Q_c\widetilde{\mathbf K}_c^{\mathrm{mix}}\mathbf Q_c\ (32)$$</div>
+  <p class="claim"><b>La mezcla es semidefinida positiva por construcción.</b> Es una congruencia de la Gram \(\mathbf K_c\), y \(\mathbf Q_c\) es otra. En CREDA el bloque cruzado no lleva \(\mathbf D^t_c\), y eso puede romperla: con una bolsa por dominio, \(\kappa^B=0{,}5\) y \(w=0{,}3\), \(\begin{bmatrix}1&0{,}5\\0{,}5&0{,}09\end{bmatrix}\) tiene determinante \(0{,}09-0{,}25\lt0\). <b>La r29 resuelve este límite de CREDA</b>, y la congruencia es justamente lo que vuelve exacta la identidad de A.3, con masa \(\tfrac12\) por dominio. <span class="tag">[derivado]</span></p>
+
+  <h3>B.3 La puntuación y su normalización</h3>
+  <div class="disp">$$J_c=\tfrac12\big[H_2(\breve{\mathbf K}_c^{s})+H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})\big]-H_2(\breve{\widetilde{\mathbf K}}{}_c^{\mathrm{mix}})\ (33),\qquad -\ln2\le J_c\le U_c\ (34)$$</div>
+  <div class="disp">$$L_c=-\ln2,\quad U_c=2\ln\cosh\!\Big(\frac{H_2(\breve{\widetilde{\mathbf K}}{}_c^{t})-H_2(\breve{\mathbf K}_c^{s})}{4}\Big)=\ln\frac{1+r_c}{2}\ (35),\qquad \ell_{\mathrm{glob},c}=\frac{U_c-J_c}{U_c-L_c}\ (36)$$</div>
+  <div class="disp">$$U_c-J_c=\ln\frac{1+r_c}{r_c+e^{-D_{CS,c}}}\ \ge0,\qquad \ell_{\mathrm{glob},c}=0\iff D_{CS,c}=0$$</div>
+  <p class="claim"><b>Resuelve el signo de la forma sin normalizar.</b> Como diferencia de entropías, \(J\) con \(\alpha=2\) no tiene el signo garantizado: con \(p=(1,0,0)\) y \(q=(\tfrac34,\tfrac18,\tfrac18)\), \(\mathrm{JR}_2=\ln\tfrac{256}{198}-\tfrac12\ln\tfrac{64}{38}\approx-0{,}0037\) nats. Con \(\ell_{\mathrm{glob},c}\), cero significa operadores de clase iguales. <span class="tag">[derivado; comprobado numéricamente]</span></p>
+
+  <h3>B.4 El atajo que queda abierto</h3>
+  <div class="disp">$$\frac{\partial}{\partial r_c}\ln\frac{1+r_c}{r_c+e^{-D_{CS,c}}}=\frac{1}{1+r_c}-\frac{1}{r_c+e^{-D_{CS,c}}}\le0$$</div>
+  <p>Mientras la clase no está alineada, el gradiente premia desajustar las purezas: el codificador objetivo puede colapsar o dispersar la clase. El atajo es finito, porque \(r_c\) está acotado por el tamaño del lote. <span class="tag">[derivado]</span></p>
+
+  <h3>B.5 El término global</h3>
+  <div class="disp">$$\mathcal L_{\mathrm{glob}}=\sum_{c\in\mathcal C_{\mathrm{act}}}\omega_c\,\ell_{\mathrm{glob},c}\ (37)$$</div>
+  <p class="claim next"><b>Siguiente etapa.</b> Lo que MIL-CREDA agrega encima, la bolsa como unidad, la referencia local \(\boldsymbol\mu^s_j\) y la pérdida completa (Ec. 39), se desarrolla aparte.</p>
+</section>
+
+<section class="math-sec">
+  <span class="eyebrow">Notas · por organizar</span>
+  <h2>Notas pendientes</h2>
+  <ol>
+    <li><b>MMD, Cauchy–Schwarz y KL no son lo mismo; las tres son divergencias.</b> Con un kernel acotado (\(k\le1\)): \(\mathrm{MMD}(p,q)\le2\,\mathrm{TV}(p,q)\le\sqrt{2\,\mathrm{KL}(p\Vert q)}\). Si la KL es chica, la MMD también; no al revés. <span class="tag">[citada de memoria]</span></li>
+    <li><b>Regla de la cadena de la KL</b> (demostrada): \(\mathrm{KL}\big(p_s(x,y)\Vert p_t(x,y)\big)=\mathrm{KL}\big(p_s(y)\Vert p_t(y)\big)+\sum_y p_s(y)\,\mathrm{KL}\big(p_s(x\mid y)\Vert p_t(x\mid y)\big)\). Con \(p_s(y)=p_t(y)=\pi_y\): \(\mathrm{KL}_{\text{conjunta}}=\sum_y\pi_y\,\mathrm{KL}_y\). La condicional es el promedio de las divergencias por clase, pesado por \(\pi_y\).</li>
+    <li><b>El Paso 9 no lleva \(\pi_y\).</b> \(\widehat{\mathrm{MMD}}^2_{\text{cond}}=\sum_y\widehat{\mathrm{MMD}}^2_y=C\cdot\mathbb E_{y\sim\text{Uniforme}}\big[\widehat{\mathrm{MMD}}^2_y\big]\): es la condicional solo con clases equiprobables. Tiene el mismo óptimo (vale 0 si y solo si cada clase está alineada, si todo \(\pi_y\gt0\)) y distinta ponderación fuera de él. Pendiente: escribir \(\pi_y\) o declarar el supuesto.</li>
+    <li><b>MMD de la conjunta con kernel delta en la clase:</b> \(\mathrm{MMD}^2_{\text{conj}}=\sum_y\big\Vert p_s(y)\,\mu_{X|y,s}-p_t(y)\,\mu_{X|y,t}\big\Vert^2\); con proporciones iguales, \(\sum_y\pi_y^2\,\mathrm{MMD}^2_y\) (pesos \(\pi_y^2\), no \(\pi_y\)).</li>
+    <li><b>CREDA sí pesa las clases.</b> r29, Ec. 37: \(\mathcal L_{\mathrm{glob}}=\sum_c\omega_c\,\ell_{\mathrm{glob},c}\), con \(\omega_c=q_c/\sum_{c'}n^t_{c'}\) y \(q_c=\sum_{j\in T_c}w^t_j\): una estimación de \(p_t(c)\) multiplicada por la confianza media de la clase.</li>
+    <li><b>Cauchy–Schwarz y KL tienen la misma plantilla, "cruzada menos propia".</b> \(\mathrm{KL}(p\Vert q)=H_\times(p,q)-H(p)\) (Shannon, asimétrica); \(-\ln\cos\theta=H_2(p,q)-\tfrac12\big[H_2(p)+H_2(q)\big]\) (Rényi de orden 2, simétrica, se estima con tres sumas de kernels).</li>
+  </ol>
+</section>
+</div>
+

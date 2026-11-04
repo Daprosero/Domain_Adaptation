@@ -106,6 +106,20 @@ header{display:flex;flex-direction:column;gap:10px}
 .kid:hover{border-color:var(--ours)}
 
 /* math tab */
+/* paper layout: the derivation tab reads as a two-column article; figures span both columns */
+.paper{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding-block:28px 20px;padding-inline:clamp(16px,3.5vw,40px);display:flex;flex-direction:column;gap:14px;min-width:0}
+.paper > h2{font-size:1.5rem}
+.paper .abstract{font-size:.93rem;color:var(--muted);max-width:none;border-bottom:1px solid var(--rule);padding-bottom:14px}
+.paper .abstract b{color:var(--ink);font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;margin-right:6px}
+.paper-body{column-count:2;column-gap:40px;column-rule:1px solid var(--rule);min-width:0}
+@media (max-width:900px){.paper-body{column-count:1}}
+.paper-body h3{font-size:1rem;margin:1.1em 0 .45em;break-after:avoid}
+.paper-body h3:first-child{margin-top:0}
+.paper-body p{max-width:none;margin:0 0 .75em;text-align:justify;hyphens:auto;font-size:.95rem}
+.paper-body .disp{overflow-x:auto;overflow-y:hidden;margin:.2em 0 .8em;break-inside:avoid}
+.paper-body figure{column-span:all;margin:.6em 0 1.4em;break-inside:avoid}
+.paper-body figure.cfig > svg{max-width:820px;margin-inline:auto}
+.paper-body figcaption b{color:var(--ink)}
 .math-sec{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .math-sec .disp{overflow-x:auto;padding-block:4px}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}.cols > div{min-width:0;display:flex;flex-direction:column;gap:10px}.cols h3{margin:0;font-size:1rem}
