@@ -1,0 +1,94 @@
+{
+  "accelerator": {
+    "architectures": [
+      "sm_75"
+    ],
+    "kind": "cuda"
+  },
+  "clonePaths": [
+    "src/CREDA",
+    "src/MIL_CREDA",
+    "src/MIL_CREDA_Benchmark",
+    "MIL-CREDA/Notebooks",
+    "MIL-CREDA/Results/Toyset/full"
+  ],
+  "commit": "5d9719b14fb2d2ccc5e5edfa60538312afed8c1b",
+  "jobName": "toyset-device-probe",
+  "product": "MIL-CREDA",
+  "repo": {
+    "ref": "two-encoders",
+    "url": "https://github.com/Daprosero/Domain_Adaptation"
+  },
+  "run": {
+    "notebook": "MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb",
+    "smoke": {
+      "notebook": "MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb"
+    }
+  },
+  "runnerTemplate": [
+    {
+      "path": "assets/runner_bootstrap.py",
+      "sha256": "b5767143f394dc80217522422bff6449466682ff5a62c60d7a73f04ac0052070"
+    },
+    {
+      "path": "assets/runner_invoke.py",
+      "sha256": "501cc19be51e4af0f331d30356b9361268b2da690a0798771adf33684f7080e8"
+    }
+  ],
+  "schemaVersion": 1,
+  "service": "kaggle",
+  "unresolvedImports": [
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb: sys.path mutation is uncertain",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/toy_run.py: non-literal importlib.import_module(...) call is uncertain"
+  ],
+  "unresolvedReads": [
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb:214: open(ART) \u2014 open() call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb:93: head.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb:84: git.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb:102: packed.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/MIL-CREDA/Notebooks/Toyset_Device_Probe.ipynb:99: loose.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/toy_run.py:4666: ruta.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/toy_run.py:6414: ruta.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/toy_run.py:6987: (origen / 'banderas.json').read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/toy_run.py:6988: (origen / 'barrido.json').read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/toy_run.py:7916: ImagenPIL.open(ruta) \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/toy_run.py:6623: module.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/CREDA/toy_experiment.py:4079: (origen / 'banderas.json').read_text() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/CREDA/toy_experiment.py:4080: (origen / 'barrido.json').read_text() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/CREDA/toy_experiment.py:5284: (origen / ARCHIVO_CONTAMINACION).read_text() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/config.py:1703: record.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/config.py:1810: record.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/config.py:1838: record.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/config.py:1887: record.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/config.py:1913: record.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:65: prefix.is_relative_to(config.REPOSITORY) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1277: _git_commit(config.REPOSITORY) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:983: bags.build(code, config.DATA_CACHE, seed, noise) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1345: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1372: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1393: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1461: record.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:3254: bags.build(code, config.DATA_CACHE, seed) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1018: record_path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1401: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:2118: bags.build(code, config.DATA_CACHE, seed, noise) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:2725: bags.build(code, config.DATA_CACHE, seed, reduction.labelNoise) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1183: weights.relative_to(config.REPOSITORY) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:2366: bags.build(code, config.DATA_CACHE, seed, noise) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:1781: slice_path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:2825: (destino / 'summary.json').relative_to(config.REPOSITORY) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:2826: p.relative_to(config.REPOSITORY) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/harness.py:157: online.read_text() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/latent.py:424: bags.rebuild(record['source'], config.DATA_CACHE) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/latent.py:425: bags.rebuild(record['target'], config.DATA_CACHE) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/latent.py:763: bags.rebuild(record['source'], config.DATA_CACHE) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/latent.py:764: bags.rebuild(record['target'], config.DATA_CACHE) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/latent.py:100: manifest_path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/latent.py:56: record.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/report_digest.py:60: file.read_bytes() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/shard_io.py:45: stamp_path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/shard_io.py:47: runs_path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/tables.py:2264: bags.tie_ceiling(dominio, config.DATA_CACHE, semilla) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation/src/MIL_CREDA_Benchmark/figures.py:94: path.open(encoding='utf-8') \u2014 read call on a path that could not be resolved"
+  ]
+}
