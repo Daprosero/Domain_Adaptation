@@ -38,7 +38,7 @@ def params(**change):
 
 
 def schedule(epochs=4):
-    return {"epochs1": 1, "patience1": 1, "epochs2": epochs, "bagsPerStep": 4}
+    return {"epochs1": 1, "epochs2": epochs, "bagsPerStep": 4}
 
 
 def f64(values):
@@ -228,7 +228,7 @@ def test_uda_search_hook_uses_common_checkpoint(registries):
                                      params(), schedule())
 
 
-def test_uda_selection_restores_best_epoch(monkeypatch):
+def test_uda_keeps_the_last_epoch_and_records_validation_per_epoch(monkeypatch):
     model, source, _, target, valid = fixture()
     snapshots = []
     real_eval = two_phase.evaluate
@@ -237,14 +237,18 @@ def test_uda_selection_restores_best_epoch(monkeypatch):
         if bags is valid:
             snapshots.append(copy.deepcopy(m.target_trunk.state_dict()))
         return out
-    scores = iter([0.1, 0.9, 0.9, 0.2, 0.9])  # tie at epoch 2: the first best wins
+    scores = iter([0.1, 0.9, 0.9, 0.2])
     monkeypatch.setattr(two_phase, "evaluate", evaluate)
     monkeypatch.setattr(two_phase, "balanced_accuracy", lambda *_: next(scores))
     out = training.adapt(model, source, target, valid, params(), schedule(), seed=13)
-    assert out["best_epoch"] == 1
-    assert all(torch.equal(v, model.target_trunk.state_dict()[k]) for k, v in snapshots[1].items())
-    assert any(not torch.equal(v, snapshots[3][k]) for k, v in snapshots[1].items())
-    assert out["checkpoint"]["label_free_score"] == out["history"][1]["label_free_score"]
+    last = schedule()["epochs2"] - 1
+    # v50: no early stopping, no restore: the last epoch is kept whatever scored best
+    assert out["best_epoch"] == last == out["checkpoint"]["epoch"]
+    assert all(torch.equal(v, model.target_trunk.state_dict()[k])
+               for k, v in snapshots[last].items())
+    assert any(not torch.equal(v, snapshots[last][k]) for k, v in snapshots[1].items())
+    assert out["checkpoint"]["label_free_score"] == out["history"][last]["label_free_score"]
+    assert [v["epoch"] for v in out["validation"]] == list(range(last + 1))
 
 
 @pytest.mark.parametrize("change", [{"lr2": -1}, {"wd2": -1}, {"mmdWeight": -1},
@@ -309,11 +313,11 @@ def test_uda_package_is_a_controlled_variant_and_import_registers_nothing(regist
              dict(search.PHASE_ONE_TRAINERS), dict(model_store.BUILDERS))
     assert before == after and "UDA-DDA" not in search.PHASE_TWO_TRAINERS
     assert uda_dda.__provenance__["sections"] == ["7.1", "7.4"]
-    # The trainer answers to v44 (Sec. 4.5: the label-free epoch); the rest of the package
-    # is unchanged since v42.
-    for module, revision in ((uda_dda, "v42"), (training, "v44"), (losses, "v42"),
+    # The trainer and its smoke answer to v50 (Secs. 4.5, 7.7: fixed epochs, no patience);
+    # the rest of the package is unchanged since v42.
+    for module, revision in ((uda_dda, "v42"), (training, "v50"), (losses, "v42"),
                              (importlib.import_module(
-                                 "MIL_CREDA_EEG.comparators.uda_dda.smoke"), "v42")):
+                                 "MIL_CREDA_EEG.comparators.uda_dda.smoke"), "v50")):
         assert module.__provenance__["revision"] == (
             f"experiments-plan-experimental-mil-creda-sobre-balladeer-{revision}.md")
 

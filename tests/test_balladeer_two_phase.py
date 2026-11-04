@@ -1,4 +1,4 @@
-"""Experiments plan v40, Secs. 4.5, 7.3, 7.7: MIL-CREDA's two phases on EEG bags."""
+"""Experiments plan v50, Secs. 4.5, 7.3, 7.7: MIL-CREDA's two phases on EEG bags."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from MIL_CREDA_EEG.mil_creda_model import MILCREDAModel, SigmaAlreadyFixed
 CPU = torch.device("cpu")
 HYPER = {"lr1": 1e-2, "wd1": 1e-4, "attentionGamma": 0.5, "attentionTemperature": 1.0,
          "sigmaMultiplier": 1.0, "lr2": 1e-2, "wd2": 1e-4, "tauLocal": 1.0,
-         "epochs1": 2, "patience1": 2, "epochs2": 2, "bagsPerStep": 4}
+         "epochs1": 2, "epochs2": 2, "bagsPerStep": 4}
 
 
 def _bags(n: int, channels: int, seed: int, prefix: str) -> list[tp.BagTensor]:
@@ -64,6 +64,9 @@ def test_the_hyperparameters_are_exactly_the_declared_ones():
         tp.check_hyper({k: v for k, v in HYPER.items() if k != "tauLocal"})
     with pytest.raises(ValueError):
         tp.check_hyper({**HYPER, "bagsPerStep": 1})
+    # v50 Sec. 7.7: no patience; a schedule that still carries one is refused, not ignored.
+    with pytest.raises(ValueError, match="not declared"):
+        tp.check_hyper({**HYPER, "patience1": 1})
 
 
 def _scripted(monkeypatch, name, values, model=None, states=None):
@@ -78,32 +81,22 @@ def _scripted(monkeypatch, name, values, model=None, states=None):
     monkeypatch.setattr(tp, name, fake)
 
 
-def test_phase_one_restores_the_best_epochs_weights_and_proves_it(monkeypatch):
+def test_phase_one_runs_its_epochs_and_keeps_the_last_without_restoring(monkeypatch):
     model, data, generator = _setup()
     states = []
-    restored_ok = (lambda m: 0.9 if all(torch.equal(m.state_dict()[k], states[1][k])
-                                        for k in tp.phase_one_state(m)) else 0.0)
-    _scripted(monkeypatch, "balanced_accuracy", [0.5, 0.9, 0.6, 0.6, restored_ok],
-              model, states)
-    out = _phase_one(model, data, generator, {**HYPER, "epochs1": 6, "patience1": 2})
-    assert out["best_epoch"] == 1 and out["epochs"] == 4
-    assert out["restored_valid_balanced_accuracy"] == out["best_valid_balanced_accuracy"] == 0.9
-    now = model.state_dict()
-    assert all(torch.equal(now[k], states[1][k]) for k in tp.phase_one_state(model))
-    assert not all(torch.equal(now[k], states[3][k]) for k in tp.phase_one_state(model))
+    # A falling validation score would have stopped and restored under the old patience.
+    _scripted(monkeypatch, "balanced_accuracy", [0.9, 0.5, 0.4, 0.3], model, states)
+    out = _phase_one(model, data, generator, {**HYPER, "epochs1": 4})
+    assert out["epochs"] == 4 and out["best_epoch"] == 3 == out["checkpoint"]["epoch"]
+    assert [h["val_balanced_accuracy"] for h in out["history"]] == [0.9, 0.5, 0.4, 0.3]
     assert tp._states_equal(out["checkpoint"]["state"], tp.phase_one_state(model))
-
-
-def test_a_restore_that_does_not_reproduce_the_best_accuracy_refuses(monkeypatch):
-    model, data, generator = _setup()
-    _scripted(monkeypatch, "balanced_accuracy", [0.5, 0.9, 0.8])
-    with pytest.raises(tp.RestoreFailed):
-        _phase_one(model, data, generator, {**HYPER, "epochs1": 2})
+    assert not tp._states_equal(out["checkpoint"]["state"],
+                                {k: states[0][k] for k in tp.phase_one_state(model)})
 
 
 def test_sigma_is_fixed_during_phase_one_and_stored_with_the_checkpoint():
     model, data, generator = _setup()
-    out = _phase_one(model, data, generator, {**HYPER, "epochs1": 3, "patience1": 3})
+    out = _phase_one(model, data, generator, {**HYPER, "epochs1": 3})
     sigma = out["checkpoint"]["sigma"]
     assert sigma == model.sigma == out["sigma"]["sigma"] > 0
     assert [r["sigma"] for r in out["history"]] == [sigma] * out["epochs"]
@@ -195,26 +188,19 @@ def test_the_source_term_does_not_change_the_phase_two_gradient():
     assert all(torch.equal(a, b) for a, b in zip(without, with_ce))
 
 
-def test_the_best_phase_two_epoch_is_chosen_by_target_validation_balanced_accuracy(
-        monkeypatch):
+def test_phase_two_keeps_its_last_epoch_and_records_validation_per_epoch(monkeypatch):
     model, data, generator, phase1, joint = _through_bridge()
-    states = []
-    original = tp.balanced_accuracy
-
-    def scripted(labels, predicted, _it=iter([0.4, 0.8, 0.6])):
-        states.append({k: v.clone() for k, v in model.target_trunk.state_dict().items()})
-        return next(_it)
-
-    monkeypatch.setattr(tp, "balanced_accuracy", scripted)
+    monkeypatch.setattr(tp, "balanced_accuracy", lambda labels, predicted,
+                        _it=iter([0.4, 0.8, 0.6]): next(_it))
     monkeypatch.setattr(tp, "label_free_score", lambda G, _it=iter([0.5, 0.1, 0.9]): next(_it))
     out = _phase_two(model, data, generator, phase1, joint, {**HYPER, "epochs2": 3})
-    monkeypatch.setattr(tp, "balanced_accuracy", original)
-    assert out["epochs"] == 3                         # the cap runs whole
-    assert out["best_epoch"] == 1 and out["checkpoint"]["valid_balanced_accuracy"] == 0.8
-    assert out["selection"]["best_label_free_epoch"] == 2
-    assert out["checkpoint"]["label_free_score"] == 0.1
-    assert tp._states_equal(model.target_trunk.state_dict(), states[1])
-    assert not tp._states_equal(model.target_trunk.state_dict(), states[2])
+    assert out["epochs"] == 3 == len(out["validation"])           # the cap runs whole
+    assert out["best_epoch"] == 2 == out["checkpoint"]["epoch"]   # the last, not the best
+    assert out["checkpoint"]["valid_balanced_accuracy"] == 0.6
+    assert out["checkpoint"]["label_free_score"] == 0.9
+    assert tp._states_equal(model.target_trunk.state_dict(), out["checkpoint"]["target_state"])
+    assert [v["subjects"] for v in out["validation"]] == [
+        [b.subject for b in data["target_valid"]]] * 3
 
 
 def test_the_label_free_score_is_entropy_of_the_mean_minus_mean_entropy():
@@ -269,7 +255,7 @@ def _bagset(root) -> bag_data.BagSet:
 def test_test_predictions_are_only_for_target_test_fold_subjects(tmp_path):
     bags = _bagset(tmp_path)
     transfer = assignment.Transfer("level", "L1", "L11")
-    hyper = {**HYPER, "epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 2}
+    hyper = {**HYPER, "epochs1": 1, "epochs2": 1, "bagsPerStep": 2}
     out = tp.run_transfer_rotation(transfer, 1, 3, hyper, "cpu", bags=bags)
     view = assignment.assign_from_bags(transfer, bags).rotation(1)
     subjects = [p["subject"] for p in out["predictions"]]

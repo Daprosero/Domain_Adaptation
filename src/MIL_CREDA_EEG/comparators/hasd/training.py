@@ -1,7 +1,10 @@
-"""HASD two-phase controlled variant; plan §§4.5, 7.3–7.4, 7.7.
+"""HASD two-phase controlled variant; plan v50 §§4.5, 7.3–7.4, 7.7.
 
 Source supervision is the existing shared trainer, not a second implementation.
-Phase 2 receives no test bags and never reads a training target label.
+Phase 2 receives no test bags and never reads a training target label. It runs
+its `epochs2` whole and keeps the last epoch (no early stopping, no restore);
+with target validation bags every epoch's validation predictions are recorded for
+the search's pooled selection, and without them (the refit) nothing is evaluated.
 """
 from __future__ import annotations
 
@@ -18,12 +21,12 @@ from .model import HASDModel, GROUP
 from .prototypes import cluster_assignments, centroids
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.5", "7.1", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["hasd_bridge_freezes_all_but_target_and_keeps_reference",
                    "hasd_target_training_labels_are_never_read",
-                   "hasd_shared_phase_one_restores_checkpoint_and_phase_two_records_selection",
+                   "hasd_phase_two_keeps_the_last_epoch_and_records_validation_per_epoch",
                    "hasd_search_adapter_and_checkpoint_roundtrip",
                    "hasd_runner_uses_shared_assignment_and_heldout_test"],
 }
@@ -97,22 +100,22 @@ def _check_params(params):
 def train_phase_two(model: HASDModel, context: AdaptationContext, source_train,
                     target_train, target_valid, params, schedule, *, seed: int,
                     fold: int, transfer: str, device="cpu", label_free: bool = False) -> dict:
-    """Whole fixed epoch budget, selecting only with target-validation bag labels."""
+    """Exactly `epochs2` epochs, the last kept; target-validation bag labels are only
+    recorded for the search's pooled selection. An empty `target_valid` is a refit."""
     _check_params(params)
     schedule = search.check_schedule(schedule)
     # Reuse the shared strict schedule/key validator; unused phase1 axes are not searched.
     two_phase.check_hyper({**{k: 1. for k in two_phase.PHASE_ONE_KEYS},
                           "tauLocal": 1., "lr2": params["lr2"], "wd2": params["wd2"],
                           **schedule})
-    if not target_valid or not target_train or not source_train:
-        raise ValueError("nonempty train and validation bags required")
+    if not target_train or not source_train:
+        raise ValueError("nonempty source and target training bags required")
     device = torch.device(device)
     generator = torch.Generator().manual_seed(seed)
     optimizer = torch.optim.Adam(model.target_trunk.parameters(), lr=params["lr2"],
                                  weight_decay=params["wd2"])
     queues = two_phase.ClassQueues(source_train, model.classes, generator)
-    history, best_state, best_epoch, best = [], None, -1, -math.inf
-    secondary_state, secondary_best = None, -math.inf
+    history, validation = [], []
     keeper = two_phase.LabelFreeBest(label_free)
     reference_state = _snapshot(context.reference)
     for epoch in range(schedule["epochs2"]):
@@ -135,20 +138,18 @@ def train_phase_two(model: HASDModel, context: AdaptationContext, source_train,
             totals["loss"] += float(step["objective"].detach())
             for k in ("das", "sgir", "pacr", "transport_mass"):
                 totals[k] += float(step[k].detach())
-        predictions = two_phase.evaluate(model, target_valid, "target", device)
-        accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
-                                               predictions.argmax(1).tolist())
-        score = two_phase.label_free_score(predictions)
+        accuracy, score = math.nan, math.nan
+        if target_valid:
+            predictions = two_phase.evaluate(model, target_valid, "target", device)
+            accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
+                                                   predictions.argmax(1).tolist())
+            score = two_phase.label_free_score(predictions)
+            validation.append(two_phase.validation_record(epoch, target_valid, predictions))
         history.append({"epoch": epoch, "seed": seed, "fold": fold,
                         "model": "HASD:phase2", "transfer": transfer,
                         **{k: v / len(batches) for k, v in totals.items()},
                         "val_balanced_accuracy": accuracy, "label_free_score": score})
-        if accuracy > best:
-            best, best_epoch, best_state = accuracy, epoch, _snapshot(model.target_trunk)
         keeper.offer(epoch, score, model)
-        if score > secondary_best:
-            secondary_best, secondary_state = score, _snapshot(model.target_trunk)
-    model.target_trunk.load_state_dict(best_state)
     model.eval()
     for k, v in two_phase.phase_one_state(model).items():
         if not torch.equal(v, context.frozen_state[k]):
@@ -156,14 +157,13 @@ def train_phase_two(model: HASDModel, context: AdaptationContext, source_train,
     for k, v in context.reference.state_dict().items():
         if not torch.equal(v, reference_state[k]):
             raise two_phase.FrozenPartsMoved(f"HASD initial target reference moved: {k}")
+    last = len(history) - 1
     return two_phase.with_label_free({
-            "checkpoint": {"target_state": best_state, "epoch": best_epoch,
-                            "valid_balanced_accuracy": best,
-                            "label_free_score": history[best_epoch]["label_free_score"],
-                            "hyper": {**params, **schedule}},
-            "best_epoch": best_epoch, "epochs": len(history), "history": history,
-            "secondary_checkpoint": {"target_state": secondary_state,
-                                      "label_free_score": secondary_best}}, keeper)
+            "checkpoint": {"target_state": _snapshot(model.target_trunk), "epoch": last,
+                           "valid_balanced_accuracy": accuracy, "label_free_score": score,
+                           "hyper": {**params, **schedule}},
+            "best_epoch": last, "epochs": len(history), "history": history,
+            "validation": validation}, keeper)
 
 
 def train_search_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
@@ -195,7 +195,9 @@ def train_search_phase_two(data, rotation, seed, record, params, schedule, devic
 def run_transfer_rotation(transfer: assignment.Transfer, rotation: int, seed: int,
                           phase_one_hyper: Mapping, params: Mapping, schedule: Mapping,
                           *, bags: bag_data.BagSet | None = None, device="cpu") -> dict:
-    """Wiring only: existing assignment/data/supervision and final test predictions.
+    """Wiring only: existing assignment/data/supervision and final test predictions, on
+    the frozen rotation's own roles (a single-rotation rehearsal, not the nested
+    selection, which `search` and `campaign` run).
 
     Callers save with shared search.save_phase_one/save_phase_two or model_store;
     no result files or partition writes occur implicitly in this function.

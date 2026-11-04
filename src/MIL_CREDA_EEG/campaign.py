@@ -1,40 +1,44 @@
 """The campaign: the plan's declared steps, wired to runnable local commands.
 
-Experiments plan v43, Secs. 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
+Experiments plan v50, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
 The steps, in order (`STEPS`), each one a subcommand of
 `python -m MIL_CREDA_EEG.campaign <step> --config <file> [--product <dir>]`:
 
-1. `search` -- per transfer, the four phase-1 studies (one per group a
-   requested strategy starts from), each chosen configuration retrained at the
-   search seed in every rotation and stored, then one phase-2 study per
-   strategy from those checkpoints (`search.run_phase_one_study`,
-   `search.run_phase_two_study`). An existing study of the same identity is
-   continued up to its declared count, or read back when complete; a study of
-   another identity is refused naming what differs (`search.open_study`).
-2. `final` -- per transfer and rotation, at the one report seed (Sec. 4.6, seed
-   1): the chosen phase-1 configuration of each group (one over the four
-   rotations, Sec. 7.3) trained and stored, its source-only control on the
-   target test fold (`controls`; the device arm records `NA_RECORD`), the
-   phase-2 configuration Sec. 4.5 selects for that rotation's test fold
-   (`search.select_per_rotation`, over the three rotations whose validation fold
-   is not that test fold) trained from the checkpoint of the same rotation and
-   stored with the selection that chose it, its target test predictions, and the
-   target-supervised upper bound with the common group's chosen `lr1`, `wd1`.
-   Where the label-free rule selects another configuration for a rotation, that
-   one is trained and stored too (`Models/Balladeer/label-free-rule/`) at the
-   epoch with the best label-free score of its own run, never the epoch the
-   target-validation accuracy chose (Sec. 4.5, 7.7; its sidecar names the epoch
-   and the rule), its per-epoch records go to `runs/history_label_free.jsonl` and
-   its test predictions are recorded apart (`runs/predictions_label_free.jsonl`);
-   where the rules coincide the primary model's predictions are recorded for it.
-   A model already stored is not trained again (an interrupted run resumes).
+1. `search` -- the nested cross-validation's inner level, per transfer and outer
+   fold r (test fold k, non-test folds F): the phase-1 study of each group a
+   requested strategy starts from, trained on the three inner splits of F
+   (`search.run_phase_one_study`); its selected (configuration, E1)
+   (`search.select`) refit on the source subjects of all of F for exactly E1
+   epochs at the search seed and stored, the one phase-1 checkpoint of that group
+   and outer fold; then one phase-2 study per strategy, every trial starting from
+   that checkpoint in each inner split (`search.run_phase_two_study`). An
+   existing study of the same identity is continued up to its declared count, or
+   read back when complete; a study of another identity is refused naming what
+   differs (`search.open_study`).
+2. `final` -- per transfer and outer fold r, at the one report seed (Sec. 4.6,
+   seed 1): each group's selected phase-1 (configuration, E1) of r refit on the
+   source subjects of F for exactly E1 epochs and stored, its source-only control
+   on the target test fold (`controls`; the device arm records `NA_RECORD`), each
+   strategy's selected phase-2 (configuration, E2) of r refit from that
+   checkpoint on the target bags of F for exactly E2 epochs, with no validation,
+   and stored with the selection that chose it, its target test predictions, and
+   the target-supervised upper bound with the common group's selected `lr1`,
+   `wd1` of r (`controls.train_upper_bound`). Where the label-free rule selects
+   another (trial, epoch) for r, that one is refit the same way and stored apart
+   (`Models/Balladeer/label-free-rule/`), its per-epoch records go to
+   `runs/history_label_free.jsonl` and its test predictions are recorded apart
+   (`runs/predictions_label_free.jsonl`); where both rules select the same
+   (trial, epoch), the primary model is reused and its predictions are recorded
+   for the label-free rule (Sec. 4.5). The test fold of r enters no decision. A
+   model already stored is not trained again (an interrupted run resumes).
 3. `k3` -- Sec. 6.3 on the core transfers, per rotation at the report seed: the
    four aggregation variants (`aggregation_variants`: the own attention without
    consensus, the published and gated attentions and the mean) trained through
    both phases and the two ablation variants (global term only, local term only)
    trained in phase 2 from full MIL-CREDA's stored phase-1 checkpoint, all with
-   full MIL-CREDA's selected hyperparameters of the transfer and no search of
-   their own -- per test rotation, the selection of Sec. 4.5
+   full MIL-CREDA's selected hyperparameters and epoch counts (E1, E2) of the
+   transfer and outer fold, refit on the non-test folds with no validation, and no
+   search of their own -- per outer fold, the selection of Sec. 4.5
    (`mechanisms.train_aggregation_variant`,
    `mechanisms.train_ablation_variant`). Sec. 6.2's "without local term" is the
    global-term-only variant, so it is also trained on a declared K2 transfer that
@@ -60,7 +64,7 @@ The steps, in order (`STEPS`), each one a subcommand of
    from the recorded histories (`mechanisms`).
 6. `results` -- the Sec. 5.4 outputs: the per-epoch histories
    (`Results/history_<experiment>.json`), the chosen hyperparameters, fANOVA
-   importance, the two selection rules per test rotation
+   importance per study, the two selection rules per outer fold
    (`selection_rules`, `selected_configurations`), and the declared figures through
    `ps_figures`: per arm the convergence curves, the optimization history,
    MIL-CREDA's contour and the critical-difference diagram; the domain-shift
@@ -75,20 +79,22 @@ commands run in this process, on `config["device"]` (default `cpu`). Placing a
 step on a remote worker belongs to `remote-execution`, behind the operator.
 
 **Required inputs (no default, `CampaignError` when absent).** The schedule
-(`epochs1`, `patience1`, `epochs2`, `bagsPerStep`: the pilot fixes them,
-Sec. 7.6) and the strategies and transfers to run. Plan v42 resolved every
-decision the earlier inputs stood in for -- the seed reduction (one report
-seed), K1's common attention, band edges and scope (Sec. 6.1), and the open
-comparator decisions (Sec. 7.7) -- so those inputs are retired and refused when
-given (`RETIRED_INPUTS`), never silently ignored.
+(`epochs1` and `epochs2`, the search's epoch caps, and `bagsPerStep`: the pilot
+fixes them, Sec. 7.6; there is no patience, Sec. 7.7) and the strategies and
+transfers to run. Plan v42 resolved every decision the earlier inputs stood in
+for -- the seed reduction (one report seed), K1's common attention, band edges
+and scope (Sec. 6.1), and the open comparator decisions (Sec. 7.7) -- so those
+inputs are retired and refused when given (`RETIRED_INPUTS`), never silently
+ignored.
 
 **Reuse is checked.** A stored study, model or prediction is reused only when it
 was produced under the partition in force, this plan revision (`REVISION`) and the
 current code version (`identity`). A stored study must carry its full identity
 (`_study_identity`: also its search space, schedule, sampler seed and trial
-budget); a stored phase-1 checkpoint, the hyperparameters and schedule now
-requested; a stored phase-2 model, the selection now in force with its
-hyperparameters and schedule. A stale one is refused, naming what differs. The
+budget, outer fold and inner splits); a stored phase-1 checkpoint, the
+hyperparameters and refit schedule (with its E1) now requested; a stored phase-2
+model, the selection (trial and epoch) now in force with its hyperparameters and
+refit schedule. A stale one is refused, naming what differs. The
 model store itself refuses a model of another plan revision on every load
 (`model_store.RevisionMismatch`).
 
@@ -112,8 +118,8 @@ listed as owed when there is none.
 from __future__ import annotations
 
 import argparse
-import copy
 import json
+import types
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -131,8 +137,8 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.mil_wrapper import COMPARATORS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
-    "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3", "7.3",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["4.2", "4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3", "7.3",
                  "7.5", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
@@ -150,9 +156,10 @@ __provenance__ = {
         "every_changed_module_answers_to_one_plan_revision",
         "a_reduced_run_is_refused_outside_rehearsal_mode",
         "the_rehearsal_summaries_say_so",
-        "phase_two_is_selected_per_test_rotation_and_phase_one_once",
+        "both_phases_are_selected_per_outer_fold_and_refit_for_their_epochs",
+        "one_phase_one_checkpoint_per_group_and_outer_fold",
         "the_label_free_rule_is_measured_on_the_test_fold",
-        "the_label_free_final_models_keep_their_label_free_epoch",
+        "the_label_free_final_models_are_refit_at_their_trial_and_epoch",
         "the_label_free_histories_are_written_apart_from_the_strategies",
         "the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation",
         "a_stored_model_is_not_trained_again",
@@ -346,21 +353,25 @@ def _study(path: Path, n_trials: int, partition_sha256: str, expect: Mapping | N
     return study
 
 
-def _study_identity(data: search.SearchData, phase: int, name: str, cfg: Mapping) -> dict:
+def _study_identity(data: search.SearchData, phase: int, name: str, rotation: int,
+                    cfg: Mapping) -> dict:
     """The identity a stored study must carry to be read back: every field the search step
-    records (`search.study_identity`) -- transfer, partition, plan revision, code version,
-    search space, schedule, sampler and its seed, trial budget, rotation folds -- except
-    the objective's wording, which the search step alone states."""
-    expected = search.study_identity(data, phase, name, cfg["schedule"], cfg["nTrials"], "")
+    records (`search.study_identity`) -- transfer, outer fold and inner splits, partition,
+    plan revision, code version, search space, schedule, sampler and its seed, trial
+    budget -- except the objective's wording, which the search step alone states."""
+    expected = search.study_identity(data, phase, name, rotation, cfg["schedule"],
+                                     cfg["nTrials"], "")
     expected.pop("objective")
     return expected
 
 
 def _stored_study(product: Path, data: search.SearchData, phase: int, name: str,
-                  cfg: Mapping):
-    """The completed study of `name`, refused unless its full identity is the current one."""
-    return _study(search.study_path(product, data.transfer, phase, name), cfg["nTrials"],
-                  data.partition_sha256, _study_identity(data, phase, name, cfg))
+                  rotation: int, cfg: Mapping):
+    """The completed study of `name` and outer fold `rotation`, refused unless its full
+    identity is the current one."""
+    return _study(search.study_path(product, data.transfer, phase, name, rotation),
+                  cfg["nTrials"], data.partition_sha256,
+                  _study_identity(data, phase, name, rotation, cfg))
 
 
 def _same(a, b) -> bool:
@@ -390,24 +401,32 @@ def _reuse(path: Path, current: Mapping, expect: Mapping | None = None,
     return path
 
 
+def _selections(product: Path, data: search.SearchData, phase: int, name: str,
+                cfg: Mapping, rule: str = "primary") -> dict[int, dict]:
+    """Sec. 4.5: per outer fold, the (configuration, epoch) `rule` selects in its study."""
+    return {r: search.select(_stored_study(product, data, phase, name, r, cfg), rule)
+            for r in sorted(data.folds)}
+
+
 def _phase_two_selection(product: Path, data: search.SearchData, strategy: str,
                          cfg: Mapping, rule: str = "primary") -> dict[int, dict]:
-    """Sec. 4.5: the configuration chosen for each test rotation by `rule`."""
-    study = _stored_study(product, data, 2, strategy, cfg)
-    return search.select_per_rotation(study, data.folds, rule)
+    """Sec. 4.5: the phase-2 (configuration, E2) chosen for each outer fold by `rule`."""
+    return _selections(product, data, 2, strategy, cfg, rule)
 
 
-def phase_one_study(group: str, data: search.SearchData, cfg: Mapping, product: Path):
-    """The search step: run, continue (same identity) or read back a phase-1 study."""
-    return search.run_phase_one_study(group, data, cfg["schedule"], root=product,
-                                      n_trials=cfg["nTrials"], device=cfg["device"])
-
-
-def phase_two_study(strategy: str, data: search.SearchData, records: Mapping, cfg: Mapping,
+def phase_one_study(group: str, data: search.SearchData, rotation: int, cfg: Mapping,
                     product: Path):
-    """The search step: run, continue (same identity) or read back a phase-2 study."""
-    return search.run_phase_two_study(strategy, data, records, cfg["schedule"], root=product,
+    """The search step: run, continue (same identity) or read back a phase-1 study."""
+    return search.run_phase_one_study(group, data, rotation, cfg["schedule"], root=product,
                                       n_trials=cfg["nTrials"], device=cfg["device"])
+
+
+def phase_two_study(strategy: str, data: search.SearchData, rotation: int, record,
+                    cfg: Mapping, product: Path):
+    """The search step: run, continue (same identity) or read back a phase-2 study."""
+    return search.run_phase_two_study(strategy, data, rotation, record, cfg["schedule"],
+                                      root=product, n_trials=cfg["nTrials"],
+                                      device=cfg["device"])
 
 
 def _groups(strategies: Sequence[str]) -> list[str]:
@@ -416,16 +435,34 @@ def _groups(strategies: Sequence[str]) -> list[str]:
 
 
 def _phase_one_checkpoint(group: str, data: search.SearchData, rotation: int, seed: int,
-                          params: Mapping, cfg: Mapping, product: Path) -> tuple[Path, list]:
-    """The stored phase-1 checkpoint of `group` at `seed`; trained once when absent."""
+                          selection: Mapping, cfg: Mapping, product: Path) -> tuple[Path, list]:
+    """The stored phase-1 checkpoint of `group`, outer fold `rotation` and `seed`: the
+    selected configuration refit on the source subjects of every non-test fold for exactly
+    its E1 epochs (Sec. 4.5); trained once when absent."""
     path = model_store.model_path(_models(product), data.transfer, rotation, seed, 1, group)
-    hyper = search.phase_one_hyper(group, params, cfg["schedule"])
+    schedule = search.refit_schedule(cfg["schedule"], 1, selection["epochs"])
+    hyper = search.phase_one_hyper(group, selection["params"], schedule)
     if path.exists():
         stored = {k: hyper[k] for k in (*two_phase.PHASE_ONE_KEYS, *two_phase.SCHEDULE_KEYS)}
         return _reuse(path, identity(data.partition_sha256), hyper=stored), []
     trained = search.train_phase_one(group, data, rotation, seed, hyper, cfg["device"])
     search.save_phase_one(_models(product), group, data, rotation, seed, trained)
     return path, trained["result"]["history"]
+
+
+def _phase_one_record(product: Path, data: search.SearchData, group: str, rotation: int,
+                      seed: int, cfg: Mapping):
+    return model_store.load(model_store.model_path(_models(product), data.transfer, rotation,
+                                                   seed, 1, group),
+                            partition_path=_partition_path(cfg))
+
+
+def _measured(record: Mapping) -> dict:
+    """A history record without the values that were not measured: a refit has no
+    validation set (Sec. 4.5), so its NaN validation series are left out, never written
+    as numbers."""
+    return {k: v for k, v in record.items()
+            if not (isinstance(v, float) and not np.isfinite(v))}
 
 
 def _append_history(product: Path, experiment: str, records: Sequence[Mapping],
@@ -436,7 +473,7 @@ def _append_history(product: Path, experiment: str, records: Sequence[Mapping],
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         for r in records:
-            handle.write(json.dumps(results._plain(r), allow_nan=False) + "\n")
+            handle.write(json.dumps(results._plain(_measured(r)), allow_nan=False) + "\n")
 
 
 def read_history(product: Path, experiment: str, rule: str = "primary") -> list[dict]:
@@ -447,25 +484,24 @@ def read_history(product: Path, experiment: str, rule: str = "primary") -> list[
 
 
 def run_search(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
-    """Step 1: phase-1 studies, their search-seed checkpoints, phase-2 studies."""
+    """Step 1: per outer fold, the phase-1 studies, each group's one refit checkpoint at the
+    search seed, and the phase-2 studies from it."""
     bags = bags or load_bags(cfg)
     register(cfg["strategies"])
     done = {}
     for transfer in transfers_of(cfg):
         data = search.search_data(transfer, bags)
-        for group in _groups(cfg["strategies"]):
-            study = phase_one_study(group, data, cfg, product)
-            for r in sorted(data.rotations):
-                _phase_one_checkpoint(group, data, r, search.SEARCH_SEED, study.best_params,
-                                      cfg, product)
-            done[f"{transfer.name}:phase1:{group}"] = study.best_value
-        for strategy in cfg["strategies"]:
-            group = search.PHASE_ONE_GROUP_OF[strategy]
-            records = {r: model_store.load(model_store.model_path(
-                _models(product), transfer, r, search.SEARCH_SEED, 1, group),
-                partition_path=_partition_path(cfg)) for r in sorted(data.rotations)}
-            study = phase_two_study(strategy, data, records, cfg, product)
-            done[f"{transfer.name}:phase2:{strategy}"] = study.best_value
+        for r in sorted(data.rotations):
+            for group in _groups(cfg["strategies"]):
+                study = phase_one_study(group, data, r, cfg, product)
+                _phase_one_checkpoint(group, data, r, search.SEARCH_SEED,
+                                      search.select(study), cfg, product)
+                done[f"{transfer.name}:phase1:{group}:outer{r}"] = study.best_value
+            for strategy in cfg["strategies"]:
+                record = _phase_one_record(product, data, search.PHASE_ONE_GROUP_OF[strategy],
+                                           r, search.SEARCH_SEED, cfg)
+                study = phase_two_study(strategy, data, r, record, cfg, product)
+                done[f"{transfer.name}:phase2:{strategy}:outer{r}"] = study.best_value
     return done
 
 
@@ -495,44 +531,42 @@ def _predicted(product: Path, experiment: str, current: Mapping,
             for r in _read_predictions(product, experiment, current, rule)}
 
 
+#: What a stored phase-2 model records of the selection that chose it (Sec. 4.5).
+SELECTION_FIELDS = ("rule", "trial", "params", "epoch", "epochs", "testFold",
+                    "selectionRotations", "excludedRotation", "score")
+
+
 def _selection_record(selection: Mapping, schedule: Mapping) -> dict:
     """What a stored phase-2 model records of the selection that chose it (Sec. 4.5), with
-    the hyperparameters and schedule it was trained at, which its reuse is checked against."""
-    return {**{k: selection[k] for k in ("rule", "trial", "params", "testFold",
-                                         "selectionRotations", "excludedRotation", "score")},
-            "schedule": dict(schedule)}
+    the refit schedule it was trained at, which its reuse is checked against."""
+    return {**{k: selection[k] for k in SELECTION_FIELDS}, "schedule": dict(schedule)}
 
 
 def _label_free_history(history: Sequence[Mapping], strategy: str, epoch: int) -> list[dict]:
-    """A label-free model's per-epoch records: its run's history, tagged with the rule and
-    the label-free epoch the stored model keeps."""
+    """A label-free model's per-epoch records: its refit's history, tagged with the rule
+    and the label-free epoch it was refit to."""
     return [{**h, "model": h.get("model", f"{strategy}:phase2"), "selectionRule": "label-free",
              "labelFreeEpoch": int(epoch)} for h in history]
 
 
+def _same_choice(a: Mapping, b: Mapping) -> bool:
+    """Sec. 4.5: the two rules coincide when they select the same trial AND epoch."""
+    return (a["trial"], a["epoch"]) == (b["trial"], b["epoch"])
+
+
 def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int, seed: int,
                      record, selection: Mapping, cfg: Mapping, device: torch.device,
-                     ppath: Path, label_free_root: Path | None = None,
-                     label_free_selection: Mapping | None = None) -> tuple:
-    """(model, history, label-free history): the stored phase-2 model of this selection, or
-    trained and stored. A reused model has neither history (None, None); a trained one has
-    its run's history, and the label-free history (`_label_free_history`) when this call
-    stored a label-free model, else None.
+                     ppath: Path) -> tuple:
+    """(model, history): the stored phase-2 model of this selection, or refit and stored.
 
-    A label-free selection keeps the epoch with the best label-free score of its own run
-    (Sec. 4.5 and 7.7, `search.label_free_trained`), and its sidecar names that epoch and
-    the rule; a stored one that does not is stale.
-
-    With `label_free_root`, a primary run trained here also stores the label-free rule's
-    model from that same run (the rules chose the same configuration): the run is reused,
-    its epoch is the label-free one, and no target label chooses it (Sec. 4.5); that run's
-    history is returned as the label-free model's history too."""
-    label_free = selection["rule"] == "label-free"
-    also_free = label_free_root is not None
-    schedule = cfg["schedule"]
+    The refit starts from `record`, the phase-1 checkpoint of this outer fold and seed, and
+    runs on the target bags of every non-test fold for exactly the selected epoch count,
+    with no validation (Sec. 4.5). A reused model has no history (None)."""
+    schedule = search.refit_schedule(cfg["schedule"], 2, selection["epochs"])
     expect = {"rule": selection["rule"], "trial": selection["trial"],
-              "params": selection["params"], "schedule": dict(schedule)}
-    if label_free:
+              "params": selection["params"], "epoch": selection["epoch"],
+              "schedule": dict(schedule)}
+    if selection["rule"] == "label-free":
         expect["epochRule"] = two_phase.LABEL_FREE_EPOCH_RULE
     path = model_store.model_path(root, data.transfer, r, seed, 2, strategy)
     if path.exists():
@@ -542,39 +576,26 @@ def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int,
         requested = {**selection["params"], **schedule}
         _reuse(path, identity(data.partition_sha256), expect,
                hyper={k: v for k, v in requested.items() if k in (stored.get("hyper") or {})})
-        return mechanisms.load_phase_two(path, partition_path=ppath)[0].to(device), None, None
+        return mechanisms.load_phase_two(path, partition_path=ppath)[0].to(device), None
     trained = search.train_phase_two(strategy, data, r, seed, record, selection["params"],
-                                     schedule, device, label_free=label_free or also_free)
-    history = trained["result"]["history"]
+                                     schedule, device)
     chosen = _selection_record(selection, schedule)
-    free_history = None
-    if also_free and not label_free:
-        free = search.label_free_trained({**trained, "model": copy.deepcopy(trained["model"])})
-        free_epoch = free["result"]["checkpoint"]["epoch"]
-        free_chosen = _selection_record(label_free_selection, schedule)
-        free_chosen.update(epoch=free_epoch, epochRule=two_phase.LABEL_FREE_EPOCH_RULE,
-                           sameRunAsPrimary=True)
-        search.save_phase_two(label_free_root, strategy, data, r, seed, free,
-                              selection=free_chosen)
-        free_history = _label_free_history(history, strategy, free_epoch)
-    if label_free:
-        trained = search.label_free_trained(trained)
-        chosen.update(epoch=trained["result"]["checkpoint"]["epoch"],
-                      epochRule=two_phase.LABEL_FREE_EPOCH_RULE)
-        free_history = _label_free_history(history, strategy, chosen["epoch"])
+    if selection["rule"] == "label-free":
+        chosen["epochRule"] = two_phase.LABEL_FREE_EPOCH_RULE
     search.save_phase_two(root, strategy, data, r, seed, trained, selection=chosen)
-    return trained["model"], history, free_history
+    return trained["model"], trained["result"]["history"]
 
 
 def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
-    """Step 2: phase 1 and phase 2 at every report seed, with controls and upper bound.
+    """Step 2: per outer fold, the refits of both phases at every report seed, with the
+    controls and the upper bound.
 
-    Phase 1 trains its group's one selected configuration in every rotation; phase 2
-    trains, in rotation r, the configuration Sec. 4.5 selects for r's test fold. Where the
-    label-free rule selects another configuration for r, that one is trained and stored
-    too (`LABEL_FREE_MODELS`) and its test predictions recorded apart; where both rules
-    coincide, the primary model's predictions are recorded for it. Nothing is selected
-    with test outcomes.
+    Each group's phase-1 (configuration, E1) and each strategy's phase-2 (configuration,
+    E2) selected for outer fold r are refit on its non-test folds; where the label-free
+    rule selects another (trial, epoch) for r, that one is refit and stored too
+    (`LABEL_FREE_MODELS`) and its test predictions recorded apart; where both rules
+    coincide, the primary model is reused and its predictions are recorded for it.
+    Nothing is selected with test outcomes.
     """
     bags = bags or load_bags(cfg)
     register(cfg["strategies"])
@@ -587,20 +608,20 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
         experiment = results.EXPERIMENT_OF_ARM[transfer.arm]
         data = search.search_data(transfer, bags)
         a = assignment_mod.assign_from_bags(transfer, bags)
-        best_one = {g: _stored_study(product, data, 1, g, cfg).best_params
-                    for g in _groups(cfg["strategies"])}
+        best_one = {g: _selections(product, data, 1, g, cfg) for g in _groups(cfg["strategies"])}
         primary = {s: _phase_two_selection(product, data, s, cfg) for s in cfg["strategies"]}
         free = {s: _phase_two_selection(product, data, s, cfg, "label-free")
                 for s in cfg["strategies"]}
         done = _predicted(product, experiment, current)
         done_free = _predicted(product, experiment, current, "label-free")
+        free_root = _models(product) / LABEL_FREE_MODELS
         for r in sorted(data.rotations):
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
             for seed in cfg["reportSeeds"]:
                 out, out_free = [], []
                 for group in best_one:
-                    path, history = _phase_one_checkpoint(group, data, r, seed, best_one[group],
-                                                          cfg, product)
+                    path, history = _phase_one_checkpoint(group, data, r, seed,
+                                                          best_one[group][r], cfg, product)
                     counts["trained_phase1"] += bool(history)
                     _append_history(product, experiment, history)
                     key = f"source-only:{group}"
@@ -612,57 +633,44 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                         out += _tag(control["predictions"], key, transfer.name, r, seed)
                 for strategy in cfg["strategies"]:
                     key = (strategy, transfer.name, r, seed)
-                    coincide = free[strategy][r]["trial"] == primary[strategy][r]["trial"]
+                    coincide = _same_choice(free[strategy][r], primary[strategy][r])
                     need, need_free = key not in done, key not in done_free
                     if not need and not need_free:
                         continue
-                    group = search.PHASE_ONE_GROUP_OF[strategy]
-                    record = model_store.load(model_store.model_path(
-                        _models(product), transfer, r, seed, 1, group), partition_path=ppath)
-                    free_root = _models(product) / LABEL_FREE_MODELS
+                    record = _phase_one_record(product, data, search.PHASE_ONE_GROUP_OF[strategy],
+                                               r, seed, cfg)
                     if need or coincide:
-                        model, history, same_run = _phase_two_model(
+                        model, history = _phase_two_model(
                             _models(product), strategy, data, r, seed, record,
-                            primary[strategy][r], cfg, device, ppath,
-                            label_free_root=free_root if need_free and coincide else None,
-                            label_free_selection=free[strategy][r])
+                            primary[strategy][r], cfg, device, ppath)
                         if history is not None:
                             _append_history(product, experiment, [
                                 {**h, "model": h.get("model", f"{strategy}:phase2")}
                                 for h in history])
                             counts["trained_phase2"] += 1
-                        # the label-free model stored from this same run has its history
-                        _append_history(product, experiment, same_run or [], rule="label-free")
                         tagged = _tag(two_phase.predictions(model, test, transfer.name, device),
                                       strategy, transfer.name, r, seed)
                         out += tagged if need else []
-                    if need_free and coincide:
-                        # The same configuration: the label-free model is the primary run at
-                        # its label-free epoch, stored above when that run was trained here;
-                        # a primary run read from disk gets its label-free model trained once.
-                        free_model, _, free_history = _phase_two_model(
+                        if need_free and coincide:
+                            # Sec. 4.5: the same (trial, epoch): the primary model is reused.
+                            out_free += [{**x, "labelFreeModel": "the primary model (same "
+                                                                 "trial and epoch)"}
+                                         for x in tagged]
+                    if need_free and not coincide:
+                        model, free_history = _phase_two_model(
                             free_root, strategy, data, r, seed, record, free[strategy][r],
                             cfg, device, ppath)
                         counts["trained_label_free"] += free_history is not None
-                        _append_history(product, experiment, free_history or [],
-                                        rule="label-free")
-                        out_free += [{**x, "labelFreeModel": "the primary run at its "
-                                                              "label-free epoch"} for x in _tag(
-                            two_phase.predictions(free_model, test, transfer.name, device),
-                            strategy, transfer.name, r, seed)]
-                    if need_free and not coincide:
-                        model, _, free_history = _phase_two_model(
-                            _models(product) / LABEL_FREE_MODELS, strategy, data, r, seed,
-                            record, free[strategy][r], cfg, device, ppath)
-                        counts["trained_label_free"] += free_history is not None
-                        _append_history(product, experiment, free_history or [],
-                                        rule="label-free")
+                        _append_history(product, experiment, _label_free_history(
+                            free_history or [], strategy, free[strategy][r]["epoch"]),
+                            rule="label-free")
                         out_free += [{**x, "labelFreeModel": "its own"} for x in _tag(
                             two_phase.predictions(model, test, transfer.name, device),
                             strategy, transfer.name, r, seed)]
                 if (results.UPPER_BOUND, transfer.name, r, seed) not in done and \
                         "common" in best_one:
-                    upper = controls.train_upper_bound(a, bags, r, seed, best_one["common"],
+                    upper = controls.train_upper_bound(a, bags, r, seed,
+                                                       best_one["common"][r]["params"],
                                                        cfg["schedule"], device)
                     _append_history(product, experiment, upper["history"])
                     out += _tag(controls.upper_bound_predictions(upper, test, device),
@@ -785,10 +793,11 @@ def _variant_hyper_row(table: str, variant: str, transfer: str, rotation: int,
     row = {"table": table, "variant": variant, "transfer": transfer, "rotation": rotation}
     for key in (*two_phase.PHASE_ONE_KEYS, *two_phase.PHASE_TWO_KEYS):
         row[key] = NOT_APPLICABLE if key in lacks else hyper[key]
-    row["search"] = ("none: full MIL-CREDA's selection for this transfer and test rotation, "
+    row["epochs1"], row["epochs2"] = hyper["epochs1"], hyper["epochs2"]
+    row["search"] = ("none: full MIL-CREDA's selection for this transfer and outer fold, "
                      "gamma = 0 (Sec. 6.3)" if variant == aggregation_variants.WITHOUT_CONSENSUS
-                     else "none: full MIL-CREDA's selection for this transfer and test "
-                          "rotation (Sec. 6.3)")
+                     else "none: full MIL-CREDA's selection for this transfer and outer "
+                          "fold (Sec. 6.3)")
     return row
 
 
@@ -818,10 +827,19 @@ def _save_variant(product: Path, data: search.SearchData, rotation: int, seed: i
                             channels=channels, sigma=sigma, extra=extra)
 
 
+def _k3_schedule(cfg: Mapping, phase_one: Mapping, phase_two: Mapping) -> dict:
+    """The refit schedule of a K3 variant: full MIL-CREDA's E1 and E2 of the outer fold."""
+    return {**search.refit_schedule(cfg["schedule"], 1, phase_one["epochs"]),
+            "epochs2": search.refit_schedule(cfg["schedule"], 2, phase_two["epochs"])["epochs2"]}
+
+
 def _k3_variant_model(product: Path, data: search.SearchData, rotation: int, seed: int,
                       table: str, variant: str, phase_one: Mapping, phase_two: Mapping,
-                      cfg: Mapping, device: torch.device, owed: list) -> tuple:
-    """(model, history, trained): the stored variant, or trained and stored when absent."""
+                      schedule: Mapping, cfg: Mapping, device: torch.device,
+                      owed: list) -> tuple:
+    """(model, history, trained): the stored variant, or refit and stored when absent.
+    `schedule` is the refit schedule (`_k3_schedule`); the variant trains on the non-test
+    folds with no validation (`search.SearchData.rotations`)."""
     ppath = _partition_path(cfg)
     name = model_store.variant_name(variant)
     path2 = model_store.model_path(_models(product), data.transfer, rotation, seed, 2, name)
@@ -835,7 +853,7 @@ def _k3_variant_model(product: Path, data: search.SearchData, rotation: int, see
         record = model_store.load(_reuse(path1, current), partition_path=ppath) \
             if path1.exists() else None
         trained = mechanisms.train_aggregation_variant(
-            data, rotation, seed, variant, phase_one, phase_two, cfg["schedule"], device,
+            data, rotation, seed, variant, phase_one, phase_two, schedule, device,
             phase_one_record=record)
         if record is None:
             checkpoint = trained["phase1"]["checkpoint"]
@@ -851,7 +869,7 @@ def _k3_variant_model(product: Path, data: search.SearchData, rotation: int, see
             return None, [], False
         trained = mechanisms.train_ablation_variant(
             data, rotation, seed, model_store.load(path1, partition_path=ppath), phase_two,
-            cfg["schedule"], variant, device)
+            schedule, variant, device)
     checkpoint = trained["result"]["checkpoint"]
     _save_variant(product, data, rotation, seed, 2, variant, trained["model"].state_dict(),
                   checkpoint["hyper"], trained["channels"], checkpoint["sigma"], checkpoint)
@@ -874,20 +892,21 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
             continue
         data = search.search_data(transfer, bags)
         a = assignment_mod.assign_from_bags(transfer, bags)
-        phase_one = _stored_study(product, data, 1, "MIL-CREDA", cfg).best_params
-        # Sec. 6.3: full MIL-CREDA's selection for each test rotation (Sec. 4.5)
+        # Sec. 6.3: full MIL-CREDA's selection of both phases for each outer fold (Sec. 4.5)
+        first = _selections(product, data, 1, "MIL-CREDA", cfg)
         selected = _phase_two_selection(product, data, "MIL-CREDA", cfg)
+        schedules = {r: _k3_schedule(cfg, first[r], selected[r]) for r in sorted(data.rotations)}
         for r in sorted(data.rotations):
-            phase_two = selected[r]["params"]
+            phase_one, phase_two = first[r]["params"], selected[r]["params"]
             hyper_rows += [_variant_hyper_row("aggregation", v, transfer.name, r,
                                               mechanisms.aggregation_hyper(
-                                                  phase_one, phase_two, cfg["schedule"], v))
+                                                  phase_one, phase_two, schedules[r], v))
                            for v in plan[transfer.name]["aggregation"]]
             hyper_rows += [_variant_hyper_row("ablation", v, transfer.name, r,
-                                              {**phase_one, **phase_two})
+                                              {**phase_one, **phase_two, **schedules[r]})
                            for v in plan[transfer.name]["ablation"]]
         for r in sorted(data.rotations):
-            phase_two = selected[r]["params"]
+            phase_one, phase_two = first[r]["params"], selected[r]["params"]
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
             for seed in cfg["reportSeeds"]:
                 out, history = [], []
@@ -899,8 +918,8 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
                         if (name, transfer.name, r, seed) in done and stored.exists():
                             continue
                         model, records, trained = _k3_variant_model(
-                            product, data, r, seed, table, variant, phase_one, phase_two, cfg,
-                            device, owed)
+                            product, data, r, seed, table, variant, phase_one, phase_two,
+                            schedules[r], cfg, device, owed)
                         if model is None:
                             continue
                         counts[f"trained_{table}"] += trained
@@ -940,8 +959,8 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
                               "k2_transfers": sorted(t for t, v in plan.items()
                                                      if not v["aggregation"])},
         "models": "stored per transfer, rotation and report seed (model_store.VARIANTS)",
-        "hyperparameters": "full MIL-CREDA's selection per transfer and test rotation "
-                           "(Sec. 4.5); no search of their own",
+        "hyperparameters": "full MIL-CREDA's selection and epoch counts per transfer and "
+                           "outer fold (Sec. 4.5); no search of their own",
         "pairs": written, "reportSeeds": cfg["reportSeeds"],
         "bootstrapResamples": cfg["bootstrapResamples"], "owed": sorted(set(owed))})
     results.write_summary(root, K3, summary, synthetic=cfg["synthetic"],
@@ -1151,14 +1170,22 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
             # what a study's identity reads, without loading any bag tensor
             known = search.SearchData(transfer=transfer, partition_sha256=bags.partition_sha256,
                                       rotations={}, folds=folds)
-            one = {g: _stored_study(product, known, 1, g, cfg)
+            outer = sorted(folds)
+            one = {g: {r: _stored_study(product, known, 1, g, r, cfg) for r in outer}
                    for g in _groups(cfg["strategies"])}
-            two = {s: _stored_study(product, known, 2, s, cfg) for s in cfg["strategies"]}
-            chosen = {s: {rule: search.select_per_rotation(study, folds, rule)
-                          for rule in search.RULES} for s, study in two.items()}
+            two = {s: {r: _stored_study(product, known, 2, s, r, cfg) for r in outer}
+                   for s in cfg["strategies"]}
+            chosen = {s: {rule: {r: search.select(study, rule) for r, study in by_r.items()}
+                          for rule in search.RULES} for s, by_r in two.items()}
+            # Sec. 5.4: phase 1's configuration and E1 per outer fold, in the one field the
+            # hyperparameter table reads.
+            first = {g: types.SimpleNamespace(best_params={
+                str(r): {**sel["params"], "E1": sel["epochs"]}
+                for r, sel in ((r, search.select(study)) for r, study in by_r.items())})
+                for g, by_r in one.items()}
             hp += results.hyperparameter_rows(
-                one, {s: c["primary"] for s, c in chosen.items()}, transfer.name)
-            for s, study in two.items():
+                first, {s: c["primary"] for s, c in chosen.items()}, transfer.name)
+            for s, by_r in two.items():
                 primary = results._pooled(results._select(records, s, [transfer.name]))
                 free = results._pooled(results._select(free_records, s, [transfer.name]))
                 selection.append(results.selection_rows(
@@ -1166,19 +1193,23 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
                     test_primary=primary["balanced_accuracy"] if primary else None,
                     test_label_free=free["balanced_accuracy"] if free else None))
                 detail += results.selected_configuration_rows(s, transfer.name, chosen[s])
-                try:
-                    importance += results.importance_rows(study, s)
-                except (RuntimeError, ValueError) as error:
-                    owed.append(f"fANOVA {study.study_name}: {error}")
+                for study in by_r.values():
+                    try:
+                        importance += results.importance_rows(study, s)
+                    except (RuntimeError, ValueError) as error:
+                        owed.append(f"fANOVA {study.study_name}: {error}")
             if transfer.name in core.get(arm, []):
-                studies.update({f"{s} ({transfer.name})": st_ for s, st_ in two.items()})
+                studies.update({f"{s} ({transfer.name}, outer {r})": st_
+                                for s, by_r in two.items() for r, st_ in by_r.items()})
         results.write_table(root, experiment, "hyperparameters", hp)
         results.write_table(root, experiment, "selection_rules", selection, note=(
-            "Per test rotation each rule selects over the three rotations whose validation "
-            "fold is not that test fold (Sec. 4.5). The label-free rule's test balanced "
-            "accuracy is pooled from its own final models where its configuration differs "
-            "from the primary one, and from the primary models where they coincide; nothing "
-            "is selected with test outcomes. Difference: primary minus label-free."))
+            "Per outer fold each rule selects a (trial, epoch) in that fold's study, on the "
+            "subject-level counts (primary) or target predictions (label-free) pooled over "
+            "the three inner splits of the non-test folds (Sec. 4.5). The label-free rule's "
+            "test balanced accuracy is pooled from its own refit models where its (trial, "
+            "epoch) differs from the primary one, and from the primary models where they "
+            "coincide; nothing is selected with test outcomes. Difference: primary minus "
+            "label-free."))
         results.write_table(root, experiment, "selected_configurations", detail)
         if importance:
             results.write_table(root, experiment, "importance", importance)
@@ -1289,7 +1320,7 @@ def write_synthetic_set(out: str | Path, *, seed: int = 0, subjects: int = 32,
     pair = [f"{conditions[0]}->{conditions[1]}", f"{conditions[1]}->{conditions[0]}"]
     config = {"synthetic": True, "processedRoot": str(out / "processed"),
               "partitionPath": str(ppath),
-              "schedule": {"epochs1": 2, "patience1": 1, "epochs2": 2, "bagsPerStep": 4},
+              "schedule": {"epochs1": 2, "epochs2": 2, "bagsPerStep": 4},
               "strategies": ["MIL-CREDA", "COT", "HASD"], "transfers": pair,
               "core": {arm: pair}, "nTrials": 4, "reportSeeds": list(REPORT_SEEDS),
               "bootstrapResamples": 500}

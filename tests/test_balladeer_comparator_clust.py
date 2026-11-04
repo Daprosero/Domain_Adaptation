@@ -28,7 +28,7 @@ def params():
 
 
 def schedule():
-    return dict(epochs1=1, patience1=1, epochs2=2, bagsPerStep=4)
+    return dict(epochs1=1, epochs2=2, bagsPerStep=4)
 
 
 def bags(prefix="t", channels=14):
@@ -201,7 +201,8 @@ def test_clust_teacher_momentum_is_one_minus_the_drawn_complement(monkeypatch):
     assert training.ema_momentum({"emaMomentumComplement": 0.1}) == pytest.approx(0.9)
 
 
-def test_clust_epoch_selection_restores_both_rules_and_dashboard_history(monkeypatch):
+def test_clust_keeps_the_last_epoch_and_records_validation_and_dashboard_history(
+        monkeypatch):
     m = model()
     accuracies, free = iter([.9, .2]), iter([.1, .8])
     monkeypatch.setattr(two_phase, "balanced_accuracy", lambda *a: next(accuracies))
@@ -209,10 +210,16 @@ def test_clust_epoch_selection_restores_both_rules_and_dashboard_history(monkeyp
     result = training.adapt_target_phase(m, bags(), bags("v"), params(), schedule(),
                                          torch.Generator().manual_seed(17), seed=7, fold=2,
                                          transfer="L6->Robots")
-    assert result["best_epoch"] == 0 and result["secondary_checkpoint"]["epoch"] == 1
+    # v50: no early stopping; the last epoch is kept even though epoch 0 scored best
+    assert result["best_epoch"] == 1 == result["checkpoint"]["epoch"]
     assert all(torch.equal(v, m.state_dict()[k]) for k, v in result["checkpoint"]["state"].items())
-    assert any(not torch.equal(v, result["secondary_checkpoint"]["state"][k])
-               for k, v in m.state_dict().items() if k.startswith("target_trunk."))
+    # the per-run label-free reading `clust.save(selection="secondary")` reads
+    assert result["secondary_checkpoint"]["epoch"] == 1
+    assert [v["epoch"] for v in result["validation"]] == [0, 1]
+    refit = training.adapt_target_phase(model(), bags(), [], params(), schedule(),
+                                        torch.Generator().manual_seed(17))
+    assert refit["validation"] == [] and refit["secondary_checkpoint"] is None
+    assert refit["epochs"] == schedule()["epochs2"]
     row = result["history"][0]
     assert (row["seed"], row["fold"], row["transfer"]) == (7, 2, "L6->Robots")
     assert row["model"].endswith(":phase2") and math.isfinite(row["loss"])

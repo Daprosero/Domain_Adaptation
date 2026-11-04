@@ -1,9 +1,11 @@
 """Every final model, saved per transfer, rotation, seed and group or strategy.
 
-Experiments plan v43, Sec. 7.3 (last paragraph of "Fase 2"), with Sec. 4.2's
-partition rule. Saved: the selected phase-1 checkpoint of each of the four
-phase-1 groups (`GROUPS`), with its sigma for MIL-CREDA, and the selected
-phase-2 model of each of the nine strategies (`STRATEGIES`). Sec. 6.3 stores
+Experiments plan v50, Secs. 4.5 and 7.3 (last paragraphs of "Fase 2"), with
+Sec. 4.2's partition rule. Saved, per outer fold (`rotation`): the one phase-1
+checkpoint of each of the four phase-1 groups (`GROUPS`), its selected
+configuration refit on the non-test folds for E1 epochs, with its sigma for
+MIL-CREDA, and the phase-2 model of each of the nine strategies (`STRATEGIES`),
+its selected configuration refit for E2 epochs. Sec. 6.3 stores
 the K3 variants the same way (`VARIANTS`, named `MIL-CREDA [<variant>]`,
 `variant_name`), because Sec. 6.1 reads their attention and Sec. 6.2 the
 global-term-only model: the four aggregation variants train both phases and
@@ -66,7 +68,7 @@ from MIL_CREDA_EEG import partition, two_phase
 from MIL_CREDA_EEG.bag_data import REPOSITORY, default_partition_path
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.2", "4.5", "6.3", "7.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],

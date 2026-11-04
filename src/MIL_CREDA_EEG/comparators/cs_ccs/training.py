@@ -6,7 +6,11 @@ trunk trains. Eq. 90, L = L_CE + lambda D_CS + beta D_CCS, keeps its source
 cross-entropy as a summand computed on frozen source bags: with the source
 trunk, the attention and the head frozen it carries no gradient, so it is
 reported and changes nothing. Target training labels are never read; target
-validation labels select the epoch only (Sec. 4.5).
+validation labels are only recorded for the search's pooled selection (Sec. 4.5).
+
+Plan v50 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
+early stopping, no restore); without target validation bags (the refit on every
+non-test fold) nothing is evaluated.
 """
 from __future__ import annotations
 
@@ -21,7 +25,7 @@ from MIL_CREDA_EEG import eegnet, mil_wrapper, model_store, search, two_phase
 from .divergences import ccs_divergence, cs_divergence, median_bandwidth, normalise
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -30,7 +34,7 @@ __provenance__ = {
         "cs_ccs_bandwidths_are_fixed_from_training_bags_at_phase_two_start",
         "cs_ccs_prediction_kernel_is_fixed_at_sigma_one_on_normalised_predictions",
         "cs_ccs_objective_is_eq_90_with_frozen_source_ce",
-        "cs_ccs_selection_restores_best_epoch_and_keeps_secondary",
+        "cs_ccs_keeps_the_last_epoch_and_records_validation_per_epoch",
         "cs_ccs_invalid_inputs_fail_closed",
         "cs_ccs_search_registration_is_explicit_and_restorable",
         "cs_ccs_search_hook_rejects_foreign_phase_one_records",
@@ -71,9 +75,10 @@ def check_params(params: Mapping) -> dict:
 
 
 def check_roles(source_train, target_train, target_valid) -> None:
-    """Non-empty roles, disjoint subjects; reads subjects only, never target labels."""
-    if not source_train or not target_train or not target_valid:
-        raise ValueError("source training, target training and target validation bags required")
+    """Non-empty training roles (a refit has no validation bags), disjoint subjects; reads
+    subjects only, never target labels."""
+    if not source_train or not target_train:
+        raise ValueError("source training and target training bags required")
     s = {b.subject for b in source_train}
     t = {b.subject for b in target_train}
     v = {b.subject for b in target_valid}
@@ -152,7 +157,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
                                 weight_decay=params["wd2"], momentum=MOMENTUM)
     hyper = {**params, **schedule, **bandwidths, "momentum": MOMENTUM}
     valid_labels = [b.label for b in target_valid]
-    history, primary, secondary = [], None, None
+    history, validation = [], []
     keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
@@ -170,39 +175,34 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
             eegnet.apply_max_norm(model.target_trunk)
             for k in sums:
                 sums[k] += float(terms[k].detach()) / len(batches)
-        prediction = two_phase.evaluate(model, target_valid, "target", device)
-        accuracy = two_phase.balanced_accuracy(valid_labels, prediction.argmax(1).tolist())
-        free = two_phase.label_free_score(prediction)
+        accuracy, free = math.nan, math.nan
+        if target_valid:
+            prediction = two_phase.evaluate(model, target_valid, "target", device)
+            accuracy = two_phase.balanced_accuracy(valid_labels, prediction.argmax(1).tolist())
+            free = two_phase.label_free_score(prediction)
+            validation.append(two_phase.validation_record(epoch, target_valid, prediction))
         history.append({"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
                         "model": f"{NAME}:phase2", **sums, **bandwidths,
                         "val_balanced_accuracy": accuracy, "label_free_score": free})
-        checkpoint = {"epoch": epoch, "valid_balanced_accuracy": accuracy,
-                      "label_free_score": free, "hyper": hyper}
-        if primary is None or accuracy > primary["valid_balanced_accuracy"]:
-            primary = {**checkpoint, "target_state": copy.deepcopy(model.target_trunk.state_dict())}
         keeper.offer(epoch, free, model)
-        if secondary is None or free > secondary["label_free_score"]:
-            secondary = {**checkpoint,
-                         "target_state": copy.deepcopy(model.target_trunk.state_dict())}
     final_state = copy.deepcopy(model.target_trunk.state_dict())
-    model.target_trunk.load_state_dict(primary["target_state"])
     two_phase.set_phase_two_modes(model)
     if not all(torch.equal(v, two_phase.phase_one_state(model)[k])
                for k, v in joint["frozen_state"].items()):
         raise two_phase.FrozenPartsMoved("CS+CCS changed a frozen phase-1 part")
-    restored = two_phase.evaluate(model, target_valid, "target", device)
-    if (two_phase.balanced_accuracy(valid_labels, restored.argmax(1).tolist())
-            != primary["valid_balanced_accuracy"]):
-        raise two_phase.RestoreFailed("CS+CCS restored validation score differs")
+    last = len(history) - 1
+    checkpoint = {"epoch": last, "valid_balanced_accuracy": accuracy, "label_free_score": free,
+                  "hyper": hyper, "target_state": final_state}
     return two_phase.with_label_free({
-            "checkpoint": primary, "secondary_checkpoint": secondary,
-            "best_epoch": primary["epoch"], "epochs": len(history), "history": history,
+            "checkpoint": checkpoint, "best_epoch": last, "epochs": len(history),
+            "history": history, "validation": validation,
             "bandwidths": bandwidths, "final_target_state": final_state,
             "layer_copy": joint["layer_copy"],
-            "selection": {"primary": "target-validation balanced accuracy (Sec. 4.5)",
-                          "secondary": "entropy of the mean prediction minus mean per-bag "
-                                       "entropy (Sec. 4.5)",
-                          "best_label_free_epoch": secondary["epoch"]}}, keeper)
+            "selection": {"primary": "pooled target-validation balanced accuracy, chosen by "
+                                     "the search (Sec. 4.5)",
+                          "secondary": "pooled entropy of the mean prediction minus mean "
+                                       "per-bag entropy, chosen by the search (Sec. 4.5)"}},
+        keeper)
 
 
 def check_record(data, rotation, seed, record) -> dict:

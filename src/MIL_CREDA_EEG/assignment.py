@@ -41,11 +41,19 @@ other condition is never returned by `side_bags`; the only way to it is
 the transfer in that rotation (Sec. 6.2): each common subject passes through
 the probe exactly once over the four rotations.
 
-**Eligibility (Sec. 4.3).** Read per side, each side needs at least five
-subjects per class in every fold. `eligibility` evaluates it per side and per
-fold, reports every (side, fold, label) cell under the minimum, the minimum
-per side and class, and the pooled target totals per class; it never
-excludes anything by itself.
+**Inner splits (plan v50, Secs. 4.2 and 4.5).** In rotation `r`, with test fold k,
+F is the other three frozen folds; `inner_splits(k)` gives the three inner splits of
+the nested cross-validation, each validating one fold of F and training on the other
+two, so every non-test subject is validated exactly once and the test fold is in none.
+They reuse the frozen folds; no new partition is drawn. `side_bags` reads them through
+the roles `inner_train` and `inner_validation` (with `split`), and the refit through
+`nontest`, every fold of F. The sides stay those of the transfer (Sec. 4.3).
+
+**The per-fold class minimum (plan v50, Sec. 4.3).** No group is excluded by its
+number of subjects per class and fold: the minimum is a declared limitation of
+the selection, reported, never a pass or fail. `eligibility` reports the
+subjects per (side, fold, label), the minimum per side and class over the folds,
+and the pooled target totals per class.
 """
 
 from __future__ import annotations
@@ -60,8 +68,8 @@ from MIL_CREDA_EEG import partition
 from MIL_CREDA_EEG.bag_data import Bag, BagSet
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
-    "sections": ["4.3", "4.6", "6.2", "5.1", "5.2", "5.3"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["4.2", "4.3", "4.5", "4.6", "6.2", "5.1", "5.2", "5.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K2-emparejamiento"],
     "invariants": [
         "the_ten_transfers_are_the_declared_ones",
@@ -81,15 +89,19 @@ __provenance__ = {
         "the_pooled_target_totals_are_reported_per_transfer_and_per_pair",
         "the_probe_reads_only_test_fold_commons",
         "the_other_condition_is_reached_only_through_the_probe_accessor",
-        "the_eligibility_rule_is_evaluated_and_reported",
+        "the_per_fold_class_minimum_is_reported_without_a_verdict",
+        "the_inner_splits_never_hold_the_test_fold_and_validate_each_non_test_fold_once",
+        "the_inner_roles_validate_every_non_test_subject_exactly_once",
     ],
 }
 
 SIDES = ("source", "target", "excluded")
 ROLES = ("train", "validation", "test")
+#: Plan v50, Secs. 4.2 and 4.5: the nested cross-validation's roles. The inner ones need
+#: an inner split; `nontest` is every fold but the test fold (the refit's training set).
+INNER_ROLES = ("inner_train", "inner_validation")
+REFIT_ROLE = "nontest"
 DEFAULT_SEED = partition.PARTITION_SEED
-#: Sec. 4.3: at least five subjects per class per fold.
-MIN_PER_CLASS_PER_FOLD = 5
 
 
 class AssignmentError(RuntimeError):
@@ -98,6 +110,19 @@ class AssignmentError(RuntimeError):
 
 class ProbeRefused(AssignmentError):
     """A subject's other condition was asked for outside the probe."""
+
+
+def inner_splits(test_fold: int, n_folds: int = partition.N_FOLDS) -> list[dict]:
+    """Plan v50, Sec. 4.2: the inner splits of the rotation whose test fold is `test_fold`.
+
+    F is every fold but the test fold, in fold order; split `i` validates F[i] and trains
+    on the other two. Each fold of F is validated once and the test fold is in no split.
+    """
+    if not 0 <= int(test_fold) < n_folds:
+        raise AssignmentError(f"test fold {test_fold} is not one of the {n_folds} folds")
+    non_test = [k for k in range(n_folds) if k != int(test_fold)]
+    return [{"inner": i, "validation_fold": v, "train_folds": [k for k in non_test if k != v]}
+            for i, v in enumerate(non_test)]
 
 
 @dataclass(frozen=True)
@@ -306,11 +331,42 @@ def pairs(assignments: Iterable[Assignment]) -> list[tuple[Assignment, Assignmen
 # ------------------------------------------------------------- accessors
 
 
-def side_bags(a: Assignment, bags: BagSet, side: str, r: int, role: str) -> list[Bag]:
-    """The bags of `side` in rotation `r` and `role`, each in its assigned condition."""
-    if side not in ("source", "target") or role not in ROLES:
+def _inner_folds(a: Assignment, r: int, role: str, split: int | None) -> set[int]:
+    """The folds of `role` in rotation `r`: an inner split's, or all of F for the refit."""
+    test = int(a.rotations[str(r)]["test_fold"])
+    if role == REFIT_ROLE:
+        if split is not None:
+            raise AssignmentError(f"the {REFIT_ROLE!r} role takes no inner split")
+        return {k for k in range(partition.N_FOLDS) if k != test}
+    if split is None:
+        raise AssignmentError(f"the {role!r} role needs an inner split (0, 1 or 2)")
+    splits = inner_splits(test)
+    if not 0 <= int(split) < len(splits):
+        raise AssignmentError(f"inner split {split} is not one of {len(splits)}")
+    chosen = splits[int(split)]
+    folds = ({chosen["validation_fold"]} if role == "inner_validation"
+             else set(chosen["train_folds"]))
+    if test in folds:
+        raise AssignmentError(f"rotation {r}: the test fold {test} entered an inner split")
+    return folds
+
+
+def side_bags(a: Assignment, bags: BagSet, side: str, r: int, role: str, *,
+              split: int | None = None) -> list[Bag]:
+    """The bags of `side` in rotation `r` and `role`, each in its assigned condition.
+
+    `role` is one of `ROLES` (the frozen rotation's own roles), `INNER_ROLES` with an
+    inner `split`, or `REFIT_ROLE` (every non-test fold)."""
+    if side not in ("source", "target") or role not in (*ROLES, *INNER_ROLES, REFIT_ROLE):
         raise AssignmentError(f"Lado o rol desconocido: {side!r}, {role!r}.")
-    subjects = sorted(a.rotation(r)[f"{side}_{role}"])
+    view = a.rotation(r)                       # the guard is checked on every read
+    if role in ROLES:
+        if split is not None:
+            raise AssignmentError(f"the {role!r} role takes no inner split")
+        subjects = sorted(view[f"{side}_{role}"])
+    else:
+        folds = _inner_folds(a, r, role, split)
+        subjects = sorted(s for s in a.subjects(side) if a.folds[s] in folds)
     return [bags.get(s, a.conditions[s]) for s in subjects]
 
 
@@ -327,8 +383,9 @@ def probe_bag(a: Assignment, bags: BagSet, subject: str, r: int) -> Bag:
 # ------------------------------------------------------------- reports
 
 
-def eligibility(a: Assignment, minimum: int = MIN_PER_CLASS_PER_FOLD) -> dict:
-    """Subjects per (side, fold, label) and whether every cell reaches `minimum`."""
+def eligibility(a: Assignment) -> dict:
+    """Subjects per (side, fold, label), the per-fold minimum per side and class, and the
+    pooled target totals: a declared limitation (Sec. 4.3), no verdict."""
     labels = sorted(set(a.labels.values()))
     rows = []
     for side in ("source", "target"):
@@ -339,14 +396,11 @@ def eligibility(a: Assignment, minimum: int = MIN_PER_CLASS_PER_FOLD) -> dict:
                 rows.append({"arm": a.transfer.arm, "transfer": a.transfer.name, "side": side,
                              "fold": fold, "label": label, "n": n})
     table = pd.DataFrame(rows)
-    failing = table[table["n"] < minimum]
     min_per_fold = {side: {label: int(g["n"].min()) for label, g in t.groupby("label")}
                     for side, t in table.groupby("side")}
-    return {"transfer": a.transfer.name, "arm": a.transfer.arm,
-            "passes": bool(failing.empty), "min_count": int(table["n"].min()),
-            "minimum": int(minimum), "table": table, "min_per_fold": min_per_fold,
-            "pooled_target": _label_counts(a.subjects("target"), a.labels),
-            "failing": failing[["side", "fold", "label", "n"]].to_dict("records")}
+    return {"transfer": a.transfer.name, "arm": a.transfer.arm, "table": table,
+            "min_per_fold": min_per_fold,
+            "pooled_target": _label_counts(a.subjects("target"), a.labels)}
 
 
 def size_table(assignments: Iterable[Assignment]) -> pd.DataFrame:

@@ -25,7 +25,7 @@ from MIL_CREDA_EEG.mil_creda_model import (ATTENTION_WIDTH, MILCREDAModel, adapt
                                            source_term)
 
 CPU = torch.device("cpu")
-SCHEDULE = {"epochs1": 2, "patience1": 2, "epochs2": 2, "bagsPerStep": 4}
+SCHEDULE = {"epochs1": 2, "epochs2": 2, "bagsPerStep": 4}
 P1 = {"lr1": 1e-2, "wd1": 1e-4, "attentionGamma": 0.5, "attentionTemperature": 1.0,
       "sigmaMultiplier": 1.0}
 P2 = {"lr2": 1e-2, "wd2": 1e-4, "tauLocal": 1.0}

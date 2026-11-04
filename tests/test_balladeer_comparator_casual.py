@@ -28,7 +28,7 @@ def params():
 
 
 def schedule(epochs=2):
-    return dict(epochs1=1, patience1=1, epochs2=epochs, bagsPerStep=2)
+    return dict(epochs1=1, epochs2=epochs, bagsPerStep=2)
 
 
 def bags(channels, prefix="s", n=4):
@@ -194,7 +194,7 @@ def test_casual_checkpoint_identity_is_checked():
         T.train_phase_two(data, 0, 19, ({}, meta), params(), schedule())
 
 
-def test_casual_selection_runs_full_budget_and_keeps_both_states():
+def test_casual_runs_full_budget_keeps_the_last_epoch_and_records_validation():
     data, record = data_record()
     scores = [torch.tensor([[0.9, 0.1], [0.1, 0.9]], dtype=torch.float64),
               torch.tensor([[0.4, 0.6], [0.6, 0.4]], dtype=torch.float64),
@@ -205,15 +205,20 @@ def test_casual_selection_runs_full_budget_and_keeps_both_states():
         trained = T.train_phase_two(data, 0, 19, record, params(), schedule(3))
     result = trained["result"]
     assert result["epochs"] == 3
-    assert result["best_epoch"] == 0
-    assert result["selection"]["best_label_free_epoch"] == 2
+    assert result["best_epoch"] == 2 == result["checkpoint"]["epoch"]   # the last, kept
     assert result["history"][0]["val_balanced_accuracy"] == 1.
     assert result["history"][1]["val_balanced_accuracy"] == 0.
     for r in result["history"]:
         assert {"model", "seed", "fold", "epoch", "transfer", "loss", "label_free_score"} <= r.keys()
     for k, v in trained["model"].target_trunk.state_dict().items():
         torch.testing.assert_close(v, result["checkpoint"]["target_state"][k], rtol=0, atol=0)
-    assert model_store.state_digest(result["checkpoint"]["target_state"]) != model_store.state_digest(result["label_free_checkpoint"]["target_state"])
+    assert "label_free_checkpoint" not in result
+    assert [v["probabilities"] for v in result["validation"]] == [x.tolist() for x in scores]
+    # the refit: no validation bags, exactly the epochs given, nothing evaluated
+    data.rotations[0]["target_valid"] = []
+    with patch.object(two_phase, "evaluate", side_effect=AssertionError("evaluated")):
+        refit = T.train_phase_two(data, 0, 19, record, params(), schedule(2))["result"]
+    assert refit["epochs"] == 2 and refit["validation"] == []
 
 
 def test_casual_training_does_not_read_target_labels():

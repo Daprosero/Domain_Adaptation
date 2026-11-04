@@ -47,7 +47,7 @@ def fixture_data(source_channels=29, target_channels=14, seed=19):
 
 
 def schedule(epochs=2):
-    return dict(epochs1=1, patience1=1, epochs2=epochs, bagsPerStep=2)
+    return dict(epochs1=1, epochs2=epochs, bagsPerStep=2)
 
 
 def test_cot_equations_have_closed_form_values_and_gradients():
@@ -174,10 +174,7 @@ def test_cot_selection_and_history_use_shared_metrics():
     result = out["result"]
     h = result["history"]
     assert len(h) == 3
-    primary = max(range(3), key=lambda i: h[i]["val_balanced_accuracy"])
-    secondary = max(range(3), key=lambda i: h[i]["label_free_score"])
-    assert result["best_epoch"] == primary
-    assert result["secondary_checkpoint"]["epoch"] == secondary
+    assert result["best_epoch"] == 2 == result["checkpoint"]["epoch"]   # the last, kept
     G = two_phase.evaluate(out["model"], data.rotations[0]["target_valid"],
                            "target", torch.device("cpu"))
     assert result["checkpoint"]["valid_balanced_accuracy"] == two_phase.balanced_accuracy(
@@ -258,16 +255,23 @@ def test_cot_synthetic_two_phase_smoke():
            "seed": seed, "phase1_loss": phase1["history"][0]["loss"], "phase2_losses": losses})
 
 
-def test_cot_selection_can_choose_different_primary_and_secondary_epochs(monkeypatch):
+def test_cot_keeps_the_last_epoch_and_records_validation_per_epoch(monkeypatch):
     data, record = fixture_data(14, 14)
-    outputs = iter([torch.tensor([[.6, .4], [.4, .6]], dtype=torch.float64),
-                    torch.tensor([[.01, .99], [.99, .01]], dtype=torch.float64)])
+    answers = [torch.tensor([[.6, .4], [.4, .6]], dtype=torch.float64),
+               torch.tensor([[.01, .99], [.99, .01]], dtype=torch.float64)]
+    outputs = iter(answers)
     monkeypatch.setattr(two_phase, "evaluate", lambda *args: next(outputs))
     out = train_phase_two(data, 0, 19, record, DEFAULT_PARAMS, schedule(2))["result"]
-    assert out["best_epoch"] == 0
-    assert out["secondary_checkpoint"]["epoch"] == 1
-    assert not torch.equal(out["checkpoint"]["state"]["target_centers"],
-                           out["secondary_checkpoint"]["state"]["target_centers"])
+    assert out["best_epoch"] == 1 == out["checkpoint"]["epoch"]
+    assert "secondary_checkpoint" not in out
+    assert [v["probabilities"] for v in out["validation"]] == [a.tolist() for a in answers]
+    # the refit: no validation bags, nothing evaluated, exactly the epochs given
+    d = {**data.rotations[0], "source_valid": [], "target_valid": []}
+    refit_data = search.SearchData(data.transfer, data.partition_sha256, {0: d})
+    monkeypatch.setattr(two_phase, "evaluate", lambda *args: (_ for _ in ()).throw(
+        AssertionError("evaluated")))
+    refit = train_phase_two(refit_data, 0, 19, record, DEFAULT_PARAMS, schedule(2))["result"]
+    assert refit["epochs"] == 2 and refit["validation"] == []
 
 
 def test_cot_rejects_leaking_roles_and_empty_batches():

@@ -5,8 +5,8 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from .training import adapt_target_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
-    "sections": ["7.3"], "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["7.3", "7.7"], "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_smoke_uses_seeded_balladeer_shapes_on_cpu"],
 }
 
@@ -16,7 +16,7 @@ def run(seed=17):
     torch.manual_seed(seed)
     generator = torch.Generator().manual_seed(seed)
     model = CommonMILModel(29, 14)
-    schedule = {"epochs1": 1, "patience1": 1, "epochs2": 3, "bagsPerStep": 4}
+    schedule = {"epochs1": 1, "epochs2": 3, "bagsPerStep": 4}
     def bags(prefix, channels):
         return [two_phase.BagTensor(f"{prefix}{i}", prefix, i % 2,
                                     torch.randn(2 + i % 2, channels, 512, generator=generator))

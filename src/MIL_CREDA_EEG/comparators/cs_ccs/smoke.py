@@ -7,8 +7,8 @@ from MIL_CREDA_EEG import mil_wrapper, two_phase
 from .training import DEFAULTS, adapt
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v42.md",
-    "sections": ["7.2", "7.3", "7.4"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cs_ccs_synthetic_smoke_executes"],
 }
@@ -34,7 +34,7 @@ def fixture(channels=29, target_channels=14, seed=SEED, bags_per_role=4):
 def run(epochs1=3, epochs2=3):
     torch.set_num_threads(1)
     model, source, source_valid, target, valid = fixture()
-    schedule = {"epochs1": epochs1, "patience1": epochs1, "epochs2": epochs2, "bagsPerStep": 4}
+    schedule = {"epochs1": epochs1, "epochs2": epochs2, "bagsPerStep": 4}
     hyper = {**mil_wrapper.COMMON_PHASE_ONE_FIXED, **schedule, "lr1": 0.001,
              "wd1": 0., "lr2": 0.001, "wd2": 0., "tauLocal": 1.}
     phase1 = two_phase.train_source_phase(model, source, source_valid, hyper,

@@ -12,7 +12,7 @@ from MIL_CREDA_EEG.mil_creda_model import MILCREDAModel
 
 LEVEL = assignment.Transfer("level", "L1", "L11")
 HYPER1 = {"lr1": 1e-3, "wd1": 1e-5, "attentionGamma": 0.3, "attentionTemperature": 0.7,
-          "sigmaMultiplier": 0.75, "epochs1": 3, "patience1": 2, "epochs2": 3,
+          "sigmaMultiplier": 0.75, "epochs1": 3, "epochs2": 3,
           "bagsPerStep": 4}
 
 

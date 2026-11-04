@@ -1,10 +1,13 @@
-"""Experiments plan v44 Sec. 4.5 and 7.7: the label-free rule picks its phase-2 epoch too.
+"""Experiments plan v50 Secs. 4.5 and 7.7: every phase-2 trainer on an inner split and on a
+refit.
 
-Phase 2 runs its whole epoch budget and keeps the best epoch "con la regla de la
-sección 4.5" (Sec. 7.7). The secondary rule "no usa etiquetas del objetivo", so the
-model it selects must keep the epoch with the best label-free score, never the epoch
-the target-validation balanced accuracy chose. Every phase-2 trainer (MIL-CREDA and
-each comparator) retains that state when asked, and only then.
+On an inner split each trainer (MIL-CREDA and each comparator) runs its whole epoch cap,
+keeps the last epoch and records every epoch's target-validation predictions, which the
+search pools over the three inner splits; the secondary rule "no usa etiquetas del
+objetivo", so those predictions must not depend on a target-validation label. On a refit
+(every non-test fold, no validation bags) it runs exactly the epochs it is given. The
+per-run label-free state (`two_phase.LabelFreeBest`) is still kept when asked, and only
+then.
 
 Rehearsed on a SYNTHETIC set on CPU: seeded noise with a weak class signal; no number it
 yields is a measured result.
@@ -22,11 +25,12 @@ from MIL_CREDA_EEG import campaign, model_store, search, two_phase
 
 SEED = 1
 ROTATION = 1
+SPLIT = 0
 #: A rehearsal schedule, not the pilot's: enough epochs, and learning rates at the top of
 #: the Sec. 7.7 ranges, for the predictions to move between phase-2 epochs (with one
 #: epoch each, every model here predicted one class at every epoch and all epochs tied).
 #: CCA-LSC needs more phase-2 epochs than its three warm-up epochs.
-SCHEDULE = {"epochs1": 6, "patience1": 6, "epochs2": 5, "bagsPerStep": 4}
+SCHEDULE = {"epochs1": 6, "epochs2": 5, "bagsPerStep": 4}
 LR1, LR2 = 1e-2, 1e-2
 
 
@@ -68,16 +72,19 @@ def setting(tmp_path_factory, registries):
 _TRAINED: dict = {}
 
 
-def _train(setting, strategy, flipped=False, **kwargs):
-    """One seeded phase-2 training, cached per (strategy, flipped labels, kwargs)."""
-    key = (strategy, flipped, tuple(sorted(kwargs.items())))
+def _train(setting, strategy, flipped=False, refit=False, **kwargs):
+    """One seeded phase-2 training on the inner split (or on the refit view, two epochs),
+    cached per (strategy, flipped labels, refit, kwargs)."""
+    key = (strategy, flipped, refit, tuple(sorted(kwargs.items())))
     if key not in _TRAINED:
         base, records = setting
         record = records[search.PHASE_ONE_GROUP_OF[strategy]]
         params = {**_sample(search.phase_two_space(strategy)), "lr2": LR2}
-        _TRAINED[key] = search.train_phase_two(
-            strategy, _flipped(base) if flipped else base, ROTATION, SEED, record, params,
-            SCHEDULE, **kwargs)
+        data = base if refit else (_flipped(base) if flipped else base).inner_view(
+            ROTATION, SPLIT)
+        schedule = search.refit_schedule(SCHEDULE, 2, 2) if refit else SCHEDULE
+        _TRAINED[key] = search.train_phase_two(strategy, data, ROTATION, SEED, record, params,
+                                               schedule, **kwargs)
     return _TRAINED[key]
 
 
@@ -95,10 +102,10 @@ def _equal(a, b) -> bool:
 
 
 def _flipped(data: search.SearchData) -> search.SearchData:
-    """The same data with every target-validation label of the rotation flipped."""
-    view = dict(data.rotations[ROTATION])
+    """The same data with every target-validation label of the inner split flipped."""
+    view = dict(data.inner[(ROTATION, SPLIT)])
     view["target_valid"] = [replace(b, label=1 - b.label) for b in view["target_valid"]]
-    return replace(data, rotations={**data.rotations, ROTATION: view})
+    return replace(data, inner={**data.inner, (ROTATION, SPLIT): view})
 
 
 STRATEGIES = list(model_store.STRATEGIES)
@@ -117,43 +124,69 @@ def test_asking_for_the_label_free_state_changes_nothing_of_the_default(setting,
 
 
 @pytest.mark.parametrize("strategy", STRATEGIES)
+def test_every_trainer_runs_its_cap_keeps_the_last_epoch_and_records_validation(setting,
+                                                                                strategy):
+    out = _train(setting, strategy)["result"]
+    valid = setting[0].inner[(ROTATION, SPLIT)]["target_valid"]
+    assert out["epochs"] == SCHEDULE["epochs2"] == len(out["history"])
+    assert out["best_epoch"] == SCHEDULE["epochs2"] - 1 == out["checkpoint"]["epoch"]
+    assert [v["epoch"] for v in out["validation"]] == list(range(SCHEDULE["epochs2"]))
+    for v in out["validation"]:
+        assert v["subjects"] == [b.subject for b in valid]
+        assert len(v["probabilities"]) == len(valid)
+
+
+@pytest.mark.parametrize("strategy", STRATEGIES)
+def test_every_trainer_refits_exactly_e_epochs_without_validation(setting, strategy):
+    out = _train(setting, strategy, refit=True)["result"]
+    assert out["epochs"] == 2 == len(out["history"]) and out["validation"] == []
+    assert out["checkpoint"]["epoch"] == 1
+    assert all(h["val_balanced_accuracy"] != h["val_balanced_accuracy"]
+               for h in out["history"])                                  # NaN: no validation
+
+
+@pytest.mark.parametrize("strategy", STRATEGIES)
 def test_the_label_free_state_is_the_earliest_best_label_free_epoch(setting, strategy):
     out = _train(setting, strategy, label_free=True)
     free = out["result"]["label_free_best"]
     scores = [h["label_free_score"] for h in out["result"]["history"]]
     assert len(scores) == SCHEDULE["epochs2"]
     best = max(scores)
-    assert free["epoch"] == scores.index(best)        # ties: the earliest, as the primary
+    assert free["epoch"] == scores.index(best)        # ties: the earliest
     assert free["label_free_score"] == best
     assert free["rule"] == two_phase.LABEL_FREE_EPOCH_RULE
     import copy
     model = copy.deepcopy(out["model"])
     model.load_state_dict(free["state"])
-    target_valid = setting[0].rotations[ROTATION]["target_valid"]
+    target_valid = setting[0].inner[(ROTATION, SPLIT)]["target_valid"]
     G = two_phase.evaluate(model, target_valid, "target", torch.device("cpu"))
     assert two_phase.label_free_score(G) == pytest.approx(best, rel=1e-6, abs=1e-12)
 
 
 @pytest.mark.parametrize("strategy", STRATEGIES)
 def test_no_target_validation_label_changes_the_label_free_epoch(setting, strategy):
-    out = _train(setting, strategy, label_free=True)["result"]["label_free_best"]
-    flipped = _train(setting, strategy, True, label_free=True)["result"]["label_free_best"]
-    assert flipped["epoch"] == out["epoch"]
-    assert flipped["label_free_score"] == out["label_free_score"]
-    assert _equal(flipped["state"], out["state"])
+    base = _train(setting, strategy, label_free=True)["result"]
+    flipped = _train(setting, strategy, True, label_free=True)["result"]
+    assert flipped["label_free_best"]["epoch"] == base["label_free_best"]["epoch"]
+    assert _equal(flipped["label_free_best"]["state"], base["label_free_best"]["state"])
+    # the predictions the search pools are those of the same models: the pooled label-free
+    # score (which reads no label) is the same, epoch by epoch
+    assert [v["probabilities"] for v in flipped["validation"]] == \
+        [v["probabilities"] for v in base["validation"]]
+    assert [two_phase.pooled_label_free_score([v]) for v in flipped["validation"]] == \
+        [two_phase.pooled_label_free_score([v]) for v in base["validation"]]
 
 
 def test_the_flip_is_seen_by_the_primary_rule(setting):
     """The flip test is not vacuous: on this fixture, flipping the target-validation labels
-    moves the primary epoch of some strategy, whose label-free epoch stays."""
+    moves the pooled balanced accuracy of some strategy, whose label-free series stays."""
+    def series(result):
+        return [two_phase.pooled_balanced_accuracy([v]) for v in result["validation"]]
+
     moved = [s for s in STRATEGIES
-             if _train(setting, s, label_free=True)["result"]["best_epoch"]
-             != _train(setting, s, True, label_free=True)["result"]["best_epoch"]]
+             if series(_train(setting, s, label_free=True)["result"])
+             != series(_train(setting, s, True, label_free=True)["result"])]
     assert moved
-    differ = [s for s in STRATEGIES
-              if _train(setting, s, label_free=True)["result"]["label_free_best"]["epoch"]
-              != _train(setting, s, label_free=True)["result"]["best_epoch"]]
-    assert differ
 
 
 def test_the_keeper_breaks_ties_by_the_earliest_epoch_as_the_primary_rule_does():

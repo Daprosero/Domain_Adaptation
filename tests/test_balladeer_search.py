@@ -1,4 +1,5 @@
-"""Experiments plan v43, Secs. 4.5, 7.3 and 7.7: the Optuna searches of both phases."""
+"""Experiments plan v50, Secs. 4.2, 4.5, 7.3 and 7.7: the Optuna searches of both phases,
+one study per group or strategy, transfer and outer fold, on the three inner splits."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from MIL_CREDA_EEG import two_phase as tp
 
 CPU = torch.device("cpu")
 LEVEL = assignment.Transfer("level", "L1", "L11")
-SCHEDULE = {"epochs1": 1, "patience1": 1, "epochs2": 1, "bagsPerStep": 2}
+SCHEDULE = {"epochs1": 1, "epochs2": 1, "bagsPerStep": 2}
 PHASE_ONE = {"lr1": 1e-2, "wd1": 1e-4, "attentionGamma": 0.5, "attentionTemperature": 1.0,
              "sigmaMultiplier": 1.0}
 
@@ -49,8 +50,12 @@ def _bagset(root, sha: str = "x" * 64) -> bag_data.BagSet:
     return bag_data.BagSet(bags=tuple(bags), partition_sha256=sha, rotations=rotations)
 
 
-def _robust(values):
-    return float(np.mean(values) - np.std(values, ddof=1))
+def _records(bags, epochs, score):
+    """Scripted validation records: `score(subject, epoch)` is the positive probability."""
+    return [{"epoch": e, "subjects": [b.subject for b in bags],
+             "labels": [b.label for b in bags],
+             "probabilities": [[1 - score(b.subject, e), score(b.subject, e)] for b in bags]}
+            for e in range(epochs)]
 
 
 def test_the_sampler_is_gpsampler_with_the_fixed_seed_and_no_pruner(tmp_path, monkeypatch):
@@ -147,31 +152,46 @@ def test_no_comparator_phase_two_is_wired_and_the_hook_takes_only_the_generic_ru
                                                   "threshold"}
 
 
-def test_epoch_caps_and_patience_have_no_default(tmp_path):
+def test_epoch_caps_have_no_default(tmp_path):
     for fn in (search.run_phase_one_study, search.run_phase_two_study):
         assert inspect.signature(fn).parameters["schedule"].default is inspect.Parameter.empty
     data = search.search_data(LEVEL, _bagset(tmp_path))
     with pytest.raises(ValueError, match="schedule"):
-        search.run_phase_one_study("MIL-CREDA", data, {"epochs1": 1}, root=tmp_path)
+        search.run_phase_one_study("MIL-CREDA", data, 0, {"epochs1": 1}, root=tmp_path)
+    # a schedule that still carries the retired patience is refused, never ignored
+    with pytest.raises(ValueError, match="schedule"):
+        search.run_phase_one_study("MIL-CREDA", data, 0, {**SCHEDULE, "patience1": 1},
+                                   root=tmp_path)
     assert not (tmp_path / "Results").exists()
 
 
-def test_the_objective_is_mean_minus_sd_over_all_four_rotations(tmp_path, monkeypatch):
+def test_the_phase_one_objective_pools_the_source_validation_of_the_three_inner_splits(
+        tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
-    scripted = {0: 0.9, 1: 0.6, 2: 0.7, 3: 0.8}
     calls = []
 
     def fake(group, data_, rotation, seed, hyper, device):
-        calls.append((rotation, seed))
-        return {"result": {"best_valid_balanced_accuracy": scripted[rotation], "epochs": 1,
-                           "best_epoch": 0}}
+        d = data_.rotations[rotation]
+        calls.append((rotation, seed, tuple(b.subject for b in d["source_valid"])))
+        # epoch 1 predicts every validated subject right, epoch 0 says "no" to all
+        records = _records(d["source_valid"], hyper["epochs1"],
+                           lambda s, e: float(e == 1) * {0: 0.0, 1: 1.0}[
+                               next(b.label for b in d["source_valid"] if b.subject == s)])
+        return {"result": {"validation": records,
+                           "history": [{"val_balanced_accuracy": 0.0, "loss": 1.0}
+                                       for _ in records]}}
 
     monkeypatch.setattr(search, "train_phase_one", fake)
-    study = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+    study = search.run_phase_one_study("common", data, 1, {**SCHEDULE, "epochs1": 3},
+                                       root=tmp_path, n_trials=1)
     trial = study.trials[0]
-    assert sorted(calls) == [(r, search.SEARCH_SEED) for r in range(4)]
-    assert trial.value == pytest.approx(_robust(list(scripted.values())), abs=1e-15)
-    assert trial.user_attrs["rotationValues"] == [scripted[r] for r in range(4)]
+    assert [(r, seed) for r, seed, _ in calls] == [(1, search.SEARCH_SEED)] * 3
+    validated = [s for _, _, subjects in calls for s in subjects]
+    assert sorted(validated) == sorted(b.subject for b in data.rotations[1]["source_train"])
+    assert trial.user_attrs["pooledBalancedAccuracy"] == [0.5, 1.0, 0.5]
+    assert trial.value == 1.0 and trial.user_attrs["bestEpoch"] == 1
+    assert trial.user_attrs["epochs"] == 2 and trial.user_attrs["trainLoss"] == [1.0] * 3
+    assert search.select(study)["epochs"] == 2
 
 
 def test_the_search_never_loads_a_test_fold_bag(tmp_path):
@@ -182,18 +202,20 @@ def test_the_search_never_loads_a_test_fold_bag(tmp_path):
     roles = []
     real = assignment.side_bags
 
-    def spy(a_, bags_, side, r, role):
+    def spy(a_, bags_, side, r, role, **kwargs):
         roles.append(role)
-        return real(a_, bags_, side, r, role)
+        return real(a_, bags_, side, r, role, **kwargs)
 
     search.assignment_mod.side_bags, saved = spy, search.assignment_mod.side_bags
     try:
         data = search.search_data(LEVEL, bags)
     finally:
         search.assignment_mod.side_bags = saved
-    assert set(roles) == {"train", "validation"}
+    assert set(roles) == {"nontest", "inner_train", "inner_validation"}
     assert sorted(data.rotations) == [0, 1, 2, 3]
-    for r, sides in data.rotations.items():
+    assert sorted(data.inner) == [(r, i) for r in range(4) for i in range(3)]
+    for (r, _), sides in [*((k, v) for k, v in data.inner.items()),
+                          *(((r, None), v) for r, v in data.rotations.items())]:
         assert set(sides) == {"source_train", "source_valid", "target_train", "target_valid"}
         view = a.rotation(r)
         held = {b.subject for side in sides.values() for b in side}
@@ -239,55 +261,44 @@ def test_the_phase_two_mil_creda_sigma_comes_from_the_phase_one_checkpoint(tmp_p
                                SCHEDULE, CPU)
 
 
-def test_the_label_free_score_is_recorded_per_trial(tmp_path, monkeypatch):
+def test_phase_two_starts_only_from_the_outer_folds_phase_one_checkpoint_at_the_search_seed(
+        tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
-    primary = {0: 0.7, 1: 0.6, 2: 0.9, 3: 0.8}
-    label_free = {0: [0.1, 0.3], 1: [0.2, 0.05], 2: [0.4, 0.4], 3: [0.0, 0.25]}
+    good = ({}, {"phase": 1, "name": "MIL-CREDA", "transfer": LEVEL.name, "rotation": 2,
+                 "seed": search.SEARCH_SEED, partition.HASH_FIELD: data.partition_sha256,
+                 "sigma": 1.0})
+    search._check_phase_one_record("MIL-CREDA", data, 2, good)
+    for change in ({"seed": search.REPORT_SEEDS[0]}, {"name": "common"},
+                   {partition.HASH_FIELD: "y" * 64}, {"transfer": "L11->L1"},
+                   {"rotation": 1}):
+        bad = ({}, {**good[1], **change})
+        with pytest.raises(search.SearchError):
+            search.run_phase_two_study("MIL-CREDA", data, 2, bad, SCHEDULE, root=tmp_path,
+                                       n_trials=1)
+    assert not (tmp_path / "Results").exists()
+    # every trial, in each of the three inner splits, starts from that one record
+    used = []
 
     def fake(strategy, data_, rotation, seed, record, params, schedule, device):
-        history = [{"label_free_score": v} for v in label_free[rotation]]
-        return {"result": {"checkpoint": {"valid_balanced_accuracy": primary[rotation],
-                                          "label_free_score": label_free[rotation][0],
-                                          "sigma": 1.0},
-                           "history": history, "best_epoch": 0, "epochs": 2}}
+        used.append((rotation, seed, record is good))
+        d = data_.rotations[rotation]
+        return {"result": {"checkpoint": {"sigma": 1.0},
+                           "validation": _records(d["target_valid"], 1, lambda s, e: 0.7),
+                           "history": [{"val_balanced_accuracy": 0.5}]}}
 
     monkeypatch.setattr(search, "train_phase_two", fake)
-    monkeypatch.setattr(search, "_check_phase_one_records", lambda *a, **k: None)
-    records = {r: ({}, {"sigma": 1.0}) for r in range(4)}
-    study = search.run_phase_two_study("MIL-CREDA", data, records, SCHEDULE, root=tmp_path,
-                                       n_trials=1)
-    trial = study.trials[0]
-    assert trial.value == pytest.approx(_robust(list(primary.values())), abs=1e-15)
-    best_free = [max(label_free[r]) for r in range(4)]
-    assert trial.user_attrs["label_free_score"] == pytest.approx(_robust(best_free), abs=1e-15)
-    assert trial.user_attrs["labelFreeRotationValues"] == best_free
-    assert trial.user_attrs["labelFreeAtPrimaryEpoch"] == [label_free[r][0] for r in range(4)]
-
-
-def test_phase_two_starts_only_from_the_phase_one_checkpoints_at_the_search_seed(tmp_path):
-    data = search.search_data(LEVEL, _bagset(tmp_path))
-    good = {r: ({}, {"phase": 1, "name": "MIL-CREDA", "transfer": LEVEL.name, "rotation": r,
-                     "seed": search.SEARCH_SEED, partition.HASH_FIELD: data.partition_sha256,
-                     "sigma": 1.0}) for r in range(4)}
-    search._check_phase_one_records("MIL-CREDA", data, good)
-    for change in ({"seed": search.REPORT_SEEDS[0]}, {"name": "common"},
-                   {partition.HASH_FIELD: "y" * 64}, {"transfer": "L11->L1"}):
-        bad = {**good, 2: ({}, {**good[2][1], **change})}
-        with pytest.raises(search.SearchError):
-            search.run_phase_two_study("MIL-CREDA", data, bad, SCHEDULE, root=tmp_path,
-                                       n_trials=1)
-    with pytest.raises(search.SearchError, match="every rotation"):
-        search._check_phase_one_records("MIL-CREDA", data, {r: good[r] for r in range(3)})
-    assert not (tmp_path / "Results").exists()
+    search.run_phase_two_study("MIL-CREDA", data, 2, good, SCHEDULE, root=tmp_path, n_trials=2)
+    assert used == [(2, search.SEARCH_SEED, True)] * 6
 
 
 def test_unwired_groups_and_strategies_refuse_before_creating_storage(tmp_path):
     data = search.search_data(LEVEL, _bagset(tmp_path))
     for group in ("AdaptMIL", "HASD"):
         with pytest.raises(model_store.GroupNotRegistered):
-            search.run_phase_one_study(group, data, SCHEDULE, root=tmp_path, n_trials=1)
+            search.run_phase_one_study(group, data, 0, SCHEDULE, root=tmp_path, n_trials=1)
     with pytest.raises(search.NotWired):
-        search.run_phase_two_study("COT", data, {}, SCHEDULE, root=tmp_path, n_trials=1)
+        search.run_phase_two_study("COT", data, 0, ({}, {}), SCHEDULE, root=tmp_path,
+                                   n_trials=1)
     assert not (tmp_path / "Results").exists()
 
 
@@ -295,33 +306,39 @@ def test_a_two_trial_smoke_study_completes_and_writes_its_sqlite(tmp_path):
     path_p, sha = _partition_file(tmp_path)
     data = search.search_data(LEVEL, _bagset(tmp_path, sha))
     root = tmp_path / "MIL-CREDA"
-    studies = {group: search.run_phase_one_study(group, data, SCHEDULE, root=root, n_trials=2)
+    schedule = {**SCHEDULE, "epochs1": 2, "epochs2": 2}
+    studies = {group: search.run_phase_one_study(group, data, 0, schedule, root=root,
+                                                 n_trials=2)
                for group in ("common", "MIL-CREDA")}
     for group, study in studies.items():
-        path = search.study_path(root, LEVEL, 1, group)
+        path = search.study_path(root, LEVEL, 1, group, 0)
         assert path.is_file() and path.parent == root / "Results" / "hpo"
         loaded = optuna.load_study(study_name=path.stem, storage=f"sqlite:///{path}")
         assert [t.state for t in loaded.trials] == [optuna.trial.TrialState.COMPLETE] * 2
         assert loaded.user_attrs["sampler"] == "GPSampler"
         assert loaded.user_attrs["samplerSeed"] == search.SAMPLER_SEED
         assert loaded.user_attrs["searchSeed"] == search.SEARCH_SEED
-    best = search.phase_one_hyper("MIL-CREDA", studies["MIL-CREDA"].best_params, SCHEDULE)
-    records = {}
-    for r in range(4):
-        trained = search.train_phase_one("MIL-CREDA", data, r, search.SEARCH_SEED, best, CPU)
-        saved = search.save_phase_one(root / "Models", "MIL-CREDA", data, r,
-                                      search.SEARCH_SEED, trained)
-        records[r] = model_store.load(saved, partition_path=path_p)
-    study = search.run_phase_two_study("MIL-CREDA", data, records, SCHEDULE, root=root,
+        assert loaded.user_attrs["outerFold"] == 0
+    chosen = search.select(studies["MIL-CREDA"])
+    best = search.phase_one_hyper("MIL-CREDA", chosen["params"],
+                                  search.refit_schedule(schedule, 1, chosen["epochs"]))
+    trained = search.train_phase_one("MIL-CREDA", data, 0, search.SEARCH_SEED, best, CPU)
+    # the refit: every non-test fold, exactly E1 epochs, no validation
+    assert trained["result"]["epochs"] == chosen["epochs"]
+    assert trained["result"]["validation"] == []
+    saved = search.save_phase_one(root / "Models", "MIL-CREDA", data, 0, search.SEARCH_SEED,
+                                  trained)
+    record = model_store.load(saved, partition_path=path_p)
+    study = search.run_phase_two_study("MIL-CREDA", data, 0, record, schedule, root=root,
                                        n_trials=2)
-    path = search.study_path(root, LEVEL, 2, "MIL-CREDA")
-    assert path.is_file() and path.name == "L1-to-L11__phase2__MIL-CREDA.db"
+    path = search.study_path(root, LEVEL, 2, "MIL-CREDA", 0)
+    assert path.is_file() and path.name == "L1-to-L11__phase2__MIL-CREDA__outer0.db"
     assert len(study.trials) == 2
     for trial in study.trials:
         assert set(trial.params) == {"lr2", "wd2", "tauLocal"}
         assert math.isfinite(trial.user_attrs["label_free_score"])
-        assert trial.user_attrs["sigmaByRotation"] == [records[r][1]["sigma"]
-                                                       for r in range(4)]
+        assert len(trial.user_attrs["pooledLabelFree"]) == schedule["epochs2"]
+        assert trial.user_attrs["sigmaBySplit"] == [record[1]["sigma"]] * 3
 
 
 def _lowest(space):
@@ -339,7 +356,7 @@ def test_a_registered_phase_one_trainer_replaces_the_shared_one_for_its_group_on
     def trainer(name):
         def run(model, source_train, source_valid, hyper, generator, device, *, seed, fold,
                 transfer):
-            calls.append((name, fold, transfer))
+            calls.append((name, fold, transfer, len(source_valid)))
             return {"history": [{"epoch": 1}], "checkpoint": {}}
         return run
 
@@ -351,7 +368,12 @@ def test_a_registered_phase_one_trainer_replaces_the_shared_one_for_its_group_on
                                        SCHEDULE)
         out = search.train_phase_one(group, data, 0, search.SEARCH_SEED, hyper, CPU)
         assert out["result"]["history"] == [{"epoch": 1, "model": f"{group}:phase1"}]
-    assert calls == [("native", 0, LEVEL.name), ("shared", 0, LEVEL.name)]
+        search.train_phase_one(group, data.inner_view(0, 1), 0, search.SEARCH_SEED, hyper,
+                               CPU)
+    valid = len(data.inner[(0, 1)]["source_valid"])
+    assert valid > 0
+    assert calls == [("native", 0, LEVEL.name, 0), ("native", 0, LEVEL.name, valid),
+                     ("shared", 0, LEVEL.name, 0), ("shared", 0, LEVEL.name, valid)]
 
 
 def test_only_a_group_with_its_own_unit_registers_a_phase_one_trainer(monkeypatch):
@@ -371,8 +393,10 @@ def _scripted_phase_one(fail_at=None):
         calls.append(rotation)
         if fail_at is not None and len(calls) == fail_at:
             raise RuntimeError("the session was cut")
-        return {"result": {"best_valid_balanced_accuracy": 0.5 + 0.1 * hyper["lr1"],
-                           "epochs": 1, "best_epoch": 0}}
+        bags = data_.rotations[rotation]["source_valid"]
+        records = _records(bags, hyper["epochs1"], lambda s, e: 0.5 + 0.4 * hyper["lr1"])
+        return {"result": {"validation": records,
+                           "history": [{"val_balanced_accuracy": 0.5} for _ in records]}}
 
     return fake
 
@@ -380,16 +404,16 @@ def _scripted_phase_one(fail_at=None):
 def test_an_interrupted_study_of_the_same_identity_continues_to_its_declared_count(
         tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
-    # the second trial dies in its third rotation: one complete trial and one failed
-    monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one(fail_at=7))
+    # the second trial dies in its third inner split: one complete trial and one failed
+    monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one(fail_at=6))
     with pytest.raises(RuntimeError, match="cut"):
-        search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3)
-    path = search.study_path(tmp_path, LEVEL, 1, "common")
+        search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=3)
+    path = search.study_path(tmp_path, LEVEL, 1, "common", 0)
     cut = optuna.load_study(study_name=path.stem, storage=f"sqlite:///{path}")
     states = [t.state for t in cut.trials]
     assert states == [optuna.trial.TrialState.COMPLETE, optuna.trial.TrialState.FAIL]
     monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one())
-    study = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3)
+    study = search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=3)
     complete = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
     assert len(complete) == 3
     # the continuation does not replay the sampler's first draws
@@ -397,41 +421,45 @@ def test_an_interrupted_study_of_the_same_identity_continues_to_its_declared_cou
     assert len(set(params)) == len(params)
     assert study.user_attrs["resumedAfter"] == [2]
     # a complete study is returned as it is, never extended
-    again = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3)
+    again = search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=3)
     assert len(again.trials) == len(study.trials)
 
 
 def test_a_study_of_another_identity_is_refused_naming_what_differs(tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
     monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one())
-    search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+    search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=1)
     with monkeypatch.context() as m:
         m.setattr(model_store, "code_version", lambda: "0" * 64)
         with pytest.raises(search.SearchError, match="code_version"):
-            search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+            search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=1)
     with monkeypatch.context() as m:
         m.setitem(search.__provenance__, "revision", "old-v01.md")
         with pytest.raises(search.SearchError, match="revision"):
-            search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+            search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=1)
     other = search.SearchData(transfer=data.transfer, partition_sha256="y" * 64,
-                              rotations=data.rotations, folds=data.folds)
+                              rotations=data.rotations, folds=data.folds, inner=data.inner)
     with pytest.raises(search.SearchError, match="partition_sha256"):
-        search.run_phase_one_study("common", other, SCHEDULE, root=tmp_path, n_trials=1)
+        search.run_phase_one_study("common", other, 0, SCHEDULE, root=tmp_path, n_trials=1)
     with pytest.raises(search.SearchError, match="schedule"):
-        search.run_phase_one_study("common", data, {**SCHEDULE, "epochs1": 2},
+        search.run_phase_one_study("common", data, 0, {**SCHEDULE, "epochs1": 2},
                                    root=tmp_path, n_trials=1)
     with pytest.raises(search.SearchError, match="nTrials"):
-        search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=2)
+        search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=2)
+    # another outer fold is another study, in its own file
+    search.run_phase_one_study("common", data, 1, SCHEDULE, root=tmp_path, n_trials=2)
 
 
 def test_a_study_records_the_identity_it_is_checked_against(tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
     monkeypatch.setattr(search, "train_phase_one", _scripted_phase_one())
-    study = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=1)
+    study = search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=1)
     assert study.user_attrs["code_version"] == model_store.code_version()
     assert study.user_attrs["partition_sha256"] == data.partition_sha256
     assert study.user_attrs["revision"] == search.__provenance__["revision"]
-    assert study.user_attrs["revision"].endswith("v44.md")
+    assert study.user_attrs["revision"].endswith("v50.md")
+    assert study.user_attrs["outerFold"] == 0 and study.user_attrs["testFold"] == 0
+    assert study.user_attrs["innerSplits"] == assignment.inner_splits(0)
 
 
 def test_a_study_stops_between_trials_when_asked_and_the_rerun_completes_it(
@@ -445,19 +473,19 @@ def test_a_study_stops_between_trials_when_asked_and_the_rerun_completes_it(
         asked.append(len(study.trials))
         return len(study.trials) >= 1
 
-    study = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3,
+    study = search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=3,
                                        should_stop=stop_after_one)
     states = [t.state for t in study.trials]
     assert states == [optuna.trial.TrialState.COMPLETE]
     assert asked == [0, 1], "asked before the first trial and after each one"
     # a hook that stops at once runs no trial at all
-    held = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3,
+    held = search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=3,
                                       should_stop=lambda s: True)
     assert len(held.trials) == 1
-    done = search.run_phase_one_study("common", data, SCHEDULE, root=tmp_path, n_trials=3)
+    done = search.run_phase_one_study("common", data, 0, SCHEDULE, root=tmp_path, n_trials=3)
     assert sum(t.state == optuna.trial.TrialState.COMPLETE for t in done.trials) == 3
     # no hook: the study runs its declared count in one call, as before
     fresh = tmp_path / "fresh"
     fresh.mkdir()
-    whole = search.run_phase_one_study("common", data, SCHEDULE, root=fresh, n_trials=2)
+    whole = search.run_phase_one_study("common", data, 0, SCHEDULE, root=fresh, n_trials=2)
     assert "resumedAfter" not in whole.user_attrs and len(whole.trials) == 2
