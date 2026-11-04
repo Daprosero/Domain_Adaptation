@@ -1,4 +1,4 @@
-"""Experiments plan v02, Sec. 2.10: the defect log, on synthetic records."""
+"""Experiments plan v50, Secs. 2.6 and 2.10: the defect log, on synthetic records."""
 
 from __future__ import annotations
 
@@ -57,6 +57,48 @@ def test_flow_table_counts_subjects_left_after_declared_hard_defects():
     assert flow.loc["2.3 integridad", "subjects_left"] == 4  # a mark, not an exclusion
     assert flow.loc["2.4 canales", "records_marked"] == 3
     assert flow.loc["2.5 contacto", "records_marked"] == 2
+
+
+def test_flow_table_counts_the_restart_mark_and_excludes_nothing_for_it():
+    frame = _records()
+    frame["restarted_or_concatenated"] = [False, False, None, False, True, False]
+    flow = defect_log.flow_table(defect_log.classify_records(frame), "EMOTIV")
+    flow = flow.set_index("step")
+    assert flow.loc["2.6 duración", "records_marked"] == 1
+    assert flow.loc["2.6 duración", "records_hard_defect"] == 0
+    assert flow.loc["2.6 duración", "subjects_left"] == 4  # S4 keeps r5
+
+
+def test_flow_table_without_the_restart_column_marks_no_duration():
+    flow = defect_log.flow_table(defect_log.classify_records(_records()), "EMOTIV")
+    assert flow.set_index("step").loc["2.6 duración", "records_marked"] == 0
+
+
+def test_records_frame_carries_the_duration_mark():
+    base = {"subject": "S1", "task": "Robots", "level": None, "task_label": "t",
+            "condition": "c", "family": "EMOTIV", "device": "EPOCX",
+            "size_bytes": 1, "readable": True, "error": None, "n_samples": 10,
+            "channels": ["AF3"], "channels_audit": {"AF3": {}},
+            "channel_marks": {"AF3": []},
+            "rate": {k: None for k in (
+                "nominal_rate", "effective_rate", "counter_corrected_rate",
+                "relative_deviation", "nearest_menu_rate", "counter_contiguous",
+                "hard_defect", "ratio_class", "half_of_nominal")},
+            "integrity": {k: None for k in (
+                "lost_fraction", "n_lost", "interpolated_fraction", "longest_gap_s",
+                "gap_exceeds_window", "windows_touched_by_loss",
+                "windows_touched_by_interpolation")}}
+    duration = {"n_windows": 1, "duration_s": 4.0, "nominal_s": None,
+                "ratio_to_nominal": None}
+    records = [{**base, "record_id": "m",
+                "duration": {**duration, "marks": ["restarted_or_concatenated"]}},
+               {**base, "record_id": "c", "duration": {**duration, "marks": []}},
+               {**base, "record_id": "old", "duration": duration}]
+    frame = defect_log.records_frame(records).set_index("record_id")
+    assert frame.loc["m", "duration_marks"] == "restarted_or_concatenated"
+    assert bool(frame.loc["m", "restarted_or_concatenated"]) is True
+    assert bool(frame.loc["c", "restarted_or_concatenated"]) is False
+    assert bool(frame.loc["old", "restarted_or_concatenated"]) is False
 
 
 def test_cross_with_label_counts_marked_subjects_per_group():
