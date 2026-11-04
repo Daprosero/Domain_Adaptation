@@ -8,7 +8,7 @@ from MIL_CREDA_EEG import eegnet
 from MIL_CREDA_EEG.mil_creda_model import MILCREDAModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["7.1", "7.2", "7.3", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion"],
     "invariants": ["hasd_native_attention_shapes_and_permutation",

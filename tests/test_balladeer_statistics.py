@@ -10,7 +10,7 @@ import math
 import numpy as np
 import pytest
 from scipy import stats as sps
-from sklearn.metrics import cohen_kappa_score, roc_auc_score
+from sklearn.metrics import balanced_accuracy_score, cohen_kappa_score, roc_auc_score
 
 from MIL_CREDA_EEG import statistics as st
 
@@ -228,7 +228,7 @@ def test_hodges_lehmann_and_its_exact_wilcoxon_interval_on_one_to_eight():
     assert out["coverage"] == pytest.approx(1 - 2 * 5 / 256)
 
 
-def test_hodges_lehmann_is_the_walsh_median_and_too_few_subjects_give_no_interval():
+def test_hodges_lehmann_is_the_walsh_median_with_the_exact_signed_rank_interval():
     out = st.hodges_lehmann([1, 2, 10])      # Walsh: 1, 1.5, 2, 5.5, 6, 10
     assert out["estimate"] == pytest.approx((2 + 5.5) / 2)
     assert out["ci_low"] is None and out["ci_high"] is None and "n = 3" in out["note"]
@@ -252,13 +252,15 @@ def test_wilcoxon_reports_hodges_lehmann_beside_the_rank_biserial():
     assert out["rank_biserial"] == st.wilcoxon_signed_rank(d)["rank_biserial"]
 
 
-def test_the_kappa_p_value_equals_a_direct_recomputation():
+def test_the_kappa_p_value_comes_from_the_same_replicates_as_the_balanced_accuracy_one():
     rng = np.random.default_rng(7)
     y = np.array([i % 2 for i in range(30)])
     pa = np.clip(0.5 + 0.3 * (y - 0.5) + rng.normal(0, 0.25, 30), 0, 1)
     pb = np.clip(0.5 + 0.1 * (y - 0.5) + rng.normal(0, 0.25, 30), 0, 1)
     strata = [(int(v), "d1" if i < 15 else "d2") for i, v in enumerate(y)]
-    out = st.paired_bootstrap(y, pa, pb, strata, resamples=3000, seed=11)
+    # cells split each direction by rotation: the AUC_avg replicates are drawn apart
+    cells = [f"rotation {i % 3}, {'d1' if i < 15 else 'd2'}" for i in range(30)]
+    out = st.paired_bootstrap(y, pa, pb, strata, cells=cells, resamples=3000, seed=11)
     groups = st._strata_index(strata)
     rng2 = np.random.default_rng(11)
     index = np.concatenate([g[rng2.integers(0, len(g), size=(3000, len(g)))]
@@ -269,6 +271,10 @@ def test_the_kappa_p_value_equals_a_direct_recomputation():
     lower = (1 + np.sum(kdiff <= 0)) / 3001
     upper = (1 + np.sum(kdiff >= 0)) / 3001
     assert out["kappa_p_value"] == pytest.approx(min(1.0, 2 * min(lower, upper)))
+    # the balanced-accuracy replicates are drawn from the very same resampled subjects
+    ba_a = np.array([balanced_accuracy_score(y[i], st.predicted_labels(pa)[i]) for i in index])
+    ba_b = np.array([balanced_accuracy_score(y[i], st.predicted_labels(pb)[i]) for i in index])
+    assert out["replicates"] == pytest.approx(ba_a - ba_b)
     # the balanced-accuracy p value is unchanged by the kappa one
     diff = out["replicates"]
     lo, hi = (1 + np.sum(diff <= 0)) / 3001, (1 + np.sum(diff >= 0)) / 3001
@@ -305,7 +311,7 @@ def test_pair_contrast_emits_the_primary_and_the_three_secondary_rows():
     assert rows[2]["strata"] == "class x rotation-and-direction cell"
 
 
-def test_holm_runs_within_each_metric_and_no_row_stays_uncorrected():
+def test_every_contrast_row_belongs_to_a_holm_family_within_its_metric():
     rows = []
     for k, rival in enumerate(("X", "Y", "Z")):
         rows += st.pair_contrast(
@@ -317,6 +323,7 @@ def test_holm_runs_within_each_metric_and_no_row_stays_uncorrected():
     st.apply_holm(primary_only, "A-nivel MIL-CREDA vs rivals, bootstrap")
     st.apply_contrast_families(rows, "A-nivel MIL-CREDA vs rivals")
     assert all(r["correction"] != "none" for r in rows)
+    assert {r["family"] for r in rows} == {st.FAMILY_PRIMARY, st.FAMILY_SECONDARY}
     for test in (st.TEST_BOOTSTRAP, st.TEST_KAPPA, st.TEST_AUC_AVG, st.TEST_NADEAU_BENGIO):
         family = [r for r in rows if r["test"] == test]
         assert len(family) == 3
@@ -351,7 +358,7 @@ def test_the_arm_ranking_is_descriptive_with_no_test():
     assert st.descriptive_ranking({"A": [0.5], "B": [0.6]})["position"] == {"A": 2, "B": 1}
 
 
-def test_the_global_ranking_joins_strategies_whose_rank_gap_does_not_exceed_the_cd():
+def test_a_nemenyi_group_joins_strategies_whose_rank_gap_does_not_exceed_the_cd():
     ranks = {"A": 1.0, "B": 2.0, "C": 4.5, "D": 5.0}
     assert st.nemenyi_groups(ranks, 3.5) == [["A", "B", "C"], ["B", "C", "D"]]
     assert st.nemenyi_groups(ranks, 0.5) == [["C", "D"]]

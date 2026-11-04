@@ -6,7 +6,7 @@ from torch import nn
 from torch.nn import functional as F
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["7.1", "7.2", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cca_calibration_uses_raw_confidence", "cca_prior_uses_confident_bags_only",

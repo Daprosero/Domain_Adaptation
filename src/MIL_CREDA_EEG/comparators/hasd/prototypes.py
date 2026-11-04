@@ -4,7 +4,7 @@ from __future__ import annotations
 import torch
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["7.1", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["hasd_prototypes_are_label_free_centroids_with_fixed_membership"],

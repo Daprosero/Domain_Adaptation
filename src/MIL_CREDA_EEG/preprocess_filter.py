@@ -1,6 +1,6 @@
 """Band-pass, then resample: the first step that transforms the signal.
 
-Experiments plan v05, Secs. 2.1 and 2.7. Per record, only the scalp channels
+Experiments plan v50, Secs. 2.1 and 2.7. Per record, only the scalp channels
 enter -- 29 for CGX and 14 for Emotiv, picked by name in the canonical order
 `modality` declares -- and A2, the bipolar externals and every other column
 never do. No device is re-referenced, nothing is decomposed into components,
@@ -34,7 +34,7 @@ from MIL_CREDA_EEG.audit_channels import BAND, bandpass
 from MIL_CREDA_EEG.modality import CGX_CHANNELS, EMOTIV_CHANNELS, EEGRecord
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v05.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
     "sections": ["2.1", "2.7"],
     "experiments": ["2.1", "2.7"],
     "invariants": [

@@ -15,8 +15,8 @@ def _points(values):
     (45, 82, [8.9, 8.3, 7.3], [8.2, 11.6, 14.2]),       # level L1<->L11 and device L6<->Robots
     (33, 33, [11.8, 11.1, 9.7], [10.9, 15.4, 18.9]),    # task CogniFit<->Robots
 ])
-def test_expected_precision_reproduces_the_plan_numbers(controls, cases, half_widths,
-                                                        detectable):
+def test_expected_precision_reproduces_the_plans_core_pair_numbers(controls, cases,
+                                                                 half_widths, detectable):
     out = st.expected_precision(controls, cases)
     assert out["ba_levels"] == [0.6, 0.7, 0.8]
     assert out["discordances"] == [0.1, 0.2, 0.3]

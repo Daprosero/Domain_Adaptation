@@ -360,13 +360,28 @@ def test_a_stored_k3_variant_model_is_rebuilt_for_its_attention(tmp_path):
 # ------------------------------------------------------------------ plan v44
 
 
-def test_the_provenance_binds_plan_v44():
+def test_the_provenance_binds_plan_v50():
     assert mech.__provenance__["revision"] == (
-        "experiments-plan-experimental-mil-creda-sobre-balladeer-v44.md")
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md")
 
 
-def test_k1_rows_carry_hodges_lehmann_and_its_wilcoxon_interval():
+def test_every_k1_and_k2_wilcoxon_row_carries_hodges_lehmann_and_its_interval():
     table = mech.k1_tests({"MIL-CREDA": _k1_rows("MIL-CREDA", "level", "L1->L11")})
+    rows = [{"model": "MIL-CREDA", "transfer": t, "subject": f"S{i}",
+             "separation": 0.1 * (i + 1)} for t in ("L1->L6", "L6->Robots") for i in range(8)]
+    weaker = [{**r, "model": mech.K2_NO_LOCAL, "separation": r["separation"] / 2}
+              for r in rows]
+    k2 = mech.k2_tests(rows, weaker)
+    tested = [r for r in table + k2 if r["n"]]
+    assert len(tested) >= 2 + 4 and all(r["test"] == st.TEST_WILCOXON for r in tested)
+    for r in tested:
+        assert r["ci_low"] <= r["hodges_lehmann"] <= r["ci_high"]
+        assert r["ci_name"] == "Hodges-Lehmann, exact Wilcoxon signed-rank 95% interval"
+    # Sec. 6.2's paired rows: MIL-CREDA minus its global-term-only variant, half the separation
+    paired = st.hodges_lehmann([0.05 * (i + 1) for i in range(8)])
+    assert k2[1]["hodges_lehmann"] == pytest.approx(paired["estimate"])
+    assert (k2[1]["ci_low"], k2[1]["ci_high"]) == (pytest.approx(paired["ci_low"]),
+                                                   pytest.approx(paired["ci_high"]))
     row = table[0]
     values = [-0.1 * (i + 1) for i in range(8)]
     hl = st.hodges_lehmann(values)
@@ -382,7 +397,14 @@ def test_k1_rows_carry_hodges_lehmann_and_its_wilcoxon_interval():
     assert out[0]["Estimador de Hodges-Lehmann"] == pytest.approx(hl["estimate"])
 
 
-def test_k2_gets_the_test_table_of_sec_6_2():
+def test_the_k1_and_k2_test_tables_carry_the_plans_headers():
+    k1 = mech.k1_test_table(mech.k1_tests(
+        {"MIL-CREDA": _k1_rows("MIL-CREDA", "level", "L1->L11")}))
+    assert list(mech.K1_TABLE_COLUMNS) == [
+        "Contraste", "Estadístico", "Valor de p",
+        "Tamaño del efecto, correlación biserial de rangos", "Estimador de Hodges-Lehmann",
+        "Intervalo de confianza al 95 % de Wilcoxon"]
+    assert k1 and all(list(r) == list(mech.K1_TABLE_COLUMNS) for r in k1)
     rows = [{"model": "MIL-CREDA", "transfer": t, "subject": f"S{i}",
              "separation": 0.1 * (i + 1)} for t in ("L1->L6", "L6->Robots") for i in range(8)]
     weaker = [{**r, "model": mech.K2_NO_LOCAL, "separation": r["separation"] / 2}

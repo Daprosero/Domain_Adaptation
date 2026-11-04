@@ -41,7 +41,7 @@ def _cell_aucs(records):
             for c, rs in cells.items()}
 
 
-def test_auc_avg_is_the_mean_of_the_cell_aucs_and_differs_from_the_pooled_auc():
+def test_auc_avg_is_the_mean_of_the_rotation_and_direction_cell_aucs():
     records = _miscalibrated()
     expected = np.mean(list(_cell_aucs(records).values()))
     pooled_auc = roc_auc_score([r["label"] for r in records],
