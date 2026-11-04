@@ -1,0 +1,20 @@
+{
+  "pinned": [
+    "AGREED.md",
+    "Experimental_AGREED.md",
+    "Data/processed/manifest.csv",
+    "Manifests/processed_sha256.csv",
+    "Partition/folds_4.json",
+    "Results/separability/summary.json",
+    "Results/timing_probe.json",
+    "Notebooks/BALLADEER_03_Preprocesamiento.ipynb",
+    "Notebooks/Toyset.ipynb",
+    "Results/Toyset/full/banderas.json",
+    "Results/Toyset/full/barrido.json",
+    "Results/Toyset/full/seccion2.json",
+    "Results/Toyset/full/seccion3.json",
+    "Results/Toyset/full/seccion4.json",
+    "Results/Toyset/full/seccion5.json",
+    "Results/discussion.json"
+  ]
+}
