@@ -1,0 +1,160 @@
+{
+  "tests": {
+    "K2a": {
+      "statistic": 465.0,
+      "p": 9.313225746154785e-10,
+      "rankBiserial": 1.0,
+      "hodgesLehmann": 0.05164468474686146,
+      "hodgesLehmannCI": [
+        0.04310601018369198,
+        0.060623204335570335
+      ],
+      "n": 30,
+      "nonZero": 30,
+      "alternative": "greater",
+      "pHolm": 1.862645149230957e-09
+    },
+    "K2b": {
+      "statistic": 188.0,
+      "p": 0.8200610363855958,
+      "rankBiserial": -0.1913978494623656,
+      "hodgesLehmann": -0.0036859624087810516,
+      "hodgesLehmannCI": [
+        -0.011652685701847076,
+        0.0058084651827812195
+      ],
+      "n": 30,
+      "nonZero": 30,
+      "alternative": "greater",
+      "pHolm": 0.8200610363855958
+    },
+    "K3a-artifact": {
+      "statistic": 219.0,
+      "p": 0.23537954882466794,
+      "rankBiserial": 0.15873015873015872,
+      "hodgesLehmann": 0.0092592592592593,
+      "hodgesLehmannCI": [
+        -0.027777777777777735,
+        0.055555555555555525
+      ],
+      "n": 30,
+      "nonZero": 27,
+      "alternative": "greater"
+    },
+    "K3b-clean": {
+      "statistic": 188.5,
+      "p": 0.3702758331386258,
+      "rankBiserial": 0.07407407407407407,
+      "hodgesLehmann": 0.0,
+      "hodgesLehmannCI": [
+        -0.018518518518518545,
+        0.02777777777777779
+      ],
+      "n": 30,
+      "nonZero": 26,
+      "alternative": "greater",
+      "pHolm": 0.3702758331386258
+    },
+    "K3c-clean": {
+      "statistic": 236.5,
+      "p": 0.12659589771939977,
+      "rankBiserial": 0.25132275132275134,
+      "hodgesLehmann": 0.018518518518518545,
+      "hodgesLehmannCI": [
+        -0.01851851851851849,
+        0.06481481481481477
+      ],
+      "n": 30,
+      "nonZero": 27,
+      "alternative": "greater",
+      "pHolm": 0.25319179543879955
+    },
+    "K3b-artifact": {
+      "statistic": 198.0,
+      "p": 0.4141067049932576,
+      "rankBiserial": 0.047619047619047616,
+      "hodgesLehmann": 0.0,
+      "hodgesLehmannCI": [
+        -0.027777777777777735,
+        0.02777777777777779
+      ],
+      "n": 30,
+      "nonZero": 27,
+      "alternative": "greater",
+      "pHolm": 0.4141067049932576
+    },
+    "K3c-artifact": {
+      "statistic": 184.0,
+      "p": 0.08069919419127308,
+      "rankBiserial": 0.3333333333333333,
+      "hodgesLehmann": 0.018518518518518545,
+      "hodgesLehmannCI": [
+        -0.0092592592592593,
+        0.05555555555555558
+      ],
+      "n": 30,
+      "nonZero": 23,
+      "alternative": "greater",
+      "pHolm": 0.16139838838254617
+    },
+    "H-task-bn-matched": {
+      "statistic": 408.5,
+      "p": 0.0001446872016345676,
+      "rankBiserial": 0.7569892473118279,
+      "hodgesLehmann": 0.06481481481481483,
+      "hodgesLehmannCI": [
+        0.037037037037037035,
+        0.10185185185185186
+      ],
+      "n": 30,
+      "nonZero": 30,
+      "alternative": "greater"
+    }
+  },
+  "gates": {
+    "clean": {
+      "piEntropyRatioMedian": 0.9865857086072568,
+      "partnerKernelRankStartMedian": 0.0625,
+      "partnerKernelRankEndMedian": 0.19791666666666669,
+      "routingErrorRateMedian": 0.6666666666666666,
+      "means": {
+        "TGL": 0.8481481481481481,
+        "TG": 0.8425925925925926,
+        "TL": 0.821604938271605,
+        "TGL-NC": 0.812962962962963
+      }
+    },
+    "artifact": {
+      "piEntropyRatioMedian": 0.9747468583361445,
+      "partnerKernelRankStartMedian": 0.08333333333333333,
+      "partnerKernelRankEndMedian": 0.17708333333333331,
+      "routingErrorRateMedian": 0.6666666666666666,
+      "means": {
+        "TGL": 0.8197530864197531,
+        "TG": 0.817283950617284,
+        "TL": 0.7950617283950617,
+        "TGL-NC": 0.808641975308642
+      }
+    }
+  },
+  "verdicts": {
+    "K2": {
+      "K2a": "supported",
+      "K2b": "inconclusive (mechanism had no room)"
+    },
+    "K3-aggregation": {
+      "K3a": "not supported"
+    },
+    "K3-ablation-clean": {
+      "K3b": "inconclusive (mechanism had no room)",
+      "K3c": "not supported"
+    },
+    "K3-ablation-artifact": {
+      "K3b": "inconclusive (mechanism had no room)",
+      "K3c": "not supported"
+    },
+    "H-task": {
+      "H-task (TGL > BN-matched floor)": "supported"
+    }
+  }
+}

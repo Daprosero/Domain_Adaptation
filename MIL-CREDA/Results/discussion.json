@@ -3,7 +3,7 @@
   "stage": "poc",
   "protocol": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
   "generated_at": "2026-11-05T16:44:07+00:00",
-  "summary": "Proof of concept on the rollo toy set with the BatchNorm MLP encoder, 30 seeds, rules pre-registered before each run (Notebooks/PoC_Hypotheses_Rollo.ipynb, run 3). Task-level adaptation is supported; attention with consensus down-weights artifact-like contamination; the local term (K2) shows no gain and the K3 ladder is ordered as expected but not significant. EEG experiments have not run.",
+  "summary": "Proof of concept on the rollo toy set with the BatchNorm MLP encoder, 30 seeds, rules pre-registered before each run (Notebooks/PoC_Hypotheses_Rollo.ipynb, run 3). Task-level adaptation is supported; attention with consensus down-weights artifact-like contamination; the local term (K2) shows no gain and the K3 ladder is ordered as expected but not significant. Corrected run (Results/PoC_K2K3): task beats the BN-matched floor; K2 inconclusive (local correspondence near uniform); K3 not supported. EEG experiments have not run.",
   "discussion_type": [
     "comparative",
     "ablation",
@@ -38,13 +38,13 @@
       "metric": "target-domain accuracy",
       "test": "Wilcoxon signed-rank, paired over 30 seeds (pre-registered, Results/PoC_Conditions/preregistration.json)",
       "criterion": "pre-registered rule: every contrast of the family with (Holm-adjusted) p < 0.05",
-      "observed": "TGL 0.848 vs source-only 0.356; W = 465.0, one-sided p = 8.55e-07, rank-biserial = 1.00, HL = 0.500. AdaBN (information only): 0.780.",
+      "observed": "TGL 0.848 vs BN-matched floor (AdaBN) 0.780, p=0.00014 (one-sided Wilcoxon, 30 seeds)",
       "evidence": [
-        "Results/PoC_Conditions/h_task.png",
-        "significance:poc-task-tgl-vs-source-only"
+        "Results/PoC_K2K3/verdicts.json",
+        "significance:poc-k2k3-H-task-bn-matched"
       ],
       "verdict": "partially_supported",
-      "rationale": "Toy-set proof of concept (rollo, BatchNorm MLP, 30 seeds): MIL-CREDA beats the source-only floor. The ranking against the eight comparators is not part of the PoC, so only part of the hypothesis is tested here."
+      "rationale": "Corrected PoC test (L115): MIL-CREDA against the BN-equalized source-only floor. The ranking among the nine strategies is not tested at PoC."
     },
     {
       "id": "H-B",
@@ -53,13 +53,13 @@
       "metric": "target-domain accuracy",
       "test": "Wilcoxon signed-rank, paired over 30 seeds (pre-registered, Results/PoC_Conditions/preregistration.json)",
       "criterion": "pre-registered rule: every contrast of the family with (Holm-adjusted) p < 0.05",
-      "observed": "TGL 0.848 vs source-only 0.356; W = 465.0, one-sided p = 8.55e-07, rank-biserial = 1.00, HL = 0.500. AdaBN (information only): 0.780.",
+      "observed": "TGL 0.848 vs BN-matched floor (AdaBN) 0.780, p=0.00014 (one-sided Wilcoxon, 30 seeds)",
       "evidence": [
-        "Results/PoC_Conditions/h_task.png",
-        "significance:poc-task-tgl-vs-source-only"
+        "Results/PoC_K2K3/verdicts.json",
+        "significance:poc-k2k3-H-task-bn-matched"
       ],
       "verdict": "partially_supported",
-      "rationale": "Toy-set proof of concept (rollo, BatchNorm MLP, 30 seeds): MIL-CREDA beats the source-only floor. The ranking against the eight comparators is not part of the PoC, so only part of the hypothesis is tested here."
+      "rationale": "Corrected PoC test (L115): MIL-CREDA against the BN-equalized source-only floor. The ranking among the nine strategies is not tested at PoC."
     },
     {
       "id": "H-C",
@@ -68,13 +68,10 @@
       "metric": "target-domain accuracy",
       "test": "Wilcoxon signed-rank, paired over 30 seeds (pre-registered, Results/PoC_Conditions/preregistration.json)",
       "criterion": "pre-registered rule: every contrast of the family with (Holm-adjusted) p < 0.05",
-      "observed": "TGL 0.848 vs source-only 0.356; W = 465.0, one-sided p = 8.55e-07, rank-biserial = 1.00, HL = 0.500. AdaBN (information only): 0.780.",
-      "evidence": [
-        "Results/PoC_Conditions/h_task.png",
-        "significance:poc-task-tgl-vs-source-only"
-      ],
-      "verdict": "partially_supported",
-      "rationale": "Toy-set proof of concept (rollo, BatchNorm MLP, 30 seeds): MIL-CREDA beats the source-only floor. The ranking against the eight comparators is not part of the PoC, so only part of the hypothesis is tested here."
+      "observed": "Not testable on the toy set: H-C makes only a ranking claim (v55:550).",
+      "evidence": [],
+      "verdict": "pending",
+      "rationale": "Belongs to the EEG full experiments."
     },
     {
       "id": "H-K1",
@@ -110,14 +107,14 @@
       "metric": "partner separation s",
       "test": "Wilcoxon signed-rank, paired over 30 seeds (pre-registered, Results/PoC_Conditions/preregistration.json)",
       "criterion": "pre-registered rule: every contrast of the family with (Holm-adjusted) p < 0.05",
-      "observed": "K2a: s(TGL) > 0: p_Holm = 1.86e-09; K2b: s(TGL) > s(TG): p_Holm = 8.20e-01. Mean separation TGL 0.0520, TG 0.0566; partner mass TGL 0.063 (chance 0.056).",
+      "observed": "K2a supported (p_Holm<1e-8); K2b gate failed: median pi entropy ratio 0.987 (>=0.9), partner kernel rank at start 0.062 (<0.5)",
       "evidence": [
-        "Results/PoC_Conditions/k2_partners.png",
-        "significance:poc-k2-1",
-        "significance:poc-k2-2"
+        "Results/PoC_K2K3/verdicts.json",
+        "significance:poc-k2k3-K2a",
+        "significance:poc-k2k3-K2b"
       ],
-      "verdict": "not_supported",
-      "rationale": "The local term adds nothing over global-only on the toy set, even with 4 source bags per class and a smooth subject shift."
+      "verdict": "inconclusive",
+      "rationale": "The local correspondence is near uniform and partners are not kernel-nearest at the start of phase 2, so the local term had no room to separate partners; pre-registered verdict: inconclusive (mechanism had no room)."
     },
     {
       "id": "H-K3",
@@ -126,19 +123,17 @@
       "metric": "target-domain accuracy",
       "test": "Wilcoxon signed-rank, paired over 30 seeds (pre-registered, Results/PoC_Conditions/preregistration.json)",
       "criterion": "pre-registered rule: every contrast of the family with (Holm-adjusted) p < 0.05",
-      "observed": "K3a: TGL > TGL-NC: mean diff +0.035, HL +0.028, p_Holm = 2.38e-01; K3b: TGL > TG: mean diff +0.006, HL +0.000, p_Holm = 3.70e-01; K3c: TGL > TL: mean diff +0.027, HL +0.019, p_Holm = 2.53e-01. Means: TGL-NC 0.813, TG 0.843, TL 0.822, TGL 0.848. | artifact ladder: K3a [artifact]: TGL > TGL-NC: mean diff +0.011, HL +0.009, p_Holm = 4.71e-01; K3b [artifact]: TGL > TG: mean diff +0.002, HL +0.000, p_Holm = 4.71e-01; K3c [artifact]: TGL > TL: mean diff +0.025, HL +0.019, p_Holm = 2.42e-01. Means: TGL-NC 0.809, TG 0.817, TL 0.795, TGL 0.820.",
+      "observed": "K3a (artifact) p=0.235; K3c p_Holm 0.253 clean / 0.161 artifact; K3b inconclusive (same gate as K2b). Means clean TGL 0.848, TG 0.843, TL 0.822, TGL-NC 0.813.",
       "evidence": [
-        "Results/PoC_Conditions/k3_clean.png",
-        "Results/PoC_Conditions/k3_artifact.png",
-        "significance:poc-k3-clean-1",
-        "significance:poc-k3-clean-2",
-        "significance:poc-k3-clean-3",
-        "significance:poc-k3-artifact-1",
-        "significance:poc-k3-artifact-2",
-        "significance:poc-k3-artifact-3"
+        "Results/PoC_K2K3/verdicts.json",
+        "significance:poc-k2k3-K3a-artifact",
+        "significance:poc-k2k3-K3b-clean",
+        "significance:poc-k2k3-K3c-clean",
+        "significance:poc-k2k3-K3b-artifact",
+        "significance:poc-k2k3-K3c-artifact"
       ],
       "verdict": "not_supported",
-      "rationale": "Gaps go in the expected direction (TGL 0.848 > TG 0.843 > TL 0.822 > TGL-NC 0.813) but none is significant."
+      "rationale": "Under the corrected families (Holm per table) the gaps go in the expected direction but none is significant; K3c had room (routing error 0.667), so its result is a real non-support on the toy set."
     }
   ],
   "qualitative": [
