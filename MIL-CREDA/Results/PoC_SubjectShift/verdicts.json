@@ -1,0 +1,341 @@
+{
+  "preregistration": {
+    "scenario": {
+      "backbone": "mlp",
+      "family": "rollo",
+      "scale": "full"
+    },
+    "seeds": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+    ],
+    "contaminationRates": [
+      0.1,
+      0.2,
+      0.3
+    ],
+    "alpha": 0.05,
+    "test": "Wilcoxon signed-rank, one-sided greater, zero_method=wilcox; rank-biserial; Hodges-Lehmann with Wilcoxon 95% CI",
+    "hypotheses": {
+      "H-task": {
+        "contrast": "acc(TGL) - acc(sourceOnly)",
+        "family": [
+          "H-task"
+        ],
+        "rule": "VALIDATED iff p < alpha"
+      },
+      "K1": {
+        "contrast": [
+          "c(TGL) > 0 at each rate",
+          "c(TGL) - c(TGL-NC) > 0 at each rate"
+        ],
+        "family": "6 tests, Holm",
+        "rule": "VALIDATED iff all 6 Holm-adjusted p < alpha"
+      },
+      "K2": {
+        "contrast": [
+          "s(TGL) > 0",
+          "s(TGL) - s(TG) > 0"
+        ],
+        "family": "2 tests, Holm",
+        "rule": "VALIDATED iff both Holm-adjusted p < alpha"
+      },
+      "K3": {
+        "contrast": [
+          "acc(TGL)-acc(TGL-NC)",
+          "acc(TGL)-acc(TG)",
+          "acc(TGL)-acc(TL)"
+        ],
+        "family": "3 tests, Holm",
+        "rule": "VALIDATED iff all 3 Holm-adjusted p < alpha"
+      }
+    },
+    "hyperparameters": {
+      "attentionGamma": 0.8633557574655063,
+      "attentionTemperature": 0.42588932435340904,
+      "dim": 64,
+      "kernelSigma": 36.135014304860874,
+      "lr1": 0.015290622066240019,
+      "lr2": 0.0026420508173972492,
+      "tauLocal": 0.27466369735257745,
+      "weightDecay1": 6.277218548234598e-07,
+      "weightDecay2": 1.5227262701506252e-06
+    },
+    "sigmaMultiplier": 0.5,
+    "noisePairingToy": [
+      1,
+      2,
+      0
+    ],
+    "writtenAt": "2026-11-05T12:09:24+00:00",
+    "copiedFrom": {
+      "file": "MIL-CREDA/Results/PoC/preregistration.json",
+      "writtenAt": "2026-11-05T07:20:52+00:00",
+      "keys": [
+        "scenario",
+        "seeds",
+        "contaminationRates",
+        "alpha",
+        "test",
+        "hypotheses",
+        "hyperparameters",
+        "sigmaMultiplier",
+        "noisePairingToy"
+      ]
+    },
+    "targetShift": {
+      "global": "CREDA.toy_experiment.perturbar (unchanged)",
+      "perPair": "MIL_CREDA_Benchmark.toy_bags.desplazar_por_par",
+      "perPairScale": 0.25,
+      "perPairRotationSdDegrees": 10.0,
+      "rationale": "per-pair displacement sized to the global Sigma-preserving rotation's (the part of the global shift BatchNorm cannot close); see toy_bags.ESCALA_POR_PAR_DECLARADA"
+    }
+  },
+  "verdicts": {
+    "H-task": {
+      "verdict": "VALIDATED",
+      "evidence": "TGL 0.839 vs source-only 0.361 (mean target accuracy); W = 465.0, one-sided p = 8.05e-07, rank-biserial = 1.00, HL = 0.472. AdaBN (information only): 0.793."
+    },
+    "K1": {
+      "verdict": "NOT VALIDATED",
+      "evidence": "K1a r=0.1: c(TGL) > 0: p_Holm = 7.01e-01; K1b r=0.1: c(TGL) > c(TGL-NC): p_Holm = 7.52e-03; K1a r=0.2: c(TGL) > 0: p_Holm = 7.52e-03; K1b r=0.2: c(TGL) > c(TGL-NC): p_Holm = 1.23e-07; K1a r=0.3: c(TGL) > 0: p_Holm = 9.31e-09; K1b r=0.3: c(TGL) > c(TGL-NC): p_Holm = 5.59e-09. Mean contrasts c(TGL) / c(TGL-NC): r=0.1: -0.077 / -0.307, r=0.2: 0.095 / -0.192, r=0.3: 0.204 / -0.077."
+    },
+    "K2": {
+      "verdict": "NOT VALIDATED",
+      "evidence": "K2a: s(TGL) > 0: p_Holm = 2.76e-06; K2b: s(TGL) > s(TG): p_Holm = 9.97e-01. Mean separation TGL 0.0211, TG 0.0394; partner mass TGL 0.174 (chance 0.167)."
+    },
+    "K3": {
+      "verdict": "NOT VALIDATED",
+      "evidence": "K3a: TGL > TGL-NC: mean diff -0.013, HL +0.000, p_Holm = 5.97e-01; K3b: TGL > TG: mean diff +0.011, HL +0.000, p_Holm = 5.64e-01; K3c: TGL > TL: mean diff +0.059, HL +0.028, p_Holm = 2.63e-01."
+    }
+  },
+  "tests": {
+    "H-task": {
+      "statistic": 465.0,
+      "p": 8.04777463306332e-07,
+      "rankBiserial": 1.0,
+      "hodgesLehmann": 0.47222222222222227,
+      "hodgesLehmannCI": [
+        0.4444444444444444,
+        0.5555555555555556
+      ],
+      "n": 30,
+      "nonZero": 30,
+      "alternative": "greater"
+    },
+    "H-task-info-adabn": {
+      "statistic": 69.5,
+      "p": 0.06272780099731104,
+      "rankBiserial": 0.4505928853754941,
+      "hodgesLehmann": 0.055555555555555525,
+      "hodgesLehmannCI": [
+        0.0,
+        0.1111111111111111
+      ],
+      "n": 30,
+      "nonZero": 22,
+      "alternative": "two-sided"
+    },
+    "K1": [
+      {
+        "test": "K1a r=0.1: c(TGL) > 0",
+        "statistic": 207.0,
+        "p": 0.7010961147025228,
+        "rankBiserial": -0.10967741935483871,
+        "hodgesLehmann": -0.02519483287117364,
+        "hodgesLehmannCI": [
+          -0.16644286499128758,
+          0.05349599411366161
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 0.7010961147025228
+      },
+      {
+        "test": "K1b r=0.1: c(TGL) > c(TGL-NC)",
+        "statistic": 366.0,
+        "p": 0.0025063063949346542,
+        "rankBiserial": 0.5741935483870968,
+        "hodgesLehmann": 0.24981927028914666,
+        "hodgesLehmannCI": [
+          0.08455290731450787,
+          0.39252313208927253
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 0.007518919184803963
+      },
+      {
+        "test": "K1a r=0.2: c(TGL) > 0",
+        "statistic": 362.0,
+        "p": 0.0033197682350873947,
+        "rankBiserial": 0.556989247311828,
+        "hodgesLehmann": 0.11867614838087724,
+        "hodgesLehmannCI": [
+          0.04877886029943412,
+          0.19097646242395666
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 0.007518919184803963
+      },
+      {
+        "test": "K1b r=0.2: c(TGL) > c(TGL-NC)",
+        "statistic": 456.0,
+        "p": 3.073364496231079e-08,
+        "rankBiserial": 0.9612903225806452,
+        "hodgesLehmann": 0.2563639572407636,
+        "hodgesLehmannCI": [
+          0.18469438247848302,
+          0.346294339461666
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 1.2293457984924316e-07
+      },
+      {
+        "test": "K1a r=0.3: c(TGL) > 0",
+        "statistic": 464.0,
+        "p": 1.862645149230957e-09,
+        "rankBiserial": 0.9956989247311828,
+        "hodgesLehmann": 0.2061113922686745,
+        "hodgesLehmannCI": [
+          0.1692940812636778,
+          0.25091804060148737
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 9.313225746154785e-09
+      },
+      {
+        "test": "K1b r=0.3: c(TGL) > c(TGL-NC)",
+        "statistic": 465.0,
+        "p": 9.313225746154785e-10,
+        "rankBiserial": 1.0,
+        "hodgesLehmann": 0.2595862177959471,
+        "hodgesLehmannCI": [
+          0.19523683698877456,
+          0.3310092910261895
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 5.587935447692871e-09
+      }
+    ],
+    "K2": [
+      {
+        "test": "K2a: s(TGL) > 0",
+        "statistic": 437.0,
+        "p": 1.3811513781547546e-06,
+        "rankBiserial": 0.8795698924731182,
+        "hodgesLehmann": 0.02039030590094626,
+        "hodgesLehmannCI": [
+          0.012326853815466166,
+          0.02806077362038195
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 2.7623027563095093e-06
+      },
+      {
+        "test": "K2b: s(TGL) > s(TG)",
+        "statistic": 104.0,
+        "p": 0.9966802317649126,
+        "rankBiserial": -0.5526881720430108,
+        "hodgesLehmann": -0.014757235534489155,
+        "hodgesLehmannCI": [
+          -0.02878003567457199,
+          -0.004560986068099737
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 0.9966802317649126
+      }
+    ],
+    "K3": [
+      {
+        "test": "K3a: TGL > TGL-NC",
+        "statistic": 130.0,
+        "p": 0.5966484732511724,
+        "rankBiserial": -0.057971014492753624,
+        "hodgesLehmann": 0.0,
+        "hodgesLehmannCI": [
+          -0.05555555555555558,
+          0.02777777777777779
+        ],
+        "n": 30,
+        "nonZero": 23,
+        "alternative": "greater",
+        "pHolm": 0.5966484732511724
+      },
+      {
+        "test": "K3b: TGL > TG",
+        "statistic": 132.0,
+        "p": 0.2819110849791152,
+        "rankBiserial": 0.14285714285714285,
+        "hodgesLehmann": 0.0,
+        "hodgesLehmannCI": [
+          -0.02777777777777779,
+          0.05555555555555558
+        ],
+        "n": 30,
+        "nonZero": 21,
+        "alternative": "greater",
+        "pHolm": 0.5638221699582304
+      },
+      {
+        "test": "K3c: TGL > TL",
+        "statistic": 154.0,
+        "p": 0.08763326814190492,
+        "rankBiserial": 0.3333333333333333,
+        "hodgesLehmann": 0.02777777777777779,
+        "hodgesLehmannCI": [
+          0.0,
+          0.08333333333333337
+        ],
+        "n": 30,
+        "nonZero": 21,
+        "alternative": "greater",
+        "pHolm": 0.26289980442571476
+      }
+    ]
+  },
+  "batterySeconds": 1477.0982989579934,
+  "workers": 6
+}

@@ -1,0 +1,120 @@
+{
+  "alpha": 0.05,
+  "contaminationRates": [
+    0.1,
+    0.2,
+    0.3
+  ],
+  "copiedFrom": {
+    "file": "MIL-CREDA/Results/PoC/preregistration.json",
+    "keys": [
+      "scenario",
+      "seeds",
+      "contaminationRates",
+      "alpha",
+      "test",
+      "hypotheses",
+      "hyperparameters",
+      "sigmaMultiplier",
+      "noisePairingToy"
+    ],
+    "writtenAt": "2026-11-05T07:20:52+00:00"
+  },
+  "hyperparameters": {
+    "attentionGamma": 0.8633557574655063,
+    "attentionTemperature": 0.42588932435340904,
+    "dim": 64,
+    "kernelSigma": 36.135014304860874,
+    "lr1": 0.015290622066240019,
+    "lr2": 0.0026420508173972492,
+    "tauLocal": 0.27466369735257745,
+    "weightDecay1": 6.277218548234598e-07,
+    "weightDecay2": 1.5227262701506252e-06
+  },
+  "hypotheses": {
+    "H-task": {
+      "contrast": "acc(TGL) - acc(sourceOnly)",
+      "family": [
+        "H-task"
+      ],
+      "rule": "VALIDATED iff p < alpha"
+    },
+    "K1": {
+      "contrast": [
+        "c(TGL) > 0 at each rate",
+        "c(TGL) - c(TGL-NC) > 0 at each rate"
+      ],
+      "family": "6 tests, Holm",
+      "rule": "VALIDATED iff all 6 Holm-adjusted p < alpha"
+    },
+    "K2": {
+      "contrast": [
+        "s(TGL) > 0",
+        "s(TGL) - s(TG) > 0"
+      ],
+      "family": "2 tests, Holm",
+      "rule": "VALIDATED iff both Holm-adjusted p < alpha"
+    },
+    "K3": {
+      "contrast": [
+        "acc(TGL)-acc(TGL-NC)",
+        "acc(TGL)-acc(TG)",
+        "acc(TGL)-acc(TL)"
+      ],
+      "family": "3 tests, Holm",
+      "rule": "VALIDATED iff all 3 Holm-adjusted p < alpha"
+    }
+  },
+  "noisePairingToy": [
+    1,
+    2,
+    0
+  ],
+  "scenario": {
+    "backbone": "mlp",
+    "family": "rollo",
+    "scale": "full"
+  },
+  "seeds": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39
+  ],
+  "sigmaMultiplier": 0.5,
+  "targetShift": {
+    "global": "CREDA.toy_experiment.perturbar (unchanged)",
+    "perPair": "MIL_CREDA_Benchmark.toy_bags.desplazar_por_par",
+    "perPairRotationSdDegrees": 10.0,
+    "perPairScale": 0.25,
+    "rationale": "per-pair displacement sized to the global Sigma-preserving rotation's (the part of the global shift BatchNorm cannot close); see toy_bags.ESCALA_POR_PAR_DECLARADA"
+  },
+  "test": "Wilcoxon signed-rank, one-sided greater, zero_method=wilcox; rank-biserial; Hodges-Lehmann with Wilcoxon 95% CI",
+  "writtenAt": "2026-11-05T12:09:24+00:00"
+}
