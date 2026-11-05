@@ -31,6 +31,7 @@ MIL-CREDA's.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 
 import numpy as np
@@ -116,6 +117,16 @@ PERIODOS_DEL_CAMPO = 3
 
 #: `CREDA.toy_experiment.dura_rollo` draws `t` uniformly on this interval.
 T_ROLLO = (1.5 * np.pi, 4.5 * np.pi)
+
+#: The subject signature's own stream offset, so switching it on changes no
+#: other draw.
+DESPLAZAMIENTO_DE_FIRMA = 6000
+
+#: The coordinate the subject signature moves: `rollo`'s height `h`. The
+#: generator draws it uniformly on [0, 12] independently of `t`, and the class
+#: is cut out of `t` alone, so an offset along `h` carries no class information
+#: by construction.
+EJE_DE_FIRMA = 1
 
 
 def t_bajo_campo(t: np.ndarray, amplitud_t: float, periodos: int,
@@ -288,6 +299,77 @@ class Familia:
     #: The subject field applied to the target (`fraccionDeBanda`,
     #: `espaciadoMinimoT`, `amplitudT`, `periodos`, `fase`); `None` when off.
     campo: dict | None = None
+    #: The subject signature applied to both domains (see `firmar_sujetos`);
+    #: `None` when off.
+    firma: dict | None = None
+
+
+def geometria_de_firma(X: np.ndarray, y: np.ndarray, b: np.ndarray) -> dict:
+    """The two scales the subject signature is read against, on one domain:
+
+    - `withinBagSpread`: the median over bags of the RMS distance of a bag's
+      instances to its own centroid;
+    - `betweenClassSeparation`: the smallest distance between two class
+      centroids.
+    """
+    spreads = []
+    for c in np.unique(y):
+        for k in np.unique(b[y == c]):
+            P = X[(y == c) & (b == k)]
+            spreads.append(np.sqrt(((P - P.mean(0)) ** 2).sum(1).mean()))
+    centres = [X[y == c].mean(0) for c in np.unique(y)]
+    gaps = [np.linalg.norm(a - c) for i, a in enumerate(centres) for c in centres[i + 1:]]
+    return {"withinBagSpread": float(np.median(spreads)),
+            "betweenClassSeparation": float(min(gaps))}
+
+
+def firmar_sujetos(familia: Familia, fraccion: float, semilla: int) -> Familia:
+    """`familia` with one fixed offset per subject added to BOTH domains.
+
+    A subject is bag index `k` within its class: source bag `k` and its
+    partner, target bag `k`, of the same class. Every instance of subject `k`
+    moves by `s_k` along `EJE_DE_FIRMA`, in the source and in the (already
+    perturbed) target alike, so the shared encoder sees the same mark on both
+    sides of the pair and the partner can become the kernel-nearest bag.
+
+    The `s_k` are drawn once per index from `semilla + DESPLAZAMIENTO_DE_FIRMA`,
+    centred over the indices and rescaled to an RMS of exactly `amplitude`,
+    and the same `s_k` is used in every class: each class receives the same
+    multiset of offsets, zero-mean over its subjects, along a coordinate the
+    class is not cut from, so the class information is unchanged.
+
+    `amplitude` is `fraccion` times the source's between-class separation
+    (`geometria_de_firma`), the unit the EEG-grounded calibration is stated in:
+    on BALLADEER the own-partner percentile across conditions is read off band
+    power, and the toy matches it at a multiple of that separation. The
+    within-bag spread is recorded beside it as the other reference scale.
+    `fraccion` 0 is off and returns `familia` itself.
+    """
+    if fraccion == 0:
+        return familia
+    if not (np.isfinite(fraccion) and fraccion > 0):
+        raise ValueError(f"fraccion = {fraccion}: a multiple of the class separation "
+                         "is finite and non-negative")
+    if familia.nombre != "rollo":
+        raise ValueError(f"the subject signature is declared on `rollo` only, "
+                         f"not {familia.nombre!r}")
+    geometria = geometria_de_firma(familia.Xs, familia.ys, familia.bs)
+    amplitud = fraccion * geometria["betweenClassSeparation"]
+    indices = np.unique(np.concatenate([familia.bs, familia.bt]))
+    firmas = np.random.default_rng(semilla + DESPLAZAMIENTO_DE_FIRMA).normal(size=len(indices))
+    firmas -= firmas.mean()
+    firmas *= amplitud / np.sqrt((firmas ** 2).mean())
+    por_indice = dict(zip(indices.tolist(), firmas.tolist()))
+
+    def marcar(X, b):
+        salida = X.copy()
+        salida[:, EJE_DE_FIRMA] += firmas[np.searchsorted(indices, b)]
+        return salida
+
+    registro = {"multipleOfClassSeparation": float(fraccion), "amplitude": float(amplitud),
+                **geometria, "axis": EJE_DE_FIRMA, "signatures": por_indice}
+    return dataclasses.replace(familia, Xs=marcar(familia.Xs, familia.bs),
+                               Xt=marcar(familia.Xt, familia.bt), firma=registro)
 
 
 def desplazar_por_par(Xt: np.ndarray, yt: np.ndarray, bt: np.ndarray,
