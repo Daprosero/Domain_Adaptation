@@ -60,7 +60,8 @@ def ramp(epoch: int, epochs: int, family: str | None,
     return schedule(epoch, epochs, delta=delta, ceiling=ceiling)
 
 
-def balanced_batches(targets: list[int], steps: int, generator: torch.Generator):
+def balanced_batches(targets: list[int], steps: int, generator: torch.Generator,
+                     per_class: int = 1):
     """One bag of every class per step, so no class is ever missing.
 
     `total_correspondence` refuses to invent a value for a class with no source
@@ -68,6 +69,10 @@ def balanced_batches(targets: list[int], steps: int, generator: torch.Generator)
     often enough to kill an epoch. Each class keeps its own shuffled queue and
     refills when it runs out, so the draw stays stratified across the epoch and
     the arms all see the same shape of batch.
+
+    `per_class` bags of every class per step (default one, which is the draw
+    exactly as it was). A queue refills only when empty, so a step repeats a
+    bag only if a class's count is not a multiple of `per_class`.
     """
     queues: dict[int, list[int]] = {c: [] for c in set(targets)}
     by_class: dict[int, list[int]] = {c: [] for c in set(targets)}
@@ -77,11 +82,12 @@ def balanced_batches(targets: list[int], steps: int, generator: torch.Generator)
     for _ in range(steps):
         batch = []
         for class_id in sorted(by_class):
-            if not queues[class_id]:
-                pool = by_class[class_id]
-                order = torch.randperm(len(pool), generator=generator).tolist()
-                queues[class_id] = [pool[i] for i in order]
-            batch.append(queues[class_id].pop())
+            for _ in range(per_class):
+                if not queues[class_id]:
+                    pool = by_class[class_id]
+                    order = torch.randperm(len(pool), generator=generator).tolist()
+                    queues[class_id] = [pool[i] for i in order]
+                batch.append(queues[class_id].pop())
         yield batch
 
 
