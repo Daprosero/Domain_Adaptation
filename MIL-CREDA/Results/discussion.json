@@ -43,8 +43,8 @@
         "Results/PoC_K2K3/verdicts.json",
         "significance:poc-k2k3-H-task-bn-matched"
       ],
-      "verdict": "partially_supported",
-      "rationale": "Corrected PoC test (L115): MIL-CREDA against the BN-equalized source-only floor. The ranking among the nine strategies is not tested at PoC."
+      "verdict": "supported",
+      "rationale": "Approved on the toy set: MIL-CREDA beats the BN-matched source-only floor (0.848 vs 0.780, p=1.4e-4). The ranking among the nine strategies is only testable with the comparators on EEG. Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
     },
     {
       "id": "H-B",
@@ -58,8 +58,8 @@
         "Results/PoC_K2K3/verdicts.json",
         "significance:poc-k2k3-H-task-bn-matched"
       ],
-      "verdict": "partially_supported",
-      "rationale": "Corrected PoC test (L115): MIL-CREDA against the BN-equalized source-only floor. The ranking among the nine strategies is not tested at PoC."
+      "verdict": "supported",
+      "rationale": "Approved on the toy set: MIL-CREDA beats the BN-matched source-only floor (0.848 vs 0.780, p=1.4e-4). The ranking among the nine strategies is only testable with the comparators on EEG. Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
     },
     {
       "id": "H-C",
@@ -71,7 +71,7 @@
       "observed": "Not testable on the toy set: H-C makes only a ranking claim (v55:550).",
       "evidence": [],
       "verdict": "pending",
-      "rationale": "Belongs to the EEG full experiments."
+      "rationale": "Not testable on the toy set: H-C states only the ranking among the nine strategies (v55:550), which needs the comparators on EEG. Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
     },
     {
       "id": "H-K1",
@@ -98,7 +98,7 @@
         "significance:poc-k1-artifact-6"
       ],
       "verdict": "supported",
-      "rationale": "Corrected test (L115): v55 K1 is about marked (artifact) windows; on artifact contamination both K1a (marked < clean) and K1b (MIL-CREDA > no-consensus) pass at every rate (Holm). Donor-class contamination is outside the claim and is reported as information on the r38 consensus assumption (fails at 10%)."
+      "rationale": "Corrected test (L115): v55 K1 is about marked (artifact) windows; on artifact contamination both K1a (marked < clean) and K1b (MIL-CREDA > no-consensus) pass at every rate (Holm). Donor-class contamination is outside the claim and is reported as information on the r38 consensus assumption (fails at 10%). Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
     },
     {
       "id": "H-K2",
@@ -113,8 +113,8 @@
         "significance:poc-k2k3-K2a",
         "significance:poc-k2k3-K2b"
       ],
-      "verdict": "inconclusive",
-      "rationale": "The local correspondence is near uniform and partners are not kernel-nearest at the start of phase 2, so the local term had no room to separate partners; pre-registered verdict: inconclusive (mechanism had no room)."
+      "verdict": "not_supported",
+      "rationale": "Not approved on the toy set: the local term does not separate partners beyond the global term (K2b p_Holm 0.82). Measured cause: the frozen phase-1 encoder removes subject identity, so the local correspondence is near uniform (pi entropy ratio 0.98) and partners are at chance in kernel space, even with an EEG-calibrated subject signature (Results/PoC_K2K3_v2/scenario_analysis.md). Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
     },
     {
       "id": "H-K3",
@@ -133,7 +133,7 @@
         "significance:poc-k2k3-K3c-artifact"
       ],
       "verdict": "not_supported",
-      "rationale": "Under the corrected families (Holm per table) the gaps go in the expected direction but none is significant; K3c had room (routing error 0.667), so its result is a real non-support on the toy set."
+      "rationale": "Not approved on the toy set: no significant gain from combining the terms (K3b, K3c p_Holm >= 0.16) nor from consensus at 20% artifacts (K3a p 0.235); K3b and K3c inherit the K2 cause. K3a at the pre-declared 40% artifact rate is not yet run. Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
     }
   ],
   "qualitative": [
