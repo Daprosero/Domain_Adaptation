@@ -1,4 +1,4 @@
-"""AdaptMIL paper mechanisms and plan-v40 controlled-variant invariants, CPU only."""
+"""AdaptMIL paper mechanisms and plan-v54 controlled-variant invariants, CPU only."""
 from __future__ import annotations
 
 import copy
@@ -184,20 +184,99 @@ def test_adaptmil_equations_one_to_four_match_their_terms():
                                F.cross_entropy(model.logits(s, "source", mean=True), labels))
 
 
-def test_adaptmil_alignment_never_uses_attention_or_target_labels(monkeypatch):
+def _features(seed=0, n=6, d=3):
+    generator = torch.Generator().manual_seed(seed)
+    return torch.randn(n, d, generator=generator, dtype=torch.float64)
+
+
+def _one_hot(labels):
+    return F.one_hot(labels, 2).to(torch.float64)
+
+
+def test_adaptmil_lmmd_is_zero_when_class_conditionals_coincide():
+    s = _features()
+    labels = torch.tensor([0, 0, 0, 1, 1, 1])
+    order = torch.tensor([4, 1, 5, 0, 3, 2])
+    zero = obj.local_mmd(s, s[order], labels, _one_hot(labels[order]), 1.0)
+    torch.testing.assert_close(zero, torch.zeros((), dtype=s.dtype))
+    # Same marginal, swapped class-conditionals: MMD sees nothing, LMMD does.
+    swapped = _one_hot(1 - labels)
+    torch.testing.assert_close(obj.multi_kernel_mmd(s, s, 1.0), torch.zeros((), dtype=s.dtype))
+    assert float(obj.local_mmd(s, s, labels, swapped, 1.0)) > 1e-3
+    # One class everywhere reduces to the module's multi-kernel MMD.
+    t = _features(1, n=4)
+    torch.testing.assert_close(
+        obj.local_mmd(s, t, torch.zeros(6, dtype=torch.long),
+                      _one_hot(torch.zeros(4, dtype=torch.long)), .7),
+        obj.multi_kernel_mmd(s, t, .7))
+
+
+def test_adaptmil_lmmd_class_weights_are_normalized_per_class():
+    labels = torch.tensor([0, 0, 1, 0])
+    probability = torch.tensor([[.9, .1], [.6, .4], [.2, .8]], dtype=torch.float64)
+    ws, wt = obj.lmmd_class_weights(labels, probability, 2)
+    assert ws.shape == (4, 2) and wt.shape == (3, 2)
+    torch.testing.assert_close(ws.sum(0), torch.ones(2, dtype=torch.float64))
+    torch.testing.assert_close(wt.sum(0), torch.ones(2, dtype=torch.float64))
+    torch.testing.assert_close(ws[:, 0], torch.tensor([1 / 3, 1 / 3, 0, 1 / 3],
+                                                      dtype=torch.float64))
+    torch.testing.assert_close(wt[:, 1], probability[:, 1] / 1.3)
+    # A class absent from the source labels or from the target argmax is dropped,
+    # and the sum is divided by the classes kept (Transfer Learning Repo LMMD).
+    ws, wt = obj.lmmd_class_weights(torch.tensor([0, 0]), probability, 2)
+    assert ws.shape == (2, 1) and wt.shape == (3, 1)
+    s, t = _features(n=2), _features(1, n=3)
+    torch.testing.assert_close(obj.local_mmd(s, t, torch.tensor([0, 0]), probability, 1.0),
+                               ws[:, 0] @ obj.mixture_kernel(s, s, 1.0) @ ws[:, 0]
+                               + wt[:, 0] @ obj.mixture_kernel(t, t, 1.0) @ wt[:, 0]
+                               - 2 * ws[:, 0] @ obj.mixture_kernel(s, t, 1.0) @ wt[:, 0])
+    # No shared class: a zero that still backpropagates.
+    t.requires_grad_(True)
+    none = obj.local_mmd(s, t, torch.tensor([1, 1]), _one_hot(torch.zeros(3, dtype=torch.long)), 1.0)
+    none.backward()
+    assert float(none.detach()) == 0 and torch.count_nonzero(t.grad) == 0
+
+
+def test_adaptmil_lmmd_weights_come_from_target_soft_predictions(monkeypatch):
+    s, t = _features(), _features(1, n=4).requires_grad_(True)
+    labels = torch.tensor([0, 1, 0, 1, 0, 1])
+    soft = torch.tensor([[.7, .3], [.4, .6], [.55, .45], [.2, .8]], dtype=torch.float64,
+                        requires_grad=True)
+    a = obj.local_mmd(s, t, labels, soft, 1.0)
+    hard = obj.local_mmd(s, t, labels, _one_hot(soft.argmax(1)), 1.0)
+    assert not torch.allclose(a, hard)
+    a.backward()
+    assert soft.grad is None and t.grad is not None   # class weights carry no gradient
+    # In the phase-2 objective the weights are the frozen attention + head's predictions.
+    import inspect
+    assert list(inspect.signature(obj.alignment_objective).parameters) == [
+        "model", "source_bags", "source_labels", "target_bags", "weight", "sigma"]
+    model = adaptmil.AdaptMILModel(14, 14)
+    tr.bridge(model)
+    model.eval()
+    sb, tb = [b.windows for b in bags("s")], [b.windows for b in bags("t", seed=1)]
+    y = torch.tensor([0, 1])
+    seen = []
+    head = model.head.forward
+    monkeypatch.setattr(model.head, "forward", lambda z: seen.append(z.shape) or head(z))
+    first = obj.alignment_objective(model, sb, y, tb, 1.0, 1.0)
+    assert seen == [(2, 256)]
+    with torch.no_grad():
+        model.head.linear.bias.copy_(torch.tensor([5.0, -5.0], dtype=model.head.linear.bias.dtype))
+    second = obj.alignment_objective(model, sb, y, tb, 1.0, 1.0)
+    assert not torch.allclose(first["lmmd"], second["lmmd"])
+
+
+def test_adaptmil_lmmd_gradient_flows_only_into_the_target_encoder():
     model = adaptmil.AdaptMILModel(14, 14).eval()
     tr.bridge(model)
     model.eval()
     s, t = [b.windows for b in bags("s")], [b.windows for b in bags("t", seed=1)]
-    a = obj.alignment_objective(model, s, t, 2.5, 1)["objective"]
-    monkeypatch.setattr(model.aggregator, "forward", lambda *a: pytest.fail("attention called"))
-    monkeypatch.setattr(model.head, "forward", lambda *a: pytest.fail("head called"))
-    with torch.no_grad():
-        model.aggregator.w.weight.add_(100)
-    b = obj.alignment_objective(model, s, t, 2.5, 1)["objective"]
-    torch.testing.assert_close(a, b)
-    b.backward()
-    assert model.aggregator.w.weight.grad is None
+    y = torch.tensor([0, 1])
+    terms = obj.alignment_objective(model, s, y, t, 2.5, 1)
+    assert set(terms) == {"objective", "lmmd"}
+    torch.testing.assert_close(terms["objective"], 2.5 * terms["lmmd"])
+    terms["objective"].backward()
     for name, p in model.named_parameters():
         if name.startswith("target_trunk."):
             assert p.grad is not None and torch.isfinite(p.grad).all(), name
@@ -205,10 +284,24 @@ def test_adaptmil_alignment_never_uses_attention_or_target_labels(monkeypatch):
         else:
             assert p.grad is None, name
     model.zero_grad(set_to_none=True)
-    disabled = obj.alignment_objective(model, s, t, 0, 1)["objective"]
+    disabled = obj.alignment_objective(model, s, y, t, 0, 1)["objective"]
     disabled.backward()
     assert float(disabled.detach()) == 0
     assert all(torch.count_nonzero(p.grad) == 0 for p in model.target_trunk.parameters())
+
+
+def test_adaptmil_lmmd_refuses_invalid_inputs():
+    s, p = torch.zeros(2, 3), torch.full((2, 2), .5)
+    with pytest.raises(ValueError):
+        obj.local_mmd(s, s, torch.tensor([0, 2]), p, 1)
+    with pytest.raises(ValueError):
+        obj.local_mmd(s, s, torch.tensor([0]), p, 1)
+    with pytest.raises(ValueError):
+        obj.local_mmd(s, s, torch.tensor([0, 1]), torch.full((2, 3), 1 / 3), 1)
+    with pytest.raises(ValueError):
+        obj.local_mmd(s, s, torch.tensor([0, 1]), torch.tensor([[1.5, -.5], [.5, .5]]), 1)
+    with pytest.raises(ValueError):
+        obj.local_mmd(s, s, torch.tensor([0, 1]), p, 0)
 
 
 def test_adaptmil_bandwidth_is_training_only_and_degenerate_safe():
@@ -338,6 +431,20 @@ def test_adaptmil_adaptation_updates_only_target_with_label_blind_loss():
     assert a["epochs"] == SCHEDULE["epochs2"]
     assert len({row["sigma"] for row in a["history"]}) == 1
     assert all(math.isfinite(row["loss"]) for row in a["history"])
+
+
+def test_adaptmil_adaptation_weights_source_bags_by_their_labels():
+    _, trained = trained_source()
+    model = trained["model"]
+    tr.bridge(model)
+    s, t = bags("s"), bags("t", seed=2)
+    runs = []
+    for source in (s, [replace(b, label=1 - b.label) for b in s]):
+        torch.manual_seed(55)
+        runs.append(tr.adapt_target_phase(copy.deepcopy(model), source, t, [], PARAMS2,
+                                          SCHEDULE, torch.Generator().manual_seed(9), "cpu"))
+    assert all("lmmd" in row and "mmd" not in row for row in runs[0]["history"])
+    assert runs[0]["history"][0]["lmmd"] != runs[1]["history"][0]["lmmd"]
 
 
 def test_adaptmil_validation_is_recorded_per_epoch_without_training_on_labels(monkeypatch):

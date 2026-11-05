@@ -8,7 +8,7 @@ from .training import (adapt_target_phase, bridge, load_model, save_model,
                        train_phase_one, train_phase_two, train_source_phase)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["7.1", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["adaptmil_registration_is_explicit_and_uses_shared_search_spaces"],

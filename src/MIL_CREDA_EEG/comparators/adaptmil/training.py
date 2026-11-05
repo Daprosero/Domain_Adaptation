@@ -1,4 +1,4 @@
-"""Controlled source-first / target-only training (plan v50 §§4.5,7.3–7.4,7.7).
+"""Controlled source-first / target-only training (plan v54 §§4.5,7.3–7.4,7.7).
 
 Not the paper's align-first / attention-second schedule. Both phases run their
 epoch count whole and keep the last epoch (no patience, no restore, v50 §7.7);
@@ -18,12 +18,13 @@ from .model import AdaptMILModel
 from .objectives import alignment_objective, median_bandwidth, stage_two_objective
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.5", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["adaptmil_source_pretraining_runs_its_epochs_and_keeps_the_last",
                    "adaptmil_bridge_freezes_all_but_target_and_preserves_buffers",
                    "adaptmil_adaptation_updates_only_target_with_label_blind_loss",
+                   "adaptmil_adaptation_weights_source_bags_by_their_labels",
                    "adaptmil_validation_is_recorded_per_epoch_without_training_on_labels",
                    "adaptmil_search_hook_restarts_from_matching_phase_one_state",
                    "adaptmil_store_checks_comparator_code_identity",
@@ -154,7 +155,7 @@ def _bandwidth(model, source_train, target_train, multiplier, device):
 
 def adapt_target_phase(model, source_train, target_train, target_valid, params, schedule,
                        generator, device, *, seed=0, fold=0, transfer="", label_free=False):
-    """Mean-pool MMD for exactly `epochs2` epochs, the last kept; validation per epoch."""
+    """Mean-pool LMMD for exactly `epochs2` epochs, the last kept; validation per epoch."""
     schedule = search.check_schedule(schedule)
     # Reuse the shared schedule guards without treating AdaptMIL as MIL-CREDA.
     two_phase.check_hyper({**dict.fromkeys(two_phase.PHASE_ONE_KEYS, float("nan")),
@@ -178,19 +179,22 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         model.train()
-        losses, mmds = [], []
+        losses, lmmds = [], []
         for indices in two_phase.shuffled_batches(len(target_train), schedule["bagsPerStep"],
                                                   generator):
-            source = [source_train[i].windows.to(device) for i in queues.draw(
+            drawn = [source_train[i] for i in queues.draw(
                 schedule["bagsPerStep"] // model.classes)]
+            source = [b.windows.to(device) for b in drawn]
+            labels = torch.tensor([b.label for b in drawn], device=device)
             target = [target_train[i].windows.to(device) for i in indices]
-            terms = alignment_objective(model, source, target, params["mmdWeight"], sigma)
+            terms = alignment_objective(model, source, labels, target, params["mmdWeight"],
+                                        sigma)
             optimizer.zero_grad(set_to_none=True)
             terms["objective"].backward()
             optimizer.step()
             model.constrain("target_trunk")
             losses.append(float(terms["objective"].detach()))
-            mmds.append(float(terms["mmd"].detach()))
+            lmmds.append(float(terms["lmmd"].detach()))
         accuracy, score = math.nan, math.nan
         if target_valid:
             predictions = two_phase.evaluate(model, target_valid, "target", device)
@@ -199,7 +203,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
             score = two_phase.label_free_score(predictions)
             validation.append(two_phase.validation_record(epoch, target_valid, predictions))
         history.append(_record(epoch, 2, seed, fold, transfer, loss=sum(losses)/len(losses),
-                               mmd=sum(mmds)/len(mmds), sigma=sigma,
+                               lmmd=sum(lmmds)/len(lmmds), sigma=sigma,
                                val_balanced_accuracy=accuracy, label_free_score=score,
                                mmd_weight=params["mmdWeight"]))
         keeper.offer(epoch, score, model)
