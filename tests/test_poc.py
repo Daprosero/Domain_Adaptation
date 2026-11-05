@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 import torch
 
-from MIL_CREDA_Benchmark import config, poc, toy_run
+from MIL_CREDA_Benchmark import config, poc, toy_bags, toy_run
 
 
 SMALL = dataclasses.replace(toy_run.FULL, name="poc-test", epochs_1=1,
@@ -220,3 +220,33 @@ def test_summary_carries_mean_sd_and_a_t_interval():
 def test_the_battery_records_are_declared_for_audits():
     from MIL_CREDA_Benchmark import __benchmark__
     assert "Results/PoC" in __benchmark__["report"]["records"]
+
+
+class _Stop(Exception):
+    pass
+
+
+@pytest.mark.parametrize("runner, args", [("run_ladder_seed", (5,)),
+                                          ("run_contamination_seed", (5, 0.2))])
+def test_the_runners_hand_the_per_pair_shift_to_the_draw(monkeypatch, runner, args):
+    seen = []
+
+    def fake_build_family(name, seed, scale, per_pair_shift=0.0):
+        seen.append(per_pair_shift)
+        raise _Stop
+
+    monkeypatch.setattr(toy_run, "build_family", fake_build_family)
+    for shift in (None, poc.SUBJECT_SHIFT_SCALE):
+        with pytest.raises(_Stop):
+            if shift is None:
+                getattr(poc, runner)(*args)
+            else:
+                getattr(poc, runner)(*args, per_pair_shift=shift)
+    assert seen == [0.0, poc.SUBJECT_SHIFT_SCALE]
+    assert poc.SUBJECT_SHIFT_SCALE == toy_bags.ESCALA_POR_PAR_DECLARADA
+
+
+def test_a_job_may_carry_keyword_arguments(monkeypatch):
+    monkeypatch.setitem(poc.__dict__, "_probe_job", lambda a, b=0: (a, b))
+    assert poc._call(("_probe_job", (1,))) == (1, 0)
+    assert poc._call(("_probe_job", (1,), {"b": 2})) == (1, 2)

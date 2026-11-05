@@ -35,7 +35,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from CREDA.toy_experiment import perturbar
+from CREDA.toy_experiment import ANGULO_SIGMA, _rotacion_generica, perturbar
 
 #: How many bags each class is cut into. The operator's number, not a search,
 #: and it is THIS toyset's own number rather than the digit benchmark's rule:
@@ -84,6 +84,26 @@ DESPLAZAMIENTO_DE_SEMILLA = 1000
 #: assignment, which is exactly what a split exists not to have. One step past
 #: `DESPLAZAMIENTO_DE_SEMILLA` so it is not the TARGET draw's stream either.
 DESPLAZAMIENTO_DE_PERMUTACION = 2000
+
+#: The offset of the per-pair shift's own stream (see `desplazar_por_par`).
+#: Its own stream, so switching the option on changes no other draw.
+DESPLAZAMIENTO_DE_PAR = 3000
+
+#: The per-pair (subject-like) shift's declared scale, relative to the source's
+#: mean coordinate spread `esc` (the unit `perturbar` measures its translation
+#: in). OFF in `construir` by default; this is the value the subject-shift
+#: proof of concept declares. **Why 0.25.** Measured on `rollo` at the full
+#: scale (seeds 10 and 11): `esc` = 5.66, the global translation is
+#: `3 esc` = 17.0, and the global Sigma-preserving rotation moves a point by
+#: 1.31 on average. The translation is shared by every bag and BatchNorm closes
+#: it; the rotation is the part of the global shift no second-order statistic
+#: closes. A per-pair translation of `0.25 esc` = 1.42 (RMS norm) plus a
+#: rotation about the pair's own centroid with angle sd `ANGULO_SIGMA` (10
+#: degrees) is that same size, per pair: comparable to the non-trivial global
+#: shift, far below the 17.0 translation, and of the order of the spacing of
+#: neighbouring bag centroids (1.1), so each target bag stays in its partner's
+#: region of the roll.
+ESCALA_POR_PAR_DECLARADA = 0.25
 
 
 def parametro(nombre: str, X: np.ndarray) -> np.ndarray:
@@ -205,11 +225,50 @@ class Familia:
     #: bands were read off, so a test can check that rather than take it on
     #: trust.
     Xt_crudo: np.ndarray
+    #: The per-pair shift applied to the target, `{(class, band): {"angulo",
+    #: "eje", "traslacion"}}`; `None` when the option is off.
+    desplazamientos: dict | None = None
+
+
+def desplazar_por_par(Xt: np.ndarray, yt: np.ndarray, bt: np.ndarray,
+                      semilla: int, escala: float, esc: float
+                      ) -> tuple[np.ndarray, dict]:
+    """A shift of its own for every (class, band) pair of the target.
+
+    Applied on top of `perturbar`'s global shift. For pair `(c, k)` -- the
+    points of target bag `k` of class `c`, whose partner is source bag `k` of
+    class `c` -- a rigid rotation about the pair's own centroid (random axis,
+    angle ~ N(0, ANGULO_SIGMA degrees)) and a translation ~ N(0, (escala *
+    esc)^2 / 3) per coordinate, so its RMS norm is `escala * esc`. The
+    translations are centered across pairs, so the shared part of the shift
+    stays the global one and what this adds is only subject-specific.
+
+    The band column is untouched: a point stays in its bag, so the partners
+    stay partners; what changes is that different pairs need different
+    corrections. Drawn from its own stream (`semilla + DESPLAZAMIENTO_DE_PAR`).
+    """
+    rng = np.random.default_rng(semilla + DESPLAZAMIENTO_DE_PAR)
+    pares = [(int(c), int(k)) for c in np.unique(yt) for k in np.unique(bt[yt == c])]
+    angulos = rng.normal(0.0, np.radians(ANGULO_SIGMA), len(pares))
+    ejes = rng.normal(size=(len(pares), 3))
+    traslaciones = rng.normal(0.0, escala * esc / np.sqrt(3), (len(pares), 3))
+    traslaciones -= traslaciones.mean(0)
+    salida = Xt.copy()
+    registro = {}
+    for (c, k), angulo, eje, traslacion in zip(pares, angulos, ejes, traslaciones):
+        m = (yt == c) & (bt == k)
+        centro = Xt[m].mean(0)
+        R = _rotacion_generica(angulo, eje)
+        salida[m] = (Xt[m] - centro) @ R.T + centro + traslacion
+        registro[(c, k)] = {"angulo": float(angulo), "eje": eje.tolist(),
+                            "traslacion": traslacion.tolist()}
+    return salida, registro
 
 
 def construir(nombre: str, fn, semilla: int = 0,
               n: int = PUNTOS_POR_DOMINIO,
-              bolsas_por_clase: int = BAGS_PER_CLASS_TOY) -> Familia:
+              bolsas_por_clase: int = BAGS_PER_CLASS_TOY,
+              escala_por_par: float = 0.0) -> Familia:
     """Source, target, labels and bag indices for one family.
 
     The draw is CREDA's, down to the seed offset: `datos_semilla` takes the
@@ -260,5 +319,13 @@ def construir(nombre: str, fn, semilla: int = 0,
     # `perturbar` consumes `rng`, so it runs after both parameter reads: moving
     # it earlier would change the source draw and silently reseed the figure.
     Xt = perturbar(Xs, Xt_crudo, rng)
+    # Off by default, and off this is the draw exactly as it was.
+    if escala_por_par < 0:
+        raise ValueError(f"escala_por_par = {escala_por_par}: a scale is non-negative")
+    desplazamientos = None
+    if escala_por_par > 0:
+        Xt, desplazamientos = desplazar_por_par(
+            Xt, yt, bt, semilla, escala_por_par, float(Xs.std(0).mean()))
     return Familia(nombre=nombre, Xs=Xs, ys=ys, bs=bs,
-                   Xt=Xt, yt=yt, bt=bt, Xt_crudo=Xt_crudo)
+                   Xt=Xt, yt=yt, bt=bt, Xt_crudo=Xt_crudo,
+                   desplazamientos=desplazamientos)

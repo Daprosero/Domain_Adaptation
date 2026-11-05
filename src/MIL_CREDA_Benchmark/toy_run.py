@@ -483,7 +483,8 @@ def family_generators() -> dict:
     return dict(DURAS)
 
 
-def build_family(name: str, seed: int, scale: Scale) -> toy_bags.Familia:
+def build_family(name: str, seed: int, scale: Scale,
+                 per_pair_shift: float = 0.0) -> toy_bags.Familia:
     """One family's two domains, their labels and their bag indices.
 
     `toy_bags.construir` is the one call: it draws the source from `seed`, the
@@ -491,13 +492,17 @@ def build_family(name: str, seed: int, scale: Scale) -> toy_bags.Familia:
     off the UNPERTURBED target, and only then perturbs. It returns a frozen
     `Familia` dataclass -- not a 6-tuple -- and carries `Xt_crudo` as a seventh
     field.
+
+    `per_pair_shift` is `toy_bags.construir`'s `escala_por_par`: off (0) by
+    default, which is the draw exactly as it was.
     """
     generators = family_generators()
     if name not in generators:
         raise KeyError(f"no family {name!r}; CREDA declares {sorted(generators)}")
     return toy_bags.construir(name, generators[name], semilla=seed,
                               n=scale.points_per_domain,
-                              bolsas_por_clase=scale.bags_per_class)
+                              bolsas_por_clase=scale.bags_per_class,
+                              escala_por_par=per_pair_shift)
 
 
 def datasets_of(familia: toy_bags.Familia) -> dict:

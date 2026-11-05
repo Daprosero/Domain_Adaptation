@@ -40,7 +40,7 @@ from scipy import stats
 from MIL_CREDA.attention import bag_embedding
 from MIL_CREDA.bag_kernel import bag_kernel, bag_kernel_matrix
 from MIL_CREDA.local_term import total_correspondence
-from MIL_CREDA_Benchmark import bags, config, harness, toy_run, wiring
+from MIL_CREDA_Benchmark import bags, config, harness, toy_bags, toy_run, wiring
 
 #: The one scenario this battery runs (L96: "rollo + mlp BatchNorm").
 FAMILY = "rollo"
@@ -93,6 +93,11 @@ REFERENCE_MECHANISMS = ("abmil-published", "abmil-gated", "max", "mean")
 #: classes admit no fixed-point-free involution. Every contaminated instance of
 #: a bag labelled `c` is a point of class `NOISE_PAIRING_TOY[c]`.
 NOISE_PAIRING_TOY = [1, 2, 0]
+
+#: The subject-shift run's per-pair target shift (`toy_bags.construir`'s
+#: `escala_por_par`); the first run used none. See
+#: `toy_bags.ESCALA_POR_PAR_DECLARADA` for the scale and its rationale.
+SUBJECT_SHIFT_SCALE = toy_bags.ESCALA_POR_PAR_DECLARADA
 
 
 def poc_hyper() -> dict:
@@ -470,21 +475,23 @@ def _two_phases(arm, material, familia, scale, hyper, device, seed,
     return model, record, phase_one
 
 
-def run_ladder_seed(seed: int, scale=SCALE) -> dict:
+def run_ladder_seed(seed: int, scale=SCALE, per_pair_shift: float = 0.0) -> dict:
     """H-task, K2 and K3 for one seed on clean material.
 
     TGL, TG and TL share ONE phase-1 checkpoint (the protocol: phase 1 has no
     adaptation term) and run phase 2 from it with the same generator seed, so
     they differ only by the flag. TGL-NC trains its own phase 1 (the
     aggregation enters phase 1) from the same initialization.
+
+    `per_pair_shift` adds the per-pair target shift to the draw (off by default).
     """
     torch.set_num_threads(1)
     start = time.perf_counter()
     device = _device()
     hyper = poc_hyper()
-    familia = toy_run.build_family(FAMILY, seed, scale)
+    familia = toy_run.build_family(FAMILY, seed, scale, per_pair_shift)
     material = toy_run.material_for(familia, seed, scale, BACKBONE)
-    out = {"seed": seed, "arms": {}}
+    out = {"seed": seed, "perPairShift": per_pair_shift, "arms": {}}
     with toy_run.material_bound(familia, scale, BACKBONE, hyper):
         shared = None
         for arm in ("TGL", "TG", "TL"):
@@ -508,7 +515,7 @@ K1_ARMS = ("TGL", NO_CONSENSUS) + REFERENCE_MECHANISMS
 
 
 def run_contamination_seed(seed: int, rate: float, scale=SCALE,
-                           arms=K1_ARMS) -> dict:
+                           arms=K1_ARMS, per_pair_shift: float = 0.0) -> dict:
     """K1 for one seed and one rate: every arm trains both phases on the
     contaminated material, and its attention is read on the contaminated
     TEST bags of the target (theta_t, primary) and of the source (theta_s)."""
@@ -516,9 +523,9 @@ def run_contamination_seed(seed: int, rate: float, scale=SCALE,
     start = time.perf_counter()
     device = _device()
     hyper = poc_hyper()
-    familia = toy_run.build_family(FAMILY, seed, scale)
+    familia = toy_run.build_family(FAMILY, seed, scale, per_pair_shift)
     material, masks = contaminated_material(familia, seed, scale, BACKBONE, rate)
-    out = {"seed": seed, "rate": rate, "arms": {}}
+    out = {"seed": seed, "rate": rate, "perPairShift": per_pair_shift, "arms": {}}
     with toy_run.material_bound(familia, scale, BACKBONE, hyper):
         for arm in arms:
             model, record, _ = _two_phases(arm, material, familia, scale, hyper,
@@ -549,12 +556,13 @@ def _worker_init(src: str) -> None:
 
 
 def _call(job):
-    function, args = job
-    return globals()[function](*args)
+    function, args, *rest = job
+    return globals()[function](*args, **(rest[0] if rest else {}))
 
 
-def run_many(jobs: list[tuple[str, tuple]], workers: int, src: str) -> list:
-    """Run `(function name, args)` jobs in spawned worker processes.
+def run_many(jobs: list[tuple], workers: int, src: str) -> list:
+    """Run `(function name, args)` or `(function name, args, kwargs)` jobs in
+    spawned worker processes.
 
     Each job is a whole seed (or seed and rate) and depends on nothing but its
     arguments, so the results are the same whatever the worker count.
