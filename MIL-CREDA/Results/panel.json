@@ -4,7 +4,7 @@
     "Experimental_AGREED.md",
     "Data/processed/manifest.csv",
     "Manifests/processed_sha256.csv",
-    "Partition/folds_4.json",
+    "Partition/folds_4_v50.json",
     "Results/separability/summary.json",
     "Results/timing_probe.json",
     "Notebooks/BALLADEER_03_Preprocesamiento.ipynb",

@@ -1,10 +1,10 @@
 """Domain assignment per transfer, the leakage guard, and the paired probe.
 
-Experiments plan v40, Secs. 4.3, 4.6 and 6.2. Inside each transfer the
+Experiments plan v50, Secs. 4.3, 4.6 and 6.2. Inside each transfer the
 assignment is a total, single-valued function that takes every subject of the
 partition to exactly one of three destinations: source, target or excluded.
 It is fixed per transfer and identical in the four rotations: a source
-subject is source in training, validation and test alike, so the target set
+subject is source in its non-test folds and in test alike, so the target set
 of a transfer does not change between rotations.
 
 **The rule (Sec. 4.3), the same in every arm.** A subject holding one of the
@@ -42,12 +42,14 @@ the transfer in that rotation (Sec. 6.2): each common subject passes through
 the probe exactly once over the four rotations.
 
 **Inner splits (plan v50, Secs. 4.2 and 4.5).** In rotation `r`, with test fold k,
-F is the other three frozen folds; `inner_splits(k)` gives the three inner splits of
-the nested cross-validation, each validating one fold of F and training on the other
-two, so every non-test subject is validated exactly once and the test fold is in none.
-They reuse the frozen folds; no new partition is drawn. `side_bags` reads them through
-the roles `inner_train` and `inner_validation` (with `split`), and the refit through
-`nontest`, every fold of F. The sides stay those of the transfer (Sec. 4.3).
+F is the other three frozen folds; the partition document stores the three inner
+splits of the nested cross-validation, each validating one fold of F and training on
+the other two, so every non-test subject is validated exactly once and the test fold
+is in none. `inner_splits(rotation)` reads them from the stored rotation, checking
+that shape, and is the one source every reader uses; no new partition is drawn. The
+frozen rotation's own roles are `nontest` (every fold of F, the refit's training set)
+and `test`; `side_bags` reads the inner splits through the roles `inner_train` and
+`inner_validation` (with `split`). The sides stay those of the transfer (Sec. 4.3).
 
 **The per-fold class minimum (plan v50, Sec. 4.3).** No group is excluded by its
 number of subjects per class and fold: the minimum is a declared limitation of
@@ -96,11 +98,12 @@ __provenance__ = {
 }
 
 SIDES = ("source", "target", "excluded")
-ROLES = ("train", "validation", "test")
-#: Plan v50, Secs. 4.2 and 4.5: the nested cross-validation's roles. The inner ones need
-#: an inner split; `nontest` is every fold but the test fold (the refit's training set).
-INNER_ROLES = ("inner_train", "inner_validation")
+#: Plan v50, Secs. 4.2 and 4.5: the nested cross-validation's roles. The frozen rotation's
+#: own are `nontest` (every fold but the test fold, the refit's training set) and `test`;
+#: the inner ones need an inner split.
 REFIT_ROLE = "nontest"
+ROLES = (REFIT_ROLE, "test")
+INNER_ROLES = ("inner_train", "inner_validation")
 DEFAULT_SEED = partition.PARTITION_SEED
 
 
@@ -112,17 +115,26 @@ class ProbeRefused(AssignmentError):
     """A subject's other condition was asked for outside the probe."""
 
 
-def inner_splits(test_fold: int, n_folds: int = partition.N_FOLDS) -> list[dict]:
-    """Plan v50, Sec. 4.2: the inner splits of the rotation whose test fold is `test_fold`.
+def inner_splits(rotation: Mapping) -> list[dict]:
+    """Plan v50, Sec. 4.2: the inner splits a stored rotation holds, shape checked.
 
     F is every fold but the test fold, in fold order; split `i` validates F[i] and trains
     on the other two. Each fold of F is validated once and the test fold is in no split.
     """
-    if not 0 <= int(test_fold) < n_folds:
-        raise AssignmentError(f"test fold {test_fold} is not one of the {n_folds} folds")
-    non_test = [k for k in range(n_folds) if k != int(test_fold)]
-    return [{"inner": i, "validation_fold": v, "train_folds": [k for k in non_test if k != v]}
-            for i, v in enumerate(non_test)]
+    try:
+        test, non_test = int(rotation["test_fold"]), list(rotation["non_test_folds"])
+        splits = [dict(s) for s in rotation["inner_splits"]]
+    except (KeyError, TypeError):
+        raise AssignmentError("the rotation stores no non-test folds and inner splits "
+                              "(plan v50, Sec. 4.2)") from None
+    if (test in non_test or [s.get("inner") for s in splits] != list(range(len(non_test)))
+            or [s.get("validation_fold") for s in splits] != non_test
+            or any(sorted(s.get("train_folds", [])) != sorted(k for k in non_test
+                                                             if k != s["validation_fold"])
+                   for s in splits)):
+        raise AssignmentError(f"the rotation testing fold {test} stores inner splits that do "
+                              f"not validate each non-test fold once: {splits}")
+    return splits
 
 
 @dataclass(frozen=True)
@@ -192,10 +204,10 @@ class Assignment:
     def rotation(self, r: int) -> dict:
         """Source and target subjects by role in rotation `r`, guard checked."""
         rot = self.rotations[str(r)]
-        fold_sets = {"train": set(rot["train_folds"]), "validation": {rot["validation_fold"]},
-                     "test": {rot["test_fold"]}}
+        splits = inner_splits(rot)
+        fold_sets = {REFIT_ROLE: set(rot["non_test_folds"]), "test": {rot["test_fold"]}}
         view = {"rotation": int(r), "test_fold": rot["test_fold"],
-                "validation_fold": rot["validation_fold"], "train_folds": list(rot["train_folds"])}
+                "non_test_folds": list(rot["non_test_folds"]), "inner_splits": splits}
         for side in ("source", "target"):
             members = self.subjects(side)
             for role, fs in fold_sets.items():
@@ -332,15 +344,12 @@ def pairs(assignments: Iterable[Assignment]) -> list[tuple[Assignment, Assignmen
 
 
 def _inner_folds(a: Assignment, r: int, role: str, split: int | None) -> set[int]:
-    """The folds of `role` in rotation `r`: an inner split's, or all of F for the refit."""
-    test = int(a.rotations[str(r)]["test_fold"])
-    if role == REFIT_ROLE:
-        if split is not None:
-            raise AssignmentError(f"the {REFIT_ROLE!r} role takes no inner split")
-        return {k for k in range(partition.N_FOLDS) if k != test}
+    """The folds of `role` in rotation `r`'s inner split `split`, as the document stores it."""
+    rotation = a.rotations[str(r)]
+    test = int(rotation["test_fold"])
     if split is None:
         raise AssignmentError(f"the {role!r} role needs an inner split (0, 1 or 2)")
-    splits = inner_splits(test)
+    splits = inner_splits(rotation)
     if not 0 <= int(split) < len(splits):
         raise AssignmentError(f"inner split {split} is not one of {len(splits)}")
     chosen = splits[int(split)]
@@ -355,9 +364,9 @@ def side_bags(a: Assignment, bags: BagSet, side: str, r: int, role: str, *,
               split: int | None = None) -> list[Bag]:
     """The bags of `side` in rotation `r` and `role`, each in its assigned condition.
 
-    `role` is one of `ROLES` (the frozen rotation's own roles), `INNER_ROLES` with an
-    inner `split`, or `REFIT_ROLE` (every non-test fold)."""
-    if side not in ("source", "target") or role not in (*ROLES, *INNER_ROLES, REFIT_ROLE):
+    `role` is one of `ROLES` (the frozen rotation's own roles: `REFIT_ROLE`, every
+    non-test fold, and `test`) or `INNER_ROLES` with an inner `split`."""
+    if side not in ("source", "target") or role not in (*ROLES, *INNER_ROLES):
         raise AssignmentError(f"Lado o rol desconocido: {side!r}, {role!r}.")
     view = a.rotation(r)                       # the guard is checked on every read
     if role in ROLES:

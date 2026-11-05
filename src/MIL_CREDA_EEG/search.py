@@ -3,7 +3,8 @@
 Experiments plan v50, Secs. 4.2, 4.5, 7.3 and 7.7. The selection is a nested
 cross-validation. The outer level is the frozen four-fold partition, rotated:
 rotation r tests fold k and F is the other three folds. The inner level is the
-three inner splits of F (`assignment.inner_splits`): each validates one fold of
+three inner splits of F, read from the partition document (`assignment.inner_splits`,
+the one source of the splits): each validates one fold of
 F and trains on the other two, so every subject of F is validated exactly once
 and the test fold is in none. There is one Optuna study per phase-1 group (the
 common group of the six non-MIL comparators, AdaptMIL, HASD and MIL-CREDA),
@@ -363,12 +364,12 @@ RULES = {"primary": "pooledBalancedAccuracy", "label-free": "pooledLabelFree"}
 
 
 def rotation_folds(rotations: Mapping) -> dict[int, dict]:
-    """Rotation -> its test fold and its inner splits' validation folds (Sec. 4.2)."""
+    """Rotation -> its test fold and the inner splits the partition stores (Sec. 4.2)."""
     out = {}
     for r, v in rotations.items():
-        test = int(v["test_fold"])
-        out[int(r)] = {"test_fold": test, "inner_validation_folds": [
-            x["validation_fold"] for x in assignment_mod.inner_splits(test)]}
+        splits = assignment_mod.inner_splits(v)
+        out[int(r)] = {"test_fold": int(v["test_fold"]), "inner_splits": splits,
+                       "inner_validation_folds": [x["validation_fold"] for x in splits]}
     return out
 
 
@@ -632,10 +633,13 @@ def study_identity(data: SearchData, phase: int, name: str, rotation: int,
     if rotation not in data.folds:
         raise SearchError(f"rotation {rotation} has no folds in the search data")
     test = int(data.folds[rotation]["test_fold"])
+    splits = data.folds[rotation].get("inner_splits")
+    if not splits:
+        raise SearchError(f"rotation {rotation} stores no inner splits in the search data")
     return _json({
         "transfer": data.transfer.name, "arm": data.transfer.arm, "phase": phase,
         "name": name, "outerFold": rotation, "testFold": test,
-        "innerSplits": assignment_mod.inner_splits(test),
+        "innerSplits": splits,
         "sampler": "GPSampler", "samplerSeed": SAMPLER_SEED,
         "nTrials": n_trials, "pruner": "none", "searchSeed": SEARCH_SEED,
         "reportSeeds": list(REPORT_SEEDS), "schedule": dict(schedule),

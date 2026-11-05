@@ -45,8 +45,7 @@ def _bagset(root, sha: str = "x" * 64) -> bag_data.BagSet:
                                      record_id=f"{subject}-{condition}", label=label, sex="M",
                                      fold=fold, device="CGX", channels=("a", "b", "c"),
                                      n_windows=3, path=path))
-    rotations = {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
-                          "train_folds": [(r + 2) % 4, (r + 3) % 4]} for r in range(4)}
+    rotations = {str(r): partition.rotation_roles(r) for r in range(4)}
     return bag_data.BagSet(bags=tuple(bags), partition_sha256=sha, rotations=rotations)
 
 
@@ -459,7 +458,7 @@ def test_a_study_records_the_identity_it_is_checked_against(tmp_path, monkeypatc
     assert study.user_attrs["revision"] == search.__provenance__["revision"]
     assert study.user_attrs["revision"].endswith("v50.md")
     assert study.user_attrs["outerFold"] == 0 and study.user_attrs["testFold"] == 0
-    assert study.user_attrs["innerSplits"] == assignment.inner_splits(0)
+    assert study.user_attrs["innerSplits"] == partition.rotation_roles(0)["inner_splits"]
 
 
 def test_a_study_stops_between_trials_when_asked_and_the_rerun_completes_it(

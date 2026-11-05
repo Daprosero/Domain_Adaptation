@@ -181,8 +181,7 @@ def _assignment(tmp_path):
         for c in (("L1", "L6") if i % 2 == 0 else (("L1",) if i % 4 == 1 else ("L6",))):
             holders[c].add(s)
             bags.append(_bag(tmp_path, s, c, label=label, fold=fold, seed=i))
-    rotations = {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
-                          "train_folds": [(r + 2) % 4, (r + 3) % 4]} for r in range(4)}
+    rotations = {str(r): partition.rotation_roles(r) for r in range(4)}
     bs = bag_data.BagSet(bags=tuple(bags), partition_sha256="x" * 64, rotations=rotations)
     a = assignment.assign(assignment.Transfer("level", "L1", "L6"), holders, folds, labels,
                           rotations, 7, "x" * 64)

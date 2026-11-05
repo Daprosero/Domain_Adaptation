@@ -1,4 +1,4 @@
-"""Experiments plan v40, Sec. 4.2: the four-fold partition, generated once and frozen."""
+"""Experiments plan v50, Sec. 4.2: the four-fold partition, generated once and frozen."""
 
 from __future__ import annotations
 
@@ -16,6 +16,10 @@ from MIL_CREDA_EEG import partition, preprocess
 REPOSITORY = Path(__file__).resolve().parents[1]
 #: sha256 of the five-fold file frozen at 7a75dd8; it is kept, never rewritten.
 FIVE_FOLD_FILE_SHA256 = "8a723bc4e04c4e5c7753c9c4fbff1a15dd026fd6d34984848da79bafe19d32cb"
+#: sha256 of the v40 four-fold file (`folds_4.json`) and its own partition hash; it is kept,
+#: never rewritten, and replaced by the v50 regeneration under a new name.
+V40_FILE_SHA256 = "ee46d4d43eaa54fac14b9fa48b35df90c32590cd8b7c1a0239bb882a2af2fcdc"
+V40_PARTITION_SHA256 = "abc9012bad78eaaa542c08a1e38e2f35d110e00f33739d76853624297d8735d1"
 
 
 def _survivors(n: int = 60) -> pd.DataFrame:
@@ -57,17 +61,15 @@ def test_folds_are_stratified_by_label_and_sex_and_rotate():
     rotations = doc["rotations"]
     assert sorted(rotations) == [str(r) for r in range(partition.N_FOLDS)]
     tests = [rotations[str(r)]["test_fold"] for r in range(partition.N_FOLDS)]
-    validations = [rotations[str(r)]["validation_fold"] for r in range(partition.N_FOLDS)]
-    assert sorted(tests) == sorted(validations) == list(range(partition.N_FOLDS))
+    assert sorted(tests) == list(range(partition.N_FOLDS))
     for r in range(partition.N_FOLDS):
         rotation = rotations[str(r)]
         assert rotation["test_fold"] == r
-        assert rotation["validation_fold"] == (r + 1) % partition.N_FOLDS
-        assert sorted(rotation["train_folds"]) == sorted(
-            set(range(partition.N_FOLDS)) - {r, (r + 1) % partition.N_FOLDS})
-        roles = rotation["test"] + rotation["validation"] + rotation["train"]
+        assert rotation["non_test_folds"] == [k for k in range(partition.N_FOLDS) if k != r]
+        roles = rotation["test"] + rotation["non_test"]
         assert sorted(roles) == sorted(folds)               # disjoint and complete
         assert all(folds[s] == r for s in rotation["test"])
+        assert all(folds[s] in rotation["non_test_folds"] for s in rotation["non_test"])
     assert doc["fingerprint"]["seed"] == partition.PARTITION_SEED
     assert doc["fingerprint"]["code_version"] == partition.code_version()
     assert doc["partition_sha256"] == partition.partition_hash(doc)
@@ -149,21 +151,33 @@ def test_a_tampered_file_is_refused(tmp_path):
         partition.current_partition_hash(path)
 
 
-# ------------------------------------------------------------- plan v40: four folds
+# ------------------------------------------------------------- plan v50: four folds
 
 
-def test_four_folds_rotate_with_one_test_one_validation_and_two_training_folds():
-    assert partition.N_FOLDS == 4
-    doc = partition.build_partition(_survivors())
-    assert doc["n_folds"] == 4 and set(doc["folds"].values()) == {0, 1, 2, 3}
-    assert "v40" in doc["plan"]
+def _rotations_store_one_test_fold_and_three_non_test_folds_each_validated_once(doc):
     rotations = doc["rotations"]
     assert sorted(rotations) == ["0", "1", "2", "3"]
     assert Counter(v["test_fold"] for v in rotations.values()) == Counter(range(4))
-    assert Counter(v["validation_fold"] for v in rotations.values()) == Counter(range(4))
     for v in rotations.values():
-        assert len(v["train_folds"]) == 2
-        assert {v["test_fold"], v["validation_fold"], *v["train_folds"]} == {0, 1, 2, 3}
+        test, non_test = v["test_fold"], v["non_test_folds"]
+        assert non_test == [k for k in range(4) if k != test]
+        assert "validation_fold" not in v and "train_folds" not in v
+        assert "validation" not in v and "train" not in v
+        splits = v["inner_splits"]
+        assert [s["inner"] for s in splits] == [0, 1, 2]
+        assert [s["validation_fold"] for s in splits] == non_test     # each validates once
+        for s in splits:
+            assert s["train_folds"] == [k for k in non_test if k != s["validation_fold"]]
+            assert test not in (s["validation_fold"], *s["train_folds"])
+        assert v["non_test"] == sorted(x for x, k in doc["folds"].items() if k in non_test)
+
+
+def test_four_folds_rotate_with_one_test_fold_and_three_non_test_folds_each_validated_once():
+    assert partition.N_FOLDS == 4
+    doc = partition.build_partition(_survivors())
+    assert doc["n_folds"] == 4 and set(doc["folds"].values()) == {0, 1, 2, 3}
+    assert "v50" in doc["plan"] and doc["format"] == "balladeer-folds/v2"
+    _rotations_store_one_test_fold_and_three_non_test_folds_each_validated_once(doc)
 
 
 def test_the_fold_count_is_a_parameter_recorded_in_the_document():
@@ -174,11 +188,52 @@ def test_the_fold_count_is_a_parameter_recorded_in_the_document():
 
 
 def test_the_current_partition_is_one_declared_four_fold_file():
-    assert partition.PARTITION_RELATIVE == Path("MIL-CREDA") / "Partition" / "folds_4.json"
+    assert partition.PARTITION_RELATIVE == Path("MIL-CREDA") / "Partition" / "folds_4_v50.json"
     assert partition.FIVE_FOLD_RELATIVE == Path("MIL-CREDA") / "Partition" / "folds.json"
+    assert partition.V40_RELATIVE == Path("MIL-CREDA") / "Partition" / "folds_4.json"
     assert preprocess.PARTITION_RELATIVE == partition.PARTITION_RELATIVE
     doc = partition.load_partition(REPOSITORY / partition.PARTITION_RELATIVE)
     assert partition.check_current(doc) is doc
+
+
+def test_the_committed_partition_stores_the_v50_rotations():
+    doc = partition.load_partition(REPOSITORY / partition.PARTITION_RELATIVE)
+    assert "v50" in doc["plan"]
+    _rotations_store_one_test_fold_and_three_non_test_folds_each_validated_once(doc)
+
+
+def test_the_v50_partition_keeps_the_fold_of_every_subject_of_the_v40_one():
+    v40 = partition.load_partition(REPOSITORY / partition.V40_RELATIVE)
+    v50 = partition.load_partition(REPOSITORY / partition.PARTITION_RELATIVE)
+    assert v50["folds"] == v40["folds"]
+    assert v50["fingerprint"]["survivors"] == v40["fingerprint"]["survivors"]
+    assert v50["fingerprint"]["seed"] == v40["fingerprint"]["seed"] == partition.PARTITION_SEED
+    assert v50["partition_sha256"] != V40_PARTITION_SHA256
+    for r, rotation in v40["rotations"].items():
+        assert v50["rotations"][r]["test"] == rotation["test"]
+        assert v50["rotations"][r]["non_test"] == sorted(rotation["validation"]
+                                                         + rotation["train"])
+
+
+def test_the_v40_four_fold_file_is_kept_and_refused_as_current(tmp_path):
+    path = REPOSITORY / partition.V40_RELATIVE
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == V40_FILE_SHA256
+    doc = partition.load_partition(path)                 # its own hash still holds
+    assert doc["partition_sha256"] == V40_PARTITION_SHA256
+    with pytest.raises(partition.PartitionError, match="balladeer-folds/v1"):
+        partition.check_current(doc)
+    copy = tmp_path / path.name
+    shutil.copyfile(path, copy)
+    survivors = pd.DataFrame(doc["fingerprint"]["survivors"])
+    with pytest.raises(partition.PartitionChanged, match="versión del código"):
+        partition.freeze_partition(survivors, copy, seed=doc["fingerprint"]["seed"])
+    assert hashlib.sha256(copy.read_bytes()).hexdigest() == V40_FILE_SHA256
+
+
+def test_a_result_bound_to_the_v40_partition_is_rejected_against_the_current_one():
+    current = REPOSITORY / partition.PARTITION_RELATIVE
+    with pytest.raises(partition.PartitionMismatch, match=V40_PARTITION_SHA256):
+        partition.check_result({"partition_sha256": V40_PARTITION_SHA256}, current)
 
 
 def test_the_five_fold_file_is_kept_and_refused_as_current(tmp_path):
@@ -217,6 +272,6 @@ def test_the_committed_four_fold_partition_reruns_byte_for_byte(tmp_path):
     copy = tmp_path / path.name
     shutil.copyfile(path, copy)
     assert partition.freeze_partition(survivors, copy, seed=seed)["status"] == "unchanged"
-    # The five-fold file's survivors are the four-fold file's: only the rule changed.
+    # The five-fold file's survivors are the current file's: only the rule changed.
     five = partition.load_partition(REPOSITORY / partition.FIVE_FOLD_RELATIVE)
     assert five["fingerprint"]["survivors"] == stored["fingerprint"]["survivors"]

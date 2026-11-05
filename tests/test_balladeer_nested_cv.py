@@ -44,8 +44,7 @@ def _bagset(root, sha: str = "x" * 64) -> bag_data.BagSet:
                                      record_id=f"{subject}-{condition}", label=label, sex="M",
                                      fold=fold, device="CGX", channels=("a", "b", "c"),
                                      n_windows=3, path=path))
-    rotations = {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
-                          "train_folds": [(r + 2) % 4, (r + 3) % 4]} for r in range(4)}
+    rotations = {str(r): partition.rotation_roles(r) for r in range(4)}
     return bag_data.BagSet(bags=tuple(bags), partition_sha256=sha, rotations=rotations)
 
 
@@ -60,7 +59,8 @@ def _bags(n: int, channels: int, seed: int, prefix: str) -> list[tp.BagTensor]:
 
 def test_the_inner_splits_never_hold_the_test_fold_and_validate_each_non_test_fold_once():
     for k in range(partition.N_FOLDS):
-        splits = assignment.inner_splits(k)
+        splits = assignment.inner_splits(partition.rotation_roles(k))
+        assert splits == partition.rotation_roles(k)["inner_splits"]
         assert len(splits) == partition.N_FOLDS - 1 == 3
         non_test = sorted(f for f in range(partition.N_FOLDS) if f != k)
         assert sorted(s["validation_fold"] for s in splits) == non_test
@@ -68,6 +68,16 @@ def test_the_inner_splits_never_hold_the_test_fold_and_validate_each_non_test_fo
             assert k not in s["train_folds"] and s["validation_fold"] != k
             assert sorted([*s["train_folds"], s["validation_fold"]]) == non_test
             assert len(s["train_folds"]) == 2
+
+
+def test_inner_splits_that_do_not_validate_each_non_test_fold_once_are_refused():
+    rotation = partition.rotation_roles(0)
+    twice = {**rotation, "inner_splits": [{**s, "validation_fold": 1}
+                                          for s in rotation["inner_splits"]]}
+    with pytest.raises(assignment.AssignmentError, match="once"):
+        assignment.inner_splits(twice)
+    with pytest.raises(assignment.AssignmentError, match="inner splits"):
+        assignment.inner_splits({"test_fold": 0, "validation_fold": 1, "train_folds": [2, 3]})
 
 
 def test_the_inner_roles_validate_every_non_test_subject_exactly_once(tmp_path):
@@ -78,8 +88,7 @@ def test_the_inner_roles_validate_every_non_test_subject_exactly_once(tmp_path):
         for side in ("source", "target"):
             test = {b.subject for b in assignment.side_bags(a, bags, side, r, "test")}
             non_test = {b.subject for b in assignment.side_bags(a, bags, side, r, "nontest")}
-            assert non_test == set().union(*(view[f"{side}_{x}"] for x in ("train",
-                                                                          "validation")))
+            assert non_test == view[f"{side}_nontest"]
             assert not test & non_test
             validated = []
             for i in range(3):
@@ -96,7 +105,7 @@ def test_the_inner_roles_validate_every_non_test_subject_exactly_once(tmp_path):
 
 
 def test_the_frozen_rotation_roles_still_read_as_before(tmp_path):
-    """The rotation's own roles (train, validation, test) are unchanged by the inner ones."""
+    """The rotation's own roles (nontest, test) are unchanged by the inner ones."""
     bags = _bagset(tmp_path)
     a = assignment.assign_from_bags(LEVEL, bags)
     for r in range(4):
@@ -107,7 +116,7 @@ def test_the_frozen_rotation_roles_still_read_as_before(tmp_path):
                 assert [b.subject for b in got] == sorted(view[f"{side}_{role}"])
                 assert all(b.condition == a.conditions[b.subject] for b in got)
         with pytest.raises(assignment.AssignmentError, match="no inner split"):
-            assignment.side_bags(a, bags, "source", r, "train", split=0)
+            assignment.side_bags(a, bags, "source", r, "nontest", split=0)
 
 
 def test_the_search_data_holds_the_inner_splits_and_a_refit_view_without_validation(

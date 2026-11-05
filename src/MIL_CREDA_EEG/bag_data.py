@@ -14,9 +14,10 @@ re-decided here.
 
 **The partition is read, never made.** The fold of every subject comes from
 `partition.load_partition`, by default from the one partition in force,
-`partition.PARTITION_RELATIVE` (the four-fold `folds_4.json`); a partition of
-another fold count, such as the retained five-fold `folds.json`, is refused by
-`partition.check_current` before any bag is built. A caller that recorded a
+`partition.PARTITION_RELATIVE` (the four-fold `folds_4_v50.json`); a partition of
+another fold count or format, such as the retained five-fold `folds.json` or the
+v40 four-fold `folds_4.json`, is refused by `partition.check_current` before any
+bag is built. A caller that recorded a
 partition hash has it checked with `partition.check_result`. A kept subject
 the partition does not name is refused: it would mean the processed data and
 the frozen partition disagree.

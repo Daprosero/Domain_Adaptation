@@ -194,10 +194,12 @@ def train_search_phase_two(data, rotation, seed, record, params, schedule, devic
 
 def run_transfer_rotation(transfer: assignment.Transfer, rotation: int, seed: int,
                           phase_one_hyper: Mapping, params: Mapping, schedule: Mapping,
-                          *, bags: bag_data.BagSet | None = None, device="cpu") -> dict:
+                          *, bags: bag_data.BagSet | None = None, device="cpu",
+                          split: int = 0) -> dict:
     """Wiring only: existing assignment/data/supervision and final test predictions, on
-    the frozen rotation's own roles (a single-rotation rehearsal, not the nested
-    selection, which `search` and `campaign` run).
+    one of the rotation's stored inner splits (`split`) and its test fold (a
+    single-rotation rehearsal, not the nested selection, which `search` and `campaign`
+    run).
 
     Callers save with shared search.save_phase_one/save_phase_two or model_store;
     no result files or partition writes occur implicitly in this function.
@@ -205,11 +207,14 @@ def run_transfer_rotation(transfer: assignment.Transfer, rotation: int, seed: in
     bags = bags if bags is not None else bag_data.load_bags()
     a = assignment.assign_from_bags(transfer, bags)
 
-    def side(domain, role):
-        return two_phase.bag_tensors(assignment.side_bags(a, bags, domain, rotation, role))
+    def side(domain, role, inner=None):
+        return two_phase.bag_tensors(assignment.side_bags(a, bags, domain, rotation, role,
+                                                          split=inner))
 
-    s_train, s_valid = side("source", "train"), side("source", "validation")
-    t_train, t_valid = side("target", "train"), side("target", "validation")
+    s_train = side("source", "inner_train", split)
+    s_valid = side("source", "inner_validation", split)
+    t_train = side("target", "inner_train", split)
+    t_valid = side("target", "inner_validation", split)
     torch.manual_seed(seed)
     device = torch.device(device)
     model = HASDModel(s_train[0].windows.shape[1], t_train[0].windows.shape[1]).to(device)

@@ -81,8 +81,9 @@ same and memory is not spent on a graph nobody differentiates.
 `run_transfer_rotation` returns the last-epoch checkpoints, sigma, the history and
 the target test-fold predictions (subject, direction, probability of the
 positive class, label), ready to pool over the two directions of a pair; it is a
-single-rotation rehearsal on the frozen rotation's own roles, not the nested
-selection, which `search` and `campaign` run.
+single-rotation rehearsal on one of the rotation's stored inner splits (`split`,
+0 by default: train on two non-test folds, validate on the third) and its test
+fold, not the nested selection, which `search` and `campaign` run.
 """
 
 from __future__ import annotations
@@ -667,19 +668,22 @@ def predictions(model: MILCREDAModel, bags: Sequence[BagTensor], direction: str,
 
 def run_transfer_rotation(transfer: assignment_mod.Transfer, rotation: int, seed: int,
                           hyper: Mapping, device: torch.device | str = "cpu", *,
-                          bags: bag_data.BagSet | None = None) -> dict:
-    """Phase 1, bridge and phase 2 of MIL-CREDA for one transfer, rotation and seed."""
+                          bags: bag_data.BagSet | None = None, split: int = 0) -> dict:
+    """Phase 1, bridge and phase 2 of MIL-CREDA for one transfer, rotation, inner split
+    and seed."""
     hyper = check_hyper(hyper)
     device = torch.device(device)
     bags = bags if bags is not None else bag_data.load_bags()
     a = assignment_mod.assign_from_bags(transfer, bags)
     view = a.rotation(rotation)
 
-    def side(name: str, role: str) -> list[BagTensor]:
-        return bag_tensors(assignment_mod.side_bags(a, bags, name, rotation, role))
+    def side(name: str, role: str, inner: int | None = None) -> list[BagTensor]:
+        return bag_tensors(assignment_mod.side_bags(a, bags, name, rotation, role, split=inner))
 
-    source_train, source_valid = side("source", "train"), side("source", "validation")
-    target_train, target_valid = side("target", "train"), side("target", "validation")
+    source_train = side("source", "inner_train", split)
+    source_valid = side("source", "inner_validation", split)
+    target_train = side("target", "inner_train", split)
+    target_valid = side("target", "inner_validation", split)
     target_test = side("target", "test")
     if set(b.subject for b in target_test) != view["target_test"]:
         raise RuntimeError("the target test bags are not the rotation's target test fold")

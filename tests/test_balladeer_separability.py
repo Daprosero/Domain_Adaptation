@@ -114,10 +114,11 @@ def test_source_and_target_are_the_rotation_training_subjects(tmp_path):
         sources = set(design["groups"][design["y"] == 1])
         targets = set(design["groups"][design["y"] == 0])
         view = a.rotation(r)
-        assert sources == view["source_train"]
-        assert targets == view["target_train"]
-        held_out = set().union(*(view[f"{side}_{role}"] for side in ("source", "target")
-                                 for role in ("validation", "test")))
+        # Plan v50: a rotation's training subjects are its three non-test folds.
+        assert sources == view["source_nontest"]
+        assert targets == view["target_nontest"]
+        assert {a.folds[s] for s in sources | targets} == set(view["non_test_folds"])
+        held_out = view["source_test"] | view["target_test"]
         assert not (sources | targets) & held_out
         assert design["X"].shape == (len(sources) + len(targets),
                                      len(CGX_CHANNELS) * len(audit_domains.BANDS))
@@ -153,7 +154,7 @@ def test_separable_domains_read_high_and_identical_ones_near_chance(tmp_path):
     lo = separability.measure(b, same, 0, "all", n_permutations=20)
     assert hi["auc_mean"] > 0.95 and hi["perm_p"] < 0.1
     assert lo["auc_mean"] < 0.8
-    assert hi["n_source"] == hi["n_target"] == 3 * 2 * 2   # two training folds x two labels
+    assert hi["n_source"] == hi["n_target"] == 3 * 3 * 2   # three non-test folds x two labels
 
 
 def test_bag_features_match_the_audit_window_features(tmp_path):
@@ -218,7 +219,7 @@ def test_separability_is_measured_over_the_four_rotations(tmp_path):
         assert sorted(g["rotation"]) == [0, 1, 2, 3]
     assert len(rows) == 2 * 4 * len(separability.READINGS)
     for r in range(4):
-        assert len(bags.rotations[str(r)]["train_folds"]) == 2
+        assert len(bags.rotations[str(r)]["non_test_folds"]) == 3
     assert set(seconds) == {"level:L1->L6", "level:L6->L1"}
 
 

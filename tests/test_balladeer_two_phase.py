@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import torch
 
-from MIL_CREDA_EEG import assignment, bag_data, eegnet, two_phase as tp
+from MIL_CREDA_EEG import assignment, bag_data, eegnet, partition, two_phase as tp
 from MIL_CREDA_EEG.mil_creda_model import MILCREDAModel, SigmaAlreadyFixed
 
 CPU = torch.device("cpu")
@@ -247,8 +247,7 @@ def _bagset(root) -> bag_data.BagSet:
                                      record_id=f"{subject}-{condition}", label=label, sex="M",
                                      fold=fold, device="CGX", channels=("a", "b", "c"),
                                      n_windows=3, path=path))
-    rotations = {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
-                          "train_folds": [(r + 2) % 4, (r + 3) % 4]} for r in range(4)}
+    rotations = {str(r): partition.rotation_roles(r) for r in range(4)}
     return bag_data.BagSet(bags=tuple(bags), partition_sha256="x" * 64, rotations=rotations)
 
 
@@ -261,8 +260,7 @@ def test_test_predictions_are_only_for_target_test_fold_subjects(tmp_path):
     subjects = [p["subject"] for p in out["predictions"]]
     assert subjects and set(subjects) == view["target_test"]
     assert len(subjects) == len(set(subjects))
-    assert not set(subjects) & (view["source_train"] | view["source_validation"]
-                                | view["source_test"])
+    assert not set(subjects) & (view["source_nontest"] | view["source_test"])
     labels = bags.labels()
     for p in out["predictions"]:
         assert p["direction"] == "L1->L11" and 0.0 <= p["probability"] <= 1.0

@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from MIL_CREDA_EEG import assignment, bag_data, search
+from MIL_CREDA_EEG import assignment, bag_data, partition, search
 from MIL_CREDA_EEG import two_phase as tp
 
 LEVEL = assignment.Transfer("level", "L1", "L11")
@@ -37,9 +37,7 @@ def _bagset(root, rotations=None) -> bag_data.BagSet:
                                      record_id=f"{subject}-{condition}", label=label, sex="M",
                                      fold=fold, device="CGX", channels=("a", "b", "c"),
                                      n_windows=3, path=path))
-    rotations = rotations or {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
-                                       "train_folds": [(r + 2) % 4, (r + 3) % 4]}
-                              for r in range(4)}
+    rotations = rotations or {str(r): partition.rotation_roles(r) for r in range(4)}
     return bag_data.BagSet(bags=tuple(bags), partition_sha256="x" * 64, rotations=rotations)
 
 
@@ -159,15 +157,21 @@ def test_the_label_free_score_is_recorded_per_trial_and_epoch(tmp_path, monkeypa
 
 
 def test_the_study_records_its_outer_fold_and_inner_splits(tmp_path, monkeypatch):
-    rotations = {str(r): {"test_fold": r, "validation_fold": (r + 3) % 4,
-                          "train_folds": [(r + 1) % 4, (r + 2) % 4]} for r in range(4)}
+    # The inner splits are the ones the partition document stores, read, never rebuilt.
+    v40 = {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
+                    "train_folds": [(r + 2) % 4, (r + 3) % 4]} for r in range(4)}
+    (tmp_path / "v40").mkdir()
+    with pytest.raises(assignment.AssignmentError, match="inner splits"):
+        search.search_data(LEVEL, _bagset(tmp_path / "v40", v40))
+    rotations = {str(r): partition.rotation_roles(r) for r in range(4)}
     data = search.search_data(LEVEL, _bagset(tmp_path, rotations))
-    assert data.folds == {r: {"test_fold": r, "inner_validation_folds":
-                              [f for f in range(4) if f != r]} for r in range(4)}
+    assert data.folds == {r: {"test_fold": r, "inner_splits": rotations[str(r)]["inner_splits"],
+                              "inner_validation_folds": [f for f in range(4) if f != r]}
+                          for r in range(4)}
     study = _study(tmp_path, data, 3, [], monkeypatch, n_trials=1)
     attrs = json.loads(json.dumps(study.user_attrs))
     assert attrs["outerFold"] == 3 and attrs["testFold"] == 3
-    assert attrs["innerSplits"] == assignment.inner_splits(3)
+    assert attrs["innerSplits"] == rotations["3"]["inner_splits"]
     chosen = search.select(study)
     assert chosen["testFold"] == chosen["excludedRotation"] == 3
     assert chosen["selectionRotations"] == [0, 1, 2]

@@ -1,6 +1,6 @@
 {
-  "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
-  "partition_sha256": "abc9012bad78eaaa542c08a1e38e2f35d110e00f33739d76853624297d8735d1",
+  "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+  "partition_sha256": "c56736832ed661257f3a3fced9e26a448ab087eced317b4bead3ed59a9a577d9",
   "instrument": {
     "features": "audit_domains log band power",
     "bands": [
@@ -40,19 +40,16 @@
     "task": []
   },
   "pairs": {
-    "device:L6|Robots": 0.952,
-    "level:L1|L11": 0.5706,
-    "level:L1|L6": 0.5386,
-    "level:L11|L6": 0.393,
-    "task:CogniFit|Robots": 0.7076
+    "device:L6|Robots": 0.9776,
+    "level:L1|L11": 0.6362,
+    "level:L1|L6": 0.5078,
+    "level:L11|L6": 0.4453,
+    "task:CogniFit|Robots": 0.6646
   },
   "eligibility": {
     "level:L1->L6": {
       "transfer": "L1->L6",
       "arm": "level",
-      "passes": true,
-      "min_count": 5,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 5,
@@ -66,15 +63,11 @@
       "pooled_target": {
         "no": 22,
         "yes": 41
-      },
-      "failing": []
+      }
     },
     "level:L1->L11": {
       "transfer": "L1->L11",
       "arm": "level",
-      "passes": true,
-      "min_count": 5,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 5,
@@ -88,15 +81,11 @@
       "pooled_target": {
         "no": 23,
         "yes": 41
-      },
-      "failing": []
+      }
     },
     "level:L6->L1": {
       "transfer": "L6->L1",
       "arm": "level",
-      "passes": true,
-      "min_count": 5,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 5,
@@ -110,15 +99,11 @@
       "pooled_target": {
         "no": 23,
         "yes": 40
-      },
-      "failing": []
+      }
     },
     "level:L6->L11": {
       "transfer": "L6->L11",
       "arm": "level",
-      "passes": false,
-      "min_count": 4,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 4,
@@ -132,22 +117,11 @@
       "pooled_target": {
         "no": 22,
         "yes": 41
-      },
-      "failing": [
-        {
-          "side": "source",
-          "fold": 0,
-          "label": "no",
-          "n": 4
-        }
-      ]
+      }
     },
     "level:L11->L1": {
       "transfer": "L11->L1",
       "arm": "level",
-      "passes": true,
-      "min_count": 5,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 5,
@@ -161,15 +135,11 @@
       "pooled_target": {
         "no": 22,
         "yes": 41
-      },
-      "failing": []
+      }
     },
     "level:L11->L6": {
       "transfer": "L11->L6",
       "arm": "level",
-      "passes": false,
-      "min_count": 4,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 5,
@@ -183,22 +153,11 @@
       "pooled_target": {
         "no": 22,
         "yes": 40
-      },
-      "failing": [
-        {
-          "side": "target",
-          "fold": 0,
-          "label": "no",
-          "n": 4
-        }
-      ]
+      }
     },
     "task:Robots->CogniFit": {
       "transfer": "Robots->CogniFit",
       "arm": "task",
-      "passes": false,
-      "min_count": 2,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 3,
@@ -212,70 +171,11 @@
       "pooled_target": {
         "no": 16,
         "yes": 17
-      },
-      "failing": [
-        {
-          "side": "source",
-          "fold": 0,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "yes",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "yes",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 0,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "yes",
-          "n": 4
-        }
-      ]
+      }
     },
     "task:CogniFit->Robots": {
       "transfer": "CogniFit->Robots",
       "arm": "task",
-      "passes": false,
-      "min_count": 2,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 3,
@@ -289,70 +189,11 @@
       "pooled_target": {
         "no": 17,
         "yes": 16
-      },
-      "failing": [
-        {
-          "side": "source",
-          "fold": 0,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "source",
-          "fold": 1,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "source",
-          "fold": 3,
-          "label": "yes",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 0,
-          "label": "yes",
-          "n": 2
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "no",
-          "n": 3
-        },
-        {
-          "side": "target",
-          "fold": 1,
-          "label": "yes",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "no",
-          "n": 4
-        },
-        {
-          "side": "target",
-          "fold": 3,
-          "label": "yes",
-          "n": 4
-        }
-      ]
+      }
     },
     "device:L6->Robots": {
       "transfer": "L6->Robots",
       "arm": "device",
-      "passes": false,
-      "min_count": 4,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 5,
@@ -366,22 +207,11 @@
       "pooled_target": {
         "no": 23,
         "yes": 29
-      },
-      "failing": [
-        {
-          "side": "target",
-          "fold": 0,
-          "label": "yes",
-          "n": 4
-        }
-      ]
+      }
     },
     "device:Robots->L6": {
       "transfer": "Robots->L6",
       "arm": "device",
-      "passes": false,
-      "min_count": 4,
-      "minimum": 5,
       "min_per_fold": {
         "source": {
           "no": 5,
@@ -395,15 +225,7 @@
       "pooled_target": {
         "no": 22,
         "yes": 53
-      },
-      "failing": [
-        {
-          "side": "source",
-          "fold": 0,
-          "label": "yes",
-          "n": 4
-        }
-      ]
+      }
     }
   },
   "pairs_pooled": {
@@ -488,20 +310,21 @@
       }
     }
   },
+  "eligibility_limitation": "El mínimo por fold queda como limitación declarada de la selección.",
   "timing": {
-    "wall_seconds": 147.4,
+    "wall_seconds": 159.2,
     "workers": 4,
     "seconds_per_transfer": {
-      "level:L1->L6": 61.1,
-      "level:L1->L11": 62.1,
-      "level:L6->L1": 61.8,
-      "level:L6->L11": 61.1,
-      "level:L11->L1": 56.1,
-      "level:L11->L6": 52.8,
-      "task:Robots->CogniFit": 43.1,
-      "task:CogniFit->Robots": 43.0,
-      "device:L6->Robots": 40.8,
-      "device:Robots->L6": 40.4
+      "level:L1->L6": 63.6,
+      "level:L1->L11": 63.6,
+      "level:L6->L1": 64.0,
+      "level:L6->L11": 63.2,
+      "level:L11->L1": 61.5,
+      "level:L11->L6": 60.5,
+      "task:Robots->CogniFit": 47.8,
+      "task:CogniFit->Robots": 48.2,
+      "device:L6->Robots": 45.3,
+      "device:Robots->L6": 45.4
     }
   }
 }

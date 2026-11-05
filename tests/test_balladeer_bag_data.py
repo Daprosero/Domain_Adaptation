@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -152,8 +153,18 @@ def test_the_holders_of_a_condition_are_its_bag_subjects(tmp_path):
 
 def test_the_bags_read_the_current_four_fold_partition_by_default():
     assert bag_data.default_partition_path() == (bag_data.REPOSITORY / "MIL-CREDA" / "Partition"
-                                                 / "folds_4.json")
+                                                 / "folds_4_v50.json")
     assert bag_data.default_partition_path() == bag_data.REPOSITORY / partition.PARTITION_RELATIVE
+
+
+def test_a_v40_format_partition_is_refused_as_not_current(tmp_path):
+    _, part = _fixture(tmp_path)
+    doc = json.loads(part.read_text(encoding="utf-8"))
+    doc["format"] = "balladeer-folds/v1"
+    doc[partition.HASH_FIELD] = partition.partition_hash(doc)
+    part.write_bytes(partition.serialize(doc))
+    with pytest.raises(partition.PartitionError, match="balladeer-folds/v1"):
+        bag_data.load_bags(tmp_path, part)
 
 
 def test_a_five_fold_partition_is_refused_as_not_current(tmp_path):
