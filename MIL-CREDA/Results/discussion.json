@@ -97,8 +97,8 @@
         "significance:poc-k1-artifact-5",
         "significance:poc-k1-artifact-6"
       ],
-      "verdict": "partially_supported",
-      "rationale": "Validated with artifact contamination (off-manifold, as EEG artifacts); fails at 10% donor-class contamination."
+      "verdict": "supported",
+      "rationale": "Corrected test (L115): v55 K1 is about marked (artifact) windows; on artifact contamination both K1a (marked < clean) and K1b (MIL-CREDA > no-consensus) pass at every rate (Holm). Donor-class contamination is outside the claim and is reported as information on the r38 consensus assumption (fails at 10%)."
     },
     {
       "id": "H-K2",
