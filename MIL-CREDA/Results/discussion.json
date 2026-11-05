@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "stage": "full",
-  "protocol": "experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v53.md",
+  "protocol": "experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
   "generated_at": "2026-11-04T02:53:59Z",
   "summary": "Evidence reconciliation only. Six protocol-v45 hypotheses are registered as pending. Existing preprocessing, frozen-partition, separability and toy-set artifacts are indexed, not promoted to campaign findings. The 20-byte Experimental_AGREED.md is a placeholder, not an operator approval.",
   "discussion_type": [],
@@ -10,13 +10,13 @@
       "name": "Balanced accuracy",
       "role": "primary",
       "why": "Declared comparison outcome in the level and task protocol hypotheses.",
-      "source": "experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v53.md"
+      "source": "experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md"
     },
     {
       "name": "Average rank",
       "role": "secondary",
       "why": "The existing H-A/H-B/H-C statements declare a descriptive top-three rank, not a new statistical finding.",
-      "source": "experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v53.md"
+      "source": "experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md"
     }
   ],
   "hypotheses": [
