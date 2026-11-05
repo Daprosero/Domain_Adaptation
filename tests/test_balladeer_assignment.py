@@ -71,8 +71,8 @@ def test_source_and_target_are_disjoint_for_every_transfer_and_rotation():
         assert not a.subjects("source") & a.subjects("target")
         for r in range(partition.N_FOLDS):
             view = a.rotation(r)
-            src = set().union(*(view[f"source_{k}"] for k in ("train", "validation", "test")))
-            tgt = set().union(*(view[f"target_{k}"] for k in ("train", "validation", "test")))
+            src = set().union(*(view[f"source_{k}"] for k in assignment.ROLES))
+            tgt = set().union(*(view[f"target_{k}"] for k in assignment.ROLES))
             assert not src & tgt
 
 
@@ -92,7 +92,7 @@ def test_the_side_is_fixed_across_rotations():
         for r in range(partition.N_FOLDS):
             view = a.rotation(r)
             for side in ("source", "target"):
-                if any(subject in view[f"{side}_{k}"] for k in ("train", "validation", "test")):
+                if any(subject in view[f"{side}_{k}"] for k in assignment.ROLES):
                     seen.add(side)
         assert len(seen) <= 1
         assert seen == ({a.side(subject)} - {"excluded"})
@@ -296,7 +296,7 @@ def test_the_other_condition_is_reached_only_through_the_probe_accessor(tmp_path
     for r in range(partition.N_FOLDS):
         view = a.rotation(r)
         for side in ("source", "target"):
-            for role in ("train", "validation", "test"):
+            for role in assignment.ROLES:
                 for bag in assignment.side_bags(a, bags, side, r, role):
                     assert bag.condition == a.condition_of(bag.subject)
                     assert bag.subject in view[f"{side}_{role}"]
@@ -307,7 +307,7 @@ def test_the_other_condition_is_reached_only_through_the_probe_accessor(tmp_path
     with pytest.raises(assignment.ProbeRefused):
         assignment.probe_bag(a, bags, single, 0)
     train_common = next(s for s in pop["holders"]["A"] & pop["holders"]["B"]
-                        if pop["folds"][s] in pop["rotations"]["0"]["train_folds"])
+                        if pop["folds"][s] in pop["rotations"]["0"]["non_test_folds"])
     with pytest.raises(assignment.ProbeRefused):
         assignment.probe_bag(a, bags, train_common, 0)
 
@@ -334,7 +334,8 @@ def test_the_size_table_reports_every_rotation():
     a = _assign(_population())
     table = assignment.size_table([a])
     assert len(table) == partition.N_FOLDS
-    assert {"transfer", "rotation", "source_train", "target_train", "target_test",
-            "probe"} <= set(table.columns)
+    assert {"transfer", "rotation", "source_nontest", "target_nontest", "source_test",
+            "target_test", "probe"} <= set(table.columns)
+    assert not {"source_train", "source_validation"} & set(table.columns)
     assert (table["probe"] > 0).all()
-    assert np.isfinite(table[["source_train", "target_train"]].to_numpy()).all()
+    assert np.isfinite(table[["source_nontest", "target_nontest"]].to_numpy()).all()

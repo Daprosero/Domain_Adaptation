@@ -34,8 +34,7 @@ def _bagset(root, sha: str = "x" * 64) -> bag_data.BagSet:
                                      record_id=f"{subject}-{condition}", label=label, sex="M",
                                      fold=fold, device="CGX", channels=("a", "b", "c"),
                                      n_windows=3, path=path))
-    rotations = {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
-                          "train_folds": [(r + 2) % 4, (r + 3) % 4]} for r in range(4)}
+    rotations = {str(r): partition.rotation_roles(r) for r in range(4)}
     return bag_data.BagSet(bags=tuple(bags), partition_sha256=sha, rotations=rotations)
 
 
@@ -133,8 +132,7 @@ def test_the_upper_bound_never_sees_source_labels_nor_target_test_labels(tmp_pat
     rotation = 1
     a = assignment.assign_from_bags(LEVEL, bags)
     view = a.rotation(rotation)
-    forbidden = (view["source_train"] | view["source_validation"] | view["source_test"]
-                 | view["target_test"])
+    forbidden = view["source_nontest"] | view["source_test"] | view["target_test"]
     for s in forbidden:                       # their bags cannot be read at all any more
         bags.get(s, a.conditions[s]).path.unlink()
     calls = []
@@ -151,7 +149,7 @@ def test_the_upper_bound_never_sees_source_labels_nor_target_test_labels(tmp_pat
                                    + [("target", "inner_validation", i) for i in range(3)]
                                    + [("target", "nontest", None)])
     assert out["in_ranking"] is False and out["reference"] == "target-supervised upper bound"
-    non_test = view["target_train"] | view["target_validation"]
+    non_test = view["target_nontest"]
     assert out["subjects"]["train"] == sorted(non_test)
     assert sorted(out["subjects"]["inner_validation"]) == sorted(non_test)
 

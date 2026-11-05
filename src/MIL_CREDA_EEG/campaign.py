@@ -692,12 +692,15 @@ def _assignments(cfg: Mapping, bags: bag_data.BagSet) -> dict[str, assignment_mo
 
 
 def test_train_ratio(a: assignment_mod.Assignment, b: assignment_mod.Assignment) -> float:
-    """Per rotation, target-test over training subjects summed over both directions; mean."""
+    """Per rotation, target-test over training subjects summed over both directions; mean.
+
+    The training subjects are the refit's (plan v50, Sec. 4.5): every non-test fold."""
     ratios = []
     for r in sorted(a.rotations, key=int):
         views = [x.rotation(int(r)) for x in (a, b)]
         test = sum(len(v["target_test"]) for v in views)
-        train = sum(len(v["source_train"]) + len(v["target_train"]) for v in views)
+        train = sum(len(v[f"source_{assignment_mod.REFIT_ROLE}"])
+                    + len(v[f"target_{assignment_mod.REFIT_ROLE}"]) for v in views)
         ratios.append(test / train)
     return float(np.mean(ratios))
 

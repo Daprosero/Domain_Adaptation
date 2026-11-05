@@ -10,10 +10,12 @@ the grouped design and the same seed), so that only the composition of
 subjects changes.
 
 **What each measurement compares.** Per transfer and rotation, the source
-subjects in that rotation's two training folds against the target subjects
-in the same training folds, each in the one condition the assignment reads
-for it (Sec. 4.3). That is exactly what phase-2 adaptation sees: validation
-and test subjects of either side never enter. Because the assignment is one
+subjects in that rotation's training folds against the target subjects in the
+same training folds, each in the one condition the assignment reads for it
+(Sec. 4.3). Under plan v50's nested cross-validation (Secs. 4.2 and 4.5) a
+rotation's training folds are its three non-test folds (`assignment.REFIT_ROLE`),
+the set the refit trains and adapts on: test subjects of either side never
+enter. Because the assignment is one
 function per pair of conditions, the two directions of a pair use the same
 subject sets with the domain labels swapped, which is why the rule below
 averages them. Two readings: all subjects, and
@@ -149,8 +151,9 @@ def design(a: Assignment, bags: BagSet, r: int, reading: str,
         raise SeparabilityError(f"Lectura desconocida {reading!r}.")
     channels = channels or CHANNELS[a.transfer.arm]
     keep = (lambda b: True) if reading == "all" else (lambda b: b.label == reading)  # noqa: E731
-    source = [b for b in assignment.side_bags(a, bags, "source", r, "train") if keep(b)]
-    target = [b for b in assignment.side_bags(a, bags, "target", r, "train") if keep(b)]
+    role = assignment.REFIT_ROLE
+    source = [b for b in assignment.side_bags(a, bags, "source", r, role) if keep(b)]
+    target = [b for b in assignment.side_bags(a, bags, "target", r, role) if keep(b)]
     chosen = source + target
     X = np.vstack([bag_features(b, channels)[None, :] for b in chosen])
     y = np.array([1] * len(source) + [0] * len(target))

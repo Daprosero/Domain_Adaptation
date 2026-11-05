@@ -16,6 +16,7 @@ import pytest
 import torch
 
 from MIL_CREDA_EEG import aggregation_variants, campaign, controls, mechanisms, model_store
+from MIL_CREDA_EEG import partition
 from MIL_CREDA_EEG import results
 from MIL_CREDA_EEG import search, two_phase
 from MIL_CREDA_EEG import statistics as st
@@ -158,7 +159,7 @@ def _light_data(sha="x" * 64):
     """A SearchData that carries only what an identity reads: transfer, partition, folds."""
     return search.SearchData(transfer=campaign.assignment_mod.TRANSFERS[0],
                              partition_sha256=sha, rotations={},
-                             folds=search.rotation_folds({str(r): {"test_fold": r}
+                             folds=search.rotation_folds({str(r): partition.rotation_roles(r)
                                                           for r in range(4)}))
 
 
@@ -744,3 +745,21 @@ def test_the_label_free_histories_are_written_apart_from_the_strategies(label_fr
             max(h[f"{term}_max"] for h in mil), rel=1e-6)
         assert float(row["observed_min"]) == pytest.approx(
             min(h[f"{term}_min"] for h in mil), rel=1e-6)
+
+
+def test_the_test_train_ratio_counts_the_refit_training_subjects():
+    """Plan v50, Sec. 4.5: the model a rotation evaluates trains on every non-test fold."""
+    folds = {f"UB{i:04d}": i % 4 for i in range(16)}
+    labels = {s: ("yes", "no")[i % 2] for i, s in enumerate(folds)}
+    holders = {"L1": {s for i, s in enumerate(folds) if i % 4 < 2},
+               "L6": {s for i, s in enumerate(folds) if i % 4 >= 2}}
+    rotations = partition.rotations(folds)
+    a, b = (campaign.assignment_mod.assign(campaign.assignment_mod.Transfer("level", x, y),
+                                           holders, folds, labels, rotations,
+                                           partition_sha256="x" * 64)
+            for x, y in (("L1", "L6"), ("L6", "L1")))
+    expected = []
+    for r in range(4):
+        test = sum(1 for x in (a, b) for s in x.subjects("target") if folds[s] == r)
+        expected.append(test / sum(1 for s in folds if folds[s] != r) / 2)
+    assert campaign.test_train_ratio(a, b) == pytest.approx(sum(expected) / 4)

@@ -1,11 +1,15 @@
 """The four-fold partition over subjects, generated once and frozen.
 
-Experiments plan v40, Sec. 4.2. Preprocessing ends here: the subjects that
+Experiments plan v50, Sec. 4.2. Preprocessing ends here: the subjects that
 survive every one of its steps (at least one record not excluded) are split
 into four folds, once, stratified by label and by sex, always over subjects
-and never over instances. Rotation `r` takes fold `r` as test, fold
-`(r + 1) mod 4` as validation and the other two as training, so each fold
-is test exactly once and validation exactly once.
+and never over instances. Rotation `r` takes fold `r` as test and the other
+three, in fold order, as its non-test folds F, so each fold is test exactly
+once. F is the inner cross-validation of Sec. 4.5: the rotation stores its
+three inner splits, split `i` validating F[i] and training on the other two,
+so every non-test subject is validated exactly once and the test fold is in
+no split. The inner splits reuse the frozen folds; no new partition is drawn,
+and every reader (`assignment`, `search`) takes them from the document.
 
 **The order needs no random generator.** Inside each label x sex stratum the
 subjects are ordered by `sha256("<seed>:<subject>")`, the strata are laid one
@@ -24,16 +28,20 @@ never overwrites a file. Every result that depends on the partition records
 `partition_sha256`; `check_result` rejects one whose hash is not the current
 partition's.
 
-**Which file is current.** `PARTITION_RELATIVE` (`folds_4.json`) is the one
-partition in force, and every reader (`bag_data`, `assignment`,
+**Which file is current.** `PARTITION_RELATIVE` (`folds_4_v50.json`) is the
+one partition in force, and every reader (`bag_data`, `assignment`,
 `separability`, the preprocessing entry point and its notebook) takes it from
-here. The five-fold file frozen under plan v18 (`FIVE_FOLD_RELATIVE`,
-`folds.json`) stays in the repository untouched as the record of what v18
-results used: plan v40 replaced it after a measurement (five folds left test
-folds with one target-side control), and it was regenerated under a new name
-exactly as Sec. 4.2 prescribes. Under this code it refuses as current twice:
-`check_current` names its fold count, and `freeze_partition` names its code
-version.
+here. Two earlier files stay in the repository untouched as the record of what
+their results used, each regenerated under a new name exactly as Sec. 4.2
+prescribes. The five-fold file of plan v18 (`FIVE_FOLD_RELATIVE`,
+`folds.json`): plan v40 replaced it after a measurement (five folds left test
+folds with one target-side control). The four-fold file of plan v40
+(`V40_RELATIVE`, `folds_4.json`): it stored v40's roles (one validation fold,
+two training folds) and plan v50's nested cross-validation replaced them; the
+fold of every subject is the same in both files, only the stored rotations
+(format `balladeer-folds/v2`) and so the hash changed. Under this code each
+refuses as current twice: `check_current` names its fold count or its format,
+and `freeze_partition` names its code version.
 """
 
 from __future__ import annotations
@@ -48,8 +56,8 @@ import pandas as pd
 from MIL_CREDA_EEG.audit_domains import SEED
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md",
-    "sections": ["4.2", "2.10"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "sections": ["4.2", "4.5", "2.10"],
     "experiments": ["4.2"],
     "invariants": [
         "survivors_are_the_subjects_with_a_kept_record",
@@ -60,9 +68,13 @@ __provenance__ = {
         "regeneration_needs_the_flag_and_a_new_name_and_never_overwrites",
         "a_result_with_another_partition_hash_is_rejected_on_load",
         "a_tampered_file_is_refused",
-        "four_folds_rotate_with_one_test_one_validation_and_two_training_folds",
+        "four_folds_rotate_with_one_test_fold_and_three_non_test_folds_each_validated_once",
         "the_fold_count_is_a_parameter_recorded_in_the_document",
         "the_current_partition_is_one_declared_four_fold_file",
+        "the_committed_partition_stores_the_v50_rotations",
+        "the_v50_partition_keeps_the_fold_of_every_subject_of_the_v40_one",
+        "the_v40_four_fold_file_is_kept_and_refused_as_current",
+        "a_result_bound_to_the_v40_partition_is_rejected_against_the_current_one",
         "the_five_fold_file_is_kept_and_refused_as_current",
         "the_committed_four_fold_partition_reruns_byte_for_byte",
     ],
@@ -72,13 +84,16 @@ N_FOLDS = 4
 #: The package's declared seed (`audit_domains.SEED`), reused for the partition.
 PARTITION_SEED = SEED
 STRATA = ("label", "sex")
-FORMAT = "balladeer-folds/v1"
+#: v2 (plan v50): a rotation stores its non-test folds and their inner splits.
+FORMAT = "balladeer-folds/v2"
 HASH_FIELD = "partition_sha256"
 #: The partition in force, relative to the repository root: every reader takes it from here.
-PARTITION_RELATIVE = Path("MIL-CREDA") / "Partition" / "folds_4.json"
+PARTITION_RELATIVE = Path("MIL-CREDA") / "Partition" / "folds_4_v50.json"
 #: The five-fold partition of plan v18, kept untouched and no longer current.
 FIVE_FOLD_RELATIVE = Path("MIL-CREDA") / "Partition" / "folds.json"
-PLAN = "experiments-plan-experimental-mil-creda-sobre-balladeer-v40.md, Sec. 4.2"
+#: The four-fold partition of plan v40 (v40 roles), kept untouched and no longer current.
+V40_RELATIVE = Path("MIL-CREDA") / "Partition" / "folds_4.json"
+PLAN = "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md, Sec. 4.2"
 
 
 class PartitionError(RuntimeError):
@@ -141,17 +156,34 @@ def assign_folds(rows: list[dict], seed: int, n_folds: int = N_FOLDS) -> dict[st
     return dict(sorted(folds.items()))
 
 
+def inner_splits(test_fold: int, n_folds: int = N_FOLDS) -> list[dict]:
+    """The inner splits of the rotation testing `test_fold`: split i validates F[i].
+
+    F is every fold but the test fold, in fold order; each split trains on the other
+    two folds of F, so each fold of F is validated once and the test fold is in none.
+    """
+    if not 0 <= int(test_fold) < n_folds:
+        raise PartitionError(f"test fold {test_fold} is not one of the {n_folds} folds")
+    non_test = [k for k in range(n_folds) if k != int(test_fold)]
+    return [{"inner": i, "validation_fold": v, "train_folds": [k for k in non_test if k != v]}
+            for i, v in enumerate(non_test)]
+
+
+def rotation_roles(r: int, n_folds: int = N_FOLDS) -> dict:
+    """Rotation r's folds: test fold r, the non-test folds F and their inner splits."""
+    return {"test_fold": int(r), "non_test_folds": [k for k in range(n_folds) if k != int(r)],
+            "inner_splits": inner_splits(r, n_folds)}
+
+
 def rotations(folds: Mapping[str, int], n_folds: int = N_FOLDS) -> dict[str, dict]:
-    """Rotation r: test fold r, validation fold r+1 mod n, training the rest."""
+    """Rotation r: its folds (`rotation_roles`) and the subjects of test and of F."""
     out = {}
     for r in range(n_folds):
-        test, validation = r, (r + 1) % n_folds
-        train = [k for k in range(n_folds) if k not in (test, validation)]
+        roles = rotation_roles(r, n_folds)
         out[str(r)] = {
-            "test_fold": test, "validation_fold": validation, "train_folds": train,
-            "test": sorted(s for s, k in folds.items() if k == test),
-            "validation": sorted(s for s, k in folds.items() if k == validation),
-            "train": sorted(s for s, k in folds.items() if k in train),
+            **roles,
+            "test": sorted(s for s, k in folds.items() if k == r),
+            "non_test": sorted(s for s, k in folds.items() if k in roles["non_test_folds"]),
         }
     return out
 
@@ -207,14 +239,14 @@ def load_partition(path: str | Path) -> dict:
 
 
 def check_current(doc: Mapping) -> Mapping:
-    """Refuse a partition that is not of the current rule's shape (format, fold count)."""
-    if doc.get("format") != FORMAT:
-        raise PartitionError(f"Formato de partición {doc.get('format')!r}; el vigente es "
-                             f"{FORMAT!r}.")
+    """Refuse a partition that is not of the current rule's shape (fold count, format)."""
     if doc.get("n_folds") != N_FOLDS:
         raise PartitionError(f"La partición tiene {doc.get('n_folds')} folds y la vigente "
                              f"({PARTITION_RELATIVE}) tiene {N_FOLDS}: no es la partición "
                              f"vigente.")
+    if doc.get("format") != FORMAT:
+        raise PartitionError(f"Formato de partición {doc.get('format')!r}; el vigente es "
+                             f"{FORMAT!r} ({PARTITION_RELATIVE}): no es la partición vigente.")
     return doc
 
 
@@ -316,9 +348,10 @@ def fold_table(doc: Mapping) -> pd.DataFrame:
 
 
 def rotation_table(doc: Mapping) -> pd.DataFrame:
-    """Per rotation: its folds and how many subjects each role holds."""
+    """Per rotation: its test fold, its non-test folds (each validated once in the inner
+    splits) and how many subjects each holds."""
     return pd.DataFrame([{
-        "rotación": int(r), "prueba": v["test_fold"], "validación": v["validation_fold"],
-        "entrenamiento": v["train_folds"], "sujetos prueba": len(v["test"]),
-        "sujetos validación": len(v["validation"]), "sujetos entrenamiento": len(v["train"]),
+        "rotación": int(r), "prueba": v["test_fold"], "no prueba": v["non_test_folds"],
+        "validación interna": [s["validation_fold"] for s in v["inner_splits"]],
+        "sujetos prueba": len(v["test"]), "sujetos no prueba": len(v["non_test"]),
     } for r, v in sorted(doc["rotations"].items(), key=lambda kv: int(kv[0]))])

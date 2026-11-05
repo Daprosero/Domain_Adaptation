@@ -5,7 +5,7 @@ import math
 import pytest
 import torch
 
-from MIL_CREDA_EEG import eegnet, model_store, search, two_phase
+from MIL_CREDA_EEG import eegnet, model_store, partition, search, two_phase
 from MIL_CREDA_EEG.comparators.hasd import HASDModel, register
 from MIL_CREDA_EEG.comparators.hasd.losses import (
     das_loss, gram, pacr_loss, sgir_loss, sinkhorn_plan, total_loss,
@@ -345,8 +345,7 @@ def test_hasd_runner_uses_shared_assignment_and_heldout_test(tmp_path):
                 np.savez(path, signal=torch.randn(3, 14, 512).numpy())
                 items.append(bag_data.Bag(subject, condition, subject, label, "F", fold,
                              "synthetic", tuple(str(c) for c in range(14)), 3, path))
-    rotations = {str(r): {"test_fold": r, "validation_fold": (r + 1) % 4,
-                         "train_folds": [(r + 2) % 4, (r + 3) % 4]} for r in range(4)}
+    rotations = {str(r): partition.rotation_roles(r) for r in range(4)}
     cohort = bag_data.BagSet(tuple(items), "synthetic-hash-not-a-real-partition", rotations)
     schedule = {"epochs1": 1, "epochs2": 1, "bagsPerStep": 2}
     hyper = search.phase_one_hyper("HASD", {"lr1": .001, "wd1": 1e-6}, schedule)
