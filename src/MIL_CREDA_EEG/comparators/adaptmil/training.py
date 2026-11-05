@@ -237,7 +237,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     """Existing search.register_phase_two callback; one fresh model per trial/rotation."""
     state, meta = record
     expected = {"phase": 1, "name": GROUP, "transfer": data.transfer.name,
-                "rotation": rotation, "seed": seed,
+                "rotation": rotation, "seed": search.PHASE_ONE_SEED,
                 "partition_sha256": data.partition_sha256}
     if any(meta.get(k) != v for k, v in expected.items()):
         raise ValueError("AdaptMIL phase1 record does not match transfer/rotation/seed/partition")

@@ -200,7 +200,7 @@ def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Map
                     *, label_free=False):
     """Existing search trainer seam; checkpoint identity checked before loading."""
     state, meta = record
-    expected = {"phase": 1, "name": "common", "rotation": rotation, "seed": seed,
+    expected = {"phase": 1, "name": "common", "rotation": rotation, "seed": search.PHASE_ONE_SEED,
                 "transfer": data.transfer.name, "partition_sha256": data.partition_sha256}
     if any(meta.get(k) != v for k, v in expected.items()):
         raise ValueError("CASUAL requires the same transfer/rotation/seed/partition common phase-1 checkpoint")

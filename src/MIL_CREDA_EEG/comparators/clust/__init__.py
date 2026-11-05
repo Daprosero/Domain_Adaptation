@@ -26,7 +26,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
                     label_free=False):
     """Shared search trainer protocol; only target train/validation accessed."""
     state, meta = record
-    expected = {"phase": 1, "name": "common", "rotation": rotation, "seed": seed,
+    expected = {"phase": 1, "name": "common", "rotation": rotation, "seed": search.PHASE_ONE_SEED,
                 "transfer": data.transfer.name, "partition_sha256": data.partition_sha256}
     if any(meta.get(k) != v for k, v in expected.items()):
         raise search.SearchError("CLUST requires this rotation/seed/partition common checkpoint")

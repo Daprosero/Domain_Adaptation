@@ -11,13 +11,14 @@ outside the data identity, no rehearsal stamp) and its device and pin items.
 and the ids it needs first (`after`):
 
 1. `search.phase1.<transfer>.<group>.outer<r>` -- one phase-1 study of Sec. 7.7
-   for outer fold r and its search-seed refit checkpoint
+   for outer fold r and its one refit checkpoint, at `search.PHASE_ONE_SEED`
    (`campaign.phase_one_study`, then the checkpoint `campaign.run_search` stores);
 2. `search.phase2.<transfer>.<strategy>.outer<r>` -- one phase-2 study of outer fold
-   r, from that fold's search-seed checkpoint of the strategy's group
+   r, from that fold's one checkpoint of the strategy's group
    (`campaign.phase_two_study`);
 3. `final.<transfer>` -- the `final` step on that transfer (`campaign.run_final`):
-   the report-seed models of Sec. 7.3, the controls and the upper bound;
+   the report-seed phase-2 models of Sec. 7.3, refit from that same checkpoint (no
+   phase-1 training of its own), the controls and the upper bound;
 4. `k3.<transfer>` -- the `k3` step on that transfer (`campaign.run_k3`).
 
 Transfers follow `assignment.TRANSFERS`, groups `model_store.GROUPS` and strategies
@@ -478,9 +479,10 @@ def timing_estimate(path: str | Path, config: Mapping,
     three inner splits of its outer fold for `epochs1` (phase 1) or `epochs2` (phase 2)
     epochs each, so a study of `nTrials` trials trains 20 x 3 = 60 times at the
     declared budget, and a phase-1 refit pass at most `epochs1`; a final rotation
-    refits each phase-1 group for at most `epochs1`, trains the upper bound on the
-    three inner splits and refits it (4 x `epochs1`), and refits each strategy twice
-    (primary and label-free) for at most `epochs2`; a K3 rotation refits each planned
+    trains no phase-1 model (it reuses each group's one checkpoint the search stored),
+    trains the upper bound on the three inner splits and refits it (4 x `epochs1`),
+    and refits each strategy twice (primary and label-free) for at most `epochs2`;
+    a K3 rotation refits each planned
     variant for at most `epochs1 + epochs2`.
     """
     path, product = Path(path), Path(product)
@@ -503,13 +505,12 @@ def timing_estimate(path: str | Path, config: Mapping,
     schedule = cfg["schedule"]
     partition.load_partition(campaign._partition_path(cfg))      # refused when absent
     strategies = list(cfg["strategies"])
-    groups = {search.PHASE_ONE_GROUP_OF[s] for s in strategies}
 
     def epochs(unit: Unit) -> int:
         if unit.step == "search":
             return search.N_INNER * schedule["epochs1" if unit.phase == 1 else "epochs2"]
         if unit.step == "final":
-            return ((len(groups) + search.N_INNER + 1) * schedule["epochs1"]
+            return ((search.N_INNER + 1) * schedule["epochs1"]
                     + 2 * len(strategies) * schedule["epochs2"])
         plan = campaign.k3_plan(cfg, campaign.core_transfers(cfg, product))[unit.transfer]
         return (sum(len(v) for v in plan.values())
@@ -779,15 +780,14 @@ def execute_unit(unit: Unit, cfg: Mapping, product: Path,
             raise DeadlineReached({"completedTrials": _completed_trials(study),
                                    "nTrials": n_trials})
         path = model_store.model_path(campaign._models(product), transfer, r,
-                                      search.SEARCH_SEED, 1, unit.name)
+                                      search.PHASE_ONE_SEED, 1, unit.name)
         if not path.exists() and guard():
             raise DeadlineReached({"completedTrials": n_trials, "nTrials": n_trials,
                                    "completedCheckpoints": [], "rotations": [r]})
-        campaign._phase_one_checkpoint(unit.name, data, r, search.SEARCH_SEED,
-                                       search.select(study), cfg, product)
+        campaign._phase_one_checkpoint(unit.name, data, r, search.select(study), cfg, product)
         return {"bestValue": study.best_value}
     record = campaign._phase_one_record(product, data, search.PHASE_ONE_GROUP_OF[unit.name], r,
-                                        search.SEARCH_SEED, cfg)
+                                        cfg)
     study = search.run_phase_two_study(unit.name, data, r, record, cfg["schedule"], **common)
     if _completed_trials(study) < n_trials:
         raise DeadlineReached({"completedTrials": _completed_trials(study),

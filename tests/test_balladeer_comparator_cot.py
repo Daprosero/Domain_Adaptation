@@ -40,7 +40,7 @@ def fixture_data(source_channels=29, target_channels=14, seed=19):
     model = CommonMILModel(source_channels, target_channels)
     record = (two_phase.phase_one_state(model), {
         "phase": 1, "name": "common", "transfer": data.transfer.name,
-        "rotation": 0, "seed": seed, "partition_sha256": data.partition_sha256,
+        "rotation": 0, "seed": search.PHASE_ONE_SEED, "partition_sha256": data.partition_sha256,
         "channels": data.channels(), "hyper": {"lr1": .001, "wd1": 0.},
     })
     return data, record

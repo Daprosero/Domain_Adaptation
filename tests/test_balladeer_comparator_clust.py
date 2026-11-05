@@ -270,7 +270,8 @@ def test_clust_search_reuses_common_checkpoint_and_never_reads_source_data():
     transfer = assignment.Transfer("device", "L6", "Robots")
     data = SimpleNamespace(transfer=transfer, partition_sha256="hash", rotations={0: TargetOnly(
         target_train=[Unlabeled(b.windows) for b in bags()], target_valid=bags("v"))})
-    meta = dict(phase=1, name="common", rotation=0, seed=17, transfer=transfer.name,
+    meta = dict(phase=1, name="common", rotation=0, seed=search.PHASE_ONE_SEED,
+                transfer=transfer.name,
                 partition_sha256="hash", channels={"source": 29, "target": 14})
     record = two_phase.phase_one_state(source), meta
     out = clust.train_phase_two(data, 0, 17, record, params(), schedule())

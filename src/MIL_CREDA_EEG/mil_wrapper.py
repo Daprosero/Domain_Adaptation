@@ -12,7 +12,7 @@ normalized terms (Sec. 7.2).
 
 **One phase-1 group, shared.** Sec. 7.3 declares four phase-1 groups; this
 module is the architecture of the common one (`GROUP`), whose single selected
-checkpoint per transfer, rotation and seed is shared by the six comparators.
+checkpoint per transfer and rotation is shared by the six comparators.
 AdaptMIL and HASD keep their native aggregators (their own groups), and
 MIL-CREDA its own attention (`mil_creda_model.MILCREDAModel`).
 

@@ -189,7 +189,8 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     """Shared search trainer hook; reject a checkpoint from a different rotation/group."""
     state, meta = record
     expected = {"phase": 1, "name": "common", "transfer": data.transfer.name,
-                "rotation": rotation, "seed": seed, "partition_sha256": data.partition_sha256}
+                "rotation": rotation, "seed": search.PHASE_ONE_SEED,
+                "partition_sha256": data.partition_sha256}
     if any(meta.get(k) != v for k, v in expected.items()):
         raise search.SearchError("UDA-DDA needs the common checkpoint of this transfer/rotation/seed/partition")
     torch.manual_seed(seed)

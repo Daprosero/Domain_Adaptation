@@ -73,7 +73,7 @@ def trained_source(data=None):
 def record_for(data, trained):
     return trained["result"]["checkpoint"]["state"], {
         "phase": 1, "name": "AdaptMIL", "transfer": data.transfer.name,
-        "rotation": 0, "seed": 0, "partition_sha256": data.partition_sha256,
+        "rotation": 0, "seed": search.PHASE_ONE_SEED, "partition_sha256": data.partition_sha256,
         "adaptmil_source_digest": tr.source_digest()}
 
 
@@ -466,7 +466,7 @@ def test_adaptmil_phase_two_reads_the_checkpoint_the_campaign_stores(tmp_path):
     pp = tmp_path / "partition.json"
     pp.write_text(json.dumps(doc))
     data = replace(data, partition_sha256=doc[partition.HASH_FIELD])
-    path = search.save_phase_one(tmp_path, "AdaptMIL", data, 0, 0, trained)
+    path = search.save_phase_one(tmp_path, "AdaptMIL", data, 0, search.PHASE_ONE_SEED, trained)
     record = model_store.load(path, partition_path=pp)
     out = search.train_phase_two("AdaptMIL", data, 0, 0, record, PARAMS2, SCHEDULE)
     assert out["result"]["checkpoint"]["valid_balanced_accuracy"] >= 0

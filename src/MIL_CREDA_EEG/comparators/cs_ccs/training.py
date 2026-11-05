@@ -209,7 +209,8 @@ def check_record(data, rotation, seed, record) -> dict:
     """The common phase-1 record of exactly this transfer, rotation, seed and partition."""
     state, meta = record
     expected = {"phase": 1, "name": mil_wrapper.GROUP, "transfer": data.transfer.name,
-                "rotation": rotation, "seed": seed, "partition_sha256": data.partition_sha256,
+                "rotation": rotation, "seed": search.PHASE_ONE_SEED,
+                "partition_sha256": data.partition_sha256,
                 "channels": data.channels()}
     wrong = {k: meta.get(k) for k, v in expected.items() if meta.get(k) != v}
     if wrong:

@@ -170,7 +170,7 @@ def train_search_phase_two(data, rotation, seed, record, params, schedule, devic
                            label_free=False):
     """Existing search hook: each trial starts fresh from its own phase1 rotation."""
     state, meta = record
-    expected = {"name": GROUP, "phase": 1, "rotation": rotation, "seed": seed,
+    expected = {"name": GROUP, "phase": 1, "rotation": rotation, "seed": search.PHASE_ONE_SEED,
                 "transfer": data.transfer.name, "partition_sha256": data.partition_sha256}
     if any(meta.get(k) != v for k, v in expected.items()):
         raise search.SearchError("HASD needs its own phase1 checkpoint of this transfer/rotation/seed/partition")

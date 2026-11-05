@@ -395,6 +395,32 @@ def test_a_unit_without_a_measured_duration_estimate_is_refused_naming_what_to_m
         remote_units.timing_estimate(product / "Results" / "timing.json", cfg, product)
 
 
+def test_the_final_unit_trains_no_phase_one_and_the_search_estimates_are_unchanged(
+        tmp_path):
+    """Secs. 4.5, 7.7: each phase-1 search unit stores its group's one checkpoint of the
+    outer fold (160 over the ten transfers with four groups), and the final unit refits
+    phase 2 from it without training phase 1 again; the search units' estimates and
+    counts are what they were."""
+    cfg, product = _config(tmp_path), _product(tmp_path)
+    cfg["schedule"] = {"epochs1": 2, "epochs2": 3, "bagsPerStep": 4}
+    (product / "Results").mkdir(parents=True)
+    (product / "Results" / "timing.json").write_text(json.dumps({"schema": 1, "measurements": [
+        {"unit": "epoch", "secondsPerUnit": 0.5, "unitsMeasured": 1}]}))
+    estimate = remote_units.timing_estimate(product / "Results" / "timing.json", cfg, product)
+    units = {u.id: u for u in remote_units.enumerate_units(cfg, product)}
+    assert estimate(units["search.phase1.L1-to-L6.common.outer0"]) == 3 * 2 * 0.5
+    assert estimate(units["search.phase2.L1-to-L6.COT.outer0"]) == 3 * 3 * 0.5
+    # the upper bound's three inner splits and refit, and each strategy twice; no phase 1
+    assert estimate(units["final.L1-to-L6"]) == ((3 + 1) * 2 + 2 * 3 * 3) * 0.5
+    full = {**cfg, "strategies": list(model_store.STRATEGIES),
+            "transfers": [t.name for t in campaign.assignment_mod.TRANSFERS],
+            "core": {"level": ["L1->L6", "L6->L1"], "task": [], "device": []}}
+    every = remote_units.enumerate_units(full, product)
+    assert sum(u.step == "search" and u.phase == 1 for u in every) == 160
+    assert sum(u.step == "search" and u.phase == 2 for u in every) == 360
+    assert sum(u.step == "final" for u in every) == 10
+
+
 def _complete_trials(db: Path) -> int:
     if not db.exists():
         return 0
