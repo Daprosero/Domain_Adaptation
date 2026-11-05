@@ -130,6 +130,13 @@ class Conditions:
     #: Run 5's subject signature, as a multiple of the source's between-class
     #: separation (`toy_bags.firmar_sujetos`); 0 is off.
     subject_signature: float = 0.0
+    #: Run 6's smooth per-subject TARGET shift along the class-free height, as
+    #: a multiple of the source's between-class separation
+    #: (`toy_bags.desplazar_sujetos_en_target`); 0 is off.
+    target_subject_shift: float = 0.0
+    #: Run 6's i.i.d. instance noise on both domains, same unit
+    #: (`toy_bags.ruido_de_instancia`); 0 is off.
+    instance_noise: float = 0.0
 
     def draw_options(self) -> dict:
         return {"per_pair_shift": self.per_pair_shift,
@@ -144,16 +151,21 @@ def conditions_record(conditions: Conditions) -> dict:
     """`conditions` as the run records and cache keys carry them: an option
     added after run 4 appears only when on, so off they are as they were."""
     record = dataclasses.asdict(conditions)
-    if record["subject_signature"] == 0.0:
-        del record["subject_signature"]
+    for late in ("subject_signature", "target_subject_shift", "instance_noise"):
+        if record[late] == 0.0:
+            del record[late]
     return record
 
 
 def family_under(seed: int, scale, conditions: Conditions):
     """The draw of one seed under `conditions`: `toy_run.build_family` with
-    the draw options, then the subject signature when on."""
+    the draw options, then, each when on, the subject signature, the
+    per-subject target shift and the instance noise, in that order."""
     familia = toy_run.build_family(FAMILY, seed, scale, **conditions.draw_options())
-    return toy_bags.firmar_sujetos(familia, conditions.subject_signature, seed)
+    familia = toy_bags.firmar_sujetos(familia, conditions.subject_signature, seed)
+    familia = toy_bags.desplazar_sujetos_en_target(
+        familia, conditions.target_subject_shift, seed)
+    return toy_bags.ruido_de_instancia(familia, conditions.instance_noise, seed)
 
 
 
@@ -704,6 +716,67 @@ def partner_kernel_rank(model, material: dict, device: torch.device) -> dict:
             "rankedBags": len(hits)}
 
 
+# ------------------------------------------------------- run 6's push reading
+
+@torch.no_grad()
+def partner_geometry(model, material: dict, device: torch.device) -> dict:
+    """Per target bag of the train and probe (eval) roles, in H_I at the
+    model's frozen width (`bag_distances`: source bags through the frozen
+    phase-1 encoder, target bags through theta_t):
+
+    - `own`: the distance to its own partner (same class, same band index);
+    - `othersMedian`: the median distance to the other same-class source bags;
+    - `spread`: the median distance between two distinct source bags of its
+      class, the typical same-class source spread.
+    """
+    source, target = material["source"], material["target"]
+    s_pos = torch.cat([source.train_idx, source.eval_idx])
+    t_pos = torch.cat([target.train_idx, target.eval_idx])
+    per_class = config.BAGS_PER_CLASS
+    s_labels, t_labels = source.labels[s_pos], target.labels[t_pos]
+    s_index, t_index = s_pos % per_class, t_pos % per_class
+    D = bag_distances(model, target, t_pos, "target", source, s_pos, "source", device)
+    D_ss = bag_distances(model, source, s_pos, "source", source, s_pos, "source", device)
+    spread_of = {}
+    for c in torch.unique(s_labels).tolist():
+        members = torch.nonzero(s_labels == c, as_tuple=False).reshape(-1)
+        block = D_ss[members][:, members]
+        upper = torch.triu_indices(len(members), len(members), offset=1)
+        spread_of[c] = torch.quantile(block[upper[0], upper[1]].double(), 0.5)
+    own, others, spread = [], [], []
+    for j in range(len(t_pos)):
+        same = s_labels == t_labels[j]
+        mine = same & (s_index == t_index[j])
+        if not mine.any():
+            continue
+        own.append(D[j, mine][0].double())
+        others.append(torch.quantile(D[j, same & ~mine].double(), 0.5))
+        spread.append(spread_of[int(t_labels[j])])
+    return {"own": torch.stack(own), "othersMedian": torch.stack(others),
+            "spread": torch.stack(spread)}
+
+
+def partner_push(start: dict, end: dict) -> dict:
+    """K2's push from two `partner_geometry` readings of one arm:
+
+    - `pushMean`: mean over bags of d_start(own) - d_end(own), positive when
+      the target bag moved toward its own partner;
+    - `marginStart`/`marginEnd`: mean of own distance minus the median
+      distance to the other same-class source bags (negative: own is closer);
+    - `roomRatioMedian`: median over bags of d_start(own) / the class's
+      same-class source spread, the room the local term starts with.
+    """
+    room = start["own"] / start["spread"]
+    return {"pushMean": float((start["own"] - end["own"]).mean()),
+            "ownDistanceStart": float(start["own"].mean()),
+            "ownDistanceEnd": float(end["own"].mean()),
+            "marginStart": float((start["own"] - start["othersMedian"]).mean()),
+            "marginEnd": float((end["own"] - end["othersMedian"]).mean()),
+            "roomRatioMedian": float(np.median(room.numpy())),
+            "sourceSpreadMedian": float(np.median(start["spread"].numpy())),
+            "bags": int(len(start["own"]))}
+
+
 # ----------------------------------------------------------- one seed's runs
 
 def _device() -> torch.device:
@@ -712,12 +785,13 @@ def _device() -> torch.device:
 
 def _two_phases(arm, material, familia, scale, hyper, device, seed,
                 phase_one=None, source_bags_per_class: int = 1,
-                gating: bool = False):
+                gating: bool = False, push: bool = False):
     """Phase 1 (unless handed one), phase 2, evaluation; returns the model.
 
     `gating` adds run 4's readings under `record["gating"]`: the partner rank
     and routing error before phase 2 moves anything, the pi entropy over its
-    steps, and the partner rank again at its end.
+    steps, and the partner rank again at its end. `push` adds run 6's
+    `record["push"]` (`partner_push` of the readings before and after phase 2).
     """
     source_train, source_valid, source_test = bags.roles(material["source"])
     if phase_one is None:
@@ -731,6 +805,7 @@ def _two_phases(arm, material, familia, scale, hyper, device, seed,
     floor = target_test_accuracy(model, material, device)
     adabn = adabn_control_accuracy(model, material, device)
     start = partner_kernel_rank(model, material, device) if gating else None
+    geometry_start = partner_geometry(model, material, device) if push else None
     with (pi_entropy_recorder(model) if gating else contextlib.nullcontext()) as ratios:
         p2 = train_phase_two(model, source_train, scale, hyper,
                              torch.Generator().manual_seed(seed + 2), device,
@@ -748,13 +823,16 @@ def _two_phases(arm, material, familia, scale, hyper, device, seed,
             "partnerKernelRankEnd": end["partnerKernelRank"],
             "routingErrorRate": start["routingErrorRate"],
             "rankedBags": start["rankedBags"]}
+    if push:
+        record["push"] = partner_push(geometry_start,
+                                      partner_geometry(model, material, device))
     toy_run.set_phase_two_modes(model)
     return model, record, phase_one
 
 
 def run_ladder_seed(seed: int, scale=SCALE, per_pair_shift: float = 0.0,
                     conditions: Conditions | None = None, rate: float = 0.0,
-                    gating: bool = True) -> dict:
+                    gating: bool = True, push: bool = False) -> dict:
     """H-task, K2 and K3 for one seed on clean material.
 
     TGL, TG and TL share ONE phase-1 checkpoint (the protocol: phase 1 has no
@@ -766,7 +844,8 @@ def run_ladder_seed(seed: int, scale=SCALE, per_pair_shift: float = 0.0,
     `conditions` (run 3) replaces it with a whole `Conditions`; `rate` > 0 runs
     the ladder on material contaminated in `conditions.contamination` mode.
     `gating` adds run 4's readings to TGL, TG and TL (`_two_phases`); they
-    are read beside training and change no other key or value.
+    are read beside training and change no other key or value; so does
+    `push`, run 6's K2 push reading on TGL and TG.
     """
     conditions = conditions or Conditions(per_pair_shift=per_pair_shift)
     k = conditions.source_bags_per_class
@@ -783,7 +862,8 @@ def run_ladder_seed(seed: int, scale=SCALE, per_pair_shift: float = 0.0,
         for arm in ("TGL", "TG", "TL"):
             model, record, shared = _two_phases(arm, material, familia, scale,
                                                 hyper, device, seed, shared, k,
-                                                gating=gating)
+                                                gating=gating,
+                                                push=push and arm in ("TGL", "TG"))
             if arm in ("TGL", "TG"):
                 record["partner"] = partner_reading(model, material, device)
             out["arms"][arm] = record
@@ -918,6 +998,20 @@ def k2k3v2_jobs(prereg: dict) -> list[tuple]:
     if isinstance(rate, bool) or not isinstance(rate, (int, float)):
         raise ValueError(f"artifact.k3Rate is {rate!r}: the parent sets it before the battery")
     return k2k3_jobs(prereg)
+
+
+def k2k3v3_jobs(prereg: dict) -> list[tuple]:
+    """Run 6's battery: `k2k3_jobs` under the room scenario (subject signature,
+    per-subject target shift and instance noise all on), each job carrying
+    `push=True`."""
+    conditions = prereg["conditions"]
+    for knob in ("subject_signature", "target_subject_shift", "instance_noise"):
+        if not conditions.get(knob):
+            raise ValueError(f"run 6 needs conditions.{knob} > 0")
+    rate = prereg["artifact"]["k3Rate"]
+    if isinstance(rate, bool) or not isinstance(rate, (int, float)):
+        raise ValueError(f"artifact.k3Rate is {rate!r}: declare it before the battery")
+    return [(f, a, {**kw, "push": True}) for f, a, kw in k2k3_jobs(prereg)]
 
 
 def _store(path: Path, out) -> None:

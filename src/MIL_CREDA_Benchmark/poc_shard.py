@@ -1,14 +1,15 @@
 """Run one shard of a PoC battery into a job cache the notebook can reuse.
 
     python -m MIL_CREDA_Benchmark.poc_shard --shard i --shards n --out DIR [--workers W]
-        [--battery full|k2k3|k2k3v2] [--prereg PATH]
+        [--battery full|k2k3|k2k3v2|k2k3v3] [--prereg PATH]
 
 Shard `i` of `n` runs jobs `i::n` of the chosen battery, read from the
 pre-registration: `full` (default) is `poc.battery_jobs`, run 3's 240 jobs;
 `k2k3` is `poc.k2k3_jobs`, run 4's 60 ladder jobs with the gating readings
 (pass run 4's `--prereg`); `k2k3v2` is `poc.k2k3v2_jobs`, the same ladder
 under run 5's subject signature (pass run 5's `--prereg`, with its `k3Rate`
-set). The slice runs through `poc.run_many` with
+set); `k2k3v3` is `poc.k2k3v3_jobs`, run 6's ladder under the room scenario
+with the K2 push reading (pass run 6's `--prereg`). The slice runs through `poc.run_many` with
 `MIL_CREDA_POC_CACHE=DIR`, so a finished job is never run twice and the
 notebook's battery cell reads the union of every shard's `DIR` as cache hits. The cache key includes `src`: pass
 `--src` with the notebook's own `SRC` string when the shard runs elsewhere.
@@ -26,7 +27,8 @@ from MIL_CREDA_Benchmark import poc
 
 SRC = str(Path(__file__).resolve().parents[1])
 #: The batteries a shard may slice, by name.
-BATTERIES = {"full": poc.battery_jobs, "k2k3": poc.k2k3_jobs, "k2k3v2": poc.k2k3v2_jobs}
+BATTERIES = {"full": poc.battery_jobs, "k2k3": poc.k2k3_jobs, "k2k3v2": poc.k2k3v2_jobs,
+             "k2k3v3": poc.k2k3v3_jobs}
 
 PREREGISTRATION = (Path(SRC).parent / "MIL-CREDA" / "Results" / "PoC_Conditions"
                    / "preregistration.json")
