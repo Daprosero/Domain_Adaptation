@@ -884,6 +884,33 @@ def test_the_final_step_refuses_a_missing_phase_one_checkpoint(level_run, regist
     assert results.read_predictions(copy / "Results", "A-nivel") == before
 
 
+def test_the_final_step_refuses_before_any_transfer_writes(level_run, registries, tmp_path):
+    """Secs. 4.5, 7.3: a missing phase-1 checkpoint of a later transfer is refused before
+    an earlier transfer of the same step trains or records anything."""
+    cfg, product, _ = level_run
+    copy = tmp_path / "product"
+    shutil.copytree(product, copy)
+    first, *later = [t.name.replace("->", "-to-") for t in campaign.transfers_of(
+        campaign.check_config(cfg))]
+    assert later, "the rehearsal needs two transfers"
+    models = copy / "Models" / "Balladeer"
+    for stale in (models / first).rglob("phase2__*"):
+        stale.unlink()
+    for rule in ("primary", "label-free"):
+        stale = results._predictions_path(copy / "Results", "A-nivel", rule)
+        if stale.exists():
+            stale.unlink()
+    before = {e: results.read_predictions(copy / "Results", e) for e in ("A-nivel",)}
+    assert before == {"A-nivel": []}
+    gone = models / later[-1] / "rotation0" / f"seed{search.PHASE_ONE_SEED}" / "phase1__common.pt"
+    gone.unlink()
+    gone.with_suffix(".json").unlink()
+    with pytest.raises(campaign.CampaignError, match="phase-1 checkpoint"):
+        campaign.run_final(campaign.check_config(cfg), copy)
+    assert not list((models / first).rglob("phase2__*"))
+    assert {e: results.read_predictions(copy / "Results", e) for e in before} == before
+
+
 def test_a_phase_two_study_from_another_checkpoint_names_the_study_to_remove(level_run):
     """Sec. 4.5: the refusal's remedy says the stale phase-2 study must be removed, since
     the search step would refuse to continue it under another identity."""

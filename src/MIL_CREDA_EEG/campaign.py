@@ -648,21 +648,25 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
     current = _bags_identity(bags)
     counts = {"trained_phase1": 0, "trained_phase2": 0, "predictions": 0,
               "trained_label_free": 0, "label_free_predictions": 0}
+    # every checkpoint of every transfer is checked before the step trains or records anything
+    plans = {}
+    for transfer in transfers_of(cfg):
+        data = search.search_data(transfer, bags)
+        best_one = {g: _selections(product, data, 1, g, cfg) for g in _groups(cfg["strategies"])}
+        plans[transfer.name] = data, best_one, {
+            r: {g: _stored_phase_one_checkpoint(g, data, r, best_one[g][r], cfg, product)
+                for g in best_one}
+            for r in sorted(data.rotations)}
     for transfer in transfers_of(cfg):
         experiment = results.EXPERIMENT_OF_ARM[transfer.arm]
-        data = search.search_data(transfer, bags)
+        data, best_one, stored_one = plans[transfer.name]
         a = assignment_mod.assign_from_bags(transfer, bags)
-        best_one = {g: _selections(product, data, 1, g, cfg) for g in _groups(cfg["strategies"])}
         primary = {s: _phase_two_selection(product, data, s, cfg) for s in cfg["strategies"]}
         free = {s: _phase_two_selection(product, data, s, cfg, "label-free")
                 for s in cfg["strategies"]}
         done = _predicted(product, experiment, current)
         done_free = _predicted(product, experiment, current, "label-free")
         free_root = _models(product) / LABEL_FREE_MODELS
-        # every checkpoint is checked before this transfer trains or records anything
-        stored_one = {r: {g: _stored_phase_one_checkpoint(g, data, r, best_one[g][r], cfg,
-                                                          product) for g in best_one}
-                      for r in sorted(data.rotations)}
         for r in sorted(data.rotations):
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
             checkpoints = stored_one[r]
