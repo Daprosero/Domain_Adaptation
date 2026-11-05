@@ -1,0 +1,319 @@
+{
+  "preregistration": {
+    "writtenAt": "2026-11-05T07:20:52+00:00",
+    "scenario": {
+      "family": "rollo",
+      "backbone": "mlp",
+      "scale": "full"
+    },
+    "seeds": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39
+    ],
+    "contaminationRates": [
+      0.1,
+      0.2,
+      0.3
+    ],
+    "alpha": 0.05,
+    "test": "Wilcoxon signed-rank, one-sided greater, zero_method=wilcox; rank-biserial; Hodges-Lehmann with Wilcoxon 95% CI",
+    "hypotheses": {
+      "H-task": {
+        "contrast": "acc(TGL) - acc(sourceOnly)",
+        "family": [
+          "H-task"
+        ],
+        "rule": "VALIDATED iff p < alpha"
+      },
+      "K1": {
+        "contrast": [
+          "c(TGL) > 0 at each rate",
+          "c(TGL) - c(TGL-NC) > 0 at each rate"
+        ],
+        "family": "6 tests, Holm",
+        "rule": "VALIDATED iff all 6 Holm-adjusted p < alpha"
+      },
+      "K2": {
+        "contrast": [
+          "s(TGL) > 0",
+          "s(TGL) - s(TG) > 0"
+        ],
+        "family": "2 tests, Holm",
+        "rule": "VALIDATED iff both Holm-adjusted p < alpha"
+      },
+      "K3": {
+        "contrast": [
+          "acc(TGL)-acc(TGL-NC)",
+          "acc(TGL)-acc(TG)",
+          "acc(TGL)-acc(TL)"
+        ],
+        "family": "3 tests, Holm",
+        "rule": "VALIDATED iff all 3 Holm-adjusted p < alpha"
+      }
+    },
+    "hyperparameters": {
+      "kernelSigma": 36.135014304860874,
+      "attentionGamma": 0.8633557574655063,
+      "attentionTemperature": 0.42588932435340904,
+      "tauLocal": 0.27466369735257745,
+      "lr1": 0.015290622066240019,
+      "weightDecay1": 6.277218548234598e-07,
+      "dim": 64,
+      "lr2": 0.0026420508173972492,
+      "weightDecay2": 1.5227262701506252e-06
+    },
+    "sigmaMultiplier": 0.5,
+    "noisePairingToy": [
+      1,
+      2,
+      0
+    ]
+  },
+  "verdicts": {
+    "H-task": {
+      "verdict": "VALIDATED",
+      "evidence": "TGL 0.839 vs source-only 0.352 (mean target accuracy); W = 465.0, one-sided p = 8.29e-07, rank-biserial = 1.00, HL = 0.500. AdaBN (information only): 0.794."
+    },
+    "K1": {
+      "verdict": "NOT VALIDATED",
+      "evidence": "K1a r=0.1: c(TGL) > 0: p_Holm = 5.00e-01; K1b r=0.1: c(TGL) > c(TGL-NC): p_Holm = 1.31e-02; K1a r=0.2: c(TGL) > 0: p_Holm = 1.31e-02; K1b r=0.2: c(TGL) > c(TGL-NC): p_Holm = 4.10e-07; K1a r=0.3: c(TGL) > 0: p_Holm = 5.59e-09; K1b r=0.3: c(TGL) > c(TGL-NC): p_Holm = 5.59e-09. Mean contrasts c(TGL) / c(TGL-NC): r=0.1: -0.069 / -0.264, r=0.2: 0.076 / -0.174, r=0.3: 0.199 / -0.082."
+    },
+    "K2": {
+      "verdict": "NOT VALIDATED",
+      "evidence": "K2a: s(TGL) > 0: p_Holm = 3.73e-09; K2b: s(TGL) > s(TG): p_Holm = 8.31e-01. Mean separation TGL 0.0332, TG 0.0388; partner mass TGL 0.178 (chance 0.167)."
+    },
+    "K3": {
+      "verdict": "NOT VALIDATED",
+      "evidence": "K3a: TGL > TGL-NC: mean diff -0.013, HL -0.028, p_Holm = 1.00e+00; K3b: TGL > TG: mean diff +0.013, HL +0.000, p_Holm = 9.13e-01; K3c: TGL > TL: mean diff -0.007, HL -0.028, p_Holm = 1.00e+00."
+    }
+  },
+  "tests": {
+    "H-task": {
+      "statistic": 465.0,
+      "p": 8.286487648765032e-07,
+      "rankBiserial": 1.0,
+      "hodgesLehmann": 0.5,
+      "hodgesLehmannCI": [
+        0.4444444444444444,
+        0.5555555555555556
+      ],
+      "n": 30,
+      "nonZero": 30,
+      "alternative": "greater"
+    },
+    "H-task-info-adabn": {
+      "statistic": 69.5,
+      "p": 0.02091228062564449,
+      "rankBiserial": 0.5366666666666666,
+      "hodgesLehmann": 0.05555555555555558,
+      "hodgesLehmannCI": [
+        0.0,
+        0.08333333333333337
+      ],
+      "n": 30,
+      "nonZero": 24,
+      "alternative": "two-sided"
+    },
+    "K1": [
+      {
+        "test": "K1a r=0.1: c(TGL) > 0",
+        "statistic": 233.0,
+        "p": 0.5,
+        "rankBiserial": 0.002150537634408602,
+        "hodgesLehmann": 0.0010437215103503428,
+        "hodgesLehmannCI": [
+          -0.1764673429374571,
+          0.06647641531962122
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 0.5
+      },
+      {
+        "test": "K1b r=0.1: c(TGL) > c(TGL-NC)",
+        "statistic": 358.0,
+        "p": 0.004352731630206108,
+        "rankBiserial": 0.5397849462365591,
+        "hodgesLehmann": 0.2204113521607432,
+        "hodgesLehmannCI": [
+          0.08035508642708993,
+          0.3537428241085123
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 0.013058194890618324
+      },
+      {
+        "test": "K1a r=0.2: c(TGL) > 0",
+        "statistic": 354.0,
+        "p": 0.005651530809700489,
+        "rankBiserial": 0.5225806451612903,
+        "hodgesLehmann": 0.09838563377141123,
+        "hodgesLehmannCI": [
+          0.022402939212042845,
+          0.16474099066625866
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 0.013058194890618324
+      },
+      {
+        "test": "K1b r=0.2: c(TGL) > c(TGL-NC)",
+        "statistic": 451.0,
+        "p": 1.0244548320770264e-07,
+        "rankBiserial": 0.9397849462365592,
+        "hodgesLehmann": 0.22326230275211856,
+        "hodgesLehmannCI": [
+          0.15331114031141624,
+          0.29885852227582493
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 4.0978193283081055e-07
+      },
+      {
+        "test": "K1a r=0.3: c(TGL) > 0",
+        "statistic": 465.0,
+        "p": 9.313225746154785e-10,
+        "rankBiserial": 1.0,
+        "hodgesLehmann": 0.20278282193762676,
+        "hodgesLehmannCI": [
+          0.16444028385362966,
+          0.24188885126489576
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 5.587935447692871e-09
+      },
+      {
+        "test": "K1b r=0.3: c(TGL) > c(TGL-NC)",
+        "statistic": 465.0,
+        "p": 9.313225746154785e-10,
+        "rankBiserial": 1.0,
+        "hodgesLehmann": 0.2642114715719664,
+        "hodgesLehmannCI": [
+          0.19070499229846055,
+          0.338437160693858
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 5.587935447692871e-09
+      }
+    ],
+    "K2": [
+      {
+        "test": "K2a: s(TGL) > 0",
+        "statistic": 464.0,
+        "p": 1.862645149230957e-09,
+        "rankBiserial": 0.9956989247311828,
+        "hodgesLehmann": 0.02828731620684266,
+        "hodgesLehmannCI": [
+          0.018572311237221584,
+          0.04097282513976097
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 3.725290298461914e-09
+      },
+      {
+        "test": "K2b: s(TGL) > s(TG)",
+        "statistic": 186.0,
+        "p": 0.830629107542336,
+        "rankBiserial": -0.2,
+        "hodgesLehmann": -0.005637586582452059,
+        "hodgesLehmannCI": [
+          -0.020919215865433216,
+          0.00782946779509075
+        ],
+        "n": 30,
+        "nonZero": 30,
+        "alternative": "greater",
+        "pHolm": 0.830629107542336
+      }
+    ],
+    "K3": [
+      {
+        "test": "K3a: TGL > TGL-NC",
+        "statistic": 80.0,
+        "p": 0.8930723901995431,
+        "rankBiserial": -0.30735930735930733,
+        "hodgesLehmann": -0.02777777777777779,
+        "hodgesLehmannCI": [
+          -0.08333333333333331,
+          0.02777777777777779
+        ],
+        "n": 30,
+        "nonZero": 21,
+        "alternative": "greater",
+        "pHolm": 1.0
+      },
+      {
+        "test": "K3b: TGL > TG",
+        "statistic": 118.5,
+        "p": 0.3044730597213776,
+        "rankBiserial": 0.12857142857142856,
+        "hodgesLehmann": 0.0,
+        "hodgesLehmannCI": [
+          -0.02777777777777779,
+          0.02777777777777779
+        ],
+        "n": 30,
+        "nonZero": 20,
+        "alternative": "greater",
+        "pHolm": 0.9134191791641328
+      },
+      {
+        "test": "K3c: TGL > TL",
+        "statistic": 92.5,
+        "p": 0.8711163788198899,
+        "rankBiserial": -0.26877470355731226,
+        "hodgesLehmann": -0.027777777777777735,
+        "hodgesLehmannCI": [
+          -0.055555555555555525,
+          0.0
+        ],
+        "n": 30,
+        "nonZero": 22,
+        "alternative": "greater",
+        "pHolm": 1.0
+      }
+    ]
+  },
+  "batterySeconds": 1472.260098540999,
+  "workers": 6
+}

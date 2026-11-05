@@ -68,7 +68,10 @@ __benchmark__ = {
         # The tutorial keeps new results in memory and saved notebook outputs.
         # Declare the retained historical archive too: retiring its writers
         # must not make those existing files undeclared records in audits.
-        "records": ["Results/Toyset"],
+        # `Results/PoC` holds what `Notebooks/PoC_Hypotheses_Rollo.ipynb`
+        # writes through `poc`: the pre-registration, the raw per-seed
+        # results, the verdicts and the figures of the hypothesis battery.
+        "records": ["Results/Toyset", "Results/PoC"],
     },
     # Retired with the digit campaign's shards and its seed/transfer axes.
     "distribution": {},
