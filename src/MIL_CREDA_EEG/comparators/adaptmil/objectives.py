@@ -1,4 +1,4 @@
-"""AdaptMIL Eqs.1–4 and mean-pool MK-MMD, with explicit estimator choices."""
+"""AdaptMIL Eqs.1–4, mean-pool MK-MMD and the phase-2 LMMD, with explicit estimator choices."""
 from __future__ import annotations
 
 import math
@@ -7,12 +7,16 @@ import torch
 from torch.nn import functional as F
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
-    "sections": ["7.3", "7.4", "7.7"],
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "sections": ["7.1", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["adaptmil_mmd_matches_closed_form_and_symmetries",
                    "adaptmil_equations_one_to_four_match_their_terms",
-                   "adaptmil_alignment_never_uses_attention_or_target_labels",
+                   "adaptmil_lmmd_is_zero_when_class_conditionals_coincide",
+                   "adaptmil_lmmd_class_weights_are_normalized_per_class",
+                   "adaptmil_lmmd_weights_come_from_target_soft_predictions",
+                   "adaptmil_lmmd_gradient_flows_only_into_the_target_encoder",
+                   "adaptmil_lmmd_refuses_invalid_inputs",
                    "adaptmil_bandwidth_is_training_only_and_degenerate_safe",
                    "adaptmil_mmd_refuses_invalid_inputs"],
 }
@@ -26,6 +30,24 @@ def _positive(value, name):
         raise ValueError(f"{name} must be positive and finite")
 
 
+def _matrices(source, target):
+    if (source.ndim != 2 or target.ndim != 2 or source.shape[0] == 0
+            or target.shape[0] == 0 or source.shape[1] != target.shape[1]
+            or source.shape[1] == 0):
+        raise ValueError("MMD requires nonempty (bags, shared features) matrices")
+    if not torch.isfinite(source).all() or not torch.isfinite(target).all():
+        raise ValueError("MMD inputs must be finite")
+
+
+def mixture_kernel(a: torch.Tensor, b: torch.Tensor, sigma: float) -> torch.Tensor:
+    """Mean of Gaussians exp(-||u-v||^2 / (2 (sigma s)^2)), s in KERNEL_SCALES; (n,m)."""
+    _positive(sigma, "sigma")
+    # Direct differences avoid cancellation of large, nearly equal norms.
+    distance = (a[:, None] - b[None, :]).square().sum(dim=-1)
+    return torch.stack([torch.exp(-distance / (2 * (sigma * s) ** 2))
+                        for s in KERNEL_SCALES]).mean(dim=0)
+
+
 def multi_kernel_mmd(source: torch.Tensor, target: torch.Tensor, sigma: float):
     """Appendix A MK-MMD; chosen biased V-statistic, unequal batches allowed.
 
@@ -34,19 +56,58 @@ def multi_kernel_mmd(source: torch.Tensor, target: torch.Tensor, sigma: float):
     numerically equivalent to TLlib's estimator.
     """
     _positive(sigma, "sigma")
-    if (source.ndim != 2 or target.ndim != 2 or source.shape[0] == 0
-            or target.shape[0] == 0 or source.shape[1] != target.shape[1]
-            or source.shape[1] == 0):
-        raise ValueError("MMD requires nonempty (bags, shared features) matrices")
-    if not torch.isfinite(source).all() or not torch.isfinite(target).all():
-        raise ValueError("MMD inputs must be finite")
-    # Direct differences avoid cancellation of large, nearly equal norms.
-    def kernel(a, b):
-        distance = (a[:, None] - b[None, :]).square().sum(dim=-1)
-        return torch.stack([torch.exp(-distance / (2 * (sigma * s) ** 2))
-                            for s in KERNEL_SCALES]).mean(dim=0)
-    return kernel(source, source).mean() + kernel(target, target).mean() - 2 * kernel(
-        source, target).mean()
+    _matrices(source, target)
+    return (mixture_kernel(source, source, sigma).mean()
+            + mixture_kernel(target, target, sigma).mean()
+            - 2 * mixture_kernel(source, target, sigma).mean())
+
+
+@torch.no_grad()
+def lmmd_class_weights(source_labels: torch.Tensor, target_probability: torch.Tensor,
+                       classes: int):
+    """LMMD class weights (Zhu et al. 2021 Eq. 4, Transfer Learning Repo `cal_weight`).
+
+    Source bag i weighs one-hot(y_i)_c / sum_i one-hot(y_i)_c; target bag j weighs
+    p_jc / sum_j p_jc, p the soft prediction, detached. Only classes present among
+    the source labels AND the target argmax are kept, as the repository does; returns
+    (Ns,K), (Nt,K) for the K kept classes, each column summing to one.
+    """
+    if (source_labels.ndim != 1 or target_probability.ndim != 2
+            or target_probability.shape[1] != classes
+            or ((source_labels < 0) | (source_labels >= classes)).any()):
+        raise ValueError("LMMD needs (Ns,) labels in [0, classes) and (Nt, classes) predictions")
+    probability = target_probability.detach()
+    if (not torch.isfinite(probability).all() or (probability < 0).any()
+            or not torch.allclose(probability.sum(1), torch.ones_like(probability[:, 0]),
+                                  atol=1e-6)):
+        raise ValueError("target predictions must be finite rows of the simplex")
+    source = F.one_hot(source_labels, classes).to(probability.dtype)
+    kept = (source.sum(0) > 0) & (torch.bincount(probability.argmax(1),
+                                                 minlength=classes) > 0)
+    source, probability = source[:, kept], probability[:, kept]
+    return source / source.sum(0), probability / probability.sum(0).clamp_min(1e-12)
+
+
+def local_mmd(source: torch.Tensor, target: torch.Tensor, source_labels: torch.Tensor,
+              target_probability: torch.Tensor, sigma: float, classes: int = 2):
+    """Zhu et al. (TNNLS 2021) LMMD, Eq. 5 over bags: mean over kept classes c of
+    ||sum_i ws_ic phi(s_i) - sum_j wt_jc phi(t_j)||^2 in the module's mixture kernel.
+
+    Biased V-statistic like `multi_kernel_mmd`; no kept class gives a zero still
+    connected to the target graph. The class weights carry no gradient.
+    """
+    _positive(sigma, "sigma")
+    _matrices(source, target)
+    if source_labels.shape != (len(source),) or target_probability.shape[0] != len(target):
+        raise ValueError("LMMD needs one label per source row and one prediction per target row")
+    ws, wt = lmmd_class_weights(source_labels, target_probability, classes)
+    if not ws.shape[1]:
+        return target.sum() * 0
+    ws, wt = ws.to(source.dtype), wt.to(target.dtype)
+    terms = ((ws * (mixture_kernel(source, source, sigma) @ ws)).sum()
+             + (wt * (mixture_kernel(target, target, sigma) @ wt)).sum()
+             - 2 * (ws * (mixture_kernel(source, target, sigma) @ wt)).sum())
+    return terms / ws.shape[1]
 
 
 @torch.no_grad()
@@ -91,16 +152,22 @@ def stage_two_objective(model, source_bags, labels):
     return F.cross_entropy(model.logits(source_bags, "source"), labels)
 
 
-def alignment_objective(model, source_bags, target_bags, weight, sigma):
-    """Plan §7.3 controlled adaptation: Eq.3's DA summand only.
+def alignment_objective(model, source_bags, source_labels, target_bags, weight, sigma):
+    """Plan §7.3 controlled adaptation: AdaptMIL-LMMD on mean-pooled P(z) bags.
 
-    No labels accepted; attention and head are never called. Source features
-    detached because the standardized source side is frozen.
+    Source bags weigh by their labels; target bags by the soft prediction of the
+    training target encoder through the frozen native attention and head, no
+    threshold, no marginal term. Source features and the class weights are
+    detached: only the target encoder receives gradient. No target labels exist here.
     """
     if not math.isfinite(float(weight)) or weight < 0:
-        raise ValueError("MMD weight must be finite and nonnegative")
+        raise ValueError("LMMD weight must be finite and nonnegative")
     with torch.no_grad():
         source = model.representations(source_bags, "source", mean=True)
-    target = model.representations(target_bags, "target", mean=True)
-    mmd = multi_kernel_mmd(source, target, sigma)
-    return {"objective": weight * mmd, "mmd": mmd}
+    # One target pass feeds both the alignment (mean) and the weights (attention).
+    projected = [model.aggregator.project(h) for h in model.embed(target_bags, "target")]
+    target = torch.stack([h.mean(dim=0) for h in projected])
+    with torch.no_grad():
+        probability = model.head(torch.stack([model.aggregator(h)[0] for h in projected]))
+    lmmd = local_mmd(source, target, source_labels, probability, sigma, model.classes)
+    return {"objective": weight * lmmd, "lmmd": lmmd}
