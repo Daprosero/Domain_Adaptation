@@ -1,0 +1,173 @@
+{
+  "alpha": 0.05,
+  "artifact": {
+    "k3Rate": 0.2,
+    "noiseSdInEsc": 1.0
+  },
+  "battery": {
+    "artifact": "run_ladder_seed per seed, contamination artifact, rate artifact.k3Rate",
+    "clean": "run_ladder_seed per seed, conditions as above, rate 0",
+    "function": "MIL_CREDA_Benchmark.poc.k2k3_jobs",
+    "jobs": 60,
+    "order": "clean seeds ascending, then artifact seeds ascending"
+  },
+  "conditions": {
+    "contamination": "donor",
+    "per_pair_shift": 0.0,
+    "rotation_degrees": 25.0,
+    "source_bags_per_class": 4,
+    "subject_field": 0.45
+  },
+  "copiedFrom": {
+    "file": "MIL-CREDA/Results/PoC_Conditions/preregistration.json",
+    "keys": [
+      "scenario",
+      "scale",
+      "conditions",
+      "subjectField",
+      "seeds",
+      "artifact",
+      "alpha",
+      "test",
+      "hyperparameters",
+      "sigmaMultiplier",
+      "noisePairingToy"
+    ],
+    "writtenAt": "2026-11-05T14:00:09+00:00"
+  },
+  "families": {
+    "K2": {
+      "correction": "Holm over 2",
+      "ladders": [
+        "clean"
+      ],
+      "tests": {
+        "K2a": "within-class s(TGL) > 0",
+        "K2b": "s(TGL) > s(TG)"
+      }
+    },
+    "K3-ablation": {
+      "correction": "Holm over 2",
+      "ladders": [
+        "clean",
+        "artifact"
+      ],
+      "tables": "two declared tables, one per ladder, each its own Holm family",
+      "tests": {
+        "K3b": "acc(TGL) > acc(TG)",
+        "K3c": "acc(TGL) > acc(TL)"
+      }
+    },
+    "K3-aggregation": {
+      "correction": "none (alone)",
+      "ladders": [
+        "artifact"
+      ],
+      "tests": {
+        "K3a": "acc(TGL) > acc(TGL-NC) on artifact bags at rate artifact.k3Rate"
+      }
+    }
+  },
+  "gateFailureVerdict": "inconclusive (mechanism had no room)",
+  "gates": {
+    "K2b": {
+      "arm": "TGL",
+      "partnerKernelRankMedianAtLeast": 0.5,
+      "partnerKernelRankReading": "start",
+      "piEntropyRatioMedianBelow": 0.9
+    },
+    "K3b": {
+      "arm": "TGL",
+      "partnerKernelRankMedianAtLeast": 0.5,
+      "partnerKernelRankReading": "start",
+      "piEntropyRatioMedianBelow": 0.9
+    },
+    "K3c": {
+      "arm": "TGL",
+      "routingErrorRateMedianAtLeast": 0.05
+    },
+    "readOn": "the same ladder (clean or artifact) the test is read on"
+  },
+  "hyperparameters": {
+    "attentionGamma": 0.8633557574655063,
+    "attentionTemperature": 0.42588932435340904,
+    "dim": 64,
+    "kernelSigma": 36.135014304860874,
+    "lr1": 0.015290622066240019,
+    "lr2": 0.0026420508173972492,
+    "tauLocal": 0.27466369735257745,
+    "weightDecay1": 6.277218548234598e-07,
+    "weightDecay2": 1.5227262701506252e-06
+  },
+  "measurements": {
+    "acc": "targetAccuracy, target test role",
+    "partnerKernelRank": "fraction of target train bags whose own partner is the kappa^B-nearest same-class source train bag, at the start of phase 2 (encoder after phase 1, before any target update)",
+    "partnerKernelRankEnd": "the same fraction at the end of phase 2",
+    "piEntropyRatio": "per arm (TGL, TL, TG): mean over phase-2 steps and the step's target bags of H(pi_{ji|c}) / log(k), c the bag's pseudo-label, pi_{ji|c} Eq. (34) over the step's k same-class source bags, from the local term's own kernel pairs",
+    "routingErrorRate": "fraction of target train bags whose argmax pseudo-label under the phase-1 head and encoder (start of phase 2) is wrong",
+    "s": "partner separation within class (partner.separationWithin), target test role"
+  },
+  "noisePairingToy": [
+    1,
+    2,
+    0
+  ],
+  "purpose": "K2 and K3 re-read with pre-registered gating measurements (odd/tasks/pipeline-phase-review.md L115, L122): the ladder only, clean and artifact material, with pi entropy, kernel-space partner rank and routing error rate measured per arm.",
+  "rule": "A test whose gate holds is supported iff its Holm-adjusted p < alpha (K3a: raw p), else not supported. A test whose gate fails is reported 'inconclusive (mechanism had no room)', never 'not supported'. K2a and K3a carry no gate.",
+  "run": 4,
+  "scale": {
+    "bagsPerClass": 39,
+    "name": "conditions",
+    "pointsPerDomain": 5850,
+    "split": {
+      "test": 18,
+      "train": 16,
+      "valid": 5
+    }
+  },
+  "scenario": {
+    "backbone": "mlp",
+    "family": "rollo",
+    "scale": "full"
+  },
+  "seeds": [
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39
+  ],
+  "sigmaMultiplier": 0.5,
+  "statistic": "Wilcoxon signed-rank, one-sided greater, paired over the 30 seeds",
+  "subjectField": {
+    "fractionOfSmallestBandGap": 0.45,
+    "periods": 3
+  },
+  "test": "Wilcoxon signed-rank, one-sided greater, zero_method=wilcox; rank-biserial; Hodges-Lehmann with Wilcoxon 95% CI",
+  "writtenAt": "2026-11-05T20:08:59+00:00"
+}

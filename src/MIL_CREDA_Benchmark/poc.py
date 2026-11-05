@@ -43,7 +43,7 @@ from scipy import stats
 
 from MIL_CREDA.attention import bag_embedding
 from MIL_CREDA.bag_kernel import bag_kernel, bag_kernel_matrix
-from MIL_CREDA.local_term import total_correspondence
+from MIL_CREDA.local_term import class_correspondence, total_correspondence
 from MIL_CREDA_Benchmark import bags, config, harness, toy_bags, toy_run, wiring
 
 #: The one scenario this battery runs (L96: "rollo + mlp BatchNorm").
@@ -583,6 +583,106 @@ def partner_reading(model, material: dict, device: torch.device) -> dict:
             "probeBags": int(len(t_pos))}
 
 
+# ------------------------------------------------------- run 4's gating readings
+
+def entropy_ratio(pi: torch.Tensor) -> float:
+    """H(pi) / log(k) for one distribution over k bags: 1 uniform, 0 one-hot.
+
+    Undefined (nan) for k = 1, where there is no choice to spread over.
+    """
+    p = pi.detach().double().reshape(-1)
+    if p.numel() < 2:
+        return float("nan")
+    nonzero = p[p > 0]
+    return float(-(nonzero * nonzero.log()).sum() / math.log(p.numel()))
+
+
+@contextlib.contextmanager
+def pi_entropy_recorder(model):
+    """Record, for every phase-2 step, the entropy ratio of Eq. (34)'s
+    pi_{ji|c} of each target bag of the step, c its pseudo-label (Eq. 22).
+
+    Read from the local term's OWN material, never a second forward: inside
+    `_milcreda_term` the step's `bags_of` and `_kernel_pairs` outputs are
+    captured as the method builds them, then `bag_kernel_matrix` gives K_st at
+    the frozen width and `class_correspondence` (the function
+    `total_correspondence` calls) gives pi_{ji|c} -- for an arm whose local
+    term is off (TG) too, which is the comparison. Nothing captured is
+    trained on, so the step's objective is untouched. Yields the list the
+    per-step means are appended to.
+    """
+    ratios: list[float] = []
+    original = model._milcreda_term
+
+    def recorded(H_s, source_labels, target_bags):
+        bags_seen, kernel_seen = [], []
+        bags_of, kernel_pairs = model.bags_of, model._kernel_pairs
+        model.bags_of = lambda *a: bags_seen.append(bags_of(*a)) or bags_seen[-1]
+        model._kernel_pairs = (lambda pairs: kernel_seen.append(kernel_pairs(pairs))
+                               or kernel_seen[-1])
+        try:
+            result = original(H_s, source_labels, target_bags)
+        finally:
+            del model.bags_of, model._kernel_pairs
+        (_, bags_t), (kernel_s, kernel_t) = bags_seen, kernel_seen
+        with torch.no_grad():
+            detach = lambda pairs: [(H.detach(), w.detach()) for H, w in pairs]
+            K_st = bag_kernel_matrix(detach(kernel_s), detach(kernel_t), model.sigma)
+            Z_t = torch.stack([bag_embedding(H, w) for H, w in detach(bags_t)])
+            pseudo = model.head(Z_t).argmax(dim=1)
+            step = []
+            for j in range(len(bags_t)):
+                members = torch.nonzero(source_labels == pseudo[j],
+                                        as_tuple=False).reshape(-1)
+                if members.numel() == 0:
+                    continue
+                pi = class_correspondence(K_st[:, j], members, model.tau_local)
+                step.append(entropy_ratio(pi))
+            if step:
+                ratios.append(float(np.nanmean(step)))
+        return result
+
+    model._milcreda_term = recorded
+    try:
+        yield ratios
+    finally:
+        del model._milcreda_term
+
+
+@torch.no_grad()
+def partner_kernel_rank(model, material: dict, device: torch.device) -> dict:
+    """On the TRAIN roles (where the local term acts), in `eval`:
+
+    - `partnerKernelRank`: the fraction of target bags whose own partner (same
+      class, same band index) is the kappa^B-nearest same-class source bag,
+      kappa^B (Eq. 18) at the model's frozen width through the kernel view
+      the local term reads (`_kernel_bags`);
+    - `routingErrorRate`: the fraction of target bags whose argmax
+      pseudo-label under the model's head is wrong.
+    """
+    source, target = material["source"], material["target"]
+    s_pos, t_pos = source.train_idx, target.train_idx
+    per_class = config.BAGS_PER_CLASS
+    s_labels, t_labels = source.labels[s_pos], target.labels[t_pos]
+    s_index, t_index = s_pos % per_class, t_pos % per_class
+    model.eval()
+    pairs_s, _ = _kernel_bags(model, source, s_pos, "source", device)
+    pairs_t, Z_t = _kernel_bags(model, target, t_pos, "target", device)
+    K_st = bag_kernel_matrix(pairs_s, pairs_t, model.sigma).cpu()
+    pseudo = model.head(Z_t).argmax(dim=1).cpu()
+    toy_run.set_phase_two_modes(model)
+    hits = []
+    for j in range(len(t_pos)):
+        same = torch.nonzero(s_labels == t_labels[j], as_tuple=False).reshape(-1)
+        own = same[s_index[same] == t_index[j]]
+        if own.numel() == 0:
+            continue
+        hits.append(float(same[K_st[same, j].argmax()] == own[0]))
+    return {"partnerKernelRank": float(np.mean(hits)) if hits else float("nan"),
+            "routingErrorRate": float((pseudo != t_labels).double().mean()),
+            "rankedBags": len(hits)}
+
+
 # ----------------------------------------------------------- one seed's runs
 
 def _device() -> torch.device:
@@ -590,8 +690,14 @@ def _device() -> torch.device:
 
 
 def _two_phases(arm, material, familia, scale, hyper, device, seed,
-                phase_one=None, source_bags_per_class: int = 1):
-    """Phase 1 (unless handed one), phase 2, evaluation; returns the model."""
+                phase_one=None, source_bags_per_class: int = 1,
+                gating: bool = False):
+    """Phase 1 (unless handed one), phase 2, evaluation; returns the model.
+
+    `gating` adds run 4's readings under `record["gating"]`: the partner rank
+    and routing error before phase 2 moves anything, the pi entropy over its
+    steps, and the partner rank again at its end.
+    """
     source_train, source_valid, source_test = bags.roles(material["source"])
     if phase_one is None:
         model_source, _ = phase_one_model(arm, material, scale, hyper, device, seed)
@@ -603,19 +709,31 @@ def _two_phases(arm, material, familia, scale, hyper, device, seed,
                                      device, seed)
     floor = target_test_accuracy(model, material, device)
     adabn = adabn_control_accuracy(model, material, device)
-    p2 = train_phase_two(model, source_train, scale, hyper,
-                         torch.Generator().manual_seed(seed + 2), device,
-                         source_bags_per_class)
+    start = partner_kernel_rank(model, material, device) if gating else None
+    with (pi_entropy_recorder(model) if gating else contextlib.nullcontext()) as ratios:
+        p2 = train_phase_two(model, source_train, scale, hyper,
+                             torch.Generator().manual_seed(seed + 2), device,
+                             source_bags_per_class)
     record = {"phaseOne": p1, "phaseTwo": p2, "sigmaPhaseTwo": sigma,
               "sourceOnlyTargetAccuracy": floor, "adabnTargetAccuracy": adabn,
               "targetAccuracy": target_test_accuracy(model, material, device),
               "sourceAccuracy": harness.accuracy(model, source_test, device)}
+    if gating:
+        end = partner_kernel_rank(model, material, device)
+        record["gating"] = {
+            "piEntropyRatio": float(np.nanmean(ratios)) if ratios else float("nan"),
+            "piSteps": len(ratios),
+            "partnerKernelRank": start["partnerKernelRank"],
+            "partnerKernelRankEnd": end["partnerKernelRank"],
+            "routingErrorRate": start["routingErrorRate"],
+            "rankedBags": start["rankedBags"]}
     toy_run.set_phase_two_modes(model)
     return model, record, phase_one
 
 
 def run_ladder_seed(seed: int, scale=SCALE, per_pair_shift: float = 0.0,
-                    conditions: Conditions | None = None, rate: float = 0.0) -> dict:
+                    conditions: Conditions | None = None, rate: float = 0.0,
+                    gating: bool = True) -> dict:
     """H-task, K2 and K3 for one seed on clean material.
 
     TGL, TG and TL share ONE phase-1 checkpoint (the protocol: phase 1 has no
@@ -626,6 +744,8 @@ def run_ladder_seed(seed: int, scale=SCALE, per_pair_shift: float = 0.0,
     `per_pair_shift` adds the per-pair target shift to the draw (off by default).
     `conditions` (run 3) replaces it with a whole `Conditions`; `rate` > 0 runs
     the ladder on material contaminated in `conditions.contamination` mode.
+    `gating` adds run 4's readings to TGL, TG and TL (`_two_phases`); they
+    are read beside training and change no other key or value.
     """
     conditions = conditions or Conditions(per_pair_shift=per_pair_shift)
     k = conditions.source_bags_per_class
@@ -641,7 +761,8 @@ def run_ladder_seed(seed: int, scale=SCALE, per_pair_shift: float = 0.0,
         shared = None
         for arm in ("TGL", "TG", "TL"):
             model, record, shared = _two_phases(arm, material, familia, scale,
-                                                hyper, device, seed, shared, k)
+                                                hyper, device, seed, shared, k,
+                                                gating=gating)
             if arm in ("TGL", "TG"):
                 record["partner"] = partner_reading(model, material, device)
             out["arms"][arm] = record
@@ -746,6 +867,22 @@ def battery_jobs(prereg: dict) -> list[tuple]:
                  for s in seeds]
         jobs += [("run_contamination_seed", (s, r), {"scale": scale, "conditions": artifact})
                  for s in seeds]
+    return jobs
+
+
+def k2k3_jobs(prereg: dict) -> list[tuple]:
+    """Run 4's battery: the clean ladder per seed, then the artifact ladder per
+    seed at the declared `k3Rate`, each carrying `gating=True` -- which also
+    keeps their cache keys apart from run 3's ladder jobs."""
+    scale = CONDITIONS_SCALE
+    clean = Conditions(**prereg["conditions"])
+    artifact = dataclasses.replace(clean, contamination="artifact")
+    rate = prereg["artifact"]["k3Rate"]
+    jobs = [("run_ladder_seed", (s,), {"scale": scale, "conditions": clean,
+                                        "gating": True}) for s in prereg["seeds"]]
+    jobs += [("run_ladder_seed", (s,), {"scale": scale, "conditions": artifact,
+                                        "rate": rate, "gating": True})
+             for s in prereg["seeds"]]
     return jobs
 
 

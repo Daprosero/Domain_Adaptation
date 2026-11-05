@@ -1,0 +1,62 @@
+\documentclass[border=2pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,shapes.misc,shapes.geometric,positioning,fit,backgrounds,calc}
+\renewcommand{\familydefault}{\sfdefault}
+\hyphenpenalty=10000 \exhyphenpenalty=10000
+\newcommand{\psClaimFont}{\fontsize{8.80}{10.56}\selectfont\bfseries}
+\newcommand{\psSpineFont}{\fontsize{8.20}{9.84}\selectfont}
+\newcommand{\psFocalFont}{\fontsize{8.20}{9.84}\selectfont\bfseries}
+\newcommand{\psNoteFont}{\fontsize{7.60}{9.12}\selectfont}
+\definecolor{psCanvas}{HTML}{F7F3E8}
+\definecolor{psInk}{HTML}{20252B}
+\definecolor{psCool}{HTML}{4F7CAC}
+\definecolor{psWarm}{HTML}{E09F3E}
+\definecolor{psAlert}{HTML}{D96855}
+\tikzset{
+  ps base/.style={align=center, text=psInk, font=\psSpineFont, inner sep=4pt},
+  ps operator/.style={ps base, rectangle, rounded corners=3pt, draw=psCool,
+    fill=psCool!14, line width=1.5pt},
+  ps state/.style={ps base, rectangle, rounded corners=8pt, draw=psInk!60, fill=psInk!7,
+    line width=1.3pt},
+  ps focal/.style={ps base, rectangle, rounded corners=5pt, draw=psAlert, fill=psWarm!32,
+    line width=1.8pt, font=\psFocalFont},
+  ps evidence/.style={ps base, rectangle, draw=psInk!45, fill=white,
+    line width=1.3pt, font=\psNoteFont},
+  ps context/.style={ps base, font=\psNoteFont, text=psInk!75, align=left, inner sep=2pt},
+  ps group/.style={rectangle, rounded corners=6pt, fill=psCool!7, draw=psCool!30,
+    line width=0.8pt, inner sep=5pt},
+  ps claim/.style={font=\psClaimFont, text=psInk, align=left, inner sep=0pt},
+  ps primary/.style={draw=psInk, line width=1.9pt, -{Stealth[length=3.0mm, width=2.6mm]}},
+  ps secondary/.style={draw=psInk!50, line width=1.4pt, -{Stealth[length=2.4mm, width=2.1mm]}},
+  ps data/.style={},
+  ps supervision/.style={dash pattern=on 5pt off 3pt},
+  ps feedback/.style={bend left=40},
+  ps inhibition/.style={-{Bar[width=3.4mm]}},
+  ps edge label/.style={font=\psNoteFont, text=psInk!80, fill=white, inner sep=1.5pt},
+}
+\begin{document}
+\begin{tikzpicture}
+% figure claim: On the rollo toy set, each MIL-CREDA term is switched on one at a time under the conditions it needs, so every hypothesis gets its own pre-registered verdict
+% printed width: 345.0pt of a 10pt body (main.tex:fallback); fonts {'claim': 8.8, 'spine': 8.2, 'note': 7.6}
+\node[ps state, text width=1.55cm, minimum height=2.08cm, anchor=center] (data) at (0.95,0.00) {Rollo toy set, 25 deg shift};
+\node[ps operator, text width=1.55cm, minimum height=2.08cm, anchor=center] (conditions) at (3.45,0.00) {Subject shift, 4 bags per class};
+\node[ps focal, text width=1.55cm, minimum height=2.08cm, anchor=center] (ladder) at (5.96,0.00) {Arm ladder: TG, TL, TGL, no consensus};
+\node[ps operator, text width=1.55cm, minimum height=2.08cm, anchor=center] (tests) at (8.46,0.00) {Wilcoxon over 30 seeds, Holm};
+\node[ps state, text width=1.55cm, minimum height=2.08cm, anchor=center] (verdicts) at (10.96,0.00) {One verdict per hypothesis};
+\node[ps evidence, text width=1.55cm, anchor=north] (k1) at (3.45,-1.94) {K1: attention on artifacts};
+\node[ps evidence, text width=1.55cm, anchor=north] (k2) at (5.96,-1.94) {K2: partner rank, pi entropy};
+\node[ps evidence, text width=1.55cm, anchor=north] (task) at (10.96,-1.94) {Task: TGL vs BN-matched floor};
+\node[ps context, text width=7.00cm, anchor=south west] (source) at (4.91,1.39) {Rules fixed before the run, protocol v55};
+\coordinate (ps top) at (current bounding box.north);
+\node[ps claim, anchor=south west, text width=11.91cm] at ($(0,0 |- ps top)+(0,0.35)$) {On the rollo toy set, each MIL-CREDA term is switched on one at a time under the conditions it needs, so every hypothesis gets its own pre-registered verdict};
+\draw[ps primary, ps data] (data.east) -- (conditions.west);
+\draw[ps primary, ps data] (conditions.east) -- (ladder.west);
+\draw[ps primary, ps data] (ladder.east) -- (tests.west);
+\draw[ps primary, ps data] (tests.east) -- (verdicts.west);
+\draw[ps secondary, ps data] (conditions.south) -- (k1.north);
+\draw[ps secondary, ps data] (ladder.south) -- (k2.north);
+\draw[ps secondary, ps data] (verdicts.south) -- (task.north);
+\end{tikzpicture}
+\end{document}
