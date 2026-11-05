@@ -1,0 +1,10 @@
+{
+  "repository": "https://github.com/xuchengjian632/CLUDA",
+  "commit": "9c655644e9f15eadddb51de236a1afecd5944468",
+  "searched_at": "2026-11-05",
+  "license": null,
+  "tracked_files": ["Figs/main_framework.png", "README.md", "main.py", "models.py", "utils.py"],
+  "route": "Read-only audit. No license declared in pinned tree; no upstream source vendored. Independently implemented controlled bag-level variant from ingested method, protocol v54 and recorded parent rulings.",
+  "paper_doi": "10.1016/j.eswa.2024.125452",
+  "not_the_method": "Ozyurt et al. ICLR 2023 time-series CLUDA"
+}
