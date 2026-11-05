@@ -136,33 +136,27 @@ introduced. Target singletons skip updates explicitly as above. For other batche
 Loss histories average only the executed updates; missing-anchor counts sum over
 updates. The finite floor also saturates extremely low positive mass.
 
-## Registration the parent must add (not performed here)
+## Registration (integrated 2026-11-04)
 
-Phase-1 group **common**, strategy name **CLUDA**; no new phase-1 group.
+Phase-1 group **common**, strategy name **CLUDA**; no new phase-1 group. The parent
+integration took the registration this unit specified, through the paths every other
+comparator uses:
 
-```python
-# model_store.STRATEGIES: add "CLUDA" (parent removes HASD separately).
-# search.PHASE_ONE_GROUP_OF (or derive by the existing comprehension):
-PHASE_ONE_GROUP_OF["CLUDA"] = "common"
-# search.OWN_AXES: admit the sole non-generic temperature axis:
-OWN_AXES["CLUDA"] = (FloatDistribution(.01, 1., log=True),)
-# campaign.register imports / registrars map:
-from MIL_CREDA_EEG.comparators.cluda import training as cluda
-# Add "CLUDA": cluda.register to the comparator registration map.
-# cluda.register() supplies:
-search.register_phase_two("CLUDA", {
-    "contrastiveWeight": search.LOSS_WEIGHT,
-    "temperature": cluda.TEMPERATURE,
-}, cluda.train_phase_two)
-```
-
-Shared lr2/wd2 are supplied by `search.phase_two_space`, not extra axes.
-`remote_units` derives groups/strategies from shared registries; parent owns its
-remaining declarations/configs. Existing `mechanisms.load_phase_two` can load the
-common inference state and return projector keys as unused auxiliaries. For full
-auxiliary restoration AND comparator digest enforcement, use this package's
-`training.load_phase_two(path, partition_path=...)`, returning `(model, meta)`;
-do not silently re-bridge a trained target. No campaign or remote files edited.
+- `model_store.STRATEGIES` holds "CLUDA" in HASD's former slot (HASD left the
+  comparison, v54 §7.1); `mil_wrapper.COMPARATORS` lists it among the seven non-MIL
+  comparators of the common group (v54 §7.3 «CLUDA incluido»), so the existing
+  comprehension derives `search.PHASE_ONE_GROUP_OF["CLUDA"] == "common"`.
+- `search.OWN_AXES["CLUDA"] = (search.CONTRASTIVE_TEMPERATURE,)`,
+  `FloatDistribution(0.01, 1.0, log=True)` (v54 §7.7); `training.TEMPERATURE` is that
+  same object, defined once in `search` like CLUST's and CASUAL's own axes.
+- `campaign.register` maps "CLUDA" to `training.register`, which supplies
+  `contrastiveWeight` on `search.LOSS_WEIGHT` and `temperature` on `TEMPERATURE`;
+  shared lr2/wd2 come from `search.phase_two_space`.
+- `mechanisms.load_phase_two` dispatches a CLUDA model to `training.load_phase_two`
+  (full auxiliary restoration and source-digest enforcement), so every stored-model
+  reader of the campaign gets the whole `CLUDAModel` with no unloaded keys.
+- `remote_units` derives groups and strategies from these registries; a trained target
+  is never re-bridged.
 
 ## Verification and bounds (2026-11-05)
 

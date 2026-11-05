@@ -429,3 +429,34 @@ def test_an_aggregation_variant_resumes_from_its_stored_phase_one():
     with pytest.raises(mech.MechanismError, match="name"):
         mech.train_aggregation_variant(data, 0, 1, "mean", P1, P2, SCHEDULE,
                                        phase_one_record=record)
+
+
+def test_the_k3_variants_start_from_the_phase_one_checkpoint_at_its_one_seed():
+    """Secs. 4.5, 6.3: the one phase-1 checkpoint per group and outer fold is the one at
+    `search.PHASE_ONE_SEED`; a variant checks the record against that seed, not against
+    the seed it trains at."""
+    data = _data()
+    state, meta = _phase_one_record(data, seed=search.PHASE_ONE_SEED)
+    other = search.PHASE_ONE_SEED + 1
+    out = mech.train_ablation_variant(data, 0, other, (state, meta), P2, SCHEDULE,
+                                      "local term only")
+    assert out["variant"] == "local term only"
+    with pytest.raises(mech.MechanismError, match="seed"):
+        mech.train_ablation_variant(data, 0, search.PHASE_ONE_SEED,
+                                    (state, {**meta, "seed": other}), P2, SCHEDULE,
+                                    "local term only")
+    first = mech.train_aggregation_variant(data, 0, search.PHASE_ONE_SEED,
+                                           "own without consensus", P1, P2, SCHEDULE)
+    checkpoint = first["phase1"]["checkpoint"]
+    record = (checkpoint["state"], {"phase": 1, "name": "MIL-CREDA [own without consensus]",
+                                    "transfer": data.transfer.name, "rotation": 0,
+                                    "seed": search.PHASE_ONE_SEED,
+                                    "sigma": checkpoint["sigma"], "hyper": first["hyper"]})
+    again = mech.train_aggregation_variant(data, 0, other, "own without consensus", P1, P2,
+                                           SCHEDULE, phase_one_record=record)
+    assert again["phase1"] is None
+    with pytest.raises(mech.MechanismError, match="seed"):
+        mech.train_aggregation_variant(data, 0, search.PHASE_ONE_SEED, "own without consensus",
+                                       P1, P2, SCHEDULE,
+                                       phase_one_record=(record[0], {**record[1],
+                                                                     "seed": other}))

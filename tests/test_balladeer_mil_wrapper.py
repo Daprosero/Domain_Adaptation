@@ -70,10 +70,10 @@ def test_the_common_wrapper_fixes_gamma_and_temperature():
         mil_wrapper.CommonMILModel(3, 2, attention_gamma=0.5)
 
 
-def test_the_common_wrapper_is_the_phase_one_architecture_of_the_six_non_mil_comparators():
+def test_the_common_wrapper_is_the_phase_one_architecture_of_the_seven_non_mil_comparators():
     assert mil_wrapper.GROUP == "common"
     assert mil_wrapper.COMPARATORS == ("UDA-DDA", "CCA-LSC", "CASUAL", "COT", "CS+CCS",
-                                       "CLUST — variante source-free")
+                                       "CLUST — variante source-free", "CLUDA")
     torch.manual_seed(0)
     model = mil_wrapper.CommonMILModel(3, 2)
     g = torch.Generator().manual_seed(1)

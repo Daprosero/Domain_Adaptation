@@ -7,15 +7,19 @@ measured result.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import inspect
 import json
+import shutil
 from pathlib import Path
 
 import optuna
 import pytest
 import torch
+from optuna.distributions import FloatDistribution
 
 from MIL_CREDA_EEG import aggregation_variants, campaign, controls, mechanisms, model_store
+from MIL_CREDA_EEG import mil_wrapper
 from MIL_CREDA_EEG import partition
 from MIL_CREDA_EEG import results
 from MIL_CREDA_EEG import search, two_phase
@@ -40,7 +44,7 @@ def registries():
 
 
 def _rehearsal(tmp, conditions=("L1", "L6"), arm="level",
-               strategies=("MIL-CREDA", "COT", "HASD")):
+               strategies=("MIL-CREDA", "COT", "AdaptMIL")):
     cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24,
                                        conditions=conditions, arm=arm)
     cfg.update({"strategies": list(strategies), "nTrials": 1, "reportSeeds": [1],
@@ -300,7 +304,7 @@ def test_stale_predictions_are_refused_naming_what_differs(tmp_path, monkeypatch
 
 
 def test_every_changed_module_answers_to_one_plan_revision():
-    assert campaign.REVISION.endswith("v50.md")
+    assert campaign.REVISION.endswith("v54.md")
     for module in (search, results, model_store):
         assert module.__provenance__["revision"] == campaign.REVISION
 
@@ -331,7 +335,7 @@ def test_the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation
     models = product / "Models" / "Balladeer"
     for transfer in ("L1-to-L6", "L6-to-L1"):
         for r in range(4):
-            for name in ("phase1__common", "phase1__HASD", "phase1__MIL-CREDA"):
+            for name in ("phase1__common", "phase1__AdaptMIL", "phase1__MIL-CREDA"):
                 assert (models / transfer / f"rotation{r}" / "seed1" / f"{name}.pt").exists()
                 assert not (models / transfer / f"rotation{r}" / "seed0" / f"{name}.pt").exists()
             assert (models / transfer / f"rotation{r}" / "seed1" / "phase2__COT.pt").exists()
@@ -339,8 +343,8 @@ def test_the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation
     records = results.read_predictions(product / "Results", "A-nivel")
     assert {r["seed"] for r in records} == {1}
     strategies = {r["strategy"] for r in records}
-    assert strategies == {"MIL-CREDA", "COT", "HASD", "source-only:common",
-                          "source-only:HASD", "source-only:MIL-CREDA", "upper-bound"}
+    assert strategies == {"MIL-CREDA", "COT", "AdaptMIL", "source-only:common",
+                          "source-only:AdaptMIL", "source-only:MIL-CREDA", "upper-bound"}
     st.check_once(records)
     for transfer in ("L1->L6", "L6->L1"):
         for r in range(4):
@@ -366,7 +370,8 @@ def test_the_device_arm_source_only_controls_are_never_numbers(tmp_path, registr
     records = results.read_predictions(product / "Results", "C-dispositivo")
     assert {r["strategy"] for r in records} == {"MIL-CREDA"}
     table = (product / "Results" / "C-dispositivo" / "tables" / "comparison.md").read_text()
-    assert table.count(controls.NA_RECORD) == 4 * 3
+    # v54 Sec. 5.3: three source-only rows (one per phase-1 group), three columns each
+    assert table.count(controls.NA_RECORD) == 3 * 3
 
 
 def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
@@ -387,7 +392,8 @@ def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
     rows = json.loads((root / "significance_A-nivel.json").read_text())
     rivals = {r["comparison"].split(" vs ")[1] for r in rows
               if r["test"] == st.TEST_BOOTSTRAP}
-    assert rivals == {"COT", "HASD", "Source only, common attention", "Source only, HASD",
+    assert rivals == {"COT", "AdaptMIL", "Source only, common attention",
+                      "Source only, AdaptMIL",
                       "Source only, MIL-CREDA"}
     assert all("holm" in r["correction"] for r in rows if r["test"] == st.TEST_BOOTSTRAP)
     # v44 Sec. 4.6: primary and secondary families, Holm within each metric; no row of the
@@ -410,7 +416,7 @@ def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
     references = {r["comparison"].split(", ", 1)[1] for r in k1
                   if r.get("criterion", "").startswith("none (reference")}
     assert references == {"MIL-CREDA [published attention]", "MIL-CREDA [gated attention]",
-                          "common attention [COT]", "HASD"}
+                          "common attention [COT]", "AdaptMIL"}
     assert not any("mean" in r["comparison"] or "band" in r["comparison"] for r in k1)
     k1_summary = json.loads((root / "K1-atencion" / "summary.json").read_text())
     assert k1_summary["excluded"] == mechanisms.K1_EXCLUDED
@@ -586,7 +592,7 @@ def test_one_phase_one_checkpoint_per_group_and_outer_fold(level_run):
     group_files = {f"phase1__{model_store.name_slug(g)}.pt" for g in model_store.GROUPS}
     stored = sorted(p.relative_to(models).as_posix() for p in models.rglob("phase1__*.pt")
                     if p.name in group_files)        # the K3 variants store their own
-    groups = ("common", "HASD", "MIL-CREDA")          # the groups COT, HASD, MIL-CREDA use
+    groups = ("common", "AdaptMIL", "MIL-CREDA")      # the groups COT, AdaptMIL, MIL-CREDA use
     assert stored == sorted(f"{t}/rotation{r}/seed{s}/phase1__{g}.pt"
                             for t in ("L1-to-L6", "L6-to-L1") for r in range(4)
                             for s in (search.PHASE_ONE_SEED,) for g in groups)
@@ -690,7 +696,7 @@ def label_free_run(tmp_path_factory, registries):
 
     tmp = tmp_path_factory.mktemp("label-free")
     cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24)
-    cfg.update({"strategies": ["MIL-CREDA", "HASD"], "nTrials": 2, "bootstrapResamples": 200,
+    cfg.update({"strategies": ["MIL-CREDA", "AdaptMIL"], "nTrials": 2, "bootstrapResamples": 200,
                 "schedule": {"epochs1": 3, "epochs2": 4, "bagsPerStep": 4}})
     product = tmp / "product"
     product.mkdir()
@@ -793,3 +799,100 @@ def test_the_test_train_ratio_counts_the_refit_training_subjects():
         test = sum(1 for x in (a, b) for s in x.subjects("target") if folds[s] == r)
         expected.append(test / sum(1 for s in folds if folds[s] != r) / 2)
     assert campaign.test_train_ratio(a, b) == pytest.approx(sum(expected) / 4)
+
+
+# ------------------------------------------------------------------ the v54 comparator set
+
+#: Plan v54, Sec. 7.1: the eight comparators and MIL-CREDA (HASD left the comparison).
+V54_STRATEGIES = {"AdaptMIL", "UDA-DDA", "CS+CCS", "CASUAL", "CCA-LSC", "COT",
+                  "CLUST — variante source-free", "CLUDA", "MIL-CREDA"}
+
+
+def test_the_comparison_is_the_v54_set_and_hasd_is_an_unknown_strategy():
+    """Plan v54, Secs. 7.1, 7.3, 7.5: nine strategies, three phase-1 groups, CLUDA in the
+    common group, HASD in no strategy list and refused as unknown."""
+    assert set(model_store.STRATEGIES) == V54_STRATEGIES and len(model_store.STRATEGIES) == 9
+    assert model_store.STRATEGIES[-1] == "MIL-CREDA"
+    assert model_store.GROUPS == ("common", "AdaptMIL", "MIL-CREDA")
+    assert set(search.PHASE_ONE_SPACES) == set(model_store.GROUPS)
+    assert set(search.PHASE_ONE_GROUP_OF) == V54_STRATEGIES
+    assert search.PHASE_ONE_GROUP_OF["CLUDA"] == "common"
+    assert "CLUDA" in mil_wrapper.COMPARATORS and len(mil_wrapper.COMPARATORS) == 7
+    assert controls.MATCHED_GROUPS == ("AdaptMIL", "MIL-CREDA")
+    assert set(results.SOURCE_ONLY) == {"source-only:common", "source-only:AdaptMIL",
+                                        "source-only:MIL-CREDA"}
+    assert results.own_control("CLUDA") == "source-only:common"
+    for listed in (model_store.STRATEGIES, model_store.GROUPS, search.PHASE_ONE_SPACES,
+                   search.PHASE_ONE_GROUP_OF, mil_wrapper.COMPARATORS,
+                   controls.MATCHED_GROUPS, results.METHOD_ROWS):
+        assert "HASD" not in listed
+    with pytest.raises(campaign.CampaignError, match="strategies are among"):
+        campaign.check_config({**BASE, "strategies": ["MIL-CREDA", "HASD"]})
+    assert importlib.util.find_spec("MIL_CREDA_EEG.comparators.hasd") is None
+
+
+def test_cluda_registers_through_the_campaign_with_its_own_axis(registries, monkeypatch):
+    """Plan v54, Sec. 7.7: CLUDA searches the generic contrastive weight and its own
+    temperature axis, log-uniform in [0.01, 1]."""
+    from MIL_CREDA_EEG.comparators.cluda import training as cluda
+    assert search.OWN_AXES["CLUDA"] == (FloatDistribution(0.01, 1.0, log=True),)
+    assert search.OWN_AXES["CLUDA"] == (cluda.TEMPERATURE,)
+    monkeypatch.delitem(search.PHASE_TWO_TRAINERS, "CLUDA", raising=False)
+    campaign.register(["MIL-CREDA", "CLUDA"])
+    assert search.PHASE_TWO_TRAINERS["CLUDA"] is cluda.train_phase_two
+    assert search.phase_two_space("CLUDA") == {**search.SHARED_PHASE_TWO,
+                                               "contrastiveWeight": search.LOSS_WEIGHT,
+                                               "temperature": cluda.TEMPERATURE}
+
+
+def test_cluda_runs_through_the_campaign_and_loads_back_whole(tmp_path, registries):
+    """Plan v54, Secs. 7.3, 7.4: CLUDA's phase 2 starts from the common group's checkpoint,
+    its final models are stored, and loading one restores its projector and checks the
+    comparator's source digest."""
+    from MIL_CREDA_EEG.comparators.cluda.model import CLUDAModel
+    cfg, product, outcome = _rehearsal(tmp_path, strategies=("MIL-CREDA", "CLUDA"))
+    records = results.read_predictions(product / "Results", "A-nivel")
+    assert {r["strategy"] for r in records} == {"MIL-CREDA", "CLUDA", "source-only:common",
+                                                "source-only:MIL-CREDA", "upper-bound"}
+    assert outcome["final"]["trained_phase2"] == 2 * 4 * 2
+    path = (product / "Models" / "Balladeer" / "L1-to-L6" / "rotation0" / "seed1"
+            / "phase2__CLUDA.pt")
+    model, meta, extra = mechanisms.load_phase_two(path, partition_path=cfg["partitionPath"])
+    assert isinstance(model, CLUDAModel) and meta["name"] == "CLUDA" and extra == []
+    assert meta["phaseOneCheckpoint"]["name"] == "common"
+    stored = torch.load(path, weights_only=True)
+    assert all(torch.equal(v, stored[k]) for k, v in model.state_dict().items()
+               if k.startswith("projector."))
+
+
+def test_the_final_step_refuses_a_missing_phase_one_checkpoint(level_run, registries,
+                                                               tmp_path):
+    """Secs. 4.5, 7.3: the final step refits phase 2 from the stored phase-1 checkpoint its
+    study started from; a missing one is refused, never trained again."""
+    cfg, product, _ = level_run
+    copy = tmp_path / "product"
+    shutil.copytree(product, copy)
+    gone = (copy / "Models" / "Balladeer" / "L1-to-L6" / "rotation0"
+            / f"seed{search.PHASE_ONE_SEED}" / "phase1__common.pt")
+    gone.unlink()
+    gone.with_suffix(".json").unlink()
+    before = results.read_predictions(copy / "Results", "A-nivel")
+    with pytest.raises(campaign.CampaignError, match="phase-1 checkpoint") as refused:
+        campaign.run_final(campaign.check_config(cfg), copy)
+    assert "search step" in str(refused.value)
+    assert not gone.exists() and not gone.with_suffix(".json").exists()
+    assert results.read_predictions(copy / "Results", "A-nivel") == before
+
+
+def test_a_phase_two_study_from_another_checkpoint_names_the_study_to_remove(level_run):
+    """Sec. 4.5: the refusal's remedy says the stale phase-2 study must be removed, since
+    the search step would refuse to continue it under another identity."""
+    cfg, product, _ = level_run
+    cfg = campaign.check_config(cfg)
+    transfer = campaign.transfers_of(cfg)[0]
+    data = search.search_data(transfer, campaign.load_bags(cfg))
+    state, meta = campaign._phase_one_record(product, data, "common", 0, cfg)
+    other = (state, {**meta, "state_sha256": "0" * 64})
+    with pytest.raises(campaign.CampaignError, match="remove") as refused:
+        campaign._check_started_from(product, data, "COT", 0, other, cfg)
+    assert str(search.study_path(product, transfer, 2, "COT", 0)) in str(refused.value)

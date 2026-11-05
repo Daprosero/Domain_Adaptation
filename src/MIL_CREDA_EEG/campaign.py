@@ -1,6 +1,6 @@
 """The campaign: the plan's declared steps, wired to runnable local commands.
 
-Experiments plan v50, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
+Experiments plan v54, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
 The steps, in order (`STEPS`), each one a subcommand of
 `python -m MIL_CREDA_EEG.campaign <step> --config <file> [--product <dir>]`:
 
@@ -139,7 +139,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.mil_wrapper import COMPARATORS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.2", "4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3", "7.3",
                  "7.5", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
@@ -289,17 +289,18 @@ def core_transfers(cfg: Mapping, product: Path) -> dict[str, list[str]]:
 
 def register(strategies: Sequence[str]) -> None:
     """Each comparator's own explicit registration (it changes global search state)."""
-    from MIL_CREDA_EEG.comparators import adaptmil, clust, hasd
+    from MIL_CREDA_EEG.comparators import adaptmil, clust
     from MIL_CREDA_EEG.comparators.casual import training as casual
     from MIL_CREDA_EEG.comparators.cca_lsc import training as cca_lsc
+    from MIL_CREDA_EEG.comparators.cluda import training as cluda
     from MIL_CREDA_EEG.comparators.cot import training as cot
     from MIL_CREDA_EEG.comparators.cs_ccs import training as cs_ccs
     from MIL_CREDA_EEG.comparators.uda_dda import training as uda_dda
     registrars = {
-        "AdaptMIL": adaptmil.register, "HASD": hasd.register, "COT": cot.register,
+        "AdaptMIL": adaptmil.register, "COT": cot.register,
         "CCA-LSC": cca_lsc.register, "UDA-DDA": uda_dda.register, "CS+CCS": cs_ccs.register,
         "CLUST — variante source-free": clust.register,
-        "CASUAL": casual.register,
+        "CASUAL": casual.register, "CLUDA": cluda.register,
     }
     for s in strategies:
         if s != "MIL-CREDA" and s not in search.PHASE_TWO_TRAINERS:
@@ -456,6 +457,24 @@ def _phase_one_checkpoint(group: str, data: search.SearchData, rotation: int,
     return path, trained["result"]["history"]
 
 
+def _stored_phase_one_checkpoint(group: str, data: search.SearchData, rotation: int,
+                                 selection: Mapping, cfg: Mapping, product: Path) -> Path:
+    """The final step's phase-1 checkpoint of `group` and outer fold `rotation`: the one the
+    search step stored and its phase-2 studies started from (Secs. 4.5, 7.3). It is reused
+    under the selection in force and never trained here: a missing one is refused."""
+    path = model_store.model_path(_models(product), data.transfer, rotation,
+                                  search.PHASE_ONE_SEED, 1, group)
+    if not path.exists():
+        raise CampaignError(f"{data.transfer.name} r{rotation}: no stored {group} phase-1 "
+                            f"checkpoint at {path}; the final step refits phase 2 from the "
+                            f"checkpoint its study started from and never trains one: run "
+                            f"the search step")
+    schedule = search.refit_schedule(cfg["schedule"], 1, selection["epochs"])
+    hyper = search.phase_one_hyper(group, selection["params"], schedule)
+    stored = {k: hyper[k] for k in (*two_phase.PHASE_ONE_KEYS, *two_phase.SCHEDULE_KEYS)}
+    return _reuse(path, identity(data.partition_sha256), hyper=stored)
+
+
 def _phase_one_record(product: Path, data: search.SearchData, group: str, rotation: int,
                       cfg: Mapping):
     """The one stored phase-1 checkpoint (state, meta) of `group` and outer fold `rotation`."""
@@ -472,10 +491,11 @@ def _check_started_from(product: Path, data: search.SearchData, strategy: str, r
     stored = study.user_attrs.get("phaseOneCheckpoint")
     current = search.phase_one_checkpoint_identity(record[1])
     if stored != current:
+        path = search.study_path(product, data.transfer, 2, strategy, rotation)
         raise CampaignError(f"{data.transfer.name} r{rotation}: the {strategy} phase-2 study "
                             f"started from phase-1 checkpoint {stored!r} and the stored one is "
-                            f"{current!r}; phase 2 is refit from the same checkpoint: run "
-                            f"the search step again")
+                            f"{current!r}; phase 2 is refit from the same checkpoint: remove "
+                            f"the stale phase-2 study {path} and run the search step again")
 
 
 def _measured(record: Mapping) -> dict:
@@ -639,14 +659,13 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
         done = _predicted(product, experiment, current)
         done_free = _predicted(product, experiment, current, "label-free")
         free_root = _models(product) / LABEL_FREE_MODELS
+        # every checkpoint is checked before this transfer trains or records anything
+        stored_one = {r: {g: _stored_phase_one_checkpoint(g, data, r, best_one[g][r], cfg,
+                                                          product) for g in best_one}
+                      for r in sorted(data.rotations)}
         for r in sorted(data.rotations):
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
-            checkpoints = {}
-            for group in best_one:
-                path, history = _phase_one_checkpoint(group, data, r, best_one[group][r], cfg,
-                                                      product)
-                checkpoints[group] = path
-                counts["trained_phase1"] += bool(history)
+            checkpoints = stored_one[r]
             records = {}
             for seed in cfg["reportSeeds"]:
                 out, out_free = [], []
@@ -724,7 +743,7 @@ def _assignments(cfg: Mapping, bags: bag_data.BagSet) -> dict[str, assignment_mo
 def test_train_ratio(a: assignment_mod.Assignment, b: assignment_mod.Assignment) -> float:
     """Per rotation, target-test over training subjects summed over both directions; mean.
 
-    The training subjects are the refit's (plan v50, Sec. 4.5): every non-test fold."""
+    The training subjects are the refit's (plan v54, Sec. 4.5): every non-test fold."""
     ratios = []
     for r in sorted(a.rotations, key=int):
         views = [x.rotation(int(r)) for x in (a, b)]
@@ -881,8 +900,8 @@ def _k3_variant_model(product: Path, data: search.SearchData, rotation: int, see
         _reuse(path2, current)
         return mechanisms.load_phase_two(path2, partition_path=ppath)[0].to(device), [], False
     if table == "aggregation":
-        path1 = model_store.model_path(_models(product), data.transfer, rotation, seed, 1,
-                                       name)
+        path1 = model_store.model_path(_models(product), data.transfer, rotation,
+                                       search.PHASE_ONE_SEED, 1, name)
         record = model_store.load(_reuse(path1, current), partition_path=ppath) \
             if path1.exists() else None
         trained = mechanisms.train_aggregation_variant(
@@ -890,9 +909,9 @@ def _k3_variant_model(product: Path, data: search.SearchData, rotation: int, see
             phase_one_record=record)
         if record is None:
             checkpoint = trained["phase1"]["checkpoint"]
-            _save_variant(product, data, rotation, seed, 1, variant, checkpoint["state"],
-                          trained["hyper"], trained["channels"], checkpoint["sigma"],
-                          checkpoint)
+            _save_variant(product, data, rotation, search.PHASE_ONE_SEED, 1, variant,
+                          checkpoint["state"], trained["hyper"], trained["channels"],
+                          checkpoint["sigma"], checkpoint)
     else:
         path1 = model_store.model_path(_models(product), data.transfer, rotation,
                                        search.PHASE_ONE_SEED, 1, two_phase.MODEL)
@@ -1065,7 +1084,7 @@ def _k1_models(product: Path, transfer, r: int, seed: int,
         if strategy in COMPARATORS:
             models.append((mechanisms.common_attention_name(strategy),
                            _phase_two_path(product, transfer, r, seed, strategy)))
-        elif strategy in ("AdaptMIL", "HASD"):
+        elif strategy == "AdaptMIL":
             models.append((strategy, _phase_two_path(product, transfer, r, seed, strategy)))
     return models
 
@@ -1354,7 +1373,7 @@ def write_synthetic_set(out: str | Path, *, seed: int = 0, subjects: int = 32,
     config = {"synthetic": True, "processedRoot": str(out / "processed"),
               "partitionPath": str(ppath),
               "schedule": {"epochs1": 2, "epochs2": 2, "bagsPerStep": 4},
-              "strategies": ["MIL-CREDA", "COT", "HASD"], "transfers": pair,
+              "strategies": ["MIL-CREDA", "COT", "AdaptMIL"], "transfers": pair,
               "core": {arm: pair}, "nTrials": 4, "reportSeeds": list(REPORT_SEEDS),
               "bootstrapResamples": 500}
     (out / "config.json").write_text(json.dumps(config, indent=1, ensure_ascii=False))
@@ -1363,7 +1382,7 @@ def write_synthetic_set(out: str | Path, *, seed: int = 0, subjects: int = 32,
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m MIL_CREDA_EEG.campaign",
-                                     description="The BALLADEER campaign of plan v43, local only.")
+                                     description="The BALLADEER campaign of plan v54, local only.")
     parser.add_argument("step", choices=(*STEPS, "all", "synthetic"))
     parser.add_argument("--config", help="campaign config (JSON)")
     parser.add_argument("--product", default=str(DEFAULT_PRODUCT),

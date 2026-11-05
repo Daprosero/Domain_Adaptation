@@ -1,8 +1,0 @@
-{
-  "repository": "https://github.com/TumVink/HASD",
-  "commit": "128c5e156ff48dab962d2af4ebd45326c25bca67",
-  "searched_at": "2026-11-02",
-  "license": null,
-  "tracked_files": ["README.md", "docs/HASD_bridge.png"],
-  "route": "No usable implementation and no license; no upstream bytes vendored. Missing method reimplemented from ingested paper under operator authorization."
-}

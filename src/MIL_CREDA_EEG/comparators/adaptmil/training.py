@@ -1,7 +1,7 @@
 """Controlled source-first / target-only training (plan v54 §§4.5,7.3–7.4,7.7).
 
 Not the paper's align-first / attention-second schedule. Both phases run their
-epoch count whole and keep the last epoch (no patience, no restore, v50 §7.7);
+epoch count whole and keep the last epoch (no patience, no restore, v54 §7.7);
 with validation bags every epoch's validation predictions are recorded for the
 search's pooled selection, and without them (a refit) nothing is evaluated. Shared partition,
 assignment, batching, metrics, bridge and model-store machinery are reused.
@@ -49,7 +49,7 @@ def _state(module):
 
 def _roles(*roles, optional=()):
     """Disjoint roles; the training ones nonempty. A validation role named in `optional`
-    may be empty: a refit has no validation bags (v50 §4.5)."""
+    may be empty: a refit has no validation bags (v54 §4.5)."""
     sets = []
     for k, role in enumerate(roles):
         if not role:

@@ -1,6 +1,6 @@
 """Domain separability: how far apart two recording conditions are, MEASURED.
 
-Experiments plan v50, Secs. 2.7 and 5. Two questions come before any transfer
+Experiments plan v54, Secs. 2.7 and 5. Two questions come before any transfer
 is run. (1) The Emotiv headset model (EPOC X vs EPOC+) is confounded with the
 label -- is it visible in the preprocessed EEG at all? (2) For every candidate
 transfer of Sec. 5 (level, task, device), how separable are its two domains?
@@ -80,7 +80,7 @@ from MIL_CREDA_EEG.modality import (
 )
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["2.7", "5"],
     "experiments": ["2.7", "5"],
     "invariants": [

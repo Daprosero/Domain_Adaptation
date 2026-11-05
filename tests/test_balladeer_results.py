@@ -53,7 +53,7 @@ def test_every_writer_lands_in_the_dashboard_layout(tmp_path):
                    "A-nivel/tables/comparison.csv", "A-nivel/tables/comparison.md",
                    "history_A-nivel.json", "significance_A-nivel.json"]
     summary = json.loads((root / "A-nivel" / "summary.json").read_text())
-    assert summary["synthetic"] is True and summary["revision"].endswith("v50.md")
+    assert summary["synthetic"] is True and summary["revision"].endswith("v54.md")
     assert summary["rehearsal"] is False
     results.write_summary(root, "A-nivel", {"n": 3}, synthetic=False, rehearsal=True)
     assert json.loads((root / "A-nivel" / "summary.json").read_text())["rehearsal"] is True
@@ -105,12 +105,12 @@ def test_the_device_arm_controls_print_the_na_record():
 
 def test_the_rank_column_ranks_only_the_nine_adapted_strategies_on_core_transfers():
     records = []
-    for k, s in enumerate(("MIL-CREDA", "COT", "HASD")):
+    for k, s in enumerate(("MIL-CREDA", "COT", "CLUDA")):
         for t in ("L1->L11", "L11->L1", "L1->L6"):
             records += _records(s, t, shift=0.05 * k, seed=k)
     records += _records("source-only:common", "L1->L11") + _records("upper-bound", "L1->L11")
     scores = results.ranking_scores(records, ["L1->L11", "L11->L1"])
-    assert sorted(scores) == ["COT", "HASD", "MIL-CREDA"]
+    assert sorted(scores) == ["CLUDA", "COT", "MIL-CREDA"]
     assert all(len(v) == 2 for v in scores.values())
     ranking = st.friedman_nemenyi(scores)
     table = results.comparison_table(records, "level", ["L1->L11", "L11->L1"], ranking)
@@ -211,7 +211,7 @@ def test_every_figure_goes_through_the_shipped_helper_with_a_png_preview(tmp_pat
         results.optimization_history_figure(tmp_path, "A-nivel", {"MIL-CREDA": study}),
         results.contour_figure(tmp_path, "A-nivel", study, ["lr2", "wd2"]),
         results.critical_difference_figure(tmp_path, "A-nivel", st.friedman_nemenyi(
-            {"MIL-CREDA": [0.8, 0.7], "COT": [0.6, 0.65], "HASD": [0.7, 0.6]})),
+            {"MIL-CREDA": [0.8, 0.7], "COT": [0.6, 0.65], "CLUDA": [0.7, 0.6]})),
         results.ladder_figure(tmp_path, [{"strategy": "MIL-CREDA", "separability": 0.6,
                                           "separability_sd": 0.02, "gain": 0.05}], 0.95)]
     assert [p.relative_to(tmp_path).as_posix() for p in paths] == [
@@ -292,7 +292,7 @@ def test_the_critical_difference_diagram_draws_every_rank_and_the_cd_bar(tmp_pat
                         lambda self, text, *a, **k: texts.append(text) or real(self, text, *a,
                                                                                 **k))
     ranking = st.friedman_nemenyi({"MIL-CREDA": [0.8, 0.7], "COT": [0.6, 0.65],
-                                   "HASD": [0.7, 0.6]})
+                                   "CLUDA": [0.7, 0.6]})
     results.critical_difference_figure(tmp_path, "B-tarea", ranking)
     assert f"CD = {ranking['critical_difference']:.2f}" in texts
     for s, r in ranking["average_rank"].items():
@@ -339,7 +339,7 @@ def test_the_label_free_rule_predictions_live_in_their_own_file(tmp_path):
 
 def test_the_ladder_reads_each_strategys_own_source_only_control():
     assert results.own_control("MIL-CREDA") == "source-only:MIL-CREDA"
-    assert results.own_control("HASD") == "source-only:HASD"
+    assert results.own_control("AdaptMIL") == "source-only:AdaptMIL"
     assert results.own_control("COT") == "source-only:common"
     records = _records("COT", "L1->L11", shift=0.1) + _records("source-only:common", "L1->L11")
     rows = [{"arm": "level", "transfer": "L1->L11", "reading": "all", "auc_rotation_mean": 0.6,
@@ -357,9 +357,9 @@ def test_the_ladder_reads_each_strategys_own_source_only_control():
 # ------------------------------------------------------------------ plan v50
 
 
-def test_the_provenance_binds_plan_v50():
+def test_the_provenance_binds_plan_v54():
     assert results.__provenance__["revision"] == (
-        "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md")
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md")
 
 
 def _all_ten(strategies=model_store.STRATEGIES):
@@ -372,7 +372,7 @@ def _all_ten(strategies=model_store.STRATEGIES):
 
 def test_the_arm_ranking_is_descriptive_under_the_plans_headers():
     records = []
-    for k, s in enumerate(("MIL-CREDA", "COT", "HASD")):
+    for k, s in enumerate(("MIL-CREDA", "COT", "CLUDA")):
         for t in ("L1->L11", "L11->L1"):
             records += _records(s, t, shift=0.05 * k, seed=k)
     ranking = results.arm_ranking(records, ["L1->L11", "L11->L1"])
@@ -395,7 +395,7 @@ def test_the_arm_ranking_is_descriptive_under_the_plans_headers():
 def test_the_arm_significance_table_carries_both_families_under_the_plans_headers():
     a = _records("MIL-CREDA", "L1->L11", n=24, shift=0.1)
     rows = []
-    for k, rival in enumerate(("COT", "HASD")):
+    for k, rival in enumerate(("COT", "CLUDA")):
         rows += st.pair_contrast(a, _records(rival, "L1->L11", n=24, seed=3 + k),
                                  name_a="MIL-CREDA", name_b=rival, scope="L1|L11",
                                  test_train_ratio=0.3, hypothesis="A-nivel",

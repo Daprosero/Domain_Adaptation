@@ -1,6 +1,6 @@
 """Every measurement the plan declares, written where the dashboard reads it.
 
-Experiments plan v50, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
+Experiments plan v54, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 `experimental-implementation` skill's Results table, under the product folder
 `MIL-CREDA/Results/` (`DEFAULT_ROOT`), one folder per experiment
 (`EXPERIMENTS`):
@@ -83,7 +83,7 @@ from MIL_CREDA_EEG import statistics as st
 from MIL_CREDA_EEG.two_phase import write_history as _write_history
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
@@ -122,7 +122,6 @@ ARM_TRANSFERS = {"level": ("L1->L6", "L1->L11", "L6->L1", "L6->L11", "L11->L1", 
 #: The method rows of the comparison tables (Secs. 5.1-5.3), keyed as predictions are.
 SOURCE_ONLY = {"source-only:common": "Source only, common attention",
                "source-only:AdaptMIL": "Source only, AdaptMIL",
-               "source-only:HASD": "Source only, HASD",
                "source-only:MIL-CREDA": "Source only, MIL-CREDA"}
 UPPER_BOUND = "upper-bound"
 #: What a stored prediction must have been produced under to be reused (Sec. 7.3).
@@ -730,7 +729,7 @@ def critical_difference_figure_at(path: Path, ranking: Mapping) -> Path:
 
 def own_control(strategy: str) -> str:
     """Sec. 5.4: the source-only control each strategy's gain is read against."""
-    return f"source-only:{strategy}" if strategy in ("MIL-CREDA", "AdaptMIL", "HASD") \
+    return f"source-only:{strategy}" if strategy in ("MIL-CREDA", "AdaptMIL") \
         else "source-only:common"
 
 

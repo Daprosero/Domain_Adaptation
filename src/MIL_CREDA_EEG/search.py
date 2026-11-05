@@ -1,15 +1,15 @@
 """The Optuna searches of both phases, per transfer and outer fold.
 
-Experiments plan v50, Secs. 4.2, 4.5, 7.3 and 7.7. The selection is a nested
+Experiments plan v54, Secs. 4.2, 4.5, 7.3 and 7.7. The selection is a nested
 cross-validation. The outer level is the frozen four-fold partition, rotated:
 rotation r tests fold k and F is the other three folds. The inner level is the
 three inner splits of F, read from the partition document (`assignment.inner_splits`,
 the one source of the splits): each validates one fold of
 F and trains on the other two, so every subject of F is validated exactly once
 and the test fold is in none. There is one Optuna study per phase-1 group (the
-common group of the six non-MIL comparators, AdaptMIL, HASD and MIL-CREDA),
+common group of the seven non-MIL comparators, AdaptMIL and MIL-CREDA),
 transfer and outer fold, and one per strategy, transfer and outer fold in
-phase 2: 160 + 360 = 520 studies over the ten transfers. Every study gets the
+phase 2: 120 + 360 = 480 studies over the ten transfers, 120 per outer fold. Every study gets the
 same budget: `N_TRIALS` trials with Optuna's Gaussian-process sampler
 (`GPSampler`, experimental in Optuna; its first ten trials are random) seeded
 with the fixed `SAMPLER_SEED` so the search can be repeated, and no pruner
@@ -63,15 +63,16 @@ sidecar. MIL-CREDA's sigma is that checkpoint's sigma
 `sigmaMultiplier` in {0.5, 0.75, 1, 1.5}. The comparators' phase-2 spaces
 follow one generic rule (`LOSS_WEIGHT`, `KERNEL_MULTIPLIER`,
 `CONFIDENCE_THRESHOLD`), registered per strategy by its own unit through
-`register_phase_two`. Sec. 7.7 adds two comparator-specific axes, each admitted
+`register_phase_two`. Sec. 7.7 adds three comparator-specific axes, each admitted
 only for its own strategy (`OWN_AXES`): CLUST's teacher EMA momentum rho in
 [0.9, 0.999] with 1 - rho log-uniform, drawn as `EMA_MOMENTUM_COMPLEMENT`
 (1 - rho in [1e-3, 1e-1], log) and converted by the CLUST trainer; and
 CASUAL's VAT radius as a fraction of the typical window L2 norm, log-uniform
-in [0.01, 1] (`VAT_RADIUS_FRACTION`), scaled by the CASUAL trainer. None is
-wired here, and AdaptMIL and HASD have no
-phase-1 architecture registered yet (`model_store.BUILDERS`), so their studies
-refuse before any storage is created.
+in [0.01, 1] (`VAT_RADIUS_FRACTION`), scaled by the CASUAL trainer; and
+CLUDA's contrastive temperature, log-uniform in [0.01, 1]
+(`CONTRASTIVE_TEMPERATURE`). None is wired here, and AdaptMIL has no phase-1
+architecture registered until its unit registers it (`model_store.BUILDERS`),
+so its studies refuse before any storage is created.
 
 **Storage.** One SQLite file per study, `<root>/Results/hpo/
 <source>-to-<target>__phase<p>__<group or strategy>__outer<r>.db`, with the study
@@ -121,7 +122,7 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, mil_wrapper, model_store, partition, two_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.2", "4.5", "5.4", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -184,17 +185,20 @@ GENERIC_RULE = (LOSS_WEIGHT, KERNEL_MULTIPLIER, CONFIDENCE_THRESHOLD)
 EMA_MOMENTUM_COMPLEMENT = FloatDistribution(1e-3, 1e-1, log=True)
 #: Sec. 7.7, CASUAL: the VAT radius as a fraction of the typical window L2 norm.
 VAT_RADIUS_FRACTION = FloatDistribution(0.01, 1.0, log=True)
+#: Sec. 7.7, CLUDA: the temperature of its contrastive term, a range that contains the
+#: official code's 0.07 (a plan assumption, not the paper's).
+CONTRASTIVE_TEMPERATURE = FloatDistribution(0.01, 1.0, log=True)
 #: Strategy -> the axes outside the generic rule that Sec. 7.7 assigns to it alone.
 OWN_AXES: dict[str, tuple[BaseDistribution, ...]] = {
     "CLUST — variante source-free": (EMA_MOMENTUM_COMPLEMENT,),
     "CASUAL": (VAT_RADIUS_FRACTION,),
+    "CLUDA": (CONTRASTIVE_TEMPERATURE,),
 }
 
 _SHARED_PHASE_ONE = {"lr1": LR1, "wd1": WEIGHT_DECAY}
 PHASE_ONE_SPACES: dict[str, dict[str, BaseDistribution]] = {
     "common": dict(_SHARED_PHASE_ONE),
     "AdaptMIL": dict(_SHARED_PHASE_ONE),
-    "HASD": dict(_SHARED_PHASE_ONE),
     "MIL-CREDA": {**_SHARED_PHASE_ONE,
                   "attentionGamma": FloatDistribution(0.0, 1.0),
                   "attentionTemperature": FloatDistribution(0.1, 10.0, log=True),
@@ -206,7 +210,7 @@ PHASE_TWO_EXTRA: dict[str, dict[str, BaseDistribution]] = {
     "MIL-CREDA": {"tauLocal": FloatDistribution(0.1, 10.0, log=True)},
 }
 #: Sec. 7.3: the phase-1 group each strategy's phase 2 starts from.
-PHASE_ONE_GROUP_OF = {s: (s if s in ("AdaptMIL", "HASD", "MIL-CREDA") else mil_wrapper.GROUP)
+PHASE_ONE_GROUP_OF = {s: (s if s in ("AdaptMIL", "MIL-CREDA") else mil_wrapper.GROUP)
                       for s in model_store.STRATEGIES}
 
 
