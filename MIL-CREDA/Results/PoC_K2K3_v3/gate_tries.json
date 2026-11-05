@@ -1,0 +1,237 @@
+{
+  "gate": "median over seeds 10-11 of the per-seed median room ratio >= 1.5 at the start of phase 2 (TGL), with source accuracy >= 0.85",
+  "baseConditions": "poc.RUN3 + subject_signature 0.15 (EEG-calibrated)",
+  "units": "target_subject_shift and instance_noise as multiples of the source between-class separation",
+  "distanceSpace": "H_I at the frozen phase-2 width (poc.bag_distances), train+eval roles",
+  "tries": [
+    {
+      "try": 1,
+      "target_subject_shift": 1.0,
+      "instance_noise": 0.1,
+      "roomRatioMedian": 1.0695230277008148,
+      "minSourceAccuracy": 0.8333333333333334,
+      "gatePassed": false,
+      "seeds": [
+        {
+          "seed": 10,
+          "roomRatioMedian": 1.1481325597759109,
+          "sourceAccuracy": 0.8333333333333334,
+          "targetAccuracy": {
+            "TGL": 0.9259259259259259,
+            "TG": 0.9074074074074074,
+            "TL": 0.8148148148148148,
+            "TGL-NC": 0.9259259259259259
+          },
+          "push": {
+            "TGL": {
+              "pushMean": 0.22225810733495974,
+              "ownDistanceStart": 0.8819352026079216,
+              "ownDistanceEnd": 0.6596770952729618,
+              "marginStart": -0.007409361647624595,
+              "marginEnd": -0.080399517919503,
+              "roomRatioMedian": 1.1481325597759109,
+              "sourceSpreadMedian": 0.7128689289093018,
+              "bags": 102
+            },
+            "TG": {
+              "pushMean": 0.19120009740193686,
+              "ownDistanceStart": 0.8819352026079216,
+              "ownDistanceEnd": 0.6907351052059847,
+              "marginStart": -0.007409361647624595,
+              "marginEnd": -0.08756180545862983,
+              "roomRatioMedian": 1.1481325597759109,
+              "sourceSpreadMedian": 0.7128689289093018,
+              "bags": 102
+            }
+          }
+        },
+        {
+          "seed": 11,
+          "roomRatioMedian": 0.9909134956257186,
+          "sourceAccuracy": 0.9074074074074074,
+          "targetAccuracy": {
+            "TGL": 0.7222222222222222,
+            "TG": 0.7407407407407407,
+            "TL": 0.6666666666666666,
+            "TGL-NC": 0.8703703703703703
+          },
+          "push": {
+            "TGL": {
+              "pushMean": 0.12927165861223258,
+              "ownDistanceStart": 0.7925652779784857,
+              "ownDistanceEnd": 0.6632936193662531,
+              "marginStart": 0.004373625213024663,
+              "marginEnd": -0.13564476137067757,
+              "roomRatioMedian": 0.9909134956257186,
+              "sourceSpreadMedian": 0.7465975880622864,
+              "bags": 102
+            },
+            "TG": {
+              "pushMean": 0.03396979091214199,
+              "ownDistanceStart": 0.7925652779784857,
+              "ownDistanceEnd": 0.7585954870663437,
+              "marginStart": 0.004373625213024663,
+              "marginEnd": -0.0893698065888648,
+              "roomRatioMedian": 0.9909134956257186,
+              "sourceSpreadMedian": 0.7465975880622864,
+              "bags": 102
+            }
+          }
+        }
+      ]
+    },
+    {
+      "try": 2,
+      "target_subject_shift": 2.0,
+      "instance_noise": 0.05,
+      "roomRatioMedian": 1.0544006546826103,
+      "minSourceAccuracy": 0.8703703703703703,
+      "gatePassed": false,
+      "seeds": [
+        {
+          "seed": 10,
+          "roomRatioMedian": 1.1586355753983755,
+          "sourceAccuracy": 0.9629629629629629,
+          "targetAccuracy": {
+            "TGL": 0.7777777777777778,
+            "TG": 0.7777777777777778,
+            "TL": 0.7592592592592593,
+            "TGL-NC": 0.5740740740740741
+          },
+          "push": {
+            "TGL": {
+              "pushMean": 0.19292835803592906,
+              "ownDistanceStart": 0.8394659658273061,
+              "ownDistanceEnd": 0.646537607791377,
+              "marginStart": 0.013862603435329362,
+              "marginEnd": -0.02275147975659838,
+              "roomRatioMedian": 1.1586355753983755,
+              "sourceSpreadMedian": 0.7173526883125305,
+              "bags": 102
+            },
+            "TG": {
+              "pushMean": 0.16286541433895335,
+              "ownDistanceStart": 0.8394659658273061,
+              "ownDistanceEnd": 0.6766005514883527,
+              "marginStart": 0.013862603435329362,
+              "marginEnd": -0.03205577240270727,
+              "roomRatioMedian": 1.1586355753983755,
+              "sourceSpreadMedian": 0.7173526883125305,
+              "bags": 102
+            }
+          }
+        },
+        {
+          "seed": 11,
+          "roomRatioMedian": 0.9501657339668452,
+          "sourceAccuracy": 0.8703703703703703,
+          "targetAccuracy": {
+            "TGL": 0.6111111111111112,
+            "TG": 0.6851851851851852,
+            "TL": 0.6481481481481481,
+            "TGL-NC": 0.5555555555555556
+          },
+          "push": {
+            "TGL": {
+              "pushMean": 0.06235873056393044,
+              "ownDistanceStart": 0.7497230972729477,
+              "ownDistanceEnd": 0.6873643667090172,
+              "marginStart": 0.0039532213818793205,
+              "marginEnd": -0.0296178854563657,
+              "roomRatioMedian": 0.9501657339668452,
+              "sourceSpreadMedian": 0.7777405381202698,
+              "bags": 102
+            },
+            "TG": {
+              "pushMean": -0.0004983842372894287,
+              "ownDistanceStart": 0.7497230972729477,
+              "ownDistanceEnd": 0.7502214815102372,
+              "marginStart": 0.0039532213818793205,
+              "marginEnd": -0.02727908129785575,
+              "roomRatioMedian": 0.9501657339668452,
+              "sourceSpreadMedian": 0.7777405381202698,
+              "bags": 102
+            }
+          }
+        }
+      ]
+    },
+    {
+      "try": 3,
+      "target_subject_shift": 4.0,
+      "instance_noise": 0.1,
+      "roomRatioMedian": 1.02696571457359,
+      "minSourceAccuracy": 0.8333333333333334,
+      "gatePassed": false,
+      "seeds": [
+        {
+          "seed": 10,
+          "roomRatioMedian": 1.0932030900322216,
+          "sourceAccuracy": 0.8333333333333334,
+          "targetAccuracy": {
+            "TGL": 0.6111111111111112,
+            "TG": 0.8148148148148148,
+            "TL": 0.6666666666666666,
+            "TGL-NC": 0.5185185185185185
+          },
+          "push": {
+            "TGL": {
+              "pushMean": 0.13508548222336114,
+              "ownDistanceStart": 0.8441162430772594,
+              "ownDistanceEnd": 0.7090307608538983,
+              "marginStart": -0.009293553291582594,
+              "marginEnd": -0.04071311039083144,
+              "roomRatioMedian": 1.0932030900322216,
+              "sourceSpreadMedian": 0.7128689289093018,
+              "bags": 102
+            },
+            "TG": {
+              "pushMean": 0.023108193395184537,
+              "ownDistanceStart": 0.8441162430772594,
+              "ownDistanceEnd": 0.8210080496820749,
+              "marginStart": -0.009293553291582594,
+              "marginEnd": -0.05386971521611307,
+              "roomRatioMedian": 1.0932030900322216,
+              "sourceSpreadMedian": 0.7128689289093018,
+              "bags": 102
+            }
+          }
+        },
+        {
+          "seed": 11,
+          "roomRatioMedian": 0.9607283391149584,
+          "sourceAccuracy": 0.9074074074074074,
+          "targetAccuracy": {
+            "TGL": 0.6851851851851852,
+            "TG": 0.7222222222222222,
+            "TL": 0.6111111111111112,
+            "TGL-NC": 0.6296296296296297
+          },
+          "push": {
+            "TGL": {
+              "pushMean": -0.03972958817201502,
+              "ownDistanceStart": 0.7914574976060905,
+              "ownDistanceEnd": 0.8311870857781055,
+              "marginStart": 0.004258786346398148,
+              "marginEnd": -0.019122850076825012,
+              "roomRatioMedian": 0.9607283391149584,
+              "sourceSpreadMedian": 0.7465975880622864,
+              "bags": 102
+            },
+            "TG": {
+              "pushMean": -0.06343750830958872,
+              "ownDistanceStart": 0.7914574976060905,
+              "ownDistanceEnd": 0.8548950059156791,
+              "marginStart": 0.004258786346398148,
+              "marginEnd": -0.02436749753998775,
+              "roomRatioMedian": 0.9607283391149584,
+              "sourceSpreadMedian": 0.7465975880622864,
+              "bags": 102
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "verdict": "gate failed after 3 tries: no preregistration written, battery not run"
+}

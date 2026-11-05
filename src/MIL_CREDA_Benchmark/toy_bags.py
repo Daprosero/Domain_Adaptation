@@ -302,6 +302,10 @@ class Familia:
     #: The subject signature applied to both domains (see `firmar_sujetos`);
     #: `None` when off.
     firma: dict | None = None
+    #: The per-subject target shift (`desplazar_sujetos_en_target`); `None` off.
+    desplazamientoDeSujeto: dict | None = None
+    #: The instance noise (`ruido_de_instancia`); `None` when off.
+    ruido: dict | None = None
 
 
 def geometria_de_firma(X: np.ndarray, y: np.ndarray, b: np.ndarray) -> dict:
@@ -370,6 +374,71 @@ def firmar_sujetos(familia: Familia, fraccion: float, semilla: int) -> Familia:
                 **geometria, "axis": EJE_DE_FIRMA, "signatures": por_indice}
     return dataclasses.replace(familia, Xs=marcar(familia.Xs, familia.bs),
                                Xt=marcar(familia.Xt, familia.bt), firma=registro)
+
+
+#: The per-subject target shift's own stream offset (its phase), and the
+#: instance noise's: their own, so switching either on changes no other draw.
+DESPLAZAMIENTO_DE_SUJETO_EN_TARGET = 7000
+DESPLAZAMIENTO_DE_RUIDO = 8000
+
+
+def desplazar_sujetos_en_target(familia: Familia, fraccion: float,
+                                semilla: int) -> Familia:
+    """`familia` with a smooth per-subject shift added to the TARGET only.
+
+    Every target point moves along `EJE_DE_FIRMA` (the class-free height) by
+    `f(t) = a sin(2 pi P (t - t0) / L + phase)`, `t` its own place on the roll
+    (read off `Xt_crudo`), `P = PERIODOS_DEL_CAMPO` (one period per class
+    segment, so every class sees both signs and the field is zero-mean over
+    its subjects) and the phase from its own stream. A subject is one band of
+    `t`, so the shift is nearly constant within a subject and distinct across
+    subjects; it is a smooth function of position, so a shared instance
+    encoder can learn to undo it, and the global term cannot, because no shared
+    translation removes it. `a` is set so the RMS over the target points is
+    exactly `fraccion` times the source's between-class separation
+    (`geometria_de_firma`, the subject signature's unit). 0 is off.
+    """
+    if fraccion == 0:
+        return familia
+    if not (np.isfinite(fraccion) and fraccion > 0):
+        raise ValueError(f"fraccion = {fraccion}: a multiple of the class separation "
+                         "is finite and non-negative")
+    if familia.nombre != "rollo":
+        raise ValueError(f"the target subject shift is declared on `rollo` only, "
+                         f"not {familia.nombre!r}")
+    geometria = geometria_de_firma(familia.Xs, familia.ys, familia.bs)
+    amplitud = fraccion * geometria["betweenClassSeparation"]
+    bajo, alto = T_ROLLO
+    fase = float(np.random.default_rng(semilla + DESPLAZAMIENTO_DE_SUJETO_EN_TARGET)
+                 .uniform(0.0, 2 * np.pi))
+    t = parametro("rollo", familia.Xt_crudo)
+    campo = np.sin(2 * np.pi * PERIODOS_DEL_CAMPO * (t - bajo) / (alto - bajo) + fase)
+    campo *= amplitud / np.sqrt((campo ** 2).mean())
+    Xt = familia.Xt.copy()
+    Xt[:, EJE_DE_FIRMA] += campo
+    registro = {"multipleOfClassSeparation": float(fraccion), "amplitude": float(amplitud),
+                "periods": PERIODOS_DEL_CAMPO, "phase": fase, "axis": EJE_DE_FIRMA}
+    return dataclasses.replace(familia, Xt=Xt, desplazamientoDeSujeto=registro)
+
+
+def ruido_de_instancia(familia: Familia, fraccion: float, semilla: int) -> Familia:
+    """`familia` with i.i.d. isotropic Gaussian noise on every instance of BOTH
+    domains, standard deviation `fraccion` times the source's between-class
+    separation. Labels, bags and partners unchanged; its own stream. 0 is off.
+    """
+    if fraccion == 0:
+        return familia
+    if not (np.isfinite(fraccion) and fraccion > 0):
+        raise ValueError(f"fraccion = {fraccion}: a multiple of the class separation "
+                         "is finite and non-negative")
+    sd = fraccion * geometria_de_firma(familia.Xs, familia.ys, familia.bs)[
+        "betweenClassSeparation"]
+    rng = np.random.default_rng(semilla + DESPLAZAMIENTO_DE_RUIDO)
+    Xs = familia.Xs + rng.normal(0.0, sd, familia.Xs.shape)
+    Xt = familia.Xt + rng.normal(0.0, sd, familia.Xt.shape)
+    return dataclasses.replace(familia, Xs=Xs, Xt=Xt,
+                               ruido={"multipleOfClassSeparation": float(fraccion),
+                                      "sd": float(sd)})
 
 
 def desplazar_por_par(Xt: np.ndarray, yt: np.ndarray, bt: np.ndarray,
