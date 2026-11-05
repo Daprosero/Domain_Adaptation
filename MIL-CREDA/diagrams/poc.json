@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "kind": "poc",
+  "claim": "On the rollo toy set, each MIL-CREDA term is switched on one at a time under the conditions it needs, so every hypothesis gets its own pre-registered verdict",
+  "focal": "ladder",
+  "nodes": [
+    {
+      "id": "data",
+      "label": "Rollo toy set, 25 deg shift",
+      "role": "state",
+      "row": "spine"
+    },
+    {
+      "id": "conditions",
+      "label": "Subject shift, 4 bags per class",
+      "role": "operator",
+      "row": "spine"
+    },
+    {
+      "id": "ladder",
+      "label": "Arm ladder: TG, TL, TGL, no consensus",
+      "role": "focal",
+      "row": "spine"
+    },
+    {
+      "id": "tests",
+      "label": "Wilcoxon over 30 seeds, Holm",
+      "role": "operator",
+      "row": "spine"
+    },
+    {
+      "id": "verdicts",
+      "label": "One verdict per hypothesis",
+      "role": "state",
+      "row": "spine"
+    },
+    {
+      "id": "k1",
+      "label": "K1: attention on artifacts",
+      "role": "evidence",
+      "row": "evidence",
+      "under": "conditions"
+    },
+    {
+      "id": "k2",
+      "label": "K2: partner rank, pi entropy",
+      "role": "evidence",
+      "row": "evidence",
+      "under": "ladder"
+    },
+    {
+      "id": "task",
+      "label": "Task: TGL vs BN-matched floor",
+      "role": "evidence",
+      "row": "evidence",
+      "under": "verdicts"
+    },
+    {
+      "id": "source",
+      "label": "Rules fixed before the run, protocol v55",
+      "role": "context",
+      "row": "context",
+      "near": "ladder"
+    }
+  ],
+  "edges": [
+    {
+      "from": "data",
+      "to": "conditions",
+      "semantics": "data",
+      "prominence": "primary"
+    },
+    {
+      "from": "conditions",
+      "to": "ladder",
+      "semantics": "data",
+      "prominence": "primary"
+    },
+    {
+      "from": "ladder",
+      "to": "tests",
+      "semantics": "data",
+      "prominence": "primary"
+    },
+    {
+      "from": "tests",
+      "to": "verdicts",
+      "semantics": "data",
+      "prominence": "primary"
+    },
+    {
+      "from": "conditions",
+      "to": "k1",
+      "semantics": "data",
+      "prominence": "secondary"
+    },
+    {
+      "from": "ladder",
+      "to": "k2",
+      "semantics": "data",
+      "prominence": "secondary"
+    },
+    {
+      "from": "verdicts",
+      "to": "task",
+      "semantics": "data",
+      "prominence": "secondary"
+    }
+  ]
+}
