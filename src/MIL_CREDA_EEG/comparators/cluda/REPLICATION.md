@@ -1,216 +1,260 @@
-# CLUDA: controlled bag-level variant, not a reproduction of published results
+# CLUDA: official-code loss under the common bag-level protocol
 
-## Code search and route (2026-11-05 UTC)
+## Code search, pin and route
 
-| Place searched | Observed answer |
-| --- | --- |
-| Ingested `guidance/related-work-evidence/xu2024cluda/xu2024cluda.md`, entire available extraction, pages 1–9 and page-10 marker | Contrary to the delegation's paywall premise, the method text, Eqs. (1)–(8), Algorithm 1 and Table 1 are available locally. Data availability says authors lack permission to share data; no code-availability link found in this extraction. |
-| Web search: exact title + github code; Xu CLUDA 125452 research cuhk code; exact title + code authors | Resolved official `https://github.com/xuchengjian632/CLUDA`, not the ICLR 2023 time-series namesake. |
-| Author/institution publication record: `https://research.cuhk.edu.hk/en/publications/unsupervised-multi-source-domain-adaptation-via-contrastive-learn/` | Fetched abstract identifies conditional source-target and inter-source contrastive learning; DOI and journal 261, article 125452, 1 February 2025. |
-| Venue: `https://www.sciencedirect.com/science/article/pii/S0957417424023194` | Raw fetch returned ScienceDirect HTML, not readable full paper; local ingested method was used instead. |
-| Official repository README, complete `main.py`, `models.py`, pinned tracked-file enumeration | Commit `9c655644e9f15eadddb51de236a1afecd5944468`. Tracked tree contains README, three Python files and a figure, no license or test/config files. Experiment defaults read from main.py, architecture defaults from models.py. No upstream tests found in that enumeration; upstream training was not run. |
+Historical code search (2026-11-05 UTC): exact paper title + github/code, Xu CLUDA
+125452 research CUHK/code, and exact title + code authors resolved
+https://github.com/xuchengjian632/CLUDA, not Ozyurt et al. ICLR 2023 CLUDA.
+The CUHK publication record was fetched at
+https://research.cuhk.edu.hk/en/publications/unsupervised-multi-source-domain-adaptation-via-contrastive-learn/
+and confirmed the abstract, DOI 10.1016/j.eswa.2024.125452 and ESWA 261 (2025).
+The venue page https://www.sciencedirect.com/science/article/pii/S0957417424023194
+returned raw ScienceDirect HTML, not readable full text. Nevertheless the local
+ingested `guidance/related-work-evidence/xu2024cluda/xu2024cluda.md` contains method
+sections, Eqs. (1)–(8), Algorithm 1 and Table 1; the earlier claim that the method
+text could not be read was false. Its data statement says the authors cannot
+share data; no code link was found in that extraction.
 
-**Route:** independent implementation of the operator-approved controlled variant.
-No upstream source copied into this repository: only `third_party/cluda/PIN.json`.
-An unlicensed public repository is not a reusable dependency. Read-only audit clone
-and logs remain at `/var/folders/y9/9hfxsk810hv08cnh64bncjq80000gn/T/tmp.zyYss9s8Sn/`;
-nothing there was deleted. No API/model calls are part of the implementation.
+The earlier scratch clone was removed outside this stretch. This rewrite freshly
+cloned the official repository to
+`/var/folders/y9/9hfxsk810hv08cnh64bncjq80000gn/T/tmp.BMfuyCBETP/CLUDA`, checked out
+**9c655644e9f15eadddb51de236a1afecd5944468**, and reread its losses and weights.
+The pinned tree contains README.md, models.py, main.py, utils.py and a figure,
+without a license or tests/config files. Experiment/architecture defaults are in
+main.py/models.py. `third_party/cluda/PIN.json` remains the existing pin, unchanged.
+**Route: independent controlled-variant implementation; read-only upstream audit,
+no upstream source vendored, no upstream patches.** No upstream training was run.
 
-Bound protocol: `experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md`
-§§4.5, 7.1–7.5, 7.7. Operator decisions: task log L59, L62, L70–L71.
-This file records correspondence, not a claim of original-result fidelity.
+Bound protocol remains `experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md`;
+its CLUDA loss description needs the v55 replacements returned to the parent.
+Authority is operator L81, superseding L74–L75's paper-Eq. (3) choice and omission
+of source-source loss, plus the parent's subsequent no-positive-anchor ruling.
+L77 (separate projector batches), L78 (source queues/singleton skip), L79 (constant
+weight), L59 (inductive evaluation), and L70–L71 (single phase-one checkpoint) stand.
+Integration e5de342 is preserved; no shared registration files were edited here.
 
-## Plan, equation analysis and boundaries
+## Exact formula, code correspondence, and shapes
 
-- Existing `CommonMILModel` supplies EEGNet, common attention and linear head.
-  Lists of bags hold `(windows, source/target channels, 512)` tensors; embeddings
-  and attention pooling yield `(source bags, 256)` and `(target bags, 256)`.
-- `model.CLUDAModel` adds a fresh training-only projector, mapping `(B,256)` to
-  `(B,256)` via width 1024. It inherits inference unchanged.
-- `training.adaptation_step`: source EEGNet/attention/head in no-grad/eval;
-  target EEGNet trains, common attention/head frozen but differentiable in its
-  input. Head logits `(T,2)` produce detached argmax pseudo-labels `(T,)`.
-  Project target and source **separately**, in that order. Source embeddings are
-  detached from the source encoder but not from the trainable projector.
-- Eq. (3) -> `losses.cross_domain_contrastive`: projected `(S,256),(T,256)` plus
-  labels `(S,),(T,)` -> scalar and missing-positive count. Each source bag is a
-  singleton subject-domain. Cosine logits `(S,T)` are normalized over TARGET
-  candidates only. Each anchor contributes `-1/2 log(positive probability)`;
-  average over sampled source domains. No target-target or source-source pairs.
-- Eq. (2) -> `F.cross_entropy` in `adaptation_step`: source CE is diagnostic and
-  constant with respect to optimized parameters. Eq. (5) -> `source_ce +
-  contrastiveWeight * contrastive`. Eq. (4) is deliberately not computed.
-  Eqs. (6)–(7) schedules are deliberately not used. Eqs. (1),(8) are replaced by
-  the common protocol's feature extractor/preparation, not rewritten here.
-- `training.train_phase_two` reuses shared checkpoint, bridge, schedule guards,
-  source `ClassQueues`, target shuffled batches, evaluation, validation records,
-  label-free keeper, max-norm and store. It never trains phase one itself.
-  `load_phase_two` uses `model_store.load` and verifies comparator source digest.
+Let a contrastive batch B contain projected vectors e_a and labels y_a. Define
+u_a=e_a/||e_a||_2, h_ba=u_b dot u_a / tau,
+P(a)={b != a : y_b=y_a}, and V={a : |P(a)|>0}. The implemented loss is
 
-Lineage gaps: the method cites Song et al. (2022) EEG Conformer, Lee et al.
-(2022) and Shen et al. (2022) for its feature/loss lineage. A guidance-name search
-found `song2024macs` and `lee2025lbm`, not those cited works; they were not ingested
-or read here. We do not infer additional equations from them. The common EEGNet
-replaces Conformer; Eq. (3) and audited projector suffice for this bounded variant.
+    L(B,tau) = mean over a in V of
+               [ log(sum_{b != a} exp(h_ba))
+                 - log(max(sum_{b in P(a)} exp(h_ba), 1e-6)) ].
 
-## Recorded parent rulings during this implementation
+When V is empty the result is a differentiable zero. The exclusion of empty
+positive sets is the **declared bag-level remedy**; all other terms follow
+`models.py:257–282`: diagonal exclusion (:265), same-class mask (:268), negative
+mask (:271), L2 normalization (:273), temperature-scaled dot products (:275),
+exponentials/off-diagonal (:277–278), **unnormalized** numerator clamp (:280),
+and symmetric mean (:282). Stable logsumexp evaluates the same formula without
+large direct exponentials. Zero-norm embeddings fail explicitly rather than
+silently substitute another cosine definition.
 
-1. Follow **paper Eq. (3)**, source-anchor/target-candidate only, not official
-   `models.py:230–234,264–294` concatenated symmetric SupCon. Keep the projector
-   from §3.2.4 / Algorithm 1 line 3; initialize each phase-2 run independently.
-2. Do **not compute** source-source loss. L62's premise that a frozen source
-   encoder makes it inert needs qualification: the original term would still
-   train a shared projector. Dropping that source-only projector objective is a
-   declared deviation, not a claim that its gradient vanishes mathematically.
-3. Floor relative positive probability at `1e-6`, absent-positive anchors included
-   in the source-domain mean with constant `-0.5*log(1e-6)` and zero gradient.
-   Official `models.py:287` instead floors the unnormalized numerator: related
-   numerical precedent, NOT an identical operation. Common pooled balanced
-   accuracy selects models, never this loss or its constant offset.
-4. Project target separately, then pooled sampled source bags. Official
-   `models.py:224,230` forwards target and each source **separately**; :231 only
-   concatenates already projected features. Source domains sharing BN is the
-   remaining singleton-bag deviation; target statistics remain separate.
-5. Use existing class-balanced `ClassQueues.draw(bagsPerStep // classes)` just
-   like UDA-DDA; missing source classes refuse before model construction.
-   Each source forward thus has >=2 bags under the shared schedule guard.
-   A target singleton remainder skips its entire update: no projector call,
-   optimizer update, or source draw; count it explicitly. Target training length
-   <2 refuses. No target bags are merged, padded or pseudo-label-filtered.
-6. The searched ST weight is **constant**, without the native ramp. v54 §7.7
-   generic weight rule and its single CLUDA weight axis, the repository CASUAL
-   controlled-variant precedent, and the common fixed phase-2 schedule motivate
-   this ruling. Native paper/code ramp departure is stated below.
+For sampled source subject-domains S_1,...,S_D and target batch T:
 
-## Correspondence and every chosen parameter/architecture
+    ST = (1/D) sum_i L(concat(S_i,T), searched_temperature)
+    SS = (1/choose(D,2)) sum_{i<j} L(concat(S_i,S_j), 0.03)
+    total = frozen_source_CE + contrastiveWeight * (ST + 0.5 * SS).
 
-Verdicts compare the controlled implementation to its stated source. `unspecified`
-means the paper fixes no such choice; it remains so even if code/protocol provides
-a usable default. There are **8 unspecified rows**.
+`models.py:225–229` generates target pseudo-labels by argmax, no threshold;
+:232–235 concatenates each projected source domain with the projected target
+batch; :241 averages ST across source domains; :243–249 averages SS across
+unordered source-domain pairs. Thus **target-target pairs participate** in every
+ST domain's symmetric loss. Source source pairs are retained and computed, not
+replaced by an unrelated global source SupCon loss. Queue repeats of one subject
+are grouped back into its same source domain before either loss is evaluated.
 
-| Element | Paper / official pinned code | Our implementation / source of choice | Verdict |
+The exact official coefficient formula at `main.py:88–91` is
+
+    gamma = 2/(1 + exp(-10*iteration/total_iterations)) - 1
+    beta1 = gamma
+    beta2 = gamma/2
+    official_total = cls_loss + beta1*ST + beta2*SS.
+
+We retain **SS/ST weight ratio 1/2** but replace gamma with the single constant
+searched `contrastiveWeight`, no ramp (L79). `models.py:208` and `main.py:193` fix
+T=.07 and T2=.03; this variant searches only ST temperature using the existing
+`search.CONTRASTIVE_TEMPERATURE` (.01–1 log). SS temperature stays .03.
+
+- Common model input: list of `(windows, source/target channels, 512)` tensors.
+  Existing EEGNet and common attention pool to `(S,256)` / `(T,256)`.
+- `model.CLUDAModel`: same inherited predictor plus projector 256->1024->256;
+  source and target pass through that projector separately, target first.
+- Source representations are detached from the frozen source encoder. They are
+  **not** detached from the projector: ST and SS both have projector gradients.
+  SS has no route to the target encoder; ST does. Attention and head stay frozen.
+- `losses.supervised_contrastive`: `(N,256),(N,) -> scalar, excluded_anchor_count`.
+  `cross_domain_contrastive` performs the ST domain loop;
+  `source_source_contrastive` performs the SS pair loop;
+  `contrastive_objective` fixes the shared scale/ratio above.
+- `training.adaptation_step` calculates the diagnostic frozen source CE and both
+  contrastive losses. `train_phase_two` reuses existing bridge, schedule guards,
+  ClassQueues, shuffled target batches, validation records, label-free keeper,
+  max-norm, search records and model_store. It never reimplements bag preparation
+  or phase-one training.
+
+## No-positive-anchor remedy and the remaining singleton-domain limitation
+
+The verbatim code clamp on an anchor without positives gives
+`log(denominator)-log(1e-6)`, **not a constant**; it still has denominator gradients.
+In this bag adaptation, many two-singleton SS pairs have different labels and no
+positives. A preliminary smoke measured SS
+`[3.701432,-4.371322,-8.335127,-9.730032,-10.253315]` and total
+`[3.305864,-1.093510,-2.712546,-3.345008,-2.837553]`. This finite trajectory is not
+proof of mathematical unboundedness, but exposed a source-only projector descent
+caused by singleton-domain adaptation. The parent required the minimal remedy:
+**exclude anchors with no positive from the anchor mean in BOTH ST and SS**.
+Reference supplied by the parent: Khosla et al., Supervised Contrastive Learning,
+NeurIPS 2020, https://arxiv.org/abs/2004.11362 (abstract fetched 2026-11-05).
+This is an explicit implementation decision, not a claim that CLUDA's code already
+handles missing positives this way. It does not replace CLUDA's log-of-positive-
+sum with Khosla's mean-of-positive-log-probabilities objective.
+
+An excluded anchor contributes no anchor loss or anchor gradient. Its embedding
+may still be a negative candidate in OTHER valid anchors' denominators; excluding
+that candidate would introduce another, unauthorized objective change. All-invalid
+batches return a graph-connected zero. The official numerator clamp remains for
+valid anchors. Consequently there is **no global nonnegativity claim**: even a
+same-class pair of opposite unit vectors at .03 can have loss
+`-1/.03-log(1e-6) = -19.5178...` when the clamp is active. Tests establish >=0 on
+an explicitly non-saturated batch and separately pin this negative saturated case.
+
+**SS is effectively inert for distinct singleton source domains**, for a different
+reason from old L62's frozen-encoder argument:
+- Different-class 2-bag pair: neither anchor has positives; both excluded, loss0.
+- Same-class 2-bag pair: numerator equals denominator, loss0 and zero gradient
+  unless the official numerator floor saturates.
+- Repeated source draws can create multi-bag domains; SS then can train the
+  projector through valid positives with negative candidates. A dedicated test
+  proves this gradient route without inventing extra source views/bags.
+
+Final synthetic smoke: 28/28 SS pairs have zero loss in every update (**100%**),
+32/56 SS anchor evaluations are excluded per update (**57.1429%**), SS=0 throughout.
+No new mechanism is added to make the SS term active. Neither this fraction nor
+its frequency on real folds is inferred from the toy run.
+
+Both losses expose per-step excluded counts, separately:
+`step_anchors_without_positive` (ST), `step_source_anchors_without_positive` (SS),
+with `step_anchors` / `step_source_anchors` as denominators. ST anchor counts sum
+over domains; SS counts sum over pairs. `step_source_pairs`,
+`step_source_zero_loss_pairs`, `source_zero_loss_pair_fraction` record measured
+zero-loss pair counts (abs(value)<1e-12); they are not an unmeasured gradient norm.
+History averages losses over executed updates; anchor counts sum over updates.
+
+## Correspondence and chosen hyperparameters / architecture
+
+`unspecified` means the paper does not fix the choice even where code or the
+common protocol supplied a default. There are **6 unspecified rows**.
+Paper/code loss differences are resolved **in favour of code** by L81, except
+for the explicit no-positive-anchor remedy. Common-protocol departures remain
+identified; no claim to reproduce the paper's numerical results is made.
+
+| Element | Paper / pinned code | This variant / provenance | Verdict |
 | --- | --- | --- | --- |
-| Feature extractor, Eq. (1), Table 1 | CNN + Transformer; models.py:38–165: 40 tokens, six layers, ten heads, expansion four, dropout .5, flatten 1480->256 for PhysioNet | Inherited EEGNet-8,2 (8 temporal filters, spatial multiplier 2, 16 separable filters, kernels 64/16, pooling 4/8, BN/ELU, dropout .25, spatial max norm 1), 256-dimensional bag representation, v54 §7.3; no Conformer implementation | deviation: common capacity |
-| Classifier, §3.2.3 | Paper two FC layers; code 256->32->4, ELU/dropout .3, models.py:183–200 | Frozen common 256->2 linear head, bag softmax, max norm .25 inherited from phase one, v54 §7.3 | deviation: common capacity |
-| MIL attention, bag labels | Native method trial labels, no MIL | Inherited single learned tanh/softmax attention, gamma zero, no consensus/local term; only bag labels, v54 §§7.2–7.4 | deviation: bag adaptation |
-| Source-domain unit | §3.1: each subject's multiple trials | Each source subject represented by its bag, v54 §7.4 / L62; each anchor equally weighted | deviation: singleton domains |
-| Projector architecture | §3.2.4, Table 1; models.py:167–181: bias-free 256->1024, affine BN, ReLU, nonaffine BN, bias-free 1024->256, nonaffine BN | `model.CLUDAModel.projector`, same widths (input follows bag width), BN placement/affinity, no dropout | match to audited code; extra BN differs from paper's simplified table |
-| Projector lifecycle | Trained together with extractor; discarded at test, Fig. 2 / README:18 | Fresh phase-2 auxiliary, trained only by ST; inherited inference never calls it, saved for reproducibility | deviation: two-phase common protocol and parent ruling |
-| Projector initialization | No initialization rule in method text | PyTorch defaults, seeded per run; fresh module each time | unspecified |
-| Projector BN epsilon/momentum | Code uses framework defaults; paper silent | PyTorch eps=1e-5, momentum=.1, track running statistics; double precision common model | unspecified |
-| Separate projector BN statistics | Code target :224, each source :230 | Target-only forward then one pooled source-only forward; singleton source domains cannot carry BN, parent ruling | deviation: source-domain BN pooling |
-| Cosine normalization | Eq. (3) uses embedding dot product, normalization implicit; code models.py:280 L2-normalizes | `F.normalize` before dot product in `cross_domain_contrastive` | match to code; paper implicit |
-| Zero-vector norm safeguard | Paper/code no zero-vector safeguard | F.normalize eps=1e-12, producing finite zero embeddings | unspecified |
-| Eq. (3) candidate axis | Paper source-anchor to target candidates; code concatenates source+target and symmetric within/cross positives, models.py:231–234,264–294 | Cross-domain only `(S,T)`; no target-target pairs; parent ruling follows paper and v54 §7.4 | match to paper, deviation from code |
-| Eq. (3) reduction | Paper `-1/2 sum_l`; code mean symmetric anchors without 1/2 | Singleton source domains, retain factor 1/2 then mean over domains | match to paper specialized to bags; deviation from code |
-| No-positive finite extension | Exact Eq. (3) infinite if class absent; code :287 clamps unnormalized numerator 1e-6 | Relative mass floor 1e-6; constant absent-class anchor, zero gradient, counted per step; parent ruling | unspecified |
-| Numerical evaluation | Paper exponential ratio; code direct exp may overflow | Stable logsumexp and safe all-masked handling in losses.py | match mathematically above floor |
-| Pseudo-label | Algorithm 1; models.py:224–228 argmax softmax, no threshold | Frozen common-head detached logits argmax; all target bags eligible, training labels unread | match |
-| Source-source loss, Eq. (4) | Code :241–248 trains encoder AND projector across source pairs | NOT computed; history source_source=0 diagnostic placeholder, not a measured original loss; parent ruling | deviation: no source-only projector training |
-| Objective Eq. (5) | Source CE + alpha ST + gamma SS | Diagnostic frozen source CE + constant searched ST weight; no SS, training.py | deviation: controlled phase 2 |
-| Alpha/gamma Eqs. (6)–(7) | Alpha logistic `2/(1+exp(-10*t/D))-1`; paper gamma=alpha/10, code main.py:88–91 SS=alpha/2 | No ramps; constant contrastiveWeight, SS moot; parent ruling, v54 §7.7 | deviation from paper and code |
-| ST weight range | Paper dynamic alpha; no search range | `contrastiveWeight=search.LOSS_WEIGHT`, [1e-3,10] log, v54 §7.7 | deviation: approved common search |
-| Default ST weight | No fixed paper default for this variant | 1 for standalone smoke; searches supply their value | unspecified |
-| ST temperature | Code models.py:210 and main.py:191: .07; paper temperature symbol | Standalone .07; `TEMPERATURE=FloatDistribution(.01,1,log=True)`, v54 §7.7 | match default; deviation search range explicitly protocol assumption |
-| SS temperature | Code .03; paper symbol tau shared in Eqs. (3),(4) | Not used or searched, SS dropped | deviation, moot |
-| Adam optimizer | §4.3 / main.py:62: Adam, beta1=.5, beta2=.999 | Same betas, target trunk + projector only | match betas, deviation trainable set |
-| Learning rate / weight decay ranges | Paper lr=.0002; no variant search | Shared search lr2 [1e-5,1e-2] log, wd2 [1e-7,1e-2] log, v54 §7.7 | deviation: approved common search |
-| Standalone lr2/wd2 | No paper values for controlled variant | .001 / 0; supplied to standalone smoke only, same convention as other comparators | unspecified |
-| Source batch selection | Code one shuffled trial batch from every source | Shared class-balanced cyclic source queues; count classes * floor(bagsPerStep/classes), parent ruling, UDA-DDA template | unspecified |
-| Batch size / epochs | Paper batch36; main.py defaults batch20, epoch200; iterations ceil(epoch*90/batch), :274–283 | Shared checked schedule, bagsPerStep>=2; epochs2 exact, no early stopping; v54 §§4.5,7.7 | deviation: common budget |
-| Target singleton handling | Eq. (3) one candidate has zero gradient; code projector BN cannot train one sample | Refuse target set <2; otherwise skip singleton remainder update and record count plus contributing bag count, parent ruling | unspecified |
-| Source freeze / target bridge | Native one shared trainable extractor | Shared bridge copies compatible source weights; keeps new spatial convolution for 29 vs14 channels; frozen source BN, attention, head; target trunk trainable, v54 §7.3 | deviation: common two-phase protocol |
-| Checkpoint seed | Native setup_seed(20), main.py:25 | Verify record seed `search.PHASE_ONE_SEED=1` even when trial seed=0; transfer, rotation, partition, channels checked; L70–L71 / v54 §4.5 | deviation: common checkpoint |
-| Training/evaluation split | main.py:167–168 target_data=test_data; LOSO PhysioNet 103 subjects | Adapt target TRAIN only; no test argument, disjoint subject role guards, v54 §4.5 / L59 | deviation: removes transductive test exposure |
-| Selection | main.py:112–114 maximizes test accuracy over iterations | Record all inner validation epochs, pooled balanced accuracy chosen by shared search; refit has no validation; optional shared label-free secondary; v54 §4.5 | deviation: removes test-label selection |
-| Preprocessing, Eq. (8) | §4.2 filtering/standardization; main.py norm_type default none, utils loader external files | Existing prepared bag data only, no comparator preprocessing, v54 common input | deviation: common data |
-| Persistence | No released checkpoint format for our variant | Shared save/load manifest, partition/code checks, own source digest; include projector BN buffers; no bridge when loading trained target | deviation: repository contract |
-| Smoke seed and shapes | Not a paper experiment | Unit id `CLUDA:synthetic:rotation0`, SHA256-derived seed 639203496; (8 bags,2 windows,29/14 channels,512), 3/5 epochs, schedule8 | deviation: explicitly synthetic execution only |
+| Feature extractor | Paper Eq. (1)/Table 1 CNN+Transformer; models.py:38–162: 40-wide tokens, six layers, ten heads, expansion4, dropout .5, flatten1480->256 | Existing EEGNet-8,2: 8 temporal filters, multiplier2, 16 separable filters, kernels64/16, pooling4/8, BN/ELU, dropout .25, spatial maxnorm1; 256-wide bag representation, v54 §7.3 | deviation: common capacity |
+| Classifier | Paper §3.2.3 two FC; code 256->32->4 with ELU/dropout .3 | Frozen common 256->2 linear bag head, maxnorm .25, v54 §7.3 | deviation: common capacity |
+| MIL aggregation and domain unit | Trial classification; each source subject contains multiple trials | Common tanh/softmax attention, gamma0/no consensus, bag-level labels; subject-domain bag(s), v54 §§7.2–7.4 | deviation: common bag protocol |
+| Projector | Paper §3.2.4/Table1; models.py:164–178, bias-free linear256->1024, affine BN, ReLU, nonaffine BN, bias-free linear1024->256, nonaffine BN | Same audited architecture; input width from existing model; no inference override | match to code; extra BN layers absent from simplified paper table |
+| Projector initialization | Paper does not state initialization | Fresh PyTorch defaults seeded for each phase-2 run, no inherited phase-one projector | unspecified |
+| BN defaults / precision | Paper silent, code framework defaults | eps1e-5, momentum.1, running stats, common model double precision | unspecified |
+| Projector batching | Target forward models.py:225, each source separately :232 | Separate target forward then one pooled source forward; minimum2 per side; L77 | deviation: singleton-source BN pooling |
+| Inference | Fig.2 / README:18 only extractor+classifier | Inherited target EEGNet+common attention+head, projector never called; state saved for audit | match mechanism under common MIL |
+| Pseudo-labels | models.py:225–229 softmax argmax, no threshold | Detached frozen-head argmax on target bag logits; no target-training label access | match |
+| ST positives, anchors and reduction | Paper Eq.(3) cross-only source-anchored -1/2 sum; code :233–241 symmetric mean on concat(source_i,target), then mean domains | `cross_domain_contrastive` follows code, includes target-target pairs, no paper factor1/2 | match code; paper/code disagreement resolved L81 |
+| SS positives, anchors and reduction | Paper Eq.(4) cross-source formula; code :243–249 symmetric SupCon on each unordered domain pair, then pair mean | `source_source_contrastive`, trainable projector; computed even if singleton pairs yield zero | match code; paper/code disagreement resolved L81 |
+| Cosine / self exclusion | Paper normalization implicit; models.py:265–278 excludes diagonal, normalizes L2, dot/tau | Same, logsumexp evaluation, explicit failure on undefined zero norm | match on defined inputs |
+| Numerator floor | models.py:280 max(positive unnormalized mass,1e-6) | Same floor for valid anchors; possible negative saturated loss retained | match |
+| Missing positives | Verbatim code retains clamped anchor; paper undefined at zero positive mass | Exclude from anchor mean; differentiable zero if none valid; per-step excluded counts, parent follow-up | deviation: minimal bag-level remedy |
+| Coefficient ratio | Paper Eqs.(5)–(7) SS=alpha/10; main.py:88–91 SS=gamma/2, ST=gamma | total=source_ce+w*(ST+.5*SS), `contrastive_objective` | match code ratio; paper/code disagreement resolved L81 |
+| Ramp | Native gamma=2/(1+exp(-10*t/D))-1 | Constant searched w, L79 common schedule | deviation: common fixed phase-2 schedule |
+| Weight range | No published controlled-variant search | w=search.LOSS_WEIGHT [1e-3,10] log, v54 §7.7 | deviation: common search |
+| Standalone weight default | No fixed paper value for this variant | 1 for smoke; actual search supplies value | unspecified |
+| Temperatures | models.py:208 / main.py:193 T=.07, T2=.03; paper uses symbol tau | ST default.07, searched search.CONTRASTIVE_TEMPERATURE [.01,1] log; SS fixed.03, no second temperature axis | match code SS/default ST; deviation: common ST search |
+| Optimizer | Paper §4.3 / main.py:62 Adam betas(.5,.999) lr.0002 | Adam betas(.5,.999), target trunk+projector; shared lr2[1e-5,1e-2] log, wd2[1e-7,1e-2] log | match betas; deviation common trainable set/search |
+| Standalone optimizer defaults | No controlled-variant values | lr2=.001, wd2=0 for smoke, same repository convention | unspecified |
+| Source sampling | Official separate shuffled trial batches per source | Shared ClassQueues.draw(bagsPerStep//classes); both source classes required before model construction; repeated subjects grouped, L78 | unspecified |
+| Batch size / epochs | Paper batch36, main.py defaults batch20/epoch200 | Shared checked schedule, >=2 bags/side, exact epochs2, no early stopping, v54 §§4.5,7.7 | deviation: common budget |
+| Singleton target remainder | Official projector BN cannot train one example | Skip entire update, no projector/optimizer/source draw, count in history; target set<2 refuses, L78 | unspecified |
+| Source CE | Official mean source-domain CE, trainable source | Diagnostic sampled-source bag CE only, no gradient; source frozen v54 §7.3 | deviation: common frozen source |
+| Phase-two bridge/freeze | Native shared trainable Conformer | Existing shared bridge copies compatible weights, keeps spatial initialization for29->14; source BN/attention/head frozen; target trunk trains | deviation: common two-phase protocol |
+| Phase-one checkpoint seed | main.py setup_seed20 | Verify search.PHASE_ONE_SEED=1 despite trial seed0; transfer/rotation/partition/channels checks, L70–L71 | deviation: common checkpoint |
+| Adaptation data | main.py:167–168 target_data=test_data | Target TRAIN bags only, disjoint subjects, no test input, L59 | deviation: inductive common protocol |
+| Selection | main.py:118–119 retains maximum test accuracy | All inner validation epochs recorded, shared pooled BA selection, no refit validation; optional label-free secondary, v54 §4.5 | deviation: removes test-label selection |
+| Preparation, Eq.(8) | Paper filtering/standardization, code main.py norm_type default none | Existing official prepared bag input only, no comparator preparation fork | deviation: common inputs |
+| Persistence | No original controlled-variant checkpoint format | Existing shared model_store plus comparator digest; full projector+BN state, no bridge on reload; integration e5de342 | deviation: repository contract |
+| Smoke | Not a paper experiment | Unit-id SHA256 seed639203496, 8 bags/domain, 2windows/bag,29/14channels,512samples;3/5epochs,8bags/step | deviation: synthetic execution check only |
 
-**Degenerate cases:** a single target candidate, or a target batch with only one
-pseudo-class, gives zero contrastive gradient for every anchor (present positives
-have probability one, absent positives are constant). No confidence workaround is
-introduced. Target singletons skip updates explicitly as above. For other batches,
-`step_anchors_without_positive`, `step_anchors`, `step_target_pseudo_classes`,
-`skipped_singleton_target_steps`, `target_bags_contributing` expose the issue.
-Loss histories average only the executed updates; missing-anchor counts sum over
-updates. The finite floor also saturates extremely low positive mass.
+Lineage limits inherited from the first audit: the cited Song2022 EEG Conformer,
+Lee2022 and Shen2022 method references were not found by guidance-name search;
+`song2024macs` and `lee2025lbm` are different papers. No lineage equation was
+invented. This rewrite follows the pinned runnable loss rather than recovering
+those references from memory. The abstract fetch for Khosla does not establish a
+line-by-line equivalence to their implementation; the precise empty-anchor
+extension is the parent's explicit decision above.
 
-## Registration (integrated 2026-11-04)
+## Verification, RED/GREEN, and what was not tested
 
-Phase-1 group **common**, strategy name **CLUDA**; no new phase-1 group. The parent
-integration took the registration this unit specified, through the paths every other
-comparator uses:
+Scratch and all logs remain at
+`/var/folders/y9/9hfxsk810hv08cnh64bncjq80000gn/T/tmp.BMfuyCBETP/`, undeleted.
+The rewrite first changed tests while the old Eq.(3) implementation still stood:
+`.venv/bin/python -m pytest -q tests/test_balladeer_comparator_cluda.py` exited1,
+**6 failed,8 passed in5.20s** (target-target loss, missing new loss API, SS
+projector gradient/ratio, domain averaging, stale provenance). Official-loss
+implementation then passed14 tests. After the no-positive follow-up, new tests
+were RED again: **5 failed,10 passed in5.37s**, exit1.
 
-- `model_store.STRATEGIES` holds "CLUDA" in HASD's former slot (HASD left the
-  comparison, v54 §7.1); `mil_wrapper.COMPARATORS` lists it among the seven non-MIL
-  comparators of the common group (v54 §7.3 «CLUDA incluido»), so the existing
-  comprehension derives `search.PHASE_ONE_GROUP_OF["CLUDA"] == "common"`.
-- `search.OWN_AXES["CLUDA"] = (search.CONTRASTIVE_TEMPERATURE,)`,
-  `FloatDistribution(0.01, 1.0, log=True)` (v54 §7.7); `training.TEMPERATURE` is that
-  same object, defined once in `search` like CLUST's and CASUAL's own axes.
-- `campaign.register` maps "CLUDA" to `training.register`, which supplies
-  `contrastiveWeight` on `search.LOSS_WEIGHT` and `temperature` on `TEMPERATURE`;
-  shared lr2/wd2 come from `search.phase_two_space`.
-- `mechanisms.load_phase_two` dispatches a CLUDA model to `training.load_phase_two`
-  (full auxiliary restoration and source-digest enforcement), so every stored-model
-  reader of the campaign gets the whole `CLUDAModel` with no unloaded keys.
-- `remote_units` derives groups and strategies from these registries; a trained target
-  is never re-bridged.
+Final commands:
+- `.venv/bin/python -m pytest -q tests/test_balladeer_comparator_cluda.py`:
+  **15 passed in5.24s**, exit0; final rerun **15 passed in5.12s**, exit0.
+- `.venv/bin/python -m pytest -q tests/test_balladeer_campaign.py -k cluda_runs`:
+  **1 passed,31 deselected,2 warnings in82.58s**, exit0. Warnings are Optuna's
+  experimental GPSampler notice. Campaign integration and full-state reload run.
+- `PYTHONPATH=src .venv/bin/python -m MIL_CREDA_EEG.comparators.cluda.smoke`:
+  exit0; output below.
 
-## Verification and bounds (2026-11-05)
+Tests pin target-target pairs, symmetric/domain/pair means, exact coefficient
+ratio, fixed SS temperature, normalized-vector scale invariance, empty-positive
+exclusion and zero gradients, retained active numerator clamp, positive-set
+non-saturated nonnegativity without a global claim, SS projector gradient with
+multi-bag domains but no source/target encoder gradients, and singleton SS zero
+pair fraction. Existing tests retain checkpoint/PHASE_ONE_SEED checks, common
+state freezing, target gradients, label blindness, reproducibility, projector
+BN minimum/separate forwards, singleton skips, final-epoch/refit semantics,
+registration and model-store/digest round trips, provenance/test coverage.
 
-Test-first RED, before package existed:
-`.venv/bin/python -m pytest -q tests/test_balladeer_comparator_cluda.py`:
-exit 2, collection `ModuleNotFoundError: No module named 'MIL_CREDA_EEG.comparators.cluda'`.
-Initial implementation: 11 passed in 4.85s. After separate-BN/source-queue/singleton
-rulings: same focused command **12 passed in 4.85s**, exit 0; final rerun
-**12 passed in 4.74s**, exit 0. `git diff --check` on the allowed surfaces exited 0.
+A read-only AST extraction executed the pinned upstream loss alone on CPU in
+scratch. Before the exclusion remedy, values AND feature gradients matched at
+N2/tau.03, N5/tau.07, N8/tau.01 (float64 tolerance1e-11). After the remedy, exact
+upstream equivalence holds only where all anchors have positives; final CPU
+audit matched values and gradients at N4/tau.03, N6/tau.07, N8/tau.01 with all
+anchors positive. No-positive cases intentionally differ and are tested
+separately. No upstream source was copied to the target repository.
 
-Tests cover Eq. (3)'s closed form, factor 1/2/domain mean, scale invariance,
-finite/nonzero gradients, no-positive finite zero gradients, degenerate classes,
-projector shape/all trainable parameters, inference never calling projector,
-minimum BN size, source/attention/head parameter+buffer freezing, compatible
-bridge, no target-label reads, exact reproducibility, PHASE_ONE_SEED metadata,
-invalid params/roles, final-epoch retention, validation per epoch and refit
-non-evaluation, registration with temporary parent-owned registries, shared-store
-round-trip and own-code digest rejection, separate projector forwards, singleton
-skip/count and missing-source-class refusal before model construction, and every
-provenance invariant having a test.
-
-Smoke command:
-`PYTHONPATH=src .venv/bin/python -m MIL_CREDA_EEG.comparators.cluda.smoke`
-(exit 0). Output after final separate-BN ruling:
+Final smoke output:
 
 ```text
 seeded synthetic EEG CPU only; NOT paper numbers; seed=639203496
 source=(8 bags,2 windows,29 channels,512); target=(8 bags,2 windows,14 channels,512)
 phase1_loss [0.037831, 0.036197, 0.036509]
-phase2_loss [0.866523, 0.870275, 0.708391, 0.947383, 0.877775]
-contrastive [0.17702, 0.180771, 0.018888, 0.257879, 0.188272]
+phase2_loss [1.455148, 1.282699, 1.5132, 1.142324, 2.480091]
+contrastive [0.765644, 0.593196, 0.823696, 0.452821, 1.790588]
+source_source [0.0, 0.0, 0.0, 0.0, 0.0]
 step_anchors_without_positive [[0], [0], [0], [0], [0]]
+step_source_anchors_without_positive [[32], [32], [32], [32], [32]]
+source_zero_loss_pair_fraction [1.0, 1.0, 1.0, 1.0, 1.0]
+skipped_singleton_target_steps [0, 0, 0, 0, 0]
 step_target_pseudo_classes [[2], [2], [2], [2], [2]]
 ```
 
-Existing `MIL-CREDA/Results/Toyset/full/{lunas,rollo,toroide}.npz` were inspected:
-they contain old benchmark histories/latent arrays such as `(81,64)`, not EEG
-window bags. Thus a seeded synthetic EEG-shape fixture was used explicitly,
-not a claim to have run the dataset-curator toy or the approved hypothesis PoC.
-Loss moved; no monotone-convergence or accuracy claim follows.
+The existing lunas/rollo/toroide archives were previously inspected as benchmark
+histories/latent arrays, not EEG window bags. This remains explicitly synthetic
+EEG-shape execution, not the operator's hypothesis PoC or real-data evidence.
+No accuracy or published numerical reproduction is claimed.
 
-Out-of-scope diagnostics: proposal-implementation probe exited 0, `nextStep=convert`
-(global inferred mixed NumPy/Torch imports, not a CLUDA failure); read its
-`next-step-convert.md` reference, changed no global backend declaration.
-Remote-parallelism `assess --units 4 --axis fold` exited 2:
-`measured inputs are required, never guessed; missing: --unit-minutes, --owners,
---sessions-per-account, --session-limit-hours, --quota-hours, --setup-minutes`.
-No verdict or launch authorization. Later stretch must measure those inputs;
-checklist: split fold/seed/subject axis, never arm; unit-id SHA256 seeds; same
-commit/requirements/accelerator/data prep; identical environment stamps; deterministic
-flags; per-owner rehearsals and one account per person/service; no cross-host timing
-pooling. This comparator smoke seed is already unit-id-derived.
-
-Not tested: upstream execution, full repository suite (not requested), real EEG
-training, held-out metrics, paper performance, GPU/remote runs, multi-account
-readiness, or parent registration end-to-end. No commits, launches, upstream
-patches, or edits to `comparators/adaptmil` were made by this stretch.
+Not run: full suite, original data/training, GPU/remote jobs, real-fold SS inert
+fractions or published-result comparison. No commits, shared registration edits,
+AdaptMIL edits, pin changes, new source views, or GPU launches. The previous
+remote-parallelism assessment refused missing measured unit/setup durations and
+account limits; that remains a later stretch's prerequisite, not launch authority.

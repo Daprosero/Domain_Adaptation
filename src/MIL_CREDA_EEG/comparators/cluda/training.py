@@ -1,7 +1,7 @@
 """CLUDA controlled bag adaptation, protocol v54 §§4.5, 7.2–7.4, 7.7.
 
-The paper's Eq. (3), not the official concatenated SupCon implementation.
-No source-source objective; see the explicit parent ruling in REPLICATION.md.
+Official symmetric SupCon, including target-target and source-source pairs.
+L81 supersedes the earlier paper-Eq. (3) ruling; see REPLICATION.md.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import torch
 from torch.nn import functional as F
 
 from MIL_CREDA_EEG import eegnet, model_store, search, two_phase
-from .losses import cross_domain_contrastive
+from .losses import cross_domain_contrastive, source_source_contrastive, contrastive_objective
 from .model import CLUDAModel
 
 __provenance__ = {
@@ -22,6 +22,7 @@ __provenance__ = {
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
         "cluda_phase_two_freezes_common_state_and_trains_target_and_projector",
+        "cluda_source_source_trains_only_projector_and_coefficient_ratio",
         "cluda_argmax_has_no_threshold_and_target_training_labels_are_unread",
         "cluda_last_epoch_validation_and_refit",
         "cluda_rejects_foreign_records_invalid_parameters_and_leaking_roles",
@@ -70,9 +71,9 @@ def _represent(model, bags, domain, device):
 
 
 def adaptation_step(model, source, target, params, device):
-    """Eq. (2) diagnostic + weighted Eq. (3); frozen source, trainable projector.
+    """Official main.py:91 objective; frozen source, trainable projector.
 
-    Project target separately, then source, as in official models.py:224,230.
+    Project target separately, then source, as in official models.py:225,232.
     Singleton source domains share one source-only BN forward (declared deviation).
     No source labels become instance labels; target training labels are unread.
     """
@@ -86,11 +87,22 @@ def adaptation_step(model, source, target, params, device):
     pseudo = pseudo_labels(model.head.linear(zt))
     target_embeddings = model.projector(zt)
     source_embeddings = model.projector(zs)
+    domains = [b.subject for b in source]
     contrastive, missing = cross_domain_contrastive(
-        source_embeddings, target_embeddings, labels, pseudo, params["temperature"])
-    return {"loss": ce + params["contrastiveWeight"]*contrastive,
-            "source_ce": ce, "contrastive": contrastive,
-            "anchors_without_positive": missing, "anchors": len(source),
+        source_embeddings, target_embeddings, labels, pseudo, params["temperature"], domains)
+    pair_diagnostics = {}
+    source_source, missing_source = source_source_contrastive(
+        source_embeddings, labels, domains, diagnostics=pair_diagnostics)
+    sizes = {subject: domains.count(subject) for subject in dict.fromkeys(domains)}
+    n_domains = len(sizes)
+    return {"loss": contrastive_objective(ce, contrastive, source_source, params["contrastiveWeight"]),
+            "source_ce": ce, "contrastive": contrastive, "source_source": source_source,
+            "anchors_without_positive": missing, "anchors": len(source) + n_domains*len(target),
+            "source_anchors_without_positive": missing_source,
+            "source_anchors": (n_domains-1)*len(source),
+            "source_domains": n_domains,
+            "source_pairs": pair_diagnostics["pairs"],
+            "source_zero_loss_pairs": pair_diagnostics["zero_loss_pairs"],
             "target_pseudo_classes": int(pseudo.unique().numel())}
 
 
@@ -145,12 +157,14 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
         two_phase.set_phase_two_modes(model)
         model.projector.train()
         batches = two_phase.shuffled_batches(len(d["target_train"]), schedule["bagsPerStep"], generator)
-        sums = dict.fromkeys(("loss", "source_ce", "contrastive"), 0.)
+        sums = dict.fromkeys(("loss", "source_ce", "contrastive", "source_source"), 0.)
         absent, anchors, classes = [], [], []
+        source_absent, source_anchors, source_domains = [], [], []
+        source_pairs, source_zero_pairs = [], []
         skipped, contributing = 0, 0
         for batch in batches:
             if len(batch) < 2:
-                # Eq. (3) has zero gradient for one target candidate; BN cannot train.
+                # Retained L78 batching deviation: target projector BN cannot train one bag.
                 skipped += 1
                 continue
             source = [d["source_train"][j] for j in queues.draw(schedule["bagsPerStep"] // model.classes)]
@@ -170,6 +184,11 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
             absent.append(terms["anchors_without_positive"])
             anchors.append(terms["anchors"])
             classes.append(terms["target_pseudo_classes"])
+            source_absent.append(terms["source_anchors_without_positive"])
+            source_anchors.append(terms["source_anchors"])
+            source_domains.append(terms["source_domains"])
+            source_pairs.append(terms["source_pairs"])
+            source_zero_pairs.append(terms["source_zero_loss_pairs"])
         accuracy, free = math.nan, math.nan
         if d["target_valid"]:
             G = two_phase.evaluate(model, d["target_valid"], "target", device)
@@ -178,7 +197,15 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
             validation.append(two_phase.validation_record(epoch, d["target_valid"], G))
         history.append({"epoch": epoch, "seed": seed, "fold": rotation, "model": "CLUDA:phase2",
                         "transfer": data.transfer.name,
-                        **{k: v/len(absent) for k, v in sums.items()}, "source_source": 0.,
+                        **{k: v/len(absent) for k, v in sums.items()},
+                        "source_zero_loss_pair_fraction": sum(source_zero_pairs)/sum(source_pairs),
+                        "step_source_pairs": source_pairs,
+                        "step_source_zero_loss_pairs": source_zero_pairs,
+                        "source_anchors_without_positive": sum(source_absent),
+                        "source_anchors": sum(source_anchors),
+                        "step_source_anchors_without_positive": source_absent,
+                        "step_source_anchors": source_anchors,
+                        "step_source_domains": source_domains,
                         "skipped_singleton_target_steps": skipped,
                         "target_bags_contributing": contributing,
                         "anchors_without_positive": sum(absent), "anchors": sum(anchors),

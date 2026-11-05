@@ -24,8 +24,8 @@ class CLUDAModel(CommonMILModel):
 
     Paper §3.2.4 / Table 1: two linear maps and nonlinearity; architecture
     details audited from official models.py:167-181, not vendored. The projector
-    remains trainable in phase 2 (parent ruling); source-source loss is dropped,
-    not claimed gradient-free through this shared trainable projector.
+    remains trainable in phase 2 through both official contrastive losses (L81).
+    The source-source term trains this projector, never the frozen source trunk.
     """
     def __init__(self, source_channels: int, target_channels: int):
         super().__init__(source_channels, target_channels)
