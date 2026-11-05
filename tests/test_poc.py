@@ -231,7 +231,7 @@ class _Stop(Exception):
 def test_the_runners_hand_the_per_pair_shift_to_the_draw(monkeypatch, runner, args):
     seen = []
 
-    def fake_build_family(name, seed, scale, per_pair_shift=0.0):
+    def fake_build_family(name, seed, scale, per_pair_shift=0.0, **draw_options):
         seen.append(per_pair_shift)
         raise _Stop
 

@@ -484,7 +484,8 @@ def family_generators() -> dict:
 
 
 def build_family(name: str, seed: int, scale: Scale,
-                 per_pair_shift: float = 0.0) -> toy_bags.Familia:
+                 per_pair_shift: float = 0.0, rotation_degrees: float | None = None,
+                 subject_field: float = 0.0) -> toy_bags.Familia:
     """One family's two domains, their labels and their bag indices.
 
     `toy_bags.construir` is the one call: it draws the source from `seed`, the
@@ -493,8 +494,10 @@ def build_family(name: str, seed: int, scale: Scale,
     `Familia` dataclass -- not a 6-tuple -- and carries `Xt_crudo` as a seventh
     field.
 
-    `per_pair_shift` is `toy_bags.construir`'s `escala_por_par`: off (0) by
-    default, which is the draw exactly as it was.
+    `per_pair_shift` is `toy_bags.construir`'s `escala_por_par`,
+    `rotation_degrees` its `grados` (the Sigma-preserving rotation; `None` is
+    `perturbar`'s declared angle) and `subject_field` its `fraccion_de_campo`.
+    All three are off by default, which is the draw exactly as it was.
     """
     generators = family_generators()
     if name not in generators:
@@ -502,7 +505,9 @@ def build_family(name: str, seed: int, scale: Scale,
     return toy_bags.construir(name, generators[name], semilla=seed,
                               n=scale.points_per_domain,
                               bolsas_por_clase=scale.bags_per_class,
-                              escala_por_par=per_pair_shift)
+                              escala_por_par=per_pair_shift,
+                              grados=rotation_degrees,
+                              fraccion_de_campo=subject_field)
 
 
 def datasets_of(familia: toy_bags.Familia) -> dict:

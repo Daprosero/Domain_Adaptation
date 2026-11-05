@@ -105,6 +105,63 @@ DESPLAZAMIENTO_DE_PAR = 3000
 #: region of the roll.
 ESCALA_POR_PAR_DECLARADA = 0.25
 
+#: The subject field's own stream offset (its phase), so switching it on
+#: changes no other draw.
+DESPLAZAMIENTO_DE_CAMPO = 4000
+
+#: How many full periods the subject field makes over `rollo`'s whole
+#: parameter range: one per class segment, so the bands of one class see
+#: shifts of both signs and every size up to the amplitude.
+PERIODOS_DEL_CAMPO = 3
+
+#: `CREDA.toy_experiment.dura_rollo` draws `t` uniformly on this interval.
+T_ROLLO = (1.5 * np.pi, 4.5 * np.pi)
+
+
+def t_bajo_campo(t: np.ndarray, amplitud_t: float, periodos: int,
+                 fase: float) -> np.ndarray:
+    """`t + amplitud_t * sin(2 pi periodos (t - t0) / L + fase)` on `rollo`'s range.
+
+    A smooth, low-frequency displacement of the roll's own parameter. It is
+    invertible (strictly increasing in `t`) whenever
+    `amplitud_t * 2 pi periodos / L < 1`; that is checked, never assumed.
+    """
+    bajo, alto = T_ROLLO
+    escala = 2 * np.pi * periodos / (alto - bajo)
+    if amplitud_t * escala >= 1.0:
+        raise ValueError(
+            f"amplitud_t = {amplitud_t} with {periodos} periods is not invertible "
+            f"along t: it needs amplitud_t < {1.0 / escala}")
+    return t + amplitud_t * np.sin(escala * (t - bajo) + fase)
+
+
+def espaciado_minimo_t(Xs, ys, bs, Xt, yt, bt) -> float:
+    """The smallest gap, in `t`, between the median `t` of two neighbouring
+    bands of one class, over both raw draws. A slide below half of it keeps
+    every band nearest its own place (condition 4 of the run-3 analysis) for
+    the tightest band, not only the typical one."""
+    gaps = []
+    for X, y, b in ((Xs, ys, bs), (Xt, yt, bt)):
+        t = parametro("rollo", X)
+        for c in np.unique(y):
+            centres = np.sort([np.median(t[(y == c) & (b == k)])
+                               for k in np.unique(b[y == c])])
+            gaps.append(np.diff(centres).min())
+    return float(min(gaps))
+
+
+def campo_de_sujeto(X: np.ndarray, amplitud_t: float, periodos: int,
+                    fase: float) -> np.ndarray:
+    """Every `rollo` point slid ALONG the roll by `t_bajo_campo`, height kept.
+
+    The point stays on the manifold `(t cos t, h, t sin t)`; only where along
+    it changes, smoothly with `t`, so neighbouring bands move alike and an
+    instance-level encoder can invert the map.
+    """
+    t = parametro("rollo", X)
+    nuevo = t_bajo_campo(t, amplitud_t, periodos, fase)
+    return np.column_stack([nuevo * np.cos(nuevo), X[:, 1], nuevo * np.sin(nuevo)])
+
 
 def parametro(nombre: str, X: np.ndarray) -> np.ndarray:
     """The scalar the generator cut the classes out of, read back off `X`.
@@ -228,6 +285,9 @@ class Familia:
     #: The per-pair shift applied to the target, `{(class, band): {"angulo",
     #: "eje", "traslacion"}}`; `None` when the option is off.
     desplazamientos: dict | None = None
+    #: The subject field applied to the target (`fraccionDeBanda`,
+    #: `espaciadoMinimoT`, `amplitudT`, `periodos`, `fase`); `None` when off.
+    campo: dict | None = None
 
 
 def desplazar_por_par(Xt: np.ndarray, yt: np.ndarray, bt: np.ndarray,
@@ -268,7 +328,8 @@ def desplazar_por_par(Xt: np.ndarray, yt: np.ndarray, bt: np.ndarray,
 def construir(nombre: str, fn, semilla: int = 0,
               n: int = PUNTOS_POR_DOMINIO,
               bolsas_por_clase: int = BAGS_PER_CLASS_TOY,
-              escala_por_par: float = 0.0) -> Familia:
+              escala_por_par: float = 0.0, grados: float | None = None,
+              fraccion_de_campo: float = 0.0) -> Familia:
     """Source, target, labels and bag indices for one family.
 
     The draw is CREDA's, down to the seed offset: `datos_semilla` takes the
@@ -316,9 +377,27 @@ def construir(nombre: str, fn, semilla: int = 0,
     permutacion = permutacion_de_bandas(ys, bolsas_por_clase, semilla)
     bs = bandas_permutadas(bs, ys, permutacion)
     bt = bandas_permutadas(bt, yt, permutacion)
+    # The subject field, OFF by default: when on, the raw target is slid along
+    # the roll by at most `fraccion_de_campo` of a band's width in `t` BEFORE
+    # the global shift. The bands were already read off `Xt_crudo`, so every
+    # point keeps its bag and every target bag keeps its partner.
+    if fraccion_de_campo < 0:
+        raise ValueError(f"fraccion_de_campo = {fraccion_de_campo}: it is non-negative")
+    campo = None
+    base = Xt_crudo
+    if fraccion_de_campo > 0:
+        if nombre != "rollo":
+            raise ValueError(f"the subject field is declared on `rollo` only, not {nombre!r}")
+        ancho = espaciado_minimo_t(Xs, ys, bs, Xt_crudo, yt, bt)
+        fase = float(np.random.default_rng(semilla + DESPLAZAMIENTO_DE_CAMPO)
+                     .uniform(0.0, 2 * np.pi))
+        amplitud = fraccion_de_campo * ancho
+        base = campo_de_sujeto(Xt_crudo, amplitud, PERIODOS_DEL_CAMPO, fase)
+        campo = {"fraccionDeBanda": fraccion_de_campo, "espaciadoMinimoT": ancho,
+                 "amplitudT": amplitud, "periodos": PERIODOS_DEL_CAMPO, "fase": fase}
     # `perturbar` consumes `rng`, so it runs after both parameter reads: moving
     # it earlier would change the source draw and silently reseed the figure.
-    Xt = perturbar(Xs, Xt_crudo, rng)
+    Xt = perturbar(Xs, base, rng, grados=grados)
     # Off by default, and off this is the draw exactly as it was.
     if escala_por_par < 0:
         raise ValueError(f"escala_por_par = {escala_por_par}: a scale is non-negative")
@@ -328,4 +407,4 @@ def construir(nombre: str, fn, semilla: int = 0,
             Xt, yt, bt, semilla, escala_por_par, float(Xs.std(0).mean()))
     return Familia(nombre=nombre, Xs=Xs, ys=ys, bs=bs,
                    Xt=Xt, yt=yt, bt=bt, Xt_crudo=Xt_crudo,
-                   desplazamientos=desplazamientos)
+                   desplazamientos=desplazamientos, campo=campo)
