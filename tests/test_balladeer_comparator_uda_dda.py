@@ -217,7 +217,7 @@ def test_uda_search_hook_uses_common_checkpoint(registries):
         0: {"source_train": s, "source_valid": sv, "target_train": t, "target_valid": tv}})
     record = (two_phase.phase_one_state(model), {
         "phase": 1, "name": "common", "transfer": data.transfer.name, "rotation": 0,
-        "seed": 13, "partition_sha256": "hash", "hyper": {}})
+        "seed": search.PHASE_ONE_SEED, "partition_sha256": "hash", "hyper": {}})
     trained = search.train_phase_two("UDA-DDA", data, 0, 13, record, params(), schedule())
     assert isinstance(trained["model"], mil_wrapper.CommonMILModel)
     assert trained["result"]["checkpoint"]["hyper"]["confidenceB"] == 0.75

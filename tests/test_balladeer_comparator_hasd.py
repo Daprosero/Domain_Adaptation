@@ -278,8 +278,8 @@ def test_hasd_search_adapter_and_checkpoint_roundtrip(tmp_path):
     schedule = {"epochs1": 1, "epochs2": 1, "bagsPerStep": 2}
     hyper = search.phase_one_hyper("HASD", {"lr1": .001, "wd1": 1e-6}, schedule)
     state = two_phase.phase_one_state(model)
-    path = model_store.save(tmp_path / "Models", transfer=transfer, rotation=0, seed=0,
-             phase=1, name="HASD", state=state, hyper=hyper,
+    path = model_store.save(tmp_path / "Models", transfer=transfer, rotation=0,
+             seed=search.PHASE_ONE_SEED, phase=1, name="HASD", state=state, hyper=hyper,
              partition_sha256=doc[partition.HASH_FIELD], channels=channels)
     record = model_store.load(path, partition_path=partition_path)
     d = {"source_train": bags(), "source_valid": bags(),

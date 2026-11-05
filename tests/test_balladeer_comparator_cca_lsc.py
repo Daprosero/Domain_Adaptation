@@ -189,7 +189,7 @@ def test_cca_search_hook_uses_common_checkpoint():
             0: {"source_train": s, "source_valid": sv, "target_train": t, "target_valid": tv}})
         record = (two_phase.phase_one_state(model), {
             "phase": 1, "name": "common", "transfer": data.transfer.name, "rotation": 0,
-            "seed": 11, "partition_sha256": "hash", "hyper": {}})
+            "seed": search.PHASE_ONE_SEED, "partition_sha256": "hash", "hyper": {}})
         trained = search.train_phase_two("CCA-LSC", data, 0, 11, record, params(), schedule())
         assert isinstance(trained["model"], mil_wrapper.CommonMILModel)
         assert trained["result"]["checkpoint"]["hyper"]["calibrationHm"] == 1.5

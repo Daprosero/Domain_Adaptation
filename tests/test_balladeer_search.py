@@ -260,14 +260,14 @@ def test_the_phase_two_mil_creda_sigma_comes_from_the_phase_one_checkpoint(tmp_p
                                SCHEDULE, CPU)
 
 
-def test_phase_two_starts_only_from_the_outer_folds_phase_one_checkpoint_at_the_search_seed(
+def test_phase_two_starts_only_from_the_outer_folds_one_phase_one_checkpoint(
         tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
     good = ({}, {"phase": 1, "name": "MIL-CREDA", "transfer": LEVEL.name, "rotation": 2,
-                 "seed": search.SEARCH_SEED, partition.HASH_FIELD: data.partition_sha256,
-                 "sigma": 1.0})
+                 "seed": search.PHASE_ONE_SEED, partition.HASH_FIELD: data.partition_sha256,
+                 "sigma": 1.0, "state_sha256": "s" * 64})
     search._check_phase_one_record("MIL-CREDA", data, 2, good)
-    for change in ({"seed": search.REPORT_SEEDS[0]}, {"name": "common"},
+    for change in ({"seed": search.SEARCH_SEED}, {"name": "common"},
                    {partition.HASH_FIELD: "y" * 64}, {"transfer": "L11->L1"},
                    {"rotation": 1}):
         bad = ({}, {**good[1], **change})
@@ -286,8 +286,15 @@ def test_phase_two_starts_only_from_the_outer_folds_phase_one_checkpoint_at_the_
                            "history": [{"val_balanced_accuracy": 0.5}]}}
 
     monkeypatch.setattr(search, "train_phase_two", fake)
-    search.run_phase_two_study("MIL-CREDA", data, 2, good, SCHEDULE, root=tmp_path, n_trials=2)
+    study = search.run_phase_two_study("MIL-CREDA", data, 2, good, SCHEDULE, root=tmp_path,
+                                       n_trials=2)
     assert used == [(2, search.SEARCH_SEED, True)] * 6
+    assert study.user_attrs["phaseOneCheckpoint"] == search.phase_one_checkpoint_identity(good[1])
+    # a stored study started from another checkpoint is not continued
+    other = ({}, {**good[1], "state_sha256": "t" * 64})
+    with pytest.raises(search.SearchError, match="phaseOneCheckpoint"):
+        search.run_phase_two_study("MIL-CREDA", data, 2, other, SCHEDULE, root=tmp_path,
+                                   n_trials=3)
 
 
 def test_unwired_groups_and_strategies_refuse_before_creating_storage(tmp_path):
@@ -321,11 +328,11 @@ def test_a_two_trial_smoke_study_completes_and_writes_its_sqlite(tmp_path):
     chosen = search.select(studies["MIL-CREDA"])
     best = search.phase_one_hyper("MIL-CREDA", chosen["params"],
                                   search.refit_schedule(schedule, 1, chosen["epochs"]))
-    trained = search.train_phase_one("MIL-CREDA", data, 0, search.SEARCH_SEED, best, CPU)
+    trained = search.train_phase_one("MIL-CREDA", data, 0, search.PHASE_ONE_SEED, best, CPU)
     # the refit: every non-test fold, exactly E1 epochs, no validation
     assert trained["result"]["epochs"] == chosen["epochs"]
     assert trained["result"]["validation"] == []
-    saved = search.save_phase_one(root / "Models", "MIL-CREDA", data, 0, search.SEARCH_SEED,
+    saved = search.save_phase_one(root / "Models", "MIL-CREDA", data, 0, search.PHASE_ONE_SEED,
                                   trained)
     record = model_store.load(saved, partition_path=path_p)
     study = search.run_phase_two_study("MIL-CREDA", data, 0, record, schedule, root=root,

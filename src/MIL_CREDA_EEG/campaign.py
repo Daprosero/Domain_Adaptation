@@ -9,19 +9,21 @@ The steps, in order (`STEPS`), each one a subcommand of
    requested strategy starts from, trained on the three inner splits of F
    (`search.run_phase_one_study`); its selected (configuration, E1)
    (`search.select`) refit on the source subjects of all of F for exactly E1
-   epochs at the search seed and stored, the one phase-1 checkpoint of that group
-   and outer fold; then one phase-2 study per strategy, every trial starting from
-   that checkpoint in each inner split (`search.run_phase_two_study`). An
+   epochs at the report seed (`search.PHASE_ONE_SEED`) and stored, the one phase-1
+   checkpoint of that group and outer fold; then one phase-2 study per strategy,
+   every trial starting from that checkpoint in each inner split, at the search
+   seed, and recording its identity (`search.run_phase_two_study`). An
    existing study of the same identity is continued up to its declared count, or
    read back when complete; a study of another identity is refused naming what
    differs (`search.open_study`).
 2. `final` -- per transfer and outer fold r, at the one report seed (Sec. 4.6,
-   seed 1): each group's selected phase-1 (configuration, E1) of r refit on the
-   source subjects of F for exactly E1 epochs and stored, its source-only control
-   on the target test fold (`controls`; the device arm records `NA_RECORD`), each
-   strategy's selected phase-2 (configuration, E2) of r refit from that
-   checkpoint on the target bags of F for exactly E2 epochs, with no validation,
-   and stored with the selection that chose it, its target test predictions, and
+   seed 1): each group's one phase-1 checkpoint of r, the one the search step
+   stored and its phase-2 studies started from (refused when it is not), its
+   source-only control on the target test fold (`controls`; the device arm records
+   `NA_RECORD`), each strategy's selected phase-2 (configuration, E2) of r refit
+   from that same checkpoint on the target bags of F for exactly E2 epochs, with no
+   validation, and stored with the selection that chose it and the checkpoint's
+   identity, its target test predictions, and
    the target-supervised upper bound with the common group's selected `lr1`,
    `wd1` of r (`controls.train_upper_bound`). Where the label-free rule selects
    another (trial, epoch) for r, that one is refit the same way and stored apart
@@ -434,11 +436,13 @@ def _groups(strategies: Sequence[str]) -> list[str]:
                   key=model_store.GROUPS.index)
 
 
-def _phase_one_checkpoint(group: str, data: search.SearchData, rotation: int, seed: int,
+def _phase_one_checkpoint(group: str, data: search.SearchData, rotation: int,
                           selection: Mapping, cfg: Mapping, product: Path) -> tuple[Path, list]:
-    """The stored phase-1 checkpoint of `group`, outer fold `rotation` and `seed`: the
-    selected configuration refit on the source subjects of every non-test fold for exactly
-    its E1 epochs (Sec. 4.5); trained once when absent."""
+    """The one stored phase-1 checkpoint of `group` and outer fold `rotation`, at
+    `search.PHASE_ONE_SEED`: the selected configuration refit on the source subjects of
+    every non-test fold for exactly its E1 epochs (Sec. 4.5); trained once when absent, its
+    per-epoch records appended to the arm's history."""
+    seed = search.PHASE_ONE_SEED
     path = model_store.model_path(_models(product), data.transfer, rotation, seed, 1, group)
     schedule = search.refit_schedule(cfg["schedule"], 1, selection["epochs"])
     hyper = search.phase_one_hyper(group, selection["params"], schedule)
@@ -447,14 +451,31 @@ def _phase_one_checkpoint(group: str, data: search.SearchData, rotation: int, se
         return _reuse(path, identity(data.partition_sha256), hyper=stored), []
     trained = search.train_phase_one(group, data, rotation, seed, hyper, cfg["device"])
     search.save_phase_one(_models(product), group, data, rotation, seed, trained)
+    _append_history(product, results.EXPERIMENT_OF_ARM[data.transfer.arm],
+                    trained["result"]["history"])
     return path, trained["result"]["history"]
 
 
 def _phase_one_record(product: Path, data: search.SearchData, group: str, rotation: int,
-                      seed: int, cfg: Mapping):
+                      cfg: Mapping):
+    """The one stored phase-1 checkpoint (state, meta) of `group` and outer fold `rotation`."""
     return model_store.load(model_store.model_path(_models(product), data.transfer, rotation,
-                                                   seed, 1, group),
+                                                   search.PHASE_ONE_SEED, 1, group),
                             partition_path=_partition_path(cfg))
+
+
+def _check_started_from(product: Path, data: search.SearchData, strategy: str, rotation: int,
+                        record, cfg: Mapping) -> None:
+    """Sec. 4.5: the phase-2 final refit of outer fold `rotation` starts from the same
+    phase-1 checkpoint its phase-2 study started from; anything else is refused."""
+    study = _stored_study(product, data, 2, strategy, rotation, cfg)
+    stored = study.user_attrs.get("phaseOneCheckpoint")
+    current = search.phase_one_checkpoint_identity(record[1])
+    if stored != current:
+        raise CampaignError(f"{data.transfer.name} r{rotation}: the {strategy} phase-2 study "
+                            f"started from phase-1 checkpoint {stored!r} and the stored one is "
+                            f"{current!r}; phase 2 is refit from the same checkpoint: run "
+                            f"the search step again")
 
 
 def _measured(record: Mapping) -> dict:
@@ -484,8 +505,8 @@ def read_history(product: Path, experiment: str, rule: str = "primary") -> list[
 
 
 def run_search(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
-    """Step 1: per outer fold, the phase-1 studies, each group's one refit checkpoint at the
-    search seed, and the phase-2 studies from it."""
+    """Step 1: per outer fold, the phase-1 studies, each group's one refit checkpoint, and
+    the phase-2 studies from it."""
     bags = bags or load_bags(cfg)
     register(cfg["strategies"])
     done = {}
@@ -494,12 +515,11 @@ def run_search(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None)
         for r in sorted(data.rotations):
             for group in _groups(cfg["strategies"]):
                 study = phase_one_study(group, data, r, cfg, product)
-                _phase_one_checkpoint(group, data, r, search.SEARCH_SEED,
-                                      search.select(study), cfg, product)
+                _phase_one_checkpoint(group, data, r, search.select(study), cfg, product)
                 done[f"{transfer.name}:phase1:{group}:outer{r}"] = study.best_value
             for strategy in cfg["strategies"]:
                 record = _phase_one_record(product, data, search.PHASE_ONE_GROUP_OF[strategy],
-                                           r, search.SEARCH_SEED, cfg)
+                                           r, cfg)
                 study = phase_two_study(strategy, data, r, record, cfg, product)
                 done[f"{transfer.name}:phase2:{strategy}:outer{r}"] = study.best_value
     return done
@@ -559,9 +579,11 @@ def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int,
                      ppath: Path) -> tuple:
     """(model, history): the stored phase-2 model of this selection, or refit and stored.
 
-    The refit starts from `record`, the phase-1 checkpoint of this outer fold and seed, and
-    runs on the target bags of every non-test fold for exactly the selected epoch count,
-    with no validation (Sec. 4.5). A reused model has no history (None)."""
+    The refit starts from `record`, the one phase-1 checkpoint of this outer fold and group,
+    and runs on the target bags of every non-test fold for exactly the selected epoch
+    count, with no validation (Sec. 4.5); the model records that checkpoint's identity and
+    is reused only under it. A reused model has no history (None)."""
+    started = search.phase_one_checkpoint_identity(record[1])
     schedule = search.refit_schedule(cfg["schedule"], 2, selection["epochs"])
     expect = {"rule": selection["rule"], "trial": selection["trial"],
               "params": selection["params"], "epoch": selection["epoch"],
@@ -574,7 +596,8 @@ def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int,
         # the stored hyperparameters must agree on every requested key they hold (a
         # comparator may store its own parameters only)
         requested = {**selection["params"], **schedule}
-        _reuse(path, identity(data.partition_sha256), expect,
+        _reuse(path, {**identity(data.partition_sha256), "phaseOneCheckpoint": started},
+               expect,
                hyper={k: v for k, v in requested.items() if k in (stored.get("hyper") or {})})
         return mechanisms.load_phase_two(path, partition_path=ppath)[0].to(device), None
     trained = search.train_phase_two(strategy, data, r, seed, record, selection["params"],
@@ -582,16 +605,17 @@ def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int,
     chosen = _selection_record(selection, schedule)
     if selection["rule"] == "label-free":
         chosen["epochRule"] = two_phase.LABEL_FREE_EPOCH_RULE
-    search.save_phase_two(root, strategy, data, r, seed, trained, selection=chosen)
+    search.save_phase_two(root, strategy, data, r, seed, trained, selection=chosen,
+                          phase_one=record[1])
     return trained["model"], trained["result"]["history"]
 
 
 def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
-    """Step 2: per outer fold, the refits of both phases at every report seed, with the
-    controls and the upper bound.
+    """Step 2: per outer fold, the phase-2 refits at every report seed from each group's
+    one phase-1 checkpoint, with the controls and the upper bound.
 
-    Each group's phase-1 (configuration, E1) and each strategy's phase-2 (configuration,
-    E2) selected for outer fold r are refit on its non-test folds; where the label-free
+    Each strategy's phase-2 (configuration, E2) selected for outer fold r is refit on its
+    non-test folds from the phase-1 checkpoint its study started from; where the label-free
     rule selects another (trial, epoch) for r, that one is refit and stored too
     (`LABEL_FREE_MODELS`) and its test predictions recorded apart; where both rules
     coincide, the primary model is reused and its predictions are recorded for it.
@@ -617,13 +641,16 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
         free_root = _models(product) / LABEL_FREE_MODELS
         for r in sorted(data.rotations):
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
+            checkpoints = {}
+            for group in best_one:
+                path, history = _phase_one_checkpoint(group, data, r, best_one[group][r], cfg,
+                                                      product)
+                checkpoints[group] = path
+                counts["trained_phase1"] += bool(history)
+            records = {}
             for seed in cfg["reportSeeds"]:
                 out, out_free = [], []
-                for group in best_one:
-                    path, history = _phase_one_checkpoint(group, data, r, seed,
-                                                          best_one[group][r], cfg, product)
-                    counts["trained_phase1"] += bool(history)
-                    _append_history(product, experiment, history)
+                for group, path in checkpoints.items():
                     key = f"source-only:{group}"
                     if (key, transfer.name, r, seed) in done:
                         continue
@@ -637,8 +664,11 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                     need, need_free = key not in done, key not in done_free
                     if not need and not need_free:
                         continue
-                    record = _phase_one_record(product, data, search.PHASE_ONE_GROUP_OF[strategy],
-                                               r, seed, cfg)
+                    if strategy not in records:
+                        records[strategy] = _phase_one_record(
+                            product, data, search.PHASE_ONE_GROUP_OF[strategy], r, cfg)
+                        _check_started_from(product, data, strategy, r, records[strategy], cfg)
+                    record = records[strategy]
                     if need or coincide:
                         model, history = _phase_two_model(
                             _models(product), strategy, data, r, seed, record,
@@ -864,11 +894,11 @@ def _k3_variant_model(product: Path, data: search.SearchData, rotation: int, see
                           trained["hyper"], trained["channels"], checkpoint["sigma"],
                           checkpoint)
     else:
-        path1 = model_store.model_path(_models(product), data.transfer, rotation, seed, 1,
-                                       two_phase.MODEL)
+        path1 = model_store.model_path(_models(product), data.transfer, rotation,
+                                       search.PHASE_ONE_SEED, 1, two_phase.MODEL)
         if not path1.exists():
             owed.append(f"no stored MIL-CREDA phase-1 checkpoint for {data.transfer.name} "
-                        f"r{rotation} s{seed}: run the final step")
+                        f"r{rotation}: run the search step")
             return None, [], False
         trained = mechanisms.train_ablation_variant(
             data, rotation, seed, model_store.load(path1, partition_path=ppath), phase_two,

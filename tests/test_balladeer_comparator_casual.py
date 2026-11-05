@@ -178,7 +178,8 @@ def data_record():
         0: dict(source_train=bags(29), source_valid=bags(29, "sv"),
                 target_train=bags(14, "t"), target_valid=bags(14, "v"))})
     m = CommonMILModel(29, 14)
-    meta = dict(phase=1, name="common", rotation=0, seed=19, transfer="L6->Robots",
+    meta = dict(phase=1, name="common", rotation=0, seed=search.PHASE_ONE_SEED,
+                transfer="L6->Robots",
                 partition_sha256="synthetic-hash", channels=dict(source=29, target=14))
     return data, (two_phase.phase_one_state(m), meta)
 

@@ -216,24 +216,24 @@ def test_a_stored_phase_one_checkpoint_is_reused_only_under_its_hyperparameters(
     hyper = search.phase_one_hyper("MIL-CREDA", params,
                                    search.refit_schedule(cfg["schedule"], 1, 1))
     hyper = {k: hyper[k] for k in (*two_phase.PHASE_ONE_KEYS, *two_phase.SCHEDULE_KEYS)}
-    path = model_store.model_path(campaign._models(tmp_path), data.transfer, 0, 1, 1,
-                                  "MIL-CREDA")
+    path = model_store.model_path(campaign._models(tmp_path), data.transfer, 0,
+                                  search.PHASE_ONE_SEED, 1, "MIL-CREDA")
     meta = {**campaign.identity(data.partition_sha256), "hyper": hyper}
     _stored_sidecar(path, meta)
-    assert campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, selection, cfg,
+    assert campaign._phase_one_checkpoint("MIL-CREDA", data, 0, selection, cfg,
                                           tmp_path) == (path, [])
     for key in ("lr1", "epochs1"):              # a searched value, the selected E1
         _stored_sidecar(path, {**meta, "hyper": {**hyper, key: hyper[key] * 2}})
         with pytest.raises(campaign.CampaignError, match=f"stale.*hyper {key}"):
-            campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, selection, cfg,
+            campaign._phase_one_checkpoint("MIL-CREDA", data, 0, selection, cfg,
                                            tmp_path)
     _stored_sidecar(path, meta)
     with pytest.raises(campaign.CampaignError, match="stale.*hyper epochs1"):
-        campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, {**selection, "epochs": 2},
+        campaign._phase_one_checkpoint("MIL-CREDA", data, 0, {**selection, "epochs": 2},
                                        cfg, tmp_path)
     _stored_sidecar(path, {**meta, "revision": "experiments-plan-v43.md"})
     with pytest.raises(campaign.CampaignError, match="stale.*revision"):
-        campaign._phase_one_checkpoint("MIL-CREDA", data, 0, 1, selection, cfg, tmp_path)
+        campaign._phase_one_checkpoint("MIL-CREDA", data, 0, selection, cfg, tmp_path)
 
 
 def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
@@ -247,7 +247,11 @@ def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
     refit = search.refit_schedule(cfg["schedule"], 2, 1)
     root = campaign._models(tmp_path)
     path = model_store.model_path(root, data.transfer, 0, 1, 2, "MIL-CREDA")
-    meta = {**campaign.identity(data.partition_sha256),
+    record = ({}, {"transfer": data.transfer.name, "rotation": 0,
+                   "seed": search.PHASE_ONE_SEED, "phase": 1, "name": "MIL-CREDA",
+                   "partition_sha256": data.partition_sha256, "state_sha256": "s" * 64})
+    started = search.phase_one_checkpoint_identity(record[1])
+    meta = {**campaign.identity(data.partition_sha256), "phaseOneCheckpoint": started,
             "hyper": {**params, **refit},
             "selection": {"rule": "primary", "trial": 0, "params": params, "epoch": 0,
                           "schedule": refit}}
@@ -255,8 +259,8 @@ def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
     monkeypatch.setattr(mechanisms, "load_phase_two", lambda p, **k: (loaded, {}, []))
 
     def reuse():
-        return campaign._phase_two_model(root, "MIL-CREDA", data, 0, 1, None, selection, cfg,
-                                         torch.device("cpu"), None)
+        return campaign._phase_two_model(root, "MIL-CREDA", data, 0, 1, record, selection,
+                                         cfg, torch.device("cpu"), None)
 
     _stored_sidecar(path, meta)
     model, history = reuse()
@@ -270,7 +274,10 @@ def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
             ({"hyper": {**meta["hyper"], "lr2": lr2["lr2"]}}, "hyper lr2"),
             ({"hyper": {**meta["hyper"], "epochs2": 2}}, "hyper epochs2"),
             ({"selection": {"rule": "primary", "trial": 0}}, "selection params"),
-            ({"code_version": "0" * 64}, "code_version")):
+            ({"code_version": "0" * 64}, "code_version"),
+            # refit from another phase-1 checkpoint than the one now in force (Sec. 4.5)
+            ({"phaseOneCheckpoint": {**started, "seed": search.SEARCH_SEED}},
+             "phaseOneCheckpoint")):
         _stored_sidecar(path, {**meta, **change})
         with pytest.raises(campaign.CampaignError, match=f"stale.*{field}"):
             reuse()
@@ -324,10 +331,9 @@ def test_the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation
     models = product / "Models" / "Balladeer"
     for transfer in ("L1-to-L6", "L6-to-L1"):
         for r in range(4):
-            for seed in (0, 1):
-                for name in ("phase1__common", "phase1__HASD", "phase1__MIL-CREDA"):
-                    assert (models / transfer / f"rotation{r}" / f"seed{seed}" /
-                            f"{name}.pt").exists()
+            for name in ("phase1__common", "phase1__HASD", "phase1__MIL-CREDA"):
+                assert (models / transfer / f"rotation{r}" / "seed1" / f"{name}.pt").exists()
+                assert not (models / transfer / f"rotation{r}" / "seed0" / f"{name}.pt").exists()
             assert (models / transfer / f"rotation{r}" / "seed1" / "phase2__COT.pt").exists()
             assert not (models / transfer / f"rotation{r}" / "seed0" / "phase2__COT.pt").exists()
     records = results.read_predictions(product / "Results", "A-nivel")
@@ -547,11 +553,10 @@ def test_both_phases_are_selected_per_outer_fold_and_refit_for_their_epochs(leve
             one = search.select(campaign._study(
                 search.study_path(product, transfer, 1, "MIL-CREDA", r), cfg["nTrials"],
                 data.partition_sha256))
-            for seed in (0, 1):
-                meta = _sidecar(models / slug / f"rotation{r}" / f"seed{seed}"
-                                / "phase1__MIL-CREDA.pt")
-                assert {k: meta["hyper"][k] for k in one["params"]} == one["params"]
-                assert meta["hyper"]["epochs1"] == one["epochs"]
+            meta = _sidecar(models / slug / f"rotation{r}" / f"seed{search.PHASE_ONE_SEED}"
+                            / "phase1__MIL-CREDA.pt")
+            assert {k: meta["hyper"][k] for k in one["params"]} == one["params"]
+            assert meta["hyper"]["epochs1"] == one["epochs"]
             for strategy in ("MIL-CREDA", "COT"):
                 study = campaign._study(search.study_path(product, transfer, 2, strategy, r),
                                         cfg["nTrials"], data.partition_sha256)
@@ -573,9 +578,9 @@ def test_both_phases_are_selected_per_outer_fold_and_refit_for_their_epochs(leve
 
 
 def test_one_phase_one_checkpoint_per_group_and_outer_fold(level_run):
-    """Sec. 4.5: the phase-1 refit leaves one checkpoint per group and outer fold, at each
-    seed, with no checkpoint per inner split; every phase-2 study of that fold starts
-    from it."""
+    """Sec. 4.5: the phase-1 refit leaves one checkpoint per group and outer fold, at the
+    report seed, with no checkpoint per inner split or per seed; every phase-2 study of that
+    fold and its phase-2 final refit start from it."""
     cfg, product, _ = level_run
     models = product / "Models" / "Balladeer"
     group_files = {f"phase1__{model_store.name_slug(g)}.pt" for g in model_store.GROUPS}
@@ -584,10 +589,35 @@ def test_one_phase_one_checkpoint_per_group_and_outer_fold(level_run):
     groups = ("common", "HASD", "MIL-CREDA")          # the groups COT, HASD, MIL-CREDA use
     assert stored == sorted(f"{t}/rotation{r}/seed{s}/phase1__{g}.pt"
                             for t in ("L1-to-L6", "L6-to-L1") for r in range(4)
-                            for s in (0, 1) for g in groups)
+                            for s in (search.PHASE_ONE_SEED,) for g in groups)
     for path in (models / x for x in stored):
         meta = _sidecar(path)
         assert "validation" not in meta and meta["epoch"] == meta["hyper"]["epochs1"] - 1
+
+
+def test_phase_two_search_and_final_refit_start_from_the_same_phase_one_checkpoint(
+        level_run):
+    """Secs. 4.5, 7.7: per group and outer fold, the phase-2 study's trials and the
+    phase-2 final refit both start from the one phase-1 refit checkpoint ("desde el mismo
+    punto de control"); each records that checkpoint's identity."""
+    cfg, product, _ = level_run
+    models = product / "Models" / "Balladeer"
+    bags = campaign.load_bags(campaign.check_config(cfg))
+    for transfer in campaign.transfers_of(campaign.check_config(cfg)):
+        data = search.search_data(transfer, bags)
+        slug = model_store.transfer_slug(transfer)
+        for r in range(4):
+            for strategy in cfg["strategies"]:
+                group = search.PHASE_ONE_GROUP_OF[strategy]
+                [checkpoint] = sorted((models / slug / f"rotation{r}").glob(
+                    f"seed*/phase1__{model_store.name_slug(group)}.pt"))
+                expected = search.phase_one_checkpoint_identity(_sidecar(checkpoint))
+                study = campaign._study(search.study_path(product, transfer, 2, strategy, r),
+                                        cfg["nTrials"], data.partition_sha256)
+                final = _sidecar(models / slug / f"rotation{r}" / "seed1"
+                                 / f"phase2__{model_store.name_slug(strategy)}.pt")
+                assert study.user_attrs["phaseOneCheckpoint"] == expected, (strategy, r)
+                assert final["phaseOneCheckpoint"] == expected, (strategy, r)
 
 
 def _other_choice(real):

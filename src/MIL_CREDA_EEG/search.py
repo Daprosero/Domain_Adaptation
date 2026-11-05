@@ -45,11 +45,15 @@ The search reads only the inner splits of F (`search_data`): no test-fold bag is
 ever loaded.
 
 **Phase 2 starts from the phase-1 refit (Secs. 4.5, 7.3, 7.7).** Every phase-2
-trial of an outer fold, in each of its three inner splits, starts from the one
-phase-1 checkpoint of that outer fold, its group and the search seed: the
-selected phase-1 configuration refit on the source subjects of all of F for E1
-epochs, read back from the model store (`model_store.load`, which refuses a
-foreign partition). MIL-CREDA's sigma is that checkpoint's sigma
+trial of an outer fold, in each of its three inner splits, and that fold's phase-2
+final refit start from the one phase-1 checkpoint of that outer fold and its group
+("desde el mismo punto de control"): the selected phase-1 configuration refit on
+the source subjects of all of F for E1 epochs at `PHASE_ONE_SEED`, the report
+seed (Sec. 7.7 refits the chosen configuration with the report seed), read back
+from the model store (`model_store.load`, which refuses a foreign partition). A
+phase-2 study records that checkpoint's identity
+(`phase_one_checkpoint_identity`) in its own identity, and a phase-2 model in its
+sidecar. MIL-CREDA's sigma is that checkpoint's sigma
 (`sigma2 = sigma1`) and is never searched: its phase-2 space is exactly `lr2`,
 `wd2` and `tauLocal`, and its phase-1 choices are fixed.
 
@@ -131,7 +135,7 @@ __provenance__ = {
         "the_search_never_loads_a_test_fold_bag",
         "the_search_data_holds_the_inner_splits_and_a_refit_view_without_validation",
         "the_phase_two_mil_creda_sigma_comes_from_the_phase_one_checkpoint",
-        "phase_two_starts_only_from_the_outer_folds_phase_one_checkpoint_at_the_search_seed",
+        "phase_two_starts_only_from_the_outer_folds_one_phase_one_checkpoint",
         "the_label_free_score_is_recorded_per_trial_and_epoch",
         "the_selection_is_the_argmax_of_the_pooled_score_over_trial_and_epoch",
         "the_pooled_series_check_each_validated_subject_once_per_epoch",
@@ -153,6 +157,12 @@ SAMPLER_SEED = 20261102
 #: Sec. 7.7: one search training seed, distinct from the single report seed (Sec. 4.6).
 SEARCH_SEED = 0
 REPORT_SEEDS = (1,)
+#: Secs. 4.5, 7.7: the seed of the one phase-1 refit checkpoint per group and outer fold,
+#: the report seed; the phase-2 search trials and the phase-2 final refit both start from it.
+PHASE_ONE_SEED = REPORT_SEEDS[0]
+#: The fields of a phase-1 checkpoint's sidecar that name it (`phase_one_checkpoint_identity`).
+PHASE_ONE_CHECKPOINT_FIELDS = ("transfer", "rotation", "seed", "phase", "name",
+                               partition.HASH_FIELD, "state_sha256")
 #: Sec. 4.2: the inner splits of each outer fold, one per non-test fold.
 N_INNER = partition.N_FOLDS - 1
 DEFAULT_ROOT = bag_data.REPOSITORY / "MIL-CREDA"
@@ -545,11 +555,15 @@ def train_phase_two(strategy: str, data: SearchData, rotation: int, seed: int, r
 
 
 def save_phase_two(root: str | Path, strategy: str, data: SearchData, rotation: int,
-                   seed: int, trained: Mapping, selection: Mapping | None = None) -> Path:
+                   seed: int, trained: Mapping, selection: Mapping | None = None,
+                   phase_one: Mapping | None = None) -> Path:
     """Store a selected phase-2 model whole (frozen parts and the selected target trunk),
-    with the Sec. 4.5 selection that chose its configuration when one is given."""
+    with the Sec. 4.5 selection that chose its configuration and the identity of the
+    phase-1 checkpoint it started from (`phase_one`, its sidecar), when given."""
     checkpoint = trained["result"]["checkpoint"]
     extra = {"selection": dict(selection)} if selection is not None else {}
+    if phase_one is not None:
+        extra["phaseOneCheckpoint"] = phase_one_checkpoint_identity(phase_one)
     return model_store.save(root, transfer=data.transfer, rotation=rotation, seed=seed,
                             phase=2, name=strategy, state=trained["model"].state_dict(),
                             hyper=dict(checkpoint["hyper"]),
@@ -562,18 +576,24 @@ def save_phase_two(root: str | Path, strategy: str, data: SearchData, rotation: 
                                    **extra})
 
 
+def phase_one_checkpoint_identity(meta: Mapping) -> dict:
+    """What names a stored phase-1 checkpoint: its transfer, outer fold, seed, group,
+    partition and the digest of its state (`model_store.save`)."""
+    return {k: meta.get(k) for k in PHASE_ONE_CHECKPOINT_FIELDS}
+
+
 def _check_phase_one_record(strategy: str, data: SearchData, rotation: int, record) -> None:
     """Phase 2 of outer fold `rotation` starts from that fold's one phase-1 checkpoint of
-    the strategy's group, at the search seed and the partition in force (Sec. 4.5)."""
+    the strategy's group, at `PHASE_ONE_SEED` and the partition in force (Sec. 4.5)."""
     group = PHASE_ONE_GROUP_OF[strategy]
     _, meta = record
     expected = {"phase": 1, "name": group, "transfer": data.transfer.name,
-                "rotation": int(rotation), "seed": SEARCH_SEED,
+                "rotation": int(rotation), "seed": PHASE_ONE_SEED,
                 partition.HASH_FIELD: data.partition_sha256}
     wrong = {k: meta.get(k) for k, v in expected.items() if meta.get(k) != v}
     if wrong:
-        raise SearchError(f"rotation {rotation}: the phase-1 checkpoint is not the {group} one "
-                          f"of {data.transfer.name} at the search seed: {wrong}")
+        raise SearchError(f"rotation {rotation}: the phase-1 checkpoint is not the one {group} "
+                          f"checkpoint of {data.transfer.name} and this outer fold: {wrong}")
 
 
 # ------------------------------------------------------------------ studies
@@ -616,6 +636,8 @@ IDENTITY_FIELDS = ("transfer", "arm", "phase", "name", "outerFold", "testFold",
                    "innerSplits", "sampler", "samplerSeed", "nTrials", "pruner",
                    "searchSeed", "reportSeeds", "schedule", "objective", "space",
                    partition.HASH_FIELD, "revision", "code_version")
+#: A phase-2 study is also the one started from its phase-1 checkpoint (Sec. 4.5).
+PHASE_TWO_IDENTITY_FIELDS = ("phaseOneCheckpoint",)
 
 
 def _json(value):
@@ -624,10 +646,12 @@ def _json(value):
 
 
 def study_identity(data: SearchData, phase: int, name: str, rotation: int,
-                   schedule: Mapping, n_trials: int, objective: str) -> dict:
+                   schedule: Mapping, n_trials: int, objective: str,
+                   phase_one: Mapping | None = None) -> dict:
     """What a study is: its transfer, phase, outer fold with its test fold and inner
     splits, budget, space, sampler and the partition, plan revision and code version it
-    was run against."""
+    was run against; a phase-2 study, also the phase-1 checkpoint it starts from
+    (`phase_one`, its sidecar), when given."""
     space = PHASE_ONE_SPACES[name] if phase == 1 else phase_two_space(name)
     rotation = _outer(rotation)
     if rotation not in data.folds:
@@ -645,7 +669,9 @@ def study_identity(data: SearchData, phase: int, name: str, rotation: int,
         "reportSeeds": list(REPORT_SEEDS), "schedule": dict(schedule),
         "objective": objective, "space": {k: repr(v) for k, v in space.items()},
         partition.HASH_FIELD: data.partition_sha256,
-        "revision": __provenance__["revision"], "code_version": model_store.code_version()})
+        "revision": __provenance__["revision"], "code_version": model_store.code_version(),
+        **({"phaseOneCheckpoint": phase_one_checkpoint_identity(phase_one)}
+           if phase_one is not None else {})})
 
 
 def identity_differences(stored: Mapping, current: Mapping,
@@ -670,7 +696,8 @@ def open_study(path: str | Path, identity: Mapping) -> tuple[optuna.Study, int]:
             study.set_user_attr(key, value)
         return study, 0
     study = optuna.load_study(study_name=path.stem, storage=f"sqlite:///{path}")
-    differ = identity_differences(study.user_attrs, identity, IDENTITY_FIELDS)
+    differ = identity_differences(study.user_attrs, identity, [
+        *IDENTITY_FIELDS, *(k for k in PHASE_TWO_IDENTITY_FIELDS if k in identity)])
     if differ:
         raise SearchError(f"{path} is a study of another identity and is not continued: "
                           + "; ".join(differ) + "; remove it to search again")
@@ -761,8 +788,9 @@ def run_phase_two_study(strategy: str, data: SearchData, rotation: int, record,
                         should_stop: Callable[[optuna.Study], bool] | None = None
                         ) -> optuna.Study:
     """One phase-2 study of outer fold `rotation`; `record` is that fold's one stored
-    phase-1 checkpoint (state, meta) of the strategy's group at the search seed. Every
-    trial starts from it in each of the three inner splits."""
+    phase-1 checkpoint (state, meta) of the strategy's group, at `PHASE_ONE_SEED`. Every
+    trial starts from it in each of the three inner splits, at the search seed; the
+    study records its identity."""
     space = phase_two_space(strategy)
     schedule = check_schedule(schedule)
     _check_phase_one_record(strategy, data, rotation, record)
@@ -772,7 +800,7 @@ def run_phase_two_study(strategy: str, data: SearchData, rotation: int, record,
         "the best epoch's target-validation balanced accuracy of the subject-level "
         "confusion counts pooled over the three inner splits (primary rule, Sec. 4.5), "
         "what the sampler observes; pooledLabelFree: per epoch, the label-free score of "
-        "the target predictions pooled the same way (secondary rule)"))
+        "the target predictions pooled the same way (secondary rule)", phase_one=record[1]))
 
     def objective(trial: optuna.Trial) -> float:
         params = suggest(trial, space)

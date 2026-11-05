@@ -77,7 +77,7 @@ def _snapshot(model):
 def _validate_record(data, rotation, seed, record):
     state, meta = record
     expected = {"phase": 1, "name": "common", "transfer": data.transfer.name,
-                "rotation": rotation, "seed": seed,
+                "rotation": rotation, "seed": search.PHASE_ONE_SEED,
                 "partition_sha256": data.partition_sha256, "channels": data.channels()}
     if any(meta.get(k) != v for k, v in expected.items()):
         raise ValueError("COT needs this transfer/rotation/seed's common phase-one record")

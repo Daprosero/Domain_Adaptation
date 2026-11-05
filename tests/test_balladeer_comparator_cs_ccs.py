@@ -52,7 +52,8 @@ def search_data(source_channels=29, target_channels=14, seed=11):
         0: {"source_train": s, "source_valid": sv, "target_train": t, "target_valid": tv}})
     record = (two_phase.phase_one_state(model), {
         "phase": 1, "name": "common", "transfer": data.transfer.name, "rotation": 0,
-        "seed": seed, "partition_sha256": "synthetic-hash", "channels": data.channels(),
+        "seed": search.PHASE_ONE_SEED, "partition_sha256": "synthetic-hash",
+        "channels": data.channels(),
         "hyper": {"lr1": .001, "wd1": 0.}})
     return data, record
 
