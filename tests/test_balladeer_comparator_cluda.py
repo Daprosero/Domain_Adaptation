@@ -49,43 +49,117 @@ def schedule(epochs=2):
     return dict(epochs1=1, epochs2=epochs, bagsPerStep=4)
 
 
-def test_cluda_equation_three_factor_domain_mean_and_direction():
-    source = torch.tensor([[1., 0.], [0., 1.]], dtype=torch.float64, requires_grad=True)
-    target = source.detach().clone().requires_grad_()
-    labels = torch.tensor([0, 1])
-    loss, missing = cross_domain_contrastive(source, target, labels, labels, 1.)
-    # Each singleton source domain: -1/2 log(e/(e+1)); then mean of domains.
-    torch.testing.assert_close(loss, .5*torch.log1p(torch.exp(torch.tensor(-1., dtype=source.dtype))))
-    assert missing == 0
-    duplicate, _ = cross_domain_contrastive(source.repeat(2, 1), target,
-                                            labels.repeat(2), labels, 1.)
-    torch.testing.assert_close(duplicate, loss)
-    # Target-target similarities never enter this source-anchored expression.
-    scaled, _ = cross_domain_contrastive(source*7, target*3, labels, labels, 1.)
-    torch.testing.assert_close(scaled, loss)
-    loss.backward()
+def official_reference(feats, labels, temperature):
+    # Independent literal scalar sums: official models.py:264-290, diagonal excluded.
+    normalized = feats / feats.norm(dim=1, keepdim=True)
+    rows = []
+    for anchor in range(len(feats)):
+        denominator = sum(torch.exp((normalized[anchor]*normalized[j]).sum()/temperature)
+                          for j in range(len(feats)) if j != anchor)
+        positives = [torch.exp((normalized[anchor]*normalized[j]).sum()/temperature)
+                     for j in range(len(feats)) if j != anchor and labels[j] == labels[anchor]]
+        numerator = sum(positives, feats.new_zeros(())).clamp_min(1e-6)
+        if positives:
+            rows.append(-torch.log(numerator/denominator))
+    return torch.stack(rows).mean() if rows else feats.sum()*0
+
+
+def test_cluda_official_symmetric_loss_includes_target_target_pairs():
+    source = torch.tensor([[1., 0.]], dtype=torch.float64, requires_grad=True)
+    target = torch.tensor([[0., 1.], [1., 1.], [-1., 1.]], dtype=torch.float64, requires_grad=True)
+    labels, pseudo = torch.tensor([1]), torch.tensor([0, 0, 1])
+    value, missing = cross_domain_contrastive(source, target, labels, pseudo, .7)
+    expected = official_reference(torch.cat((source, target)), torch.cat((labels, pseudo)), .7)
+    torch.testing.assert_close(value, expected)
+    assert missing == 0  # the two target class-0 bags are positives for one another
+    value.backward()
     for tensor in (source, target):
-        assert tensor.grad is not None and torch.isfinite(tensor.grad).all()
-        assert tensor.grad.abs().sum() > 0
-    asymmetric, _ = cross_domain_contrastive(source.detach()[:1], target.detach(),
-                                             labels[:1], torch.tensor([0, 0]), 1.)
-    assert asymmetric.item() == pytest.approx(0., abs=1e-14)
+        assert torch.isfinite(tensor.grad).all() and tensor.grad.abs().sum() > 0
+    scaled, _ = cross_domain_contrastive(source*7, target*3, labels, pseudo, .7)
+    torch.testing.assert_close(scaled, value)
 
 
-def test_cluda_absent_positive_and_single_class_are_finite_zero_gradient():
-    s = torch.tensor([[1., 0.]], dtype=torch.float64, requires_grad=True)
-    t = torch.tensor([[1., 0.], [0., 1.]], dtype=torch.float64, requires_grad=True)
-    loss, missing = cross_domain_contrastive(s, t, torch.tensor([1]), torch.tensor([0, 0]), .07)
-    assert missing == 1
-    assert loss.item() == pytest.approx(-.5*math.log(1e-6))
-    loss.backward()
-    assert s.grad.abs().sum() == 0 and t.grad.abs().sum() == 0
-    for candidates in (t[:1], t):
-        value, _ = cross_domain_contrastive(s, candidates, torch.tensor([0]),
-                                             torch.zeros(len(candidates), dtype=torch.long), .01)
-        assert value.item() == pytest.approx(0., abs=1e-14)
-    extreme, _ = cross_domain_contrastive(s, t, torch.tensor([1]), torch.tensor([0, 1]), .01)
-    assert torch.isfinite(extreme)
+def test_cluda_excludes_no_positive_anchors_and_keeps_official_positive_clamp():
+    from MIL_CREDA_EEG.comparators.cluda.losses import supervised_contrastive
+    z = torch.tensor([[1., 0.], [.5, 1.]], dtype=torch.float64, requires_grad=True)
+    value, missing = supervised_contrastive(z, torch.tensor([0, 1]), .07)
+    assert missing == 2 and value.item() == 0
+    value.backward()
+    assert torch.count_nonzero(z.grad) == 0
+    # Every anchor has positives; the numerator floor is inactive in this batch.
+    positive_batch = torch.tensor([[1., 0.], [1., .1], [0., 1.], [.1, 1.]], dtype=torch.float64)
+    labels = torch.tensor([0, 0, 1, 1])
+    ordinary, missing = supervised_contrastive(positive_batch, labels, .07)
+    assert missing == 0 and ordinary.item() >= 0
+    torch.testing.assert_close(ordinary, official_reference(positive_batch, labels, .07))
+    # Retain the official active floor even for positives: no GLOBAL >=0 claim.
+    opposite = torch.tensor([[1., 0.], [-1., 0.]], dtype=torch.float64)
+    saturated, _ = supervised_contrastive(opposite, torch.tensor([0, 0]), .03)
+    assert saturated.item() == pytest.approx(-1/.03-math.log(1e-6))
+    for invalid in (torch.zeros(2, 2), torch.ones(1, 2)):
+        with pytest.raises(ValueError):
+            supervised_contrastive(invalid, torch.zeros(len(invalid), dtype=torch.long), .07)
+
+
+def test_cluda_source_source_trains_only_projector_and_coefficient_ratio():
+    from MIL_CREDA_EEG.comparators.cluda import training
+    data, record = fixture_data(14, 14)
+    model = CLUDAModel(14, 14)
+    model.load_state_dict(record[0], strict=False)
+    two_phase.bridge(model)
+    model.projector.train()
+    source = data.rotations[0]["source_train"]
+    # Queue repeats provide a multi-bag subject-domain; unlike singleton pairs it can train.
+    terms = training.adaptation_step(model, [source[0], source[0], source[1], source[2]],
+                                    data.rotations[0]["target_train"], DEFAULT_PARAMS, "cpu")
+    assert terms["source_source"].requires_grad
+    terms["source_source"].backward()
+    assert all(p.grad is None for p in model.source_trunk.parameters())
+    assert all(p.grad is None for p in model.target_trunk.parameters())
+    assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in model.projector.parameters())
+    assert all(p.grad is not None and torch.isfinite(p.grad).all() for p in model.projector.parameters())
+    torch.testing.assert_close(terms["loss"], terms["source_ce"] + DEFAULT_PARAMS["contrastiveWeight"] *
+                               (terms["contrastive"] + .5*terms["source_source"]))
+    from MIL_CREDA_EEG.comparators.cluda.losses import contrastive_objective
+    ce, st, ss = (torch.tensor(v, dtype=torch.float64) for v in (2., 3., 7.))
+    assert contrastive_objective(ce, st, ss, .4).item() == pytest.approx(4.6)
+
+
+def test_cluda_singleton_source_pairs_are_inert_without_floor_saturation():
+    from MIL_CREDA_EEG.comparators.cluda.losses import source_source_contrastive
+    source = torch.tensor([[1., 0.], [1., .1], [0., 1.], [.1, 1.]],
+                          dtype=torch.float64, requires_grad=True)
+    diagnostics = {}
+    ss, excluded = source_source_contrastive(source, torch.tensor([0, 0, 1, 1]),
+                                             diagnostics=diagnostics)
+    assert ss.item() == pytest.approx(0., abs=1e-14)
+    ss.backward()
+    assert source.grad.abs().sum() < 1e-12
+    assert excluded == 8  # four different-class pairs, two excluded anchors each
+    assert diagnostics["zero_loss_pairs"] == diagnostics["pairs"] == 6
+
+
+def test_cluda_domain_averages_match_official_loops():
+    from MIL_CREDA_EEG.comparators.cluda.losses import source_source_contrastive
+    torch.manual_seed(42)
+    source = torch.randn(4, 5, dtype=torch.float64)
+    target = torch.randn(3, 5, dtype=torch.float64)
+    labels, pseudo = torch.tensor([0, 0, 1, 1]), torch.tensor([0, 1, 0])
+    st, _ = cross_domain_contrastive(source, target, labels, pseudo, .2)
+    expected_st = torch.stack([official_reference(torch.cat((source[i:i+1], target)),
+                              torch.cat((labels[i:i+1], pseudo)), .2) for i in range(4)]).mean()
+    torch.testing.assert_close(st, expected_st)
+    ss, _ = source_source_contrastive(source, labels)
+    expected_ss = torch.stack([official_reference(source[[i, j]], labels[[i, j]], .03)
+                               for i in range(4) for j in range(i+1, 4)]).mean()
+    torch.testing.assert_close(ss, expected_ss)
+    # Repeated draws of the SAME subject stay in one domain, not independent domains.
+    domains = ["a", "a", "b", "c"]
+    grouped, _ = cross_domain_contrastive(source, target, labels, pseudo, .2, domains)
+    expected_grouped = torch.stack([official_reference(torch.cat((source[idx], target)),
+                                  torch.cat((labels[idx], pseudo)), .2)
+                                  for idx in ([0, 1], [2], [3])]).mean()
+    torch.testing.assert_close(grouped, expected_grouped)
 
 
 def test_cluda_projector_is_training_only_and_differentiable(monkeypatch):
@@ -142,7 +216,7 @@ def test_cluda_phase_two_freezes_common_state_and_trains_target_and_projector(mo
     assert not model.source_trunk.training
     assert not torch.equal(record[0]["source_trunk.conv_temporal.weight"],
                            model.target_trunk.conv_temporal.weight)
-    assert all(row["source_source"] == 0 for row in out["result"]["history"])
+    assert all("source_zero_loss_pair_fraction" in row for row in out["result"]["history"])
 
 
 def test_cluda_argmax_has_no_threshold_and_target_training_labels_are_unread():
@@ -175,7 +249,7 @@ def test_cluda_last_epoch_validation_and_refit(monkeypatch):
     assert [v["probabilities"] for v in result["validation"]] == [a.tolist() for a in answers]
     for row in result["history"]:
         assert row["loss"] == pytest.approx(row["source_ce"] +
-                                             DEFAULT_PARAMS["contrastiveWeight"]*row["contrastive"])
+                                             DEFAULT_PARAMS["contrastiveWeight"]*(row["contrastive"] + .5*row["source_source"]))
         assert row["anchors_without_positive"] >= 0
         assert len(row["step_anchors_without_positive"]) == 1
     d = {**data.rotations[0], "source_valid": [], "target_valid": []}
@@ -246,9 +320,10 @@ def test_cluda_separate_projector_batches_skip_singleton_target_and_require_sour
 
 
 def test_cluda_search_registration_is_explicit(monkeypatch):
-    # Parent owns shared strategy/own-axis registration; emulate that future wiring locally.
-    monkeypatch.setattr(model_store, "STRATEGIES", (*model_store.STRATEGIES, "CLUDA"))
-    monkeypatch.setitem(search.OWN_AXES, "CLUDA", (FloatDistribution(.01, 1., log=True),))
+    # Integration e5de342 owns these shared declarations; test the real join.
+    assert "CLUDA" in model_store.STRATEGIES
+    assert search.PHASE_ONE_GROUP_OF["CLUDA"] == "common"
+    assert search.OWN_AXES["CLUDA"] == (search.CONTRASTIVE_TEMPERATURE,)
     monkeypatch.setattr(search, "PHASE_TWO_EXTRA", dict(search.PHASE_TWO_EXTRA))
     monkeypatch.setattr(search, "PHASE_TWO_TRAINERS", dict(search.PHASE_TWO_TRAINERS))
     before = dict(search.PHASE_TWO_TRAINERS)

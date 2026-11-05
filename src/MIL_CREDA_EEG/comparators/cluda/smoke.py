@@ -42,7 +42,11 @@ def run():
     print("phase1_loss", [round(r["loss"], 6) for r in phase1["history"]])
     print("phase2_loss", [round(r["loss"], 6) for r in result["history"]])
     print("contrastive", [round(r["contrastive"], 6) for r in result["history"]])
+    print("source_source", [round(r["source_source"], 6) for r in result["history"]])
     print("step_anchors_without_positive", [r["step_anchors_without_positive"] for r in result["history"]])
+    print("step_source_anchors_without_positive", [r["step_source_anchors_without_positive"] for r in result["history"]])
+    print("source_zero_loss_pair_fraction", [r["source_zero_loss_pair_fraction"] for r in result["history"]])
+    print("skipped_singleton_target_steps", [r["skipped_singleton_target_steps"] for r in result["history"]])
     print("step_target_pseudo_classes", [r["step_target_pseudo_classes"] for r in result["history"]])
     return result
 
