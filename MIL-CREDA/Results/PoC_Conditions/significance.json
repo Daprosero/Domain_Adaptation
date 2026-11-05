@@ -1,0 +1,403 @@
+{
+  "tests": [
+    {
+      "comparison": "poc-task-tgl-vs-source-only",
+      "hypothesis": "H-A",
+      "experiment": "A-nivel",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 465.0,
+      "p": 8.547247810978344e-07,
+      "p_adjusted": 8.547247810978344e-07,
+      "correction": "none",
+      "effect_size": 1.0,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.4722222222222222,
+        0.5277777777777778
+      ],
+      "estimate": 0.5,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-donor-1",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1a r=0.1: c(TGL) > 0",
+      "statistic": 214.0,
+      "p": 0.6499835392460227,
+      "p_adjusted": 0.6499835392460227,
+      "correction": "Holm",
+      "effect_size": -0.07956989247311828,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.3483745199292821,
+        0.12974983550715471
+      ],
+      "estimate": -0.05861042466478369,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-donor-2",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1b r=0.1: c(TGL) > c(TGL-NC)",
+      "statistic": 289.0,
+      "p": 0.12671805266290903,
+      "p_adjusted": 0.25343610532581806,
+      "correction": "Holm",
+      "effect_size": 0.24301075268817204,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.12270849520640464,
+        0.37785469725634135
+      ],
+      "estimate": 0.16808431530050327,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-donor-3",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1a r=0.2: c(TGL) > 0",
+      "statistic": 430.0,
+      "p": 3.997236490249634e-06,
+      "p_adjusted": 1.1991709470748901e-05,
+      "correction": "Holm",
+      "effect_size": 0.8494623655913979,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.1230783388341984,
+        0.21416054216118668
+      ],
+      "estimate": 0.1748903960105963,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-donor-4",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1b r=0.2: c(TGL) > c(TGL-NC)",
+      "statistic": 462.0,
+      "p": 4.6566128730773926e-09,
+      "p_adjusted": 2.3283064365386963e-08,
+      "correction": "Holm",
+      "effect_size": 0.9870967741935484,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.24780395941989908,
+        0.39157911920618194
+      ],
+      "estimate": 0.314499694197568,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-donor-5",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1a r=0.3: c(TGL) > 0",
+      "statistic": 460.0,
+      "p": 9.313225746154785e-09,
+      "p_adjusted": 3.725290298461914e-08,
+      "correction": "Holm",
+      "effect_size": 0.978494623655914,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.24013480785256824,
+        0.3233460677648866
+      ],
+      "estimate": 0.2842181894970923,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-donor-6",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1b r=0.3: c(TGL) > c(TGL-NC)",
+      "statistic": 465.0,
+      "p": 9.313225746154785e-10,
+      "p_adjusted": 5.587935447692871e-09,
+      "correction": "Holm",
+      "effect_size": 1.0,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.32413980054019864,
+        0.42717243827890927
+      ],
+      "estimate": 0.37512341673967203,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-artifact-1",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1a r=0.1: c(TGL) > 0",
+      "statistic": 356.0,
+      "p": 0.00496575515717268,
+      "p_adjusted": 0.00496575515717268,
+      "correction": "Holm",
+      "effect_size": 0.5311827956989247,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.05129046116427638,
+        0.22002929725795375
+      ],
+      "estimate": 0.14034566253307754,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-artifact-2",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1b r=0.1: c(TGL) > c(TGL-NC)",
+      "statistic": 380.0,
+      "p": 0.000859295018017292,
+      "p_adjusted": 0.001718590036034584,
+      "correction": "Holm",
+      "effect_size": 0.6344086021505376,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.09390707712581214,
+        0.3612585113970218
+      ],
+      "estimate": 0.21573399920342298,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-artifact-3",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1a r=0.2: c(TGL) > 0",
+      "statistic": 435.0,
+      "p": 1.8952414393424988e-06,
+      "p_adjusted": 5.685724318027496e-06,
+      "correction": "Holm",
+      "effect_size": 0.8709677419354839,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.2544515783611806,
+        0.31144910272107357
+      ],
+      "estimate": 0.2812580099217249,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-artifact-4",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1b r=0.2: c(TGL) > c(TGL-NC)",
+      "statistic": 437.0,
+      "p": 1.3811513781547546e-06,
+      "p_adjusted": 5.5246055126190186e-06,
+      "correction": "Holm",
+      "effect_size": 0.8795698924731182,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.23567473087664603,
+        0.31410496072634553
+      ],
+      "estimate": 0.2727749438566173,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-artifact-5",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1a r=0.3: c(TGL) > 0",
+      "statistic": 464.0,
+      "p": 1.862645149230957e-09,
+      "p_adjusted": 9.313225746154785e-09,
+      "correction": "Holm",
+      "effect_size": 0.9956989247311828,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.2540805457948606,
+        0.34855438650723686
+      ],
+      "estimate": 0.303303862045083,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k1-artifact-6",
+      "hypothesis": "H-K1",
+      "experiment": "K1-atencion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K1b r=0.3: c(TGL) > c(TGL-NC)",
+      "statistic": 465.0,
+      "p": 9.313225746154785e-10,
+      "p_adjusted": 5.587935447692871e-09,
+      "correction": "Holm",
+      "effect_size": 1.0,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.24131035700672832,
+        0.37161169697522767
+      ],
+      "estimate": 0.30402175310959734,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2-1",
+      "hypothesis": "H-K2",
+      "experiment": "K2-emparejamiento",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K2a: s(TGL) > 0",
+      "statistic": 465.0,
+      "p": 9.313225746154785e-10,
+      "p_adjusted": 1.862645149230957e-09,
+      "correction": "Holm",
+      "effect_size": 1.0,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.04310601018369198,
+        0.060623204335570335
+      ],
+      "estimate": 0.05164468474686146,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2-2",
+      "hypothesis": "H-K2",
+      "experiment": "K2-emparejamiento",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K2b: s(TGL) > s(TG)",
+      "statistic": 188.0,
+      "p": 0.8200610363855958,
+      "p_adjusted": 0.8200610363855958,
+      "correction": "Holm",
+      "effect_size": -0.1913978494623656,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.011652685701847076,
+        0.0058084651827812195
+      ],
+      "estimate": -0.0036859624087810516,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k3-clean-1",
+      "hypothesis": "H-K3",
+      "experiment": "K3-ablacion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K3a: TGL > TGL-NC",
+      "statistic": 231.0,
+      "p": 0.07921316084483504,
+      "p_adjusted": 0.23763948253450512,
+      "correction": "Holm",
+      "effect_size": 0.3162393162393162,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.01851851851851849,
+        0.07407407407407407
+      ],
+      "estimate": 0.02777777777777779,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k3-clean-2",
+      "hypothesis": "H-K3",
+      "experiment": "K3-ablacion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K3b: TGL > TG",
+      "statistic": 188.5,
+      "p": 0.3702758331386258,
+      "p_adjusted": 0.3702758331386258,
+      "correction": "Holm",
+      "effect_size": 0.07407407407407407,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.018518518518518545,
+        0.02777777777777779
+      ],
+      "estimate": 0.0,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k3-clean-3",
+      "hypothesis": "H-K3",
+      "experiment": "K3-ablacion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K3c: TGL > TL",
+      "statistic": 236.5,
+      "p": 0.12659589771939977,
+      "p_adjusted": 0.25319179543879955,
+      "correction": "Holm",
+      "effect_size": 0.25132275132275134,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.01851851851851849,
+        0.06481481481481477
+      ],
+      "estimate": 0.018518518518518545,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k3-artifact-1",
+      "hypothesis": "H-K3",
+      "experiment": "K3-ablacion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K3a [artifact]: TGL > TGL-NC",
+      "statistic": 219.0,
+      "p": 0.23537954882466794,
+      "p_adjusted": 0.4707590976493359,
+      "correction": "Holm",
+      "effect_size": 0.15873015873015872,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.027777777777777735,
+        0.055555555555555525
+      ],
+      "estimate": 0.0092592592592593,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k3-artifact-2",
+      "hypothesis": "H-K3",
+      "experiment": "K3-ablacion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K3b [artifact]: TGL > TG",
+      "statistic": 198.0,
+      "p": 0.4141067049932576,
+      "p_adjusted": 0.4707590976493359,
+      "correction": "Holm",
+      "effect_size": 0.047619047619047616,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.027777777777777735,
+        0.02777777777777779
+      ],
+      "estimate": 0.0,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k3-artifact-3",
+      "hypothesis": "H-K3",
+      "experiment": "K3-ablacion",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided; K3c [artifact]: TGL > TL",
+      "statistic": 184.0,
+      "p": 0.08069919419127308,
+      "p_adjusted": 0.24209758257381925,
+      "correction": "Holm",
+      "effect_size": 0.3333333333333333,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.0092592592592593,
+        0.05555555555555558
+      ],
+      "estimate": 0.018518518518518545,
+      "n": 30,
+      "alpha": 0.05
+    }
+  ]
+}
