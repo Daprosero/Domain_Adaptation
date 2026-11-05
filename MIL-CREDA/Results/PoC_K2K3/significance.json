@@ -1,0 +1,140 @@
+{
+  "tests": [
+    {
+      "comparison": "poc-k2k3-K2a",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 465.0,
+      "p": 9.313225746154785e-10,
+      "p_adjusted": 1.862645149230957e-09,
+      "correction": "Holm",
+      "effect_size": 1.0,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.04310601018369198,
+        0.060623204335570335
+      ],
+      "estimate": 0.05164468474686146,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2k3-K2b",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 188.0,
+      "p": 0.8200610363855958,
+      "p_adjusted": 0.8200610363855958,
+      "correction": "Holm",
+      "effect_size": -0.1913978494623656,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.011652685701847076,
+        0.0058084651827812195
+      ],
+      "estimate": -0.0036859624087810516,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2k3-K3a-artifact",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 219.0,
+      "p": 0.23537954882466794,
+      "p_adjusted": 0.23537954882466794,
+      "correction": "none",
+      "effect_size": 0.15873015873015872,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.027777777777777735,
+        0.055555555555555525
+      ],
+      "estimate": 0.0092592592592593,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2k3-K3b-clean",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 188.5,
+      "p": 0.3702758331386258,
+      "p_adjusted": 0.3702758331386258,
+      "correction": "Holm",
+      "effect_size": 0.07407407407407407,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.018518518518518545,
+        0.02777777777777779
+      ],
+      "estimate": 0.0,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2k3-K3c-clean",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 236.5,
+      "p": 0.12659589771939977,
+      "p_adjusted": 0.25319179543879955,
+      "correction": "Holm",
+      "effect_size": 0.25132275132275134,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.01851851851851849,
+        0.06481481481481477
+      ],
+      "estimate": 0.018518518518518545,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2k3-K3b-artifact",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 198.0,
+      "p": 0.4141067049932576,
+      "p_adjusted": 0.4141067049932576,
+      "correction": "Holm",
+      "effect_size": 0.047619047619047616,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.027777777777777735,
+        0.02777777777777779
+      ],
+      "estimate": 0.0,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2k3-K3c-artifact",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 184.0,
+      "p": 0.08069919419127308,
+      "p_adjusted": 0.16139838838254617,
+      "correction": "Holm",
+      "effect_size": 0.3333333333333333,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.0092592592592593,
+        0.05555555555555558
+      ],
+      "estimate": 0.018518518518518545,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-k2k3-H-task-bn-matched",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 408.5,
+      "p": 0.0001446872016345676,
+      "p_adjusted": 0.0001446872016345676,
+      "correction": "none",
+      "effect_size": 0.7569892473118279,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.037037037037037035,
+        0.10185185185185186
+      ],
+      "estimate": 0.06481481481481483,
+      "n": 30,
+      "alpha": 0.05
+    }
+  ]
+}
