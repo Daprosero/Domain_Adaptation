@@ -127,6 +127,9 @@ class Conditions:
     #: What a contaminated slot holds: `donor` (`bags.build`'s own seam) or
     #: `artifact` (the clean instance plus off-manifold noise, same slots).
     contamination: str = "donor"
+    #: Run 5's subject signature, as a multiple of the source's between-class
+    #: separation (`toy_bags.firmar_sujetos`); 0 is off.
+    subject_signature: float = 0.0
 
     def draw_options(self) -> dict:
         return {"per_pair_shift": self.per_pair_shift,
@@ -135,6 +138,24 @@ class Conditions:
 
 
 OFF = Conditions()
+
+
+def conditions_record(conditions: Conditions) -> dict:
+    """`conditions` as the run records and cache keys carry them: an option
+    added after run 4 appears only when on, so off they are as they were."""
+    record = dataclasses.asdict(conditions)
+    if record["subject_signature"] == 0.0:
+        del record["subject_signature"]
+    return record
+
+
+def family_under(seed: int, scale, conditions: Conditions):
+    """The draw of one seed under `conditions`: `toy_run.build_family` with
+    the draw options, then the subject signature when on."""
+    familia = toy_run.build_family(FAMILY, seed, scale, **conditions.draw_options())
+    return toy_bags.firmar_sujetos(familia, conditions.subject_signature, seed)
+
+
 
 #: Run 3's fraction of a band's width the subject field may slide a target
 #: point along the roll: below the half-spacing where the nearest same-class
@@ -753,10 +774,10 @@ def run_ladder_seed(seed: int, scale=SCALE, per_pair_shift: float = 0.0,
     start = time.perf_counter()
     device = _device()
     hyper = poc_hyper()
-    familia = toy_run.build_family(FAMILY, seed, scale, **conditions.draw_options())
+    familia = family_under(seed, scale, conditions)
     material, _ = material_under(familia, seed, scale, conditions, rate)
     out = {"seed": seed, "perPairShift": conditions.per_pair_shift, "rate": rate,
-           "conditions": dataclasses.asdict(conditions), "arms": {}}
+           "conditions": conditions_record(conditions), "arms": {}}
     with toy_run.material_bound(familia, scale, BACKBONE, hyper):
         shared = None
         for arm in ("TGL", "TG", "TL"):
@@ -791,10 +812,10 @@ def run_contamination_seed(seed: int, rate: float, scale=SCALE,
     device = _device()
     hyper = poc_hyper()
     conditions = conditions or Conditions(per_pair_shift=per_pair_shift)
-    familia = toy_run.build_family(FAMILY, seed, scale, **conditions.draw_options())
+    familia = family_under(seed, scale, conditions)
     material, masks = material_under(familia, seed, scale, conditions, rate)
     out = {"seed": seed, "rate": rate, "perPairShift": conditions.per_pair_shift,
-           "conditions": dataclasses.asdict(conditions), "arms": {}}
+           "conditions": conditions_record(conditions), "arms": {}}
     with toy_run.material_bound(familia, scale, BACKBONE, hyper):
         for arm in arms:
             model, record, _ = _two_phases(arm, material, familia, scale, hyper,
@@ -836,7 +857,9 @@ CACHE_ENV = "MIL_CREDA_POC_CACHE"
 
 def _canonical(value):
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {"__dataclass__": type(value).__qualname__, **dataclasses.asdict(value)}
+        fields = (conditions_record(value) if isinstance(value, Conditions)
+                  else dataclasses.asdict(value))
+        return {"__dataclass__": type(value).__qualname__, **fields}
     raise TypeError(f"no canonical form for {type(value).__name__}")
 
 
@@ -884,6 +907,17 @@ def k2k3_jobs(prereg: dict) -> list[tuple]:
                                         "rate": rate, "gating": True})
              for s in prereg["seeds"]]
     return jobs
+
+
+def k2k3v2_jobs(prereg: dict) -> list[tuple]:
+    """Run 5's battery: `k2k3_jobs` under a pre-registration whose conditions
+    carry the subject signature and whose `k3Rate` the parent has set."""
+    if not prereg["conditions"].get("subject_signature"):
+        raise ValueError("run 5 needs conditions.subject_signature > 0")
+    rate = prereg["artifact"]["k3Rate"]
+    if isinstance(rate, bool) or not isinstance(rate, (int, float)):
+        raise ValueError(f"artifact.k3Rate is {rate!r}: the parent sets it before the battery")
+    return k2k3_jobs(prereg)
 
 
 def _store(path: Path, out) -> None:
