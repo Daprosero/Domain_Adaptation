@@ -1,0 +1,140 @@
+{
+  "tests": [
+    {
+      "comparison": "poc-run6-K2a",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 463.0,
+      "p": 2.7939677238464355e-09,
+      "p_adjusted": 5.587935447692871e-09,
+      "correction": "Holm",
+      "effect_size": 0.9913978494623656,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.09435081102100074,
+        0.1456930992357871
+      ],
+      "estimate": 0.1212518660753381,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-run6-K2b",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 459.0,
+      "p": 1.30385160446167e-08,
+      "p_adjusted": 1.30385160446167e-08,
+      "correction": "Holm",
+      "effect_size": 0.9741935483870968,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.05045289604687223,
+        0.08303635406727884
+      ],
+      "estimate": 0.06737278474896563,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-run6-K2c-info",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 178.0,
+      "p": 0.8689388632774353,
+      "p_adjusted": 0.8689388632774353,
+      "correction": "none",
+      "effect_size": -0.23440860215053763,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.014924995747267033,
+        0.004451457191916072
+      ],
+      "estimate": -0.005111200844540316,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-run6-K3a",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 231.0,
+      "p": 0.03229047634287822,
+      "p_adjusted": 0.03229047634287822,
+      "correction": "none",
+      "effect_size": 0.42153846153846153,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        0.0,
+        0.055555555555555525
+      ],
+      "estimate": 0.027777777777777735,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-run6-K3b-clean",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 171.5,
+      "p": 0.4039342808757793,
+      "p_adjusted": 0.4039342808757793,
+      "correction": "Holm",
+      "effect_size": 0.055384615384615386,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.027777777777777735,
+        0.037037037037037035
+      ],
+      "estimate": 0.0,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-run6-K3c-clean",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 270.0,
+      "p": 0.12745241157767856,
+      "p_adjusted": 0.2549048231553571,
+      "correction": "Holm",
+      "effect_size": 0.2413793103448276,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.0092592592592593,
+        0.046296296296296335
+      ],
+      "estimate": 0.0092592592592593,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-run6-K3b-artifact",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 115.0,
+      "p": 0.6460176092436245,
+      "p_adjusted": 1.0,
+      "correction": "Holm",
+      "effect_size": -0.09090909090909091,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.0185185185185186,
+        0.01851851851851849
+      ],
+      "estimate": -0.009259259259259245,
+      "n": 30,
+      "alpha": 0.05
+    },
+    {
+      "comparison": "poc-run6-K3c-artifact",
+      "test": "Wilcoxon signed-rank, paired over 30 seeds, one-sided",
+      "statistic": 142.5,
+      "p": 0.7050371122427181,
+      "p_adjusted": 1.0,
+      "correction": "Holm",
+      "effect_size": -0.12307692307692308,
+      "effect_size_name": "rank-biserial",
+      "ci95": [
+        -0.04629629629629628,
+        0.027777777777777735
+      ],
+      "estimate": -0.009259259259259245,
+      "n": 30,
+      "alpha": 0.05
+    }
+  ]
+}

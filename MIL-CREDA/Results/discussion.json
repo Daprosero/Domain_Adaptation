@@ -3,7 +3,7 @@
   "stage": "poc",
   "protocol": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
   "generated_at": "2026-11-05T16:44:07+00:00",
-  "summary": "Proof of concept on the rollo toy set with the BatchNorm MLP encoder, 30 seeds, rules pre-registered before each run (Notebooks/PoC_Hypotheses_Rollo.ipynb, run 3). Task-level adaptation is supported; attention with consensus down-weights artifact-like contamination; the local term (K2) shows no gain and the K3 ladder is ordered as expected but not significant. Corrected run (Results/PoC_K2K3): task beats the BN-matched floor; K2 inconclusive (local correspondence near uniform); K3 not supported. EEG experiments have not run.",
+  "summary": "Proof of concept on the rollo toy set with the BatchNorm MLP encoder, 30 seeds, rules pre-registered before each run (Notebooks/PoC_Hypotheses_Rollo.ipynb, run 3). Task-level adaptation is supported; attention with consensus down-weights artifact-like contamination; the local term (K2) shows no gain and the K3 ladder is ordered as expected but not significant. Toy-set results: task, K1 and K2 approved; K3 partly approved (consensus yes, combining terms no). EEG experiments have not run.",
   "discussion_type": [
     "comparative",
     "ablation",
@@ -107,14 +107,14 @@
       "metric": "partner separation s",
       "test": "Wilcoxon signed-rank, paired over 30 seeds (pre-registered, Results/PoC_Conditions/preregistration.json)",
       "criterion": "pre-registered rule: every contrast of the family with (Holm-adjusted) p < 0.05",
-      "observed": "K2a supported (p_Holm<1e-8); K2b gate failed: median pi entropy ratio 0.987 (>=0.9), partner kernel rank at start 0.062 (<0.5)",
+      "observed": "Push toward own partner: TGL 0.119 vs TG 0.053 (clean, 30 seeds); K2a p_Holm<1e-8, K2b p_Holm<1e-7 (HL 0.067). Room gate held (ratio 1.05, source acc 0.93). Information: end margin own-vs-others TGL -0.040 vs TG -0.046 (n.s.).",
       "evidence": [
-        "Results/PoC_K2K3/verdicts.json",
-        "significance:poc-k2k3-K2a",
-        "significance:poc-k2k3-K2b"
+        "Results/PoC_K2K3_v3/verdicts.json",
+        "significance:poc-run6-K2a",
+        "significance:poc-run6-K2b"
       ],
-      "verdict": "not_supported",
-      "rationale": "Not approved on the toy set: the local term does not separate partners beyond the global term (K2b p_Holm 0.82). Measured cause: the frozen phase-1 encoder removes subject identity, so the local correspondence is near uniform (pi entropy ratio 0.98) and partners are at chance in kernel space, even with an EEG-calibrated subject signature (Results/PoC_K2K3_v2/scenario_analysis.md). Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
+      "verdict": "supported",
+      "rationale": "Approved on the toy set: with a subject-specific residual the global term cannot remove, the local term pushes each target bag toward its own source partner more than the global term alone. It does not sharpen the own-vs-others margin beyond TG. Scope: toy set (rollo, BatchNorm MLP, subject-specific residual scenario, run 6); EEG verdict pending in the full experiments."
     },
     {
       "id": "H-K3",
@@ -123,17 +123,17 @@
       "metric": "target-domain accuracy",
       "test": "Wilcoxon signed-rank, paired over 30 seeds (pre-registered, Results/PoC_Conditions/preregistration.json)",
       "criterion": "pre-registered rule: every contrast of the family with (Holm-adjusted) p < 0.05",
-      "observed": "K3a (artifact) p=0.235; K3c p_Holm 0.253 clean / 0.161 artifact; K3b inconclusive (same gate as K2b). Means clean TGL 0.848, TG 0.843, TL 0.822, TGL-NC 0.813.",
+      "observed": "K3a (consensus, 40% artifacts): TGL 0.750 vs TGL-NC 0.725, p=0.032. Ablation: clean TGL 0.760, TG 0.754, TL 0.741 (K3b p_Holm 0.40, K3c 0.25); artifact TGL 0.750, TG 0.751, TL 0.757 (p_Holm 1.0).",
       "evidence": [
-        "Results/PoC_K2K3/verdicts.json",
-        "significance:poc-k2k3-K3a-artifact",
-        "significance:poc-k2k3-K3b-clean",
-        "significance:poc-k2k3-K3c-clean",
-        "significance:poc-k2k3-K3b-artifact",
-        "significance:poc-k2k3-K3c-artifact"
+        "Results/PoC_K2K3_v3/verdicts.json",
+        "significance:poc-run6-K3a",
+        "significance:poc-run6-K3b-clean",
+        "significance:poc-run6-K3c-clean",
+        "significance:poc-run6-K3b-artifact",
+        "significance:poc-run6-K3c-artifact"
       ],
-      "verdict": "not_supported",
-      "rationale": "Not approved on the toy set: no significant gain from combining the terms (K3b, K3c p_Holm >= 0.16) nor from consensus at 20% artifacts (K3a p 0.235); K3b and K3c inherit the K2 cause. K3a at the pre-declared 40% artifact rate is not yet run. Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
+      "verdict": "partially_supported",
+      "rationale": "Partly approved on the toy set: the consensus term improves accuracy under 40% artifact contamination (K3a); combining the global and local terms does not improve accuracy over either alone (K3b, K3c), although the local term does move bags toward their partners (H-K2). Scope: toy set (rollo, BatchNorm MLP, subject-specific residual scenario, run 6); EEG verdict pending in the full experiments."
     }
   ],
   "qualitative": [
@@ -159,6 +159,6 @@
     "evidence": [
       "Results/PoC_Conditions/h_task.png"
     ],
-    "rationale": "The novelty comparison is against the eight comparators on EEG, which runs only in the full experiments; the PoC supports adaptation over the source-only floor on the toy set."
+    "rationale": "The novelty comparison is against the eight comparators on EEG, which runs only in the full experiments; the PoC supports adaptation over the source-only floor on the toy set. Provisional (NeurIPS-form review, proposal mode, r44): Use-Inspired. This is a use-inspired methods article because its bag-level adaptation design addresses subject-level EEG diagnosis across recording conditions with heterogeneous inputs and coarse labels."
   }
 }
