@@ -1,6 +1,6 @@
 """Controlled CCA-LSC variant: common checkpoint -> warmup -> calibrated bag adaptation.
 
-Plan v50 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
+Plan v54 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
 early stopping, no restore). With target validation bags (an inner split) every
 epoch's validation predictions are recorded for the search's pooled selection;
 without them (the refit) nothing is evaluated. A search cap must leave at least
@@ -23,7 +23,7 @@ from .losses import (CentroidMemory, calibrated_pseudo, calibration_weights,
                      estimate_prior, label_shift)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cca_phase_two_freezes_common_predictor", "cca_target_training_labels_are_unread",

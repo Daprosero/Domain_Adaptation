@@ -52,7 +52,7 @@ def torch_flags():
         os.environ["CUBLAS_WORKSPACE_CONFIG"] = saved[3]
 
 
-def _config(tmp: Path, strategies=("MIL-CREDA", "COT", "HASD")) -> dict:
+def _config(tmp: Path, strategies=("MIL-CREDA", "COT", "AdaptMIL")) -> dict:
     cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24)
     cfg.update({"strategies": list(strategies), "nTrials": 1, "schedule": dict(SCHEDULE),
                 "bootstrapResamples": 200, "device": "cpu"})
@@ -71,31 +71,33 @@ def _product(tmp: Path) -> Path:
 def test_units_are_enumerated_in_a_deterministic_order_with_stable_ids(tmp_path):
     cfg = _config(tmp_path)
     ids = [u.id for u in remote_units.enumerate_units(cfg, _product(tmp_path))]
-    groups, strategies = ("common", "HASD", "MIL-CREDA"), ("COT", "HASD", "MIL-CREDA")
+    groups, strategies = ("common", "AdaptMIL", "MIL-CREDA"), ("AdaptMIL", "COT", "MIL-CREDA")
     transfers = ("L1-to-L6", "L6-to-L1")
     assert ids == (
         [f"search.phase1.{t}.{g}.outer{r}" for t in transfers for r in range(4) for g in groups]
         + [f"search.phase2.{t}.{s}.outer{r}" for t in transfers for r in range(4)
            for s in strategies]
         + ["final.L1-to-L6", "final.L6-to-L1", "k3.L1-to-L6", "k3.L6-to-L1"])
-    shuffled = {**cfg, "strategies": ["HASD", "MIL-CREDA", "COT"],
+    shuffled = {**cfg, "strategies": ["COT", "MIL-CREDA", "AdaptMIL"],
                 "transfers": list(reversed(cfg["transfers"]))}
     assert [u.id for u in remote_units.enumerate_units(shuffled, _product(tmp_path))] == ids
 
 
 def test_the_search_units_are_one_per_study_and_outer_fold(tmp_path):
-    """Sec. 7.7: 4 phase-1 groups and 9 strategies per transfer and outer fold, ten
-    transfers: 520 studies, each one search unit carrying its outer fold."""
+    """Plan v54, Sec. 7.7: 3 phase-1 groups and 9 strategies per transfer and outer fold,
+    ten transfers: 480 studies, 120 per outer fold, each one search unit carrying its
+    outer fold."""
     full = {**_config(tmp_path), "strategies": list(model_store.STRATEGIES),
             "transfers": [t.name for t in campaign.assignment_mod.TRANSFERS],
             "core": {"level": ["L1->L6", "L6->L1"], "task": [], "device": []}}
     units = remote_units.enumerate_units(full, _product(tmp_path))
     found = [u for u in units if u.step == "search"]
-    assert len(found) == 520
-    assert sum(u.phase == 1 for u in found) == 160 and sum(u.phase == 2 for u in found) == 360
+    assert len(found) == 480
+    assert all(sum(u.rotation == r for u in found) == 120 for r in range(4))
+    assert sum(u.phase == 1 for u in found) == 120 and sum(u.phase == 2 for u in found) == 360
     for u in found:
         assert u.id.endswith(f".outer{u.rotation}") and u.rotation in range(4)
-    assert len({(u.transfer, u.phase, u.name, u.rotation) for u in found}) == 520
+    assert len({(u.transfer, u.phase, u.name, u.rotation) for u in found}) == 480
 
 
 def test_units_name_their_dependencies(tmp_path):
@@ -106,8 +108,8 @@ def test_units_name_their_dependencies(tmp_path):
         # a phase-2 study starts from its own outer fold's phase-1 checkpoint
         assert units[f"search.phase2.L1-to-L6.COT.outer{r}"].after == (
             f"search.phase1.L1-to-L6.common.outer{r}",)
-        assert units[f"search.phase2.L1-to-L6.HASD.outer{r}"].after == (
-            f"search.phase1.L1-to-L6.HASD.outer{r}",)
+        assert units[f"search.phase2.L1-to-L6.AdaptMIL.outer{r}"].after == (
+            f"search.phase1.L1-to-L6.AdaptMIL.outer{r}",)
     assert set(units["final.L1-to-L6"].after) == {
         i for i in units if i.startswith("search.") and ".L1-to-L6." in i}
     assert len(units["final.L1-to-L6"].after) == 2 * 3 * 4
@@ -118,7 +120,7 @@ def test_selected_units_come_from_forge_run_units(tmp_path):
     units = remote_units.enumerate_units(_config(tmp_path), _product(tmp_path))
     every = [u.id for u in units]
     assert [u.id for u in remote_units.select_units(units, environ={})] == every
-    pick = ["final.L6-to-L1", "search.phase1.L1-to-L6.HASD.outer0"]
+    pick = ["final.L6-to-L1", "search.phase1.L1-to-L6.AdaptMIL.outer0"]
     env = {remote_units.UNITS_ENV: json.dumps(pick)}
     assert [u.id for u in remote_units.select_units(units, environ=env)] == pick
     assert remote_units.select_units(units, environ={remote_units.UNITS_ENV: "[]"}) == []
@@ -182,7 +184,7 @@ def _run(cfg, product, tmp, ids, calls, **kwargs):
 def test_each_unit_writes_isolated_outputs_with_completion_and_environment_stamps(
         tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.HASD.outer0"]
+    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.AdaptMIL.outer0"]
     outcome = _run(cfg, product, tmp_path, ids, calls)
     assert outcome["ran"] == ids and outcome["remaining"] == []
     assert not (product / "Models").exists(), "a unit never writes the product itself"
@@ -210,7 +212,7 @@ def test_each_unit_writes_isolated_outputs_with_completion_and_environment_stamp
 
 def test_the_deadline_stops_before_a_unit_and_writes_partial(tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.HASD.outer0",
+    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.AdaptMIL.outer0",
            "search.phase1.L1-to-L6.MIL-CREDA.outer0"]
     outcome = _run(cfg, product, tmp_path, ids, calls, deadline=time.time() + 3600,
                    estimate=lambda unit: 0.0 if unit.id == ids[0] else 1e9)
@@ -228,7 +230,7 @@ def test_the_deadline_stops_before_a_unit_and_writes_partial(tmp_path, torch_fla
 
 def test_completed_units_are_skipped_on_resume(tmp_path, torch_flags):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.HASD.outer0"]
+    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.AdaptMIL.outer0"]
     _run(cfg, product, tmp_path, ids[:1], calls)
     outcome = _run(cfg, product, tmp_path, ids, calls)
     assert [c[0] for c in calls] == ids
@@ -263,7 +265,7 @@ def test_deterministic_flags_are_set_before_any_unit(tmp_path, torch_flags):
 
 def _two_shards(tmp_path):
     cfg, product, calls = _config(tmp_path), _product(tmp_path), []
-    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.HASD.outer0"]
+    ids = ["search.phase1.L1-to-L6.common.outer0", "search.phase1.L1-to-L6.AdaptMIL.outer0"]
     _run(cfg, product, tmp_path, ids, calls)
     return cfg, product, ids, product / remote_units.SHARDS_RELATIVE
 
@@ -332,7 +334,9 @@ def _predictions(product: Path) -> list[str]:
 
 def test_units_run_the_campaign_functions_with_the_plans_seeds(tmp_path, registries,
                                                                torch_flags):
-    """Units then merge give the campaign's own predictions: same functions, seeds 0 and 1."""
+    """Units then merge give the campaign's own predictions: the same functions, the search
+    seed for the search trials and the report seed for the one phase-1 checkpoint and every
+    final model."""
     cfg = _config(tmp_path, strategies=("MIL-CREDA",))
     direct = tmp_path / "direct"
     direct.mkdir()
@@ -398,7 +402,7 @@ def test_a_unit_without_a_measured_duration_estimate_is_refused_naming_what_to_m
 def test_the_final_unit_trains_no_phase_one_and_the_search_estimates_are_unchanged(
         tmp_path):
     """Secs. 4.5, 7.7: each phase-1 search unit stores its group's one checkpoint of the
-    outer fold (160 over the ten transfers with four groups), and the final unit refits
+    outer fold (120 over the ten transfers with three groups), and the final unit refits
     phase 2 from it without training phase 1 again; the search units' estimates and
     counts are what they were."""
     cfg, product = _config(tmp_path), _product(tmp_path)
@@ -416,7 +420,7 @@ def test_the_final_unit_trains_no_phase_one_and_the_search_estimates_are_unchang
             "transfers": [t.name for t in campaign.assignment_mod.TRANSFERS],
             "core": {"level": ["L1->L6", "L6->L1"], "task": [], "device": []}}
     every = remote_units.enumerate_units(full, product)
-    assert sum(u.step == "search" and u.phase == 1 for u in every) == 160
+    assert sum(u.step == "search" and u.phase == 1 for u in every) == 120
     assert sum(u.step == "search" and u.phase == 2 for u in every) == 360
     assert sum(u.step == "final" for u in every) == 10
 

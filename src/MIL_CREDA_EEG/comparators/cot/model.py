@@ -7,7 +7,7 @@ from torch import nn
 from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["7.2", "7.3", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cot_uses_common_inference_and_four_auxiliary_centers"],

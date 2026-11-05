@@ -89,7 +89,7 @@ def test_the_main_reference_is_the_common_checkpoint_applied_to_the_target():
 
 def test_each_other_phase_one_group_has_a_matched_source_only_control():
     assert controls.MAIN_REFERENCE == "common"
-    assert controls.MATCHED_GROUPS == ("AdaptMIL", "HASD", "MIL-CREDA")
+    assert controls.MATCHED_GROUPS == ("AdaptMIL", "MIL-CREDA")
     torch.manual_seed(0)
     model = MILCREDAModel(3, 3, attention_gamma=0.4, attention_temperature=1.0)
     model.fix_sigma(2.0)
@@ -114,14 +114,15 @@ def test_a_placeholder_group_control_accepts_any_registered_phase_one_checkpoint
     model = mil_wrapper.CommonMILModel(3, 3)
     state = {k: v for k, v in model.state_dict().items() if not k.startswith("target_trunk.")}
     saved = model_store.save(tmp_path / "Models", transfer=LEVEL, rotation=0, seed=1, phase=1,
-                             name="HASD", state=state, hyper={"lr1": 1e-3},
+                             name="AdaptMIL", state=state, hyper={"lr1": 1e-3},
                              partition_sha256=sha, channels={"source": 3, "target": 3})
+    monkeypatch.delitem(model_store.BUILDERS, "AdaptMIL", raising=False)
     with pytest.raises(model_store.GroupNotRegistered):
         controls.source_only_from_store(saved, LEVEL, _target_bags(3), partition_path=path_p)
-    monkeypatch.setitem(model_store.BUILDERS, "HASD",
+    monkeypatch.setitem(model_store.BUILDERS, "AdaptMIL",
                         lambda s, t, hyper: mil_wrapper.CommonMILModel(s, t))
     out = controls.source_only_from_store(saved, LEVEL, _target_bags(3), partition_path=path_p)
-    assert out["group"] == "HASD" and out["applicable"] is True and out["rotation"] == 0
+    assert out["group"] == "AdaptMIL" and out["applicable"] is True and out["rotation"] == 0
     with pytest.raises(controls.ControlError, match="transfer"):
         controls.source_only_from_store(saved, assignment.Transfer("level", "L11", "L1"),
                                         _target_bags(3), partition_path=path_p)

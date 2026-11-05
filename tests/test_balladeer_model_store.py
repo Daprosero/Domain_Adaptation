@@ -139,7 +139,7 @@ def test_every_final_model_has_its_own_path_per_transfer_rotation_seed_and_name(
              for p, names in ((1, model_store.GROUPS), (2, model_store.STRATEGIES))
              for n in names}
     assert len(paths) == 2 * 4 * 3 * (len(model_store.GROUPS) + len(model_store.STRATEGIES))
-    assert len(model_store.STRATEGIES) == 9 and len(model_store.GROUPS) == 4
+    assert len(model_store.STRATEGIES) == 9 and len(model_store.GROUPS) == 3
     with pytest.raises(model_store.StoreError):
         model_store.model_path(root, LEVEL, 0, 1, 1, "UDA-DDA")       # not a phase-1 group
     with pytest.raises(model_store.StoreError):

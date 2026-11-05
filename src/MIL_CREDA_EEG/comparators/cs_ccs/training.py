@@ -8,7 +8,7 @@ trunk, the attention and the head frozen it carries no gradient, so it is
 reported and changes nothing. Target training labels are never read; target
 validation labels are only recorded for the search's pooled selection (Sec. 4.5).
 
-Plan v50 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
+Plan v54 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
 early stopping, no restore); without target validation bags (the refit on every
 non-test fold) nothing is evaluated.
 """
@@ -25,7 +25,7 @@ from MIL_CREDA_EEG import eegnet, mil_wrapper, model_store, search, two_phase
 from .divergences import ccs_divergence, cs_divergence, median_bandwidth, normalise
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [

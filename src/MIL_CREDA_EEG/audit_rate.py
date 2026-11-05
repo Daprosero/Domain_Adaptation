@@ -1,6 +1,6 @@
 """Sampling-rate audit, per record and never per subject.
 
-Experiments plan v50, Sec. 2.2. The effective rate is derived from the
+Experiments plan v54, Sec. 2.2. The effective rate is derived from the
 timestamps and from the sample counter and compared with what the manufacturer
 declares. Two hard defects are declared:
 
@@ -37,7 +37,7 @@ import numpy as np
 from MIL_CREDA_EEG.audit_integrity import counter_modulus, lost_before_each_sample
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["2.2"],
     "experiments": ["2.2"],
     "invariants": [

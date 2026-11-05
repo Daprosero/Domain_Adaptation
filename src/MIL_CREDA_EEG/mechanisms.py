@@ -1,6 +1,6 @@
 """The mechanism experiments, read from the stored models: K1, K2 and K3.
 
-Experiments plan v50, Secs. 6.1-6.3, over proposal r38 Eqs. 14-19 (attention
+Experiments plan v54, Secs. 6.1-6.3, over proposal r38 Eqs. 14-19 (attention
 and bag kernel), 28-31 (local alignment) and 34-38 (bounds of the normalized
 terms). K1 and K2 train nothing: they read a model that `model_store` saved
 (Secs. 6.3 and 7.3) or a history that training already recorded. K3 trains its
@@ -16,7 +16,7 @@ one analysis twice. The level arm runs two contrasts, the task and device arms
 only the contact one (`K1_CONTRASTS`). Per window: the attention weight
 (`attention_weights`, read from the model's own attention: Eqs. 15-16 for
 MIL-CREDA, its variant without consensus and the common wrapper, the native
-aggregator for AdaptMIL and HASD); whether it is marked by sample loss
+aggregator for AdaptMIL); whether it is marked by sample loss
 (Sec. 2.3, `integrity_mark`) or bad contact (Sec. 2.5, any channel's
 `contact_bad`), which `marked_windows` reads from the bag's own marks; and, in
 the level arm, whether it holds a behavioural event (`event_windows`, the
@@ -29,7 +29,7 @@ three: marked vs clean with MIL-CREDA, MIL-CREDA vs the own attention without
 consensus (Sec. 6.3, `K1_WITHOUT_CONSENSUS`) paired per subject, and event vs
 rest with MIL-CREDA. The task and device arms report the two contact tests as
 support, without criterion. Every other attention -- the published and gated
-attentions of Sec. 6.3, the common attention of Sec. 7.2, AdaptMIL and HASD --
+attentions of Sec. 6.3, the common attention of Sec. 7.2 and AdaptMIL --
 is reported with the same contrasts and without criterion. The mean is
 excluded (`K1_EXCLUDED`). Subjects without marked windows do not enter the
 contact contrast and are counted.
@@ -108,7 +108,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.two_phase import EVAL_CHUNK
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.6", "6.1", "6.2", "6.3", "7.2", "7.3"],
     "experiments": ["K1-atencion", "K2-emparejamiento", "K3-ablacion"],
     "equations": ["14", "15", "16", "17", "18", "19", "33", "38"],
@@ -204,13 +204,20 @@ def load_phase_two(path: str | Path, *, partition_path: str | Path | None = None
 
     Every parameter and buffer of the architecture must be in the stored state
     (the store saves the whole model); keys the architecture does not hold are the
-    strategy's auxiliary training structures and are returned, not loaded.
+    strategy's auxiliary training structures and are returned, not loaded. A CLUDA
+    model is rebuilt whole by its own unit (`cluda.load_phase_two`: the projector
+    restored and the comparator's source digest checked), so nothing is returned unloaded.
     """
     state, meta = model_store.load(path, partition_path=partition_path,
                                    allow_code_mismatch=allow_code_mismatch)
     if meta["phase"] != 2:
         raise MechanismError(f"{path} is not a phase-2 model")
     name = meta["name"]
+    if name == "CLUDA":
+        from MIL_CREDA_EEG.comparators.cluda import training as cluda
+        model, meta = cluda.load_phase_two(path, partition_path=partition_path,
+                                           allow_code_mismatch=allow_code_mismatch)
+        return model, meta, []
     group = name if name in model_store.VARIANTS else search.PHASE_ONE_GROUP_OF[name]
     model = model_store.build_stored(group, meta["channels"]["source"],
                                      meta["channels"]["target"], meta["hyper"])
@@ -641,19 +648,20 @@ def train_ablation_variant(data: search.SearchData, rotation: int, seed: int, re
                            device: torch.device | str = "cpu") -> dict:
     """Sec. 6.3's ablation: full MIL-CREDA's phase 1, phase 2 with `term_selection`.
 
-    `record` is full MIL-CREDA's stored phase-1 checkpoint `(state, meta)` of this
-    transfer, rotation and seed; `params` are full MIL-CREDA's selected phase-2
+    `record` is full MIL-CREDA's one stored phase-1 checkpoint `(state, meta)` of this
+    transfer and rotation, at `search.PHASE_ONE_SEED`, whatever seed the variant trains
+    at; `params` are full MIL-CREDA's selected phase-2
     hyperparameters of this transfer.
     """
     two_phase.term_coefficients(term_selection)
     state, meta = record
     expected = {"phase": 1, "name": two_phase.MODEL, "transfer": data.transfer.name,
-                "rotation": int(rotation), "seed": int(seed)}
+                "rotation": int(rotation), "seed": search.PHASE_ONE_SEED}
     wrong = {k: meta.get(k) for k, v in expected.items() if meta.get(k) != v}
     if wrong:
-        raise MechanismError(f"the ablation starts from full MIL-CREDA's phase-1 checkpoint "
-                             f"of {data.transfer.name}, rotation {rotation}, seed {seed}; the "
-                             f"record differs in {wrong}")
+        raise MechanismError(f"the ablation starts from full MIL-CREDA's one phase-1 "
+                             f"checkpoint of {data.transfer.name}, rotation {rotation}, seed "
+                             f"{search.PHASE_ONE_SEED}; the record differs in {wrong}")
     if meta.get("sigma") is None:
         raise MechanismError("the MIL-CREDA phase-1 checkpoint carries no sigma; phase 2 "
                              "runs at exactly that value")
@@ -692,7 +700,7 @@ def train_aggregation_variant(data: search.SearchData, rotation: int, seed: int,
     """Sec. 6.3's aggregation table: one variant, both phases, at full MIL-CREDA's choice.
 
     `phase_one_record` is the variant's own stored phase-1 checkpoint `(state, meta)`
-    of this transfer, rotation and seed; given, phase 1 is not trained again and phase 2
+    of this transfer and rotation, at `search.PHASE_ONE_SEED`; given, phase 1 is not trained again and phase 2
     runs from it exactly as it would have run from the fresh checkpoint.
     """
     aggregation_variants.check_aggregation(aggregation)
@@ -717,12 +725,13 @@ def train_aggregation_variant(data: search.SearchData, rotation: int, seed: int,
         state, meta = phase_one_record
         expected = {"phase": 1, "name": model_store.variant_name(aggregation),
                     "transfer": data.transfer.name, "rotation": int(rotation),
-                    "seed": int(seed)}
+                    "seed": search.PHASE_ONE_SEED}
         wrong = {k: meta.get(k) for k, v in expected.items() if meta.get(k) != v}
         if wrong or meta.get("sigma") is None:
             raise MechanismError(f"the {aggregation} phase 2 starts from its own phase-1 "
                                  f"checkpoint of {data.transfer.name}, rotation {rotation}, "
-                                 f"seed {seed}, with its sigma; the record differs in {wrong}")
+                                 f"seed {search.PHASE_ONE_SEED}, with its sigma; the record "
+                                 f"differs in {wrong}")
         phase1, sigma = None, float(meta["sigma"])
     torch.manual_seed(seed)
     model = build()

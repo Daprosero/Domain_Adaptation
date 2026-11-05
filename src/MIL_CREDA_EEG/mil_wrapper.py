@@ -1,8 +1,8 @@
 """The common MIL wrapper of the non-MIL comparators, on EEG.
 
-Experiments plan v50, Secs. 7.2 and 7.3, over proposal r38, Eqs. 15, 16, 19
-and 20. The six comparators that are not MIL methods (UDA-DDA, CCA-LSC,
-CASUAL, COT, CS+CCS and CLUST in its source-free variant) all receive the same
+Experiments plan v54, Secs. 7.2 and 7.3, over proposal r38, Eqs. 15, 16, 19
+and 20. The seven comparators that are not MIL methods (UDA-DDA, CCA-LSC,
+CASUAL, COT, CS+CCS, CLUST in its source-free variant and CLUDA) all receive the same
 attention wrapper, and this is it: each window is encoded by the EEGNet-8,2
 trunk, a learned tanh relevance score passes through a softmax over the
 windows of the bag, the bag is the weighted sum of the window vectors, and the
@@ -10,10 +10,10 @@ common head classifies the bag once. That is Eq. 15 with gamma = 0: no
 in-bag kernel consensus, no local subject matching, none of MIL-CREDA's
 normalized terms (Sec. 7.2).
 
-**One phase-1 group, shared.** Sec. 7.3 declares four phase-1 groups; this
+**One phase-1 group, shared.** Sec. 7.3 declares three phase-1 groups; this
 module is the architecture of the common one (`GROUP`), whose single selected
-checkpoint per transfer and rotation is shared by the six comparators.
-AdaptMIL and HASD keep their native aggregators (their own groups), and
+checkpoint per transfer and rotation is shared by the seven comparators.
+AdaptMIL keeps its native aggregator (its own group), and
 MIL-CREDA its own attention (`mil_creda_model.MILCREDAModel`).
 
 **Reuse, not a second model.** `CommonMILModel` is `MILCREDAModel` with the
@@ -49,7 +49,7 @@ from MIL_CREDA.attention import bag_weights, relevance_component, relevance_logi
 from MIL_CREDA_EEG.mil_creda_model import ATTENTION_WIDTH, CLASSES, MILCREDAModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["7.2", "7.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "equations": ["13", "15", "16", "19", "20"],
@@ -65,9 +65,9 @@ __provenance__ = {
 
 #: Sec. 7.3: the phase-1 group this architecture is.
 GROUP = "common"
-#: Sec. 7.1: the six non-MIL comparators that share it (Sec. 7.2).
+#: Sec. 7.1: the seven non-MIL comparators that share it (Secs. 7.2, 7.3), CLUDA included.
 COMPARATORS = ("UDA-DDA", "CCA-LSC", "CASUAL", "COT", "CS+CCS",
-               "CLUST — variante source-free")
+               "CLUST — variante source-free", "CLUDA")
 #: Eq. 15 with gamma = 0 (Sec. 7.2) and a softmax at temperature 1.
 COMMON_GAMMA = 0.0
 COMMON_TEMPERATURE = 1.0

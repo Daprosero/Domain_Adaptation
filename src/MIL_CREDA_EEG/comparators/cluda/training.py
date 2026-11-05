@@ -10,7 +10,6 @@ import math
 from pathlib import Path
 
 import torch
-from optuna.distributions import FloatDistribution
 from torch.nn import functional as F
 
 from MIL_CREDA_EEG import eegnet, model_store, search, two_phase
@@ -34,7 +33,8 @@ __provenance__ = {
 
 NAME = "CLUDA"
 DEFAULT_PARAMS = {"lr2": .001, "wd2": 0., "contrastiveWeight": 1., "temperature": .07}
-TEMPERATURE = FloatDistribution(.01, 1., log=True)
+#: v54 §7.7 own axis, defined once in `search.OWN_AXES` like CLUST's and CASUAL's.
+TEMPERATURE = search.CONTRASTIVE_TEMPERATURE
 
 
 def source_digest():

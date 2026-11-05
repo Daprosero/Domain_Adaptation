@@ -5,7 +5,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from .training import adapt_target_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["7.3", "7.7"], "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_smoke_uses_seeded_balladeer_shapes_on_cpu"],
 }

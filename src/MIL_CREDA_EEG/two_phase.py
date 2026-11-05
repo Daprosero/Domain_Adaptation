@@ -1,6 +1,6 @@
 """MIL-CREDA's two-phase training on EEG, for one transfer, rotation and seed.
 
-Experiments plan v50, Secs. 4.5, 7.3 and 7.7, over proposal r38 Eqs. 21 and
+Experiments plan v54, Secs. 4.5, 7.3 and 7.7, over proposal r38 Eqs. 21 and
 32-39. The phase mechanics follow the retired toy-set runner (git history,
 `src/MIL_CREDA_Benchmark/toy_run.py` before 9b733d7) as a reference; nothing of
 it is imported or restored, and the plan's rules govern where the two differ.
@@ -105,7 +105,7 @@ from MIL_CREDA_EEG.mil_creda_model import (CLASSES, TERM_BOUNDS, MILCREDAModel,
                                            adaptation_terms, source_term)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "equations": ["21", "28", "29", "30", "31", "32", "33", "38", "39"],
@@ -386,7 +386,7 @@ def _clone_state(module: torch.nn.Module) -> dict:
     return {k: v.detach().clone() for k, v in module.state_dict().items()}
 
 
-#: Plan v50, Secs. 4.5 and 7.7: the (trial, epoch) the secondary rule selects, ties
+#: Plan v54, Secs. 4.5 and 7.7: the (trial, epoch) the secondary rule selects, ties
 #: broken as the primary rule breaks them (the lowest trial, then the earliest epoch).
 LABEL_FREE_EPOCH_RULE = ("the phase-2 trial and epoch with the best label-free score of "
                          "the target predictions pooled over the three inner splits "
@@ -397,7 +397,7 @@ class LabelFreeBest:
     """The state of the epoch with the best label-free score of ONE run, kept only when
     asked.
 
-    It is offered the score and the model, never a label. Plan v50 selects the label-free
+    It is offered the score and the model, never a label. Plan v54 selects the label-free
     (trial, epoch) on the predictions pooled over the inner splits (`search.select`) and
     refits there, so the campaign does not ask for it; it stays a per-run reading. Asked
     for nothing, it keeps and clones nothing, so a default run is unchanged.

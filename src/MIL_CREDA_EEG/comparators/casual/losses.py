@@ -1,4 +1,4 @@
-"""CASUAL Eqs. 11–16, evaluated on bags (plan v50 §§7.2–7.4)."""
+"""CASUAL Eqs. 11–16, evaluated on bags (plan v54 §§7.2–7.4)."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -7,7 +7,7 @@ import torch
 from torch.nn import functional as F
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["7.1", "7.2", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["casual_losses_have_closed_form_values",
@@ -118,5 +118,5 @@ def virtual_adversarial_loss(model, windows, radius, *, xi=0.01, iterations=1,
 
 def adaptation_objective(source_ce, alignment, entropy, vat, *, lambda_align,
                          lambda_entropy, lambda_vat):
-    """Paper Eq. 16; source CE is a constant in plan v50's frozen-source variant."""
+    """Paper Eq. 16; source CE is a constant in plan v54's frozen-source variant."""
     return source_ce + lambda_align * alignment + lambda_entropy * entropy + lambda_vat * vat

@@ -1,6 +1,6 @@
 """The campaign's units of work, run one remote session at a time and merged back.
 
-Experiments plan v50, Secs. 4.2, 4.5, 4.6, 7.3, 7.6 and 7.7, under the forge's remote
+Experiments plan v54, Secs. 4.2, 4.5, 4.6, 7.3, 7.6 and 7.7, under the forge's remote
 contract (`remote-execution`: the session-chain rule, job inputs and the shard
 stamp; `remote-parallelism`: the reproducibility checklist). Code review blocker
 B5: the campaign had no shard-aware contract; the second review's R1-R4 (an active
@@ -25,8 +25,8 @@ Transfers follow `assignment.TRANSFERS`, groups `model_store.GROUPS` and strateg
 `model_store.STRATEGIES`, whatever order the config lists them in, and the outer
 folds their order. A study belongs to one outer fold and trains its three inner
 splits inside each trial (its objective pools them), so a search unit is one
-study: 4 groups and 9 strategies per transfer and outer fold, 520 search units
-over the ten transfers (Sec. 7.7). `statistics`, `mechanisms`, `results` and
+study: 3 groups and 9 strategies per transfer and outer fold, 480 search units
+over the ten transfers, 120 per outer fold (Sec. 7.7). `statistics`, `mechanisms`, `results` and
 the K3 tables read every transfer at once: they run after the merge, as campaign
 steps, and train nothing that a merged unit already stored.
 
@@ -126,7 +126,7 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, campaign, model_store, partition, preprocess, results, search
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
     "sections": ["4.2", "4.5", "4.6", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "invariants": [
@@ -1038,7 +1038,7 @@ def merge(product: str | Path, roots: Sequence[str | Path] | None = None, *,
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m MIL_CREDA_EEG.remote_units",
-                                     description="The campaign's remote units (plan v43).")
+                                     description="The campaign's remote units (plan v54).")
     parser.add_argument("verb", choices=("list", "run", "merge", "smoke"))
     parser.add_argument("--config", required=True, help="campaign config (JSON)")
     parser.add_argument("--product", default=str(campaign.DEFAULT_PRODUCT))

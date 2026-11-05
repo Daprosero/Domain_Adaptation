@@ -1,18 +1,20 @@
 """MIL_CREDA_EEG: the BALLADEER EEG data audit, preprocessing and data units.
 
-Experiments plan v02 (`experiments-plan-experimental-mil-creda-sobre-balladeer-v02.md`),
-Secs. 2.1-2.6 and 2.10, for the audit. One module per audit step, each
-declaring the section it implements in its own `__provenance__`. The data
-units of plan v40 -- the four-fold partition (`partition`), bags
-(`bag_data`), domain assignment per transfer (`assignment`) and the
-re-measured separability (`separability`) -- declare v40 in theirs.
+Experiments plan v54 (`experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md`;
+the audit was first written against v02), Secs. 2.1-2.6 and 2.10, for the audit. One
+module per audit step, each declaring the revision and section it implements in its
+own `__provenance__`. The data units -- the four-fold partition (`partition`), bags
+(`bag_data`), domain assignment per transfer (`assignment`) and the re-measured
+separability (`separability`) -- declare theirs too; `partition` stays bound to v50,
+the revision its frozen document was regenerated under, because that document's
+identity hashes the module's own bytes.
 
 Kept apart from `MIL_CREDA`, which holds the mathematical objects of the
 proposal: the audit, preprocessing and data-unit modules read and measure raw
 recordings, implement no equation and import nothing from `MIL_CREDA`, so they
 run without torch.
 
-Three modules of plan v40 (Sec. 7.3) are the exception, and only they import
+Three modules (Sec. 7.3) are the exception, and only they import
 torch and `MIL_CREDA`: `eegnet` (EEGNet-8,2 as trunk and common head, and the
 phase-2 layer copy), `mil_creda_model` (two trunks, one shared attention, one
 head, wired to the proposal's equations without re-implementing them) and

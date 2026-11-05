@@ -175,7 +175,8 @@ Tested (commands from the worktree root, `PYTHONPATH=$PWD/src .venv/bin/python`)
   29→14, 14→29 and 29→29; poisoned target-training labels never read
   (identical history and weights); bandwidth computed once per step from
   detached tensors; search registration on the generic rule and refusal of a
-  foreign checkpoint; best-epoch restore with first-best tie-break; invalid
+  foreign checkpoint; last epoch kept with no restore (v54 §§4.5, 7.7; this item
+  read "best-epoch restore with first-best tie-break" before v50); invalid
   parameters refused; objective weights effective; importing registers
   nothing; synthetic smoke.
 - Mutation check (v40 code, before the v42 changes): 18 single-line mutations of the code (Eq. 4 sign, Eq. 5

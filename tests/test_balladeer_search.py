@@ -89,7 +89,7 @@ def test_the_spaces_are_exactly_those_of_sec_7_7():
     wd = FloatDistribution(1e-7, 1e-2, log=True)
     shared1 = {"lr1": lr1, "wd1": wd}
     assert search.PHASE_ONE_SPACES == {
-        "common": shared1, "AdaptMIL": shared1, "HASD": shared1,
+        "common": shared1, "AdaptMIL": shared1,
         "MIL-CREDA": {**shared1, "attentionGamma": FloatDistribution(0.0, 1.0),
                       "attentionTemperature": FloatDistribution(0.1, 10.0, log=True),
                       "sigmaMultiplier": CategoricalDistribution((0.5, 0.75, 1.0, 1.5))}}
@@ -106,15 +106,17 @@ def test_the_spaces_are_exactly_those_of_sec_7_7():
                                  search.EMA_MOMENTUM_COMPLEMENT.high))
     assert rho == pytest.approx([0.9, 0.999])
     assert search.VAT_RADIUS_FRACTION == FloatDistribution(0.01, 1.0, log=True)
+    assert search.CONTRASTIVE_TEMPERATURE == FloatDistribution(0.01, 1.0, log=True)
 
 
 def test_the_comparator_specific_axes_are_admitted_only_for_their_own_strategy(monkeypatch):
     monkeypatch.setattr(search, "PHASE_TWO_TRAINERS", dict(search.PHASE_TWO_TRAINERS))
     monkeypatch.setattr(search, "PHASE_TWO_EXTRA", dict(search.PHASE_TWO_EXTRA))
-    clust, casual = "CLUST — variante source-free", "CASUAL"
-    assert set(search.OWN_AXES) == {clust, casual} <= set(model_store.STRATEGIES)
+    clust, casual, cluda = "CLUST — variante source-free", "CASUAL", "CLUDA"
+    assert set(search.OWN_AXES) == {clust, casual, cluda} <= set(model_store.STRATEGIES)
     assert search.OWN_AXES[clust] == (search.EMA_MOMENTUM_COMPLEMENT,)
     assert search.OWN_AXES[casual] == (search.VAT_RADIUS_FRACTION,)
+    assert search.OWN_AXES[cluda] == (search.CONTRASTIVE_TEMPERATURE,)
     for strategy, axis in ((casual, search.EMA_MOMENTUM_COMPLEMENT),
                            (clust, search.VAT_RADIUS_FRACTION),
                            ("COT", search.EMA_MOMENTUM_COMPLEMENT),
@@ -297,11 +299,11 @@ def test_phase_two_starts_only_from_the_outer_folds_one_phase_one_checkpoint(
                                    n_trials=3)
 
 
-def test_unwired_groups_and_strategies_refuse_before_creating_storage(tmp_path):
+def test_unwired_groups_and_strategies_refuse_before_creating_storage(tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
-    for group in ("AdaptMIL", "HASD"):
-        with pytest.raises(model_store.GroupNotRegistered):
-            search.run_phase_one_study(group, data, 0, SCHEDULE, root=tmp_path, n_trials=1)
+    monkeypatch.delitem(model_store.BUILDERS, "AdaptMIL", raising=False)
+    with pytest.raises(model_store.GroupNotRegistered):
+        search.run_phase_one_study("AdaptMIL", data, 0, SCHEDULE, root=tmp_path, n_trials=1)
     with pytest.raises(search.NotWired):
         search.run_phase_two_study("COT", data, 0, ({}, {}), SCHEDULE, root=tmp_path,
                                    n_trials=1)
@@ -388,8 +390,8 @@ def test_only_a_group_with_its_own_unit_registers_a_phase_one_trainer(monkeypatc
     for group in ("common", "MIL-CREDA", "UDA-DDA"):
         with pytest.raises(search.SearchError):
             search.register_phase_one(group, print)
-    search.register_phase_one("HASD", print)
-    assert search.PHASE_ONE_TRAINERS == {"HASD": print}
+    search.register_phase_one("AdaptMIL", print)
+    assert search.PHASE_ONE_TRAINERS == {"AdaptMIL": print}
 
 
 def _scripted_phase_one(fail_at=None):
@@ -463,7 +465,7 @@ def test_a_study_records_the_identity_it_is_checked_against(tmp_path, monkeypatc
     assert study.user_attrs["code_version"] == model_store.code_version()
     assert study.user_attrs["partition_sha256"] == data.partition_sha256
     assert study.user_attrs["revision"] == search.__provenance__["revision"]
-    assert study.user_attrs["revision"].endswith("v50.md")
+    assert study.user_attrs["revision"].endswith("v54.md")
     assert study.user_attrs["outerFold"] == 0 and study.user_attrs["testFold"] == 0
     assert study.user_attrs["innerSplits"] == partition.rotation_roles(0)["inner_splits"]
 
