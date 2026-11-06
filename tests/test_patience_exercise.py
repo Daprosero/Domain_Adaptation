@@ -118,3 +118,22 @@ def test_a_phase_one_adaptmil_trial_registers_its_own_unit():
     from MIL_CREDA_EEG import campaign, model_store
     campaign.register(px.registrations([{"phase": 1, "name": "AdaptMIL"}]))
     model_store.require_registered("AdaptMIL")
+
+
+def test_gpu_witness_records_parameter_devices_steps_and_epoch_stamps():
+    import torch
+    from MIL_CREDA_EEG import two_phase
+    model = torch.nn.Linear(2, 1)
+    opt = torch.optim.SGD(model.parameters(), lr=0.1)
+    original = two_phase.validation_record
+    with px.GpuWitness(two_phase, torch) as w:
+        for _ in range(3):
+            opt.zero_grad()
+            model(torch.ones(1, 2)).sum().backward()
+            opt.step()
+            assert two_phase.validation_record is not original
+            w.stamps.append(0.0)
+    assert two_phase.validation_record is original
+    ev = w.evidence()
+    assert ev["optimizerSteps"] == 3 and ev["parameterDevices"] == {"cpu": 6}
+    assert ev["allParametersOnCuda"] is False and ev["epochsStamped"] == 3

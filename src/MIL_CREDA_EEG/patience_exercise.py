@@ -188,6 +188,61 @@ def registrations(trials: Sequence[Mapping]) -> list[str]:
     return sorted(names)
 
 
+class GpuWitness:
+    """Per trial, what certifies where training ran: the device types of every parameter
+    any optimizer stepped (a global optimizer step pre-hook, so every trainer is covered
+    however it builds its model), the number of steps, the CUDA peak memory, and the end
+    of every epoch (`two_phase.validation_record`, which all twelve trainers call once
+    per epoch, wrapped to stamp the clock) to give the measured seconds per epoch."""
+
+    def __init__(self, two_phase, torch):
+        self.two_phase, self.torch = two_phase, torch
+        self.devices: dict[str, int] = {}
+        self.steps = 0
+        self.stamps: list[float] = []
+
+    def __enter__(self):
+        torch, original = self.torch, self.two_phase.validation_record
+        self._original = original
+
+        def stamped(*args, **kwargs):
+            out = original(*args, **kwargs)
+            self.stamps.append(time.perf_counter())
+            return out
+
+        def hook(optimizer, args, kwargs):
+            self.steps += 1
+            if self.steps <= 3 or self.steps % 500 == 0:
+                for group in optimizer.param_groups:
+                    for p in group["params"]:
+                        key = str(p.device)
+                        self.devices[key] = self.devices.get(key, 0) + 1
+
+        self.two_phase.validation_record = stamped
+        from torch.optim.optimizer import register_optimizer_step_pre_hook
+        self._handle = register_optimizer_step_pre_hook(hook)
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+        return self
+
+    def __exit__(self, *exc):
+        self.two_phase.validation_record = self._original
+        self._handle.remove()
+        return False
+
+    def evidence(self) -> dict:
+        torch = self.torch
+        diffs = [b - a for a, b in zip(self.stamps, self.stamps[1:])]
+        return {"optimizerSteps": self.steps,
+                "parameterDevices": dict(sorted(self.devices.items())),
+                "allParametersOnCuda": bool(self.devices) and all(
+                    k.startswith("cuda") for k in self.devices),
+                "cudaMaxMemoryAllocatedMB": (torch.cuda.max_memory_allocated() / 2**20
+                                             if torch.cuda.is_available() else None),
+                "epochsStamped": len(self.stamps),
+                "medianEpochSeconds": statistics.median(diffs) if diffs else None}
+
+
 @contextmanager
 def _enqueued(search, params: Mapping):
     """Every study `search.make_study` creates meanwhile starts with `params` enqueued."""
@@ -246,9 +301,12 @@ def run(device: str = "cuda", trials: Sequence[Mapping] = (),
     transfer) a phase-2 trial needs, the selected {"group", "transfer", "params", "epochs"}."""
     import torch
     from MIL_CREDA_EEG import (assignment, bag_data, campaign, model_store, remote_timing,
-                               search)
+                               search, two_phase)
     started = time.time()
     evidence = remote_timing.device_evidence(device)
+    evidence["cudaIsAvailable"] = bool(torch.cuda.is_available())
+    evidence["cudaDeviceName0"] = (torch.cuda.get_device_name(0)
+                                   if torch.cuda.is_available() else None)
     print(f"[patience] device {json.dumps(evidence)}", flush=True)
     target = Path(out_dir)
     target.mkdir(parents=True, exist_ok=True)
@@ -283,11 +341,13 @@ def run(device: str = "cuda", trials: Sequence[Mapping] = (),
                                                           device, scratch, schedule)
                         setup["phaseOneRefitSeconds"][f"{gkey[0]}:{gkey[1]}"] = time.time() - t1
                     record = records[gkey]
-                out = run_trial(spec, data, record, device, scratch, schedule)
-                if torch.cuda.is_available():
-                    torch.cuda.synchronize()
+                with GpuWitness(two_phase, torch) as witness:
+                    out = run_trial(spec, data, record, device, scratch, schedule)
+                    if torch.cuda.is_available():
+                        torch.cuda.synchronize()
                 row = {**{k: spec[k] for k in ("phase", "name", "transfer", "draw", "params")},
                        "arm": by_name[spec["transfer"]].arm, **out,
+                       "gpuEvidence": witness.evidence(),
                        "outcomes": trial_outcomes([math.nan if v is None else v
                                                    for v in out["series"]]),
                        "seconds": time.time() - t_start}
