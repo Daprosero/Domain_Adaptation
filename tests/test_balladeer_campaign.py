@@ -407,12 +407,12 @@ def test_the_rehearsal_writes_the_dashboard_layout_end_to_end(level_run):
     assert "mil_creda_top_three" in summary
     k1 = json.loads((root / "significance_K1-atencion.json").read_text())
     assert any("event_window" in (r.get("not_computed") or "") for r in k1)
+    # v56 Sec. 6.1: the rehearsal runs only the level arm, which keeps only the event test;
+    # the two task-arm criterion tests need a task arm, so the level event row is alone
     criterion = [r for r in k1 if r.get("criterion") == mechanisms.K1_CRITERION]
-    assert [r["comparison"] for r in criterion] == [
-        "K1-atencion:level:marked vs clean, MIL-CREDA",
-        "K1-atencion:level:marked vs clean, MIL-CREDA vs MIL-CREDA [own without consensus]",
-        "K1-atencion:level:event vs rest, MIL-CREDA"]
-    assert criterion[1]["n"] > 0 and criterion[1]["p_value"] is not None
+    assert [r["comparison"] for r in criterion] == ["K1-atencion:level:event vs rest, MIL-CREDA"]
+    assert "event_window" in (criterion[0]["not_computed"] or "")
+    assert not any("marked vs clean" in r["comparison"] for r in k1)
     references = {r["comparison"].split(", ", 1)[1] for r in k1
                   if r.get("criterion", "").startswith("none (reference")}
     assert references == {"MIL-CREDA [published attention]", "MIL-CREDA [gated attention]",

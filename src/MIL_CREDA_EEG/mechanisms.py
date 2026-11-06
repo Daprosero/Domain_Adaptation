@@ -1,6 +1,6 @@
 """The mechanism experiments, read from the stored models: K1, K2 and K3.
 
-Experiments plan v55, Secs. 6.1-6.3, over proposal r44 Eqs. 14-19 (attention
+Experiments plan v56, Secs. 6.1-6.3, over proposal r44 Eqs. 14-19 (attention
 and bag kernel), 28-31 (local alignment) and 34-38 (bounds of the normalized
 terms). K1 and K2 train nothing: they read a model that `model_store` saved
 (Secs. 6.3 and 7.3) or a history that training already recorded. K3 trains its
@@ -12,8 +12,9 @@ averaged (`once_per_subject`).
 **K1, the attention selects something meaningful (Sec. 6.1).** Measured per
 arm on its core transfers, on the target test bags of each rotation, with the
 saved phase-2 models; each arm is analysed separately, so no subject enters
-one analysis twice. The level arm runs two contrasts, the task and device arms
-only the contact one (`K1_CONTRASTS`). Per window: the attention weight
+one analysis twice. The task and device arms run the marked-window contrast,
+the level arm only the behavioural one (`K1_CONTRASTS`): the high-density
+bags of the levels carry no marked window. Per window: the attention weight
 (`attention_weights`, read from the model's own attention: Eqs. 15-16 for
 MIL-CREDA, its variant without consensus and the common wrapper, the native
 aggregator for AdaptMIL); whether it is marked by sample loss
@@ -21,18 +22,21 @@ aggregator for AdaptMIL); whether it is marked by sample loss
 `contact_bad`), which `marked_windows` reads from the bag's own marks; and, in
 the level arm, whether it holds a behavioural event (`event_windows`, the
 `event_window` mark that preprocessing writes from `k1_events`; refused as
-`NotRecorded` while it does not exist). Per subject: the mean weight of the
-marked windows minus that of the clean ones and, in the level arm, the mean
-weight of the event windows minus that of the rest. Tested with Wilcoxon over
-subjects (`k1_tests`). The criterion is the level arm's three tests, Holm over
-three: marked vs clean with MIL-CREDA, MIL-CREDA vs the own attention without
-consensus (Sec. 6.3, `K1_WITHOUT_CONSENSUS`) paired per subject, and event vs
-rest with MIL-CREDA. The task and device arms report the two contact tests as
-support, without criterion. Every other attention -- the published and gated
-attentions of Sec. 6.3, the common attention of Sec. 7.2 and AdaptMIL --
-is reported with the same contrasts and without criterion. The mean is
-excluded (`K1_EXCLUDED`). Subjects without marked windows do not enter the
-contact contrast and are counted.
+`NotRecorded` while it does not exist). The marked-window contrast reads only
+EMOTIV recordings (`is_emotiv`, from `bag_data.CONDITIONS`), so the device arm
+measures only its Robots side, and only the subjects whose bag holds both
+marked and clean windows; the others are counted per arm. Per subject: the
+mean weight of the marked windows minus that of the clean ones in the task and
+device arms and, in the level arm, the mean weight of the event windows minus
+that of the rest. Tested with Wilcoxon over subjects (`k1_tests`). The
+criterion is three tests across arms, Holm over the three: in the task arm,
+marked vs clean with MIL-CREDA and MIL-CREDA vs the own attention without
+consensus (Sec. 6.3, `K1_WITHOUT_CONSENSUS`) paired per subject; in the level
+arm, event vs rest with MIL-CREDA. The device arm reports the two marked-window
+tests as support, without criterion. Every other attention -- the published
+and gated attentions of Sec. 6.3, the common attention of Sec. 7.2 and
+AdaptMIL -- is reported with the same contrasts and without criterion. The
+mean is excluded (`K1_EXCLUDED`).
 
 **K2, local matching aligns compatible subjects (Sec. 6.2).** Over the probe
 subjects of each rotation (`assignment.Assignment.probe_subjects`: the test
@@ -108,7 +112,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.two_phase import EVAL_CHUNK
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["4.6", "6.1", "6.2", "6.3", "7.2", "7.3"],
     "experiments": ["K1-atencion", "K2-emparejamiento", "K3-ablacion"],
     "equations": ["14", "15", "16", "17", "18", "19", "33", "38"],
@@ -118,7 +122,8 @@ __provenance__ = {
         "an_unrecorded_event_mark_is_refused_not_guessed",
         "the_attention_weights_are_the_models_own_and_sum_to_one",
         "the_weight_contrast_is_marked_minus_clean_and_skips_subjects_without_marks",
-        "k1_reads_one_report_seed_and_holms_the_three_level_criterion_tests",
+        "the_marked_window_contrast_reads_only_emotiv_recordings",
+        "k1_reads_one_report_seed_and_holms_three_criterion_tests_across_task_and_level",
         "k2_reads_the_other_condition_only_through_the_probe",
         "the_kernel_distance_is_the_rkhs_distance_at_the_frozen_sigma",
         "the_separation_is_others_minus_own",
@@ -144,10 +149,13 @@ EVENT_MARK = "event_window"
 #: Sec. 2.3 and 2.5: the marks K1 reads.
 INTEGRITY_MARK = "integrity_mark"
 CONTACT_MARK = "contact_bad"
-#: Sec. 6.1: the contrasts each arm runs; the criterion is the level arm's.
-K1_CONTRASTS = {"level": ("contact", "event"), "task": ("contact",), "device": ("contact",)}
-K1_CRITERION_ARM = "level"
-K1_CRITERION = "level arm, Holm over three (Sec. 6.1)"
+#: Sec. 6.1: the contrasts each arm runs, in the order of its test table.
+K1_CONTRASTS = {"task": ("contact",), "level": ("event",), "device": ("contact",)}
+#: Sec. 6.1: the device of the only recordings with marked windows (`bag_data.CONDITIONS`).
+EMOTIV_DEVICE = bag_data.CONDITIONS["Robots"][1]
+#: Sec. 6.1: the three criterion tests, (arm, contrast), Holm over the three.
+K1_CRITERION_TESTS = (("task", "marked"), ("task", "paired"), ("level", "event"))
+K1_CRITERION = "task marked-window tests and level event test, Holm over three (Sec. 6.1, v56)"
 K1_OWN = two_phase.MODEL
 #: Sec. 6.1: the rival that carries the criterion, the K3 variant without consensus.
 K1_WITHOUT_CONSENSUS = model_store.variant_name(aggregation_variants.WITHOUT_CONSENSUS)
@@ -162,7 +170,7 @@ K2_DECLARED = {"smaller shift": assignment_mod.Transfer("level", "L1", "L6"),
 #: Sec. 6.2: MIL-CREDA without its local term is the Sec. 6.3 global-term-only variant.
 K2_NO_LOCAL = model_store.variant_name("global term only")
 #: Sec. 6.1's test table, headers verbatim.
-K1_TABLE_COLUMNS = ("Contraste", "Estadístico", "Valor de p",
+K1_TABLE_COLUMNS = ("Contraste", "Sujetos", "Estadístico", "Valor de p",
                     "Tamaño del efecto, correlación biserial de rangos",
                     "Estimador de Hodges-Lehmann", "Intervalo de confianza al 95 % de Wilcoxon")
 #: Sec. 6.2's test table, headers and rows verbatim, in the plan's order.
@@ -250,6 +258,14 @@ def marked_windows(bag: bag_data.Bag) -> np.ndarray:
     return marked
 
 
+def is_emotiv(condition: str) -> bool:
+    """Sec. 6.1: the condition is recorded with EMOTIV, read from `bag_data.CONDITIONS`."""
+    if condition not in bag_data.CONDITIONS:
+        raise MechanismError(f"unknown condition {condition!r}; known: "
+                             f"{list(bag_data.CONDITIONS)}")
+    return bag_data.CONDITIONS[condition][1] == EMOTIV_DEVICE
+
+
 def event_windows(bag: bag_data.Bag) -> np.ndarray:
     """Per window: it contains the instant of a behavioural event (Sec. 6.1)."""
     if bag.condition not in EVENT_CONDITIONS:
@@ -300,11 +316,13 @@ def k1_subject_rows(model, bags: Sequence[bag_data.Bag], *, model_name: str,
     if transfer.arm not in K1_CONTRASTS:
         raise MechanismError(f"K1 is measured per arm {list(K1_CONTRASTS)}; got {transfer.arm}")
     with_events = "event" in K1_CONTRASTS[transfer.arm]
+    with_marked = "contact" in K1_CONTRASTS[transfer.arm]
     rows = []
     for bag in bags:
         weights = attention_weights(model, torch.from_numpy(np.ascontiguousarray(bag.windows()))
                                     .float(), domain)
-        marked = marked_windows(bag)
+        emotiv = is_emotiv(bag.condition)
+        marked = marked_windows(bag) if with_marked and emotiv else None
         event, event_note = None, None
         if with_events:
             try:
@@ -314,8 +332,11 @@ def k1_subject_rows(model, bags: Sequence[bag_data.Bag], *, model_name: str,
         rows.append({"model": model_name, "arm": transfer.arm, "transfer": transfer.name,
                      "pair": "|".join(transfer.pair), "rotation": int(rotation),
                      "seed": int(seed), "subject": bag.subject,
-                     "marked_minus_clean": weight_contrast(weights, marked),
-                     "n_marked": int(marked.sum()), "n_windows": int(len(marked)),
+                     "emotiv": emotiv,
+                     "marked_minus_clean": None if marked is None
+                     else weight_contrast(weights, marked),
+                     "n_marked": None if marked is None else int(marked.sum()),
+                     "n_windows": int(bag.n_windows),
                      "event_minus_rest": event, "event_not_recorded": event_note})
     return rows
 
@@ -358,62 +379,82 @@ def _not_recorded(members: Sequence[Mapping]) -> str | None:
                 None)
 
 
-def _k1_single(members: Sequence[Mapping], arm: str, model: str, criterion: str) -> list[dict]:
-    """The arm's one-model contrasts: marked vs clean and, in the level arm, event vs rest."""
+def _k1_single(members: Sequence[Mapping], arm: str, model: str,
+               criterion: str | None) -> list[dict]:
+    """The arm's one-model contrasts: marked vs clean (task, device) or event vs rest (level).
+
+    `criterion` None marks the own model: each row takes the criterion of its
+    (arm, contrast) slot in `K1_CRITERION_TESTS`, or support otherwise.
+    """
     experiment = "K1-atencion"
     prefix = f"{experiment}:{arm}"
-    marked = [r["marked_minus_clean"] for r in members]
-    rows = [_wilcoxon_row(marked, comparison=f"{prefix}:marked vs clean, {model}",
-                          name="matched-pairs rank-biserial (marked - clean weight)",
-                          experiment=experiment,
-                          extra={"criterion": criterion,
-                                 "subjects_without_marked_windows":
-                                     sum(v is None for v in marked)})]
-    if "event" in K1_CONTRASTS[arm]:
+    rows = []
+    if "contact" in K1_CONTRASTS[arm]:
+        marked = [r["marked_minus_clean"] for r in members]
         rows.append(_wilcoxon_row(
-            [r["event_minus_rest"] for r in members],
-            comparison=f"{prefix}:event vs rest, {model}",
+            marked, comparison=f"{prefix}:marked vs clean, {model}",
+            name="matched-pairs rank-biserial (marked - clean weight)", experiment=experiment,
+            extra={"criterion": criterion or _k1_criterion(arm, "marked"),
+                   "subjects": sum(v is not None for v in marked),
+                   "subjects_with_both_window_kinds": sum(v is not None for v in marked),
+                   "subjects_not_emotiv": sum(not r.get("emotiv", True) for r in members),
+                   "subjects_without_marked_windows": sum(v is None for v in marked)}))
+    if "event" in K1_CONTRASTS[arm]:
+        events = [r["event_minus_rest"] for r in members]
+        rows.append(_wilcoxon_row(
+            events, comparison=f"{prefix}:event vs rest, {model}",
             name="matched-pairs rank-biserial (event - rest weight)", experiment=experiment,
-            extra={"criterion": criterion, "not_computed": _not_recorded(members)}))
+            extra={"criterion": criterion or _k1_criterion(arm, "event"),
+                   "subjects": sum(v is not None for v in events),
+                   "not_computed": _not_recorded(members)}))
     return rows
+
+
+def _k1_criterion(arm: str, contrast: str) -> str:
+    return K1_CRITERION if (arm, contrast) in K1_CRITERION_TESTS else "none (support, Sec. 6.1)"
 
 
 def k1_tests(rows_by_model: Mapping[str, Sequence[Mapping]], *,
              own: str = K1_OWN, without: str = K1_WITHOUT_CONSENSUS) -> list[dict]:
-    """Sec. 6.1's tables, per arm, from per-subject rows at the report seed."""
+    """Sec. 6.1's tables, per arm, from per-subject rows at the report seed.
+
+    The criterion rows of every arm present form one family, Holm over them
+    (three when the task and level arms are both measured).
+    """
     experiment = "K1-atencion"
     by_model = {m: once_per_subject(rs) for m, rs in rows_by_model.items()}
     out = []
     for arm in [a for a in K1_CONTRASTS if any(r["arm"] == a for r in by_model.get(own, []))]:
         members = [r for r in by_model[own] if r["arm"] == arm]
-        criterion = K1_CRITERION if arm == K1_CRITERION_ARM else "none (support, Sec. 6.1)"
-        family = _k1_single(members, arm, own, criterion)
-        rivals = [r for r in by_model.get(without, []) if r["arm"] == arm]
-        paired, note = [], None
-        if not rivals:
-            note = (f"the {without} model is not stored for the {arm} arm (Sec. 6.3 "
-                    f"aggregation table: run the k3 step)")
-        else:
-            rival_by = {(r["transfer"], r["subject"]): r for r in rivals}
-            for r in members:
-                c = rival_by.get((r["transfer"], r["subject"]))
-                if c is None:
-                    raise MechanismError(f"{r['subject']} of {r['transfer']} has no {without} "
-                                         f"row")
-                if r["marked_minus_clean"] is not None and c["marked_minus_clean"] is not None:
-                    paired.append(r["marked_minus_clean"] - c["marked_minus_clean"])
-        family.insert(1, _wilcoxon_row(
-            paired, comparison=f"{experiment}:{arm}:marked vs clean, {own} vs {without}",
-            name=f"matched-pairs rank-biserial ({own} - {without})", experiment=experiment,
-            extra={"criterion": criterion, "not_computed": note}))
-        if arm == K1_CRITERION_ARM:
-            out += st.apply_holm(family, f"{experiment}:{arm} criterion tests")
-        else:
-            out += family
+        family = _k1_single(members, arm, own, None)
+        if "contact" in K1_CONTRASTS[arm]:
+            rivals = [r for r in by_model.get(without, []) if r["arm"] == arm]
+            paired, note = [], None
+            if not rivals:
+                note = (f"the {without} model is not stored for the {arm} arm (Sec. 6.3 "
+                        f"aggregation table: run the k3 step)")
+            else:
+                rival_by = {(r["transfer"], r["subject"]): r for r in rivals}
+                for r in members:
+                    c = rival_by.get((r["transfer"], r["subject"]))
+                    if c is None:
+                        raise MechanismError(f"{r['subject']} of {r['transfer']} has no "
+                                             f"{without} row")
+                    if r["marked_minus_clean"] is not None and \
+                            c["marked_minus_clean"] is not None:
+                        paired.append(r["marked_minus_clean"] - c["marked_minus_clean"])
+            family.insert(1, _wilcoxon_row(
+                paired, comparison=f"{experiment}:{arm}:marked vs clean, {own} vs {without}",
+                name=f"matched-pairs rank-biserial ({own} - {without})", experiment=experiment,
+                extra={"criterion": _k1_criterion(arm, "paired"), "subjects": len(paired),
+                       "subjects_with_both_window_kinds": len(paired), "not_computed": note}))
+        out += family
         for model in sorted(m for m in by_model if m not in (own, without)):
             mine = [r for r in by_model[model] if r["arm"] == arm]
             if mine:
                 out += _k1_single(mine, arm, model, "none (reference, Sec. 6.1)")
+    st.apply_holm([r for r in out if r["criterion"] == K1_CRITERION],
+                  f"{experiment} criterion tests")
     return out
 
 
@@ -538,7 +579,8 @@ def _interval(row: Mapping) -> str:
 
 def k1_test_table(rows: Sequence[Mapping]) -> list[dict]:
     """Sec. 6.1's test table from `k1_tests` rows, one per contrast, in their order."""
-    return [dict(zip(K1_TABLE_COLUMNS, (r["comparison"], r["statistic"], r["p_value"],
+    return [dict(zip(K1_TABLE_COLUMNS, (r["comparison"], r.get("subjects", r["n"]),
+                                        r["statistic"], r["p_value"],
                                         r["effect_size"], r.get("hodges_lehmann"),
                                         _interval(r)))) for r in rows]
 

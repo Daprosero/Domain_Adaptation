@@ -59,8 +59,10 @@ The steps, in order (`STEPS`), each one a subcommand of
    rival present with Holm over the arm's bootstrap family, and the Friedman
    ranking (`statistics`, `results`).
 5. `mechanisms` -- K1 per arm over the stored models of its core transfers
-   (`mechanisms.k1_tests`: the level arm's three criterion tests, support in the
-   task and device arms, every other attention as a reference), K2 over every
+   (`mechanisms.k1_tests`, plan v56: three criterion tests, Holm over the three --
+   the task arm's two marked-window tests on its EMOTIV bags and the level arm's
+   event test --, the device arm's Robots side as support, every other attention
+   as a reference), K2 over every
    transfer's probe subjects with its criterion contrast against the
    global-term-only model, and the K3 implementation control of the term bounds
    from the recorded histories (`mechanisms`).
@@ -1167,8 +1169,13 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
                                 "(mechanisms.common_attention_name)",
             "excluded": mechanisms.K1_EXCLUDED, "reportSeeds": cfg["reportSeeds"],
             "event_marks_recorded": any(r["event_minus_rest"] is not None for r in own),
-            "subjects_without_marked_windows": sum(r["marked_minus_clean"] is None
-                                                   for r in own)}, synthetic=cfg["synthetic"],
+            "subjects_with_both_window_kinds": {
+                arm: sum(r["arm"] == arm and r["marked_minus_clean"] is not None for r in own)
+                for arm, c in mechanisms.K1_CONTRASTS.items() if "contact" in c},
+            "subjects_not_emotiv": {
+                arm: sum(r["arm"] == arm and not r["emotiv"] for r in own)
+                for arm, c in mechanisms.K1_CONTRASTS.items() if "contact" in c}},
+            synthetic=cfg["synthetic"],
             rehearsal=cfg["rehearsal"])
     if k2_full:
         rows = mechanisms.k2_tests(k2_full, k2_no_local)
