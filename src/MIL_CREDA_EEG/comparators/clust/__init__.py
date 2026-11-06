@@ -13,7 +13,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from .training import NAME, PARAMETERS, adapt_target_phase, restore_model
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_search_reuses_common_checkpoint_and_never_reads_source_data",

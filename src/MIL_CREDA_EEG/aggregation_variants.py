@@ -1,6 +1,6 @@
 """K3's aggregation variants: MIL-CREDA with another bag aggregation and nothing else.
 
-Experiments plan v56, Sec. 6.3, over proposal r44 Eqs. 13-38. The aggregation
+Experiments plan v57, Sec. 6.3, over proposal r44 Eqs. 13-38. The aggregation
 table trains MIL-CREDA with five mechanisms: its own relevance-plus-consensus
 attention (r44 Eqs. 14-16, `mil_creda_model.MILCREDAModel`, unchanged) and the
 four variants here (`VARIANTS`, in the table's order):
@@ -56,7 +56,7 @@ from MIL_CREDA_EEG import eegnet
 from MIL_CREDA_EEG.mil_creda_model import ATTENTION_WIDTH, CLASSES, MILCREDAModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
     "sections": ["6.3", "7.3"],
     "experiments": ["K3-ablacion"],
     "equations": ["13", "17", "18", "19", "20"],

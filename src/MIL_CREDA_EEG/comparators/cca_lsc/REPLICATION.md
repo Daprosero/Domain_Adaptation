@@ -50,7 +50,7 @@ The ingested Table 6 image could not be rendered by this session's image reader;
 the HTML table was read instead. Garbled result tables are not used as config.
 
 Binding experiment source:
-`experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md`,
+`experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md`,
 Sections 4.5, 7.1–7.4 and 7.7. Task T6, S1–S5 in
 `odd/tasks/balladeer-implementacion-experimental.md` (read through `## Log`).
 This is explicitly a **controlled variant**, not reproduction of the paper's

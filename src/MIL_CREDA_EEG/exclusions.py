@@ -1,6 +1,6 @@
 """What preprocessing excludes, and the flow log that keeps it honest.
 
-Experiments plan v56, Secs. 2.2, 2.4, 2.5, 2.10 and 3.2. Three rules drop a
+Experiments plan v57, Secs. 2.2, 2.4, 2.5, 2.10 and 3.2. Three rules drop a
 record as a hard defect of the record, each with its reason:
 
 * **2.2 rate**: an effective rate outside the manufacturer's menu or different
@@ -75,7 +75,7 @@ from MIL_CREDA_EEG.windows import (
 )
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
     "sections": ["2.2", "2.4", "2.5", "2.7", "2.10", "3.2", "6.1"],
     "experiments": ["2.2", "2.4", "2.5", "2.10", "3.2", "K1-atencion"],
     "invariants": [

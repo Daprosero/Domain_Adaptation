@@ -11,7 +11,7 @@ Route: reimplementation; no usable CLUST implementation located in the searches 
 
 ## Plan and scope
 
-Binding: experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md §§4.5, 7.1–7.4, 7.7 (rebound from v40 on 2026-11-03, rebound to v54 on 2026-11-04, to v55 on 2026-11-05 and to v56 on 2026-11-05 with no change of behaviour: v56 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites); task T6/S1–S5. This is NOT a reproduction of CLUST's reported results. Only the source-free variant is implemented: phase 2 accepts target training windows, never source bags or target training labels. Source classifier weights are the only source prototypes. No source CE, source sampling or replay exists in this adapter. No Eq.16 ensemble at inference.
+Binding: experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md §§4.5, 7.1–7.4, 7.7 (rebound from v40 on 2026-11-03, rebound to v54 on 2026-11-04, to v55 on 2026-11-05 and to v56 on 2026-11-05 with no change of behaviour: v56 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites); task T6/S1–S5. This is NOT a reproduction of CLUST's reported results. Only the source-free variant is implemented: phase 2 accepts target training windows, never source bags or target training labels. Source classifier weights are the only source prototypes. No source CE, source sampling or replay exists in this adapter. No Eq.16 ensemble at inference.
 
 Reuse common phase-1 model/trainer, bridge, EEGNet, evaluation, metrics, batching, assignment/search and model store. No existing module is changed. Phase-1 checkpoint is supplied by the shared common group rather than retrained here.
 

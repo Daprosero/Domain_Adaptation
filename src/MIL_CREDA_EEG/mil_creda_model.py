@@ -1,6 +1,6 @@
 """MIL-CREDA on EEG: two EEGNet trunks, one shared attention, one common head.
 
-Experiments plan v56, Secs. 3, 7.2 and 7.3, over proposal r44, Eqs. 13-39.
+Experiments plan v57, Secs. 3, 7.2 and 7.3, over proposal r44, Eqs. 13-39.
 This module wires the proposal's objects to the EEG instance encoder; it does
 not re-implement any of them. Every equation is called from `MIL_CREDA`:
 
@@ -61,7 +61,7 @@ from MIL_CREDA.renyi import quadratic_entropy
 from MIL_CREDA_EEG import eegnet
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
     "sections": ["3.2", "3.3", "7.2", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "equations": ["13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23",
