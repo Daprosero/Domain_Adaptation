@@ -1,8 +1,8 @@
 """K3's aggregation variants: MIL-CREDA with another bag aggregation and nothing else.
 
-Experiments plan v54, Sec. 6.3, over proposal r38 Eqs. 13-38. The aggregation
+Experiments plan v55, Sec. 6.3, over proposal r44 Eqs. 13-38. The aggregation
 table trains MIL-CREDA with five mechanisms: its own relevance-plus-consensus
-attention (r38 Eqs. 14-16, `mil_creda_model.MILCREDAModel`, unchanged) and the
+attention (r44 Eqs. 14-16, `mil_creda_model.MILCREDAModel`, unchanged) and the
 four variants here (`VARIANTS`, in the table's order):
 
 - "own without consensus" (`WITHOUT_CONSENSUS`): MIL-CREDA with gamma = 0 and
@@ -56,7 +56,7 @@ from MIL_CREDA_EEG import eegnet
 from MIL_CREDA_EEG.mil_creda_model import ATTENTION_WIDTH, CLASSES, MILCREDAModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["6.3", "7.3"],
     "experiments": ["K3-ablacion"],
     "equations": ["13", "17", "18", "19", "20"],
@@ -87,7 +87,7 @@ FORMS = {
 }
 #: Sec. 6.3's four variants (`mechanisms.AGGREGATIONS` without "own"), in the table's order.
 VARIANTS = (WITHOUT_CONSENSUS, *FORMS)
-WITHOUT_CONSENSUS_FORM = ("r38 Eqs. 15-16 at gamma = 0: relevance with bias b_R, l1 "
+WITHOUT_CONSENSUS_FORM = ("r44 Eqs. 15-16 at gamma = 0: relevance with bias b_R, l1 "
                           "constraint and full MIL-CREDA's selected temperature tau_att")
 #: MIL-CREDA's phase-1 keys that a published variant does not have (Eqs. 15-16).
 NOT_APPLICABLE = ("attentionGamma", "attentionTemperature")

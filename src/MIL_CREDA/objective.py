@@ -18,7 +18,7 @@ import torch
 from MIL_CREDA import as_matrix, as_tensor
 
 __provenance__ = {
-    "revision": "research-concept-r38.md",
+    "revision": "research-concept-r44.md",
     "sections": ["3", "6"],
     "equations": ["21", "39"],
     "invariants": [
@@ -86,7 +86,7 @@ def total_objective(
     lambda_global: float,
     lambda_local: float,
 ) -> torch.Tensor:
-    """Implement Eq. (39): L_src + lambda_glob L_glob + lambda_loc L_loc.
+    """Implement Eq. (39): L_src + eta_glob L_glob + eta_loc L_loc.
 
     Both coefficients must be non-negative: a negative one would reward
     misalignment.

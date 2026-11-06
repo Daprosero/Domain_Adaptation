@@ -1,6 +1,6 @@
 """Controlled UDA-DDA variant: common checkpoint -> target-only MMD + CMMD adaptation.
 
-Plan v54 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
+Plan v55 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
 early stopping, no restore). With target validation bags (an inner split) every
 epoch's validation predictions are recorded for the search's pooled selection;
 without them (the refit) nothing is evaluated. The paper's MMD-weight and
@@ -19,7 +19,7 @@ from MIL_CREDA_EEG import eegnet, mil_wrapper, model_store, search, two_phase
 from . import losses
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["uda_phase_two_freezes_common_predictor", "uda_target_training_labels_are_unread",

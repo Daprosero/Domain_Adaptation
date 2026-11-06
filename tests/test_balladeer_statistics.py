@@ -209,12 +209,12 @@ def test_significance_rows_carry_exactly_the_dashboard_keys():
     assert "discordant" in rows[0] and "kappa_difference" in rows[0]
 
 
-# ------------------------------------------------------------------ plan v54
+# ------------------------------------------------------------------ plan v55
 
 
 def test_the_provenance_binds_plan_v54():
     assert st.__provenance__["revision"] == (
-        "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md")
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md")
 
 
 def test_hodges_lehmann_and_its_exact_wilcoxon_interval_on_one_to_eight():

@@ -1,6 +1,6 @@
 """MIL-CREDA's two-phase training on EEG, for one transfer, rotation and seed.
 
-Experiments plan v54, Secs. 4.5, 7.3 and 7.7, over proposal r38 Eqs. 21 and
+Experiments plan v55, Secs. 4.5, 7.3 and 7.7, over proposal r44 Eqs. 21 and
 32-39. The phase mechanics follow the retired toy-set runner (git history,
 `src/MIL_CREDA_Benchmark/toy_run.py` before 9b733d7) as a reference; nothing of
 it is imported or restored, and the plan's rules govern where the two differ.
@@ -17,7 +17,7 @@ the selected E1 or E2 epochs and its history carries NaN validation values.
 
 **Phase 1, supervised in the source (Sec. 7.3).** Source trunk, attention and
 head are trained on the source training bags with Eq. 21 normalized by B_src,
-the supervised term of r38's objective (`mil_creda_model.source_term`), for
+the supervised term of r44's objective (`mil_creda_model.source_term`), for
 exactly `epochs1` epochs.
 
 **sigma in phase 1: this implementation's rule.** Sec. 7.7 fixes that phase 2
@@ -42,8 +42,8 @@ attention and the head are frozen: `requires_grad` off and the source trunk in
 `eval`, so BatchNorm does not update its running statistics either.
 
 **Phase 2, adaptation (Secs. 7.3, 7.7).** The optimizer holds the target trunk
-only. The loss is `lambda_glob * L_glob + lambda_loc * L_loc` with both
-coefficients 1 and no ramp (r38 Eqs. 28-33, 38; Eq. 39 with its supervised summand
+only. The loss is `eta_glob * L_glob + eta_loc * L_loc` with both
+coefficients 1 and no ramp (r44 Eqs. 28-33, 38; Eq. 39 with its supervised summand
 dropped, `objective.total_objective` with a zero first argument). Eq. 21 over
 the source batch is computed and recorded on every step and summed into
 nothing: with theta_s, phi and psi frozen it carries no gradient to theta_t.
@@ -70,7 +70,7 @@ before the selection existed, so every existing caller is unchanged.
 does not fix. Phase 1 takes one class-interleaved pass over the source training
 bags per epoch. Phase 2 takes one shuffled pass over the target training bags
 per epoch, each step paired with a source batch drawn with equal numbers per
-class from per-class queues, so every class is in the source batch, as r38's
+class from per-class queues, so every class is in the source batch, as r44's
 local correspondence requires (S_c non-empty). The source side of phase 2 is
 encoded without gradient: it is frozen, so the target trunk's gradient is the
 same and memory is not spent on a graph nobody differentiates.
@@ -105,7 +105,7 @@ from MIL_CREDA_EEG.mil_creda_model import (CLASSES, TERM_BOUNDS, MILCREDAModel,
                                            adaptation_terms, source_term)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "equations": ["21", "28", "29", "30", "31", "32", "33", "38", "39"],
@@ -141,7 +141,7 @@ MODEL = "MIL-CREDA"
 #: Sec. 7.7: the adaptation coefficients of phase 2, fixed, with no ramp.
 LAMBDA_GLOBAL = 1.0
 LAMBDA_LOCAL = 1.0
-#: Sec. 6.3: the ablation's term selections -> (lambda_glob, lambda_loc). A dropped term
+#: Sec. 6.3: the ablation's term selections -> (eta_glob, eta_loc). A dropped term
 #: has coefficient 0; the names are `mechanisms.ABLATIONS`, in that order.
 TERM_SELECTIONS = {"global term only": (LAMBDA_GLOBAL, 0.0),
                    "local term only": (0.0, LAMBDA_LOCAL),
@@ -174,7 +174,7 @@ class UnknownTermSelection(ValueError):
 
 
 def term_coefficients(term_selection: str) -> tuple[float, float]:
-    """(lambda_glob, lambda_loc) of a declared term selection; anything else refuses."""
+    """(eta_glob, eta_loc) of a declared term selection; anything else refuses."""
     if not isinstance(term_selection, str) or term_selection not in TERM_SELECTIONS:
         raise UnknownTermSelection(f"the term selection is one of {list(TERM_SELECTIONS)}; "
                                    f"got {term_selection!r}")
@@ -386,7 +386,7 @@ def _clone_state(module: torch.nn.Module) -> dict:
     return {k: v.detach().clone() for k, v in module.state_dict().items()}
 
 
-#: Plan v54, Secs. 4.5 and 7.7: the (trial, epoch) the secondary rule selects, ties
+#: Plan v55, Secs. 4.5 and 7.7: the (trial, epoch) the secondary rule selects, ties
 #: broken as the primary rule breaks them (the lowest trial, then the earliest epoch).
 LABEL_FREE_EPOCH_RULE = ("the phase-2 trial and epoch with the best label-free score of "
                          "the target predictions pooled over the three inner splits "
@@ -397,7 +397,7 @@ class LabelFreeBest:
     """The state of the epoch with the best label-free score of ONE run, kept only when
     asked.
 
-    It is offered the score and the model, never a label. Plan v54 selects the label-free
+    It is offered the score and the model, never a label. Plan v55 selects the label-free
     (trial, epoch) on the predictions pooled over the inner splits (`search.select`) and
     refits there, so the campaign does not ask for it; it stays a per-run reading. Asked
     for nothing, it keeps and clones nothing, so a default run is unchanged.
@@ -533,7 +533,7 @@ def set_phase_two_modes(model: MILCREDAModel) -> None:
 
 
 def phase_two_objective(terms: Mapping, term_selection: str = BOTH_TERMS) -> torch.Tensor:
-    """Eq. 39 without its supervised summand: lambda_glob L_glob + lambda_loc L_loc.
+    """Eq. 39 without its supervised summand: eta_glob L_glob + eta_loc L_loc.
 
     A term the selection drops enters detached with coefficient 0: no gradient.
     """

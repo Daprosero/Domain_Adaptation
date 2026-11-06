@@ -1,6 +1,6 @@
 """Every final model, saved per transfer, rotation, seed and group or strategy.
 
-Experiments plan v54, Secs. 4.5 and 7.3 (last paragraphs of "Fase 2"), with
+Experiments plan v55, Secs. 4.5 and 7.3 (last paragraphs of "Fase 2"), with
 Sec. 4.2's partition rule. Saved, per outer fold (`rotation`): the one phase-1
 checkpoint of each of the three phase-1 groups (`GROUPS`), its selected
 configuration refit on the non-test folds for E1 epochs, with its sigma for
@@ -68,7 +68,7 @@ from MIL_CREDA_EEG import partition, two_phase
 from MIL_CREDA_EEG.bag_data import REPOSITORY, default_partition_path
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["4.2", "4.5", "6.3", "7.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],

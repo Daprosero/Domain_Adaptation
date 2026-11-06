@@ -39,13 +39,14 @@ same test treatment: they are `MIL_CREDA.__init__`'s plumbing, and importing
 plumbing would re-establish exactly the dependency this module exists to
 avoid.
 
-**One revision lives here, and `__provenance__` names it: r38.** r38 carries the
+**One revision lives here, and `__provenance__` names it: r44.** r44 carries the
 numbering r35 introduced when it reordered
 the global and local sections and renumbered Eqs. 28-37 without touching a
 body; before it, r34 moved Eq. 15's consensus term to a leave-one-out average, which is MIL-CREDA's
 attention over the instances of a bag; this module holds Eqs. 21 and 31-32,
 all three byte-identical in r33 and r34, so the rebind moved no arithmetic and
-every claim below about r33 holds at r34, r35 and r38 unchanged. It named r25
+every claim below about r33 holds at r34, r35, r38 and r44 unchanged (r38 -> r44
+changed notation only: bold inputs, unified delta/u indices, H_I -> H). It named r25
 until 2026-10-18, because `conservative_bounds` and `class_global_loss` sat
 beside the two functions below and implemented Eq. (31)/(32) as r25 wrote them:
 ends from cardinality alone, `L_c = -ln(n_s + n_t)` and
@@ -127,7 +128,7 @@ ENTROPY_COSH_LOWER = -math.log(2.0)
 GLOBAL_LOSS_SPAN = math.log(2.0)
 
 __provenance__ = {
-    "revision": "research-concept-r38.md",
+    "revision": "research-concept-r44.md",
     "sections": ["3", "4"],
     # La 34 estaba CALCULADA y no declarada: `entropy_cosh_bounds` devuelve
     # `L_c = -ln 2`, que es el extremo inferior de la Ec. 30 y no de la 35 ---

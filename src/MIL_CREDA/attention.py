@@ -51,7 +51,7 @@ from MIL_CREDA import as_matrix, as_tensor
 from MIL_CREDA.kernels import gaussian_kernel
 
 __provenance__ = {
-    "revision": "research-concept-r38.md",
+    "revision": "research-concept-r44.md",
     "sections": ["3"],
     "equations": ["15", "16", "19"],
     "invariants": [

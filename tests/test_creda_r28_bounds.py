@@ -854,12 +854,12 @@ class R28BoundsProvenanceTests(unittest.TestCase):
         """
         from CREDA import bounds
         self.assertEqual(bounds.__provenance__['revision'],
-                         'research-concept-r38.md')
+                         'research-concept-r44.md')
         declared = bounds.__provenance__['invariants']
         for retired in ('conservative_bounds_copy_agrees_with_the_original',
                         'class_global_loss_copy_agrees_with_the_original'):
             self.assertNotIn(retired, declared)
-        self.assertIn('research-concept-r38.md', bounds.__provenance__['revision'])
+        self.assertIn('research-concept-r44.md', bounds.__provenance__['revision'])
         self.assertIn('entropy_cosh_bounds', bounds.__doc__)
 
 

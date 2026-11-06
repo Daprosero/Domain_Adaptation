@@ -14,7 +14,7 @@ from pathlib import Path
 
 # ------------------------------------------------------------------- material
 
-REVISION = "research-concept-r38.md"
+REVISION = "research-concept-r44.md"
 
 #: The domain codes a run has bound, and what each is called. Empty at rest:
 #: `toy_run.material_bound` adds the two codes of the family it binds and
@@ -509,15 +509,15 @@ RAMP_CEILING = 1.0
 #: rejilla que reemplaza: lo que cambia es que adentro ya no hay cinco puntos
 #: sino un continuo.
 #:
-#: `lambda_glob` de la Ec. (39) -- Decision: leído por `ceiling_for`/
+#: `eta_glob` de la Ec. (39) -- Decision: leído por `ceiling_for`/
 #: `reduction.ceilings`. Ver `CEILING_LOCAL_RANGE` para el segundo coeficiente
 #: que esta constante ya no tiene que cubrir sola.
 CEILING_RANGE = (1e-4, 1.0)
 
-#: `lambda_loc` de la Ec. (39): el segundo coeficiente que este mismo `objective.
+#: `eta_loc` de la Ec. (39): el segundo coeficiente que este mismo `objective.
 #: total_objective` siempre aceptó por separado (su propia firma y docstring lo
 #: dicen) y que hasta esta etapa el harness financiaba con el MISMO número que
-#: `lambda_glob` -- una rampa, un techo, pasado dos veces. Ese acoplamiento era el
+#: `eta_glob` -- una rampa, un techo, pasado dos veces. Ese acoplamiento era el
 #: defecto, no una decisión de la Ec. (39): el comentario que solía vivir en esta
 #: sección, más abajo, argumentaba lo contrario y quedó falsificado por este mismo
 #: cambio; ver la nota nueva donde estaba.
@@ -554,7 +554,7 @@ CEILING_LOCAL_RANGE = (1e-4, 1.0)
 # Every one is an Eq. (39)/Eq. (15)/Eq. (16)/Eq. (34) constant this file
 # otherwise declares fixed.
 #
-# `lambda_glob`/`lambda_loc` used NOT to be among them, on the premise that both
+# `eta_glob`/`eta_loc` used NOT to be among them, on the premise that both
 # came out of the one shared ramp (`harness.ramp`, then `total_objective(...,
 # coefficient, coefficient)`) and a second, independent coefficient for each
 # would change Eq. (39) itself rather than search over it. That premise was
@@ -581,8 +581,8 @@ CEILING_LOCAL_RANGE = (1e-4, 1.0)
 #: the two qualitative regimes a growth-rate search has to be able to reach.
 RAMP_DELTA_RANGE = (1.0, 100.0)
 
-#: How fast the LOCAL term's ramp climbs -- `lambda_loc`'s own growth rate,
-#: independent of `lambda_glob`'s above. Reuses `RAMP_DELTA_RANGE`'s bracket
+#: How fast the LOCAL term's ramp climbs -- `eta_loc`'s own growth rate,
+#: independent of `eta_glob`'s above. Reuses `RAMP_DELTA_RANGE`'s bracket
 #: outright rather than re-deriving one, and unlike `CEILING_LOCAL_RANGE` this
 #: reuse is not a weaker stand-in: growth SPEED is a property of a schedule
 #: climbing from zero to whatever ceiling it was given, over the fraction of

@@ -53,7 +53,7 @@ def test_every_writer_lands_in_the_dashboard_layout(tmp_path):
                    "A-nivel/tables/comparison.csv", "A-nivel/tables/comparison.md",
                    "history_A-nivel.json", "significance_A-nivel.json"]
     summary = json.loads((root / "A-nivel" / "summary.json").read_text())
-    assert summary["synthetic"] is True and summary["revision"].endswith("v54.md")
+    assert summary["synthetic"] is True and summary["revision"].endswith("v55.md")
     assert summary["rehearsal"] is False
     results.write_summary(root, "A-nivel", {"n": 3}, synthetic=False, rehearsal=True)
     assert json.loads((root / "A-nivel" / "summary.json").read_text())["rehearsal"] is True
@@ -359,7 +359,7 @@ def test_the_ladder_reads_each_strategys_own_source_only_control():
 
 def test_the_provenance_binds_plan_v54():
     assert results.__provenance__["revision"] == (
-        "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md")
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md")
 
 
 def _all_ten(strategies=model_store.STRATEGIES):

@@ -1,6 +1,6 @@
 """The common MIL wrapper of the non-MIL comparators, on EEG.
 
-Experiments plan v54, Secs. 7.2 and 7.3, over proposal r38, Eqs. 15, 16, 19
+Experiments plan v55, Secs. 7.2 and 7.3, over proposal r44, Eqs. 15, 16, 19
 and 20. The seven comparators that are not MIL methods (UDA-DDA, CCA-LSC,
 CASUAL, COT, CS+CCS, CLUST in its source-free variant and CLUDA) all receive the same
 attention wrapper, and this is it: each window is encoded by the EEGNet-8,2
@@ -49,7 +49,7 @@ from MIL_CREDA.attention import bag_weights, relevance_component, relevance_logi
 from MIL_CREDA_EEG.mil_creda_model import ATTENTION_WIDTH, CLASSES, MILCREDAModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["7.2", "7.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "equations": ["13", "15", "16", "19", "20"],

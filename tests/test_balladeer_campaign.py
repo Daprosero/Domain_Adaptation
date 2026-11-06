@@ -304,7 +304,7 @@ def test_stale_predictions_are_refused_naming_what_differs(tmp_path, monkeypatch
 
 
 def test_every_changed_module_answers_to_one_plan_revision():
-    assert campaign.REVISION.endswith("v54.md")
+    assert campaign.REVISION.endswith("v55.md")
     for module in (search, results, model_store):
         assert module.__provenance__["revision"] == campaign.REVISION
 
@@ -370,7 +370,7 @@ def test_the_device_arm_source_only_controls_are_never_numbers(tmp_path, registr
     records = results.read_predictions(product / "Results", "C-dispositivo")
     assert {r["strategy"] for r in records} == {"MIL-CREDA"}
     table = (product / "Results" / "C-dispositivo" / "tables" / "comparison.md").read_text()
-    # v54 Sec. 5.3: three source-only rows (one per phase-1 group), three columns each
+    # v55 Sec. 5.3: three source-only rows (one per phase-1 group), three columns each
     assert table.count(controls.NA_RECORD) == 3 * 3
 
 
@@ -801,15 +801,15 @@ def test_the_test_train_ratio_counts_the_refit_training_subjects():
     assert campaign.test_train_ratio(a, b) == pytest.approx(sum(expected) / 4)
 
 
-# ------------------------------------------------------------------ the v54 comparator set
+# ------------------------------------------------------------------ the v55 comparator set
 
-#: Plan v54, Sec. 7.1: the eight comparators and MIL-CREDA (HASD left the comparison).
+#: Plan v55, Sec. 7.1: the eight comparators and MIL-CREDA (HASD left the comparison).
 V54_STRATEGIES = {"AdaptMIL", "UDA-DDA", "CS+CCS", "CASUAL", "CCA-LSC", "COT",
                   "CLUST — variante source-free", "CLUDA", "MIL-CREDA"}
 
 
 def test_the_comparison_is_the_v54_set_and_hasd_is_an_unknown_strategy():
-    """Plan v54, Secs. 7.1, 7.3, 7.5: nine strategies, three phase-1 groups, CLUDA in the
+    """Plan v55, Secs. 7.1, 7.3, 7.5: nine strategies, three phase-1 groups, CLUDA in the
     common group, HASD in no strategy list and refused as unknown."""
     assert set(model_store.STRATEGIES) == V54_STRATEGIES and len(model_store.STRATEGIES) == 9
     assert model_store.STRATEGIES[-1] == "MIL-CREDA"
@@ -832,7 +832,7 @@ def test_the_comparison_is_the_v54_set_and_hasd_is_an_unknown_strategy():
 
 
 def test_cluda_registers_through_the_campaign_with_its_own_axis(registries, monkeypatch):
-    """Plan v54, Sec. 7.7: CLUDA searches the generic contrastive weight and its own
+    """Plan v55, Sec. 7.7: CLUDA searches the generic contrastive weight and its own
     temperature axis, log-uniform in [0.01, 1]."""
     from MIL_CREDA_EEG.comparators.cluda import training as cluda
     assert search.OWN_AXES["CLUDA"] == (FloatDistribution(0.01, 1.0, log=True),)
@@ -846,7 +846,7 @@ def test_cluda_registers_through_the_campaign_with_its_own_axis(registries, monk
 
 
 def test_cluda_runs_through_the_campaign_and_loads_back_whole(tmp_path, registries):
-    """Plan v54, Secs. 7.3, 7.4: CLUDA's phase 2 starts from the common group's checkpoint,
+    """Plan v55, Secs. 7.3, 7.4: CLUDA's phase 2 starts from the common group's checkpoint,
     its final models are stored, and loading one restores its projector and checks the
     comparator's source digest."""
     from MIL_CREDA_EEG.comparators.cluda.model import CLUDAModel

@@ -1068,8 +1068,8 @@ def frozen_source_sigma(model: wiring.Arm, bagset: bags.BagSet,
 #: The four declared ranges this path does NOT search, each with the thing it
 #: parameterizes and the reason it decides nothing here.
 #:
-#: All four are Eq. (39)'s schedule: `ceiling` IS `lambda_glob` and
-#: `ceilingLocal` IS `lambda_loc` -- `harness.ramp` multiplies its warmup curve
+#: All four are Eq. (39)'s schedule: `ceiling` IS `eta_glob` and
+#: `ceilingLocal` IS `eta_loc` -- `harness.ramp` multiplies its warmup curve
 #: by the ceiling, so the ceiling is the coefficient the curve approaches --
 #: and the two deltas are how fast each curve gets there. With both
 #: coefficients fixed at exactly 1 and no curve, a value for any of the four
@@ -1103,8 +1103,8 @@ RETIRED_RANGES = {
     },
 }
 
-#: Eq. (39)'s two coefficients on this path: `L = L_src + lambda_glob * L_glob
-#: + lambda_loc * L_loc` with BOTH lambdas exactly 1, fixed, with no ramp.
+#: Eq. (39)'s two coefficients on this path: `L = L_src + eta_glob * L_glob
+#: + eta_loc * L_loc` with BOTH etas exactly 1, fixed, with no ramp.
 #:
 #: **A fixed 1 is not a ramp evaluated at its ceiling, which is why
 #: `harness.ramp` is not called with this value instead of being dropped.**

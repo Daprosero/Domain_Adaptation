@@ -16,7 +16,7 @@ This is a bounded search, not a claim that code cannot exist. Scratch HTML/text 
 
 ## Plan and equation analysis (before coding)
 
-Binding plan: `experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md`, §§4.5, 7.1–7.4, 7.7 (rebound from v40 on 2026-11-03, rebound to v54 on 2026-11-04 with no change of behaviour: v54 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites); T6/S1–S5. This is explicitly a controlled variant, not reproduction of published image experiments.
+Binding plan: `experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md`, §§4.5, 7.1–7.4, 7.7 (rebound from v40 on 2026-11-03, rebound to v54 on 2026-11-04 and to v55 on 2026-11-05 with no change of behaviour: v55 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites); T6/S1–S5. This is explicitly a controlled variant, not reproduction of published image experiments.
 
 - `losses.py`: classification, conditional entropy, joint conditioning, discriminator loss, support loss and VAT, one function per computational equation.
 - `training.py`: auxiliary discriminator, alternating updates, shared bridge and checkpoint reconstruction, full epoch budget and both validation selectors, explicit search registration and model-store wrappers.
@@ -73,7 +73,7 @@ Every row is either a cited choice or explicitly unspecified. Published image se
 | Auxiliary optimizer | Adam, same lr2/wd2 and defaults as target, constant rate | unspecified — avoids unplanned additional search axes. |
 | Epoch budget and batches | Required schedule; shuffled target pass and cyclic shuffled source batches; partial batches retained | unspecified — epochs/bagsPerStep supplied by common pilot; source sampling does not introduce target labels. |
 | Alignment schedule | Fixed supplied weight, no ramp | unspecified — EEG pilot budget has no corresponding published image step count; departure from Appendix G ramps. |
-| Selection | Entire epoch budget, last epoch kept (no early stopping, no restore); per-epoch target-validation predictions recorded for the search's pooled primary and label-free (trial, epoch) selection | Plan v54 §§4.5, 7.7, shared evaluate/balanced_accuracy/label_free_score. (Row corrected 2026-11-04: it described best-epoch states that v50 removed.) |
+| Selection | Entire epoch budget, last epoch kept (no early stopping, no restore); per-epoch target-validation predictions recorded for the search's pooled primary and label-free (trial, epoch) selection | Plan v55 §§4.5, 7.7, shared evaluate/balanced_accuracy/label_free_score. (Row corrected 2026-11-04: it described best-epoch states that v50 removed.) |
 | Search | Explicit `register()` wires production search: shared lr2/wd2, three loss weights on the generic rule, `vat_radius_fraction` on `search.VAT_RADIUS_FRACTION` (admitted by the hook for CASUAL only) | Plan v42 §7.7. |
 | Final persistence | Existing model_store plus comparator source digest in extra metadata; check both digests on load | Plan §7.3; existing store code_version excludes comparator files. |
 | Seeds | Caller unit seed, torch and batch generator seeded from it | Plan §§4.6,7.7; reuse search seeds, no seed search. |

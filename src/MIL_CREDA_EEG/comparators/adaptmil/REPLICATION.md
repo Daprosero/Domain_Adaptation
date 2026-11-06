@@ -2,7 +2,7 @@
 
 ## Code search and route (2026-11-02 UTC)
 
-Route: reimplementation of the ABMIL mechanism with the LMMD objective (AdaptMIL-LMMD, plan v54 §7.1/§7.3; MMD until v50), **controlled variant**, not a replication of published results. No upstream AdaptMIL repository was adopted; URL/commit/license: not applicable. No third-party files were copied.
+Route: reimplementation of the ABMIL mechanism with the LMMD objective (AdaptMIL-LMMD, plan v55 §7.1/§7.3; MMD until v50), **controlled variant**, not a replication of published results. No upstream AdaptMIL repository was adopted; URL/commit/license: not applicable. No third-party files were copied.
 
 | Place searched | Answer |
 |---|---|
@@ -34,7 +34,7 @@ Fetched raw HTML with the target interpreter and extracted every equation's LaTe
 
 ## Plan and equation analysis (before code)
 
-Binding plan: `experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md`, §§4.5, 7.1–7.4, 7.7 (originally written against v40, task T6/S1–S5; the LMMD switch follows the operator decision of 2026-11-04, `odd/tasks/pipeline-phase-review.md` L60, L62).
+Binding plan: `experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md`, §§4.5, 7.1–7.4, 7.7 (originally written against v40, task T6/S1–S5; the LMMD switch follows the operator decision of 2026-11-04, `odd/tasks/pipeline-phase-review.md` L60, L62).
 
 - `model.py`: existing EEGNetTrunk instances encode ragged bags `(mi,C,512)` into `(mi,256)`; native projection P maps each instance to `(mi,256)`; ABMIL scores `(mi,)`, weights softmax over instances, weighted sum `(256,)`; existing EEGNetHead maps stacked bags `(B,256)` to `(B,2)`. One projection, attention and head shared across domains. No common MIL wrapper, no MIL-CREDA consensus or L1 attention constraint.
 - `objectives.py`: mean pooling, Gaussian multi-kernel biased MMD, the four paper-equation reference functions (Eqs. 1–3 keep MK-MMD as the paper writes them), and the phase-2 LMMD. The controlled adaptation loss reads source labels and the frozen attention/head's target soft predictions as class weights, never target labels. Fixed scalar bandwidth derived only from training bags after the bridge.
@@ -49,7 +49,7 @@ Original-paper ordering is deliberately **not** implemented as the experiment sc
 
 | Choice | Paper/plan source | Implementation | Verdict |
 |---|---|---|---|
-| Comparator ABMIL + LMMD | Plan v54 §§7.1,7.3; paper §4.3, Tab. 1 (AdaptMIL-LMMD) | Native projected ABMIL; mean-pool LMMD | match |
+| Comparator ABMIL + LMMD | Plan v55 §§7.1,7.3; paper §4.3, Tab. 1 (AdaptMIL-LMMD) | Native projected ABMIL; mean-pool LMMD | match |
 | Bag units and labels | Plan §§3.2,7.2 | Ragged subject-condition bags; CE once per bag, never per window | match |
 | EEGNet encoder | Plan §7.3 | Reuse EEGNetTrunk, 8/2/16 filters, kernels64/16, pools4/8, dropout.25, maxnorm1; C=14 or29, T=512, d=256 | deviation: replaces frozen PFM with trainable EEGNet |
 | Head | Plan §7.3 | Existing EEGNetHead linear256->2 + softmax, maxnorm.25 | deviation: standardized head |
@@ -65,28 +65,28 @@ Original-paper ordering is deliberately **not** implemented as the experiment sc
 | Gaussian definition | unspecified | exp(-squared_distance/(2*sigma^2)) | unspecified |
 | Kernel mixture | unspecified | Mean of three Gaussian kernels at sigma times (.5,1,2), not TLlib equivalence claimed | unspecified |
 | Median bandwidth rule | Plan §7.7 specifies multiplier, not median scope/cadence | Initial joint source+target TRAINING mean-projected bag vectors; positive off-diagonal Euclidean median, fixed for phase2; collapsed median ->1 | unspecified |
-| Bandwidth multiplier search | Plan v54 §7.7 "el ancho de sus núcleos" | kernelMultiplier in {.5,.75,1,1.5}, shared distribution reused | match |
-| LMMD loss weight | Paper A: LMMD 1 (MMD 2.5); plan v54 §7.7 "el peso de la pérdida LMMD" | Key kept as `mmdWeight` (same search family and shared `search.LOSS_WEIGHT` distribution), now weighting LMMD; no production default | deviation: standardized search |
+| Bandwidth multiplier search | Plan v55 §7.7 "el ancho de sus núcleos" | kernelMultiplier in {.5,.75,1,1.5}, shared distribution reused | match |
+| LMMD loss weight | Paper A: LMMD 1 (MMD 2.5); plan v55 §7.7 "el peso de la pérdida LMMD" | Key kept as `mmdWeight` (same search family and shared `search.LOSS_WEIGHT` distribution), now weighting LMMD; no production default | deviation: standardized search |
 | Phase1 loss | Plan §7.3; paper Eq.4 supervised objective | Raw mean bag CE, no MMD; fits source trunk/P/attention/head | deviation: source-first instead of mean-align-first |
 | Bridge | Plan §7.3 | Existing copy_compatible_layers via two_phase.bridge; mismatched spatial conv retains fresh initialization | match |
 | Phase2 trainable state | Plan §§7.3–7.4 | Target trunk only; P/attention/head and source params+BN buffers frozen | deviation: no native attention-learning second stage |
-| Phase2 objective | Plan v54 §7.3; paper Eq.3 DA summand with LMMD | `alignment_objective`: weight x `local_mmd` on mean-projected representations; source CE has no target gradient and is not optimized | deviation: controlled target-only optimization |
+| Phase2 objective | Plan v55 §7.3; paper Eq.3 DA summand with LMMD | `alignment_objective`: weight x `local_mmd` on mean-projected representations; source CE has no target gradient and is not optimized | deviation: controlled target-only optimization |
 | LMMD definition | Zhu et al., TNNLS 2021 (DSAN), https://ieeexplore.ieee.org/document/9085896; paper Appendix A builds on the Transfer Learning Repo LMMD | Mean over kept classes c of the squared RKHS distance between the source-weighted and target-weighted kernel means; biased V-statistic, unequal batches allowed | match |
-| LMMD class weights | Plan v54 §7.3; DSAN Eq. 4 | Source: one-hot label divided by its class count; target: soft prediction divided by its class total; each kept column sums to one; detached (no gradient through the weights) | match |
-| Target soft predictions | Plan v54 §7.3 | Head softmax of the attention-aggregated bag from the training target encoder, frozen native attention and head; no threshold; same target forward pass as the alignment | match |
+| LMMD class weights | Plan v55 §7.3; DSAN Eq. 4 | Source: one-hot label divided by its class count; target: soft prediction divided by its class total; each kept column sums to one; detached (no gradient through the weights) | match |
+| Target soft predictions | Plan v55 §7.3 | Head softmax of the attention-aggregated bag from the training target encoder, frozen native attention and head; no threshold; same target forward pass as the alignment | match |
 | Kept classes | unspecified by the paper; Transfer Learning Repo `cal_weight` (recalled, not re-fetched in this run) | A class enters only when present among the batch's source labels and the target argmax; the sum is divided by the classes kept; none kept gives a zero connected to the graph | unspecified |
 | LMMD kernel | unspecified (repository uses its own multi-kernel Gaussian with batch bandwidth, recalled, not re-fetched) | The module's existing `mixture_kernel` (three Gaussians, sigma x (.5,1,2)) shared with `multi_kernel_mmd`, sigma the fixed training median below | unspecified |
-| LMMD vs UDA-DDA CMMD | Plan v54 §7.3 | UDA-DDA (`comparators/uda_dda/losses.py`) aligns the common attention's bag representation, adds a marginal MMD, and its CMMD keeps only target bags whose pseudo-label passes two confidence thresholds, each class an unweighted MMD; AdaptMIL-LMMD aligns the mean-pooled P(z), has no marginal term and uses every target bag with soft weights. The similarity of the two is declared | declared |
-| Choice of LMMD over MMD | Plan v54 §§7.3,9; paper §4.5 line ~180 | The authors report "MMD is the best-performing objective for two of the three PFMs, while LMMD and CORAL also yield notable gains"; the plan uses LMMD because its selection rule discards marginal-only alignment | deviation: not the paper's best objective |
+| LMMD vs UDA-DDA CMMD | Plan v55 §7.3 | UDA-DDA (`comparators/uda_dda/losses.py`) aligns the common attention's bag representation, adds a marginal MMD, and its CMMD keeps only target bags whose pseudo-label passes two confidence thresholds, each class an unweighted MMD; AdaptMIL-LMMD aligns the mean-pooled P(z), has no marginal term and uses every target bag with soft weights. The similarity of the two is declared | declared |
+| Choice of LMMD over MMD | Plan v55 §§7.3,9; paper §4.5 line ~180 | The authors report "MMD is the best-performing objective for two of the three PFMs, while LMMD and CORAL also yield notable gains"; the plan uses LMMD because its selection rule discards marginal-only alignment | deviation: not the paper's best objective |
 | Optimizer | Paper Appendix A | AdamW in both controlled phases | match |
 | Optimizer beta/epsilon | unspecified | PyTorch AdamW defaults (.9,.999), eps1e-8; explicit weight-decay input | unspecified |
 | LR schedule | Paper Appendix A | No cosine in controlled schedule; fixed lr1/lr2 supplied from search | deviation: standardized controlled training |
 | Learning rates/decay search | Plan §7.7 | Reuse shared lr1/lr2/wd1/wd2 spaces; no extra optimizer axes | match |
-| Epoch caps | Plan v54 §§7.6–7.7; paper40+40 | Required epochs1/epochs2 inputs, no patience; no production cap default (row corrected 2026-11-04: it listed patience1) | deviation: pilot decides caps |
+| Epoch caps | Plan v55 §§7.6–7.7; paper40+40 | Required epochs1/epochs2 inputs, no patience; no production cap default (row corrected 2026-11-04: it listed patience1) | deviation: pilot decides caps |
 | Batch size | Paper A:8+8; plan does not fix size | Required bagsPerStep; shared class-balanced source queues and shuffled target pass, final partial target batch retained | unspecified |
 | Source phase1 sampling | Plan does not fix sampling; paper A balances source | Shared class-interleaved pass, no oversampling in phase1; balanced queues in phase2 | deviation: phase1 may have unequal class counts |
-| Primary selection | Plan v54 §4.5 | Both caps run whole and keep the last epoch; the search picks (trial, E1) by pooled source-validation BA and (trial, E2) by pooled target-validation BA over the three inner splits (row corrected 2026-11-04: it described a best-epoch selection inside the run) | deviation: target labels used for model selection only |
-| Secondary selection | Plan v54 §4.5 | Shared H(mean p)-mean H(p), per epoch, pooled by the search; no secondary snapshot is kept in the run (row corrected 2026-11-04) | match |
+| Primary selection | Plan v55 §4.5 | Both caps run whole and keep the last epoch; the search picks (trial, E1) by pooled source-validation BA and (trial, E2) by pooled target-validation BA over the three inner splits (row corrected 2026-11-04: it described a best-epoch selection inside the run) | deviation: target labels used for model selection only |
+| Secondary selection | Plan v55 §4.5 | Shared H(mean p)-mean H(p), per epoch, pooled by the search; no secondary snapshot is kept in the run (row corrected 2026-11-04) | match |
 | Epoch ties | unspecified | Earliest epoch on equal score; strict greater-than replacement, deterministic | unspecified |
 | Seed | Plan §7.7 | Caller seed passed to torch and generator; shared search seeds reused by hook | match |
 | Checkpoint storage | Plan §7.3 | Existing model_store; explicit registration; comparator source digest embedded and checked by package save/load helpers | match |

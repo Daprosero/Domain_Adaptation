@@ -1,7 +1,7 @@
-"""Controlled source-first / target-only training (plan v54 §§4.5,7.3–7.4,7.7).
+"""Controlled source-first / target-only training (plan v55 §§4.5,7.3–7.4,7.7).
 
 Not the paper's align-first / attention-second schedule. Both phases run their
-epoch count whole and keep the last epoch (no patience, no restore, v54 §7.7);
+epoch count whole and keep the last epoch (no patience, no restore, v55 §7.7);
 with validation bags every epoch's validation predictions are recorded for the
 search's pooled selection, and without them (a refit) nothing is evaluated. Shared partition,
 assignment, batching, metrics, bridge and model-store machinery are reused.
@@ -18,7 +18,7 @@ from .model import AdaptMILModel
 from .objectives import alignment_objective, median_bandwidth, stage_two_objective
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["4.5", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["adaptmil_source_pretraining_runs_its_epochs_and_keeps_the_last",
@@ -49,7 +49,7 @@ def _state(module):
 
 def _roles(*roles, optional=()):
     """Disjoint roles; the training ones nonempty. A validation role named in `optional`
-    may be empty: a refit has no validation bags (v54 §4.5)."""
+    may be empty: a refit has no validation bags (v55 §4.5)."""
     sets = []
     for k, role in enumerate(roles):
         if not role:

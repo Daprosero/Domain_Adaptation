@@ -313,11 +313,11 @@ def test_uda_package_is_a_controlled_variant_and_import_registers_nothing(regist
              dict(search.PHASE_ONE_TRAINERS), dict(model_store.BUILDERS))
     assert before == after and "UDA-DDA" not in search.PHASE_TWO_TRAINERS
     assert uda_dda.__provenance__["sections"] == ["7.1", "7.4"]
-    # The package, its trainer, its smoke and its losses answer to v54 (Secs. 4.5, 7.7:
+    # The package, its trainer, its smoke and its losses answer to v55 (Secs. 4.5, 7.7:
     # fixed epochs, no patience).
-    for module, revision in ((uda_dda, "v54"), (training, "v54"), (losses, "v54"),
+    for module, revision in ((uda_dda, "v55"), (training, "v55"), (losses, "v55"),
                              (importlib.import_module(
-                                 "MIL_CREDA_EEG.comparators.uda_dda.smoke"), "v54")):
+                                 "MIL_CREDA_EEG.comparators.uda_dda.smoke"), "v55")):
         assert module.__provenance__["revision"] == (
             f"experiments-plan-experimental-mil-creda-sobre-balladeer-{revision}.md")
 

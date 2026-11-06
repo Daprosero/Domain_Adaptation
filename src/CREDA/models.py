@@ -43,8 +43,8 @@ the source batch is balanced, which is how the toyset runs.
 is deliberately not written; `_mix_kernel_concat`'s docstring says why it is a
 no-op here.
 
-**Why `revision` says `research-concept-r38.md`.** It said r28 until
-2026-10-17, r31 and then r33 until 2026-10-18, and r34 and r35 until 2026-11-04; r36-r38 only renamed section 3's heading and linked the proposal graph, so the r35 -> r38 rebind moved nothing. The r31 -> r33 rebind DID change
+**Why `revision` says `research-concept-r44.md`.** It said r28 until
+2026-10-17, r31 and then r33 until 2026-10-18, r34 and r35 until 2026-11-04, and r38 until 2026-11-05; r36-r38 only renamed section 3's heading and linked the proposal graph, so the r35 -> r38 rebind moved nothing; r39-r44 changed notation only (bold inputs, unified delta/u indices, H_I -> H, d_j -> zeta_j, lambda -> eta), so the r38 -> r44 rebind moved nothing either. The r31 -> r33 rebind DID change
 arithmetic here, unlike the other two: r32 rewrote Eq. 33, which
 `_eq37_aggregate` now implements, and r33 scoped Eq. 26's confidence weighting
 to the class-conditional blocks, which took the weighting out of
@@ -96,7 +96,7 @@ normalization were on, which is a different claim. It read that `train_creda`
 `training_pipeline.py` passes `balance_mass='cardinality'` and nothing else. And
 it read that `CREDA.bounds` "carries the same r25/r31 split in its own
 `__provenance__` -- which stays at r25"; that module declares
-`research-concept-r38.md` and holds one pair of ends.
+`research-concept-r44.md` and holds one pair of ends.
 
 **What the superseded paragraph was protecting is still real.** Every number
 published out of this repository was measured under some specific pair of flags,
@@ -181,7 +181,7 @@ from CREDA.bounds import class_global_loss_cosh
 #: for why `revision` moved from r28 to r31 without a line of arithmetic
 #: changing in this file.
 __provenance__ = {
-    "revision": "research-concept-r38.md",
+    "revision": "research-concept-r44.md",
     "sections": ["2", "3", "4"],
     "equations": ["10", "22", "23", "24", "25", "26", "27", "28", "29",
                   "31", "32", "33"],
@@ -893,7 +893,7 @@ class CREDALoss(nn.Module):
         saca los pares `j = k` del numerador Y del denominador. Se retiro por
         tres razones acumuladas.
 
-        **No esta en la formulacion.** r38 declara UNA entropia, la Ec. (10),
+        **No esta en la formulacion.** r44 declara UNA entropia, la Ec. (10),
         escrita con el mismo `tr(A^T A)` que la linea de abajo. Un estadistico U
         de la pureza no aparece en el documento, y la declaracion del toyset lo
         rotulaba `# Instrumento`.
@@ -1253,7 +1253,7 @@ class CREDALoss(nn.Module):
             # written out rather than inferred, because that implication rests
             # on Eq. (27)'s block structure and not on anything checked here.
             #
-            # Skipped and not clamped: r38 says the score is not defined for
+            # Skipped and not clamped: r44 says the score is not defined for
             # such a class.
             #
             # **The test is POSITIVE TRACE and nothing else, since 2026-10-18.**
