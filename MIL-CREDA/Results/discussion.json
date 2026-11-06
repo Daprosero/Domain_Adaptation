@@ -164,5 +164,9 @@
       "Results/PoC_Conditions/verdicts.json"
     ],
     "rationale": "On the toy set the method adapts beyond the BN-matched source-only floor, its consensus attention down-weights artifacts, and its local term pulls bags toward their own partner under a subject-specific residual; combining the two alignment terms gives no accuracy gain, and the comparison against the eight comparators is left to the EEG experiments."
+  },
+  "contribution_type": {
+    "type": "Concept & Feasibility",
+    "why": "\"H-A\", \"H-B\", \"H-K1\" and \"H-K2\" are supported only on the toy set; \"H-C\" is inconclusive and \"H-K3\" partially_supported, with no accuracy gain from combining alignment terms. Novelty is partially_justified; EEG validation remains pending, supporting pilot feasibility rather than the proposal's Use-Inspired classification."
   }
 }
