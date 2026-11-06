@@ -10,8 +10,12 @@ the epoch count it is given, whole, and keeps the weights of its last epoch; no
 phase uses patience and no epoch is restored. With validation bags (a search
 training on one inner split) the validation predictions of every epoch are
 recorded (`validation_record`: subject, label and predicted probabilities per
-bag), so the search pools them over the three inner splits and picks the epoch
-(`pooled_balanced_accuracy`, `pooled_label_free_score`). Without validation bags
+bag, and in phase 2 each bag's representation Z, the vector entering the
+predictive head, `represent`), so the search pools them over the three inner
+splits and picks the epoch: phase 1 by `pooled_balanced_accuracy` on the source
+labels, phase 2 by Sec. 4.5's centroid rule (`centroid_counts`,
+`pooled_centroid_balanced_accuracy`) and its EnsV secondary rule, neither of
+which reads a target label. Without validation bags
 (a refit on every non-test fold) nothing is evaluated: the refit runs exactly
 the selected E1 or E2 epochs and its history carries NaN validation values.
 
@@ -50,10 +54,10 @@ nothing: with theta_s, phi and psi frozen it carries no gradient to theta_t.
 sigma is EXACTLY the stored phase-1 value (`sigma2 = sigma1`): no re-estimation,
 no recalibration, no per-batch update, and `MILCREDAModel.fix_sigma` refuses
 any other value. Phase 2 runs exactly `epochs2` epochs and keeps the last one;
-with target validation bags it records, per epoch, their balanced accuracy and
-the label-free score (entropy of the mean prediction minus the mean per-bag
-entropy), and their predictions for the pooled selection of Sec. 4.5, which
-the search makes over the three inner splits, never here. After phase 2 the
+with target validation bags it records, per epoch, their predictions and
+representations for the pooled selection of Sec. 4.5, which the search makes
+over the three inner splits, never here (their balanced accuracy is recorded
+in the history as a reading; no selection reads it). After phase 2 the
 source trunk, attention and head are asserted bit-identical to the end of the
 bridge (`FrozenPartsMoved` otherwise).
 
@@ -115,7 +119,10 @@ __provenance__ = {
         "the_refit_runs_exactly_e_epochs_with_no_validation",
         "the_search_records_validation_every_epoch_and_never_stops_early",
         "the_pooled_count_balanced_accuracy_is_not_the_mean_of_the_split_ones",
-        "the_label_free_selection_reads_no_target_label",
+        "the_phase_two_selection_reads_no_target_label",
+        "the_representation_is_the_vector_entering_the_predictive_head",
+        "the_centroid_rule_assigns_each_source_bag_to_the_nearest_pseudo_class_centroid",
+        "a_collapse_to_one_pseudo_class_scores_one_half_with_two_classes",
         "sigma_is_fixed_during_phase_one_and_stored_with_the_checkpoint",
         "the_phase_one_sigma_is_the_multiplier_times_the_within_bag_median",
         "the_bridge_copies_compatible_layers_and_freezes_the_source_side",
@@ -128,10 +135,6 @@ __provenance__ = {
         "the_dropped_terms_value_is_still_recorded_for_the_bound_control",
         "the_source_term_does_not_change_the_phase_two_gradient",
         "phase_two_keeps_its_last_epoch_and_records_validation_per_epoch",
-        "the_label_free_score_is_entropy_of_the_mean_minus_mean_entropy",
-        "the_label_free_state_is_the_earliest_best_label_free_epoch",
-        "no_target_validation_label_changes_the_label_free_epoch",
-        "asking_for_the_label_free_state_changes_nothing_of_the_default",
         "history_records_carry_the_dashboard_keys",
         "test_predictions_are_only_for_target_test_fold_subjects",
     ],
@@ -159,6 +162,14 @@ SIGMA_RULE = ("sigmaMultiplier x median pairwise distance between instance embed
               "fixed through phase 1")
 #: Windows per trunk pass when evaluating without gradient.
 EVAL_CHUNK = 512
+#: Sec. 4.5: how every phase-2 trainer's run is selected; the search chooses, never a run.
+SELECTION = {"primary": "the centroid rule: source validation bags of each inner split "
+                        "assigned to the nearest centroid of the target validation bags' "
+                        "pseudo-classes, confusion counts pooled over the three inner "
+                        "splits, chosen by the search (Sec. 4.5); no target label",
+             "secondary": "EnsV: accuracy against the pseudo-labels of the ensemble of every "
+                          "(trial, epoch) of the study, chosen by the search (Sec. 4.5); no "
+                          "target label"}
 
 
 class FrozenPartsMoved(RuntimeError):
@@ -228,24 +239,18 @@ def balanced_accuracy(labels: Sequence[int], predicted: Sequence[int]) -> float:
     return float(np.mean(recalls)) if recalls else float("nan")
 
 
-def _entropy(p: torch.Tensor) -> torch.Tensor:
-    return -(p * torch.log(p.clamp_min(1e-300))).sum(dim=-1)
-
-
-def label_free_score(G: torch.Tensor) -> float:
-    """Sec. 4.5's secondary rule: H(mean prediction) - mean per-bag H. In [0, ln C]."""
-    G = G.detach().to(torch.float64)
-    if G.shape[0] == 0:
-        return float("nan")
-    return float(_entropy(G.mean(dim=0)) - _entropy(G).mean())
-
-
-def validation_record(epoch: int, bags: Sequence[BagTensor], G: torch.Tensor) -> dict:
+def validation_record(epoch: int, bags: Sequence[BagTensor], G: torch.Tensor,
+                      Z: torch.Tensor | None = None) -> dict:
     """One epoch's validation predictions of one inner split, as the search pools them:
-    per bag (one bag per subject) its subject, its label and its predicted probabilities."""
-    return {"epoch": int(epoch), "subjects": [b.subject for b in bags],
-            "labels": [int(b.label) for b in bags],
-            "probabilities": G.detach().to(torch.float64).cpu().tolist()}
+    per bag (one bag per subject) its subject, its label and its predicted probabilities,
+    and, given `Z` (`represent`, phase 2), its representation. The search reads a target
+    record's probabilities and representations, never its labels (Sec. 4.5)."""
+    record = {"epoch": int(epoch), "subjects": [b.subject for b in bags],
+              "labels": [int(b.label) for b in bags],
+              "probabilities": G.detach().to(torch.float64).cpu().tolist()}
+    if Z is not None:
+        record["representations"] = Z.detach().to(torch.float64).cpu().tolist()
+    return record
 
 
 def _pooled(records: Sequence[Mapping]) -> list[Mapping]:
@@ -269,13 +274,98 @@ def pooled_balanced_accuracy(records: Sequence[Mapping]) -> float:
     return balanced_accuracy(labels, predicted)
 
 
-def pooled_label_free_score(records: Sequence[Mapping]) -> float:
-    """Sec. 4.5's secondary rule for one epoch: the label-free score of the target
-    predictions pooled over the inner splits. It reads `probabilities` only, never a
-    label."""
-    records = _pooled(records)
-    return label_free_score(torch.tensor([p for r in records for p in r["probabilities"]],
-                                         dtype=torch.float64))
+def centroid_counts(target_Z, target_probabilities, source_Z, source_labels,
+                    classes: int | None = None) -> np.ndarray:
+    """Sec. 4.5's primary rule on one inner split and epoch: the confusion counts
+    (rows: real source label, columns: assigned class) of the source bags assigned to the
+    nearest centroid of the target pseudo-classes.
+
+    Each target bag's pseudo-label is the argmax of its predicted probabilities; one
+    centroid per pseudo-class, the mean of its bags' representations (a class no bag is
+    assigned to has no centroid); each source bag goes to the nearest centroid in Euclidean
+    distance (the lowest class index on an exact tie). No model is trained, and no target
+    label is an input."""
+    Zt = np.asarray(target_Z, dtype=np.float64)
+    P = np.asarray(target_probabilities, dtype=np.float64)
+    Zs = np.asarray(source_Z, dtype=np.float64)
+    y = np.asarray(source_labels, dtype=np.int64).reshape(-1)
+    if Zt.ndim != 2 or P.ndim != 2 or Zt.shape[0] != P.shape[0] or Zt.shape[0] == 0:
+        raise ValueError(f"one representation and one probability row per target bag; got "
+                         f"{Zt.shape} and {P.shape}")
+    if Zs.ndim != 2 or Zs.shape[0] != y.shape[0] or Zs.shape[0] == 0:
+        raise ValueError(f"one representation and one label per source bag; got {Zs.shape} "
+                         f"and {y.shape}")
+    if Zs.shape[1] != Zt.shape[1]:
+        raise ValueError(f"source and target representations live in different spaces: "
+                         f"{Zs.shape[1]} vs {Zt.shape[1]}")
+    classes = int(classes if classes is not None else P.shape[1])
+    pseudo = P.argmax(axis=1)
+    present = [c for c in range(classes) if np.any(pseudo == c)]
+    centroids = np.stack([Zt[pseudo == c].mean(axis=0) for c in present])
+    distances = ((Zs[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
+    assigned = np.asarray(present)[distances.argmin(axis=1)]
+    counts = np.zeros((classes, classes), dtype=np.int64)
+    np.add.at(counts, (y, assigned), 1)
+    return counts
+
+
+def balanced_accuracy_of_counts(counts) -> float:
+    """Mean recall over the classes with at least one real member, from confusion counts
+    (rows: real class, columns: assigned class), computed once on the counts."""
+    counts = np.asarray(counts, dtype=np.float64)
+    totals = counts.sum(axis=1)
+    recalls = [counts[c, c] / totals[c] for c in range(counts.shape[0]) if totals[c] > 0]
+    return float(np.mean(recalls)) if recalls else float("nan")
+
+
+def pooled_centroid_balanced_accuracy(target_records: Sequence[Mapping],
+                                      sources: Sequence[Mapping]) -> float:
+    """Sec. 4.5's primary rule for one epoch: the centroid counts of every inner split
+    (`target_records[i]`, that split's target validation record, with `sources[i]`, its
+    source validation bags: `representations` and `labels`) summed, and the balanced
+    accuracy computed once on the pooled counts. It reads the target records'
+    `probabilities` and `representations`, never their labels."""
+    target_records = _pooled(target_records)
+    _pooled(sources)
+    if len(target_records) != len(sources):
+        raise ValueError(f"one source pass per inner split; got {len(sources)} for "
+                         f"{len(target_records)} splits")
+    classes = max(len(r["probabilities"][0]) for r in target_records if r["probabilities"])
+    total = None
+    for record, source in zip(target_records, sources):
+        if "representations" not in record:
+            raise ValueError("the target validation record carries no representations")
+        counts = centroid_counts(record["representations"], record["probabilities"],
+                                 source["representations"], source["labels"], classes)
+        total = counts if total is None else total + counts
+    return balanced_accuracy_of_counts(total)
+
+
+def _bag_representations(model, windows: Sequence[torch.Tensor], domain: str) -> torch.Tensor:
+    """Z of `windows`' bags: the vector the predictive head reads. AdaptMIL names it
+    `representations`; every MIL-CREDA-shaped model (MIL-CREDA, the common group, COT,
+    CLUDA) `represent(bag_pairs(embed(...)))`."""
+    if hasattr(model, "representations"):
+        return model.representations(windows, domain, chunk=EVAL_CHUNK)
+    return model.represent(model.bag_pairs(model.embed(windows, domain, EVAL_CHUNK)))
+
+
+@torch.no_grad()
+def represent(model, bags: Sequence[BagTensor], domain: str,
+              device: torch.device) -> torch.Tensor:
+    """Sec. 4.5: each bag's representation Z, the vector entering the predictive head, in
+    eval mode and without gradient, as `evaluate` predicts (float64, on the CPU). Both
+    domains write the same space (the shared attention and head), whatever their channel
+    counts (the device arm)."""
+    modes = {m: m.training for m in model.modules()}
+    model.eval()
+    try:
+        Z = torch.cat([_bag_representations(model, [b.windows.to(device)], domain)
+                       for b in bags]) if bags else torch.zeros(0, 0)
+    finally:
+        for m, mode in modes.items():
+            m.train(mode)
+    return Z.detach().to(torch.float64).cpu()
 
 
 @torch.no_grad()
@@ -384,48 +474,6 @@ class ClassQueues:
 
 def _clone_state(module: torch.nn.Module) -> dict:
     return {k: v.detach().clone() for k, v in module.state_dict().items()}
-
-
-#: Plan v56, Secs. 4.5 and 7.7: the (trial, epoch) the secondary rule selects, ties
-#: broken as the primary rule breaks them (the lowest trial, then the earliest epoch).
-LABEL_FREE_EPOCH_RULE = ("the phase-2 trial and epoch with the best label-free score of "
-                         "the target predictions pooled over the three inner splits "
-                         "(Sec. 4.5), the lowest trial and earliest epoch on ties")
-
-
-class LabelFreeBest:
-    """The state of the epoch with the best label-free score of ONE run, kept only when
-    asked.
-
-    It is offered the score and the model, never a label. Plan v56 selects the label-free
-    (trial, epoch) on the predictions pooled over the inner splits (`search.select`) and
-    refits there, so the campaign does not ask for it; it stays a per-run reading. Asked
-    for nothing, it keeps and clones nothing, so a default run is unchanged.
-    """
-
-    def __init__(self, enabled: bool):
-        self.enabled = bool(enabled)
-        self.epoch, self.score, self.state = -1, -math.inf, None
-
-    def offer(self, epoch: int, score: float, module: torch.nn.Module) -> None:
-        if self.enabled and score > self.score:
-            self.epoch, self.score, self.state = int(epoch), float(score), _clone_state(module)
-
-    def checkpoint(self) -> dict | None:
-        if not self.enabled:
-            return None
-        if self.state is None:
-            raise RuntimeError("no epoch offered a finite label-free score")
-        return {"epoch": self.epoch, "label_free_score": self.score, "state": self.state,
-                "rule": LABEL_FREE_EPOCH_RULE}
-
-
-def with_label_free(result: dict, keeper: LabelFreeBest) -> dict:
-    """`result` with `label_free_best` added when the keeper was asked; else as is."""
-    kept = keeper.checkpoint()
-    if kept is not None:
-        result["label_free_best"] = kept
-    return result
 
 
 def phase_one_state(model: MILCREDAModel) -> dict:
@@ -563,13 +611,12 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
                        target_valid: Sequence[BagTensor], hyper: Mapping,
                        generator: torch.Generator, device: torch.device, *,
                        seed: int = 0, fold: int = 0, transfer: str = "",
-                       term_selection: str = BOTH_TERMS, label_free: bool = False) -> dict:
+                       term_selection: str = BOTH_TERMS) -> dict:
     """Phase 2: the target trunk alone, at the phase-1 sigma, for exactly `epochs2` epochs.
 
     The checkpoint is the last epoch's (no early stopping). With `target_valid` (an inner
-    split) every epoch's validation is recorded; without it (the refit) nothing is
-    evaluated. `label_free=True` also returns `label_free_best`, the whole model state of
-    the epoch of this run with the best label-free score (`LabelFreeBest`)."""
+    split) every epoch's validation is recorded, with the bags' representations; without
+    it (the refit) nothing is evaluated."""
     lambda_global, lambda_local = term_coefficients(term_selection)
     hyper = check_hyper(hyper)
     sigma1 = phase_one["checkpoint"]["sigma"]
@@ -582,7 +629,6 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
     per_class = hyper["bagsPerStep"] // model.classes
     valid_labels = _labels(target_valid)
     history, seconds, validation = [], [], []
-    keeper = LabelFreeBest(label_free)
     for epoch in range(hyper["epochs2"]):
         started = time.perf_counter()
         set_phase_two_modes(model)
@@ -610,16 +656,16 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
                                ("confidence_mean", step["confidence_mean"])):
                 sums[key] += value
             steps += 1
-        accuracy, score = float("nan"), float("nan")
+        accuracy = float("nan")
         if target_valid:
             G_valid = evaluate(model, target_valid, "target", device)
             accuracy = balanced_accuracy(valid_labels, G_valid.argmax(dim=1).tolist())
-            score = label_free_score(G_valid)
-            validation.append(validation_record(epoch, target_valid, G_valid))
+            validation.append(validation_record(
+                epoch, target_valid, G_valid, represent(model, target_valid, "target", device)))
         seconds.append(time.perf_counter() - started)
         means = {k: v / max(steps, 1) for k, v in sums.items()}
         history.append(_record(epoch, seed, fold, 2, transfer, {
-            **means, "val_balanced_accuracy": accuracy, "label_free_score": score,
+            **means, "val_balanced_accuracy": accuracy,
             "lambda_global": lambda_global, "lambda_local": lambda_local,
             "global_min": global_range[0], "global_max": global_range[1],
             "local_min": local_range[0], "local_max": local_range[1],
@@ -633,24 +679,18 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
                 and TERM_BOUNDS["local"][0] <= local_range[0] <= local_range[1]
                 <= TERM_BOUNDS["local"][1]),
             "sigma": sigma1}))
-        keeper.offer(epoch, score, model)
     set_phase_two_modes(model)
     if not _states_equal(phase_one_state(model), frozen_state):
         raise FrozenPartsMoved("phase 2 changed the source trunk, the attention or the head")
     last = len(history) - 1
-    return with_label_free({"checkpoint": {"target_state": _clone_state(model.target_trunk),
-                                           "sigma": sigma1, "epoch": last,
-                                           "valid_balanced_accuracy":
-                                               history[last]["val_balanced_accuracy"],
-                                           "label_free_score": history[last]["label_free_score"],
-                                           "hyper": dict(hyper)},
+    return {"checkpoint": {"target_state": _clone_state(model.target_trunk),
+                           "sigma": sigma1, "epoch": last,
+                           "valid_balanced_accuracy": history[last]["val_balanced_accuracy"],
+                           "hyper": dict(hyper)},
             "best_epoch": last, "epochs": len(history), "validation": validation,
-            "selection": {"primary": "pooled target-validation balanced accuracy over the "
-                                     "inner splits, chosen by the search (Sec. 4.5)",
-                          "secondary": "pooled label-free score over the inner splits, "
-                                       "chosen by the search (Sec. 4.5)"},
+            "selection": SELECTION,
             "seconds_per_epoch": float(np.mean(seconds)), "seconds": seconds,
-            "history": history}, keeper)
+            "history": history}
 
 
 # ------------------------------------------------------------------ the run

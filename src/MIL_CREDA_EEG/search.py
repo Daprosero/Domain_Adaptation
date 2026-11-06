@@ -22,24 +22,40 @@ the single report seed (`REPORT_SEEDS`, Sec. 4.6), for its whole epoch cap
 (`epochs1` or `epochs2`, no early stopping), recording every epoch's validation
 predictions. Per epoch, the subject-level confusion counts of the three inner
 splits are pooled (each subject of F once) and the balanced accuracy is computed
-once on them (`two_phase.pooled_balanced_accuracy`; Forman and Scholz, 2010): no
-mean per split and no deviation. The trial's value, what the sampler observes,
-is the best epoch's pooled balanced accuracy:
+once on them (Forman and Scholz, 2010): no mean per split and no deviation. The
+trial's value, what the sampler observes, is the best epoch's pooled balanced
+accuracy:
 
-- phase 1: over the source subjects of the validating folds;
-- phase 2: over the target subjects of the validating folds, Sec. 4.5's primary
-  rule, which uses target labels of F for model selection only. The secondary
-  label-free rule is recorded on the same trial (`pooledLabelFree`): per epoch,
-  the label-free score of the target predictions pooled over the three inner
-  splits (`two_phase.pooled_label_free_score`, which reads no label). Nothing is
-  trained for it in the search.
+- phase 1: over the source subjects of the validating folds, with their labels
+  (`two_phase.pooled_balanced_accuracy`, `pooled_balanced_accuracy_series`);
+- phase 2: Sec. 4.5's primary rule, the centroid rule, which reads no target
+  label (`pooledCentroidBalancedAccuracy`). In each inner split, the adapted
+  model's target validation predictions are pseudo-labels (argmax) and their
+  representations Z (the vector entering the predictive head) give one centroid
+  per pseudo-class; the source bags of the validating fold, passed through the
+  frozen source trunk and the same frozen attention or aggregator, are assigned
+  to the nearest centroid and scored against their real source labels; the
+  counts of the three splits are pooled and the balanced accuracy computed once
+  (`two_phase.centroid_counts`, `two_phase.pooled_centroid_balanced_accuracy`).
+  The source representations do not change between trials or epochs (the source
+  side is frozen in phase 2, Sec. 7.3): they are computed once per outer fold
+  and inner split from the phase-1 checkpoint, by inference only
+  (`source_representations`), here, outside every trainer (CLUST's trainer reads
+  no source data, Sec. 7.3). The EnsV secondary rule needs no score of its own
+  per trial: each trial records, per epoch, its target validation probabilities
+  pooled over the three inner splits (`ensvSubjects`, `ensvProbabilities`;
+  probabilities only, never a representation or a label). Nothing is trained for
+  either rule (Sec. 7.7).
 
-**Selection (Sec. 4.5).** `select` picks, in one outer fold's study, the
-completed trial and epoch with the best pooled score of the rule: (trial, E1)
-in phase 1, (trial, E2) in phase 2, and the label-free rule its own (trial,
-epoch); ties go to the lowest trial and the earliest epoch. The selected
-configuration is refit on every fold of F for exactly that many epochs, with no
-validation (`campaign`).
+**Selection (Sec. 4.5).** `select` picks, in one outer fold's study, a completed
+trial and epoch: (trial, E1) in phase 1 and (trial, E2) in phase 2 by the best
+pooled score of the primary rule, and by `rule="ensv"` the phase-2 (trial, epoch)
+of EnsV (Hu et al., NeurIPS 2024): every (trial, epoch) of the study is a
+candidate, their probabilities averaged per target bag of F are the role model
+whose argmax is each bag's pseudo-label, and the candidate with the best accuracy
+against those pseudo-labels wins. Ties go to the lowest trial and the earliest
+epoch, for both rules. The selected configuration is refit on every fold of F for
+exactly that many epochs, with no validation (`campaign`).
 
 The search reads only the inner splits of F (`search_data`): no test-fold bag is
 ever loaded.
@@ -133,12 +149,17 @@ __provenance__ = {
         "the_comparator_specific_axes_are_admitted_only_for_their_own_strategy",
         "epoch_caps_have_no_default",
         "the_objective_is_the_best_epochs_pooled_balanced_accuracy_over_the_inner_splits",
+        "the_phase_two_objective_is_the_centroid_rule_and_reads_no_target_label",
+        "the_source_representations_are_computed_once_per_outer_fold_and_inner_split",
+        "the_source_pass_runs_in_the_search_never_in_a_trainer",
         "the_search_never_loads_a_test_fold_bag",
         "the_search_data_holds_the_inner_splits_and_a_refit_view_without_validation",
         "the_phase_two_mil_creda_sigma_comes_from_the_phase_one_checkpoint",
         "phase_two_starts_only_from_the_outer_folds_one_phase_one_checkpoint",
-        "the_label_free_score_is_recorded_per_trial_and_epoch",
+        "the_ensv_probabilities_are_recorded_per_trial_and_epoch",
+        "the_ensv_selection_reads_every_completed_trial_of_the_study",
         "the_selection_is_the_argmax_of_the_pooled_score_over_trial_and_epoch",
+        "no_target_label_changes_either_phase_two_selection",
         "the_pooled_series_check_each_validated_subject_once_per_epoch",
         "the_labels_of_r_test_subjects_cannot_change_r_selection",
         "one_study_per_strategy_transfer_and_outer_fold",
@@ -338,10 +359,11 @@ def register_phase_two(strategy: str, extra: Mapping[str, BaseDistribution],
     """Wire a comparator's phase 2: its own parameters under the generic rule, plus
     only the Sec. 7.7 axes `OWN_AXES` assigns to this strategy.
 
-    `trainer(data, rotation, seed, record, params, schedule, device, *, label_free=False)`
-    returns `{"result": {"checkpoint": {"valid_balanced_accuracy", "label_free_score"},
-    "history": [{"label_free_score"}, ...]}}`, as `train_mil_creda_phase_two`, and with
-    `label_free=True` also `result["label_free_best"]` (`two_phase.LabelFreeBest`).
+    `trainer(data, rotation, seed, record, params, schedule, device)` returns
+    `{"model", "result": {"checkpoint": {"valid_balanced_accuracy", "hyper", ...},
+    "history": [...], "validation": [two_phase.validation_record(..., Z), ...]}}`, as
+    `train_mil_creda_phase_two`: every validation record carries the bags'
+    representations (`two_phase.represent`), which the centroid rule reads.
     """
     if strategy not in model_store.STRATEGIES or strategy == "MIL-CREDA":
         raise SearchError(f"{strategy!r} is not a comparator")
@@ -373,8 +395,26 @@ def suggest(trial: optuna.Trial, space: Mapping[str, BaseDistribution]) -> dict:
 
 # ------------------------------------------------------------------ selection (Sec. 4.5)
 
-#: Sec. 4.5's two rules -> the per-epoch pooled series of a trial each one reads.
-RULES = {"primary": "pooledBalancedAccuracy", "label-free": "pooledLabelFree"}
+#: Sec. 4.5's two phase-2 rules: the centroid rule (primary) and EnsV (secondary).
+RULES = ("primary", "ensv")
+#: Phase -> the per-epoch pooled series of a trial the primary rule reads: phase 1 the
+#: source-validation balanced accuracy, phase 2 the centroid rule's.
+PRIMARY_SERIES = {1: "pooledBalancedAccuracy", 2: "pooledCentroidBalancedAccuracy"}
+#: What a phase-2 trial records for EnsV: the target subjects of F in pooled order, and
+#: per epoch their predicted probabilities, in that order.
+ENSV_SUBJECTS, ENSV_PROBABILITIES = "ensvSubjects", "ensvProbabilities"
+#: The selection rules, for every record that names them (Sec. 4.5).
+PRIMARY_RULE = ("phase 1: the best epoch's source-validation balanced accuracy of the "
+                "subject-level confusion counts pooled over the three inner splits; phase 2: "
+                "the centroid rule (source validation bags assigned to the nearest centroid "
+                "of the target validation bags' pseudo-classes, counts pooled over the three "
+                "inner splits, balanced accuracy once), no target label; the lowest trial "
+                "and earliest epoch on ties (Sec. 4.5)")
+ENSV_RULE = ("EnsV (Hu et al., NeurIPS 2024): every (trial, epoch) of the phase-2 study is "
+             "a candidate; the mean of their predicted probabilities per target bag of F is "
+             "the role model, whose argmax is the bag's pseudo-label; the candidate with "
+             "the best accuracy against those pseudo-labels wins, the lowest trial and "
+             "earliest epoch on ties; no target label (Sec. 4.5)")
 
 
 def rotation_folds(rotations: Mapping) -> dict[int, dict]:
@@ -387,39 +427,73 @@ def rotation_folds(rotations: Mapping) -> dict[int, dict]:
     return out
 
 
-def pooled_series(per_split: Sequence[Sequence[Mapping]], *,
-                  label_free: bool = True) -> dict[str, list[float]]:
-    """Per epoch, Sec. 4.5's pooled scores over the inner splits: `per_split` holds each
-    split's validation records (`two_phase.validation_record`), one per epoch."""
+def _by_epoch(per_split: Sequence[Sequence[Mapping]]) -> list[tuple]:
+    """The validation records of the three inner splits, grouped by epoch."""
     if len(per_split) != N_INNER:
         raise SearchError(f"the score pools the {N_INNER} inner splits; got {len(per_split)}")
     epochs = [[int(r["epoch"]) for r in split] for split in per_split]
     if not epochs[0] or any(e != epochs[0] for e in epochs):
         raise SearchError(f"the inner splits recorded different epochs: {epochs}")
-    by_epoch = list(zip(*per_split))
+    return list(zip(*per_split))
+
+
+def pooled_balanced_accuracy_series(per_split: Sequence[Sequence[Mapping]]) -> list[float]:
+    """Per epoch, the balanced accuracy of the subject-level counts pooled over the inner
+    splits, against the validated subjects' own labels: phase 1's selection score on the
+    source subjects (Sec. 4.5), and the target-supervised upper bound's epoch
+    (`controls`), which is a reference, not a phase-2 selection."""
     try:
-        out = {"pooledBalancedAccuracy": [two_phase.pooled_balanced_accuracy(records)
-                                          for records in by_epoch]}
-        if label_free:
-            out["pooledLabelFree"] = [two_phase.pooled_label_free_score(records)
-                                      for records in by_epoch]
+        return [two_phase.pooled_balanced_accuracy(records) for records in _by_epoch(per_split)]
     except ValueError as error:
         raise SearchError(str(error)) from None
-    return out
 
 
-def select(study: optuna.Study, rule: str = "primary") -> dict:
-    """Sec. 4.5: the completed trial and epoch with the best pooled score of `rule`.
+def pooled_centroid_series(per_split: Sequence[Sequence[Mapping]],
+                           sources: Sequence[Mapping]) -> list[float]:
+    """Per epoch, Sec. 4.5's primary phase-2 score: the centroid rule's counts of the three
+    inner splits pooled, balanced accuracy once (`two_phase.pooled_centroid_balanced_
+    accuracy`); `sources[i]` is split i's source pass (`source_representations`). It reads
+    the target records' probabilities and representations, never their labels."""
+    try:
+        return [two_phase.pooled_centroid_balanced_accuracy(records, sources)
+                for records in _by_epoch(per_split)]
+    except ValueError as error:
+        raise SearchError(str(error)) from None
 
-    Ties go to the lowest trial number, then to the earliest epoch; a non-finite score is
-    not a candidate. `epochs` is the refit's epoch count (the epoch index plus one)."""
-    if rule not in RULES:
-        raise SearchError(f"the selection rule is one of {list(RULES)}; got {rule!r}")
-    key = RULES[rule]
+
+def ensv_record(per_split: Sequence[Sequence[Mapping]]) -> dict:
+    """What a phase-2 trial records for EnsV: the target subjects of F pooled over the
+    three inner splits (each predicted once, from the split where it validates) and, per
+    epoch, their predicted probabilities in that order. No label, no representation."""
+    by_epoch = _by_epoch(per_split)
+    subjects = [s for r in by_epoch[0] for s in r["subjects"]]
+    if len(subjects) != len(set(subjects)):
+        raise SearchError("the pooled validation must hold each subject exactly once")
+    probabilities = []
+    for records in by_epoch:
+        if [s for r in records for s in r["subjects"]] != subjects:
+            raise SearchError("the inner splits validated other subjects at another epoch")
+        probabilities.append([[float(x) for x in p] for r in records
+                              for p in r["probabilities"]])
+    return {ENSV_SUBJECTS: subjects, ENSV_PROBABILITIES: probabilities}
+
+
+def _completed(study: optuna.Study) -> list:
     trials = sorted((t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE),
                     key=lambda t: t.number)
     if not trials:
         raise SearchError(f"{study.study_name}: no completed trial to select from")
+    return trials
+
+
+def _study_phase(study: optuna.Study, trials: Sequence) -> int:
+    phase = study.user_attrs.get("phase")
+    if phase is not None:
+        return int(phase)
+    return 2 if any(PRIMARY_SERIES[2] in t.user_attrs for t in trials) else 1
+
+
+def _primary_choice(study: optuna.Study, trials: Sequence, key: str):
     best, best_epoch, best_score = None, -1, -math.inf
     for t in trials:
         series = t.user_attrs.get(key)
@@ -429,6 +503,55 @@ def select(study: optuna.Study, rule: str = "primary") -> dict:
         for epoch, value in enumerate(series):
             if value is not None and math.isfinite(value) and value > best_score:
                 best, best_epoch, best_score = t, epoch, float(value)
+    return best, best_epoch, best_score
+
+
+def _ensv_choice(study: optuna.Study, trials: Sequence):
+    """EnsV over every completed trial and epoch of the study (Sec. 4.5)."""
+    subjects, candidates = None, []
+    for t in trials:
+        names, series = t.user_attrs.get(ENSV_SUBJECTS), t.user_attrs.get(ENSV_PROBABILITIES)
+        if not names or not series:
+            raise SearchError(f"{study.study_name} trial {t.number} records no EnsV "
+                              f"probabilities ({ENSV_SUBJECTS}, {ENSV_PROBABILITIES})")
+        if subjects is None:
+            subjects = list(names)
+        if sorted(names) != sorted(subjects):
+            raise SearchError(f"{study.study_name} trial {t.number} predicted other target "
+                              f"subjects than trial {trials[0].number}")
+        order = [list(names).index(s) for s in subjects]
+        for epoch, rows in enumerate(series):
+            P = np.asarray([rows[k] for k in order], dtype=np.float64)
+            if np.all(np.isfinite(P)):
+                candidates.append((t, epoch, P))
+    if not candidates:
+        return None, -1, -math.inf
+    pseudo = np.mean([P for _, _, P in candidates], axis=0).argmax(axis=1)
+    best, best_epoch, best_score = None, -1, -math.inf
+    for t, epoch, P in candidates:
+        score = float(np.mean(P.argmax(axis=1) == pseudo))
+        if score > best_score:
+            best, best_epoch, best_score = t, epoch, score
+    return best, best_epoch, best_score
+
+
+def select(study: optuna.Study, rule: str = "primary") -> dict:
+    """Sec. 4.5: the completed trial and epoch `rule` selects in one outer fold's study.
+
+    `primary`: the best pooled score of the study's phase (`PRIMARY_SERIES`); `ensv`: the
+    EnsV choice over every completed (trial, epoch) of a phase-2 study. Ties go to the
+    lowest trial number, then to the earliest epoch; a non-finite score or probability is
+    not a candidate. `epochs` is the refit's epoch count (the epoch index plus one)."""
+    if rule not in RULES:
+        raise SearchError(f"the selection rule is one of {list(RULES)}; got {rule!r}")
+    trials = _completed(study)
+    phase = _study_phase(study, trials)
+    if rule == "ensv":
+        if phase != 2:
+            raise SearchError(f"{study.study_name}: EnsV selects in a phase-2 study only")
+        best, best_epoch, best_score = _ensv_choice(study, trials)
+    else:
+        best, best_epoch, best_score = _primary_choice(study, trials, PRIMARY_SERIES[phase])
     if best is None:
         raise SearchError(f"{study.study_name}: no trial has a finite {rule} score")
     out = {"rule": rule, "trial": best.number, "params": dict(best.params),
@@ -509,8 +632,7 @@ def save_phase_one(root: str | Path, group: str, data: SearchData, rotation: int
 
 def train_mil_creda_phase_two(data: SearchData, rotation: int, seed: int, record,
                               params: Mapping, schedule: Mapping,
-                              device: torch.device | str = "cpu", *,
-                              label_free: bool = False) -> dict:
+                              device: torch.device | str = "cpu") -> dict:
     """MIL-CREDA's phase 2 from its stored phase-1 checkpoint, at that checkpoint's sigma."""
     state, meta = record
     sigma1 = meta.get("sigma")
@@ -535,7 +657,7 @@ def train_mil_creda_phase_two(data: SearchData, rotation: int, seed: int, record
     result = two_phase.adapt_target_phase(
         model, {"checkpoint": {"sigma": sigma1}}, joint["frozen_state"], d["source_train"],
         d["target_train"], d["target_valid"], hyper, generator, device, seed=seed,
-        fold=rotation, transfer=data.transfer.name, label_free=label_free)
+        fold=rotation, transfer=data.transfer.name)
     return {"strategy": "MIL-CREDA", "model": model, "result": result, "hyper": hyper,
             "channels": channels, "layer_copy": joint["layer_copy"]}
 
@@ -546,16 +668,48 @@ PHASE_TWO_TRAINERS: dict[str, Callable] = {"MIL-CREDA": train_mil_creda_phase_tw
 
 def train_phase_two(strategy: str, data: SearchData, rotation: int, seed: int, record,
                     params: Mapping, schedule: Mapping,
-                    device: torch.device | str = "cpu", *, label_free: bool = False) -> dict:
-    """One phase-2 training. `label_free=True` also returns, under
-    `result["label_free_best"]`, the model state of the epoch Sec. 4.5's secondary
-    rule keeps (`two_phase.LabelFreeBest`); the default result is unchanged."""
+                    device: torch.device | str = "cpu") -> dict:
+    """One phase-2 training of `strategy` (its registered trainer)."""
     space = phase_two_space(strategy)
     if set(params) != set(space):
         raise SearchError(f"the {strategy} phase-2 parameters are exactly {list(space)}; "
                           f"got {sorted(params)}")
     return PHASE_TWO_TRAINERS[strategy](data, rotation, seed, record, params, schedule,
-                                        device, label_free=label_free)
+                                        device)
+
+
+def source_representations(strategy: str, data: SearchData, rotation: int, record,
+                           device: torch.device | str = "cpu") -> list[dict]:
+    """Sec. 4.5's source pass of the centroid rule, per inner split of outer fold
+    `rotation`: the source validation bags through the frozen source trunk and the frozen
+    attention or aggregator of `record`, the outer fold's one phase-1 checkpoint of the
+    strategy's group, which every phase-2 trial keeps unchanged (Sec. 7.3; the trainers
+    assert it, `two_phase.FrozenPartsMoved`). Inference only, never a training; it runs
+    here, outside every trainer, so a source-free trainer (CLUST) reads no source data.
+    Split i -> {"subjects", "labels", "representations"} (the labels are the SOURCE
+    labels the rule scores against)."""
+    group = PHASE_ONE_GROUP_OF[strategy]
+    state, meta = record
+    device = torch.device(device)
+    channels = data.channels()
+    model = model_store.build_model(group, channels["source"], channels["target"],
+                                    meta.get("hyper") or {})
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    if unexpected or any(not k.startswith("target_trunk.") for k in missing):
+        raise SearchError(f"the phase-1 state does not fit {group} (missing {missing}, "
+                          f"unexpected {unexpected})")
+    if group == "MIL-CREDA":
+        model.fix_sigma(meta["sigma"])
+    model.to(device)
+    out = []
+    for i in range(N_INNER):
+        bags = data.inner_view(rotation, i).rotations[rotation]["source_valid"]
+        if not bags:
+            raise SearchError(f"inner split {i} of rotation {rotation} validates no source bag")
+        Z = two_phase.represent(model, bags, "source", device)
+        out.append({"subjects": [b.subject for b in bags], "labels": [int(b.label) for b in bags],
+                    "representations": Z.tolist()})
+    return out
 
 
 def save_phase_two(root: str | Path, strategy: str, data: SearchData, rotation: int,
@@ -576,7 +730,6 @@ def save_phase_two(root: str | Path, strategy: str, data: SearchData, rotation: 
                             extra={"epoch": checkpoint["epoch"],
                                    "valid_balanced_accuracy":
                                        checkpoint["valid_balanced_accuracy"],
-                                   "label_free_score": checkpoint["label_free_score"],
                                    **extra})
 
 
@@ -703,8 +856,13 @@ def open_study(path: str | Path, identity: Mapping) -> tuple[optuna.Study, int]:
     differ = identity_differences(study.user_attrs, identity, [
         *IDENTITY_FIELDS, *(k for k in PHASE_TWO_IDENTITY_FIELDS if k in identity)])
     if differ:
-        raise SearchError(f"{path} is a study of another identity and is not continued: "
-                          + "; ".join(differ) + "; remove it to search again")
+        changed = (" (the phase-2 selection rule changed in plan v58, Sec. 4.5: the "
+                   "centroid primary rule and the EnsV secondary rule read no target label, "
+                   "so a study scored by an earlier rule is searched again)"
+                   if identity.get("phase") == 2 and any(d.startswith("objective:")
+                                                        for d in differ) else "")
+        raise SearchError(f"{path} is a study of another identity and is not continued"
+                          f"{changed}: " + "; ".join(differ) + "; remove it to search again")
     complete = sum(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials)
     if complete > identity["nTrials"]:
         raise SearchError(f"{path} holds {complete} completed trials, more than its declared "
@@ -772,7 +930,7 @@ def run_phase_one_study(group: str, data: SearchData, rotation: int, schedule: M
             per_split.append(out["validation"])
             histories.append(out["history"])
             split_values.append([float(h["val_balanced_accuracy"]) for h in out["history"]])
-        series = pooled_series(per_split, label_free=False)["pooledBalancedAccuracy"]
+        series = pooled_balanced_accuracy_series(per_split)
         if not any(math.isfinite(v) for v in series):
             raise SearchError(f"no epoch has a finite pooled validation score: {series}")
         best = int(np.nanargmax(series))
@@ -801,33 +959,32 @@ def run_phase_two_study(strategy: str, data: SearchData, rotation: int, record,
     path = study_path(root, data.transfer, 2, strategy, rotation)
     study, complete = open_study(path, study_identity(
         data, 2, strategy, rotation, schedule, n_trials,
-        "the best epoch's target-validation balanced accuracy of the subject-level "
-        "confusion counts pooled over the three inner splits (primary rule, Sec. 4.5), "
-        "what the sampler observes; pooledLabelFree: per epoch, the label-free score of "
-        "the target predictions pooled the same way (secondary rule)", phase_one=record[1]))
+        "plan v58, Sec. 4.5, no target label: the best epoch's centroid-rule balanced "
+        "accuracy (the source validation bags of each inner split assigned to the nearest "
+        "centroid of the adapted model's target validation pseudo-classes, scored against "
+        "their source labels, counts pooled over the three inner splits), what the sampler "
+        "observes; ensvProbabilities: per epoch, the pooled target validation "
+        "probabilities the EnsV secondary rule reads", phase_one=record[1]))
+    sources: list[dict] = []           # the source pass, once per inner split (Sec. 4.5)
 
     def objective(trial: optuna.Trial) -> float:
+        if not sources:
+            sources.extend(source_representations(strategy, data, rotation, record, device))
         params = suggest(trial, space)
-        per_split, histories, split_values, sigmas = [], [], [], []
+        per_split, histories, sigmas = [], [], []
         for i in range(N_INNER):
             out = train_phase_two(strategy, data.inner_view(rotation, i), rotation,
                                   SEARCH_SEED, record, params, schedule, device)["result"]
             per_split.append(out["validation"])
             histories.append(out["history"])
-            split_values.append([float(h["val_balanced_accuracy"]) for h in out["history"]])
             sigmas.append(out["checkpoint"].get("sigma"))
-        series = pooled_series(per_split)
-        primary, free = series["pooledBalancedAccuracy"], series["pooledLabelFree"]
+        primary = pooled_centroid_series(per_split, sources)
         if not all(math.isfinite(v) for v in primary):
-            raise SearchError(f"an epoch returned a non-finite pooled validation score: "
+            raise SearchError(f"an epoch returned a non-finite pooled centroid score: "
                               f"{primary}")
         best = int(np.argmax(primary))
-        finite_free = [v if math.isfinite(v) else -math.inf for v in free]
-        best_free = int(np.argmax(finite_free))
-        _set_attrs(trial, {**series, "bestEpoch": best, "epochs": best + 1,
-                           "labelFreeBestEpoch": best_free,
-                           "label_free_score": float(free[best_free]),
-                           "splitBalancedAccuracy": split_values,
+        _set_attrs(trial, {PRIMARY_SERIES[2]: primary, "bestEpoch": best, "epochs": best + 1,
+                           **ensv_record(per_split),
                            "trainLoss": _mean_loss(histories), "sigmaBySplit": sigmas,
                            "seed": SEARCH_SEED})
         return float(primary[best])

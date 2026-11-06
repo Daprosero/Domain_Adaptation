@@ -221,7 +221,8 @@ def test_cca_keeps_the_last_epoch_and_records_validation_per_epoch(monkeypatch):
     assert all(torch.equal(v, model.target_trunk.state_dict()[k])
                for k, v in snapshots[last].items())
     assert any(not torch.equal(v, snapshots[last][k]) for k, v in snapshots[1].items())
-    assert out["checkpoint"]["label_free_score"] == out["history"][last]["label_free_score"]
+    assert "label_free_score" not in out["checkpoint"]
+    assert len(out["validation"][last]["representations"]) == len(valid)
     assert [v["epoch"] for v in out["validation"]] == list(range(schedule()["epochs2"]))
 
 

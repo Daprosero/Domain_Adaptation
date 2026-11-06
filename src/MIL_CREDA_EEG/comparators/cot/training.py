@@ -101,8 +101,7 @@ def _check_roles(d):
             raise ValueError("training/validation subjects overlap")
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
-                    label_free=False):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
     """Existing search trainer hook; target-training labels are never accessed.
 
     Phase one is the shared common-group trainer/checkpoint, not retrained here.
@@ -130,7 +129,6 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     optimizer = torch.optim.SGD([*model.target_trunk.parameters(), model.target_centers],
                                 lr=params["lr2"], weight_decay=params["wd2"], momentum=.9)
     history, validation = [], []
-    keeper = two_phase.LabelFreeBest(label_free)
     valid_labels = [b.label for b in d["target_valid"]]
     for epoch in range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
@@ -175,31 +173,28 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
                           ot_share=abs(params["alphaOT"]*values["ot"])/max(denom, 1e-30))
             for k in sums:
                 sums[k] += values[k]
-        accuracy, free = math.nan, math.nan
+        accuracy = math.nan
         if d["target_valid"]:
             G = two_phase.evaluate(model, d["target_valid"], "target", device)
             accuracy = two_phase.balanced_accuracy(valid_labels, G.argmax(1).tolist())
-            free = two_phase.label_free_score(G)
-            validation.append(two_phase.validation_record(epoch, d["target_valid"], G))
+            validation.append(two_phase.validation_record(
+                epoch, d["target_valid"], G,
+                two_phase.represent(model, d["target_valid"], "target", device)))
         row = {"epoch": epoch, "seed": seed, "fold": rotation, "model": "COT:phase2",
                "transfer": data.transfer.name, **{k: v/len(batches) for k, v in sums.items()},
-               "val_balanced_accuracy": accuracy, "label_free_score": free}
+               "val_balanced_accuracy": accuracy}
         history.append(row)
-        keeper.offer(epoch, free, model)
         if any(not torch.equal(model.state_dict()[k], v) for k, v in frozen.items()):
             raise two_phase.FrozenPartsMoved("COT phase two changed a common frozen tensor")
     two_phase.set_phase_two_modes(model)
     last = len(history) - 1
-    checkpoint = {"epoch": last, "valid_balanced_accuracy": accuracy, "label_free_score": free,
+    checkpoint = {"epoch": last, "valid_balanced_accuracy": accuracy,
                   "hyper": hyper, "state": _snapshot(model)}
     return {"strategy": "COT", "model": model, "channels": channels, "hyper": hyper,
-            "layer_copy": joint["layer_copy"], "result": two_phase.with_label_free({
+            "layer_copy": joint["layer_copy"], "result": {
                 "checkpoint": checkpoint, "best_epoch": last, "epochs": len(history),
                 "history": history, "validation": validation,
-                "selection": {"primary": "pooled target-validation balanced accuracy, "
-                                         "chosen by the search",
-                              "secondary": "pooled entropy of mean minus mean entropy, "
-                                           "chosen by the search"}}, keeper)}
+                "selection": two_phase.SELECTION}}
 
 
 

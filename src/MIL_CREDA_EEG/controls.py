@@ -32,9 +32,10 @@ nested cross-validation of Sec. 4.5, with no early stopping: at the search seed
 it is trained on each of the three inner splits of the rotation's non-test folds
 F for the whole `epochs1` cap, recording every epoch's validation; E_ub is the
 epoch with the best balanced accuracy of the target validation counts pooled
-over the three splits (`search.pooled_series`), the earliest on ties; then it is
-refit on the target subjects of all of F for exactly E_ub epochs at the given
-seed, with no validation set. It reads only the target side of F: never a
+over the three splits (`search.pooled_balanced_accuracy_series`), the earliest on
+ties; then it is refit on the target subjects of all of F for exactly E_ub epochs
+at the given seed, with no validation set. The target labels it reads make it a
+reference, never a phase-2 selection (Sec. 4.5). It reads only the target side of F: never a
 source bag, never a target test bag. It is a reference outside the ranking (`in_ranking` False)
 and applies to every arm, the device arm included, because it lives in one
 domain.
@@ -196,7 +197,7 @@ def train_upper_bound(a: assignment_mod.Assignment, bags: bag_data.BagSet, rotat
         _, out = fit(target("inner_train", i), valid, full["epochs1"], search.SEARCH_SEED)
         per_split.append(out["validation"])
         validated += [b.subject for b in valid]
-    series = search.pooled_series(per_split, label_free=False)["pooledBalancedAccuracy"]
+    series = search.pooled_balanced_accuracy_series(per_split)
     best = int(np.nanargmax(series))
     train = target(assignment_mod.REFIT_ROLE)
     model, out = fit(train, [], best + 1, seed)

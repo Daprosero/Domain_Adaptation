@@ -313,10 +313,8 @@ def test_cs_ccs_objective_is_eq_90_with_frozen_source_ce():
 def test_cs_ccs_keeps_the_last_epoch_and_records_validation_per_epoch(monkeypatch):
     model, source, _, target, valid = fixture()
     scores = iter([0.25, 0.75, 0.5])
-    frees = iter([0.6, 0.1, 0.2])
     monkeypatch.setattr(training.two_phase, "balanced_accuracy",
                         lambda *a: next(scores))
-    monkeypatch.setattr(training.two_phase, "label_free_score", lambda *a: next(frees))
     result = training.adapt(model, source, target, valid, params(), schedule(3), seed=11)
     # v50: no early stopping, no restore: the last epoch is kept whatever scored best
     assert result["best_epoch"] == 2 == result["checkpoint"]["epoch"]

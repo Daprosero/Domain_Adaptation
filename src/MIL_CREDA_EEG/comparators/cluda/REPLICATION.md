@@ -92,7 +92,7 @@ T=.07 and T2=.03; this variant searches only ST temperature using the existing
   `contrastive_objective` fixes the shared scale/ratio above.
 - `training.adaptation_step` calculates the diagnostic frozen source CE and both
   contrastive losses. `train_phase_two` reuses existing bridge, schedule guards,
-  ClassQueues, shuffled target batches, validation records, label-free keeper,
+  ClassQueues, shuffled target batches, validation records with representations,
   max-norm, search records and model_store. It never reimplements bag preparation
   or phase-one training.
 
@@ -182,7 +182,7 @@ identified; no claim to reproduce the paper's numerical results is made.
 | Phase-two bridge/freeze | Native shared trainable Conformer | Existing shared bridge copies compatible weights, keeps spatial initialization for29->14; source BN/attention/head frozen; target trunk trains | deviation: common two-phase protocol |
 | Phase-one checkpoint seed | main.py setup_seed20 | Verify search.PHASE_ONE_SEED=1 despite trial seed0; transfer/rotation/partition/channels checks, L70–L71 | deviation: common checkpoint |
 | Adaptation data | main.py:167–168 target_data=test_data | Target TRAIN bags only, disjoint subjects, no test input, L59 | deviation: inductive common protocol |
-| Selection | main.py:118–119 retains maximum test accuracy | All inner validation epochs recorded, shared pooled BA selection, no refit validation; optional label-free secondary, v56 §4.5 | deviation: removes test-label selection |
+| Selection | main.py:118–119 retains maximum test accuracy | All inner validation epochs recorded, the search's centroid primary and EnsV secondary selection with no target label, no refit validation, v58 §4.5 | deviation: removes test-label selection |
 | Preparation, Eq.(8) | Paper filtering/standardization, code main.py norm_type default none | Existing official prepared bag input only, no comparator preparation fork | deviation: common inputs |
 | Persistence | No original controlled-variant checkpoint format | Existing shared model_store plus comparator digest; full projector+BN state, no bridge on reload; integration e5de342 | deviation: repository contract |
 | Smoke | Not a paper experiment | Unit-id SHA256 seed639203496, 8 bags/domain, 2windows/bag,29/14channels,512samples;3/5epochs,8bags/step | deviation: synthetic execution check only |

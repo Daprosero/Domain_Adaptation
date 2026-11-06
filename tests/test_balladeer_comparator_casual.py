@@ -210,7 +210,8 @@ def test_casual_runs_full_budget_keeps_the_last_epoch_and_records_validation():
     assert result["history"][0]["val_balanced_accuracy"] == 1.
     assert result["history"][1]["val_balanced_accuracy"] == 0.
     for r in result["history"]:
-        assert {"model", "seed", "fold", "epoch", "transfer", "loss", "label_free_score"} <= r.keys()
+        assert {"model", "seed", "fold", "epoch", "transfer", "loss"} <= r.keys()
+        assert "label_free_score" not in r
     for k, v in trained["model"].target_trunk.state_dict().items():
         torch.testing.assert_close(v, result["checkpoint"]["target_state"][k], rtol=0, atol=0)
     assert "label_free_checkpoint" not in result

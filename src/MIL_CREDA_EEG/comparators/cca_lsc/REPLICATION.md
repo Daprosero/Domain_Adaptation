@@ -73,7 +73,7 @@ Existing code was read before writing: `eegnet.py`, `mil_wrapper.py`,
   adversarial saddle objective. No EEG encoder or aggregator implementation.
 - `training.py`: phase-2 adapter, explicit search registration, common-checkpoint
   hook. Reuses `two_phase.bridge`, `ClassQueues`, `shuffled_batches`, `evaluate`,
-  `balanced_accuracy`, `label_free_score`, `check_hyper`; reuses `search.check_schedule`
+  `represent`, `balanced_accuracy`, `check_hyper`; reuses `search.check_schedule`
   and `model_store.build_model`. Assignment, bag loading, controls, search budget
   and persistence remain owned by their existing modules.
 - `smoke.py`: seeded synthetic CPU check, shared source trainer then adapter.

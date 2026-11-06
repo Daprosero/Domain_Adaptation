@@ -50,11 +50,22 @@ def _bagset(root, sha: str = "x" * 64) -> bag_data.BagSet:
 
 
 def _records(bags, epochs, score):
-    """Scripted validation records: `score(subject, epoch)` is the positive probability."""
+    """Scripted validation records: `score(subject, epoch)` is the positive probability,
+    and the bag's representation (phase 2's centroid rule reads it)."""
     return [{"epoch": e, "subjects": [b.subject for b in bags],
              "labels": [b.label for b in bags],
-             "probabilities": [[1 - score(b.subject, e), score(b.subject, e)] for b in bags]}
+             "probabilities": [[1 - score(b.subject, e), score(b.subject, e)] for b in bags],
+             "representations": [[score(b.subject, e)] for b in bags]}
             for e in range(epochs)]
+
+
+def _sources(strategy, data, rotation, record, device="cpu"):
+    """A scripted source pass of the centroid rule (the real one needs a real record)."""
+    return [{"subjects": [b.subject for b in data.inner[(rotation, i)]["source_valid"]],
+             "labels": [b.label for b in data.inner[(rotation, i)]["source_valid"]],
+             "representations": [[float(b.label)]
+                                 for b in data.inner[(rotation, i)]["source_valid"]]}
+            for i in range(search.N_INNER)]
 
 
 def test_the_sampler_is_gpsampler_with_the_fixed_seed_and_no_pruner(tmp_path, monkeypatch):
@@ -288,6 +299,7 @@ def test_phase_two_starts_only_from_the_outer_folds_one_phase_one_checkpoint(
                            "history": [{"val_balanced_accuracy": 0.5}]}}
 
     monkeypatch.setattr(search, "train_phase_two", fake)
+    monkeypatch.setattr(search, "source_representations", _sources)
     study = search.run_phase_two_study("MIL-CREDA", data, 2, good, SCHEDULE, root=tmp_path,
                                        n_trials=2)
     assert used == [(2, search.SEARCH_SEED, True)] * 6
@@ -344,8 +356,9 @@ def test_a_two_trial_smoke_study_completes_and_writes_its_sqlite(tmp_path):
     assert len(study.trials) == 2
     for trial in study.trials:
         assert set(trial.params) == {"lr2", "wd2", "tauLocal"}
-        assert math.isfinite(trial.user_attrs["label_free_score"])
-        assert len(trial.user_attrs["pooledLabelFree"]) == schedule["epochs2"]
+        assert len(trial.user_attrs["pooledCentroidBalancedAccuracy"]) == schedule["epochs2"]
+        assert all(0 <= v <= 1 for v in trial.user_attrs["pooledCentroidBalancedAccuracy"])
+        assert len(trial.user_attrs["ensvProbabilities"]) == schedule["epochs2"]
         assert trial.user_attrs["sigmaBySplit"] == [record[1]["sigma"]] * 3
 
 

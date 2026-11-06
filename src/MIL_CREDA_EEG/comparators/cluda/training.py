@@ -106,8 +106,7 @@ def adaptation_step(model, source, target, params, device):
             "target_pseudo_classes": int(pseudo.unique().numel())}
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
-                    label_free=False):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
     """Shared phase-2 trainer signature. Uses the single PHASE_ONE_SEED checkpoint.
 
     Exactly epochs2 epochs, last state retained; every inner validation epoch is
@@ -152,7 +151,6 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     optimizer = torch.optim.Adam([*model.target_trunk.parameters(), *model.projector.parameters()],
                                  lr=hyper["lr2"], weight_decay=hyper["wd2"], betas=(.5, .999))
     history, validation = [], []
-    keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
         model.projector.train()
@@ -189,12 +187,13 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
             source_domains.append(terms["source_domains"])
             source_pairs.append(terms["source_pairs"])
             source_zero_pairs.append(terms["source_zero_loss_pairs"])
-        accuracy, free = math.nan, math.nan
+        accuracy = math.nan
         if d["target_valid"]:
             G = two_phase.evaluate(model, d["target_valid"], "target", device)
             accuracy = two_phase.balanced_accuracy([b.label for b in d["target_valid"]], G.argmax(1).tolist())
-            free = two_phase.label_free_score(G)
-            validation.append(two_phase.validation_record(epoch, d["target_valid"], G))
+            validation.append(two_phase.validation_record(
+                epoch, d["target_valid"], G,
+                two_phase.represent(model, d["target_valid"], "target", device)))
         history.append({"epoch": epoch, "seed": seed, "fold": rotation, "model": "CLUDA:phase2",
                         "transfer": data.transfer.name,
                         **{k: v/len(absent) for k, v in sums.items()},
@@ -211,21 +210,19 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
                         "anchors_without_positive": sum(absent), "anchors": sum(anchors),
                         "step_anchors_without_positive": absent, "step_anchors": anchors,
                         "step_target_pseudo_classes": classes,
-                        "val_balanced_accuracy": accuracy, "label_free_score": free})
-        keeper.offer(epoch, free, model)
+                        "val_balanced_accuracy": accuracy})
         if any(not torch.equal(model.state_dict()[k], v) for k, v in frozen.items()):
             raise two_phase.FrozenPartsMoved("CLUDA changed a frozen common tensor")
     two_phase.set_phase_two_modes(model)
     model.projector.eval()
     last = len(history)-1
-    checkpoint = {"epoch": last, "valid_balanced_accuracy": accuracy, "label_free_score": free,
+    checkpoint = {"epoch": last, "valid_balanced_accuracy": accuracy,
                   "hyper": hyper, "state": {k: v.detach().clone() for k, v in model.state_dict().items()}}
     return {"strategy": NAME, "model": model, "channels": channels, "hyper": hyper,
-            "layer_copy": joint["layer_copy"], "result": two_phase.with_label_free({
+            "layer_copy": joint["layer_copy"], "result": {
                 "checkpoint": checkpoint, "best_epoch": last, "epochs": len(history),
                 "history": history, "validation": validation,
-                "selection": {"primary": "pooled target-validation balanced accuracy, chosen by the search",
-                              "secondary": "pooled entropy of mean minus mean entropy, chosen by the search"}}, keeper)}
+                "selection": two_phase.SELECTION}}
 
 
 def register():

@@ -243,8 +243,7 @@ def test_cluda_last_epoch_validation_and_refit(monkeypatch):
                torch.tensor([[.01, .99], [.99, .01]]*2, dtype=torch.float64)]
     outputs = iter(answers)
     monkeypatch.setattr(two_phase, "evaluate", lambda *args: next(outputs))
-    result = train_phase_two(data, 0, 0, record, DEFAULT_PARAMS, schedule(2),
-                              label_free=True)["result"]
+    result = train_phase_two(data, 0, 0, record, DEFAULT_PARAMS, schedule(2))["result"]
     assert result["best_epoch"] == 1 == result["checkpoint"]["epoch"]
     assert [v["probabilities"] for v in result["validation"]] == [a.tolist() for a in answers]
     for row in result["history"]:

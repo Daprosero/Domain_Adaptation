@@ -132,7 +132,7 @@ def alternating_step(model, discriminator, source, target, params, target_optimi
 
 
 def adapt_target_phase(model, source_train, target_train, target_valid, params, schedule,
-                       *, seed=0, fold=0, transfer="", device="cpu", label_free=False):
+                       *, seed=0, fold=0, transfer="", device="cpu"):
     """Exactly `epochs2` epochs, the last kept; validation recorded per epoch when given.
 
     Caller has loaded the common phase-1 state and called shared bridge(). An empty
@@ -156,7 +156,6 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     optimizer = torch.optim.Adam(model.target_trunk.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
     dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
     history, validation = [], []
-    keeper = two_phase.LabelFreeBest(label_free)
     size = schedule["bagsPerStep"]
     for epoch in range(schedule["epochs2"]):
         source_batches = two_phase.shuffled_batches(len(source_train), size, generator)
@@ -166,38 +165,34 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
             totals.append(alternating_step(model, discriminator, [source_train[i] for i in s],
                                           [target_train[i] for i in batch], params, optimizer,
                                           dis_optimizer, device, vat_radius=vat_radius))
-        ba, free = math.nan, math.nan
+        ba = math.nan
         if target_valid:
             probabilities = two_phase.evaluate(model, target_valid, "target", device)
             ba = two_phase.balanced_accuracy([b.label for b in target_valid],
                                              probabilities.argmax(1).tolist())
-            free = two_phase.label_free_score(probabilities)
-            validation.append(two_phase.validation_record(epoch, target_valid, probabilities))
+            validation.append(two_phase.validation_record(
+                epoch, target_valid, probabilities,
+                two_phase.represent(model, target_valid, "target", device)))
         row = {"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
-               "model": "CASUAL:phase2", "val_balanced_accuracy": ba, "label_free_score": free,
+               "model": "CASUAL:phase2", "val_balanced_accuracy": ba,
                "typical_window_norm": typical, "vat_radius": vat_radius,
                **{k: sum(r[k] for r in totals) / len(totals) for k in totals[0]}}
         history.append(row)
-        keeper.offer(epoch, free, model)
     if model_store.state_digest(two_phase.phase_one_state(model)) != model_store.state_digest(frozen):
         raise two_phase.FrozenPartsMoved("CASUAL changed frozen source/attention/head state")
     model.eval()
     last = history[-1]
     checkpoint = {"target_state": _state(model.target_trunk), "epoch": last["epoch"],
                   "valid_balanced_accuracy": last["val_balanced_accuracy"],
-                  "label_free_score": last["label_free_score"], "hyper": params,
+                  "hyper": params,
                   "discriminator_state": _state(discriminator)}
-    return two_phase.with_label_free({
+    return {
             "checkpoint": checkpoint, "history": history, "validation": validation,
             "best_epoch": last["epoch"], "epochs": len(history),
-            "selection": {"primary": "pooled target-validation balanced accuracy, chosen "
-                                     "by the search",
-                          "secondary": "pooled entropy of mean minus mean entropy, chosen "
-                                       "by the search"}}, keeper)
+            "selection": two_phase.SELECTION}
 
 
-def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Mapping, device="cpu",
-                    *, label_free=False):
+def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Mapping, device="cpu"):
     """Existing search trainer seam; checkpoint identity checked before loading."""
     state, meta = record
     expected = {"phase": 1, "name": "common", "rotation": rotation, "seed": search.PHASE_ONE_SEED,
@@ -216,8 +211,7 @@ def train_phase_two(data, rotation, seed, record, params: Mapping, schedule: Map
     d = data.rotations[rotation]
     result = adapt_target_phase(model, d["source_train"], d["target_train"], d["target_valid"],
                                params, schedule, seed=seed, fold=rotation,
-                               transfer=data.transfer.name, device=device,
-                               label_free=label_free)
+                               transfer=data.transfer.name, device=device)
     return {"strategy": STRATEGY, "model": model, "result": result, "hyper": dict(params),
 
             "channels": channels, "layer_copy": joint["layer_copy"]}
@@ -250,8 +244,7 @@ def save_final_model(root, data, rotation, seed, trained):
                             phase=2, name=STRATEGY, state=trained["model"].state_dict(),
                             hyper=checkpoint["hyper"], partition_sha256=data.partition_sha256,
                             channels=trained["channels"], extra={"casual_code_digest": code_digest(),
-                            "epoch": checkpoint["epoch"], "valid_balanced_accuracy": checkpoint["valid_balanced_accuracy"],
-                            "label_free_score": checkpoint["label_free_score"]})
+                            "epoch": checkpoint["epoch"], "valid_balanced_accuracy": checkpoint["valid_balanced_accuracy"]})
 
 
 def load_final_model(path, *, partition_path=None):

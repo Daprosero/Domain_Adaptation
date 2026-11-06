@@ -1,10 +1,11 @@
-"""Experiments plan v50, Secs. 4.2, 4.5, 7.3 and 7.7: selection by nested cross-validation.
+"""Experiments plan v58, Secs. 4.2, 4.5, 7.3 and 7.7: selection by nested cross-validation.
 
-One Optuna study per strategy, transfer and outer fold; each trial is scored on the three
-inner splits of the outer fold's non-test folds, per epoch, by the balanced accuracy of the
-subject-level counts pooled over the splits; the label-free rule pools the target
-predictions the same way. Every number here is scripted or synthetic, never a measured
-result.
+One Optuna study per strategy, transfer and outer fold; each phase-2 trial is scored on the
+three inner splits of the outer fold's non-test folds, per epoch, by the centroid rule: the
+source validation bags assigned to the nearest centroid of the target validation bags'
+pseudo-classes, the counts pooled over the splits and the balanced accuracy computed once;
+EnsV reads the pooled target predictions of every trial and epoch. Neither reads a target
+label. Every number here is scripted or synthetic, never a measured result.
 """
 
 from __future__ import annotations
@@ -46,12 +47,18 @@ def _probability(subject: str, params, epoch: int) -> float:
     return int(digest[:8], 16) / 0xFFFFFFFF
 
 
-def _scripted_trainer(seen: list):
-    """A phase-2 trainer whose predictions depend on the subject, the trial and the epoch,
-    never on a label; it records which subjects each call validated on."""
+def _representation(subject: str, params, epoch: int) -> list[float]:
+    """A target bag's scripted Z: it moves with the trial and the epoch."""
+    p = _probability(subject, params, epoch)
+    return [4.0 * p - 2.0, _probability(subject + "z", params, epoch)]
 
-    def fake(strategy, data, rotation, seed, record, params, schedule, device="cpu", *,
-             label_free=False):
+
+def _scripted_trainer(seen: list):
+    """A phase-2 trainer whose predictions and representations depend on the subject, the
+    trial and the epoch, never on a label; it records which subjects each call validated
+    on."""
+
+    def fake(strategy, data, rotation, seed, record, params, schedule, device="cpu"):
         d = data.rotations[rotation]
         seen.append({"rotation": rotation, "valid": [b.subject for b in d["target_valid"]],
                      "train": [b.subject for b in d["target_train"]]})
@@ -59,9 +66,10 @@ def _scripted_trainer(seen: list):
         for e in range(schedule["epochs2"]):
             p = [_probability(b.subject, params, e) for b in d["target_valid"]]
             G = torch.tensor([[1 - x, x] for x in p], dtype=torch.float64)
-            validation.append(tp.validation_record(e, d["target_valid"], G))
-            history.append({"epoch": e, "val_balanced_accuracy": float("nan"),
-                            "label_free_score": float("nan"), "loss": 0.0})
+            Z = torch.tensor([_representation(b.subject, params, e) for b in d["target_valid"]],
+                             dtype=torch.float64)
+            validation.append(tp.validation_record(e, d["target_valid"], G, Z))
+            history.append({"epoch": e, "val_balanced_accuracy": float("nan"), "loss": 0.0})
         return {"result": {"checkpoint": {"sigma": 1.0}, "history": history,
                            "validation": validation, "best_epoch": len(history) - 1,
                            "epochs": len(history)}}
@@ -69,18 +77,42 @@ def _scripted_trainer(seen: list):
     return fake
 
 
-def _study(tmp_path, data, rotation, seen, monkeypatch, n_trials=4, name="s"):
+def _source_z(subject: str) -> list[float]:
+    p = int(hashlib.sha256(subject.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+    return [4.0 * p - 2.0, 0.5]
+
+
+def _scripted_sources(calls: list):
+    """The source pass: per inner split the source validation bags with their SOURCE
+    labels and a fixed representation per subject (the frozen source side)."""
+
+    def fake(strategy, data, rotation, record, device="cpu"):
+        calls.append(rotation)
+        return [{"subjects": [b.subject for b in data.inner[(rotation, i)]["source_valid"]],
+                 "labels": [b.label for b in data.inner[(rotation, i)]["source_valid"]],
+                 "representations": [_source_z(b.subject)
+                                     for b in data.inner[(rotation, i)]["source_valid"]]}
+                for i in range(search.N_INNER)]
+
+    return fake
+
+
+def _study(tmp_path, data, rotation, seen, monkeypatch, n_trials=4, name="s", calls=None):
     monkeypatch.setattr(search, "train_phase_two", _scripted_trainer(seen))
+    monkeypatch.setattr(search, "source_representations",
+                        _scripted_sources(calls if calls is not None else []))
     monkeypatch.setattr(search, "_check_phase_one_record", lambda *a, **k: None)
     return search.run_phase_two_study("MIL-CREDA", data, rotation, ({}, {"sigma": 1.0}),
                                       SCHEDULE, root=tmp_path / name, n_trials=n_trials)
 
 
-def _flip(data, subjects):
-    """The same search data with the labels of `subjects` flipped everywhere."""
+def _flip(data, subjects, roles=None):
+    """The same search data with the labels of `subjects` flipped (in `roles`, everywhere
+    by default)."""
     def bags(rows):
         return {k: [tp.BagTensor(b.subject, b.condition, 1 - b.label, b.windows)
-                    if b.subject in subjects else b for b in v] for k, v in rows.items()}
+                    if b.subject in subjects and (roles is None or k in roles) else b
+                    for b in v] for k, v in rows.items()}
 
     return search.SearchData(transfer=data.transfer, partition_sha256=data.partition_sha256,
                              folds=data.folds,
@@ -105,55 +137,93 @@ def test_the_labels_of_r_test_subjects_cannot_change_r_selection(tmp_path, monke
             before, after = search.select(first, rule), search.select(flipped, rule)
             assert (after["trial"], after["epoch"], after["score"]) == \
                 (before["trial"], before["epoch"], before["score"])
-        # ... while the same flip reaches the study of another outer fold, whose F holds them
+        # ... while the same flip reaches the study of another outer fold, whose F holds
+        # them: as source subjects, their labels are what the centroid rule scores against
         other = (r + 1) % 4
         base = _study(tmp_path, data, other, [], monkeypatch, name=f"o{r}")
         moved = _study(tmp_path, flipped_data, other, [], monkeypatch, name=f"m{r}")
-        assert [t.user_attrs["pooledBalancedAccuracy"] for t in base.trials] != \
-            [t.user_attrs["pooledBalancedAccuracy"] for t in moved.trials]
+        assert [t.user_attrs["pooledCentroidBalancedAccuracy"] for t in base.trials] != \
+            [t.user_attrs["pooledCentroidBalancedAccuracy"] for t in moved.trials]
 
 
-def test_the_objective_is_the_best_epochs_pooled_balanced_accuracy_over_the_inner_splits(
+def test_the_objective_is_the_best_epochs_pooled_centroid_score_over_the_inner_splits(
         tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
-    seen = []
-    study = _study(tmp_path, data, 2, seen, monkeypatch, n_trials=3)
+    seen, calls = [], []
+    study = _study(tmp_path, data, 2, seen, monkeypatch, n_trials=3, calls=calls)
     assert len(seen) == 3 * 3                              # three inner splits per trial
+    assert calls == [2]                     # the source pass: once per outer fold's study
     for t in study.trials:
-        series = t.user_attrs["pooledBalancedAccuracy"]
+        series = t.user_attrs["pooledCentroidBalancedAccuracy"]
         assert len(series) == SCHEDULE["epochs2"]
         assert t.value == max(series) and t.user_attrs["bestEpoch"] == int(np.argmax(series))
         assert t.user_attrs["epochs"] == t.user_attrs["bestEpoch"] + 1
-    # recomputed by hand: pooled counts over the three validating folds, epoch by epoch
+        assert "pooledBalancedAccuracy" not in t.user_attrs
+        assert "splitBalancedAccuracy" not in t.user_attrs
+    # recomputed by hand: per split, the target pseudo-class centroids, each source bag to
+    # the nearest one; counts pooled over the three validating folds, epoch by epoch
     t = study.trials[0]
-    labels, by_epoch = {}, {e: {} for e in range(SCHEDULE["epochs2"])}
-    for i in range(3):
-        for b in data.inner[(2, i)]["target_valid"]:
-            labels[b.subject] = b.label
-            for e in by_epoch:
-                by_epoch[e][b.subject] = int(_probability(b.subject, t.params, e) > 0.5)
-    validated = sorted(labels)
+    validated = sorted(b.subject for i in range(3) for b in data.inner[(2, i)]["target_valid"])
     assert validated == sorted(b.subject for b in data.rotations[2]["target_train"])
-    expected = [tp.balanced_accuracy([labels[s] for s in validated],
-                                     [by_epoch[e][s] for s in validated]) for e in by_epoch]
-    assert t.user_attrs["pooledBalancedAccuracy"] == pytest.approx(expected)
+    expected = []
+    for e in range(SCHEDULE["epochs2"]):
+        real, assigned = [], []
+        for i in range(3):
+            targets = data.inner[(2, i)]["target_valid"]
+            pseudo = np.array([int(_probability(b.subject, t.params, e) > 0.5)
+                               for b in targets])
+            Z = np.array([_representation(b.subject, t.params, e) for b in targets])
+            centroids = {c: Z[pseudo == c].mean(0) for c in (0, 1) if np.any(pseudo == c)}
+            for b in data.inner[(2, i)]["source_valid"]:
+                z = np.array(_source_z(b.subject))
+                assigned.append(min(centroids, key=lambda c: np.sum((z - centroids[c]) ** 2)))
+                real.append(b.label)
+        expected.append(tp.balanced_accuracy(real, assigned))
+    assert t.user_attrs["pooledCentroidBalancedAccuracy"] == pytest.approx(expected)
 
 
-def test_the_label_free_score_is_recorded_per_trial_and_epoch(tmp_path, monkeypatch):
+def test_the_ensv_probabilities_are_recorded_per_trial_and_epoch(tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
     study = _study(tmp_path, data, 1, [], monkeypatch, n_trials=3)
-    every = {b.subject for i in range(3) for b in data.inner[(1, i)]["target_valid"]}
-    flipped = _study(tmp_path, _flip(data, every), 1, [], monkeypatch, n_trials=3, name="f")
-    for a, b in zip(study.trials, flipped.trials):
-        assert len(a.user_attrs["pooledLabelFree"]) == SCHEDULE["epochs2"]
-        assert a.user_attrs["pooledLabelFree"] == b.user_attrs["pooledLabelFree"]
-        assert a.user_attrs["label_free_score"] == max(a.user_attrs["pooledLabelFree"])
-        assert a.user_attrs["labelFreeBestEpoch"] == int(np.argmax(a.user_attrs["pooledLabelFree"]))
-    assert [t.user_attrs["pooledBalancedAccuracy"] for t in study.trials] != \
-        [t.user_attrs["pooledBalancedAccuracy"] for t in flipped.trials]
-    free, again = search.select(study, "label-free"), search.select(flipped, "label-free")
-    assert (free["trial"], free["epoch"]) == (again["trial"], again["epoch"])
-    assert math.isfinite(free["score"])
+    order = [b.subject for i in range(3) for b in data.inner[(1, i)]["target_valid"]]
+    for t in study.trials:
+        assert t.user_attrs["ensvSubjects"] == order
+        np.testing.assert_allclose(
+            t.user_attrs["ensvProbabilities"],
+            [[[1 - _probability(s, t.params, e), _probability(s, t.params, e)] for s in order]
+             for e in range(SCHEDULE["epochs2"])])
+        assert "representations" not in json.dumps(t.user_attrs)
+    chosen = search.select(study, "ensv")
+    assert chosen["rule"] == "ensv" and math.isfinite(chosen["score"])
+
+
+def test_no_target_label_of_f_changes_either_phase_two_selection(tmp_path, monkeypatch):
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    every = {b.subject for b in data.rotations[1]["target_train"]}
+    flipped = _flip(data, every, roles=("target_train", "target_valid"))
+    a = _study(tmp_path, data, 1, [], monkeypatch, n_trials=3)
+    b = _study(tmp_path, flipped, 1, [], monkeypatch, n_trials=3, name="f")
+    for x, y in zip(a.trials, b.trials):
+        for key in ("pooledCentroidBalancedAccuracy", "ensvSubjects", "ensvProbabilities"):
+            assert x.user_attrs[key] == y.user_attrs[key], key
+    for rule in search.RULES:
+        before, after = search.select(a, rule), search.select(b, rule)
+        assert (after["trial"], after["epoch"], after["score"]) == \
+            (before["trial"], before["epoch"], before["score"]), rule
+    # a source label of F does move the primary rule (the flip test is not vacuous)
+    sources = {b.subject for i in range(3) for b in data.inner[(1, i)]["source_valid"]}
+    c = _study(tmp_path, _flip(data, sources, roles=("source_valid",)), 1, [], monkeypatch,
+               n_trials=3, name="c")
+    assert [t.user_attrs["pooledCentroidBalancedAccuracy"] for t in a.trials] != \
+        [t.user_attrs["pooledCentroidBalancedAccuracy"] for t in c.trials]
+
+
+def test_a_study_scored_by_an_earlier_rule_is_refused(tmp_path, monkeypatch):
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    study = _study(tmp_path, data, 0, [], monkeypatch, n_trials=1)
+    study.set_user_attr("objective", "the best epoch's target-validation balanced accuracy")
+    with pytest.raises(search.SearchError, match="selection rule changed in plan v58"):
+        _study(tmp_path, data, 0, [], monkeypatch, n_trials=2)
 
 
 def test_the_study_records_its_outer_fold_and_inner_splits(tmp_path, monkeypatch):

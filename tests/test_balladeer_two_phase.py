@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import json
-import math
 
 import numpy as np
 import pytest
@@ -192,26 +191,20 @@ def test_phase_two_keeps_its_last_epoch_and_records_validation_per_epoch(monkeyp
     model, data, generator, phase1, joint = _through_bridge()
     monkeypatch.setattr(tp, "balanced_accuracy", lambda labels, predicted,
                         _it=iter([0.4, 0.8, 0.6]): next(_it))
-    monkeypatch.setattr(tp, "label_free_score", lambda G, _it=iter([0.5, 0.1, 0.9]): next(_it))
     out = _phase_two(model, data, generator, phase1, joint, {**HYPER, "epochs2": 3})
     assert out["epochs"] == 3 == len(out["validation"])           # the cap runs whole
     assert out["best_epoch"] == 2 == out["checkpoint"]["epoch"]   # the last, not the best
     assert out["checkpoint"]["valid_balanced_accuracy"] == 0.6
-    assert out["checkpoint"]["label_free_score"] == 0.9
+    assert "label_free_score" not in out["checkpoint"]
     assert tp._states_equal(model.target_trunk.state_dict(), out["checkpoint"]["target_state"])
     assert [v["subjects"] for v in out["validation"]] == [
         [b.subject for b in data["target_valid"]]] * 3
-
-
-def test_the_label_free_score_is_entropy_of_the_mean_minus_mean_entropy():
-    confident = torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64)
-    assert tp.label_free_score(confident) == pytest.approx(math.log(2))
-    assert tp.label_free_score(torch.full((4, 2), 0.5)) == pytest.approx(0.0, abs=1e-12)
-    one_class = torch.tensor([[1.0, 0.0]] * 3, dtype=torch.float64)
-    assert tp.label_free_score(one_class) == pytest.approx(0.0, abs=1e-12)
-    G = torch.tensor([[0.9, 0.1], [0.3, 0.7]], dtype=torch.float64)
-    h = lambda p: -(p * p.log()).sum(-1)
-    assert tp.label_free_score(G) == pytest.approx(float(h(G.mean(0)) - h(G).mean()))
+    # each epoch's record carries the bags' representations, the input of the head
+    for v in out["validation"]:
+        assert np.asarray(v["representations"]).shape == (len(data["target_valid"]), 256)
+    np.testing.assert_allclose(out["validation"][-1]["representations"],
+                               tp.represent(model, data["target_valid"], "target", CPU))
+    assert out["selection"] == tp.SELECTION
 
 
 def test_history_records_carry_the_dashboard_keys(tmp_path):
@@ -224,8 +217,9 @@ def test_history_records_carry_the_dashboard_keys(tmp_path):
         numeric = {k for k, v in r.items() if isinstance(v, float)}
         assert {"loss", "val_balanced_accuracy"} <= numeric
     for r in phase2["history"]:
-        assert {"global", "local", "source_ce", "label_free_score", "global_bound_low",
+        assert {"global", "local", "source_ce", "global_bound_low",
                 "global_bound_high", "local_bound_low", "local_bound_high"} <= set(r)
+        assert "label_free_score" not in r
         assert r["terms_within_bounds"] == 1.0
     path = tp.write_history(records, tmp_path / "Results" / "history_milcreda.json")
     assert json.loads(path.read_text()) == records

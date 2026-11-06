@@ -154,7 +154,7 @@ def _bandwidth(model, source_train, target_train, multiplier, device):
 
 
 def adapt_target_phase(model, source_train, target_train, target_valid, params, schedule,
-                       generator, device, *, seed=0, fold=0, transfer="", label_free=False):
+                       generator, device, *, seed=0, fold=0, transfer=""):
     """Mean-pool LMMD for exactly `epochs2` epochs, the last kept; validation per epoch."""
     schedule = search.check_schedule(schedule)
     # Reuse the shared schedule guards without treating AdaptMIL as MIL-CREDA.
@@ -176,7 +176,6 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     sigma = _bandwidth(model, source_train, target_train, params["kernelMultiplier"], device)
     queues = two_phase.ClassQueues(source_train, model.classes, generator)
     history, validation = [], []
-    keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(schedule["epochs2"]):
         model.train()
         losses, lmmds = [], []
@@ -195,32 +194,27 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
             model.constrain("target_trunk")
             losses.append(float(terms["objective"].detach()))
             lmmds.append(float(terms["lmmd"].detach()))
-        accuracy, score = math.nan, math.nan
+        accuracy = math.nan
         if target_valid:
             predictions = two_phase.evaluate(model, target_valid, "target", device)
             accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
                                                    predictions.argmax(1).tolist())
-            score = two_phase.label_free_score(predictions)
-            validation.append(two_phase.validation_record(epoch, target_valid, predictions))
+            validation.append(two_phase.validation_record(
+                epoch, target_valid, predictions,
+                two_phase.represent(model, target_valid, "target", device)))
         history.append(_record(epoch, 2, seed, fold, transfer, loss=sum(losses)/len(losses),
                                lmmd=sum(lmmds)/len(lmmds), sigma=sigma,
-                               val_balanced_accuracy=accuracy, label_free_score=score,
+                               val_balanced_accuracy=accuracy,
                                mmd_weight=params["mmdWeight"]))
-        keeper.offer(epoch, score, model)
     model.eval()
     if model_store.state_digest(two_phase.phase_one_state(model)) != model_store.state_digest(frozen):
         raise two_phase.FrozenPartsMoved("AdaptMIL phase2 changed frozen parameters/buffers")
     last = len(history) - 1
-    return two_phase.with_label_free({
-            "checkpoint": {"target_state": _state(model.target_trunk), "epoch": last,
-                           "valid_balanced_accuracy": accuracy, "label_free_score": score,
+    return {"checkpoint": {"target_state": _state(model.target_trunk), "epoch": last,
+                           "valid_balanced_accuracy": accuracy,
                            "sigma": sigma, "hyper": {**params, **schedule}},
             "history": history, "best_epoch": last, "epochs": len(history),
-            "validation": validation,
-            "selection": {"primary": "pooled target-validation balanced accuracy, chosen "
-                                     "by the search",
-                          "secondary": "pooled H(mean prediction) - mean H(prediction), "
-                                       "chosen by the search"}}, keeper)
+            "validation": validation, "selection": two_phase.SELECTION}
 
 
 def train_phase_one(data, rotation, seed, params, schedule, device="cpu"):
@@ -236,8 +230,7 @@ def train_phase_one(data, rotation, seed, params, schedule, device="cpu"):
             "channels": data.channels()}
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
-                    label_free=False):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
     """Existing search.register_phase_two callback; one fresh model per trial/rotation."""
     state, meta = record
     expected = {"phase": 1, "name": GROUP, "transfer": data.transfer.name,
@@ -257,8 +250,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     d = data.rotations[rotation]
     result = adapt_target_phase(model, d["source_train"], d["target_train"], d["target_valid"],
                                 params, schedule, torch.Generator().manual_seed(seed), device,
-                                seed=seed, fold=rotation, transfer=data.transfer.name,
-                                label_free=label_free)
+                                seed=seed, fold=rotation, transfer=data.transfer.name)
     return {"strategy": GROUP, "model": model, "result": result,
 
             "hyper": {**params, **schedule}, "channels": data.channels(),

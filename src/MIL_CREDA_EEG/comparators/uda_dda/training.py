@@ -100,8 +100,7 @@ def adaptation_step(model, source, target, params, alpha, threshold, device):
 
 def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_valid,
           params: Mapping, schedule: Mapping, *, seed: int, fold: int = 0,
-          transfer: str = "", device: torch.device | str = "cpu",
-          label_free: bool = False) -> dict:
+          transfer: str = "", device: torch.device | str = "cpu") -> dict:
     """Adapt a selected common phase-1 model; target_train labels are never read.
 
     Only the target trunk trains (plan 7.3); the paper's epoch schedules are
@@ -135,7 +134,6 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     epochs = schedule["epochs2"]
     middle, late = ordered_thresholds(params)
     history, validation = [], []
-    keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(epochs):
         alpha = losses.mmd_weight_schedule(epoch, epochs)
         threshold = losses.confidence_threshold(epoch, epochs, middle, late)
@@ -154,38 +152,35 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
             eegnet.apply_max_norm(model.target_trunk)
             for k in sums:
                 sums[k] += float(terms[k].detach()) / len(batches)
-        accuracy, free = math.nan, math.nan
+        accuracy = math.nan
         if target_valid:
             prediction = two_phase.evaluate(model, target_valid, "target", device)
             accuracy = two_phase.balanced_accuracy([b.label for b in target_valid],
                                                    prediction.argmax(1).tolist())
-            free = two_phase.label_free_score(prediction)
-            validation.append(two_phase.validation_record(epoch, target_valid, prediction))
+            validation.append(two_phase.validation_record(
+                epoch, target_valid, prediction,
+                two_phase.represent(model, target_valid, "target", device)))
         history.append({"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
                         "model": f"{NAME}:phase2", **sums, "stage": losses.stage(epoch, epochs),
                         "threshold": threshold,
-                        "val_balanced_accuracy": accuracy, "label_free_score": free})
-        keeper.offer(epoch, free, model)
+                        "val_balanced_accuracy": accuracy})
     final_state = copy.deepcopy(model.target_trunk.state_dict())
     if not all(torch.equal(v, two_phase.phase_one_state(model)[k])
                for k, v in joint["frozen_state"].items()):
         raise two_phase.FrozenPartsMoved("UDA-DDA changed a frozen phase-1 part")
     last = len(history) - 1
-    return two_phase.with_label_free({
+    return {
             "checkpoint": {"target_state": final_state, "epoch": last,
-                           "valid_balanced_accuracy": accuracy, "label_free_score": free,
+                           "valid_balanced_accuracy": accuracy,
                            "hyper": {**params, **schedule},
                            "thresholds": {"middle": middle, "late": late}},
             "best_epoch": last, "epochs": len(history), "history": history,
             "validation": validation,
             "final_target_state": final_state, "layer_copy": joint["layer_copy"],
-            "selection": {"primary": "pooled target-validation balanced accuracy, chosen "
-                                     "by the search"}},
-        keeper)
+            "selection": two_phase.SELECTION}
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
-                    label_free=False):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
     """Shared search trainer hook; reject a checkpoint from a different rotation/group."""
     state, meta = record
     expected = {"phase": 1, "name": "common", "transfer": data.transfer.name,
@@ -201,8 +196,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
         raise search.SearchError("incompatible common phase-1 state")
     d = data.rotations[rotation]
     result = adapt(model, d["source_train"], d["target_train"], d["target_valid"], params,
-                   schedule, seed=seed, fold=rotation, transfer=data.transfer.name, device=device,
-                   label_free=label_free)
+                   schedule, seed=seed, fold=rotation, transfer=data.transfer.name, device=device)
 
     return {"strategy": NAME, "model": model, "result": result,
             "hyper": result["checkpoint"]["hyper"], "channels": channels,
