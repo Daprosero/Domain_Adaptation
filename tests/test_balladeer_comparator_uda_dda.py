@@ -115,7 +115,8 @@ def test_uda_alpha_decays_from_tau_h_to_tau_l():
     assert losses.mmd_weight_schedule(0, 1) == 1.0
 
 
-def test_uda_confidence_thresholds_are_sorted_so_the_schedule_never_inverts():
+def test_uda_confidence_thresholds_are_sorted_so_the_schedule_never_inverts(monkeypatch):
+    monkeypatch.setattr(training.search, "EPOCH_CAP", 10)
     assert training.ordered_thresholds(params(confidenceA=0.9, confidenceB=0.6)) == (0.6, 0.9)
     assert training.ordered_thresholds(params(confidenceA=0.6, confidenceB=0.9)) == (0.6, 0.9)
     runs = []
@@ -252,6 +253,23 @@ def test_uda_keeps_the_last_epoch_and_records_validation_per_epoch(monkeypatch):
     assert [v["epoch"] for v in out["validation"]] == list(range(last + 1))
 
 
+def test_uda_schedule_horizon_is_the_phase_two_budget_whatever_the_epochs_trained(monkeypatch):
+    """Plan v59 7.4: the refit of E epochs follows the schedule the search validated."""
+    model, source, _, target, _ = fixture()
+    horizons = []
+    real_weight, real_threshold = training.losses.mmd_weight_schedule, training.losses.confidence_threshold
+    def weight(epoch, total):
+        horizons.append(total)
+        return real_weight(epoch, total)
+    def threshold(epoch, total, middle, late):
+        horizons.append(total)
+        return real_threshold(epoch, total, middle, late)
+    monkeypatch.setattr(training.losses, "mmd_weight_schedule", weight)
+    monkeypatch.setattr(training.losses, "confidence_threshold", threshold)
+    training.adapt(model, source, target, [], params(), schedule(), seed=13)
+    assert horizons and set(horizons) == {training.search.EPOCH_CAP}
+
+
 @pytest.mark.parametrize("change", [{"lr2": -1}, {"wd2": -1}, {"mmdWeight": -1},
                                     {"cmmdWeight": float("nan")}, {"kernelMultiplier": 0},
                                     {"confidenceA": 1.5}, {"confidenceB": -0.1}])
@@ -323,7 +341,8 @@ def test_uda_package_is_a_controlled_variant_and_import_registers_nothing(regist
             f"experiments-plan-experimental-mil-creda-sobre-balladeer-{revision}.md")
 
 
-def test_uda_synthetic_smoke_executes(capsys):
+def test_uda_synthetic_smoke_executes(capsys, monkeypatch):
+    monkeypatch.setattr(training.search, "EPOCH_CAP", 10)
     result = run()
     assert result["epochs"] == 10
     assert [h["stage"] for h in result["history"]] == [0, 1, 1, 1, 2, 2, 2, 2, 2, 3]
