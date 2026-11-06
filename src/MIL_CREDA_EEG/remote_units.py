@@ -660,11 +660,17 @@ def merged_units(product: Path) -> set[str]:
     return {json.loads(x)["unit"] for x in path.read_text(encoding="utf-8").splitlines() if x}
 
 
+def _appends(entry: Mapping) -> bool:
+    """A run file is shared by the units of its arm: whichever of them started it, in this
+    session or in another notebook, its lines join what is there."""
+    return entry["mode"] == "append" or _matches(entry["path"], APPEND_PATTERNS)
+
+
 def _apply(folder: Path, stamp: Mapping, dest: Path, *, tolerate_identical: bool) -> None:
     for entry in stamp["completion"]["outputs"]:
         source, target = folder / OUTPUTS_DIR / entry["path"], dest / entry["path"]
         target.parent.mkdir(parents=True, exist_ok=True)
-        if entry["mode"] == "append":
+        if _appends(entry):
             with target.open("ab") as handle:
                 handle.write(source.read_bytes())
         elif target.exists():
@@ -1076,7 +1082,7 @@ def merge(product: str | Path, roots: Sequence[str | Path] | None = None, *,
             if not path.is_file() or _sha(path) != entry["sha256"]:
                 raise MergeError(f"{folder}: output {entry['path']} does not match its "
                                  f"recorded sha256")
-            if entry["mode"] == "new" and (product / entry["path"]).exists():
+            if not _appends(entry) and (product / entry["path"]).exists():
                 raise MergeError(f"{folder}: output {entry['path']} already exists in "
                                  f"{product}")
     shards.sort(key=lambda item: item[1]["completion"]["index"])

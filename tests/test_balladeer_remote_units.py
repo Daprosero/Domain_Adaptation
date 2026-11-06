@@ -842,3 +842,34 @@ def test_a_budget_is_the_only_guard_of_a_smoke_and_records_the_measured_estimate
     assert timing.is_file() and outcome["ran"] == [uid]
     stamp = json.loads((work / "shard.json").read_text())
     assert stamp["evidence"]["estimates"] == {uid: 3 * SCHEDULE["epochs1"] * 30.0}
+
+
+def test_units_of_one_arm_share_their_run_files_in_any_run_order(
+        tmp_path, registries, torch_flags):
+    """Kaggle smoke of b47ac1b: two phase-1 units of one arm in one session, in another
+    order than the enumeration, could not be overlaid on the next unit's product."""
+    cfg, product = _config(tmp_path, strategies=("MIL-CREDA", "COT")), _product(tmp_path)
+    ids = ["search.phase1.L1-to-L6.MIL-CREDA.outer0", "search.phase1.L1-to-L6.common.outer0",
+           "search.phase2.L1-to-L6.MIL-CREDA.outer0"]
+    outcome = remote_units.run_units(cfg, product, units=ids, workdir=tmp_path / "work",
+                                     estimate=lambda u: 0.0, environ={})
+    assert outcome["ran"] == ids
+    assert remote_units.merge(product, config=cfg)["merged"]
+    lines = (product / "Results/A-nivel/runs/history.jsonl").read_text().splitlines()
+    assert len(lines) >= 2
+
+
+def test_the_merge_joins_the_run_files_of_notebooks_that_each_started_them(
+        tmp_path, registries, torch_flags):
+    cfg, product = _config(tmp_path, strategies=("MIL-CREDA",)), _product(tmp_path)
+    roots, sizes = [], []
+    for rotation in (0, 1):
+        root = tmp_path / f"notebook{rotation}"
+        remote_units.run_units(cfg, tmp_path / f"p{rotation}", shards_root=root,
+                               units=[f"search.phase1.L1-to-L6.MIL-CREDA.outer{rotation}"],
+                               workdir=tmp_path / "work", estimate=lambda u: 0.0, environ={})
+        roots.append(root)
+        unit = next(p for p in root.iterdir() if p.name.startswith("search"))
+        sizes.append((unit / "outputs/Results/A-nivel/runs/history.jsonl").stat().st_size)
+    remote_units.merge(product, roots, config=cfg)
+    assert (product / "Results/A-nivel/runs/history.jsonl").stat().st_size == sum(sizes)
