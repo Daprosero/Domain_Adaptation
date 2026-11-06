@@ -649,17 +649,44 @@ def _other_choice(real):
     return choose
 
 
-def test_the_ensv_rule_is_measured_on_the_test_fold(tmp_path, registries, monkeypatch):
+@pytest.fixture(scope="module")
+def ensv_partial_run(tmp_path_factory, registries):
+    """Search, final and results with the EnsV rule choosing another trial than the primary
+    rule in outer folds 1-3 and the same (trial, epoch) in outer fold 0; then the final
+    step once more, which must train nothing."""
     choose = _other_choice(search.select)
-    monkeypatch.setattr(search, "select",
-                        lambda study, rule="primary": choose(study, rule, differ=(1, 2, 3)))
-    cfg = campaign.write_synthetic_set(tmp_path / "synthetic", seed=0, subjects=24)
+    tmp = tmp_path_factory.mktemp("ensv-partial")
+    cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24)
     cfg.update({"strategies": ["MIL-CREDA"], "nTrials": 2, "bootstrapResamples": 200,
                 "schedule": {"epochs1": 1, "epochs2": 1, "bagsPerStep": 4}})
-    product = tmp_path / "product"
+    product = tmp / "product"
     product.mkdir()
-    outcome = {s: campaign.run(s, cfg, product) for s in ("search", "final", "results")}
-    # rotation 0 coincides (same trial and epoch): the primary model is reused, no refit
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(search, "select",
+                      lambda study, rule="primary": choose(study, rule, differ=(1, 2, 3)))
+        outcome = {s: campaign.run(s, cfg, product) for s in ("search", "final", "results")}
+        again = campaign.run_final(campaign.check_config(cfg), product)
+    return cfg, product, outcome, again
+
+
+def test_the_ensv_rule_is_measured_on_the_test_fold(ensv_partial_run):
+    cfg, product, _, _ = ensv_partial_run
+    res = product / "Results"
+    free = results.read_predictions(res, "A-nivel", rule="ensv")
+    assert {x["rotation"] for x in free} == {0, 1, 2, 3}
+    assert {x["strategy"] for x in free} == {"MIL-CREDA"}
+    core = campaign.core_transfers(campaign.check_config(cfg), product)["level"]
+    rows = _csv(res / "A-nivel" / "tables" / "selection_rules.csv")
+    mine = [x for x in free if x["transfer"] in core]
+    assert float(rows[0]["Exactitud balanceada de prueba, regla secundaria"]) == pytest.approx(
+        st.pooled(mine)["balanced_accuracy"], abs=1e-4)
+
+
+def test_the_ensv_final_models_are_refit_only_where_the_rules_differ(ensv_partial_run):
+    """Sec. 4.5: an EnsV final model is trained only in the outer folds where the EnsV
+    (trial, epoch) differs from the primary one; where they coincide (outer fold 0 here)
+    the primary model is reused and its predictions are the EnsV rule's."""
+    cfg, product, outcome, again = ensv_partial_run
     assert outcome["final"]["final"]["trained_ensv"] == 3 * 2
     root = product / "Models" / "Balladeer" / campaign.ENSV_MODELS
     for slug in ("L1-to-L6", "L6-to-L1"):
@@ -681,9 +708,17 @@ def test_the_ensv_rule_is_measured_on_the_test_fold(tmp_path, registries, monkey
                 if x["strategy"] == "MIL-CREDA" and x["rotation"] == 0)
     f0 = sorted((key(x), x["probability"]) for x in free if x["rotation"] == 0)
     assert p0 and f0 == p0          # where the rules coincide, the primary model is reused
-    assert {x["rotation"] for x in free} == {0, 1, 2, 3}
-    assert {x["strategy"] for x in free} == {"MIL-CREDA"}
-    # Sec. 4.5's table: one row per strategy over the core transfers, the plan's headers
+    # nothing is trained twice
+    assert again["trained_ensv"] == again["ensv_predictions"] == 0
+
+
+def test_the_two_rules_table_reports_both_choices_and_the_class_proportions(ensv_partial_run):
+    """Sec. 4.5's table: one row per strategy over the core transfers with both rules'
+    test balanced accuracy, their difference and how often they coincide; beside it, the
+    class proportions of each core transfer's source and target side."""
+    cfg, product, _, _ = ensv_partial_run
+    res = product / "Results"
+    free = results.read_predictions(res, "A-nivel", rule="ensv")
     core = campaign.core_transfers(campaign.check_config(cfg), product)["level"]
     table = res / "A-nivel" / "tables" / "selection_rules"
     rows = _csv(table.with_suffix(".csv"))
@@ -708,9 +743,6 @@ def test_the_ensv_rule_is_measured_on_the_test_fold(tmp_path, registries, monkey
                   and p["Lado"] == "fuente")
     assert int(source["Sujetos"]) == len(a.subjects("source"))
     assert int(source["yes"]) == sum(a.labels[s] == "yes" for s in a.subjects("source"))
-    # nothing is trained twice
-    again = campaign.run_final(campaign.check_config(cfg), product)
-    assert again["trained_ensv"] == again["ensv_predictions"] == 0
 
 
 @pytest.fixture(scope="module")

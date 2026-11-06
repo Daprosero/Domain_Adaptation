@@ -57,7 +57,7 @@ __provenance__ = {
         "the_common_attention_is_eq_15_with_gamma_zero_and_no_consensus",
         "the_bag_is_the_attention_weighted_sum_and_the_head_applies_once_per_bag",
         "the_common_wrapper_fixes_gamma_and_temperature",
-        "the_common_wrapper_is_the_phase_one_architecture_of_the_six_non_mil_comparators",
+        "the_common_wrapper_is_the_phase_one_architecture_of_the_seven_non_mil_comparators",
         "gamma_zero_skips_the_consensus_kernel",
         "the_gamma_zero_shortcut_is_byte_identical_in_outputs_and_gradients",
     ],
