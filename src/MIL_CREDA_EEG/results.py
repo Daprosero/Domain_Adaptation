@@ -2,7 +2,7 @@
 
 Experiments plan v58, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 `experimental-implementation` skill's Results table, under the product folder
-`MIL-CREDA/Results/` (`DEFAULT_ROOT`), one folder per experiment
+`MIL-CREDA-EEG/Results/` (`DEFAULT_ROOT`), one folder per experiment
 (`EXPERIMENTS`):
 
 - `Results/significance_<experiment>.json`: a JSON list of rows with exactly
@@ -117,7 +117,7 @@ __provenance__ = {
     ],
 }
 
-DEFAULT_ROOT = bag_data.REPOSITORY / "MIL-CREDA" / "Results"
+DEFAULT_ROOT = bag_data.REPOSITORY / "MIL-CREDA-EEG" / "Results"
 EXPERIMENT_OF_ARM = {"level": "A-nivel", "task": "B-tarea", "device": "C-dispositivo"}
 EXPERIMENTS = (*EXPERIMENT_OF_ARM.values(), "K1-atencion", "K2-emparejamiento", "K3-ablacion")
 #: Sec. 5.1-5.3: the transfer columns of each arm, in the plan's order.

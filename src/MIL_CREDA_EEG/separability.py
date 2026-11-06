@@ -41,7 +41,7 @@ both its transfers, and the other pairs are control, however small the
 difference. The task and device arms hold one pair each, so both their
 transfers are core. An exact tie at the top refuses instead of choosing.
 
-**Results** land in `MIL-CREDA/Results/separability/` in the dashboard layout:
+**Results** land in `MIL-CREDA-EEG/Results/separability/` in the dashboard layout:
 `tables/separability.csv` (per transfer and reading: mean and sd over the
 rotations, with the pair separability and the role), `tables/
 separability_rotations.csv` (every rotation), `tables/assignment_sizes.csv`,
@@ -110,7 +110,7 @@ CHANNELS: dict[str, list[str]] = {
     "task": list(EMOTIV_CHANNELS),
     "device": audit_domains.common_channels(),
 }
-RESULTS_RELATIVE = Path("MIL-CREDA") / "Results" / "separability"
+RESULTS_RELATIVE = Path("MIL-CREDA-EEG") / "Results" / "separability"
 #: Sec. 4.3: the per-fold minimum is reported as a limitation of the selection, verbatim.
 ELIGIBILITY_LIMITATION = "El mínimo por fold queda como limitación declarada de la selección."
 #: What `assignment.eligibility` computes against the retired threshold; never reported.

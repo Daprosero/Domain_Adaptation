@@ -37,7 +37,7 @@ is empty: stated, not omitted.
 
 This module also drives the single preprocessing pass: each record is read
 once, its exclusion decided, and when kept its windows are written to
-`MIL-CREDA/Data/processed/signals/<record_id>.npz` beside a JSON summary under
+`MIL-CREDA-EEG/Data/processed/signals/<record_id>.npz` beside a JSON summary under
 `records/`, so a rerun only computes what is missing.
 
 The npz holds `signal`, `window_index`, `window_start_s`, every per-window

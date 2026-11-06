@@ -9,10 +9,10 @@ notebook `BALLADEER_03_Preprocesamiento.ipynb` calls it, and so does the
 command line, from the repository root:
 
     PYTHONPATH=src python -m MIL_CREDA_EEG.preprocess \\
-        --raw "MIL-CREDA/Data/raw/BALLADEER ADHD DATASET" --out MIL-CREDA/Data/processed
+        --raw "MIL-CREDA-EEG/Data/raw/BALLADEER ADHD DATASET" --out MIL-CREDA-EEG/Data/processed
 
 The command line writes the partition to `partition.PARTITION_RELATIVE` and
-the hash manifest to `MIL-CREDA/Manifests/processed_sha256.csv` unless told
+the hash manifest to `MIL-CREDA-EEG/Manifests/processed_sha256.csv` unless told
 otherwise; the function writes them only where it is told to. A partition
 that already exists is recomputed and compared, never overwritten
 (`partition.freeze_partition`).
@@ -25,7 +25,7 @@ this pipeline writes, never anything else in the folder.
 
 **Where the raw data comes from.** Figshare, DOI 10.6084/m9.figshare.28676042,
 file "BALLADEER ADHD DATASET.zip", MD5 c7e7b5d57855ada4a380f667d1a5cf85,
-extracted to `MIL-CREDA/Data/raw/`. `check_raw` refuses a tree that does not
+extracted to `MIL-CREDA-EEG/Data/raw/`. `check_raw` refuses a tree that does not
 look like that release, with a message in Spanish because the notebooks are.
 """
 
@@ -66,7 +66,7 @@ OUTPUT_FILES = ("manifest.csv", "flow_CGX.csv", "flow_EMOTIV.csv", "exclusion_cr
 
 #: Kept in git, outside the data folder (Sec. 4.2), relative to the repository root.
 PARTITION_RELATIVE = partition.PARTITION_RELATIVE
-SHA_MANIFEST_RELATIVE = Path("MIL-CREDA") / "Manifests" / "processed_sha256.csv"
+SHA_MANIFEST_RELATIVE = Path("MIL-CREDA-EEG") / "Manifests" / "processed_sha256.csv"
 
 
 class RawDataError(RuntimeError):
@@ -77,7 +77,7 @@ def check_raw(raw_root: str | Path, expected_subjects: int | None = EXPECTED_SUB
     """The raw release exists and has the published structure; refuses otherwise."""
     raw_root = Path(raw_root)
     fix = (f"Descargá 'BALLADEER ADHD DATASET.zip' de Figshare (DOI {DOI}) y "
-           f"descomprimilo en MIL-CREDA/Data/raw/.")
+           f"descomprimilo en MIL-CREDA-EEG/Data/raw/.")
     if not raw_root.is_dir():
         raise RawDataError(f"No existe la carpeta de datos crudos {raw_root}. {fix}")
     if not (raw_root / "users_demographics.json").is_file():

@@ -92,7 +92,7 @@ so its studies refuse before any storage is created.
 
 **Storage.** One SQLite file per study, `<root>/Results/hpo/
 <source>-to-<target>__phase<p>__<group or strategy>__outer<r>.db`, with the study
-named as the file's stem; `<root>` defaults to `MIL-CREDA/`. Each study records its
+named as the file's stem; `<root>` defaults to `MIL-CREDA-EEG/`. Each study records its
 identity (`study_identity`: transfer, phase, outer fold and its test fold, the
 inner splits, budget, space, sampler and its seed, schedule, the partition hash,
 the plan revision and the code version). A study whose file exists is continued only when its identity
@@ -187,7 +187,7 @@ PHASE_ONE_CHECKPOINT_FIELDS = ("transfer", "rotation", "seed", "phase", "name",
                                partition.HASH_FIELD, "state_sha256")
 #: Sec. 4.2: the inner splits of each outer fold, one per non-test fold.
 N_INNER = partition.N_FOLDS - 1
-DEFAULT_ROOT = bag_data.REPOSITORY / "MIL-CREDA"
+DEFAULT_ROOT = bag_data.REPOSITORY / "MIL-CREDA-EEG"
 #: Inputs with no default (Sec. 7.6: the pilot fixes them).
 SCHEDULE_KEYS = two_phase.SCHEDULE_KEYS
 

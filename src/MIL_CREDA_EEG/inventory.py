@@ -37,7 +37,7 @@ __provenance__ = {
 }
 
 #: Release-relative directory of the raw data, inside the product folder.
-RAW_RELATIVE = Path("MIL-CREDA") / "Data" / "raw" / "BALLADEER ADHD DATASET"
+RAW_RELATIVE = Path("MIL-CREDA-EEG") / "Data" / "raw" / "BALLADEER ADHD DATASET"
 
 #: Task folder -> (task, level). Levels exist only for Slackline.
 TASKS = {
