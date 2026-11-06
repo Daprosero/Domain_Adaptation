@@ -1,0 +1,20 @@
+{
+ "evidence": {
+  "commit": "f73f63bfaac8dcd3d259fd474dd9a60955845c58",
+  "device": {
+   "requested": "cpu",
+   "torch": "2.11.0+cpu",
+   "cudaAvailable": false,
+   "threads": 2,
+   "cpuCount": 4,
+   "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+   "processor": "x86_64",
+   "kind": "cpu",
+   "name": "Intel(R) Xeon(R) CPU @ 2.20GHz"
+  },
+  "probe": "timing_probe/probe.json",
+  "wallSeconds": 246.28894209861755,
+  "errors": {},
+  "complete": true
+ }
+}

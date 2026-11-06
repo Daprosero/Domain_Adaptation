@@ -1,5 +1,19 @@
 {
- "schema": 1,
+ "schema": 2,
+ "hosts": {
+  "local": {
+   "cpuCount": 8,
+   "ramGB": null,
+   "mps": true,
+   "cuda": false
+  },
+  "kaggle:daprosero": {
+   "cpuCount": 4,
+   "ramGB": null,
+   "mps": false,
+   "cuda": true
+  }
+ },
  "measurements": [
   {
    "measuredAt": "2026-11-06T08:17:50.247412+00:00",
@@ -9,7 +23,36 @@
    "unit": "epoch",
    "secondsPerUnit": 34.17480016352503,
    "unitsMeasured": 14,
-   "setupSeconds": 1211.6939622750415
+   "setupSeconds": 1211.6939622750415,
+   "candidate": "local-cpu-1",
+   "processes": 1,
+   "threads": 4
+  },
+  {
+   "measuredAt": "2026-11-06T09:03:55.861422+00:00",
+   "host": "kaggle:daprosero",
+   "device": "cpu",
+   "arm": "campaign-v58",
+   "unit": "epoch",
+   "secondsPerUnit": 17.757990056518917,
+   "unitsMeasured": 15,
+   "setupSeconds": 5055.405299232341,
+   "candidate": "kaggle:daprosero/cpu",
+   "processes": 1,
+   "threads": 2
+  },
+  {
+   "measuredAt": "2026-11-06T09:10:36.594368+00:00",
+   "host": "kaggle:daprosero",
+   "device": "cuda:Tesla T4",
+   "arm": "campaign-v58",
+   "unit": "epoch",
+   "secondsPerUnit": 0.8772818660095422,
+   "unitsMeasured": 50,
+   "setupSeconds": 5272.974884508035,
+   "candidate": "kaggle:daprosero/NvidiaTeslaT4",
+   "processes": 1,
+   "threads": 2
   }
  ],
  "scales": {

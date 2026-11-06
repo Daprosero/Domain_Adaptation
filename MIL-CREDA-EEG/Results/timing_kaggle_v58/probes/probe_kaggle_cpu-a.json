@@ -1,0 +1,194 @@
+{
+ "transfer": "L1->L11",
+ "arm": "level",
+ "device": "cpu",
+ "torch": "2.11.0+cpu",
+ "threads": 2,
+ "cpuCount": 4,
+ "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+ "python": "3.13.18",
+ "mpsFallback": null,
+ "measuredAt": "2026-11-06T09:03:55.861422+00:00",
+ "epochs": 2,
+ "bagsPerStep": 8,
+ "rotation": 0,
+ "innerSplit": 0,
+ "bags": {
+  "source_train": 31,
+  "source_valid": 16,
+  "target_train": 32,
+  "target_valid": 17
+ },
+ "windows": {
+  "source_train": 2331,
+  "source_valid": 1202,
+  "target_train": 2711,
+  "target_valid": 1275
+ },
+ "refitBags": {
+  "source_train": 47,
+  "source_valid": 0,
+  "target_train": 49,
+  "target_valid": 0
+ },
+ "refitWindows": {
+  "source_train": 3533,
+  "source_valid": 0,
+  "target_train": 3986,
+  "target_valid": 0
+ },
+ "setup": {
+  "loadBagsSeconds": 30.348938789000044,
+  "searchDataSeconds": 7.637887906999936
+ },
+ "phase1": {
+  "common": {
+   "seconds": 28.195365440000046,
+   "epochsRecorded": [
+    0,
+    1
+   ],
+   "steadyEpochSeconds": [
+    9.02287413900001
+   ],
+   "firstEpochSeconds": 19.171522896000056,
+   "error": null,
+   "peakRssMB": 2416.74609375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": null,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07
+   }
+  },
+  "AdaptMIL": {
+   "seconds": 17.85936794600002,
+   "epochsRecorded": [
+    0,
+    1
+   ],
+   "steadyEpochSeconds": [
+    8.609983822000004
+   ],
+   "firstEpochSeconds": 9.248258222000004,
+   "error": null,
+   "peakRssMB": 2433.203125,
+   "mpsDriverMB": null,
+   "cudaPeakMB": null,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07
+   }
+  }
+ },
+ "phase2": {
+  "AdaptMIL": {
+   "seconds": 35.42999378899992,
+   "epochsRecorded": [
+    0,
+    1
+   ],
+   "steadyEpochSeconds": [
+    15.127190369000004
+   ],
+   "firstEpochSeconds": 20.29373899699999,
+   "error": null,
+   "peakRssMB": 3098.91015625,
+   "mpsDriverMB": null,
+   "cudaPeakMB": null,
+   "group": "AdaptMIL",
+   "epochs": 2
+  },
+  "UDA-DDA": {
+   "seconds": 28.787343261000046,
+   "epochsRecorded": [
+    0,
+    1
+   ],
+   "steadyEpochSeconds": [
+    14.915925978000018
+   ],
+   "firstEpochSeconds": 13.859817146999944,
+   "error": null,
+   "peakRssMB": 3098.91015625,
+   "mpsDriverMB": null,
+   "cudaPeakMB": null,
+   "group": "common",
+   "epochs": 2
+  },
+  "CCA-LSC": {
+   "seconds": 58.47341176600003,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "steadyEpochSeconds": [
+    14.727948124000022,
+    13.81738739900004,
+    15.967938855999932
+   ],
+   "firstEpochSeconds": 13.951191553999934,
+   "error": null,
+   "peakRssMB": 3098.91015625,
+   "mpsDriverMB": null,
+   "cudaPeakMB": null,
+   "group": "common",
+   "epochs": 4
+  },
+  "CASUAL": {
+   "seconds": 75.243052293,
+   "epochsRecorded": [
+    0,
+    1
+   ],
+   "steadyEpochSeconds": [
+    37.558567313000026
+   ],
+   "firstEpochSeconds": 37.68031493199999,
+   "error": null,
+   "peakRssMB": 4255.8359375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": null,
+   "group": "common",
+   "epochs": 2
+  }
+ },
+ "sourcePass": {
+  "common": {
+   "seconds": 2.76794428300002,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": null,
+   "peakRssMB": 2416.74609375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": null
+  },
+  "AdaptMIL": {
+   "seconds": 2.1179227229999924,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": null,
+   "peakRssMB": 2433.203125,
+   "mpsDriverMB": null,
+   "cudaPeakMB": null
+  }
+ },
+ "wallSeconds": 287.004641129,
+ "deviceEvidence": {
+  "requested": "cpu",
+  "torch": "2.11.0+cpu",
+  "cudaAvailable": false,
+  "threads": 2,
+  "cpuCount": 4,
+  "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+  "processor": "x86_64",
+  "kind": "cpu",
+  "name": "Intel(R) Xeon(R) CPU @ 2.20GHz"
+ },
+ "processedRoot": "/kaggle/input/datasets/daprosero/balladeer-existing-local",
+ "commit": "f73f63bfaac8dcd3d259fd474dd9a60955845c58"
+}

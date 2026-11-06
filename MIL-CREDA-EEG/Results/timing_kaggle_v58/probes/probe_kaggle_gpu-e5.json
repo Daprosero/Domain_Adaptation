@@ -1,0 +1,386 @@
+{
+ "transfer": "L1->L11",
+ "arm": "level",
+ "device": "cuda",
+ "torch": "2.11.0+cu130",
+ "threads": 2,
+ "cpuCount": 4,
+ "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+ "python": "3.13.16",
+ "mpsFallback": null,
+ "measuredAt": "2026-11-06T09:10:36.594368+00:00",
+ "epochs": 5,
+ "bagsPerStep": 8,
+ "rotation": 0,
+ "innerSplit": 0,
+ "bags": {
+  "source_train": 31,
+  "source_valid": 16,
+  "target_train": 32,
+  "target_valid": 17
+ },
+ "windows": {
+  "source_train": 2331,
+  "source_valid": 1202,
+  "target_train": 2711,
+  "target_valid": 1275
+ },
+ "refitBags": {
+  "source_train": 47,
+  "source_valid": 0,
+  "target_train": 49,
+  "target_valid": 0
+ },
+ "refitWindows": {
+  "source_train": 3533,
+  "source_valid": 0,
+  "target_train": 3986,
+  "target_valid": 0
+ },
+ "setup": {
+  "loadBagsSeconds": 34.227915800999995,
+  "searchDataSeconds": 8.662840311999958
+ },
+ "phase1": {
+  "common": {
+   "seconds": 14.988260547000095,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.4030967109999892,
+    0.40198718600004213,
+    0.4029832039999519,
+    0.40530726700001196
+   ],
+   "firstEpochSeconds": 13.373620195000058,
+   "error": null,
+   "peakRssMB": 2347.4375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 931.796875,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07
+   }
+  },
+  "AdaptMIL": {
+   "seconds": 2.1295625520000385,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.41828708900004585,
+    0.4147876170000018,
+    0.4172386299999289,
+    0.41655436200005624
+   ],
+   "firstEpochSeconds": 0.46148962699999174,
+   "error": null,
+   "peakRssMB": 2368.02734375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 931.796875,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07
+   }
+  },
+  "MIL-CREDA": {
+   "seconds": 2.2600758679999444,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.4210713100000021,
+    0.41912092899997333,
+    0.4221785309999859,
+    0.42496388500001103
+   ],
+   "firstEpochSeconds": 0.5714260490000242,
+   "error": null,
+   "peakRssMB": 2379.37109375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 934.8681640625,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07,
+    "attentionGamma": 0.1102586414602692,
+    "attentionTemperature": 9.235987033331298,
+    "sigmaMultiplier": 1.0
+   }
+  }
+ },
+ "phase2": {
+  "AdaptMIL": {
+   "seconds": 3.7824836779999487,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.6589258550000068,
+    0.6598821469999621,
+    0.664968789999989,
+    0.6577585469999576
+   ],
+   "firstEpochSeconds": 1.129793769999992,
+   "error": null,
+   "peakRssMB": 2488.96484375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 1424.234375,
+   "group": "AdaptMIL",
+   "epochs": 5
+  },
+  "UDA-DDA": {
+   "seconds": 3.420549572000027,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.6481695670000818,
+    0.6480072779999091,
+    0.648446644000046,
+    0.6447258240000338
+   ],
+   "firstEpochSeconds": 0.8139591770000152,
+   "error": null,
+   "peakRssMB": 2589.63671875,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 1424.234375,
+   "group": "common",
+   "epochs": 5
+  },
+  "CCA-LSC": {
+   "seconds": 4.797272960999976,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "steadyEpochSeconds": [
+    0.6557394400000476,
+    0.6514542500000289,
+    0.8092637059999106,
+    0.6555432540000083,
+    0.6559313770000017,
+    0.6562969149999844
+   ],
+   "firstEpochSeconds": 0.6969150950000085,
+   "error": null,
+   "peakRssMB": 2616.73828125,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 1424.234375,
+   "group": "common",
+   "epochs": 7
+  },
+  "CASUAL": {
+   "seconds": 7.603516345999992,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    1.4930987500000583,
+    1.4966041109998969,
+    1.489966050000021,
+    1.4947797849999915
+   ],
+   "firstEpochSeconds": 1.6234761829999798,
+   "error": null,
+   "peakRssMB": 2658.44140625,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 2538.50390625,
+   "group": "common",
+   "epochs": 5
+  },
+  "COT": {
+   "seconds": 3.4025615670000207,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.6759850449999476,
+    0.6778365830000439,
+    0.680467507000003,
+    0.6783857020000141
+   ],
+   "firstEpochSeconds": 0.683966309000084,
+   "error": null,
+   "peakRssMB": 2658.60546875,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 2538.50390625,
+   "group": "common",
+   "epochs": 5
+  },
+  "CS+CCS": {
+   "seconds": 3.595089729000051,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.6557503139999881,
+    0.6592109599999958,
+    0.6589637460000404,
+    0.6605071779999889
+   ],
+   "firstEpochSeconds": 0.9454833660000759,
+   "error": null,
+   "peakRssMB": 2658.73046875,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 2538.50390625,
+   "group": "common",
+   "epochs": 5
+  },
+  "CLUST — variante source-free": {
+   "seconds": 3.2645047319999776,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.652159203999986,
+    0.647796752999966,
+    0.6491825500000914,
+    0.649866602999964
+   ],
+   "firstEpochSeconds": 0.6610776080000278,
+   "error": null,
+   "peakRssMB": 2658.98046875,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 2538.50390625,
+   "group": "common",
+   "epochs": 5
+  },
+  "CLUDA": {
+   "seconds": 4.778955822000057,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    0.9538372270000082,
+    0.9444799120000198,
+    0.9440181150000626,
+    0.9443294689999675
+   ],
+   "firstEpochSeconds": 0.9844748919999802,
+   "error": null,
+   "peakRssMB": 2675.40234375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 2538.50390625,
+   "group": "common",
+   "epochs": 5
+  },
+  "MIL-CREDA": {
+   "seconds": 6.542216583000027,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3,
+    4
+   ],
+   "steadyEpochSeconds": [
+    1.2920276129999593,
+    1.3052675640000189,
+    1.3110877310000433,
+    1.3085726519999525
+   ],
+   "firstEpochSeconds": 1.3201059870000336,
+   "error": null,
+   "peakRssMB": 2684.85546875,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 2538.50390625,
+   "group": "MIL-CREDA",
+   "epochs": 5
+  }
+ },
+ "sourcePass": {
+  "common": {
+   "seconds": 0.16026914599990505,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": null,
+   "peakRssMB": 2348.45703125,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 931.796875
+  },
+  "AdaptMIL": {
+   "seconds": 0.16699439399997118,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": null,
+   "peakRssMB": 2370.02734375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 931.796875
+  },
+  "MIL-CREDA": {
+   "seconds": 0.16792867599997408,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": null,
+   "peakRssMB": 2379.37109375,
+   "mpsDriverMB": null,
+   "cudaPeakMB": 934.8681640625
+  }
+ },
+ "wallSeconds": 104.33765483399998,
+ "deviceEvidence": {
+  "requested": "cuda",
+  "torch": "2.11.0+cu130",
+  "cudaAvailable": true,
+  "threads": 2,
+  "cpuCount": 4,
+  "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+  "processor": "x86_64",
+  "kind": "cuda",
+  "name": "Tesla T4",
+  "capability": "sm_75",
+  "totalMemoryMB": 14911.6875,
+  "cudaVersion": "13.0"
+ },
+ "processedRoot": "/kaggle/input/datasets/daprosero/balladeer-existing-local",
+ "commit": "f73f63bfaac8dcd3d259fd474dd9a60955845c58"
+}

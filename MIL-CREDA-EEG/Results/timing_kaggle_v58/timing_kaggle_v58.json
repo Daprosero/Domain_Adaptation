@@ -1,0 +1,1206 @@
+{
+ "formula": "serial seconds(C1, C2) = coef1 * C1 + coef2 * C2 + fixed (tools/timing_v58_record.py campaign_cost)",
+ "candidates": {
+  "local-cpu": {
+   "device": "cpu",
+   "deviceEvidence": null,
+   "commit": null,
+   "measuredAt": "2026-11-06T08:17:50.247412+00:00",
+   "shards": [
+    "probes/probe_local_cpu_merged.json"
+   ],
+   "epochTable": {
+    "phase1": {
+     "common": 14.471171540993964,
+     "AdaptMIL": 14.45247954200022,
+     "MIL-CREDA": 12.785167499998352
+    },
+    "phase2": {
+     "AdaptMIL": 22.971878083000774,
+     "UDA-DDA": 24.827721375011606,
+     "CCA-LSC": 31.344636694334138,
+     "CASUAL": 71.36157720800838,
+     "COT": 32.82994658300595,
+     "CS+CCS": 37.012689208990196,
+     "CLUST — variante source-free": 29.30020599999989,
+     "CLUDA": 33.427484125000774,
+     "MIL-CREDA": 27.187982249990455
+    },
+    "sourcePass": {
+     "common": 9.77690741600236,
+     "AdaptMIL": 9.728804667000077,
+     "MIL-CREDA": 10.055301582993707
+    },
+    "setup": 0.5691533750068629
+   },
+   "coef1": 136533.54358920243,
+   "coef2": 890214.1525237436,
+   "fixed": 4846.775849100166,
+   "epochs1": 7576,
+   "epochs2": 22468,
+   "serialHoursPerEpochOfC1": 37.92598433033401,
+   "serialHoursPerEpochOfC2": 247.28170903437322,
+   "serialHours": {
+    "C10": 2853.4232602718225,
+    "C20": 5705.500193918895,
+    "C30": 8557.577127565966
+   },
+   "stepUnitSeconds": {
+    "p1:common": {
+     "units": 40,
+     "meanA1": 1142.6417387964018,
+     "meanA2": 0.0,
+     "meanB": 0.5691533750068629,
+     "maxA1": 3628.6595759074935,
+     "maxA2": 0.0
+    },
+    "p1:AdaptMIL": {
+     "units": 40,
+     "meanA1": 1141.165821095387,
+     "meanA2": 0.0,
+     "meanB": 0.5691533750068629,
+     "maxA1": 3623.972539965078,
+     "maxA2": 0.0
+    },
+    "p1:MIL-CREDA": {
+     "units": 40,
+     "meanA1": 1009.5150887830569,
+     "meanA2": 0.0,
+     "meanB": 0.5691533750068629,
+     "maxA1": 3205.8925116759237,
+     "maxA2": 0.0
+    },
+    "p2:AdaptMIL": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 1573.585654296018,
+     "meanB": 13.162351649313333,
+     "maxA1": 0.0,
+     "maxA2": 5034.329787561134
+    },
+    "p2:UDA-DDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 1700.7118897034227,
+     "meanB": 13.22461700219678,
+     "maxA1": 0.0,
+     "maxA2": 5441.041295094749
+    },
+    "p2:CCA-LSC": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 2147.123994960787,
+     "meanB": 13.22461700219678,
+     "maxA1": 0.0,
+     "maxA2": 6869.235402539412
+    },
+    "p2:CASUAL": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 4888.305333883742,
+     "meanB": 13.22461700219678,
+     "maxA1": 0.0,
+     "maxA2": 15639.022309258711
+    },
+    "p2:COT": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 2248.8684985905347,
+     "meanB": 13.22461700219678,
+     "maxA1": 0.0,
+     "maxA2": 7194.7438258943575
+    },
+    "p2:CS+CCS": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 2535.388554464063,
+     "meanB": 13.22461700219678,
+     "maxA1": 0.0,
+     "maxA2": 8111.399648270352
+    },
+    "p2:CLUST — variante source-free": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 2007.0794239342908,
+     "meanB": 13.22461700219678,
+     "maxA1": 0.0,
+     "maxA2": 6421.194615194839
+    },
+    "p2:CLUDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 2289.800132503488,
+     "meanB": 13.22461700219678,
+     "maxA1": 0.0,
+     "maxA2": 7325.695289069529
+    },
+    "p2:MIL-CREDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 1862.3909931638987,
+     "meanB": 13.584977094040784,
+     "maxA1": 0.0,
+     "maxA2": 5958.296853668955
+    },
+    "final": {
+     "units": 10,
+     "meanA1": 299.7093085367612,
+     "meanA2": 3389.9355068092373,
+     "meanB": 0.5691533750068629,
+     "maxA1": 951.7795608937689,
+     "maxA2": 10765.335731083385
+    },
+    "k3": {
+     "units": 7,
+     "meanA1": 257.6492224058541,
+     "meanA2": 883.516919377407,
+     "meanB": 0.5691533750068629,
+     "maxA1": 840.8898391281112,
+     "maxA2": 2830.0509449600336
+    }
+   }
+  },
+  "kaggle-cpu": {
+   "device": "cpu",
+   "deviceEvidence": {
+    "requested": "cpu",
+    "torch": "2.11.0+cpu",
+    "cudaAvailable": false,
+    "threads": 2,
+    "cpuCount": 4,
+    "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "kind": "cpu",
+    "name": "Intel(R) Xeon(R) CPU @ 2.20GHz"
+   },
+   "commit": "f73f63bfaac8dcd3d259fd474dd9a60955845c58",
+   "measuredAt": "2026-11-06T09:03:55.861422+00:00",
+   "shards": [
+    "papersmith-v58-timing-cpu-a",
+    "papersmith-v58-timing-cpu-b"
+   ],
+   "epochTable": {
+    "phase1": {
+     "common": 9.190932189500018,
+     "AdaptMIL": 8.609983822000004,
+     "MIL-CREDA": 9.226527454000006
+    },
+    "phase2": {
+     "AdaptMIL": 15.127190369000004,
+     "UDA-DDA": 14.915925978000018,
+     "CCA-LSC": 14.837758126333332,
+     "CASUAL": 37.558567313000026,
+     "COT": 14.21570283899996,
+     "CS+CCS": 14.444979667999974,
+     "CLUST — variante source-free": 14.682756550000022,
+     "CLUDA": 14.388438175000033,
+     "MIL-CREDA": 14.809506348000014
+    },
+    "sourcePass": {
+     "common": 2.8633568320000222,
+     "AdaptMIL": 2.1179227229999924,
+     "MIL-CREDA": 3.0028955660000065
+    },
+    "setup": 38.60957021600001
+   },
+   "coef1": 88568.38831207306,
+   "coef2": 444952.6649459813,
+   "fixed": 20221.621196929365,
+   "epochs1": 7576,
+   "epochs2": 22468,
+   "serialHoursPerEpochOfC1": 24.602330086686962,
+   "serialHoursPerEpochOfC2": 123.59796248499481,
+   "serialHours": {
+    "C10": 1487.6200427159647,
+    "C20": 2969.6229684327823,
+    "C30": 4451.6258941496
+   },
+   "stepUnitSeconds": {
+    "p1:common": {
+     "units": 40,
+     "meanA1": 725.7147569856525,
+     "meanA2": 0.0,
+     "meanB": 38.609570216000044,
+     "maxA1": 2304.634701238221,
+     "maxA2": 0.0
+    },
+    "p1:AdaptMIL": {
+     "units": 40,
+     "meanA1": 679.843152816585,
+     "meanA2": 0.0,
+     "meanB": 38.609570216000044,
+     "maxA1": 2158.9613636742906,
+     "maxA2": 0.0
+    },
+    "p1:MIL-CREDA": {
+     "units": 40,
+     "meanA1": 728.5253542345323,
+     "meanA2": 0.0,
+     "meanB": 38.609570216000044,
+     "maxA1": 2313.5602465556094,
+     "maxA2": 0.0
+    },
+    "p2:AdaptMIL": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 1036.2204460800378,
+     "meanB": 41.351060223592306,
+     "maxA1": 0.0,
+     "maxA2": 3315.151891438935
+    },
+    "p2:UDA-DDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 1021.7487248851052,
+     "meanB": 42.31596802638851,
+     "maxA1": 0.0,
+     "maxA2": 3268.8529074020466
+    },
+    "p2:CCA-LSC": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 1016.3941861936928,
+     "meanB": 42.31596802638851,
+     "maxA1": 0.0,
+     "maxA2": 3251.722277392023
+    },
+    "p2:CASUAL": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 2572.781489876682,
+     "meanB": 42.31596802638851,
+     "maxA1": 0.0,
+     "maxA2": 8231.02984957408
+    },
+    "p2:COT": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 973.7830739115352,
+     "meanB": 42.31596802638851,
+     "maxA1": 0.0,
+     "maxA2": 3115.397704746406
+    },
+    "p2:CS+CCS": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 989.4886565231673,
+     "meanB": 42.31596802638851,
+     "maxA1": 0.0,
+     "maxA2": 3165.6441480568674
+    },
+    "p2:CLUST — variante source-free": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 1005.7764972076166,
+     "meanB": 42.31596802638851,
+     "maxA1": 0.0,
+     "maxA2": 3217.7533937842363
+    },
+    "p2:CLUDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 985.6155347028395,
+     "meanB": 42.31596802638851,
+     "maxA1": 0.0,
+     "maxA2": 3153.252974752956
+    },
+    "p2:MIL-CREDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 1014.4589246128577,
+     "meanB": 42.496590312923665,
+     "maxA1": 0.0,
+     "maxA2": 3245.530847649052
+    },
+    "final": {
+     "units": 10,
+     "meanA1": 190.3514116683679,
+     "meanA2": 1693.3153604666345,
+     "meanB": 38.60957021600001,
+     "maxA1": 604.4943478657628,
+     "maxA2": 5377.420401481881
+    },
+    "k3": {
+     "units": 7,
+     "meanA1": 185.93480484551128,
+     "meanA2": 481.25856879613485,
+     "meanB": 38.60957021600001,
+     "maxA1": 606.8354745063893,
+     "maxA2": 1541.550860566851
+    }
+   }
+  },
+  "kaggle-gpu": {
+   "device": "cuda",
+   "deviceEvidence": {
+    "requested": "cuda",
+    "torch": "2.11.0+cu130",
+    "cudaAvailable": true,
+    "threads": 2,
+    "cpuCount": 4,
+    "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+    "processor": "x86_64",
+    "kind": "cuda",
+    "name": "Tesla T4",
+    "capability": "sm_75",
+    "totalMemoryMB": 14911.6875,
+    "cudaVersion": "13.0"
+   },
+   "commit": "f73f63bfaac8dcd3d259fd474dd9a60955845c58",
+   "measuredAt": "2026-11-06T09:10:36.594368+00:00",
+   "shards": [
+    "papersmith-v58-timing-gpu-e5"
+   ],
+   "epochTable": {
+    "phase1": {
+     "common": 0.4033435919999988,
+     "AdaptMIL": 0.4167169245000082,
+     "MIL-CREDA": 0.4218336637499931
+    },
+    "phase2": {
+     "AdaptMIL": 0.6603838347499789,
+     "UDA-DDA": 0.6473373282500177,
+     "CCA-LSC": 0.6807048236666636,
+     "CASUAL": 1.493612173999992,
+     "COT": 0.6781687092500022,
+     "CS+CCS": 0.6586080495000033,
+     "CLUST — variante source-free": 0.6497512775000018,
+     "CLUDA": 0.9466661807500145,
+     "MIL-CREDA": 1.3042388899999935
+    },
+    "sourcePass": {
+     "common": 0.16026914599990505,
+     "AdaptMIL": 0.16699439399997118,
+     "MIL-CREDA": 0.16792867599997408
+    },
+    "setup": 42.89075611299995
+   },
+   "coef1": 4065.4335776832613,
+   "coef2": 22291.622804707422,
+   "fixed": 21091.89953803214,
+   "epochs1": 7576,
+   "epochs2": 22468,
+   "serialHoursPerEpochOfC1": 1.129287104912017,
+   "serialHoursPerEpochOfC2": 6.192117445752062,
+   "serialHours": {
+    "C10": 79.07290648942748,
+    "C20": 152.28695199606827,
+    "C30": 225.50099750270905
+   },
+   "stepUnitSeconds": {
+    "p1:common": {
+     "units": 40,
+     "meanA1": 31.84795522530373,
+     "meanA2": 0.0,
+     "meanB": 42.89075611299995,
+     "maxA1": 101.13877672900509,
+     "maxA2": 0.0
+    },
+    "p1:AdaptMIL": {
+     "units": 40,
+     "meanA1": 32.90391174257846,
+     "meanA2": 0.0,
+     "meanB": 42.89075611299995,
+     "maxA1": 104.49215215548564,
+     "maxA2": 0.0
+    },
+    "p1:MIL-CREDA": {
+     "units": 40,
+     "meanA1": 33.307928778587474,
+     "meanA2": 0.0,
+     "meanB": 42.89075611299995,
+     "maxA1": 105.77517922929808,
+     "maxA2": 0.0
+    },
+    "p2:AdaptMIL": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 45.23663781154001,
+     "meanB": 43.10691766483712,
+     "maxA1": 0.0,
+     "maxA2": 144.72434506632132
+    },
+    "p2:UDA-DDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 44.342945297900414,
+     "meanB": 43.098212342404636,
+     "maxA1": 0.0,
+     "maxA2": 141.86517891285962
+    },
+    "p2:CCA-LSC": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 46.6286361725302,
+     "meanB": 43.098212342404636,
+     "maxA1": 0.0,
+     "maxA2": 149.1777275649717
+    },
+    "p2:CASUAL": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 102.31321451368497,
+     "meanB": 43.098212342404636,
+     "maxA1": 0.0,
+     "maxA2": 327.3278846189082
+    },
+    "p2:COT": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 46.4549110095595,
+     "meanB": 43.098212342404636,
+     "maxA1": 0.0,
+     "maxA2": 148.62193337581874
+    },
+    "p2:CS+CCS": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 45.11499559385209,
+     "meanB": 43.098212342404636,
+     "maxA1": 0.0,
+     "maxA2": 144.33517842753096
+    },
+    "p2:CLUST — variante source-free": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 44.508302083107495,
+     "meanB": 43.098212342404636,
+     "maxA1": 0.0,
+     "maxA2": 142.39420037862516
+    },
+    "p2:CLUDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 64.84712813001458,
+     "meanB": 43.098212342404636,
+     "maxA1": 0.0,
+     "maxA2": 207.4636534029515
+    },
+    "p2:MIL-CREDA": {
+     "units": 40,
+     "meanA1": 0.0,
+     "meanA2": 89.34104558902747,
+     "meanB": 43.108127021882794,
+     "maxA1": 0.0,
+     "maxA2": 285.8263773775408
+    },
+    "final": {
+     "units": 10,
+     "meanA1": 8.353562026309174,
+     "meanA2": 84.34268717645082,
+     "meanB": 42.89075611299995,
+     "maxA1": 26.52820373219805,
+     "maxA2": 267.84502008737763
+    },
+    "k3": {
+     "units": 7,
+     "meanA1": 8.500875365912279,
+     "meanA2": 42.38332641347107,
+     "meanB": 42.89075611299995,
+     "maxA1": 27.7443093060454,
+     "maxA2": 135.76081038891377
+    }
+   }
+  }
+ },
+ "options": {
+  "kaggle-cpu only": {
+   "services": {
+    "kaggle-cpu": "kaggle-cpu"
+   },
+   "illustrative": {
+    "C10": {
+     "makespanHours": 27.76,
+     "serialHours": 1489.45,
+     "speedup": 53.65,
+     "quotaOk": true,
+     "quotaWeeks": 1,
+     "reasons": [
+      "kaggle-cpu:daproserom2 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:amalvarezme has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:andresalvarez has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:collazosh has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:cuentacolab has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:diego9901 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:juanouter has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:jucaguirrear has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:katerineparra1234 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:manri09 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:sofiaescalante has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:sofiaescalante2401 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:trayectoria50 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:trayectoria51 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:daprosero has an unknown weekly quota: not checked; record it before the launch"
+     ],
+     "error": null,
+     "stepServices": {
+      "p1-common": [
+       "kaggle-cpu"
+      ],
+      "p1-AdaptMIL": [
+       "kaggle-cpu"
+      ],
+      "p1-MIL-CREDA": [
+       "kaggle-cpu"
+      ],
+      "p2-AdaptMIL": [
+       "kaggle-cpu"
+      ],
+      "p2-UDA-DDA": [
+       "kaggle-cpu"
+      ],
+      "p2-CCA-LSC": [
+       "kaggle-cpu"
+      ],
+      "p2-CASUAL": [
+       "kaggle-cpu"
+      ],
+      "p2-COT": [
+       "kaggle-cpu"
+      ],
+      "p2-CSplusCCS": [
+       "kaggle-cpu"
+      ],
+      "p2-CLUST-variante-source-free": [
+       "kaggle-cpu"
+      ],
+      "p2-CLUDA": [
+       "kaggle-cpu"
+      ],
+      "p2-MIL-CREDA": [
+       "kaggle-cpu"
+      ],
+      "final": [
+       "kaggle-cpu"
+      ],
+      "k3": [
+       "kaggle-cpu"
+      ]
+     },
+     "quota": [
+      {
+       "account": "kaggle-cpu:daproserom2",
+       "gpuHours": 102.36,
+       "quotaHours": null,
+       "overQuota": null
+      },
+      {
+       "account": "kaggle-cpu:amalvarezme",
+       "gpuHours": 102.36,
+       "quotaHours": null,
+       "overQuota": null
+      },
+      {
+       "account": "kaggle-cpu:andresalvarez",
+       "gpuHours": 102.36,
+       "quotaHours": null,
+       "overQuota": null
+      }
+     ]
+    },
+    "C20": {
+     "makespanHours": null,
+     "serialHours": null,
+     "speedup": null,
+     "quotaOk": null,
+     "quotaWeeks": null,
+     "reasons": null,
+     "error": "{\n  \"error\": \"unit-over-session-limit\",\n  \"message\": \"step 'p2-CASUAL': one unit plus its setup exceeds every eligible account's session limit (on kaggle-cpu one unit takes 858.3 minutes plus a 0.7-minute setup against 80% of the 720-minute session limit (576 minutes)): split it along the declared axis (by fold, seed or subject block, never by arm) or declare the step resumable from a checkpoint (\\\"resumable\\\": true, \\\"checkpointMinutes\\\": <minutes>) and schedule again\",\n  \"objective\": {\n    \"purpose\": \"decide from measurements whether a proof of concept or an experiment campaign is worth spreading over several remote GPU accounts, and keep the split reproducible when it is\",\n    \"stages\": [\n      {\n        \"stage\": \"measured\",\n        \"establishes\": \"per-unit duration comes from a pilot and setup overhead from a rehearsal, and the accounts' limits and quota are recorded with their date\",\n        \"behindWhen\": \"an input to assess has no pilot, rehearsal or quota reading behind it\"\n      },\n      {\n        \"stage\": \"assessed\",\n        \"establishes\": \"assess turned those measurements into a verdict with its threshold stated, recorded in the tree it concerns\",\n        \"behindWhen\": \"no .remote-parallelism/assessment-*.json exists in the product or experiments tree\"\n      },\n      {\n        \"stage\": \"planned\",\n        \"establishes\": \"every reproducibility checklist item holds for the split the verdict calls for\",\n        \"behindWhen\": \"a checklist item is unmet: no declared axis, stamp fields missing from identicalAcrossShards, accelerator not pinned, or an account without a passing rehearsal\"\n      }\n    ],\n    \"arrival\": \"a recorded verdict \\u2014 parallelize over N accounts or stay on one \\u2014 with its reproducibility checklist satisfied, before any job is generated\",\n    \"humanStops\": [\n      \"the launch itself, behind remote-execution's consent and gate\",\n      \"which owners take part: one account per person per service, each owner registered in the team registry",
+     "stepServices": {},
+     "quota": []
+    },
+    "C30": {
+     "makespanHours": null,
+     "serialHours": null,
+     "speedup": null,
+     "quotaOk": null,
+     "quotaWeeks": null,
+     "reasons": null,
+     "error": "{\n  \"error\": \"unit-over-session-limit\",\n  \"message\": \"step 'p2-CASUAL': one unit plus its setup exceeds every eligible account's session limit (on kaggle-cpu one unit takes 1287.1 minutes plus a 0.7-minute setup against 80% of the 720-minute session limit (576 minutes)): split it along the declared axis (by fold, seed or subject block, never by arm) or declare the step resumable from a checkpoint (\\\"resumable\\\": true, \\\"checkpointMinutes\\\": <minutes>) and schedule again\",\n  \"objective\": {\n    \"purpose\": \"decide from measurements whether a proof of concept or an experiment campaign is worth spreading over several remote GPU accounts, and keep the split reproducible when it is\",\n    \"stages\": [\n      {\n        \"stage\": \"measured\",\n        \"establishes\": \"per-unit duration comes from a pilot and setup overhead from a rehearsal, and the accounts' limits and quota are recorded with their date\",\n        \"behindWhen\": \"an input to assess has no pilot, rehearsal or quota reading behind it\"\n      },\n      {\n        \"stage\": \"assessed\",\n        \"establishes\": \"assess turned those measurements into a verdict with its threshold stated, recorded in the tree it concerns\",\n        \"behindWhen\": \"no .remote-parallelism/assessment-*.json exists in the product or experiments tree\"\n      },\n      {\n        \"stage\": \"planned\",\n        \"establishes\": \"every reproducibility checklist item holds for the split the verdict calls for\",\n        \"behindWhen\": \"a checklist item is unmet: no declared axis, stamp fields missing from identicalAcrossShards, accelerator not pinned, or an account without a passing rehearsal\"\n      }\n    ],\n    \"arrival\": \"a recorded verdict \\u2014 parallelize over N accounts or stay on one \\u2014 with its reproducibility checklist satisfied, before any job is generated\",\n    \"humanStops\": [\n      \"the launch itself, behind remote-execution's consent and gate\",\n      \"which owners take part: one account per person per service, each owner registered in the team registr",
+     "stepServices": {},
+     "quota": []
+    }
+   },
+   "maxEqualCapFitting": {
+    "1w": 13,
+    "2w": 13
+   },
+   "makespanHoursPerEpochOfCap": null
+  },
+  "kaggle-gpu only": {
+   "services": {
+    "kaggle-gpu": "kaggle-gpu"
+   },
+   "illustrative": {
+    "C10": {
+     "makespanHours": 3.24,
+     "serialHours": 79.32,
+     "speedup": 24.46,
+     "quotaOk": true,
+     "quotaWeeks": 1,
+     "reasons": [],
+     "error": null,
+     "stepServices": {
+      "p1-common": [
+       "kaggle-gpu"
+      ],
+      "p1-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p1-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "p2-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p2-UDA-DDA": [
+       "kaggle-gpu"
+      ],
+      "p2-CCA-LSC": [
+       "kaggle-gpu"
+      ],
+      "p2-CASUAL": [
+       "kaggle-gpu"
+      ],
+      "p2-COT": [
+       "kaggle-gpu"
+      ],
+      "p2-CSplusCCS": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUST-variante-source-free": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUDA": [
+       "kaggle-gpu"
+      ],
+      "p2-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "final": [
+       "kaggle-gpu"
+      ],
+      "k3": [
+       "kaggle-gpu"
+      ]
+     },
+     "quota": [
+      {
+       "account": "kaggle-gpu:daproserom2",
+       "gpuHours": 5.79,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:amalvarezme",
+       "gpuHours": 5.79,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:andresalvarez",
+       "gpuHours": 5.79,
+       "quotaHours": 30,
+       "overQuota": false
+      }
+     ]
+    },
+    "C20": {
+     "makespanHours": 6.1,
+     "serialHours": 152.57,
+     "speedup": 25.03,
+     "quotaOk": true,
+     "quotaWeeks": 1,
+     "reasons": [],
+     "error": null,
+     "stepServices": {
+      "p1-common": [
+       "kaggle-gpu"
+      ],
+      "p1-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p1-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "p2-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p2-UDA-DDA": [
+       "kaggle-gpu"
+      ],
+      "p2-CCA-LSC": [
+       "kaggle-gpu"
+      ],
+      "p2-CASUAL": [
+       "kaggle-gpu"
+      ],
+      "p2-COT": [
+       "kaggle-gpu"
+      ],
+      "p2-CSplusCCS": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUST-variante-source-free": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUDA": [
+       "kaggle-gpu"
+      ],
+      "p2-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "final": [
+       "kaggle-gpu"
+      ],
+      "k3": [
+       "kaggle-gpu"
+      ]
+     },
+     "quota": [
+      {
+       "account": "kaggle-gpu:daproserom2",
+       "gpuHours": 10.97,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:amalvarezme",
+       "gpuHours": 10.97,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:andresalvarez",
+       "gpuHours": 10.97,
+       "quotaHours": 30,
+       "overQuota": false
+      }
+     ]
+    },
+    "C30": {
+     "makespanHours": 8.95,
+     "serialHours": 225.89,
+     "speedup": 25.24,
+     "quotaOk": true,
+     "quotaWeeks": 1,
+     "reasons": [],
+     "error": null,
+     "stepServices": {
+      "p1-common": [
+       "kaggle-gpu"
+      ],
+      "p1-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p1-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "p2-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p2-UDA-DDA": [
+       "kaggle-gpu"
+      ],
+      "p2-CCA-LSC": [
+       "kaggle-gpu"
+      ],
+      "p2-CASUAL": [
+       "kaggle-gpu"
+      ],
+      "p2-COT": [
+       "kaggle-gpu"
+      ],
+      "p2-CSplusCCS": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUST-variante-source-free": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUDA": [
+       "kaggle-gpu"
+      ],
+      "p2-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "final": [
+       "kaggle-gpu"
+      ],
+      "k3": [
+       "kaggle-gpu"
+      ]
+     },
+     "quota": [
+      {
+       "account": "kaggle-gpu:daproserom2",
+       "gpuHours": 16.09,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:amalvarezme",
+       "gpuHours": 16.09,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:andresalvarez",
+       "gpuHours": 16.09,
+       "quotaHours": 30,
+       "overQuota": false
+      }
+     ]
+    }
+   },
+   "maxEqualCapFitting": {
+    "1w": 59,
+    "2w": 118
+   },
+   "makespanHoursPerEpochOfCap": 0.2855
+  },
+  "mixed kaggle-cpu + kaggle-gpu": {
+   "services": {
+    "kaggle-cpu": "kaggle-cpu",
+    "kaggle-gpu": "kaggle-gpu"
+   },
+   "illustrative": {
+    "C10": {
+     "makespanHours": 3.24,
+     "serialHours": 79.32,
+     "speedup": 24.46,
+     "quotaOk": true,
+     "quotaWeeks": 1,
+     "reasons": [],
+     "error": null,
+     "stepServices": {
+      "p1-common": [
+       "kaggle-gpu"
+      ],
+      "p1-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p1-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "p2-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p2-UDA-DDA": [
+       "kaggle-gpu"
+      ],
+      "p2-CCA-LSC": [
+       "kaggle-gpu"
+      ],
+      "p2-CASUAL": [
+       "kaggle-gpu"
+      ],
+      "p2-COT": [
+       "kaggle-gpu"
+      ],
+      "p2-CSplusCCS": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUST-variante-source-free": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUDA": [
+       "kaggle-gpu"
+      ],
+      "p2-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "final": [
+       "kaggle-gpu"
+      ],
+      "k3": [
+       "kaggle-gpu"
+      ]
+     },
+     "quota": [
+      {
+       "account": "kaggle-gpu:daproserom2",
+       "gpuHours": 5.79,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:amalvarezme",
+       "gpuHours": 5.79,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:andresalvarez",
+       "gpuHours": 5.79,
+       "quotaHours": 30,
+       "overQuota": false
+      }
+     ]
+    },
+    "C20": {
+     "makespanHours": 5.67,
+     "serialHours": 152.57,
+     "speedup": 26.9,
+     "quotaOk": true,
+     "quotaWeeks": 1,
+     "reasons": [
+      "kaggle-cpu:daproserom2 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:amalvarezme has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:andresalvarez has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:collazosh has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:cuentacolab has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:diego9901 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:juanouter has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:jucaguirrear has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:katerineparra1234 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:manri09 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:sofiaescalante has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:sofiaescalante2401 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:trayectoria50 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:trayectoria51 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:daprosero has an unknown weekly quota: not checked; record it before the launch"
+     ],
+     "error": null,
+     "stepServices": {
+      "p1-common": [
+       "kaggle-gpu"
+      ],
+      "p1-AdaptMIL": [
+       "kaggle-cpu"
+      ],
+      "p1-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "p2-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p2-UDA-DDA": [
+       "kaggle-gpu"
+      ],
+      "p2-CCA-LSC": [
+       "kaggle-gpu"
+      ],
+      "p2-CASUAL": [
+       "kaggle-gpu"
+      ],
+      "p2-COT": [
+       "kaggle-gpu"
+      ],
+      "p2-CSplusCCS": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUST-variante-source-free": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUDA": [
+       "kaggle-gpu"
+      ],
+      "p2-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "final": [
+       "kaggle-gpu"
+      ],
+      "k3": [
+       "kaggle-gpu"
+      ]
+     },
+     "quota": [
+      {
+       "account": "kaggle-gpu:daproserom2",
+       "gpuHours": 10.33,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:amalvarezme",
+       "gpuHours": 10.33,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:andresalvarez",
+       "gpuHours": 10.33,
+       "quotaHours": 30,
+       "overQuota": false
+      }
+     ]
+    },
+    "C30": {
+     "makespanHours": 8.34,
+     "serialHours": 225.89,
+     "speedup": 27.08,
+     "quotaOk": true,
+     "quotaWeeks": 1,
+     "reasons": [
+      "kaggle-cpu:daproserom2 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:amalvarezme has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:andresalvarez has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:collazosh has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:cuentacolab has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:diego9901 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:juanouter has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:jucaguirrear has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:katerineparra1234 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:manri09 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:sofiaescalante has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:sofiaescalante2401 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:trayectoria50 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:trayectoria51 has an unknown weekly quota: not checked; record it before the launch",
+      "kaggle-cpu:daprosero has an unknown weekly quota: not checked; record it before the launch"
+     ],
+     "error": null,
+     "stepServices": {
+      "p1-common": [
+       "kaggle-gpu"
+      ],
+      "p1-AdaptMIL": [
+       "kaggle-cpu"
+      ],
+      "p1-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "p2-AdaptMIL": [
+       "kaggle-gpu"
+      ],
+      "p2-UDA-DDA": [
+       "kaggle-gpu"
+      ],
+      "p2-CCA-LSC": [
+       "kaggle-gpu"
+      ],
+      "p2-CASUAL": [
+       "kaggle-gpu"
+      ],
+      "p2-COT": [
+       "kaggle-gpu"
+      ],
+      "p2-CSplusCCS": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUST-variante-source-free": [
+       "kaggle-gpu"
+      ],
+      "p2-CLUDA": [
+       "kaggle-gpu"
+      ],
+      "p2-MIL-CREDA": [
+       "kaggle-gpu"
+      ],
+      "final": [
+       "kaggle-gpu"
+      ],
+      "k3": [
+       "kaggle-gpu"
+      ]
+     },
+     "quota": [
+      {
+       "account": "kaggle-gpu:daproserom2",
+       "gpuHours": 15.18,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:amalvarezme",
+       "gpuHours": 15.18,
+       "quotaHours": 30,
+       "overQuota": false
+      },
+      {
+       "account": "kaggle-gpu:andresalvarez",
+       "gpuHours": 15.18,
+       "quotaHours": 30,
+       "overQuota": false
+      }
+     ]
+    }
+   },
+   "maxEqualCapFitting": {
+    "1w": "not bisected (mixed search cost)",
+    "2w": "not bisected"
+   },
+   "makespanHoursPerEpochOfCap": 0.255
+  }
+ },
+ "assess": {
+  "kaggle-gpu": {
+   "C": 30,
+   "serialMinutes": 13549.05,
+   "singleAccountMinutes": 6776.17,
+   "parallelMinutes": 453.68,
+   "speedup": 14.94,
+   "savedMinutes": 6322.49,
+   "verdict": "parallelize",
+   "reasons": [
+    "speed-up 14.94 >= 1.5, 6322.49 saved minutes >= 30, and no account exceeds its quota: parallelize over 15 accounts once the checklist holds",
+    "one account alone would spend 225.82 GPU hours, over its 30-hour weekly quota"
+   ],
+   "quotaOk": true,
+   "error": null,
+   "message": null
+  },
+  "kaggle-cpu": {
+   "C": 13,
+   "serialMinutes": null,
+   "singleAccountMinutes": null,
+   "parallelMinutes": null,
+   "speedup": null,
+   "savedMinutes": null,
+   "verdict": "split-first",
+   "reasons": [
+    "37 unit(s) need more than 80% of the 720-minute session limit (576 minutes) including the 0.7-minute setup: split them along the declared axis (more seeds, folds or subject blocks per unit, never by arm) and assess again, or declare the step resumable from a checkpoint in a schedule plan"
+   ],
+   "quotaOk": null,
+   "error": null,
+   "message": null
+  }
+ },
+ "inputs": {
+  "kaggleJobs": {
+   "cpu-a": "https://www.kaggle.com/code/daprosero/papersmith-v58-timing-cpu-a",
+   "cpu-b": "https://www.kaggle.com/code/daprosero/papersmith-v58-timing-cpu-b",
+   "gpu-a": "https://www.kaggle.com/code/daprosero/papersmith-v58-timing-gpu-a",
+   "gpu-b": "https://www.kaggle.com/code/daprosero/papersmith-v58-timing-gpu-b",
+   "gpu-e5": "https://www.kaggle.com/code/daprosero/papersmith-v58-timing-gpu-e5"
+  },
+  "commit": "f73f63bfaac8dcd3d259fd474dd9a60955845c58",
+  "accounts": "15 attested owners (.papersmith/team.json), one Kaggle account each; accounts.json",
+  "concurrency": {
+   "kaggle-gpu": "2 sessions per account (operator, 2026-11-06; adapter KAGGLE_WORKER_CAPACITY=2)",
+   "kaggle-cpu": "5 sessions per account (operator, 2026-11-06)"
+  },
+  "sessionLimitHours": {
+   "kaggle-gpu": "12 (adapters/kaggle.py KAGGLE_SESSION_LIMIT_SECONDS, published limit 2026-10)",
+   "kaggle-cpu": "12 (assumed equal to the GPU limit; not in the adapter table, not verified)"
+  },
+  "weeklyGpuQuotaHours": {
+   "value": 30,
+   "source": "kagglesdk KernelsApi.get_accelerator_quota_statistics for daprosero, 2026-11-06: total_time_allowed 30:00:00, refresh 2026-11-07T00:00:00; assumed equal for the other 14 accounts (not read)"
+  },
+  "cpuQuota": "unknown (no GPU quota applies; schedule reports it unchecked)",
+  "setupMinutes": {
+   "value": 0.7,
+   "source": "kernel log: ~30 s from kernel start to the probe (clone, imports, data mount) + ~11 s output save; the Kaggle queue/boot before kernel start is not measured",
+   "perUnitDataLoadSeconds": "in the unit cost (b): loadBags + searchData, 38.6 s CPU / 42.9 s GPU on the mounted dataset vs 0.6 s locally"
+  },
+  "unitDuration": "schedule takes one duration per step: the MEAN unit of the step; session fit of the LONGEST unit is checked separately (sessionFit)"
+ },
+ "sessionFit": {
+  "kaggle-cpu": {
+   "worstStep": "p2:CASUAL",
+   "secondsPerEpochOfCap": 8231.02984957408,
+   "maxEqualCapInOneSession": 4
+  },
+  "kaggle-gpu": {
+   "worstStep": "p2:CASUAL",
+   "secondsPerEpochOfCap": 327.3278846189082,
+   "maxEqualCapInOneSession": 105
+  },
+  "local-cpu": {
+   "worstStep": "p2:CASUAL",
+   "secondsPerEpochOfCap": 15639.022309258711,
+   "maxEqualCapInOneSession": 2
+  }
+ }
+}
