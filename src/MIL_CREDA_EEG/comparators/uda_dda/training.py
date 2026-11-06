@@ -4,8 +4,10 @@ Plan v56 §7.7: phase 2 runs its `epochs2` whole and keeps the last epoch (no
 early stopping, no restore). With target validation bags (an inner split) every
 epoch's validation predictions are recorded for the search's pooled selection;
 without them (the refit) nothing is evaluated. The paper's MMD-weight and
-confidence schedules are rescaled to the epochs this run trains, so a refit of
-E2 epochs spans its schedule over E2 epochs.
+confidence schedules are rescaled to the phase-2 budget, `search.EPOCH_CAP` (plan
+v59 7.4 and 7.6), never to the epochs a run trains: a search trial stopped by
+patience and a refit of E2 epochs both follow the first epochs of the same schedule,
+so the refit trains what the search validated.
 """
 from __future__ import annotations
 
@@ -104,7 +106,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     """Adapt a selected common phase-1 model; target_train labels are never read.
 
     Only the target trunk trains (plan 7.3); the paper's epoch schedules are
-    rescaled from 100 epochs to `epochs2` (plan 7.4). Exactly `epochs2` epochs run and
+    rescaled to the phase-2 budget `search.EPOCH_CAP` (plan 7.4). Exactly `epochs2` epochs run and
     the last is kept; the selection is the search's (plan 4.5). An empty `target_valid`
     is a refit.
     """
@@ -135,8 +137,8 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     middle, late = ordered_thresholds(params)
     history, validation = [], []
     for epoch in two_phase.epoch_range(epochs):
-        alpha = losses.mmd_weight_schedule(epoch, epochs)
-        threshold = losses.confidence_threshold(epoch, epochs, middle, late)
+        alpha = losses.mmd_weight_schedule(epoch, search.EPOCH_CAP)
+        threshold = losses.confidence_threshold(epoch, search.EPOCH_CAP, middle, late)
         two_phase.set_phase_two_modes(model)
         sums = dict.fromkeys(TERMS, 0.)
         batches = two_phase.shuffled_batches(len(target_train), schedule["bagsPerStep"], generator)
@@ -161,7 +163,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
                 epoch, target_valid, prediction,
                 two_phase.represent(model, target_valid, "target", device)))
         history.append({"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
-                        "model": f"{NAME}:phase2", **sums, "stage": losses.stage(epoch, epochs),
+                        "model": f"{NAME}:phase2", **sums, "stage": losses.stage(epoch, search.EPOCH_CAP),
                         "threshold": threshold,
                         "val_balanced_accuracy": accuracy})
     final_state = copy.deepcopy(model.target_trunk.state_dict())
