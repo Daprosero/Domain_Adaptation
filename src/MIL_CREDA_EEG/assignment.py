@@ -1,6 +1,6 @@
 """Domain assignment per transfer, the leakage guard, and the paired probe.
 
-Experiments plan v55, Secs. 4.3, 4.6 and 6.2. Inside each transfer the
+Experiments plan v56, Secs. 4.3, 4.6 and 6.2. Inside each transfer the
 assignment is a total, single-valued function that takes every subject of the
 partition to exactly one of three destinations: source, target or excluded.
 It is fixed per transfer and identical in the four rotations: a source
@@ -41,7 +41,7 @@ other condition is never returned by `side_bags`; the only way to it is
 the transfer in that rotation (Sec. 6.2): each common subject passes through
 the probe exactly once over the four rotations.
 
-**Inner splits (plan v55, Secs. 4.2 and 4.5).** In rotation `r`, with test fold k,
+**Inner splits (plan v56, Secs. 4.2 and 4.5).** In rotation `r`, with test fold k,
 F is the other three frozen folds; the partition document stores the three inner
 splits of the nested cross-validation, each validating one fold of F and training on
 the other two, so every non-test subject is validated exactly once and the test fold
@@ -51,7 +51,7 @@ frozen rotation's own roles are `nontest` (every fold of F, the refit's training
 and `test`; `side_bags` reads the inner splits through the roles `inner_train` and
 `inner_validation` (with `split`). The sides stay those of the transfer (Sec. 4.3).
 
-**The per-fold class minimum (plan v55, Sec. 4.3).** No group is excluded by its
+**The per-fold class minimum (plan v56, Sec. 4.3).** No group is excluded by its
 number of subjects per class and fold: the minimum is a declared limitation of
 the selection, reported, never a pass or fail. `eligibility` reports the
 subjects per (side, fold, label), the minimum per side and class over the folds,
@@ -70,7 +70,7 @@ from MIL_CREDA_EEG import partition
 from MIL_CREDA_EEG.bag_data import Bag, BagSet
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["4.2", "4.3", "4.5", "4.6", "6.2", "5.1", "5.2", "5.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K2-emparejamiento"],
     "invariants": [
@@ -98,7 +98,7 @@ __provenance__ = {
 }
 
 SIDES = ("source", "target", "excluded")
-#: Plan v55, Secs. 4.2 and 4.5: the nested cross-validation's roles. The frozen rotation's
+#: Plan v56, Secs. 4.2 and 4.5: the nested cross-validation's roles. The frozen rotation's
 #: own are `nontest` (every fold but the test fold, the refit's training set) and `test`;
 #: the inner ones need an inner split.
 REFIT_ROLE = "nontest"
@@ -116,7 +116,7 @@ class ProbeRefused(AssignmentError):
 
 
 def inner_splits(rotation: Mapping) -> list[dict]:
-    """Plan v55, Sec. 4.2: the inner splits a stored rotation holds, shape checked.
+    """Plan v56, Sec. 4.2: the inner splits a stored rotation holds, shape checked.
 
     F is every fold but the test fold, in fold order; split `i` validates F[i] and trains
     on the other two. Each fold of F is validated once and the test fold is in no split.
@@ -126,7 +126,7 @@ def inner_splits(rotation: Mapping) -> list[dict]:
         splits = [dict(s) for s in rotation["inner_splits"]]
     except (KeyError, TypeError):
         raise AssignmentError("the rotation stores no non-test folds and inner splits "
-                              "(plan v55, Sec. 4.2)") from None
+                              "(plan v56, Sec. 4.2)") from None
     if (test in non_test or [s.get("inner") for s in splits] != list(range(len(non_test)))
             or [s.get("validation_fold") for s in splits] != non_test
             or any(sorted(s.get("train_folds", [])) != sorted(k for k in non_test

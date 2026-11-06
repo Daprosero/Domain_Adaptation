@@ -1,6 +1,6 @@
 """The internal references: source-only controls and the target-supervised upper bound.
 
-Experiments plan v55, Secs. 4.5 and 7.5, for the experiments A-nivel (Sec. 5.1),
+Experiments plan v56, Secs. 4.5 and 7.5, for the experiments A-nivel (Sec. 5.1),
 B-tarea (Sec. 5.2) and C-dispositivo (Sec. 5.3).
 
 **The main source-only reference.** The common-group phase-1 checkpoint (the
@@ -46,7 +46,7 @@ channel count; the trunk the trainer fits is the one in the `source_trunk`
 slot, which here holds the target-supervised trunk); `lr1` and `wd1` are
 inputs with no default, the caller passing those selected for the common group
 of the same transfer and rotation; it has no Optuna study of its own. The epoch
-cap is an input with no default too (Sec. 7.6). Plan v55 does not state the
+cap is an input with no default too (Sec. 7.6). Plan v56 does not state the
 upper bound's epoch rule explicitly: the inner-split choice of E_ub above is
 this implementation's reading of Sec. 4.5 (no early stopping anywhere, the inner
 level chooses every model's epoch count).
@@ -66,7 +66,7 @@ from MIL_CREDA_EEG import bag_data, mil_wrapper, model_store, search, two_phase
 from MIL_CREDA_EEG.mil_creda_model import CLASSES
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["4.5", "7.3", "7.5"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [

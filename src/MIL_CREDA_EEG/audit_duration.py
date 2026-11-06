@@ -1,6 +1,6 @@
 """Duration audit: how long each record really is, against its nominal length.
 
-Experiments plan v55, Sec. 2.6. The duration is measured and excludes nothing
+Experiments plan v56, Sec. 2.6. The duration is measured and excludes nothing
 here. A truncated session only contributes fewer windows; whether they reach a
 bag is decided by the bag cardinality floor, which belongs to the bag
 definition of Sec. 3.2 and not to this step. A restarted or concatenated
@@ -8,7 +8,7 @@ session is marked and reported, never excluded. This module reports the real
 duration, its ratio to the nominal, the number of complete four-second windows
 -- the instances a bag would get (Sec. 3.1) -- and that one mark.
 
-**The restart mark reads only unambiguous evidence.** v55 gives no numeric
+**The restart mark reads only unambiguous evidence.** v56 gives no numeric
 rule for a restarted or concatenated session, so no gap or excess threshold is
 invented here (assumption, recorded as such): a record is marked
 `restarted_or_concatenated` when its timestamps step backwards at least once,
@@ -34,7 +34,7 @@ from __future__ import annotations
 import numpy as np
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["2.6"],
     "experiments": ["2.6"],
     "invariants": [

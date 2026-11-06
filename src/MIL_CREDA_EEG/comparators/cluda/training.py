@@ -1,4 +1,4 @@
-"""CLUDA controlled bag adaptation, protocol v55 §§4.5, 7.2–7.4, 7.7.
+"""CLUDA controlled bag adaptation, protocol v56 §§4.5, 7.2–7.4, 7.7.
 
 Official symmetric SupCon, including target-target and source-source pairs.
 L81 supersedes the earlier paper-Eq. (3) ruling; see REPLICATION.md.
@@ -17,7 +17,7 @@ from .losses import cross_domain_contrastive, source_source_contrastive, contras
 from .model import CLUDAModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["4.5", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -34,7 +34,7 @@ __provenance__ = {
 
 NAME = "CLUDA"
 DEFAULT_PARAMS = {"lr2": .001, "wd2": 0., "contrastiveWeight": 1., "temperature": .07}
-#: v55 §7.7 own axis, defined once in `search.OWN_AXES` like CLUST's and CASUAL's.
+#: v56 §7.7 own axis, defined once in `search.OWN_AXES` like CLUST's and CASUAL's.
 TEMPERATURE = search.CONTRASTIVE_TEMPERATURE
 
 

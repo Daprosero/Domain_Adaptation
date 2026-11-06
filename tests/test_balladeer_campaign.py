@@ -304,7 +304,7 @@ def test_stale_predictions_are_refused_naming_what_differs(tmp_path, monkeypatch
 
 
 def test_every_changed_module_answers_to_one_plan_revision():
-    assert campaign.REVISION.endswith("v55.md")
+    assert campaign.REVISION.endswith("v56.md")
     for module in (search, results, model_store):
         assert module.__provenance__["revision"] == campaign.REVISION
 
@@ -370,7 +370,7 @@ def test_the_device_arm_source_only_controls_are_never_numbers(tmp_path, registr
     records = results.read_predictions(product / "Results", "C-dispositivo")
     assert {r["strategy"] for r in records} == {"MIL-CREDA"}
     table = (product / "Results" / "C-dispositivo" / "tables" / "comparison.md").read_text()
-    # v55 Sec. 5.3: three source-only rows (one per phase-1 group), three columns each
+    # v56 Sec. 5.3: three source-only rows (one per phase-1 group), three columns each
     assert table.count(controls.NA_RECORD) == 3 * 3
 
 
@@ -801,15 +801,15 @@ def test_the_test_train_ratio_counts_the_refit_training_subjects():
     assert campaign.test_train_ratio(a, b) == pytest.approx(sum(expected) / 4)
 
 
-# ------------------------------------------------------------------ the v55 comparator set
+# ------------------------------------------------------------------ the v56 comparator set
 
-#: Plan v55, Sec. 7.1: the eight comparators and MIL-CREDA (HASD left the comparison).
+#: Plan v56, Sec. 7.1: the eight comparators and MIL-CREDA (HASD left the comparison).
 V54_STRATEGIES = {"AdaptMIL", "UDA-DDA", "CS+CCS", "CASUAL", "CCA-LSC", "COT",
                   "CLUST — variante source-free", "CLUDA", "MIL-CREDA"}
 
 
 def test_the_comparison_is_the_v54_set_and_hasd_is_an_unknown_strategy():
-    """Plan v55, Secs. 7.1, 7.3, 7.5: nine strategies, three phase-1 groups, CLUDA in the
+    """Plan v56, Secs. 7.1, 7.3, 7.5: nine strategies, three phase-1 groups, CLUDA in the
     common group, HASD in no strategy list and refused as unknown."""
     assert set(model_store.STRATEGIES) == V54_STRATEGIES and len(model_store.STRATEGIES) == 9
     assert model_store.STRATEGIES[-1] == "MIL-CREDA"
@@ -832,7 +832,7 @@ def test_the_comparison_is_the_v54_set_and_hasd_is_an_unknown_strategy():
 
 
 def test_cluda_registers_through_the_campaign_with_its_own_axis(registries, monkeypatch):
-    """Plan v55, Sec. 7.7: CLUDA searches the generic contrastive weight and its own
+    """Plan v56, Sec. 7.7: CLUDA searches the generic contrastive weight and its own
     temperature axis, log-uniform in [0.01, 1]."""
     from MIL_CREDA_EEG.comparators.cluda import training as cluda
     assert search.OWN_AXES["CLUDA"] == (FloatDistribution(0.01, 1.0, log=True),)
@@ -846,7 +846,7 @@ def test_cluda_registers_through_the_campaign_with_its_own_axis(registries, monk
 
 
 def test_cluda_runs_through_the_campaign_and_loads_back_whole(tmp_path, registries):
-    """Plan v55, Secs. 7.3, 7.4: CLUDA's phase 2 starts from the common group's checkpoint,
+    """Plan v56, Secs. 7.3, 7.4: CLUDA's phase 2 starts from the common group's checkpoint,
     its final models are stored, and loading one restores its projector and checks the
     comparator's source digest."""
     from MIL_CREDA_EEG.comparators.cluda.model import CLUDAModel
@@ -923,3 +923,81 @@ def test_a_phase_two_study_from_another_checkpoint_names_the_study_to_remove(lev
     with pytest.raises(campaign.CampaignError, match="remove") as refused:
         campaign._check_started_from(product, data, "COT", 0, other, cfg)
     assert str(search.study_path(product, transfer, 2, "COT", 0)) in str(refused.value)
+
+
+def _k2_diagnostics(root: Path) -> dict[str, dict]:
+    rows = _csv(root / "K2-emparejamiento" / "tables" / "diagnostics.csv")
+    assert all(list(r) == list(mechanisms.K2_DIAGNOSTICS_COLUMNS) for r in rows)
+    by_transfer = {r["Transferencia"]: r for r in rows}
+    assert len(by_transfer) == len(rows), "one row per K2 transfer"
+    return by_transfer
+
+
+def _gate(row: dict) -> bool:
+    return mechanisms.k2_has_room(float(row["Mediana de la razón de entropía"]),
+                                  float(row["Mediana de la razón de margen"]))
+
+
+def test_the_rehearsal_writes_the_k2_mechanism_diagnostics(level_run):
+    """v56 Sec. 6.2: per K2 transfer, the diagnostics at the start of phase 2, the push
+    with and without the local term, and the reading gate on the criterion rows."""
+    cfg, product, outcome = level_run
+    root = product / "Results"
+    diagnostics = _k2_diagnostics(root)
+    separation = _csv(root / "K2-emparejamiento" / "tables" / "separation.csv")
+    assert set(diagnostics) == {r["transfer"] for r in separation
+                                if r["model"] == "MIL-CREDA"}
+    for name, row in diagnostics.items():
+        assert int(row["Sujetos de la sonda"]) > 0, name
+        assert 0.0 <= float(row["Mediana de la razón de entropía"]) <= 1.0, name
+        assert 0.0 <= float(row["Fracción con la propia bolsa fuente como la más cercana"]) <= 1.0
+        assert float(row["Mediana de la razón de margen"]) >= 0.0, name
+        # every rehearsal transfer has the global-term-only variant: both pushes measured
+        float(row["Empuje con término local"]), float(row["Empuje sin término local"])
+        assert row["Condición de lectura"] == ("leída" if _gate(row)
+                                               else mechanisms.K2_INCONCLUSIVE), name
+    k2 = json.loads((root / "significance_K2-emparejamiento.json").read_text())
+    declared = {t.name for t in mechanisms.K2_DECLARED.values()}
+    for r in k2:
+        if r["transfer"] in diagnostics:
+            assert r["inconclusive_no_room"] is (not _gate(diagnostics[r["transfer"]]))
+            assert (r.get("verdict") == mechanisms.K2_INCONCLUSIVE) is r["inconclusive_no_room"]
+        else:
+            assert r["transfer"] in declared and "inconclusive_no_room" not in r
+    assert any(r["transfer"] in diagnostics for r in k2)
+    summary = json.loads((root / "K2-emparejamiento" / "summary.json").read_text())
+    assert summary["revision"].endswith("balladeer-v56.md")
+    assert set(summary["diagnostics"]) == set(diagnostics)
+    # v56 Sec. 6.3: both terms vs global only is inconclusive only when NEITHER direction
+    # of the core pair meets the gate
+    k3 = json.loads((root / "significance_K3-ablacion.json").read_text())
+    rows = [r for r in k3 if "both terms vs global term only" in r["comparison"]]
+    assert len(rows) > 1      # the primary row and its secondary metrics
+    expected = not any(_gate(diagnostics[t]) for t in ("L1->L6", "L6->L1"))
+    assert all(r["inconclusive_no_room"] is expected for r in rows)
+    assert all((r.get("verdict") == mechanisms.K2_INCONCLUSIVE) is expected for r in rows)
+    assert not any("inconclusive_no_room" in r for r in k3
+                   if "both terms vs global term only" not in r["comparison"])
+
+
+def test_a_missing_phase_one_checkpoint_leaves_the_k2_diagnostics_not_computed(
+        level_run, registries, tmp_path):
+    """v56 Sec. 6.2: a diagnostic without its stored model is recorded as not computed,
+    with the reason, never fabricated; the gate is then not applied to that transfer."""
+    cfg, product, _ = level_run
+    copy = tmp_path / "product"
+    shutil.copytree(product, copy)
+    for gone in (copy / "Models" / "Balladeer" / "L6-to-L1").rglob("phase1__MIL-CREDA.*"):
+        gone.unlink()
+    out = campaign.run_mechanisms(campaign.check_config(cfg), copy)
+    diagnostics = _k2_diagnostics(copy / "Results")
+    missing = diagnostics["L6->L1"]
+    assert missing["Condición de lectura"].startswith(mechanisms.K2_NOT_COMPUTED)
+    assert "phase-1" in missing["Condición de lectura"]
+    assert missing["Mediana de la razón de entropía"] == ""
+    assert diagnostics["L1->L6"]["Condición de lectura"] in ("leída", mechanisms.K2_INCONCLUSIVE)
+    assert any("L6->L1" in o and "phase-1" in o for o in out["owed"])
+    # Sec. 6.3: with one direction not computed, the flag reads the computed one only
+    k3 = json.loads((copy / "Results" / "significance_K3-ablacion.json").read_text())
+    rows = [r for r in k3 if "both terms vs global term only" in r["comparison"]]
+    assert rows and all(r["inconclusive_no_room"] is (not _gate(diagnostics["L1->L6"])) for r in rows)

@@ -1,6 +1,6 @@
 """The campaign: the plan's declared steps, wired to runnable local commands.
 
-Experiments plan v55, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
+Experiments plan v56, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
 The steps, in order (`STEPS`), each one a subcommand of
 `python -m MIL_CREDA_EEG.campaign <step> --config <file> [--product <dir>]`:
 
@@ -141,7 +141,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.mil_wrapper import COMPARATORS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["4.2", "4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3", "7.3",
                  "7.5", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
@@ -749,7 +749,7 @@ def _assignments(cfg: Mapping, bags: bag_data.BagSet) -> dict[str, assignment_mo
 def test_train_ratio(a: assignment_mod.Assignment, b: assignment_mod.Assignment) -> float:
     """Per rotation, target-test over training subjects summed over both directions; mean.
 
-    The training subjects are the refit's (plan v55, Sec. 4.5): every non-test fold."""
+    The training subjects are the refit's (plan v56, Sec. 4.5): every non-test fold."""
     ratios = []
     for r in sorted(a.rotations, key=int):
         views = [x.rotation(int(r)) for x in (a, b)]
@@ -1076,6 +1076,9 @@ def k3_tables(cfg: Mapping, product: Path, bags: bag_data.BagSet,
         if rows[table]:
             results.write_table(root, K3, table, rows[table])
     if significance:
+        # the mechanisms step's K2 diagnostics, when already measured (Sec. 6.3, v56)
+        _flag_global_only(cfg, significance, core,
+                          _merged_summary(root, "K2-emparejamiento").get("diagnostics") or {})
         results.write_significance(root, K3, significance)
     return pairs
 
@@ -1095,6 +1098,83 @@ def _k1_models(product: Path, transfer, r: int, seed: int,
     return models
 
 
+def _k2_diagnose(product: Path, transfer, a, bags: bag_data.BagSet, r: int, seed: int,
+                 full, no_local, ppath, parts: dict, missing: dict, owed: list) -> None:
+    """Sec. 6.2 (v56): one rotation's mechanism diagnostics, from full MIL-CREDA's stored
+    phase-1 checkpoint (the start of phase 2) and the stored phase-2 models with and
+    without the local term; a missing checkpoint is recorded, never replaced."""
+    pairs = mechanisms.probe_pairs(a, bags, r)
+    if len(pairs) < 2:
+        return
+    path1 = model_store.model_path(_models(product), transfer, r, search.PHASE_ONE_SEED, 1,
+                                   two_phase.MODEL)
+    if not path1.exists():
+        reason = (f"no stored MIL-CREDA phase-1 checkpoint for {transfer.name} r{r}: run "
+                  f"the search step")
+        missing.setdefault(transfer.name, []).append(reason)
+        owed.append(f"K2 diagnostics: {reason}")
+        return
+    start = mechanisms.k2_phase_two_start(model_store.load(path1, partition_path=ppath))
+    tau_loc = model_store.load(_phase_two_path(product, transfer, r, seed, "MIL-CREDA"),
+                               partition_path=ppath)[1]["hyper"]["tauLocal"]
+    parts.setdefault(transfer.name, []).append(mechanisms.k2_rotation_diagnostics(
+        start, full, no_local, pairs, tau_loc=tau_loc, transfer=transfer.name))
+
+
+def _k2_transfer_diagnostics(full_rows, parts: Mapping, missing: Mapping) -> dict[str, dict]:
+    """One diagnostics record per K2 transfer present: pooled over its rotations, or not
+    computed with the reason when a rotation lacks its stored model."""
+    out = {}
+    for name in sorted({r["transfer"] for r in full_rows}):
+        if missing.get(name):
+            out[name] = {"transfer": name, "not_computed": "; ".join(sorted(set(missing[name])))}
+        elif parts.get(name):
+            out[name] = mechanisms.k2_pool_diagnostics(name, parts[name])
+        else:
+            out[name] = {"transfer": name,
+                         "not_computed": "fewer than two probe subjects in every rotation"}
+    return out
+
+
+def _flag_global_only(cfg: Mapping, rows: list, core: Mapping,
+                      diagnostics: Mapping[str, Mapping]) -> bool:
+    """Sec. 6.3 (v56): per core pair, the both-terms vs global-only rows carry
+    `inconclusive_no_room` -- and then the K2 verdict -- only when neither direction
+    meets the Sec. 6.2 reading gate; a pair with no computed direction is left unflagged.
+    True when a row was flagged."""
+    by_name = {t.name: t for t in transfers_of(cfg)}
+    changed = False
+    for arm in sorted(core):
+        first, second = _pair_of(core[arm])
+        if first not in by_name or second not in by_name:
+            continue
+        flag = mechanisms.both_vs_global_only_inconclusive(
+            [diagnostics[n] for n in (first, second) if n in diagnostics])
+        if flag is None:
+            continue
+        comparison = (f"{K3}:ablation:{'|'.join(by_name[first].pair)}:"
+                      f"{K3_TABLES['ablation']['full']} vs {K2_GLOBAL_ONLY}")
+        for row in rows:     # the primary row and its secondary metrics, e.g. " (kappa)"
+            if row["comparison"] == comparison or row["comparison"].startswith(
+                    f"{comparison} ("):
+                row["inconclusive_no_room"] = flag
+                if flag:
+                    row["verdict"] = mechanisms.K2_INCONCLUSIVE
+                changed = True
+    return changed
+
+
+def _flag_global_only_rows(cfg: Mapping, root: Path, core: Mapping,
+                           diagnostics: Mapping[str, Mapping]) -> None:
+    """The k3 step's significance on disk, flagged by `_flag_global_only`."""
+    path = root / f"significance_{K3}.json"
+    if not path.exists():
+        return
+    rows = json.loads(path.read_text(encoding="utf-8"))
+    if _flag_global_only(cfg, rows, core, diagnostics):
+        results.write_significance(root, K3, rows)
+
+
 def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
     """Step 5: K1, K2 and the K3 bound control, from stored models and histories."""
     bags = bags or load_bags(cfg)
@@ -1105,6 +1185,8 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
     owed, out = [], {}
     k1_rows: dict[str, list] = {}
     k2_full, k2_no_local, k2_other = [], [], []
+    k2_parts: dict[str, list] = {}
+    k2_missing: dict[str, list] = {}
     for transfer in transfers_of(cfg):
         a = assignment_mod.assign_from_bags(transfer, bags)
         is_core = transfer.name in core.get(transfer.arm, [])
@@ -1132,14 +1214,17 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
                 k2_full += mechanisms.k2_subject_rows(model, a, bags, rotation=r, seed=seed,
                                                       model_name="MIL-CREDA", metric="kernel")
                 npath = _phase_two_path(product, transfer, r, seed, mechanisms.K2_NO_LOCAL)
+                no_local = None
                 if npath.exists():
+                    no_local = mechanisms.load_phase_two(npath, partition_path=ppath)[0]
                     k2_no_local += mechanisms.k2_subject_rows(
-                        mechanisms.load_phase_two(npath, partition_path=ppath)[0], a, bags,
-                        rotation=r, seed=seed, model_name=mechanisms.K2_NO_LOCAL,
-                        metric="kernel")
+                        no_local, a, bags, rotation=r, seed=seed,
+                        model_name=mechanisms.K2_NO_LOCAL, metric="kernel")
                 elif transfer.name in {t.name for t in mechanisms.K2_DECLARED.values()}:
                     owed.append(f"no stored {mechanisms.K2_NO_LOCAL} model for K2 at "
                                 f"{transfer.name} r{r} s{seed}: run the k3 step")
+                _k2_diagnose(product, transfer, a, bags, r, seed, model, no_local, ppath,
+                             k2_parts, k2_missing, owed)
                 for strategy in cfg["strategies"]:
                     spath = _phase_two_path(product, transfer, r, seed, strategy)
                     if strategy == "MIL-CREDA" or not spath.exists():
@@ -1178,17 +1263,27 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
             synthetic=cfg["synthetic"],
             rehearsal=cfg["rehearsal"])
     if k2_full:
-        rows = mechanisms.k2_tests(k2_full, k2_no_local)
+        diagnostics = _k2_transfer_diagnostics(k2_full, k2_parts, k2_missing)
+        rows = mechanisms.k2_tests(k2_full, k2_no_local, diagnostics=diagnostics)
         results.write_significance(root, "K2-emparejamiento", rows)
         results.write_table(root, "K2-emparejamiento", "tests", mechanisms.k2_test_table(rows))
+        results.write_table(root, "K2-emparejamiento", "diagnostics",
+                            mechanisms.k2_diagnostics_table(list(diagnostics.values())),
+                            columns=mechanisms.K2_DIAGNOSTICS_COLUMNS)
         results.write_table(root, "K2-emparejamiento", "separation",
                             k2_full + k2_no_local + k2_other)
+        _flag_global_only_rows(cfg, root, core, diagnostics)
         results.write_summary(root, "K2-emparejamiento", {
             "probe_subjects": len({(r["transfer"], r["subject"]) for r in k2_full}),
             "declared": {k: v.name for k, v in mechanisms.K2_DECLARED.items()},
             "transfers": sorted({r["transfer"] for r in k2_full}),
             "no_local_variant": mechanisms.K2_NO_LOCAL,
             "no_local_transfers": sorted({r["transfer"] for r in k2_no_local}),
+            "diagnostics": {t: {k: v for k, v in d.items() if k != "per_bag"}
+                            for t, d in diagnostics.items()},
+            "reading_gate": {"median_entropy_ratio_below": mechanisms.K2_ENTROPY_MAX,
+                             "median_room_ratio_at_least": mechanisms.K2_ROOM_MIN,
+                             "otherwise": mechanisms.K2_INCONCLUSIVE},
             "reportSeeds": cfg["reportSeeds"]}, synthetic=cfg["synthetic"],
             rehearsal=cfg["rehearsal"])
         out["K2-emparejamiento"] = len(rows)
@@ -1393,7 +1488,7 @@ def write_synthetic_set(out: str | Path, *, seed: int = 0, subjects: int = 32,
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m MIL_CREDA_EEG.campaign",
-                                     description="The BALLADEER campaign of plan v55, local only.")
+                                     description="The BALLADEER campaign of plan v56, local only.")
     parser.add_argument("step", choices=(*STEPS, "all", "synthetic"))
     parser.add_argument("--config", help="campaign config (JSON)")
     parser.add_argument("--product", default=str(DEFAULT_PRODUCT),

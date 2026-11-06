@@ -25,8 +25,8 @@ main.py/models.py. `third_party/cluda/PIN.json` remains the existing pin, unchan
 **Route: independent controlled-variant implementation; read-only upstream audit,
 no upstream source vendored, no upstream patches.** No upstream training was run.
 
-Bound protocol is `experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md`
-(rebound from v54 on 2026-11-05): v55 publishes the CLUDA replacements R1-R5, which
+Bound protocol is `experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md`
+(rebound from v54 on 2026-11-05, and to v56 on 2026-11-05 with no change of behaviour): v55 published the CLUDA replacements R1-R5, which
 state the official-code loss and the main.py:118-119 selection implemented here.
 Authority is operator L81, superseding L74–L75's paper-Eq. (3) choice and omission
 of source-source loss, plus the parent's subsequent no-positive-anchor ruling.
@@ -154,9 +154,9 @@ identified; no claim to reproduce the paper's numerical results is made.
 
 | Element | Paper / pinned code | This variant / provenance | Verdict |
 | --- | --- | --- | --- |
-| Feature extractor | Paper Eq. (1)/Table 1 CNN+Transformer; models.py:38–162: 40-wide tokens, six layers, ten heads, expansion4, dropout .5, flatten1480->256 | Existing EEGNet-8,2: 8 temporal filters, multiplier2, 16 separable filters, kernels64/16, pooling4/8, BN/ELU, dropout .25, spatial maxnorm1; 256-wide bag representation, v55 §7.3 | deviation: common capacity |
-| Classifier | Paper §3.2.3 two FC; code 256->32->4 with ELU/dropout .3 | Frozen common 256->2 linear bag head, maxnorm .25, v55 §7.3 | deviation: common capacity |
-| MIL aggregation and domain unit | Trial classification; each source subject contains multiple trials | Common tanh/softmax attention, gamma0/no consensus, bag-level labels; subject-domain bag(s), v55 §§7.2–7.4 | deviation: common bag protocol |
+| Feature extractor | Paper Eq. (1)/Table 1 CNN+Transformer; models.py:38–162: 40-wide tokens, six layers, ten heads, expansion4, dropout .5, flatten1480->256 | Existing EEGNet-8,2: 8 temporal filters, multiplier2, 16 separable filters, kernels64/16, pooling4/8, BN/ELU, dropout .25, spatial maxnorm1; 256-wide bag representation, v56 §7.3 | deviation: common capacity |
+| Classifier | Paper §3.2.3 two FC; code 256->32->4 with ELU/dropout .3 | Frozen common 256->2 linear bag head, maxnorm .25, v56 §7.3 | deviation: common capacity |
+| MIL aggregation and domain unit | Trial classification; each source subject contains multiple trials | Common tanh/softmax attention, gamma0/no consensus, bag-level labels; subject-domain bag(s), v56 §§7.2–7.4 | deviation: common bag protocol |
 | Projector | Paper §3.2.4/Table1; models.py:164–178, bias-free linear256->1024, affine BN, ReLU, nonaffine BN, bias-free linear1024->256, nonaffine BN | Same audited architecture; input width from existing model; no inference override | match to code; extra BN layers absent from simplified paper table |
 | Projector initialization | Paper does not state initialization | Fresh PyTorch defaults seeded for each phase-2 run, no inherited phase-one projector | unspecified |
 | BN defaults / precision | Paper silent, code framework defaults | eps1e-5, momentum.1, running stats, common model double precision | unspecified |
@@ -170,19 +170,19 @@ identified; no claim to reproduce the paper's numerical results is made.
 | Missing positives | Verbatim code retains clamped anchor; paper undefined at zero positive mass | Exclude from anchor mean; differentiable zero if none valid; per-step excluded counts, parent follow-up | deviation: minimal bag-level remedy |
 | Coefficient ratio | Paper Eqs.(5)–(7) SS=alpha/10; main.py:88–91 SS=gamma/2, ST=gamma | total=source_ce+w*(ST+.5*SS), `contrastive_objective` | match code ratio; paper/code disagreement resolved L81 |
 | Ramp | Native gamma=2/(1+exp(-10*t/D))-1 | Constant searched w, L79 common schedule | deviation: common fixed phase-2 schedule |
-| Weight range | No published controlled-variant search | w=search.LOSS_WEIGHT [1e-3,10] log, v55 §7.7 | deviation: common search |
+| Weight range | No published controlled-variant search | w=search.LOSS_WEIGHT [1e-3,10] log, v56 §7.7 | deviation: common search |
 | Standalone weight default | No fixed paper value for this variant | 1 for smoke; actual search supplies value | unspecified |
 | Temperatures | models.py:208 / main.py:193 T=.07, T2=.03; paper uses symbol tau | ST default.07, searched search.CONTRASTIVE_TEMPERATURE [.01,1] log; SS fixed.03, no second temperature axis | match code SS/default ST; deviation: common ST search |
 | Optimizer | Paper §4.3 / main.py:62 Adam betas(.5,.999) lr.0002 | Adam betas(.5,.999), target trunk+projector; shared lr2[1e-5,1e-2] log, wd2[1e-7,1e-2] log | match betas; deviation common trainable set/search |
 | Standalone optimizer defaults | No controlled-variant values | lr2=.001, wd2=0 for smoke, same repository convention | unspecified |
 | Source sampling | Official separate shuffled trial batches per source | Shared ClassQueues.draw(bagsPerStep//classes); both source classes required before model construction; repeated subjects grouped, L78 | unspecified |
-| Batch size / epochs | Paper batch36, main.py defaults batch20/epoch200 | Shared checked schedule, >=2 bags/side, exact epochs2, no early stopping, v55 §§4.5,7.7 | deviation: common budget |
+| Batch size / epochs | Paper batch36, main.py defaults batch20/epoch200 | Shared checked schedule, >=2 bags/side, exact epochs2, no early stopping, v56 §§4.5,7.7 | deviation: common budget |
 | Singleton target remainder | Official projector BN cannot train one example | Skip entire update, no projector/optimizer/source draw, count in history; target set<2 refuses, L78 | unspecified |
-| Source CE | Official mean source-domain CE, trainable source | Diagnostic sampled-source bag CE only, no gradient; source frozen v55 §7.3 | deviation: common frozen source |
+| Source CE | Official mean source-domain CE, trainable source | Diagnostic sampled-source bag CE only, no gradient; source frozen v56 §7.3 | deviation: common frozen source |
 | Phase-two bridge/freeze | Native shared trainable Conformer | Existing shared bridge copies compatible weights, keeps spatial initialization for29->14; source BN/attention/head frozen; target trunk trains | deviation: common two-phase protocol |
 | Phase-one checkpoint seed | main.py setup_seed20 | Verify search.PHASE_ONE_SEED=1 despite trial seed0; transfer/rotation/partition/channels checks, L70–L71 | deviation: common checkpoint |
 | Adaptation data | main.py:167–168 target_data=test_data | Target TRAIN bags only, disjoint subjects, no test input, L59 | deviation: inductive common protocol |
-| Selection | main.py:118–119 retains maximum test accuracy | All inner validation epochs recorded, shared pooled BA selection, no refit validation; optional label-free secondary, v55 §4.5 | deviation: removes test-label selection |
+| Selection | main.py:118–119 retains maximum test accuracy | All inner validation epochs recorded, shared pooled BA selection, no refit validation; optional label-free secondary, v56 §4.5 | deviation: removes test-label selection |
 | Preparation, Eq.(8) | Paper filtering/standardization, code main.py norm_type default none | Existing official prepared bag input only, no comparator preparation fork | deviation: common inputs |
 | Persistence | No original controlled-variant checkpoint format | Existing shared model_store plus comparator digest; full projector+BN state, no bridge on reload; integration e5de342 | deviation: repository contract |
 | Smoke | Not a paper experiment | Unit-id SHA256 seed639203496, 8 bags/domain, 2windows/bag,29/14channels,512samples;3/5epochs,8bags/step | deviation: synthetic execution check only |

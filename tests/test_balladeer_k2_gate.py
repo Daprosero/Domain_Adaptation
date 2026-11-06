@@ -118,3 +118,27 @@ def test_section_6_3_flag_only_when_both_directions_fail():
                  {"transfer": "b->a", "median_entropy_ratio": 0.5, "median_room_ratio": 0.5}]
     assert mech.both_vs_global_only_inconclusive(both_fail) is True
     assert mech.both_vs_global_only_inconclusive(one_reads) is False
+
+
+def test_diagnostics_pool_over_rotations_by_bag():
+    """One row per transfer: the medians run over every probe bag of every rotation."""
+    a = mech.k2_transfer_diagnostics(transfer="L1->L6", **_constructed())
+    b = mech.k2_transfer_diagnostics(transfer="L1->L6", **_constructed())
+    pooled = mech.k2_pool_diagnostics("L1->L6", [a, b])
+    assert pooled["probe_subjects"] == 4
+    assert pooled["median_entropy_ratio"] == pytest.approx(a["median_entropy_ratio"])
+    assert pooled["median_room_ratio"] == pytest.approx(0.2, abs=1e-9)
+    assert pooled["fraction_own_nearest"] == pytest.approx(1.0)
+    assert pooled["push_with_local"] is None and pooled["push_without_local"] is None
+
+
+def test_a_not_computed_diagnostic_is_reported_with_its_reason_never_gated():
+    row = {"transfer": "L6->Robots", "not_computed": "no stored MIL-CREDA phase-1 checkpoint"}
+    (table,) = mech.k2_diagnostics_table([row])
+    assert table["Condición de lectura"] == (f"{mech.K2_NOT_COMPUTED}: no stored MIL-CREDA "
+                                             f"phase-1 checkpoint")
+    assert table["Mediana de la razón de entropía"] is None
+    rows = _separation_rows("L1->L6") + _separation_rows("L6->Robots")
+    out = mech.k2_tests(rows, None, diagnostics={"L6->Robots": row})
+    assert not any("inconclusive_no_room" in r for r in out)
+    assert mech.both_vs_global_only_inconclusive([row]) is None

@@ -255,4 +255,4 @@ def test_the_per_fold_minimum_is_a_declared_limitation_with_no_verdict(tmp_path)
     assert entry["min_per_fold"]["source"] == {"no": 3, "yes": 3}
     assert summary["limitation"] == (
         "El mínimo por fold queda como limitación declarada de la selección.")
-    assert separability.__provenance__["revision"].endswith("v55.md")
+    assert separability.__provenance__["revision"].endswith("v56.md")

@@ -1,6 +1,6 @@
 """The defect log: the audit pass and the per-record log of its marks.
 
-Experiments plan v55, Sec. 2.10. The plan's flow table -- initial, rate (2.2),
+Experiments plan v56, Sec. 2.10. The plan's flow table -- initial, rate (2.2),
 record without EEG (2.4), contact (2.5), undetermined diagnosis and EPOC+
 records (2.10), bag floor (3.2), final -- and its crosses by exclusion type are
 produced by `exclusions`, which applies those exclusions. This module is the
@@ -21,7 +21,7 @@ defects whose rule the audit reads directly were applied (an unreadable file;
 a rate outside the menu or different from the nominal, Sec. 2.2). Every other
 row is a mark: a gap longer than a window (2.3), a marked or missing channel
 (2.4), a contact window below the maximum (2.5), and a restarted or
-concatenated session (2.6, `audit_duration`), which v55 marks and reports and
+concatenated session (2.6, `audit_duration`), which v56 marks and reports and
 never excludes. A mark is counted only when its definition needs no number the
 plan has not given, and the continuous distributions behind every mark are
 crossed with the label as well, so a later cut can be chosen without looking at
@@ -58,7 +58,7 @@ from MIL_CREDA_EEG.audit_rate import CGX_MENU, EMOTIV_MENU, audit_rate
 from MIL_CREDA_EEG.modality import emotiv_export_streams, read_record
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["2.6", "2.10"],
     "experiments": ["2.6", "2.10"],
     "invariants": [
@@ -71,7 +71,7 @@ __provenance__ = {
     ],
 }
 
-#: Steps of the audit's own mark table, in plan order (the v55 flow table of
+#: Steps of the audit's own mark table, in plan order (the v56 flow table of
 #: exclusions is `exclusions.STEPS`).
 STEPS = ("inicial", "lectura", "2.2 tasa", "2.3 integridad", "2.4 canales",
          "2.5 contacto", "2.6 duración")

@@ -1,6 +1,6 @@
 """The reproducible entry point: raw BALLADEER in, `Data/processed/` out.
 
-Experiments plan v55, Secs. 2.1-2.10, 3.1, 3.2 and 4.2. One function,
+Experiments plan v56, Secs. 2.1-2.10, 3.1, 3.2 and 4.2. One function,
 `build_processed`, takes the raw release and writes every processed record,
 the manifest, the two flow tables and the exclusion crosses; then it freezes
 the current partition over the surviving subjects (`partition`, Sec. 4.2)
@@ -41,7 +41,7 @@ import pandas as pd
 from MIL_CREDA_EEG import exclusions, inventory, partition
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["2.1", "2.2", "2.3", "2.4", "2.5", "2.7", "2.8", "2.10", "3.1", "3.2", "4.2"],
     "experiments": ["2.1", "2.2", "2.3", "2.4", "2.5", "2.7", "2.8", "2.10", "3.1", "3.2",
                     "4.2"],
