@@ -44,7 +44,7 @@ RETAINED = (
     "CREDA/Notebooks/Plots_Generator.ipynb",
     "CREDA/Notebooks/Results_Generator.ipynb",
     "CREDA/Notebooks/Tables_Generator.ipynb",
-    "MIL-CREDA/Notebooks/BALLADEER_03_Preprocesamiento.ipynb",
+    "MIL-CREDA-EEG/Notebooks/BALLADEER_03_Preprocesamiento.ipynb",
 )
 
 #: What the retired split used to read or write: the stored sweep and its readers.

@@ -117,7 +117,7 @@ def test_a_bag_below_the_floor_leaves_at_its_own_row():
 
 
 def test_the_floor_excludes_no_bag_of_the_processed_data():
-    path = REPO / "MIL-CREDA" / "Data" / "processed" / "manifest.csv"
+    path = REPO / "MIL-CREDA-EEG" / "Data" / "processed" / "manifest.csv"
     if not path.is_file():
         pytest.skip("Data/processed/manifest.csv is not on this machine")
     manifest = pd.read_csv(path)

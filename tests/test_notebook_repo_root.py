@@ -17,6 +17,8 @@ import pytest
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 NOTEBOOKS = REPOSITORY / "MIL-CREDA" / "Notebooks"
+#: Every product folder's notebooks: the proof of concept's and the full EEG campaign's.
+NOTEBOOK_DIRS = (NOTEBOOKS, REPOSITORY / "MIL-CREDA-EEG" / "Notebooks")
 
 #: La celda es de la forja y viaja desde su skill. Se lee de ahí y nunca se
 #: copia acá: una copia y el original se pueden desalinear, y entonces esta
@@ -50,8 +52,8 @@ def _first_code_cell(path: Path) -> str:
 
 
 def _notebooks() -> list[Path]:
-    found = sorted(NOTEBOOKS.glob("*.ipynb"))
-    assert found, f"no notebooks under {NOTEBOOKS}"
+    found = sorted(p for d in NOTEBOOK_DIRS for p in d.glob("*.ipynb"))
+    assert found, f"no notebooks under {NOTEBOOK_DIRS}"
     return found
 
 

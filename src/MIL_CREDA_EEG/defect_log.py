@@ -29,7 +29,7 @@ accuracy.
 
 This module also drives the single pass over the release: each EEG record is
 read once, every audit step runs on it, and its summary is cached as JSON under
-`MIL-CREDA/Results/audit/records/`, so a notebook never re-reads 58 GB. Its
+`MIL-CREDA-EEG/Results/audit/records/`, so a notebook never re-reads 58 GB. Its
 `records.csv` is the per-record table Sec. 2.6 cites and `exclusions` checks
 its excluded sets against.
 """

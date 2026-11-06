@@ -8,7 +8,7 @@ per-window marks that travel with them (Secs. 2.3-2.5, 2.8, 2.1), its label,
 its sex and the fold the frozen partition gave its subject.
 
 **Only what preprocessing kept.** The bags are the records of
-`MIL-CREDA/Data/processed/manifest.csv` with `excluded == False`; EPOC+ and
+`MIL-CREDA-EEG/Data/processed/manifest.csv` with `excluded == False`; EPOC+ and
 every other exclusion were decided there (Secs. 2.10 and 4.3) and are never
 re-decided here.
 
@@ -60,7 +60,7 @@ __provenance__ = {
 
 #: Repository root (src/MIL_CREDA_EEG/bag_data.py -> parents[2]).
 REPOSITORY = Path(__file__).resolve().parents[2]
-PROCESSED_RELATIVE = Path("MIL-CREDA") / "Data" / "processed"
+PROCESSED_RELATIVE = Path("MIL-CREDA-EEG") / "Data" / "processed"
 
 #: Condition name -> (manifest `condition`, manifest `device`).
 CONDITIONS: dict[str, tuple[str, str]] = {

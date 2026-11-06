@@ -17,6 +17,8 @@ import MIL_CREDA as package
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 NOTEBOOKS = REPOSITORY / "MIL-CREDA" / "Notebooks"
+#: Every product folder's notebooks: the proof of concept's and the full EEG campaign's.
+NOTEBOOK_DIRS = (NOTEBOOKS, REPOSITORY / "MIL-CREDA-EEG" / "Notebooks")
 
 #: The forge's own cell 0, where the probe lives. Read when it is there and
 #: skipped when it is not, for the reason `test_distribute.py` states: a clone
@@ -73,7 +75,7 @@ def test_the_declaration_provides_the_kernel_every_notebook_asks_for() -> None:
     Reachable red: drop `ipykernel` from the list, or change a notebook's kernel
     to one this declaration does not install.
     """
-    notebooks = sorted(NOTEBOOKS.glob("*.ipynb"))
+    notebooks = sorted(p for d in NOTEBOOK_DIRS for p in d.glob("*.ipynb"))
     assert notebooks
     kernels = set()
     for path in notebooks:

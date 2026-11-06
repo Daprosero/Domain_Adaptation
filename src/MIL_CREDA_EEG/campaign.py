@@ -192,7 +192,7 @@ K3_TABLES = {
                   "criterion": tuple(a for a in mechanisms.ABLATIONS if a != "both terms")},
 }
 NOT_APPLICABLE = "not applicable"
-DEFAULT_PRODUCT = bag_data.REPOSITORY / "MIL-CREDA"
+DEFAULT_PRODUCT = bag_data.REPOSITORY / "MIL-CREDA-EEG"
 SEPARABILITY_SUMMARY = Path("Results") / "separability" / "summary.json"
 SEPARABILITY_TABLE = Path("Results") / "separability" / "tables" / "separability.csv"
 #: Sec. 4.6: one report seed, seed 1 (the search seed is 0, Sec. 7.7); one source of truth.
@@ -1512,7 +1512,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("step", choices=(*STEPS, "all", "synthetic"))
     parser.add_argument("--config", help="campaign config (JSON)")
     parser.add_argument("--product", default=str(DEFAULT_PRODUCT),
-                        help="product folder holding Results/ and Models/ (default MIL-CREDA/)")
+                        help="product folder holding Results/ and Models/ (default MIL-CREDA-EEG/)")
     parser.add_argument("--out", help="synthetic: where to write the synthetic set")
     parser.add_argument("--seed", type=int, default=0, help="synthetic: generator seed")
     args = parser.parse_args(argv)

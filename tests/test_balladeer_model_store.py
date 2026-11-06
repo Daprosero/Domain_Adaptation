@@ -144,7 +144,7 @@ def test_every_final_model_has_its_own_path_per_transfer_rotation_seed_and_name(
         model_store.model_path(root, LEVEL, 0, 1, 1, "UDA-DDA")       # not a phase-1 group
     with pytest.raises(model_store.StoreError):
         model_store.model_path(root, LEVEL, 0, 1, 2, "common")        # not a strategy
-    assert model_store.DEFAULT_ROOT.parts[-3:] == ("MIL-CREDA", "Models", "Balladeer")
+    assert model_store.DEFAULT_ROOT.parts[-3:] == ("MIL-CREDA-EEG", "Models", "Balladeer")
     # Sec. 6.3: the K3 variants are stored like the final models; the aggregation variants
     # train both phases, the ablation variants only phase 2.
     assert model_store.VARIANTS == {

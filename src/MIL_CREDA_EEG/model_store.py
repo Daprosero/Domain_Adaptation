@@ -42,7 +42,7 @@ commit, because a remote run executes a working tree, and the commit would not
 change when an uncommitted edit did.
 
 **Layout.** `<root>/<source>-to-<target>/rotation<r>/seed<s>/phase<p>__<name>.pt`,
-`<root>` defaulting to `MIL-CREDA/Models/Balladeer/` (`DEFAULT_ROOT`).
+`<root>` defaulting to `MIL-CREDA-EEG/Models/Balladeer/` (`DEFAULT_ROOT`).
 
 **Rebuilding a phase-1 model.** `BUILDERS` maps each phase-1 group to the
 constructor of its architecture; `common` and `MIL-CREDA` are registered here,
@@ -110,7 +110,7 @@ ABLATION_VARIANTS = {variant_name(v): v for v in two_phase.TERM_SELECTIONS
                      if v != two_phase.BOTH_TERMS}
 VARIANTS = {**{n: (1, 2) for n in AGGREGATION_VARIANTS},
             **{n: (2,) for n in ABLATION_VARIANTS}}
-DEFAULT_ROOT = REPOSITORY / "MIL-CREDA" / "Models" / "Balladeer"
+DEFAULT_ROOT = REPOSITORY / "MIL-CREDA-EEG" / "Models" / "Balladeer"
 _SRC = Path(__file__).resolve().parents[1]
 CODE_FILES = (
     *sorted(p.relative_to(_SRC).as_posix() for p in (_SRC / "MIL_CREDA").glob("*.py")),

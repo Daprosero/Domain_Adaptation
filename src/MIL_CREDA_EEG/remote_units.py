@@ -66,7 +66,7 @@ the processed data and of the partition; `FORGE_INPUT_DATASETS` maps each ref to
 its mounted directory, where the processed `manifest.csv` and the partition file
 are looked for. A ref mapped to null is refused: this target has no download. Before
 anything is loaded, every consumed processed file (`manifest.csv` and each kept
-record's NPZ) is verified against `MIL-CREDA/Manifests/processed_sha256.csv`, once
+record's NPZ) is verified against `MIL-CREDA-EEG/Manifests/processed_sha256.csv`, once
 per session (`verify_processed`).
 
 **Smoke** (`smoke`). One unit, the first by default, through `run_units` on the
