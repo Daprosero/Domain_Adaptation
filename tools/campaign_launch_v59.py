@@ -1,6 +1,6 @@
 """Plan the v59 campaign's launch: chains of units, queues, the `--unit` order. Submits nothing.
 
-    queues  --slots 30 [--stat median] [--scale 1.0] --out queues.json
+    queues  --slots 30 [--stat median] [--scale 1.0] [--transfer NAME]... --out queues.json
     order   --queues queues.json --probe <distribute output on u0000..> --out units.json
     check   --queues queues.json --distribute <distribute output on the ordered units>
 
@@ -177,6 +177,8 @@ def balance(items: list[dict], slots: int) -> list[list[dict]]:
 def queues_cmd(args) -> int:
     rows = stops(tool.load_rows(sorted(glob.glob(str(RAW / "*.trials.jsonl")))))
     model = tool.cost_model()
+    if args.transfer:
+        model = {**model, "transfers": {k: model["transfers"][k] for k in args.transfer}}
     minutes = {k: v * args.scale for k, v in unit_minutes(model, epochs_of(rows, args.stat)).items()}
     groups = chains(minutes, model)
     queues = balance(groups, args.slots)
@@ -230,6 +232,8 @@ def main(argv=None) -> int:
     q.add_argument("--slots", type=int, default=30)
     q.add_argument("--stat", default="median", choices=("mean", "p25", "median", "p90"))
     q.add_argument("--scale", type=float, default=1.0)
+    q.add_argument("--transfer", action="append", default=[],
+                   help="repeatable: plan only these transfers (default every transfer)")
     q.add_argument("--out", required=True)
     o = verbs.add_parser("order")
     o.add_argument("--queues", required=True)
