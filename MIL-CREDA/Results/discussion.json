@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "stage": "poc",
-  "protocol": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+  "protocol": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
   "generated_at": "2026-11-05T16:44:07+00:00",
   "summary": "Proof of concept on the rollo toy set with the BatchNorm MLP encoder, 30 seeds, rules pre-registered before each run (Notebooks/PoC_Hypotheses_Rollo.ipynb, run 3). Task-level adaptation is supported; attention with consensus down-weights artifact-like contamination; the local term (K2) shows no gain and the K3 ladder is ordered as expected but not significant. Toy-set results: task, K1 and K2 approved; K3 partly approved (consensus yes, combining terms no). EEG experiments have not run.",
   "discussion_type": [
@@ -15,19 +15,19 @@
       "name": "target-domain accuracy",
       "role": "primary",
       "why": "Decides the task-level and K3 contrasts.",
-      "source": "v56 §5"
+      "source": "v57 §5"
     },
     {
       "name": "attention-mass contrast c",
       "role": "secondary",
       "why": "Reads whether attention down-weights contaminated windows (K1).",
-      "source": "v56 §6.1"
+      "source": "v57 §6.1"
     },
     {
       "name": "partner separation s",
       "role": "secondary",
       "why": "Reads whether the local term pairs compatible bags (K2).",
-      "source": "v56 §6.2"
+      "source": "v57 §6.2"
     }
   ],
   "hypotheses": [
@@ -69,9 +69,11 @@
       "test": "Wilcoxon signed-rank, paired over 30 seeds (pre-registered, Results/PoC_Conditions/preregistration.json)",
       "criterion": "pre-registered rule: every contrast of the family with (Holm-adjusted) p < 0.05",
       "observed": "Not testable on the toy set: H-C makes only a ranking claim (v55:550).",
-      "evidence": [],
-      "verdict": "pending",
-      "rationale": "Not testable on the toy set: H-C states only the ranking among the nine strategies (v55:550), which needs the comparators on EEG. Scope: toy set (rollo, BatchNorm MLP); EEG verdict pending in the full experiments."
+      "evidence": [
+        "Results/PoC_K2K3/verdicts.json"
+      ],
+      "verdict": "inconclusive",
+      "rationale": "Not testable on the toy set: H-C states only the ranking among the nine strategies (protocol v57:540), which needs the comparators on EEG; decided in the full experiments. Scope: toy set; EEG verdict pending."
     },
     {
       "id": "H-K1",
@@ -155,10 +157,12 @@
   ],
   "novelty": {
     "claim": "Unsupervised bag-level adaptation of subject-level EEG diagnosis to unlabeled target bags (relevance- and consensus-weighted bag kernel, class-conditional Rényi global alignment, subject-level local alignment).",
-    "verdict": "pending",
+    "verdict": "partially_justified",
     "evidence": [
-      "Results/PoC_Conditions/h_task.png"
+      "Results/PoC_K2K3/verdicts.json",
+      "Results/PoC_K2K3_v3/verdicts.json",
+      "Results/PoC_Conditions/verdicts.json"
     ],
-    "rationale": "The novelty comparison is against the eight comparators on EEG, which runs only in the full experiments; the PoC supports adaptation over the source-only floor on the toy set. Provisional (NeurIPS-form review, proposal mode, r44): Use-Inspired. This is a use-inspired methods article because its bag-level adaptation design addresses subject-level EEG diagnosis across recording conditions with heterogeneous inputs and coarse labels."
+    "rationale": "On the toy set the method adapts beyond the BN-matched source-only floor, its consensus attention down-weights artifacts, and its local term pulls bags toward their own partner under a subject-specific residual; combining the two alignment terms gives no accuracy gain, and the comparison against the eight comparators is left to the EEG experiments."
   }
 }
