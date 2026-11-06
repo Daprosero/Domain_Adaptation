@@ -1,6 +1,6 @@
 """K1's behavioural event, defined over parsed TAGS rows; preprocessing marks the windows.
 
-Experiments plan v58, Sec. 6.1. Only the TAGS files of the high-density device's
+Experiments plan v59, Sec. 6.1. Only the TAGS files of the high-density device's
 Slackline levels log events with an instant; each logged row (one
 `reactionOrOmission` entry, its `reacted`, `correct` and `duplicated` flags and its
 `generalTime`) is one candidate. A K1 behavioural event is a non-duplicated row
@@ -36,7 +36,7 @@ from collections.abc import Iterable, Mapping, Sequence
 import numpy as np
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
     "sections": ["6.1"],
     "experiments": ["K1-atencion"],
     "invariants": [

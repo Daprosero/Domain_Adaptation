@@ -1,6 +1,6 @@
 """Domain separability re-measured on the assigned subjects, and the core rule.
 
-Experiments plan v58, Sec. 5.1 (and 5.2, 5.3 for their arms; Sec. 4.3 for the
+Experiments plan v59, Sec. 5.1 (and 5.2, 5.3 for their arms; Sec. 4.3 for the
 eligibility report). The audit's
 separabilities were provisional: same subjects on both sides, no reading
 within class, and both Emotiv models together. They are measured again with
@@ -12,7 +12,7 @@ subjects changes.
 **What each measurement compares.** Per transfer and rotation, the source
 subjects in that rotation's training folds against the target subjects in the
 same training folds, each in the one condition the assignment reads for it
-(Sec. 4.3). Under plan v58's nested cross-validation (Secs. 4.2 and 4.5) a
+(Sec. 4.3). Under plan v59's nested cross-validation (Secs. 4.2 and 4.5) a
 rotation's training folds are its three non-test folds (`assignment.REFIT_ROLE`),
 the set the refit trains and adapts on: test subjects of either side never
 enter. Because the assignment is one
@@ -78,7 +78,7 @@ from MIL_CREDA_EEG.bag_data import REPOSITORY, Bag, BagSet
 from MIL_CREDA_EEG.modality import CGX_CHANNELS, EMOTIV_CHANNELS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
     "sections": ["5.1", "5.2", "5.3", "4.3", "4.6"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [

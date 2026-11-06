@@ -32,7 +32,7 @@ from __future__ import annotations
 from pathlib import Path
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
     "sections": ["2.10", "5.4"],
     "experiments": ["2.10", "A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [

@@ -1,4 +1,4 @@
-"""Plan v58 Sec. 4.5: the epoch-0 toy-set check adapter (`tools/epoch0_check.py`).
+"""Plan v59 Sec. 4.5: the epoch-0 toy-set check adapter (`tools/epoch0_check.py`).
 
 Pins, through the adapter's public functions: the score is the EEG centroid rule on the
 toy model's representations; the chosen epoch is the argmax over epochs 1..E with ties to

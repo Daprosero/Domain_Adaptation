@@ -1,6 +1,6 @@
 """Sample integrity: holes in the stream and samples the device made up.
 
-Experiments plan v58, Sec. 2.3. Both device families carry a sample counter,
+Experiments plan v59, Sec. 2.3. Both device families carry a sample counter,
 so a lost sample is visible as a jump in it; Emotiv also flags, per sample,
 whether it was interpolated. The plan declares three defects:
 
@@ -29,7 +29,7 @@ from __future__ import annotations
 import numpy as np
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
     "sections": ["2.3"],
     "experiments": ["2.3"],
     "invariants": [

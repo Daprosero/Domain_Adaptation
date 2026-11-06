@@ -5,7 +5,7 @@ validate one fold of F and train on the other two. Every training runs a fixed n
 epochs (no early stopping); the search records validation per epoch and the refit runs
 exactly E epochs with no validation set. The selection score is the balanced accuracy of
 the subject-level confusion counts pooled over the three inner splits, per epoch: on the
-source labels in phase 1, and in phase 2 through the centroid rule (plan v58), whose counts
+source labels in phase 1, and in phase 2 through the centroid rule (plan v59), whose counts
 are those of source validation bags; EnsV reads the pooled target predictions. Neither
 phase-2 rule reads a target label.
 """

@@ -1,6 +1,6 @@
 """Contact-quality audit, asymmetric across devices by necessity.
 
-Experiments plan v58, Sec. 2.5. Emotiv writes quality indicators per channel
+Experiments plan v59, Sec. 2.5. Emotiv writes quality indicators per channel
 and per session; CGX writes none, so its criterion has to come from the signal.
 
 **Emotiv.** The defect is falling below the acquisition threshold the data
@@ -30,7 +30,7 @@ import pandas as pd
 from scipy.signal import welch
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
     "sections": ["2.5"],
     "experiments": ["2.5"],
     "invariants": [
