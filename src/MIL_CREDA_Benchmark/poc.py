@@ -45,6 +45,7 @@ from MIL_CREDA.attention import bag_embedding
 from MIL_CREDA.bag_kernel import bag_kernel, bag_kernel_matrix
 from MIL_CREDA.local_term import class_correspondence, total_correspondence
 from MIL_CREDA_Benchmark import bags, config, harness, toy_bags, toy_run, wiring
+from MIL_CREDA_Benchmark.poc_math import entropy_ratio, partner_push  # noqa: F401 (re-exported)
 
 #: The one scenario this battery runs (L96: "rollo + mlp BatchNorm").
 FAMILY = "rollo"
@@ -618,18 +619,6 @@ def partner_reading(model, material: dict, device: torch.device) -> dict:
 
 # ------------------------------------------------------- run 4's gating readings
 
-def entropy_ratio(pi: torch.Tensor) -> float:
-    """H(pi) / log(k) for one distribution over k bags: 1 uniform, 0 one-hot.
-
-    Undefined (nan) for k = 1, where there is no choice to spread over.
-    """
-    p = pi.detach().double().reshape(-1)
-    if p.numel() < 2:
-        return float("nan")
-    nonzero = p[p > 0]
-    return float(-(nonzero * nonzero.log()).sum() / math.log(p.numel()))
-
-
 @contextlib.contextmanager
 def pi_entropy_recorder(model):
     """Record, for every phase-2 step, the entropy ratio of Eq. (34)'s
@@ -754,27 +743,6 @@ def partner_geometry(model, material: dict, device: torch.device) -> dict:
         spread.append(spread_of[int(t_labels[j])])
     return {"own": torch.stack(own), "othersMedian": torch.stack(others),
             "spread": torch.stack(spread)}
-
-
-def partner_push(start: dict, end: dict) -> dict:
-    """K2's push from two `partner_geometry` readings of one arm:
-
-    - `pushMean`: mean over bags of d_start(own) - d_end(own), positive when
-      the target bag moved toward its own partner;
-    - `marginStart`/`marginEnd`: mean of own distance minus the median
-      distance to the other same-class source bags (negative: own is closer);
-    - `roomRatioMedian`: median over bags of d_start(own) / the class's
-      same-class source spread, the room the local term starts with.
-    """
-    room = start["own"] / start["spread"]
-    return {"pushMean": float((start["own"] - end["own"]).mean()),
-            "ownDistanceStart": float(start["own"].mean()),
-            "ownDistanceEnd": float(end["own"].mean()),
-            "marginStart": float((start["own"] - start["othersMedian"]).mean()),
-            "marginEnd": float((end["own"] - end["othersMedian"]).mean()),
-            "roomRatioMedian": float(np.median(room.numpy())),
-            "sourceSpreadMedian": float(np.median(start["spread"].numpy())),
-            "bags": int(len(start["own"]))}
 
 
 # ----------------------------------------------------------- one seed's runs

@@ -104,6 +104,8 @@ import numpy as np
 import torch
 
 from MIL_CREDA.bag_kernel import bag_kernel_matrix
+from MIL_CREDA.local_term import class_correspondence
+from MIL_CREDA_Benchmark.poc_math import entropy_ratio
 from MIL_CREDA_EEG import aggregation_variants
 from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, model_store, search
@@ -184,6 +186,17 @@ K2_TABLE_ROWS = (
     ("larger shift", "separation", "Corrimiento mayor: separación de MIL-CREDA mayor que cero"),
     ("smaller shift", "no local", "Corrimiento menor: MIL-CREDA contra sin término local"),
     ("larger shift", "no local", "Corrimiento mayor: MIL-CREDA contra sin término local"))
+#: Sec. 6.2's reading gate (v56): the verdict a transfer carries when the local
+#: term had no room, never "not supported".
+K2_INCONCLUSIVE = "no concluyente (el mecanismo no tuvo margen)"
+#: Sec. 6.2's gate thresholds (v56): read where entropy < 0.9 OR room >= 1.0.
+K2_ENTROPY_MAX = 0.9
+K2_ROOM_MIN = 1.0
+#: Sec. 6.2's diagnostics table, headers verbatim, in the plan's order.
+K2_DIAGNOSTICS_COLUMNS = (
+    "Transferencia", "Sujetos de la sonda", "Mediana de la razón de entropía",
+    "Fracción con la propia bolsa fuente como la más cercana", "Mediana de la razón de margen",
+    "Empuje con término local", "Empuje sin término local", "Condición de lectura")
 #: Sec. 6.3.
 AGGREGATIONS = ("own", *aggregation_variants.VARIANTS)
 ABLATIONS = tuple(two_phase.TERM_SELECTIONS)
@@ -546,19 +559,28 @@ def k2_subject_rows(model, a: assignment_mod.Assignment, bags: bag_data.BagSet, 
 
 
 def k2_tests(full_rows: Sequence[Mapping], no_local_rows: Sequence[Mapping] | None, *,
-             full: str = two_phase.MODEL, no_local: str = K2_NO_LOCAL) -> list[dict]:
-    """Sec. 6.2: separation > 0 and full > no-local on the two declared transfers, Holm/4."""
+             full: str = two_phase.MODEL, no_local: str = K2_NO_LOCAL,
+             diagnostics: Mapping[str, Mapping] | None = None) -> list[dict]:
+    """Sec. 6.2: separation > 0 and full > no-local on the two declared transfers, Holm/4.
+
+    All four tests are always computed and Holm'd over four. When `diagnostics`
+    carries a transfer's reading gate (v56), its two rows carry
+    `inconclusive_no_room` and, where the local term had no room, the verdict
+    `K2_INCONCLUSIVE` -- never "not supported"; the tests are reported either way.
+    """
     experiment = "K2-emparejamiento"
     full_rows = once_per_subject(full_rows)
     no_local_rows = once_per_subject(no_local_rows or [])
     family = []
     for label, transfer in K2_DECLARED.items():
         mine = [r for r in full_rows if r["transfer"] == transfer.name]
+        gate = _k2_gate_extra(diagnostics, transfer.name)
         family.append(_wilcoxon_row(
             [r["separation"] for r in mine],
             comparison=f"{experiment}:{transfer.name} ({label}):separation, {full}",
             name="matched-pairs rank-biserial (others - own distance)", experiment=experiment,
-            extra={"declared": label, "k2_test": "separation"}))
+            extra={"declared": label, "k2_test": "separation", "transfer": transfer.name,
+                   **gate}))
         other = {r["subject"]: r for r in no_local_rows if r["transfer"] == transfer.name}
         diffs = [r["separation"] - other[r["subject"]]["separation"] for r in mine
                  if r["subject"] in other]
@@ -568,8 +590,117 @@ def k2_tests(full_rows: Sequence[Mapping], no_local_rows: Sequence[Mapping] | No
             diffs, comparison=f"{experiment}:{transfer.name} ({label}):{full} vs {no_local}",
             name=f"matched-pairs rank-biserial ({full} - {no_local} separation)",
             experiment=experiment, extra={"declared": label, "k2_test": "no local",
+                                          "transfer": transfer.name, **gate,
                                           **({"not_computed": note} if note else {})}))
     return st.apply_holm(family, f"{experiment} criterion tests")
+
+
+def k2_has_room(median_entropy_ratio: float, median_room_ratio: float) -> bool:
+    """Sec. 6.2's reading gate (v56): read where entropy < 0.9 OR room >= 1.0."""
+    entropy = float(median_entropy_ratio)
+    room = float(median_room_ratio)
+    low_entropy = not np.isnan(entropy) and entropy < K2_ENTROPY_MAX
+    enough_room = not np.isnan(room) and room >= K2_ROOM_MIN
+    return bool(low_entropy or enough_room)
+
+
+def _k2_gate_extra(diagnostics: Mapping[str, Mapping] | None, transfer: str) -> dict:
+    """The `inconclusive_no_room` flag and, when it fires, the K2 verdict."""
+    if not diagnostics or transfer not in diagnostics:
+        return {}
+    d = diagnostics[transfer]
+    read = k2_has_room(d["median_entropy_ratio"], d["median_room_ratio"])
+    return {"inconclusive_no_room": not read,
+            **({} if read else {"verdict": K2_INCONCLUSIVE})}
+
+
+def _same_class_spread(D_ss: np.ndarray, members: np.ndarray) -> float:
+    """Median pairwise H distance among the same-class source bags; nan for < 2."""
+    if members.size < 2:
+        return float("nan")
+    block = D_ss[np.ix_(members, members)]
+    iu = np.triu_indices(members.size, k=1)
+    return float(np.median(block[iu]))
+
+
+def k2_transfer_diagnostics(K_st, source_labels, target_classes, own_index,
+                            D_start, D_start_ss, tau_loc, *, transfer: str | None = None,
+                            D_end_full=None, D_end_no_local=None) -> dict:
+    """Sec. 6.2's mechanism diagnostics on one transfer's probe target bags (v56).
+
+    Measured with the frozen sigma, the phase-1 source encoder and the target
+    encoder at the start of phase 2 (the phase-1 checkpoint), before the
+    criterion verdict is read. For each target bag `j`, `S_c` is the source
+    bags of its pseudo-label `target_classes[j]` and `own_index[j]` is its own
+    source bag:
+
+    - median over bags of the entropy ratio of Eq. 34's pi over `S_c`
+      (`class_correspondence` at `tau_loc`, `entropy_ratio`): 1 uniform, 0 one-hot;
+    - fraction of bags whose own source bag is the kappa^B-nearest of `S_c`;
+    - median room ratio: own-partner H distance at start over the median
+      same-class source-bag spread;
+    - push toward the own source bag, start minus end, with the local term
+      (`D_end_full`) and without it (`D_end_no_local`), when each is given.
+    """
+    K_st = np.asarray(K_st, dtype=float)
+    D_start = np.asarray(D_start, dtype=float)
+    D_start_ss = np.asarray(D_start_ss, dtype=float)
+    source_labels = np.asarray(source_labels)
+    target_classes = np.asarray(target_classes)
+    own_index = np.asarray(own_index, dtype=int)
+    ratios, nearest_hits, rooms, push_full, push_no_local = [], [], [], [], []
+    for j in range(K_st.shape[0]):
+        members = np.nonzero(source_labels == target_classes[j])[0]
+        if members.size == 0:
+            continue
+        own = int(own_index[j])
+        pi = class_correspondence(torch.as_tensor(K_st[j]),
+                                  torch.as_tensor(members), float(tau_loc))
+        ratios.append(entropy_ratio(pi))
+        nearest = int(members[int(np.argmax(K_st[j, members]))])
+        nearest_hits.append(float(nearest == own))
+        spread = _same_class_spread(D_start_ss, members)
+        if not np.isnan(spread) and spread > 0:
+            rooms.append(float(D_start[j, own]) / spread)
+        if D_end_full is not None:
+            push_full.append(float(D_start[j, own]) - float(np.asarray(D_end_full)[j, own]))
+        if D_end_no_local is not None:
+            push_no_local.append(float(D_start[j, own])
+                                 - float(np.asarray(D_end_no_local)[j, own]))
+    return {"transfer": transfer,
+            "probe_subjects": int(K_st.shape[0]),
+            "median_entropy_ratio": float(np.nanmedian(ratios)) if ratios else float("nan"),
+            "fraction_own_nearest": float(np.mean(nearest_hits)) if nearest_hits
+                                    else float("nan"),
+            "median_room_ratio": float(np.median(rooms)) if rooms else float("nan"),
+            "push_with_local": float(np.mean(push_full)) if push_full else None,
+            "push_without_local": float(np.mean(push_no_local)) if push_no_local else None}
+
+
+def k2_diagnostics_table(diagnostics: Sequence[Mapping]) -> list[dict]:
+    """Sec. 6.2's diagnostics table: one row per transfer, headers verbatim."""
+    out = []
+    for d in diagnostics:
+        reading = (K2_INCONCLUSIVE
+                   if not k2_has_room(d["median_entropy_ratio"], d["median_room_ratio"])
+                   else "leída")
+        out.append(dict(zip(K2_DIAGNOSTICS_COLUMNS,
+                            (d.get("transfer"), d.get("probe_subjects"),
+                             d["median_entropy_ratio"], d.get("fraction_own_nearest"),
+                             d["median_room_ratio"], d.get("push_with_local"),
+                             d.get("push_without_local"), reading))))
+    return out
+
+
+def both_vs_global_only_inconclusive(direction_diagnostics: Sequence[Mapping]) -> bool:
+    """Sec. 6.3 (v56): the both-terms vs global-only row of a core pair is
+    inconclusive only when NEITHER of its two directions meets the Sec. 6.2 gate.
+    """
+    diags = list(direction_diagnostics)
+    if not diags:
+        return False
+    return not any(k2_has_room(d["median_entropy_ratio"], d["median_room_ratio"])
+                   for d in diags)
 
 
 def _interval(row: Mapping) -> str:
