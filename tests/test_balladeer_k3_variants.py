@@ -79,7 +79,7 @@ def _reference_step(model, source, target, tau_local, device):
     return {**terms, "objective": _reference_objective(terms), "source_ce": source_ce}
 
 
-#: Every key a phase-2 history record carried at 5395416, less the entropy score plan v58
+#: Every key a phase-2 history record carried at 5395416, less the entropy score plan v59
 #: removed from phase-2 selection (Sec. 4.5).
 PHASE_TWO_KEYS_5395416 = {
     "epoch", "seed", "fold", "model", "transfer", "loss", "global", "local", "source_ce",

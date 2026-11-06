@@ -316,9 +316,9 @@ def test_uda_package_is_a_controlled_variant_and_import_registers_nothing(regist
     assert uda_dda.__provenance__["sections"] == ["7.1", "7.4"]
     # The package, its trainer, its smoke and its losses answer to v56 (Secs. 4.5, 7.7:
     # fixed epochs, no patience).
-    for module, revision in ((uda_dda, "v58"), (training, "v58"), (losses, "v58"),
+    for module, revision in ((uda_dda, "v59"), (training, "v59"), (losses, "v59"),
                              (importlib.import_module(
-                                 "MIL_CREDA_EEG.comparators.uda_dda.smoke"), "v58")):
+                                 "MIL_CREDA_EEG.comparators.uda_dda.smoke"), "v59")):
         assert module.__provenance__["revision"] == (
             f"experiments-plan-experimental-mil-creda-sobre-balladeer-{revision}.md")
 

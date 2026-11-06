@@ -212,7 +212,7 @@ def test_clust_keeps_the_last_epoch_and_records_validation_and_dashboard_history
     # v50: no early stopping; the last epoch is kept even though epoch 0 scored best
     assert result["best_epoch"] == 1 == result["checkpoint"]["epoch"]
     assert all(torch.equal(v, m.state_dict()[k]) for k, v in result["checkpoint"]["state"].items())
-    # plan v58: no per-run secondary state; the search selects both rules' (trial, epoch)
+    # plan v59: no per-run secondary state; the search selects both rules' (trial, epoch)
     assert "secondary_checkpoint" not in result
     assert [v["epoch"] for v in result["validation"]] == [0, 1]
     assert all(len(v["representations"]) == len(v["subjects"]) for v in result["validation"])

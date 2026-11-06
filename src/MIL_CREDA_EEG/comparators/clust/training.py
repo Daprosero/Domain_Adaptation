@@ -1,4 +1,4 @@
-"""Target-only phase 2 of the controlled CLUST variant (plan v58 §§7.3–7.4, 7.7).
+"""Target-only phase 2 of the controlled CLUST variant (plan v59 §§7.3–7.4, 7.7).
 
 No source data argument exists. Source weights, common attention and diagnostic
 head stay fixed. EMA components are auxiliary, never diagnostic heads. Phase 2
@@ -6,7 +6,7 @@ runs its `epochs2` whole and keeps the last epoch (no early stopping, v56 §7.7)
 with target validation bags every epoch's validation predictions are recorded for
 the search's pooled selection (with each bag's representation, `two_phase.represent`),
 and without them (the refit) nothing is evaluated. The source pass of Sec. 4.5's
-centroid rule runs in `search`, outside this trainer (plan v58 §7.3): the
+centroid rule runs in `search`, outside this trainer (plan v59 §7.3): the
 adaptation reads no source data, and no run here selects anything.
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 from . import losses
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
     "sections": ["4.5", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["clust_adaptation_never_reads_training_labels_or_source_bags",

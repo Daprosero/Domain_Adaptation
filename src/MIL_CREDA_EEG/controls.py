@@ -1,6 +1,6 @@
 """The internal references: source-only controls and the target-supervised upper bound.
 
-Experiments plan v58, Secs. 4.5 and 7.5, for the experiments A-nivel (Sec. 5.1),
+Experiments plan v59, Secs. 4.5 and 7.5, for the experiments A-nivel (Sec. 5.1),
 B-tarea (Sec. 5.2) and C-dispositivo (Sec. 5.3).
 
 **The main source-only reference.** The common-group phase-1 checkpoint (the
@@ -67,7 +67,7 @@ from MIL_CREDA_EEG import bag_data, mil_wrapper, model_store, search, two_phase
 from MIL_CREDA_EEG.mil_creda_model import CLASSES
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
     "sections": ["4.5", "7.3", "7.5"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [

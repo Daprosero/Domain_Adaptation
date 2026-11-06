@@ -1,4 +1,4 @@
-"""Experiments plan v58, Secs. 4.2, 4.5, 7.3 and 7.7: selection by nested cross-validation.
+"""Experiments plan v59, Secs. 4.2, 4.5, 7.3 and 7.7: selection by nested cross-validation.
 
 One Optuna study per strategy, transfer and outer fold; each phase-2 trial is scored on the
 three inner splits of the outer fold's non-test folds, per epoch, by the centroid rule: the

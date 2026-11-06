@@ -1,4 +1,4 @@
-"""Experiments plan v58, Secs. 4.5, 7.3 and 7.7: the phase-2 selection rules.
+"""Experiments plan v59, Secs. 4.5, 7.3 and 7.7: the phase-2 selection rules.
 
 The primary rule is the centroid rule: per inner split and epoch, the adapted model's
 target validation predictions are pseudo-labels, their representations Z (the vector

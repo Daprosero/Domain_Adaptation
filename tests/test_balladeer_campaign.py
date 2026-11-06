@@ -310,7 +310,7 @@ def test_stale_predictions_are_refused_naming_what_differs(tmp_path, monkeypatch
 
 
 def test_every_changed_module_answers_to_one_plan_revision():
-    assert campaign.REVISION.endswith("v58.md")
+    assert campaign.REVISION.endswith("v59.md")
     for module in (search, results, model_store):
         assert module.__provenance__["revision"] == campaign.REVISION
 
@@ -1024,7 +1024,7 @@ def test_the_rehearsal_writes_the_k2_mechanism_diagnostics(level_run):
             assert r["transfer"] in declared and "inconclusive_no_room" not in r
     assert any(r["transfer"] in diagnostics for r in k2)
     summary = json.loads((root / "K2-emparejamiento" / "summary.json").read_text())
-    assert summary["revision"].endswith("balladeer-v58.md")
+    assert summary["revision"].endswith("balladeer-v59.md")
     assert set(summary["diagnostics"]) == set(diagnostics)
     # v56 Sec. 6.3: both terms vs global only is inconclusive only when NEITHER direction
     # of the core pair meets the gate

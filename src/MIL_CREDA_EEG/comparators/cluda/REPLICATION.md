@@ -25,7 +25,7 @@ main.py/models.py. `third_party/cluda/PIN.json` remains the existing pin, unchan
 **Route: independent controlled-variant implementation; read-only upstream audit,
 no upstream source vendored, no upstream patches.** No upstream training was run.
 
-Bound protocol is `experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md`
+Bound protocol is `experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md`
 (rebound from v54 on 2026-11-05, and to v56 on 2026-11-05 with no change of behaviour): v55 published the CLUDA replacements R1-R5, which
 state the official-code loss and the main.py:118-119 selection implemented here.
 Authority is operator L81, superseding L74–L75's paper-Eq. (3) choice and omission
@@ -182,7 +182,7 @@ identified; no claim to reproduce the paper's numerical results is made.
 | Phase-two bridge/freeze | Native shared trainable Conformer | Existing shared bridge copies compatible weights, keeps spatial initialization for29->14; source BN/attention/head frozen; target trunk trains | deviation: common two-phase protocol |
 | Phase-one checkpoint seed | main.py setup_seed20 | Verify search.PHASE_ONE_SEED=1 despite trial seed0; transfer/rotation/partition/channels checks, L70–L71 | deviation: common checkpoint |
 | Adaptation data | main.py:167–168 target_data=test_data | Target TRAIN bags only, disjoint subjects, no test input, L59 | deviation: inductive common protocol |
-| Selection | main.py:118–119 retains maximum test accuracy | All inner validation epochs recorded, the search's centroid primary and EnsV secondary selection with no target label, no refit validation, v58 §4.5 | deviation: removes test-label selection |
+| Selection | main.py:118–119 retains maximum test accuracy | All inner validation epochs recorded, the search's centroid primary and EnsV secondary selection with no target label, no refit validation, v59 §4.5 | deviation: removes test-label selection |
 | Preparation, Eq.(8) | Paper filtering/standardization, code main.py norm_type default none | Existing official prepared bag input only, no comparator preparation fork | deviation: common inputs |
 | Persistence | No original controlled-variant checkpoint format | Existing shared model_store plus comparator digest; full projector+BN state, no bridge on reload; integration e5de342 | deviation: repository contract |
 | Smoke | Not a paper experiment | Unit-id SHA256 seed639203496, 8 bags/domain, 2windows/bag,29/14channels,512samples;3/5epochs,8bags/step | deviation: synthetic execution check only |
