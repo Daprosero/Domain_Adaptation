@@ -1,6 +1,6 @@
 """Ocular artifact: MEASURE, never act.
 
-Experiments plan v57, Sec. 2.8. The plan declares a defect ("a record whose
+Experiments plan v58, Sec. 2.8. The plan declares a defect ("a record whose
 fraction of contaminated epochs exceeds the declared threshold") but no
 threshold, and no definition of a contaminated epoch. Before any rule exists
 the question the operator asked comes first: is ocular activity in the EEG
@@ -55,7 +55,7 @@ from MIL_CREDA_EEG.modality import (
 )
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
     "sections": ["2.8"],
     "experiments": ["2.8"],
     "invariants": [

@@ -1,6 +1,6 @@
 """EEGNet-8,2 split in two: the instance encoder and the common predictive head.
 
-Experiments plan v57, Sec. 7.3. The configuration is EEGNet-8,2 of Lawhern et
+Experiments plan v58, Sec. 7.3. The configuration is EEGNet-8,2 of Lawhern et
 al. (2018, https://arxiv.org/abs/1611.08024) as its official implementation
 fixes it (https://raw.githubusercontent.com/vlawhern/arl-eegmodels/master/EEGModels.py):
 F1 = 8 temporal filters, D = 2 spatial filters per temporal filter, F2 = 16
@@ -54,7 +54,7 @@ from torch import nn
 from torch.nn import functional as F
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
     "sections": ["7.3", "3.1", "5.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "equations": ["13", "20"],

@@ -1,6 +1,6 @@
 """MIL_CREDA_EEG: the BALLADEER EEG data audit, preprocessing and data units.
 
-Experiments plan v57 (`experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md`;
+Experiments plan v58 (`experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md`;
 the audit was first written against v02), Secs. 2.1-2.6 and 2.10, for the audit. One
 module per audit step, each declaring the revision and section it implements in its
 own `__provenance__`. The data units -- the four-fold partition (`partition`), bags

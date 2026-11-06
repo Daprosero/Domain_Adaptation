@@ -398,7 +398,7 @@ def test_a_stored_k3_variant_model_is_rebuilt_for_its_attention(tmp_path):
 
 def test_the_provenance_binds_plan_v56():
     assert mech.__provenance__["revision"] == (
-        "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md")
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md")
 
 
 def test_every_k1_and_k2_wilcoxon_row_carries_hodges_lehmann_and_its_interval():
