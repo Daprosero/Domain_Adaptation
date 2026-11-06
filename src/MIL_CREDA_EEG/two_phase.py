@@ -5,9 +5,15 @@ Experiments plan v58, Secs. 4.5, 7.3 and 7.7, over proposal r44 Eqs. 21 and
 `src/MIL_CREDA_Benchmark/toy_run.py` before 9b733d7) as a reference; nothing of
 it is imported or restored, and the plan's rules govern where the two differ.
 
-**Fixed epochs, no early stopping (Secs. 4.5, 7.7).** Every training here runs
-the epoch count it is given, whole, and keeps the weights of its last epoch; no
-phase uses patience and no epoch is restored. With validation bags (a search
+**Epochs and the search's pooled early stopping (Secs. 4.5, 7.6, 7.7).** Every
+training here keeps the weights of its last trained epoch; no epoch is restored.
+Outside a search trial it runs the epoch count it is given, whole (a refit runs
+exactly the selected E1 or E2). Inside a search trial the three inner splits'
+trainings advance together and stop when the trial's POOLED selection score has
+not improved for the phase's patience (plan v59): every trainer loops over
+`epoch_range(count)`, which is `range(count)` unless the calling thread runs
+under an `epoch_control` the search installed, and `validation_record` hands each
+epoch's record to that control. Nothing in a trainer's numerics depends on it. With validation bags (a search
 training on one inner split) the validation predictions of every epoch are
 recorded (`validation_record`: subject, label and predicted probabilities per
 bag, and in phase 2 each bag's representation Z, the vector entering the
@@ -94,8 +100,10 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -150,8 +158,9 @@ TERM_SELECTIONS = {"global term only": (LAMBDA_GLOBAL, 0.0),
                    "local term only": (0.0, LAMBDA_LOCAL),
                    "both terms": (LAMBDA_GLOBAL, LAMBDA_LOCAL)}
 BOTH_TERMS = "both terms"
-#: Sec. 7.7: what each phase searches, and the schedule the pilot fixes (7.6). The
-#: epochs are the search's caps, or the selected E1 and E2 of a refit; no patience.
+#: Sec. 7.7: what each phase searches, and the schedule (7.6). The epochs are the
+#: search's caps (at most `search.EPOCH_CAP`; the search's pooled patience may stop a
+#: trial earlier, plan v59), or the selected E1 and E2 of a refit.
 PHASE_ONE_KEYS = ("lr1", "wd1", "attentionGamma", "attentionTemperature", "sigmaMultiplier")
 PHASE_TWO_KEYS = ("lr2", "wd2", "tauLocal")
 SCHEDULE_KEYS = ("epochs1", "epochs2", "bagsPerStep")
@@ -239,6 +248,42 @@ def balanced_accuracy(labels: Sequence[int], predicted: Sequence[int]) -> float:
     return float(np.mean(recalls)) if recalls else float("nan")
 
 
+#: The calling thread's epoch control (`epoch_control`), when a search trial runs it.
+_EPOCH_CONTROL = threading.local()
+
+
+@contextmanager
+def epoch_control(control) -> Iterator[None]:
+    """Run the calling thread's trainings under `control` (plan v59, Secs. 4.5, 7.6): an
+    object with `collect(record)`, given every `validation_record` this thread builds,
+    and `boundary(epoch) -> bool`, asked after each trained epoch whether to train the
+    next one. The search's lockstep of the three inner splits installs it; nothing else."""
+    previous = getattr(_EPOCH_CONTROL, "control", None)
+    _EPOCH_CONTROL.control = control
+    try:
+        yield
+    finally:
+        _EPOCH_CONTROL.control = previous
+
+
+def epoch_range(count: int) -> Iterator[int]:
+    """The epochs a trainer runs: `range(count)`, or its prefix up to the epoch the
+    calling thread's `epoch_control` stops at (the search's pooled early stopping, plan
+    v59). After each epoch the control is told it ended, including the last one, so the
+    trainer's code after its loop runs only when the control lets it."""
+    count = int(count)
+    control = getattr(_EPOCH_CONTROL, "control", None)
+    if control is None:
+        yield from range(count)
+        return
+    for epoch in range(count):
+        if epoch and not control.boundary(epoch - 1):
+            return
+        yield epoch
+    if count:
+        control.boundary(count - 1)
+
+
 def validation_record(epoch: int, bags: Sequence[BagTensor], G: torch.Tensor,
                       Z: torch.Tensor | None = None) -> dict:
     """One epoch's validation predictions of one inner split, as the search pools them:
@@ -250,6 +295,9 @@ def validation_record(epoch: int, bags: Sequence[BagTensor], G: torch.Tensor,
               "probabilities": G.detach().to(torch.float64).cpu().tolist()}
     if Z is not None:
         record["representations"] = Z.detach().to(torch.float64).cpu().tolist()
+    control = getattr(_EPOCH_CONTROL, "control", None)
+    if control is not None:
+        control.collect(record)
     return record
 
 
@@ -503,7 +551,8 @@ def train_source_phase(model: MILCREDAModel, source_train: Sequence[BagTensor],
                        source_valid: Sequence[BagTensor], hyper: Mapping,
                        generator: torch.Generator, device: torch.device, *,
                        seed: int = 0, fold: int = 0, transfer: str = "") -> dict:
-    """Phase 1: Eq. 21 on the source for exactly `epochs1` epochs, no early stopping.
+    """Phase 1: Eq. 21 on the source for `epochs1` epochs (`epoch_range`: fewer only when
+    the search's pooled early stopping ends a trial), no early stopping of its own.
 
     With `source_valid` (an inner split) every epoch's validation is recorded; without
     it (the refit on every non-test fold) nothing is evaluated. The checkpoint is the
@@ -516,7 +565,7 @@ def train_source_phase(model: MILCREDAModel, source_train: Sequence[BagTensor],
     valid_labels = _labels(source_valid)
     history, seconds, validation = [], [], []
     nan = float("nan")
-    for epoch in range(hyper["epochs1"]):
+    for epoch in epoch_range(hyper["epochs1"]):
         started = time.perf_counter()
         model.train()
         total, steps = 0.0, 0
@@ -612,7 +661,8 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
                        generator: torch.Generator, device: torch.device, *,
                        seed: int = 0, fold: int = 0, transfer: str = "",
                        term_selection: str = BOTH_TERMS) -> dict:
-    """Phase 2: the target trunk alone, at the phase-1 sigma, for exactly `epochs2` epochs.
+    """Phase 2: the target trunk alone, at the phase-1 sigma, for `epochs2` epochs
+    (`epoch_range`: fewer only when the search's pooled early stopping ends a trial).
 
     The checkpoint is the last epoch's (no early stopping). With `target_valid` (an inner
     split) every epoch's validation is recorded, with the bags' representations; without
@@ -629,7 +679,7 @@ def adapt_target_phase(model: MILCREDAModel, phase_one: Mapping, frozen_state: M
     per_class = hyper["bagsPerStep"] // model.classes
     valid_labels = _labels(target_valid)
     history, seconds, validation = [], [], []
-    for epoch in range(hyper["epochs2"]):
+    for epoch in epoch_range(hyper["epochs2"]):
         started = time.perf_counter()
         set_phase_two_modes(model)
         sums = {"loss": 0.0, "global": 0.0, "local": 0.0, "source_ce": 0.0,

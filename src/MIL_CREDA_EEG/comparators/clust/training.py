@@ -151,7 +151,7 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
                                  weight_decay=params["wd2"])
     history, seconds, validation = [], [], []
     labels = [b.label for b in target_valid]  # selection only, never adaptation
-    for epoch in range(int(epochs)):
+    for epoch in two_phase.epoch_range(int(epochs)):
         started = time.perf_counter()
         two_phase.set_phase_two_modes(model)
         sums = {k: 0.0 for k in ("loss", "feature", "semantic", "consistency", "information",

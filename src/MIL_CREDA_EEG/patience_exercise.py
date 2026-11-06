@@ -13,6 +13,10 @@ best epoch under patience and whether the cap was reached are computed afterward
 patience of their own and the score of epoch e never depends on later epochs) and gives
 every patience at once.
 
+Plan v59 adopted the rule (cap 100, patience 30 in phase 1 and 10 in phase 2) inside
+`search` itself (`search.train_inner_splits`), so a study run by this exercise now stops on
+the search's own patience; the records it already produced were measured on full series.
+
 A trial is draw k of the campaign's own sampler (`search.SAMPLER_SEED`; the GPSampler's
 first 10 trials come from its independent `RandomSampler` with that seed), enqueued into
 a one-trial study so the campaign's objective runs unchanged.

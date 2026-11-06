@@ -157,7 +157,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=params["lr2"], weight_decay=params["wd2"])
     history, validation = [], []
     size = schedule["bagsPerStep"]
-    for epoch in range(schedule["epochs2"]):
+    for epoch in two_phase.epoch_range(schedule["epochs2"]):
         source_batches = two_phase.shuffled_batches(len(source_train), size, generator)
         totals = []
         for step, batch in enumerate(two_phase.shuffled_batches(len(target_train), size, generator)):

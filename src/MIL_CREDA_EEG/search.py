@@ -18,9 +18,21 @@ the outer test fold's subjects.
 
 **A trial (Secs. 4.5, 7.7).** Each configuration is trained on the three inner
 splits of its outer fold with ONE training seed, `SEARCH_SEED`, distinct from
-the single report seed (`REPORT_SEEDS`, Sec. 4.6), for its whole epoch cap
-(`epochs1` or `epochs2`, no early stopping), recording every epoch's validation
-predictions. Per epoch, the subject-level confusion counts of the three inner
+the single report seed (`REPORT_SEEDS`, Sec. 4.6), recording every trained epoch's
+validation predictions. Plan v59 (Secs. 4.5, 7.6): a trial trains at most its epoch cap
+(`epochs1` or `epochs2`, at most `EPOCH_CAP` = 100) and stops when the POOLED per-epoch
+selection score of its phase has not improved for `PATIENCE[phase]` consecutive epochs
+(30 in phase 1, 10 in phase 2), never before a strategy's `MIN_TRAINED_EPOCHS` (CCA-LSC:
+3 warm-up + 1 calibrated). The three inner splits advance together for that
+(`train_inner_splits`): each split trains in its own thread, one split computing at a
+time in split order, each keeping its own RNG state, so every trainer's numbers are those
+of a serial run; after every split's epoch e the pooled score of e decides whether all of
+them train e + 1. The trial's selected epoch is still the best of its pooled series; the
+refit trains exactly that many epochs with no early stopping; EnsV's candidates are the
+(trial, epoch) pairs actually trained. Each trial records `trainedEpochs`, `reachedCap`,
+`patience` and `epochCap`; `stopping_diagnostic` gives, per strategy, the fraction of
+trials that reached the cap and of selected epochs equal to their trial's last trained
+epoch. Per epoch, the subject-level confusion counts of the three inner
 splits are pooled (each subject of F once) and the balanced accuracy is computed
 once on them (Forman and Scholz, 2010): no mean per split and no deviation. The
 trial's value, what the sampler observes, is the best epoch's pooled balanced
@@ -111,7 +123,7 @@ remaining count in one `optimize` call, as before.
 
 **Implementation choices the plan does not fix.** The seeds: `SEARCH_SEED` = 0,
 `REPORT_SEEDS` = (1,), `SAMPLER_SEED` = 20261102. The epoch caps (`epochs1`,
-`epochs2`) and `bagsPerStep` are inputs with no default: the pilot fixes them
+`epochs2`, at most `EPOCH_CAP`) and `bagsPerStep` are inputs with no default
 (Sec. 7.6). Groups other than
 MIL-CREDA fix `attentionGamma` = 0, `attentionTemperature` = 1 and
 `sigmaMultiplier` = 1 in the phase-1 trainer's key set
@@ -124,6 +136,8 @@ nobody chose.
 from __future__ import annotations
 
 import math
+import random
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -148,6 +162,14 @@ __provenance__ = {
         "no_comparator_phase_two_is_wired_and_the_hook_takes_only_the_generic_rule",
         "the_comparator_specific_axes_are_admitted_only_for_their_own_strategy",
         "epoch_caps_have_no_default",
+        "the_caps_and_patience_values_are_those_of_v59",
+        "a_trial_stops_after_exactly_patience_epochs_without_pooled_improvement",
+        "the_phase_one_stop_uses_the_pooled_score_not_one_split",
+        "the_cap_of_100_is_respected",
+        "cca_lsc_trains_its_minimum_epochs_before_it_can_stop",
+        "the_coordinated_splits_keep_the_trainers_numerics",
+        "the_refit_trains_exactly_the_selected_epochs_with_no_early_stopping",
+        "the_stopping_diagnostic_reports_cap_and_last_epoch_fractions",
         "the_objective_is_the_best_epochs_pooled_balanced_accuracy_over_the_inner_splits",
         "the_phase_two_objective_is_the_centroid_rule_and_reads_no_target_label",
         "the_source_representations_are_computed_once_per_outer_fold_and_inner_split",
@@ -185,6 +207,15 @@ PHASE_ONE_SEED = REPORT_SEEDS[0]
 #: The fields of a phase-1 checkpoint's sidecar that name it (`phase_one_checkpoint_identity`).
 PHASE_ONE_CHECKPOINT_FIELDS = ("transfer", "rotation", "seed", "phase", "name",
                                partition.HASH_FIELD, "state_sha256")
+#: Plan v59, Secs. 4.5 and 7.6: every search trial trains at most `EPOCH_CAP` epochs and
+#: stops when the POOLED per-epoch selection score of its phase (phase 1: source-validation
+#: balanced accuracy; phase 2: the centroid score; both over the three inner splits) has
+#: not improved for `PATIENCE[phase]` consecutive epochs. A refit has no early stopping.
+EPOCH_CAP = 100
+PATIENCE = {1: 30, 2: 10}
+#: The epochs a strategy's trainer needs before its trial may stop: CCA-LSC's 3 warm-up
+#: epochs plus one calibrated epoch (`comparators.cca_lsc.training.WARMUP_EPOCHS` + 1).
+MIN_TRAINED_EPOCHS = {"CCA-LSC": 4}
 #: Sec. 4.2: the inner splits of each outer fold, one per non-test fold.
 N_INNER = partition.N_FOLDS - 1
 DEFAULT_ROOT = bag_data.REPOSITORY / "MIL-CREDA-EEG"
@@ -410,6 +441,22 @@ PRIMARY_RULE = ("phase 1: the best epoch's source-validation balanced accuracy o
                 "of the target validation bags' pseudo-classes, counts pooled over the three "
                 "inner splits, balanced accuracy once), no target label; the lowest trial "
                 "and earliest epoch on ties (Sec. 4.5)")
+#: What a study's sampler observes, part of its identity (`open_study` refuses a study
+#: scored by another objective, a v58 one included).
+PHASE_ONE_OBJECTIVE = (
+    "plan v59, Secs. 4.5 and 7.6: the best epoch's source-validation balanced accuracy of "
+    "the subject-level confusion counts pooled over the three inner splits; each trial "
+    f"trains at most {EPOCH_CAP} epochs and stops when that pooled score has not improved "
+    f"for {PATIENCE[1]} consecutive epochs")
+PHASE_TWO_OBJECTIVE = (
+    "plan v59, Secs. 4.5 and 7.6, no target label: the best epoch's centroid-rule balanced "
+    "accuracy (the source validation bags of each inner split assigned to the nearest "
+    "centroid of the adapted model's target validation pseudo-classes, scored against "
+    "their source labels, counts pooled over the three inner splits), what the sampler "
+    f"observes; each trial trains at most {EPOCH_CAP} epochs and stops when that pooled "
+    f"score has not improved for {PATIENCE[2]} consecutive epochs (never before a "
+    "strategy's MIN_TRAINED_EPOCHS); ensvProbabilities: per trained epoch, the pooled "
+    "target validation probabilities the EnsV secondary rule reads")
 ENSV_RULE = ("EnsV (Hu et al., NeurIPS 2024): every (trial, epoch) of the phase-2 study is "
              "a candidate; the mean of their predicted probabilities per target bag of F is "
              "the role model, whose argmax is the bag's pseudo-label; the candidate with "
@@ -565,6 +612,225 @@ def select(study: optuna.Study, rule: str = "primary") -> dict:
                                        for x in attrs["innerSplits"]],
                    excludedRotation=int(attrs["testFold"]))
     return out
+
+
+# ------------------------------------------------------------------ pooled early stopping
+
+
+@dataclass
+class PooledStop:
+    """Plan v59's stop of one search trial over its pooled per-epoch score: an epoch
+    improves when its score is strictly greater than every earlier one (a non-finite score
+    never improves); after `update`, the trial stops when it trained `cap` epochs, or at
+    least `minimum` epochs and the last `patience` ones did not improve."""
+
+    patience: int
+    cap: int
+    minimum: int = 1
+    trained: int = 0
+    best: float = -math.inf
+    best_epoch: int = -1
+
+    def update(self, score: float) -> bool:
+        epoch, self.trained = self.trained, self.trained + 1
+        if math.isfinite(score) and score > self.best:
+            self.best, self.best_epoch = float(score), epoch
+        return self.trained >= self.cap or (self.trained >= self.minimum
+                                            and epoch - self.best_epoch >= self.patience)
+
+
+def _rng_state() -> tuple:
+    cuda = (torch.cuda.get_rng_state_all()
+            if torch.cuda.is_available() and torch.cuda.is_initialized() else None)
+    return torch.get_rng_state(), cuda, np.random.get_state(), random.getstate()
+
+
+def _set_rng_state(state: tuple) -> None:
+    cpu, cuda, numpy_state, python_state = state
+    torch.set_rng_state(cpu)
+    if cuda is not None:
+        torch.cuda.set_rng_state_all(cuda)
+    np.random.set_state(numpy_state)
+    random.setstate(python_state)
+
+
+class _Lockstep:
+    """The three inner splits of one trial, each trained in its own thread, advancing one
+    epoch at a time in split order: only the split whose turn it is computes (so peak
+    memory is one split's), each keeps its own global RNG state across its turns (so its
+    numbers are those of a serial run), and after the last split's epoch e the pooled
+    score of epoch e decides whether every split trains epoch e + 1."""
+
+    def __init__(self, n: int, score: Callable[[Sequence[Mapping]], float], stop: PooledStop):
+        self.n, self.score, self.stop = n, score, stop
+        self.cond = threading.Condition()
+        self.turn = 0
+        self.alive = [True] * n
+        self.pending: dict[int, dict[int, Mapping]] = {}
+        self.decided = -1
+        self.stopped = False
+        self.error: BaseException | None = None
+        self.series: list[float] = []
+        self.rng: list[tuple | None] = [None] * n
+
+    def _next(self, i: int) -> int | None:
+        for k in range(1, self.n + 1):
+            j = (i + k) % self.n
+            if self.alive[j]:
+                return j
+        return None
+
+    def _fail(self, error: BaseException) -> None:
+        if self.error is None:
+            self.error = error
+        self.stopped = True
+
+    def _decide(self, epoch: int) -> None:
+        records = self.pending.pop(epoch, {})
+        if not self.stopped:
+            if sorted(records) != list(range(self.n)):
+                self._fail(SearchError(f"epoch {epoch} was recorded by inner splits "
+                                       f"{sorted(records)} only; the score pools all "
+                                       f"{self.n}"))
+            else:
+                try:
+                    value = float(self.score([records[k] for k in range(self.n)]))
+                except Exception as error:      # failed the trial, never hidden
+                    self._fail(error)
+                else:
+                    self.series.append(value)
+                    if self.stop.update(value):
+                        self.stopped = True
+        self.decided = epoch
+
+    def _hand_over(self, i: int, epoch: int | None) -> None:
+        j = self._next(i)
+        if epoch is not None and (j is None or j <= i):
+            self._decide(epoch)        # split i was the last of this epoch's round
+        self.turn = j if j is not None else i
+        self.cond.notify_all()
+
+    def run(self, train_split: Callable[[int], Mapping]) -> list[Mapping]:
+        outs: list[Mapping | None] = [None] * self.n
+
+        def work(i: int) -> None:
+            control = _SplitControl(self, i)
+            with self.cond:
+                self.cond.wait_for(lambda: self.turn == i)
+                failed = self.error is not None
+            try:
+                if failed:                      # an earlier split already failed the trial
+                    return
+                with two_phase.epoch_control(control):
+                    outs[i] = train_split(i)
+                if control.records:
+                    raise SearchError(f"inner split {i}'s trainer recorded an epoch after "
+                                      f"its last `two_phase.epoch_range` boundary")
+            except BaseException as error:      # noqa: BLE001 -- re-raised below
+                with self.cond:
+                    self._fail(error)
+            finally:
+                with self.cond:
+                    self.alive[i] = False
+                    last = max(self.pending, default=None)
+                    if last is not None and all(i_ in self.pending[last]
+                                                for i_ in range(self.n) if self.alive[i_]):
+                        self._decide(last)
+                    self._hand_over(i, None)
+
+        threads = [threading.Thread(target=work, args=(i,), name=f"inner-split-{i}",
+                                    daemon=True) for i in range(self.n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        if self.error is not None:
+            raise self.error
+        return outs
+
+
+class _SplitControl:
+    """One split's side of the lockstep (`two_phase.epoch_control`)."""
+
+    def __init__(self, lockstep: _Lockstep, i: int):
+        self.lockstep, self.i, self.records = lockstep, i, []
+
+    def collect(self, record: Mapping) -> None:
+        self.records.append(record)
+
+    def boundary(self, epoch: int) -> bool:
+        ls, i = self.lockstep, self.i
+        with ls.cond:
+            if [int(r["epoch"]) for r in self.records] != [epoch]:
+                ls._fail(SearchError(f"inner split {i} recorded epochs "
+                                     f"{[r['epoch'] for r in self.records]} in epoch {epoch}; "
+                                     f"a trainer records exactly one validation per epoch"))
+            else:
+                ls.pending.setdefault(epoch, {})[i] = self.records[0]
+            self.records = []
+            ls.rng[i] = _rng_state()
+            ls._hand_over(i, epoch)
+            ls.cond.wait_for(lambda: ls.turn == i and (ls.decided >= epoch or ls.stopped))
+            _set_rng_state(ls.rng[i])
+            return not ls.stopped
+
+
+def train_inner_splits(train_split: Callable[[int], Mapping],
+                       score: Callable[[Sequence[Mapping]], float], phase: int,
+                       cap: int, minimum: int = 1) -> tuple[list[Mapping], dict]:
+    """Plan v59, Secs. 4.5 and 7.6: one search trial's trainings of its `N_INNER` inner
+    splits (`train_split(i)` -> that split's trainer result), in lockstep, stopped by the
+    pooled score `score(records of one epoch, one per split)` with `PATIENCE[phase]`, at
+    most `cap` epochs and never before `minimum`. Returns the split results (each trainer
+    returns normally, its history and validation holding the trained epochs) and the
+    stop: trained epochs, whether the cap was reached and the pooled series."""
+    stop = PooledStop(patience=int(PATIENCE[phase]), cap=int(cap), minimum=int(minimum))
+    lockstep = _Lockstep(N_INNER, score, stop)
+    outs = lockstep.run(train_split)
+    trained = {len(o["validation"]) for o in outs}
+    if len(trained) != 1:
+        raise SearchError(f"the inner splits trained different epoch counts: {sorted(trained)}")
+    epochs = trained.pop()
+    replay = PooledStop(patience=stop.patience, cap=stop.cap, minimum=stop.minimum)
+    expected = next((k + 1 for k, v in enumerate(lockstep.series) if replay.update(v)), None)
+    if lockstep.series and (len(lockstep.series) != epochs or expected != epochs):
+        raise SearchError(f"the trial trained {epochs} epochs; the pooled stop rule ends it "
+                          f"at {expected}")
+    return outs, {"trainedEpochs": epochs, "reachedCap": epochs >= int(cap),
+                  "patience": stop.patience, "epochCap": int(cap)}
+
+
+def stopping_diagnostic(name: str, studies: Sequence[optuna.Study]) -> dict:
+    """Plan v59's declared diagnostic of the pooled early stopping, for one strategy (or
+    phase-1 group) over its studies: the fraction of its trials that reached the epoch cap,
+    and per selection rule the fraction of selected epochs equal to the last epoch their
+    trial trained (a selection at the last trained epoch says the cap, not the patience,
+    may have bound it)."""
+    trials = [t for st_ in studies for t in _completed(st_)]
+    capped = sum(bool(t.user_attrs.get("reachedCap")) for t in trials)
+    at_last: dict[str, dict] = {}
+    for st_ in studies:
+        rules = RULES if _study_phase(st_, _completed(st_)) == 2 else ("primary",)
+        for rule in rules:
+            sel = select(st_, rule)
+            trial = next(t for t in st_.trials if t.number == sel["trial"])
+            row = at_last.setdefault(rule, {"selections": 0, "atLast": 0})
+            row["selections"] += 1
+            row["atLast"] += int(sel["epochs"] == trial.user_attrs.get("trainedEpochs"))
+    for row in at_last.values():
+        row["fraction"] = row["atLast"] / row["selections"] if row["selections"] else None
+    return {"name": name, "studies": len(studies), "trials": len(trials),
+            "trialsReachedCap": capped,
+            "fractionTrialsReachedCap": capped / len(trials) if trials else None,
+            "selectedAtLastTrainedEpoch": at_last}
+
+
+def _search_cap(schedule: Mapping, phase: int) -> int:
+    cap = int(schedule[f"epochs{phase}"])
+    if cap > EPOCH_CAP:
+        raise SearchError(f"epochs{phase} = {cap} exceeds the search's epoch cap of "
+                          f"{EPOCH_CAP} (plan v59, Secs. 4.5 and 7.6)")
+    return cap
 
 
 # ------------------------------------------------------------------ training units
@@ -856,11 +1122,11 @@ def open_study(path: str | Path, identity: Mapping) -> tuple[optuna.Study, int]:
     differ = identity_differences(study.user_attrs, identity, [
         *IDENTITY_FIELDS, *(k for k in PHASE_TWO_IDENTITY_FIELDS if k in identity)])
     if differ:
-        changed = (" (the phase-2 selection rule changed in plan v58, Sec. 4.5: the "
-                   "centroid primary rule and the EnsV secondary rule read no target label, "
-                   "so a study scored by an earlier rule is searched again)"
-                   if identity.get("phase") == 2 and any(d.startswith("objective:")
-                                                        for d in differ) else "")
+        changed = (" (the search rule changed in plan v59, Secs. 4.5 and 7.6: each trial "
+                   f"trains at most {EPOCH_CAP} epochs and stops on its pooled selection "
+                   "score's patience, so a study searched under an earlier plan, v58 "
+                   "included, is searched again)"
+                   if any(d.startswith("objective:") for d in differ) else "")
         raise SearchError(f"{path} is a study of another identity and is not continued"
                           f"{changed}: " + "; ".join(differ) + "; remove it to search again")
     complete = sum(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials)
@@ -916,27 +1182,28 @@ def run_phase_one_study(group: str, data: SearchData, rotation: int, schedule: M
         raise SearchError(f"{group!r} is not a phase-1 group")
     model_store.require_registered(group)
     path = study_path(root, data.transfer, 1, group, rotation)
+    cap = _search_cap(schedule, 1)
     study, complete = open_study(path, study_identity(
-        data, 1, group, rotation, schedule, n_trials,
-        "the best epoch's source-validation balanced accuracy of the subject-level "
-        "confusion counts pooled over the three inner splits (Sec. 4.5)"))
+        data, 1, group, rotation, schedule, n_trials, PHASE_ONE_OBJECTIVE))
 
     def objective(trial: optuna.Trial) -> float:
         hyper = phase_one_hyper(group, suggest(trial, PHASE_ONE_SPACES[group]), schedule)
-        per_split, histories, split_values = [], [], []
-        for i in range(N_INNER):
-            out = train_phase_one(group, data.inner_view(rotation, i), rotation, SEARCH_SEED,
-                                  hyper, device)["result"]
-            per_split.append(out["validation"])
-            histories.append(out["history"])
-            split_values.append([float(h["val_balanced_accuracy"]) for h in out["history"]])
+        outs, stopped = train_inner_splits(
+            lambda i: train_phase_one(group, data.inner_view(rotation, i), rotation,
+                                      SEARCH_SEED, hyper, device)["result"],
+            two_phase.pooled_balanced_accuracy, 1, cap, MIN_TRAINED_EPOCHS.get(group, 1))
+        per_split = [out["validation"] for out in outs]
+        histories = [out["history"] for out in outs]
+        split_values = [[float(h["val_balanced_accuracy"]) for h in out["history"]]
+                        for out in outs]
         series = pooled_balanced_accuracy_series(per_split)
         if not any(math.isfinite(v) for v in series):
             raise SearchError(f"no epoch has a finite pooled validation score: {series}")
         best = int(np.nanargmax(series))
         _set_attrs(trial, {"pooledBalancedAccuracy": series, "bestEpoch": best,
                            "epochs": best + 1, "splitBalancedAccuracy": split_values,
-                           "trainLoss": _mean_loss(histories), "seed": SEARCH_SEED})
+                           "trainLoss": _mean_loss(histories), "seed": SEARCH_SEED,
+                           **stopped})
         return float(series[best])
 
     _optimize(study, objective, n_trials - complete, should_stop)
@@ -957,27 +1224,25 @@ def run_phase_two_study(strategy: str, data: SearchData, rotation: int, record,
     schedule = check_schedule(schedule)
     _check_phase_one_record(strategy, data, rotation, record)
     path = study_path(root, data.transfer, 2, strategy, rotation)
+    cap = _search_cap(schedule, 2)
     study, complete = open_study(path, study_identity(
-        data, 2, strategy, rotation, schedule, n_trials,
-        "plan v58, Sec. 4.5, no target label: the best epoch's centroid-rule balanced "
-        "accuracy (the source validation bags of each inner split assigned to the nearest "
-        "centroid of the adapted model's target validation pseudo-classes, scored against "
-        "their source labels, counts pooled over the three inner splits), what the sampler "
-        "observes; ensvProbabilities: per epoch, the pooled target validation "
-        "probabilities the EnsV secondary rule reads", phase_one=record[1]))
+        data, 2, strategy, rotation, schedule, n_trials, PHASE_TWO_OBJECTIVE,
+        phase_one=record[1]))
     sources: list[dict] = []           # the source pass, once per inner split (Sec. 4.5)
 
     def objective(trial: optuna.Trial) -> float:
         if not sources:
             sources.extend(source_representations(strategy, data, rotation, record, device))
         params = suggest(trial, space)
-        per_split, histories, sigmas = [], [], []
-        for i in range(N_INNER):
-            out = train_phase_two(strategy, data.inner_view(rotation, i), rotation,
-                                  SEARCH_SEED, record, params, schedule, device)["result"]
-            per_split.append(out["validation"])
-            histories.append(out["history"])
-            sigmas.append(out["checkpoint"].get("sigma"))
+        outs, stopped = train_inner_splits(
+            lambda i: train_phase_two(strategy, data.inner_view(rotation, i), rotation,
+                                      SEARCH_SEED, record, params, schedule,
+                                      device)["result"],
+            lambda records: two_phase.pooled_centroid_balanced_accuracy(records, sources),
+            2, cap, MIN_TRAINED_EPOCHS.get(strategy, 1))
+        per_split = [out["validation"] for out in outs]
+        histories = [out["history"] for out in outs]
+        sigmas = [out["checkpoint"].get("sigma") for out in outs]
         primary = pooled_centroid_series(per_split, sources)
         if not all(math.isfinite(v) for v in primary):
             raise SearchError(f"an epoch returned a non-finite pooled centroid score: "
@@ -986,7 +1251,7 @@ def run_phase_two_study(strategy: str, data: SearchData, rotation: int, record,
         _set_attrs(trial, {PRIMARY_SERIES[2]: primary, "bestEpoch": best, "epochs": best + 1,
                            **ensv_record(per_split),
                            "trainLoss": _mean_loss(histories), "sigmaBySplit": sigmas,
-                           "seed": SEARCH_SEED})
+                           "seed": SEARCH_SEED, **stopped})
         return float(primary[best])
 
     _optimize(study, objective, n_trials - complete, should_stop)
