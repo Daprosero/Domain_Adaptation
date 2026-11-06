@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "stage": "poc",
-  "protocol": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+  "protocol": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
   "generated_at": "2026-11-05T16:44:07+00:00",
   "summary": "Proof of concept on the rollo toy set with the BatchNorm MLP encoder, 30 seeds, rules pre-registered before each run (Notebooks/PoC_Hypotheses_Rollo.ipynb, run 3). Task-level adaptation is supported; attention with consensus down-weights artifact-like contamination; the local term (K2) shows no gain and the K3 ladder is ordered as expected but not significant. Toy-set results: task, K1 and K2 approved; K3 partly approved (consensus yes, combining terms no). EEG experiments have not run.",
   "discussion_type": [
@@ -15,19 +15,19 @@
       "name": "target-domain accuracy",
       "role": "primary",
       "why": "Decides the task-level and K3 contrasts.",
-      "source": "v55 §5"
+      "source": "v56 §5"
     },
     {
       "name": "attention-mass contrast c",
       "role": "secondary",
       "why": "Reads whether attention down-weights contaminated windows (K1).",
-      "source": "v55 §6.1"
+      "source": "v56 §6.1"
     },
     {
       "name": "partner separation s",
       "role": "secondary",
       "why": "Reads whether the local term pairs compatible bags (K2).",
-      "source": "v55 §6.2"
+      "source": "v56 §6.2"
     }
   ],
   "hypotheses": [
