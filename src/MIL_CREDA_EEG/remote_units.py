@@ -481,7 +481,8 @@ def timing_estimate(path: str | Path, config: Mapping,
     declared budget, and a phase-1 refit pass at most `epochs1`; a final rotation
     trains no phase-1 model (it reuses each group's one checkpoint the search stored),
     trains the upper bound on the three inner splits and refits it (4 x `epochs1`),
-    and refits each strategy twice (primary and label-free) for at most `epochs2`;
+    and refits each strategy at most twice (primary, and EnsV where its choice differs)
+    for at most `epochs2` each; the source pass of the centroid rule is inference only;
     a K3 rotation refits each planned
     variant for at most `epochs1 + epochs2`.
     """
@@ -717,7 +718,7 @@ def _rotation_boundaries(unit: Unit, rotations: Sequence[int], seeds: int,
 
     `campaign.run_final` and `campaign.run_k3` take no hook, so the boundary is read
     off the call that ends each rotation and report seed: `results.append_predictions`
-    with the label-free rule (final) or for K3 (k3). The wrapper is installed only for
+    with the EnsV rule (final) or for K3 (k3). The wrapper is installed only for
     the call and removed afterwards; everything a rotation wrote is already in the
     working product, and the campaign skips stored predictions and reuses stored
     models when the unit is continued."""
@@ -726,7 +727,7 @@ def _rotation_boundaries(unit: Unit, rotations: Sequence[int], seeds: int,
 
     def ends_rotation(experiment: str, rule: str) -> bool:
         if unit.step == "final":
-            return rule == "label-free"
+            return rule == "ensv"
         return experiment == campaign.K3
 
     def wrapped(root, experiment, records, *, identity, rule="primary"):

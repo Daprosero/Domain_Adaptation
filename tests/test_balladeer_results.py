@@ -120,32 +120,50 @@ def test_the_rank_column_ranks_only_the_nine_adapted_strategies_on_core_transfer
     assert ranks["MIL-CREDA"] == f"{ranking['average_rank']['MIL-CREDA']:.2f}"
 
 
-def _selection(trials, rule):
+def _selection(trials, rule, epochs=None):
+    epochs = epochs or [0] * len(trials)
     return {r: {"rotation": r, "rule": rule, "trial": n, "params": {"lr2": 1e-3 * (n + 1)},
+                "epoch": e, "epochs": e + 1,
                 "score": 0.5, "testFold": r, "selectionRotations": [q for q in range(4)
                                                                     if q != (r + 3) % 4],
-                "excludedRotation": (r + 3) % 4} for r, n in enumerate(trials)}
+                "excludedRotation": (r + 3) % 4} for r, (n, e) in enumerate(zip(trials, epochs))}
 
 
 def test_the_selection_table_reads_both_rules_from_the_same_trials():
-    primary, free = _selection([1, 1, 2, 0], "primary"), _selection([1, 2, 2, 3], "label-free")
-    row = results.selection_rows("MIL-CREDA", "L1->L11", primary, free, test_primary=0.7,
-                                 test_label_free=0.65)
-    assert row["primary trial by rotation"] == "r0: 1; r1: 1; r2: 2; r3: 0"
-    assert row["label-free trial by rotation"] == "r0: 1; r1: 2; r2: 2; r3: 3"
-    assert row["coinciding rotations"] == 2
-    assert row["test BA, primary rule"] == 0.7 and row["test BA, label-free rule"] == 0.65
-    assert row["difference"] == pytest.approx(0.05)
-    assert json.loads(row["primary configuration by rotation"])["3"] == {"lr2": 1e-3}
+    primary = _selection([1, 1, 2, 0], "primary", [2, 0, 1, 1])
+    # r1 picks another trial, r3 the same trial at another epoch: neither coincides
+    free = _selection([1, 2, 2, 0], "ensv", [2, 0, 1, 3])
+    row = results.selection_rows("MIL-CREDA", {"L1->L11": primary, "L11->L1": primary},
+                                 {"L1->L11": free, "L11->L1": primary}, test_primary=0.7,
+                                 test_secondary=0.65)
+    assert tuple(row) == results.SELECTION_RULE_COLUMNS == (
+        "Estrategia, reglas de selección", "Configuración de la regla principal",
+        "Configuración de la regla secundaria", "Coinciden",
+        "Exactitud balanceada de prueba, regla principal",
+        "Exactitud balanceada de prueba, regla secundaria", "Diferencia")
+    assert row["Estrategia, reglas de selección"] == "MIL-CREDA"
+    assert row["Coinciden"] == "6/8"
+    assert row["Exactitud balanceada de prueba, regla principal"] == 0.7
+    assert row["Exactitud balanceada de prueba, regla secundaria"] == 0.65
+    assert row["Diferencia"] == pytest.approx(0.05)
+    chosen = json.loads(row["Configuración de la regla principal"])
+    assert chosen["L1->L11 r3"] == {"lr2": 1e-3, "E2": 2, "trial": 0}
+    assert json.loads(row["Configuración de la regla secundaria"])["L1->L11 r3"]["E2"] == 4
+    assert "eligen distinto en 2 de 8" in results.selection_outcome(row)
+    same = results.selection_rows("COT", {"L1->L11": primary}, {"L1->L11": primary})
+    assert same["Coinciden"] == "4/4" and same["Diferencia"] is None
+    assert "no depende del validador" in results.selection_outcome(same)
+    with pytest.raises(results.ResultsError, match="same transfers"):
+        results.selection_rows("COT", {"L1->L11": primary}, {"L11->L1": primary})
     detail = results.selected_configuration_rows("MIL-CREDA", "L1->L11",
-                                                 {"primary": primary, "label-free": free})
+                                                 {"primary": primary, "ensv": free})
     assert [(d["rule"], d["rotation"], d["trial"]) for d in detail][:2] == [
         ("primary", 0, 1), ("primary", 1, 1)]
     assert detail[0]["selection rotations"] == "0, 1, 2" and detail[0]["excluded rotation"] == 3
     assert detail[0]["score (pooled inner balanced accuracy)"] == 0.5
     assert not any("mean - sd" in k for k in detail[0])
     with pytest.raises(results.ResultsError, match="rotations"):
-        results.selection_rows("MIL-CREDA", "L1->L11", primary, {0: free[0]})
+        results.selection_rows("MIL-CREDA", {"L1->L11": primary}, {"L1->L11": {0: free[0]}})
 
 
 def test_the_selection_score_is_labelled_the_pooled_inner_balanced_accuracy(tmp_path,
@@ -261,13 +279,14 @@ def test_the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_
         results.convergence_figure(tmp_path, "A-nivel", history, ["L6->L1"])
 
 
-def test_the_label_free_convergence_figure_marks_the_label_free_epoch(tmp_path, monkeypatch):
-    """Validation BA peaks at epoch 1, the label-free score at epoch 3: the primary figure
-    marks 1, the label-free one 3 (Sec. 4.5's secondary rule reads no target label)."""
+def test_the_ensv_convergence_figure_marks_the_ensv_refit_epoch(tmp_path, monkeypatch):
+    """Validation BA peaks at epoch 1; the EnsV refits carry the epoch EnsV chose in the
+    search (`ensvEpoch`, 2, 3, 3, 3 over the folds): the primary figure marks 1, the EnsV
+    one the median, 3 (Sec. 4.5's secondary rule reads no target label)."""
     history = [{"epoch": e, "seed": 1, "fold": fold, "model": "MIL-CREDA:phase2",
                 "transfer": "L1->L11", "loss": 1.0 / (e + 1),
                 "val_balanced_accuracy": [0.5, 0.9, 0.6, 0.7][e],
-                "label_free_score": [0.1, 0.2, 0.3, 0.4][e]}
+                "ensvEpoch": [2, 3, 3, 3][fold]}
                for fold in range(4) for e in range(4)]
     marked = []
     import matplotlib.axes
@@ -278,9 +297,8 @@ def test_the_label_free_convergence_figure_marks_the_label_free_epoch(tmp_path, 
     assert marked == [1.0]
     marked.clear()
     path = results.convergence_figure(tmp_path, "A-nivel", history, ["L1->L11"],
-                                      name="convergence_label_free",
-                                      epoch_key="label_free_score")
-    assert marked == [3.0] and path.name == "convergence_label_free.pdf"
+                                      name="convergence_ensv", epoch_field="ensvEpoch")
+    assert marked == [3.0] and path.name == "convergence_ensv.pdf"
 
 
 def test_the_critical_difference_diagram_draws_every_rank_and_the_cd_bar(tmp_path,
@@ -326,15 +344,28 @@ def test_every_prediction_carries_the_identity_it_was_written_under(tmp_path):
         "partition_sha256: 1 records written under None")
 
 
-def test_the_label_free_rule_predictions_live_in_their_own_file(tmp_path):
+def test_the_ensv_rule_predictions_live_in_their_own_file(tmp_path):
     records = _records("MIL-CREDA", "L1->L11")[:4]
     path = results.append_predictions(tmp_path, "A-nivel", records, identity=IDENTITY,
-                                      rule="label-free")
-    assert path.name == "predictions_label_free.jsonl" and path.parent.name == "runs"
+                                      rule="ensv")
+    assert path.name == "predictions_ensv.jsonl" and path.parent.name == "runs"
     assert results.read_predictions(tmp_path, "A-nivel") == []
-    assert len(results.read_predictions(tmp_path, "A-nivel", rule="label-free")) == 4
-    with pytest.raises(results.ResultsError, match="rule"):
-        results.read_predictions(tmp_path, "A-nivel", rule="oracle")
+    assert len(results.read_predictions(tmp_path, "A-nivel", rule="ensv")) == 4
+    for retired in ("oracle", "label-free"):
+        with pytest.raises(results.ResultsError, match="rule"):
+            results.read_predictions(tmp_path, "A-nivel", rule=retired)
+
+
+def test_the_class_proportions_of_each_core_transfer_side_are_reported():
+    from types import SimpleNamespace
+    a = SimpleNamespace(transfer=SimpleNamespace(name="L1->L11"),
+                        labels={"a": "yes", "b": "no", "c": "yes", "d": "no", "e": "no"},
+                        subjects=lambda side: {"a", "b", "c"} if side == "source"
+                        else {"d", "e"})
+    rows = results.class_proportion_rows(a)
+    assert [tuple(r.values()) for r in rows] == [("L1->L11", "fuente", 3, 2, 1, 2 / 3),
+                                                 ("L1->L11", "objetivo", 2, 0, 2, 0.0)]
+    assert tuple(rows[0]) == results.CLASS_PROPORTION_COLUMNS
 
 
 def test_the_ladder_reads_each_strategys_own_source_only_control():

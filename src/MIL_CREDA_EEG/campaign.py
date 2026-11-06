@@ -25,13 +25,14 @@ The steps, in order (`STEPS`), each one a subcommand of
    validation, and stored with the selection that chose it and the checkpoint's
    identity, its target test predictions, and
    the target-supervised upper bound with the common group's selected `lr1`,
-   `wd1` of r (`controls.train_upper_bound`). Where the label-free rule selects
-   another (trial, epoch) for r, that one is refit the same way and stored apart
-   (`Models/Balladeer/label-free-rule/`), its per-epoch records go to
-   `runs/history_label_free.jsonl` and its test predictions are recorded apart
-   (`runs/predictions_label_free.jsonl`); where both rules select the same
+   `wd1` of r (`controls.train_upper_bound`). Where the EnsV secondary rule
+   selects another (trial, epoch) for r, that one is refit the same way, at the
+   report seed, and stored apart (`Models/Balladeer/ensv-rule/`), its per-epoch
+   records go to `runs/history_ensv.jsonl` and its test predictions are recorded
+   apart (`runs/predictions_ensv.jsonl`); where both rules select the same
    (trial, epoch), the primary model is reused and its predictions are recorded
-   for the label-free rule (Sec. 4.5). The test fold of r enters no decision. A
+   for EnsV (Sec. 4.5). Neither rule reads a target label, and the test fold of r
+   enters no decision. A
    model already stored is not trained again (an interrupted run resumes).
 3. `k3` -- Sec. 6.3 on the core transfers, per rotation at the report seed: the
    four aggregation variants (`aggregation_variants`: the own attention without
@@ -162,9 +163,10 @@ __provenance__ = {
         "the_rehearsal_summaries_say_so",
         "both_phases_are_selected_per_outer_fold_and_refit_for_their_epochs",
         "one_phase_one_checkpoint_per_group_and_outer_fold",
-        "the_label_free_rule_is_measured_on_the_test_fold",
-        "the_label_free_final_models_are_refit_at_their_trial_and_epoch",
-        "the_label_free_histories_are_written_apart_from_the_strategies",
+        "the_ensv_rule_is_measured_on_the_test_fold",
+        "the_ensv_final_models_are_refit_only_where_the_rules_differ",
+        "the_ensv_histories_are_written_apart_from_the_strategies",
+        "the_two_rules_table_reports_both_choices_and_the_class_proportions",
         "the_final_models_are_trained_at_the_report_seeds_from_the_same_rotation",
         "a_stored_model_is_not_trained_again",
         "the_device_arm_source_only_controls_are_never_numbers",
@@ -202,15 +204,17 @@ RETIRED_INPUTS = {
     "pendingDecisions": "the comparator decisions are resolved (Sec. 7.7)",
 }
 HISTORY_FILE = Path("runs") / "history.jsonl"
-#: The label-free final models' per-epoch records: the primary layout in their own file,
-#: so nothing that reads the strategies' history takes them for a strategy.
-LABEL_FREE_HISTORY_FILE = Path("runs") / "history_label_free.jsonl"
-HISTORY_FILES = {"primary": HISTORY_FILE, "label-free": LABEL_FREE_HISTORY_FILE}
+#: The EnsV final models' per-epoch records: the primary layout in their own file, so
+#: nothing that reads the strategies' history takes them for a strategy.
+ENSV_HISTORY_FILE = Path("runs") / "history_ensv.jsonl"
+HISTORY_FILES = {"primary": HISTORY_FILE, "ensv": ENSV_HISTORY_FILE}
 #: The one plan revision every result, study and model of this campaign answers to.
 REVISION = __provenance__["revision"]
 #: Sec. 4.5's secondary rule: where its configuration differs from the primary one, its
-#: final model is stored apart, under `Models/Balladeer/<LABEL_FREE_MODELS>/`.
-LABEL_FREE_MODELS = "label-free-rule"
+#: final model is stored apart, under `Models/Balladeer/<ENSV_MODELS>/`.
+ENSV_MODELS = "ensv-rule"
+#: The rule that chose a stored phase-2 model, as its sidecar records it.
+EPOCH_RULES = {"primary": search.PRIMARY_RULE, "ensv": search.ENSV_RULE}
 
 
 class CampaignError(RuntimeError):
@@ -584,11 +588,11 @@ def _selection_record(selection: Mapping, schedule: Mapping) -> dict:
     return {**{k: selection[k] for k in SELECTION_FIELDS}, "schedule": dict(schedule)}
 
 
-def _label_free_history(history: Sequence[Mapping], strategy: str, epoch: int) -> list[dict]:
-    """A label-free model's per-epoch records: its refit's history, tagged with the rule
-    and the label-free epoch it was refit to."""
-    return [{**h, "model": h.get("model", f"{strategy}:phase2"), "selectionRule": "label-free",
-             "labelFreeEpoch": int(epoch)} for h in history]
+def _ensv_history(history: Sequence[Mapping], strategy: str, epoch: int) -> list[dict]:
+    """An EnsV model's per-epoch records: its refit's history, tagged with the rule and
+    the epoch it was refit to."""
+    return [{**h, "model": h.get("model", f"{strategy}:phase2"), "selectionRule": "ensv",
+             "ensvEpoch": int(epoch)} for h in history]
 
 
 def _same_choice(a: Mapping, b: Mapping) -> bool:
@@ -609,9 +613,7 @@ def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int,
     schedule = search.refit_schedule(cfg["schedule"], 2, selection["epochs"])
     expect = {"rule": selection["rule"], "trial": selection["trial"],
               "params": selection["params"], "epoch": selection["epoch"],
-              "schedule": dict(schedule)}
-    if selection["rule"] == "label-free":
-        expect["epochRule"] = two_phase.LABEL_FREE_EPOCH_RULE
+              "schedule": dict(schedule), "epochRule": EPOCH_RULES[selection["rule"]]}
     path = model_store.model_path(root, data.transfer, r, seed, 2, strategy)
     if path.exists():
         stored = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
@@ -624,9 +626,8 @@ def _phase_two_model(root: Path, strategy: str, data: search.SearchData, r: int,
         return mechanisms.load_phase_two(path, partition_path=ppath)[0].to(device), None
     trained = search.train_phase_two(strategy, data, r, seed, record, selection["params"],
                                      schedule, device)
-    chosen = _selection_record(selection, schedule)
-    if selection["rule"] == "label-free":
-        chosen["epochRule"] = two_phase.LABEL_FREE_EPOCH_RULE
+    chosen = {**_selection_record(selection, schedule),
+              "epochRule": EPOCH_RULES[selection["rule"]]}
     search.save_phase_two(root, strategy, data, r, seed, trained, selection=chosen,
                           phase_one=record[1])
     return trained["model"], trained["result"]["history"]
@@ -637,9 +638,9 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
     one phase-1 checkpoint, with the controls and the upper bound.
 
     Each strategy's phase-2 (configuration, E2) selected for outer fold r is refit on its
-    non-test folds from the phase-1 checkpoint its study started from; where the label-free
+    non-test folds from the phase-1 checkpoint its study started from; where the EnsV
     rule selects another (trial, epoch) for r, that one is refit and stored too
-    (`LABEL_FREE_MODELS`) and its test predictions recorded apart; where both rules
+    (`ENSV_MODELS`) and its test predictions recorded apart; where both rules
     coincide, the primary model is reused and its predictions are recorded for it.
     Nothing is selected with test outcomes.
     """
@@ -649,7 +650,7 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
     ppath = _partition_path(cfg)
     current = _bags_identity(bags)
     counts = {"trained_phase1": 0, "trained_phase2": 0, "predictions": 0,
-              "trained_label_free": 0, "label_free_predictions": 0}
+              "trained_ensv": 0, "ensv_predictions": 0}
     # every checkpoint of every transfer is checked before the step trains or records anything
     plans = {}
     for transfer in transfers_of(cfg):
@@ -664,11 +665,11 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
         data, best_one, stored_one = plans[transfer.name]
         a = assignment_mod.assign_from_bags(transfer, bags)
         primary = {s: _phase_two_selection(product, data, s, cfg) for s in cfg["strategies"]}
-        free = {s: _phase_two_selection(product, data, s, cfg, "label-free")
+        free = {s: _phase_two_selection(product, data, s, cfg, "ensv")
                 for s in cfg["strategies"]}
         done = _predicted(product, experiment, current)
-        done_free = _predicted(product, experiment, current, "label-free")
-        free_root = _models(product) / LABEL_FREE_MODELS
+        done_free = _predicted(product, experiment, current, "ensv")
+        free_root = _models(product) / ENSV_MODELS
         for r in sorted(data.rotations):
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
             checkpoints = stored_one[r]
@@ -708,18 +709,18 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                         out += tagged if need else []
                         if need_free and coincide:
                             # Sec. 4.5: the same (trial, epoch): the primary model is reused.
-                            out_free += [{**x, "labelFreeModel": "the primary model (same "
-                                                                 "trial and epoch)"}
+                            out_free += [{**x, "ensvModel": "the primary model (same trial "
+                                                            "and epoch)"}
                                          for x in tagged]
                     if need_free and not coincide:
                         model, free_history = _phase_two_model(
                             free_root, strategy, data, r, seed, record, free[strategy][r],
                             cfg, device, ppath)
-                        counts["trained_label_free"] += free_history is not None
-                        _append_history(product, experiment, _label_free_history(
+                        counts["trained_ensv"] += free_history is not None
+                        _append_history(product, experiment, _ensv_history(
                             free_history or [], strategy, free[strategy][r]["epoch"]),
-                            rule="label-free")
-                        out_free += [{**x, "labelFreeModel": "its own"} for x in _tag(
+                            rule="ensv")
+                        out_free += [{**x, "ensvModel": "its own"} for x in _tag(
                             two_phase.predictions(model, test, transfer.name, device),
                             strategy, transfer.name, r, seed)]
                 if (results.UPPER_BOUND, transfer.name, r, seed) not in done and \
@@ -732,9 +733,9 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
                                 results.UPPER_BOUND, transfer.name, r, seed)
                 results.append_predictions(_results(product), experiment, out, identity=current)
                 results.append_predictions(_results(product), experiment, out_free,
-                                           identity=current, rule="label-free")
+                                           identity=current, rule="ensv")
                 counts["predictions"] += len(out)
-                counts["label_free_predictions"] += len(out_free)
+                counts["ensv_predictions"] += len(out_free)
     return counts
 
 
@@ -1287,7 +1288,7 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
             "reportSeeds": cfg["reportSeeds"]}, synthetic=cfg["synthetic"],
             rehearsal=cfg["rehearsal"])
         out["K2-emparejamiento"] = len(rows)
-    # The label-free final models train MIL-CREDA's phase 2 too: their steps are read.
+    # The EnsV final models train MIL-CREDA's phase 2 too: their steps are read.
     history = [h for arm in results.EXPERIMENT_OF_ARM.values() for rule in HISTORY_FILES
                for h in read_history(product, arm, rule)]
 
@@ -1321,8 +1322,10 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
     for arm in sorted({t.arm for t in transfers_of(cfg)}):
         experiment = results.EXPERIMENT_OF_ARM[arm]
         records = _read_predictions(product, experiment, current)
-        free_records = _read_predictions(product, experiment, current, "label-free")
-        hp, importance, selection, detail, studies = [], [], [], [], {}
+        free_records = _read_predictions(product, experiment, current, "ensv")
+        hp, importance, detail, studies = [], [], [], {}
+        core_choices: dict[str, dict[str, dict]] = {}
+        proportions = []
         for transfer in [t for t in transfers_of(cfg) if t.arm == arm]:
             folds = search.rotation_folds(bags.rotations)
             # what a study's identity reads, without loading any bag tensor
@@ -1343,13 +1346,12 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
                 for g, by_r in one.items()}
             hp += results.hyperparameter_rows(
                 first, {s: c["primary"] for s, c in chosen.items()}, transfer.name)
+            if transfer.name in core.get(arm, []):
+                for s in two:
+                    core_choices.setdefault(s, {})[transfer.name] = chosen[s]
+                proportions += results.class_proportion_rows(
+                    assignment_mod.assign_from_bags(transfer, bags))
             for s, by_r in two.items():
-                primary = results._pooled(results._select(records, s, [transfer.name]))
-                free = results._pooled(results._select(free_records, s, [transfer.name]))
-                selection.append(results.selection_rows(
-                    s, transfer.name, chosen[s]["primary"], chosen[s]["label-free"],
-                    test_primary=primary["balanced_accuracy"] if primary else None,
-                    test_label_free=free["balanced_accuracy"] if free else None))
                 detail += results.selected_configuration_rows(s, transfer.name, chosen[s])
                 for study in by_r.values():
                     try:
@@ -1360,31 +1362,49 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
                 studies.update({f"{s} ({transfer.name}, outer {r})": st_
                                 for s, by_r in two.items() for r, st_ in by_r.items()})
         results.write_table(root, experiment, "hyperparameters", hp)
-        results.write_table(root, experiment, "selection_rules", selection, note=(
-            "Per outer fold each rule selects a (trial, epoch) in that fold's study, on the "
-            "subject-level counts (primary) or target predictions (label-free) pooled over "
-            "the three inner splits of the non-test folds (Sec. 4.5). The label-free rule's "
-            "test balanced accuracy is pooled from its own refit models where its (trial, "
-            "epoch) differs from the primary one, and from the primary models where they "
-            "coincide; nothing is selected with test outcomes. Difference: primary minus "
-            "label-free."))
+        selection = []
+        for s, by_t in core_choices.items():
+            primary = results._pooled(results._select(records, s, sorted(by_t)))
+            free = results._pooled(results._select(free_records, s, sorted(by_t)))
+            selection.append(results.selection_rows(
+                s, {t: c["primary"] for t, c in by_t.items()},
+                {t: c["ensv"] for t, c in by_t.items()},
+                test_primary=primary["balanced_accuracy"] if primary else None,
+                test_secondary=free["balanced_accuracy"] if free else None))
+        results.write_table(
+            root, experiment, "selection_rules", selection,
+            columns=results.SELECTION_RULE_COLUMNS, note="\n".join([
+                "Per core transfer and outer fold each rule selects a (trial, epoch) in that "
+                "fold's study, without any target label (Sec. 4.5): the primary rule by the "
+                "centroid score pooled over the three inner splits of the non-test folds, "
+                "the secondary rule by EnsV over every (trial, epoch) of the study. The "
+                "secondary rule's test balanced accuracy is pooled from its own refit models "
+                "where its (trial, epoch) differs from the primary one, and from the primary "
+                "models where they coincide; nothing is selected with test outcomes. "
+                "Diferencia: primary minus secondary.", "",
+                *(results.selection_outcome(row) for row in selection), "",
+                "Class proportions of each core transfer's sides (Sec. 8):",
+                *(f"- {p['Transferencia núcleo']}, {p['Lado']}: {p['yes']} yes, {p['no']} "
+                  f"no of {p['Sujetos']} subjects" for p in proportions)]))
+        results.write_table(root, experiment, "selection_class_proportions", proportions,
+                            columns=results.CLASS_PROPORTION_COLUMNS)
         results.write_table(root, experiment, "selected_configurations", detail)
         if importance:
             results.write_table(root, experiment, "importance", importance)
         history = read_history(product, experiment)
         if history:
             written.append(results.write_history(root, experiment, history))
-        free_history = read_history(product, experiment, rule="label-free")
+        free_history = read_history(product, experiment, rule="ensv")
         if free_history:
-            written.append(results.write_history(root, f"{experiment}_label_free",
+            written.append(results.write_history(root, f"{experiment}_ensv",
                                                  free_history))
             try:
                 written.append(results.convergence_figure(root, experiment, free_history,
                                                           core[arm],
-                                                          name="convergence_label_free",
-                                                          epoch_key="label_free_score"))
+                                                          name="convergence_ensv",
+                                                          epoch_field="ensvEpoch"))
             except results.ResultsError as error:
-                owed.append(f"{experiment} label-free convergence: {error}")
+                owed.append(f"{experiment} EnsV convergence: {error}")
         try:
             written.append(results.convergence_figure(root, experiment, history, core[arm]))
         except results.ResultsError as error:

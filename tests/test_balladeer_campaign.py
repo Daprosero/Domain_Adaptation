@@ -19,6 +19,7 @@ import torch
 from optuna.distributions import FloatDistribution
 
 from MIL_CREDA_EEG import aggregation_variants, campaign, controls, mechanisms, model_store
+from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import mil_wrapper
 from MIL_CREDA_EEG import partition
 from MIL_CREDA_EEG import results
@@ -258,7 +259,7 @@ def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
     meta = {**campaign.identity(data.partition_sha256), "phaseOneCheckpoint": started,
             "hyper": {**params, **refit},
             "selection": {"rule": "primary", "trial": 0, "params": params, "epoch": 0,
-                          "schedule": refit}}
+                          "schedule": refit, "epochRule": search.PRIMARY_RULE}}
     loaded = torch.nn.Identity()
     monkeypatch.setattr(mechanisms, "load_phase_two", lambda p, **k: (loaded, {}, []))
 
@@ -273,6 +274,11 @@ def test_a_stored_phase_two_model_is_reused_only_under_the_requested_selection(
     schedule = {**refit, "epochs2": 2}
     for change, field in (
             ({"selection": {**meta["selection"], "epoch": 1}}, "selection epoch"),
+            # a model chosen by an earlier rule (no epochRule, or another one) is stale
+            ({"selection": {k: v for k, v in meta["selection"].items() if k != "epochRule"}},
+             "selection epochRule"),
+            ({"selection": {**meta["selection"], "epochRule": search.ENSV_RULE}},
+             "selection epochRule"),
             ({"selection": {**meta["selection"], "params": lr2}}, "selection params"),
             ({"selection": {**meta["selection"], "schedule": schedule}}, "selection schedule"),
             ({"hyper": {**meta["hyper"], "lr2": lr2["lr2"]}}, "hyper lr2"),
@@ -360,7 +366,7 @@ def test_a_stored_model_is_not_trained_again(level_run, registries):
     before = len(results.read_predictions(product / "Results", "A-nivel"))
     again = campaign.run_final(campaign.check_config(cfg), product)
     assert again == {"trained_phase1": 0, "trained_phase2": 0, "predictions": 0,
-                     "trained_label_free": 0, "label_free_predictions": 0}
+                     "trained_ensv": 0, "ensv_predictions": 0}
     assert len(results.read_predictions(product / "Results", "A-nivel")) == before
 
 
@@ -578,7 +584,7 @@ def test_both_phases_are_selected_per_outer_fold_and_refit_for_their_epochs(leve
     detail = _csv(product / "Results" / "A-nivel" / "tables" / "selected_configurations.csv")
     assert {(d["strategy"], d["transfer"], d["rule"], d["rotation"]) for d in detail} == {
         (s, t, rule, str(r)) for s in cfg["strategies"] for t in cfg["transfers"]
-        for rule in ("primary", "label-free") for r in range(4)}
+        for rule in ("primary", "ensv") for r in range(4)}
     k3 = _csv(product / "Results" / "K3-ablacion" / "tables" / "variant_hyperparameters.csv")
     assert {d["rotation"] for d in k3} == {"0", "1", "2", "3"}
 
@@ -627,11 +633,11 @@ def test_phase_two_search_and_final_refit_start_from_the_same_phase_one_checkpoi
 
 
 def _other_choice(real):
-    """`search.select` with the label-free rule moved off the primary (trial, epoch) in the
+    """`search.select` with the EnsV rule moved off the primary (trial, epoch) in the
     phase-2 studies of the outer folds `differ` names, and onto it elsewhere."""
     def choose(study, rule="primary", differ=(0, 1, 2, 3)):
         chosen = real(study, rule)
-        if rule != "label-free" or study.user_attrs.get("phase") != 2:
+        if rule != "ensv" or study.user_attrs.get("phase") != 2:
             return chosen
         primary = real(study, "primary")
         if study.user_attrs["outerFold"] not in differ:
@@ -643,7 +649,7 @@ def _other_choice(real):
     return choose
 
 
-def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, monkeypatch):
+def test_the_ensv_rule_is_measured_on_the_test_fold(tmp_path, registries, monkeypatch):
     choose = _other_choice(search.select)
     monkeypatch.setattr(search, "select",
                         lambda study, rule="primary": choose(study, rule, differ=(1, 2, 3)))
@@ -654,20 +660,22 @@ def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, 
     product.mkdir()
     outcome = {s: campaign.run(s, cfg, product) for s in ("search", "final", "results")}
     # rotation 0 coincides (same trial and epoch): the primary model is reused, no refit
-    assert outcome["final"]["final"]["trained_label_free"] == 3 * 2
-    root = product / "Models" / "Balladeer" / campaign.LABEL_FREE_MODELS
+    assert outcome["final"]["final"]["trained_ensv"] == 3 * 2
+    root = product / "Models" / "Balladeer" / campaign.ENSV_MODELS
     for slug in ("L1-to-L6", "L6-to-L1"):
         assert not (root / slug / "rotation0").exists()
         for r in (1, 2, 3):
             meta = _sidecar(root / slug / f"rotation{r}" / "seed1" / "phase2__MIL-CREDA.pt")
-            assert meta["selection"]["rule"] == "label-free"
-            assert meta["selection"]["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
+            assert meta["selection"]["rule"] == "ensv"
+            assert meta["selection"]["epochRule"] == search.ENSV_RULE
+            assert meta["seed"] == search.REPORT_SEEDS[0]
             primary = _sidecar(product / "Models" / "Balladeer" / slug / f"rotation{r}"
                                / "seed1" / "phase2__MIL-CREDA.pt")
+            assert primary["selection"]["epochRule"] == search.PRIMARY_RULE
             assert meta["selection"]["trial"] != primary["selection"]["trial"]
     res = product / "Results"
     primary = results.read_predictions(res, "A-nivel")
-    free = results.read_predictions(res, "A-nivel", rule="label-free")
+    free = results.read_predictions(res, "A-nivel", rule="ensv")
     key = lambda x: (x["transfer"], x["rotation"], x["subject"])  # noqa: E731
     p0 = sorted((key(x), x["probability"]) for x in primary
                 if x["strategy"] == "MIL-CREDA" and x["rotation"] == 0)
@@ -675,26 +683,43 @@ def test_the_label_free_rule_is_measured_on_the_test_fold(tmp_path, registries, 
     assert p0 and f0 == p0          # where the rules coincide, the primary model is reused
     assert {x["rotation"] for x in free} == {0, 1, 2, 3}
     assert {x["strategy"] for x in free} == {"MIL-CREDA"}
-    rows = _csv(res / "A-nivel" / "tables" / "selection_rules.csv")
-    for row in rows:
-        mine = [x for x in free if x["transfer"] == row["transfer"]]
-        expected = st.pooled(mine)["balanced_accuracy"]
-        assert float(row["test BA, label-free rule"]) == pytest.approx(expected, abs=1e-4)
-        assert float(row["difference"]) == pytest.approx(
-            float(row["test BA, primary rule"]) - expected, abs=2e-4)
-        assert row["coinciding rotations"] == "1"
+    # Sec. 4.5's table: one row per strategy over the core transfers, the plan's headers
+    core = campaign.core_transfers(campaign.check_config(cfg), product)["level"]
+    table = res / "A-nivel" / "tables" / "selection_rules"
+    rows = _csv(table.with_suffix(".csv"))
+    assert [r["Estrategia, reglas de selección"] for r in rows] == ["MIL-CREDA"]
+    assert tuple(rows[0]) == results.SELECTION_RULE_COLUMNS
+    mine = [x for x in free if x["transfer"] in core]
+    expected = st.pooled(mine)["balanced_accuracy"]
+    row = rows[0]
+    assert float(row["Exactitud balanceada de prueba, regla secundaria"]) == pytest.approx(
+        expected, abs=1e-4)
+    assert float(row["Diferencia"]) == pytest.approx(
+        float(row["Exactitud balanceada de prueba, regla principal"]) - expected, abs=2e-4)
+    assert row["Coinciden"] == f"{len(core)}/{4 * len(core)}"
+    note = table.with_suffix(".md").read_text(encoding="utf-8")
+    assert "eligen distinto en" in note and "Class proportions" in note
+    proportions = _csv(res / "A-nivel" / "tables" / "selection_class_proportions.csv")
+    assert {(p["Transferencia núcleo"], p["Lado"]) for p in proportions} == {
+        (t, side) for t in core for side in ("fuente", "objetivo")}
+    a = assignment_mod.assign_from_bags(campaign.transfers_of({"transfers": [core[0]]})[0],
+                                        campaign.load_bags(campaign.check_config(cfg)))
+    source = next(p for p in proportions if p["Transferencia núcleo"] == core[0]
+                  and p["Lado"] == "fuente")
+    assert int(source["Sujetos"]) == len(a.subjects("source"))
+    assert int(source["yes"]) == sum(a.labels[s] == "yes" for s in a.subjects("source"))
     # nothing is trained twice
     again = campaign.run_final(campaign.check_config(cfg), product)
-    assert again["trained_label_free"] == again["label_free_predictions"] == 0
+    assert again["trained_ensv"] == again["ensv_predictions"] == 0
 
 
 @pytest.fixture(scope="module")
-def label_free_run(tmp_path_factory, registries):
-    """Search, final, results and mechanisms with the label-free rule choosing another
-    trial than the primary rule in every outer fold, so every label-free model is its own."""
+def ensv_run(tmp_path_factory, registries):
+    """Search, final, results and mechanisms with the EnsV rule choosing another trial than
+    the primary rule in every outer fold, so every EnsV model is its own."""
     other_trial = _other_choice(search.select)
 
-    tmp = tmp_path_factory.mktemp("label-free")
+    tmp = tmp_path_factory.mktemp("ensv")
     cfg = campaign.write_synthetic_set(tmp / "synthetic", seed=0, subjects=24)
     cfg.update({"strategies": ["MIL-CREDA", "AdaptMIL"], "nTrials": 2, "bootstrapResamples": 200,
                 "schedule": {"epochs1": 3, "epochs2": 4, "bagsPerStep": 4}})
@@ -706,7 +731,8 @@ def label_free_run(tmp_path_factory, registries):
 
     def recording_figure(root, experiment, history, core, **kwargs):
         path = real_figure(root, experiment, history, core, **kwargs)
-        figures.append((path.stem, kwargs.get("epoch_key", "val_balanced_accuracy")))
+        figures.append((path.stem, kwargs.get("epoch_field") or
+                        kwargs.get("epoch_key", "val_balanced_accuracy")))
         return path
 
     def recording_bounds(history, *args, **kwargs):
@@ -723,14 +749,14 @@ def label_free_run(tmp_path_factory, registries):
     return cfg, product, read_by_bounds, figures
 
 
-def test_the_label_free_final_models_are_refit_at_their_trial_and_epoch(label_free_run):
-    """Sec. 4.5: a label-free final model is the label-free rule's (trial, epoch) refit on
-    the non-test folds for exactly that many epochs, and its sidecar says which and by
-    which rule."""
-    cfg, product, _, _ = label_free_run
-    history = campaign.read_history(product, "A-nivel", rule="label-free")
-    assert history and {h["selectionRule"] for h in history} == {"label-free"}
-    root = product / "Models" / "Balladeer" / campaign.LABEL_FREE_MODELS
+def test_the_ensv_final_models_are_refit_at_their_trial_and_epoch(ensv_run):
+    """Sec. 4.5: an EnsV final model is the EnsV rule's (trial, epoch) refit on the
+    non-test folds for exactly that many epochs at the report seed, and its sidecar says
+    which and by which rule."""
+    cfg, product, _, _ = ensv_run
+    history = campaign.read_history(product, "A-nivel", rule="ensv")
+    assert history and {h["selectionRule"] for h in history} == {"ensv"}
+    root = product / "Models" / "Balladeer" / campaign.ENSV_MODELS
     checked = 0
     for path in sorted(root.rglob("phase2__*.pt")):
         meta = _sidecar(path)
@@ -738,11 +764,11 @@ def test_the_label_free_final_models_are_refit_at_their_trial_and_epoch(label_fr
                 and h["transfer"] == meta["transfer"] and h["fold"] == meta["rotation"]
                 and h["seed"] == meta["seed"]]
         chosen = meta["selection"]
-        assert chosen["rule"] == "label-free"
-        assert chosen["epochRule"] == two_phase.LABEL_FREE_EPOCH_RULE
+        assert chosen["rule"] == "ensv"
+        assert chosen["epochRule"] == search.ENSV_RULE
         assert len(mine) == chosen["epochs"] == chosen["epoch"] + 1 == meta["epoch"] + 1
         assert meta["hyper"]["epochs2"] == chosen["epochs"]
-        assert {h["labelFreeEpoch"] for h in mine} == {chosen["epoch"]}
+        assert {h["ensvEpoch"] for h in mine} == {chosen["epoch"]}
         assert not any("val_balanced_accuracy" in h for h in mine)   # a refit validates nothing
         primary = _sidecar(path.parents[4] / meta["transfer"].replace("->", "-to-")
                            / f"rotation{meta['rotation']}" / f"seed{meta['seed']}"
@@ -752,29 +778,29 @@ def test_the_label_free_final_models_are_refit_at_their_trial_and_epoch(label_fr
     assert checked == 2 * 2 * 4            # two strategies, two directions, four rotations
 
 
-def test_the_label_free_histories_are_written_apart_from_the_strategies(label_free_run):
-    """The label-free models' per-epoch records land in their own files, in the primary
-    layout, read by the convergence output and the K3 bound control, never by the
-    primary history the statistics step reads."""
-    cfg, product, read_by_bounds, figures = label_free_run
+def test_the_ensv_histories_are_written_apart_from_the_strategies(ensv_run):
+    """The EnsV models' per-epoch records land in their own files, in the primary layout,
+    read by the convergence output and the K3 bound control, never by the primary history
+    the statistics step reads."""
+    cfg, product, read_by_bounds, figures = ensv_run
     res = product / "Results"
     runs = res / "A-nivel" / "runs"
-    assert (runs / "history_label_free.jsonl").exists()
+    assert (runs / "history_ensv.jsonl").exists()
     primary = campaign.read_history(product, "A-nivel")
     assert primary and all("selectionRule" not in h for h in primary)
-    free = json.loads((res / "history_A-nivel_label_free.json").read_text())
-    assert free == campaign.read_history(product, "A-nivel", rule="label-free")
-    assert set(free[0]) - {"selectionRule", "labelFreeEpoch"} == set(
+    free = json.loads((res / "history_A-nivel_ensv.json").read_text())
+    assert free == campaign.read_history(product, "A-nivel", rule="ensv")
+    assert set(free[0]) - {"selectionRule", "ensvEpoch"} == set(
         next(h for h in primary if h["model"] == free[0]["model"]))
-    assert (res / "A-nivel" / "figures" / "convergence_label_free.pdf").exists()
-    # the label-free figure marks the label-free epoch; the primary one, max validation BA
-    assert ("convergence_label_free", "label_free_score") in figures
+    assert (res / "A-nivel" / "figures" / "convergence_ensv.pdf").exists()
+    # the EnsV figure marks the EnsV refit epoch; the primary one, max validation BA
+    assert ("convergence_ensv", "ensvEpoch") in figures
     assert ("convergence", "val_balanced_accuracy") in figures
     summary = json.loads((res / "K3-ablacion" / "summary.json").read_text())
     bounds = {r["term"]: r for r in summary["term_bounds"]}
     assert bounds
     mil = [h for h in primary + free if h["model"] == "MIL-CREDA:phase2"]
-    assert [h for h in read_by_bounds if h.get("selectionRule") == "label-free"
+    assert [h for h in read_by_bounds if h.get("selectionRule") == "ensv"
             and h["model"] == "MIL-CREDA:phase2"]
     for term, row in bounds.items():
         assert float(row["observed_max"]) == pytest.approx(
@@ -896,7 +922,7 @@ def test_the_final_step_refuses_before_any_transfer_writes(level_run, registries
     models = copy / "Models" / "Balladeer"
     for stale in (models / first).rglob("phase2__*"):
         stale.unlink()
-    for rule in ("primary", "label-free"):
+    for rule in ("primary", "ensv"):
         stale = results._predictions_path(copy / "Results", "A-nivel", rule)
         if stale.exists():
             stale.unlink()

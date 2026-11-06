@@ -24,9 +24,9 @@ Experiments plan v57, Secs. 4.5, 4.6, 5.1-5.4 and 6.1-6.3. The layout is the
 - `Results/<experiment>/runs/predictions.jsonl`: the per-run test predictions
   every table and contrast is computed from (`append_predictions`), each record
   stamped with the partition hash, plan revision and code version it was
-  produced under (`IDENTITY_FIELDS`, `stale_predictions`); the label-free
-  rule's predictions go to `runs/predictions_label_free.jsonl` and are read only
-  by `selection_rules`. The panel does not show `runs/`.
+  produced under (`IDENTITY_FIELDS`, `stale_predictions`); the EnsV secondary
+  rule's predictions go to `runs/predictions_ensv.jsonl` and are read only by
+  `selection_rules`. The panel does not show `runs/`.
 
 **Tables (what each one is).** Per performance arm (Secs. 5.1-5.3):
 `transfer_detail` (MIL-CREDA per transfer: balanced accuracy, AUC,
@@ -44,9 +44,13 @@ among the nine, no test, `arm_ranking`), `significance` (the arm's significance
 table under the plan's headers, `significance_table`: per rival the
 balanced-accuracy difference with its interval and raw and Holm p values, the
 kappa difference with its Holm p value, the Holm p values of the AUC_avg
-difference and of Nadeau-Bengio and the discordant subjects), `selection_rules` (Sec. 4.5: per strategy and transfer, the trial
-each rule chose for each test rotation, in how many rotations they coincide, and
-the pooled test balanced accuracy of each choice with their difference),
+difference and of Nadeau-Bengio and the discordant subjects), `selection_rules` (Sec. 4.5's
+table of the two selection rules under the plan's headers: one row per strategy over the
+core transfers, the configuration and epoch each rule chose for each transfer and test
+rotation, in how many of them they coincide, and the pooled test balanced accuracy of
+each choice with their difference; under it, the outcome the rows show and the class
+proportions of the source and target sides of each core transfer, also written as
+`selection_class_proportions`, Sec. 8),
 `selected_configurations` (per rule and test rotation, the trial, the
 rotations it was selected over and its selection score, the balanced accuracy
 from the subject-level counts pooled over the inner splits, Sec. 4.5) and `hyperparameters` (Sec. 5.4: phase 1's one
@@ -97,7 +101,8 @@ __provenance__ = {
         "the_selection_table_reads_both_rules_from_the_same_trials",
         "every_figure_goes_through_the_shipped_helper_with_a_png_preview",
         "the_convergence_figure_reads_the_core_transfers_and_marks_the_selected_epoch",
-        "the_label_free_convergence_figure_marks_the_label_free_epoch",
+        "the_ensv_convergence_figure_marks_the_ensv_refit_epoch",
+        "the_class_proportions_of_each_core_transfer_side_are_reported",
         "the_critical_difference_diagram_draws_every_rank_and_the_cd_bar",
         "the_arm_ranking_is_descriptive_under_the_plans_headers",
         "the_arm_significance_table_carries_both_families_under_the_plans_headers",
@@ -106,7 +111,7 @@ __provenance__ = {
         "the_global_ranking_is_one_friedman_over_the_ten_transfers_and_the_nine",
         "predictions_round_trip_through_the_runs_file",
         "every_prediction_carries_the_identity_it_was_written_under",
-        "the_label_free_rule_predictions_live_in_their_own_file",
+        "the_ensv_rule_predictions_live_in_their_own_file",
         "the_hyperparameter_table_carries_phase_two_per_test_rotation",
         "the_ladder_reads_each_strategys_own_source_only_control",
     ],
@@ -127,8 +132,17 @@ UPPER_BOUND = "upper-bound"
 #: What a stored prediction must have been produced under to be reused (Sec. 7.3).
 IDENTITY_FIELDS = ("partition_sha256", "revision", "code_version")
 #: Sec. 4.5's two selection rules: the primary rule's predictions feed every table and
-#: contrast; the label-free rule's are kept apart and read only by `selection_rules`.
-PREDICTION_FILES = {"primary": "predictions.jsonl", "label-free": "predictions_label_free.jsonl"}
+#: contrast; the EnsV rule's are kept apart and read only by `selection_rules`.
+PREDICTION_FILES = {"primary": "predictions.jsonl", "ensv": "predictions_ensv.jsonl"}
+#: Sec. 4.5: the headers of the table of the two selection rules, the plan's own.
+SELECTION_RULE_COLUMNS = ("Estrategia, reglas de selección",
+                          "Configuración de la regla principal",
+                          "Configuración de la regla secundaria", "Coinciden",
+                          "Exactitud balanceada de prueba, regla principal",
+                          "Exactitud balanceada de prueba, regla secundaria", "Diferencia")
+#: Secs. 4.5 and 8: the class proportions of each core transfer's sides.
+CLASS_PROPORTION_COLUMNS = ("Transferencia núcleo", "Lado", "Sujetos", "yes", "no",
+                            "Proporción de yes")
 METHOD_ROWS = {**SOURCE_ONLY, **{s: s for s in model_store.STRATEGIES},
                UPPER_BOUND: "Target-supervised upper bound"}
 #: Sec. 5.4: the ten transfers of the three arms, the blocks of the global ranking.
@@ -486,33 +500,66 @@ def write_global_ranking(root: str | Path, ranking: Mapping) -> list[Path]:
 # ------------------------------------------------------------------ Sec. 4.5 and 5.4
 
 
-def _by_rotation(selection: Mapping[int, Mapping], key: str) -> str:
-    return "; ".join(f"r{r}: {selection[r][key]}" for r in sorted(selection))
+def _choices(chosen: Mapping[str, Mapping[int, Mapping]]) -> str:
+    """Per core transfer and test rotation, the trial, configuration and epoch count E2."""
+    return json.dumps({f"{t} r{r}": {**chosen[t][r]["params"], "E2": chosen[t][r]["epochs"],
+                                     "trial": chosen[t][r]["trial"]}
+                       for t in sorted(chosen) for r in sorted(chosen[t])}, sort_keys=True)
 
 
-def selection_rows(strategy: str, transfer: str, primary: Mapping[int, Mapping],
-                   label_free: Mapping[int, Mapping], test_primary: float | None = None,
-                   test_label_free: float | None = None) -> dict:
-    """Sec. 4.5's table row: per test rotation the trial each rule chose
-    (`search.select_per_rotation`), in how many rotations they coincide, and the pooled
-    test balanced accuracy of each choice with their difference (primary minus label-free).
-    """
-    if sorted(primary) != sorted(label_free) or not primary:
-        raise ResultsError(f"both rules select for the same test rotations; got "
-                           f"{sorted(primary)} and {sorted(label_free)}")
-    diff = (test_primary - test_label_free
-            if test_primary is not None and test_label_free is not None else None)
-    return {"strategy": strategy, "transfer": transfer,
-            "primary trial by rotation": _by_rotation(primary, "trial"),
-            "label-free trial by rotation": _by_rotation(label_free, "trial"),
-            "primary configuration by rotation": json.dumps(
-                {str(r): primary[r]["params"] for r in sorted(primary)}, sort_keys=True),
-            "label-free configuration by rotation": json.dumps(
-                {str(r): label_free[r]["params"] for r in sorted(label_free)}, sort_keys=True),
-            "coinciding rotations": sum(primary[r]["trial"] == label_free[r]["trial"]
-                                        for r in primary),
-            "test BA, primary rule": test_primary, "test BA, label-free rule": test_label_free,
-            "difference": diff}
+def selection_rows(strategy: str, primary: Mapping[str, Mapping[int, Mapping]],
+                   secondary: Mapping[str, Mapping[int, Mapping]],
+                   test_primary: float | None = None,
+                   test_secondary: float | None = None) -> dict:
+    """Sec. 4.5's table of the two selection rules, one strategy's row over the core
+    transfers (`primary[transfer][rotation]`, `search.select`): the configuration and epoch
+    each rule chose for each transfer and test rotation, in how many of them they coincide
+    (the same trial AND epoch), and the pooled test balanced accuracy of each choice with
+    their difference (primary minus secondary), under the plan's headers."""
+    def keys(chosen):
+        return sorted((t, r) for t in chosen for r in chosen[t])
+
+    if keys(primary) != keys(secondary) or not keys(primary):
+        raise ResultsError(f"both rules select for the same transfers and test rotations; "
+                           f"got {keys(primary)} and {keys(secondary)}")
+    same = sum((primary[t][r]["trial"], primary[t][r]["epoch"])
+               == (secondary[t][r]["trial"], secondary[t][r]["epoch"])
+               for t, r in keys(primary))
+    diff = (test_primary - test_secondary
+            if test_primary is not None and test_secondary is not None else None)
+    return dict(zip(SELECTION_RULE_COLUMNS, (
+        strategy, _choices(primary), _choices(secondary), f"{same}/{len(keys(primary))}",
+        test_primary, test_secondary, diff)))
+
+
+def selection_outcome(row: Mapping) -> str:
+    """Which of Sec. 4.5's three outcomes a row of the two rules shows, as far as the row
+    decides it: the same choice everywhere, or different choices with the test difference
+    the reader judges (the plan fixes no threshold for similar results)."""
+    same, total = (int(x) for x in str(row["Coinciden"]).split("/"))
+    name = row["Estrategia, reglas de selección"]
+    if same == total:
+        return (f"{name}: las dos reglas eligen lo mismo en las {total} rotaciones; la "
+                f"selección no depende del validador.")
+    diff = row["Diferencia"]
+    measured = (f"diferencia de exactitud balanceada de prueba (principal menos "
+                f"secundaria) {diff:.4f}" if diff is not None else
+                "sin exactitud de prueba de alguna de las dos elecciones")
+    return (f"{name}: eligen distinto en {total - same} de {total} rotaciones; {measured}. "
+            f"El resultado reportado es el de la regla principal.")
+
+
+def class_proportion_rows(assignment) -> list[dict]:
+    """Secs. 4.5 and 8: the class proportions of the source and target sides of one core
+    transfer, over the subjects each side holds (`assignment.Assignment`)."""
+    rows = []
+    for side, label in (("source", "fuente"), ("target", "objetivo")):
+        subjects = sorted(assignment.subjects(side))
+        yes = sum(assignment.labels[s] == "yes" for s in subjects)
+        rows.append(dict(zip(CLASS_PROPORTION_COLUMNS, (
+            assignment.transfer.name, label, len(subjects), yes, len(subjects) - yes,
+            yes / len(subjects) if subjects else None))))
+    return rows
 
 
 def selected_configuration_rows(strategy: str, transfer: str,
@@ -582,10 +629,15 @@ def _band(ax, xs, rows: Sequence[Sequence[float]], label: str, **style) -> None:
         ax.fill_between(xs, mean - sd, mean + sd, alpha=0.2, color=line.get_color())
 
 
-def selected_epoch(records: Sequence[Mapping], key: str = "val_balanced_accuracy") -> float | None:
-    """Median over runs (transfer, seed, fold) of the first epoch of maximal `key`: the
-    epoch phase 1 restores and phase 2 selects (Sec. 4.5's primary rule); with
-    `key="label_free_score"`, the epoch the label-free rule keeps (`two_phase.LabelFreeBest`)."""
+def selected_epoch(records: Sequence[Mapping], key: str = "val_balanced_accuracy",
+                   field: str | None = None) -> float | None:
+    """Median over runs (transfer, seed, fold) of the first epoch of maximal `key`; with
+    `field`, of the epoch each run's records carry under it (an EnsV refit's `ensvEpoch`,
+    the epoch the rule chose in the search, Sec. 4.5)."""
+    if field is not None:
+        picks = {(r.get("transfer"), r["seed"], r["fold"]): r[field]
+                 for r in records if field in r}
+        return float(np.median(list(picks.values()))) if picks else None
     runs: dict = {}
     for r in records:
         if key in r:
@@ -604,13 +656,14 @@ CONVERGENCE_SERIES = {"loss": "loss", "val_balanced_accuracy": "validation BA",
 
 def convergence_figure(root: str | Path, experiment: str, history: Sequence[Mapping],
                        core: Sequence[str], name: str = "convergence",
-                       epoch_key: str = "val_balanced_accuracy") -> Path:
+                       epoch_key: str = "val_balanced_accuracy",
+                       epoch_field: str | None = None) -> Path:
     """Sec. 5.4: one figure per arm on its core transfers, one panel per phase-1 group and
     per phase-2 strategy; each curve the mean +/- sd over the four rotations, at the one
     report seed, of the value averaged over the core transfers; the selected epoch marked;
     MIL-CREDA's global and local terms with their bounds. The selected epoch is the one of
-    maximal `epoch_key`: validation BA for the primary rule, `label_free_score` for the
-    label-free models' figure, whose epoch no target label chooses (Sec. 4.5)."""
+    maximal `epoch_key`, or, with `epoch_field`, the epoch each run carries under it: the
+    EnsV models' figure marks `ensvEpoch`, the epoch EnsV chose (Sec. 4.5)."""
     path = Path(root) / _experiment(experiment) / "figures" / f"{name}.pdf"
     records = [r for r in history if r.get("transfer") in set(core)]
     if not records:
@@ -636,11 +689,11 @@ def convergence_figure(root: str | Path, experiment: str, history: Sequence[Mapp
             if any(f"{term}_bound_high" in r for r in rs):
                 for bound in (rs[0][f"{term}_bound_low"], rs[0][f"{term}_bound_high"]):
                     ax.axhline(bound, linestyle=":", linewidth=0.6, color="grey")
-        chosen = selected_epoch(rs, epoch_key)
+        chosen = selected_epoch(rs, epoch_key, epoch_field)
         if chosen is not None:
             ax.axvline(chosen, linestyle="--", linewidth=0.8, color="black",
-                       label="selected epoch (median)" if epoch_key == "val_balanced_accuracy"
-                       else "label-free epoch (median)")
+                       label="selected epoch (median)" if epoch_field is None
+                       else "EnsV epoch (median)")
         ax.set_ylabel(model.replace(":phase", ", phase "))
         ax.legend(loc="best")
     axes[-1, 0].set_xlabel("epoch")
