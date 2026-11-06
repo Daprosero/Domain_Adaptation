@@ -80,6 +80,8 @@ class Stamps:
 def _sync(device: torch.device) -> None:
     if device.type == "mps":
         torch.mps.synchronize()
+    elif device.type == "cuda":
+        torch.cuda.synchronize(device)
 
 
 def _params(space, seed: int) -> dict:
@@ -94,6 +96,12 @@ def _windows(bags) -> int:
 def _peak_rss_mb() -> float:
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak / 2**20 if sys.platform == "darwin" else peak / 2**10
+
+
+def _cuda_memory_mb() -> float | None:
+    if not torch.cuda.is_available():
+        return None
+    return torch.cuda.max_memory_allocated() / 2**20
 
 
 def _mps_memory_mb() -> float | None:
@@ -114,14 +122,16 @@ def _timed(fn, device):
         _sync(device)
     total = time.perf_counter() - start
     return out, {"seconds": total, **stamps.epochs(start), "error": error,
-                 "peakRssMB": _peak_rss_mb(), "mpsDriverMB": _mps_memory_mb()}
+                 "peakRssMB": _peak_rss_mb(), "mpsDriverMB": _mps_memory_mb(),
+                 "cudaPeakMB": _cuda_memory_mb()}
 
 
 def run(transfer_name: str, device_name: str, epochs: int, bags_per_step: int,
-        scratch: Path, groups=None, strategies=None, phase2_epochs=None) -> dict:
+        scratch: Path, groups=None, strategies=None, phase2_epochs=None,
+        processed_root=None) -> dict:
     device = torch.device(device_name)
     started = time.perf_counter()
-    bags = bag_data.load_bags()
+    bags = bag_data.load_bags(processed_root)
     loaded = time.perf_counter()
     transfer = {t.name: t for t in assignment.TRANSFERS}[transfer_name]
     data = search.search_data(transfer, bags)
