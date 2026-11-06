@@ -245,6 +245,17 @@ The campaign as it stands runs on clean material, so nothing in it can show whet
 the formulation mitigates the corruption it claims to. Noise enters as a declared
 axis over the same notebooks rather than as a duplicated set of them.
 
+## Proof of concept — toy set, approved 2026-11-05 against research-concept-r44.md
+
+- [x] The proof of concept runs on the rollo toy set with the BatchNorm MLP encoder only, with every test rule pre-registered before its run and 30 fresh seeds.
+- [x] H-A and H-B (task) are approved on the toy set: MIL-CREDA beats the BN-matched source-only floor (0.848 vs 0.780, Wilcoxon p = 1.4e-4); their ranking part is tested only on EEG.
+- [x] H-C is not applicable on the toy set, because it states only the ranking among the nine strategies; it is decided on EEG.
+- [x] K1 is approved on the toy set: attention down-weights artifact windows and beats its no-consensus variant at 10, 20 and 30 percent contamination (Holm).
+- [x] K2 is approved on the toy set under a subject-specific residual the global term cannot remove: the local term pushes each target bag toward its own partner more than the global term alone (0.119 vs 0.053, p below 1e-7).
+- [x] K3 is partly approved on the toy set: consensus improves accuracy at 40 percent artifacts (p = 0.032); combining the global and local terms does not improve accuracy over either alone.
+- [x] A PoC test counts only where its mechanism had room: a pre-declared gate on the conditions comes before every verdict, and a failed gate reads inconclusive, never not supported.
+- [ ] The full EEG run measures the local correspondence entropy and the own-partner kernel rank, so K2 is read only where its conditions hold on EEG.
+- [ ] The K1 contact contrast on the level arm has no marked windows on CGX and must be resolved in the protocol before the full run.
 ## Reversed
 
 What was agreed and later changed, and what replaced it. Written rather than deleted: an agreement that was turned over is part of the record, and removing it would lose exactly what this file exists to keep. No bullets, because the parser counts items and this is not one.
