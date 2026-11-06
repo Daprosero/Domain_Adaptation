@@ -1,0 +1,110 @@
+[
+ {
+  "group": "AdaptMIL",
+  "transfer": "L1->L11",
+  "params": {
+   "lr1": 0.013817435159425021,
+   "wd1": 0.00017429435860432833
+  },
+  "epochs": 15,
+  "draw": 9,
+  "score": 0.5852941176470587
+ },
+ {
+  "group": "AdaptMIL",
+  "transfer": "L6->Robots",
+  "params": {
+   "lr1": 0.019495394025140007,
+   "wd1": 2.3729573941429156e-07
+  },
+  "epochs": 17,
+  "draw": 5,
+  "score": 0.5980392156862745
+ },
+ {
+  "group": "AdaptMIL",
+  "transfer": "Robots->CogniFit",
+  "params": {
+   "lr1": 0.012856876991199905,
+   "wd1": 9.604423499934736e-06
+  },
+  "epochs": 7,
+  "draw": 1,
+  "score": 0.6190476190476191
+ },
+ {
+  "group": "MIL-CREDA",
+  "transfer": "L1->L11",
+  "params": {
+   "attentionGamma": 0.988267224365056,
+   "attentionTemperature": 0.42314923889665207,
+   "lr1": 0.001359600751537158,
+   "sigmaMultiplier": 1.5,
+   "wd1": 1.2646580923454063e-05
+  },
+  "epochs": 1,
+  "draw": 4,
+  "score": 0.5127450980392156
+ },
+ {
+  "group": "MIL-CREDA",
+  "transfer": "L6->Robots",
+  "params": {
+   "attentionGamma": 0.703045162930058,
+   "attentionTemperature": 0.6208526235679097,
+   "lr1": 0.018607820623536633,
+   "sigmaMultiplier": 0.5,
+   "wd1": 5.868183122247138e-06
+  },
+  "epochs": 22,
+  "draw": 0,
+  "score": 0.5964052287581699
+ },
+ {
+  "group": "MIL-CREDA",
+  "transfer": "Robots->CogniFit",
+  "params": {
+   "attentionGamma": 0.928385201941989,
+   "attentionTemperature": 5.801520257329028,
+   "lr1": 0.0031155297595372136,
+   "sigmaMultiplier": 0.75,
+   "wd1": 9.368164736048496e-07
+  },
+  "epochs": 10,
+  "draw": 9,
+  "score": 0.5654761904761905
+ },
+ {
+  "group": "common",
+  "transfer": "L1->L11",
+  "params": {
+   "lr1": 0.018607820623536633,
+   "wd1": 5.868183122247138e-06
+  },
+  "epochs": 1,
+  "draw": 0,
+  "score": 0.5294117647058824
+ },
+ {
+  "group": "common",
+  "transfer": "L6->Robots",
+  "params": {
+   "lr1": 0.013817435159425021,
+   "wd1": 0.00017429435860432833
+  },
+  "epochs": 2,
+  "draw": 9,
+  "score": 0.5294117647058824
+ },
+ {
+  "group": "common",
+  "transfer": "Robots->CogniFit",
+  "params": {
+   "lr1": 0.019495394025140007,
+   "wd1": 2.3729573941429156e-07
+  },
+  "epochs": 6,
+  "draw": 5,
+  "score": 0.5357142857142857
+ }
+]

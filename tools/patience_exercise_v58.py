@@ -132,6 +132,43 @@ def select(rows: list[dict], patience: int = 10) -> list[dict]:
     return [v for _, v in sorted(out.values(), key=lambda x: (x[1]["group"], x[1]["transfer"]))]
 
 
+# ------------------------------------------------------------------ GPU certification
+
+#: Steady seconds per epoch above which an epoch cannot have run on the T4: the Kaggle CPU
+#: probe measured 8.6 s (phase 1) to 37.6 s (CASUAL) per epoch, the T4 0.40 to 1.49 s.
+CPU_EPOCH_FLOOR_SECONDS = 5.0
+
+
+def certify(result: dict, trials: list[dict]) -> dict:
+    """Whether one notebook's training ran on the GPU, from its own evidence: CUDA
+    available with a named device, and for every finished trial every stepped parameter
+    on CUDA, a positive CUDA peak memory and a median epoch below the CPU floor."""
+    device = result.get("device") or {}
+    reasons = []
+    if not device.get("cudaIsAvailable"):
+        reasons.append("torch.cuda.is_available() not recorded true")
+    if not device.get("cudaDeviceName0"):
+        reasons.append("torch.cuda.get_device_name(0) not recorded")
+    finished = [t for t in trials if not t.get("error")]
+    if not finished:
+        reasons.append("no finished trial")
+    for t in finished:
+        ev = t.get("gpuEvidence")
+        key = f"p{t['phase']}:{t['name']}:{t['transfer']}:{t['draw']}"
+        if not ev:
+            reasons.append(f"{key}: no per-trial GPU evidence")
+            continue
+        if not ev.get("allParametersOnCuda"):
+            reasons.append(f"{key}: parameters on {ev.get('parameterDevices')}")
+        if not (ev.get("cudaMaxMemoryAllocatedMB") or 0) > 0:
+            reasons.append(f"{key}: no CUDA memory allocated")
+        if ev.get("medianEpochSeconds") is None or \
+                ev["medianEpochSeconds"] >= CPU_EPOCH_FLOOR_SECONDS:
+            reasons.append(f"{key}: median epoch {ev.get('medianEpochSeconds')} s")
+    return {"certified": not reasons, "reasons": reasons,
+            "device": device.get("cudaDeviceName0") or device.get("name")}
+
+
 # ------------------------------------------------------------------ report
 
 

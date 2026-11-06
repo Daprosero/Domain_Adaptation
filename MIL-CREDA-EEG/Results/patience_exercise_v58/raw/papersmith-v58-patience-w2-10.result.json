@@ -1,0 +1,44 @@
+{
+ "device": {
+  "requested": "cuda",
+  "torch": "2.11.0+cu130",
+  "cudaAvailable": true,
+  "threads": 2,
+  "cpuCount": 4,
+  "platform": "Linux-6.18.55+-x86_64-with-glibc2.39",
+  "processor": "x86_64",
+  "kind": "cuda",
+  "name": "Tesla T4",
+  "capability": "sm_75",
+  "totalMemoryMB": 14911.6875,
+  "cudaVersion": "13.0"
+ },
+ "commit": "a3da6133b98e49b4ea26e945663e8137f38b9538",
+ "processedRoot": "/kaggle/input/datasets/daprosero/balladeer-existing-local",
+ "schedule": {
+  "epochs1": 100,
+  "epochs2": 100,
+  "bagsPerStep": 8
+ },
+ "setup": {
+  "loadBagsSeconds": 31.60634160041809,
+  "searchDataSeconds": {
+   "Robots->CogniFit": 6.884205102920532,
+   "L6->Robots": 6.675246238708496,
+   "L1->L11": 9.246153593063354
+  },
+  "phaseOneRefitSeconds": {
+   "common:Robots->CogniFit": 11.778587341308594,
+   "common:L6->Robots": 1.6525845527648926,
+   "common:L1->L11": 0.8844802379608154
+  }
+ },
+ "trials": [
+  "p2:CCA-LSC:Robots->CogniFit:4",
+  "p2:CLUDA:L6->Robots:1",
+  "p2:CCA-LSC:L1->L11:1",
+  "p2:COT:L6->Robots:1"
+ ],
+ "errors": {},
+ "wallSeconds": 880.969425201416
+}
