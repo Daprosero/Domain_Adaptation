@@ -653,7 +653,7 @@ def test_attention_logits_depend_only_on_own_bag(rng: Sampler) -> None:
 
 
 def test_consensus_component_in_unit_interval(rng: Sampler) -> None:
-    """r38 Sec. 3 (consensus term preceding Eq. 15): consensus in (0, 1].
+    """r44 Sec. 3 (consensus term preceding Eq. 15): consensus in (0, 1].
 
     kappa^I is strictly positive and at most one everywhere (Eq. 14), so an
     average of its off-diagonal entries cannot reach zero and cannot exceed
@@ -711,7 +711,7 @@ def test_consensus_component_in_unit_interval(rng: Sampler) -> None:
 
 
 def test_consensus_component_bandwidth_limits(rng: Sampler) -> None:
-    """r38 Sec. 3: 'si sigma -> 0, el kernel se anula entre embeddings
+    """r44 Sec. 3: 'si sigma -> 0, el kernel se anula entre embeddings
     distintos y los consensos de la bolsa tienden a cero; si sigma ->
     infinito, el kernel tiende a uno y los consensos tambien.'
 
@@ -740,7 +740,7 @@ def test_consensus_component_bandwidth_limits(rng: Sampler) -> None:
 
 
 def test_consensus_component_excludes_the_instance_itself(rng: Sampler) -> None:
-    """r38 Sec. 3, Eq. (15): the average runs over a' != a, divided by (m-1).
+    """r44 Sec. 3, Eq. (15): the average runs over a' != a, divided by (m-1).
 
     Asserted as a VALUE against an independently built pair, not as a property
     that both forms happen to share: the leave-one-out average must equal
@@ -776,7 +776,7 @@ def test_consensus_component_excludes_the_instance_itself(rng: Sampler) -> None:
 
 
 def test_consensus_component_omits_the_term_for_a_singleton_bag() -> None:
-    """r38 Sec. 3: 'en una bolsa con una sola instancia el termino se omite, lo
+    """r44 Sec. 3: 'en una bolsa con una sola instancia el termino se omite, lo
     que no altera nada, porque esa bolsa recibe peso uno (Ec. 16).'
 
     Both halves are asserted, because the first alone would let the omission
@@ -933,7 +933,7 @@ def test_effective_bag_size_in_range(rng: Sampler) -> None:
 
 
 def test_mean_consensus_in_range(rng: Sampler) -> None:
-    """r38 Sec. 3 (diagnostic pair following Eq. 16): the mean consensus
+    """r44 Sec. 3 (diagnostic pair following Eq. 16): the mean consensus
     c_bar(B) is in (0, 1], equal to 1 only when every embedding of the bag
     coincides, and tending to zero as they disperse.
 

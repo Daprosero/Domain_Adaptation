@@ -1,6 +1,6 @@
 """Bags: one subject in one condition, read from the processed data.
 
-Experiments plan v54, Secs. 3.2, 4.2 and 5.1-5.3. A bag is a pair of subject
+Experiments plan v55, Secs. 3.2, 4.2 and 5.1-5.3. A bag is a pair of subject
 and condition, where a condition is one recording context (task, device and
 level). Each bag lives in exactly one domain, because each condition has one
 device. A bag carries its windows (Sec. 3.1, already cut by `windows`), the
@@ -41,7 +41,7 @@ import pandas as pd
 from MIL_CREDA_EEG import partition
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["3.2", "4.2", "5.1", "5.2", "5.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K2-emparejamiento"],
     "invariants": [

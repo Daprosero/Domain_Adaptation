@@ -465,7 +465,7 @@ def test_a_study_records_the_identity_it_is_checked_against(tmp_path, monkeypatc
     assert study.user_attrs["code_version"] == model_store.code_version()
     assert study.user_attrs["partition_sha256"] == data.partition_sha256
     assert study.user_attrs["revision"] == search.__provenance__["revision"]
-    assert study.user_attrs["revision"].endswith("v54.md")
+    assert study.user_attrs["revision"].endswith("v55.md")
     assert study.user_attrs["outerFold"] == 0 and study.user_attrs["testFold"] == 0
     assert study.user_attrs["innerSplits"] == partition.rotation_roles(0)["inner_splits"]
 

@@ -425,7 +425,7 @@ def test_models_declares_the_revision_its_own_equations_are_bound_to() -> None:
     instances of a bag -- and this module is the SAMPLE-level method, with no
     bags and no attention, so it implements no equation r34 touched.
     """
-    assert creda_models.__provenance__['revision'] == 'research-concept-r38.md'
+    assert creda_models.__provenance__['revision'] == 'research-concept-r44.md'
 
 
 def test_models_says_which_of_its_equations_it_only_applies() -> None:
@@ -444,7 +444,7 @@ def test_models_says_which_of_its_equations_it_only_applies() -> None:
     artefact needs.
     """
     doc = creda_models.__doc__
-    assert 'research-concept-r38.md' in doc
+    assert 'research-concept-r44.md' in doc
     assert 'r25' in doc, "what happened to r25's pair has to be named"
     declared = creda_models.__provenance__['equations']
     assert '31' in declared and '32' in declared
@@ -873,5 +873,5 @@ def test_every_r28_mention_left_in_creda_is_history_and_not_a_live_rule() -> Non
     # held `conservative_bounds`/`class_global_loss`; those were removed, so
     # every equation it holds is r33's and the stamp could finally move -- and
     # r34 moved only Eq. 15, which neither module implements.
-    assert creda_bounds_module.__provenance__['revision'] == 'research-concept-r38.md'
-    assert creda_models.__provenance__['revision'] == 'research-concept-r38.md'
+    assert creda_bounds_module.__provenance__['revision'] == 'research-concept-r44.md'
+    assert creda_models.__provenance__['revision'] == 'research-concept-r44.md'

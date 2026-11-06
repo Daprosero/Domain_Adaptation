@@ -84,7 +84,7 @@ def test_units_are_enumerated_in_a_deterministic_order_with_stable_ids(tmp_path)
 
 
 def test_the_search_units_are_one_per_study_and_outer_fold(tmp_path):
-    """Plan v54, Sec. 7.7: 3 phase-1 groups and 9 strategies per transfer and outer fold,
+    """Plan v55, Sec. 7.7: 3 phase-1 groups and 9 strategies per transfer and outer fold,
     ten transfers: 480 studies, 120 per outer fold, each one search unit carrying its
     outer fold."""
     full = {**_config(tmp_path), "strategies": list(model_store.STRATEGIES),

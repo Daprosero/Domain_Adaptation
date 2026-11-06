@@ -365,6 +365,6 @@ def test_cluda_synthetic_two_phase_smoke():
 def test_cluda_every_provenance_invariant_has_a_test():
     for name in ("losses", "model", "training", "smoke", "__init__"):
         module = importlib.import_module(f"MIL_CREDA_EEG.comparators.cluda.{name}")
-        assert module.__provenance__["revision"] == "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md"
+        assert module.__provenance__["revision"] == "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md"
         for invariant in module.__provenance__["invariants"]:
             assert callable(globals().get(f"test_{invariant}")), invariant

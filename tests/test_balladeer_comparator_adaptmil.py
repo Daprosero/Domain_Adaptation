@@ -1,4 +1,4 @@
-"""AdaptMIL paper mechanisms and plan-v54 controlled-variant invariants, CPU only."""
+"""AdaptMIL paper mechanisms and plan-v55 controlled-variant invariants, CPU only."""
 from __future__ import annotations
 
 import copy

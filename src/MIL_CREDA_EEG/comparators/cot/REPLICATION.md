@@ -20,8 +20,8 @@ Search failure is bounded to these places, not proof that code does not exist.
 
 ## Plan and equation analysis
 
-Binding: experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md §§4.5,
-7.1–7.4 and 7.7 (written against v40; rebound to v54 on 2026-11-04 with no change of behaviour: v54 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites). This is NOT reproduction of the image benchmarks. Source
+Binding: experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md §§4.5,
+7.1–7.4 and 7.7 (written against v40; rebound to v54 on 2026-11-04 and to v55 on 2026-11-05 with no change of behaviour: v55 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites). This is NOT reproduction of the image benchmarks. Source
 encoder, common attention and common head freeze in phase 2. Only target
 EEGNet and auxiliary centers/potentials train. No DANN/MMI addition: the plan
 selects the cluster-transport mechanism, not the paper's default host algorithm.
@@ -86,8 +86,8 @@ PDF `d2044d4b20a6f321505c0be4bbe4e1a8d1b9c969e3f50b8bca20ece021434214`.
 | Target-center initialization | Repeat head rows twice plus seeded N(0,0.01²) noise | unspecified; retain source scale while breaking ties. |
 | Ties in nearest centers | torch min, first index | unspecified; deterministic subgradient at nondifferentiable ties. |
 | Epoch/step budget | Explicit shared schedule, no default epoch cap | Plan §7.3, §7.7; pilot owns budget. |
-| Checkpoint | Last epoch of the run (no early stopping, no restore); the search's pooled (trial, epoch) selection breaks ties at the lowest trial and earliest epoch | Plan v54 §§4.5, 7.7 (row corrected 2026-11-04: it described a first-maximum validation checkpoint). |
-| Primary/secondary selection | Shared BA and H(mean)-mean H on validation bags, pooled over the three inner splits per epoch by `search` | Plan v54 §4.5 (row corrected 2026-11-04: it named v40's four-rotation `search.robust`). |
+| Checkpoint | Last epoch of the run (no early stopping, no restore); the search's pooled (trial, epoch) selection breaks ties at the lowest trial and earliest epoch | Plan v55 §§4.5, 7.7 (row corrected 2026-11-04: it described a first-maximum validation checkpoint). |
+| Primary/secondary selection | Shared BA and H(mean)-mean H on validation bags, pooled over the three inner splits per epoch by `search` | Plan v55 §4.5 (row corrected 2026-11-04: it named v40's four-rotation `search.robust`). |
 | Source training CE batching | Cycle existing interleaved source batches | unspecified; diagnostic constant only, target labels never used. |
 | Hyperparameter spaces | Shared lr2/wd2; generic LOSS_WEIGHT for weights/dualLR, KERNEL_MULTIPLIER for dual-step budget | Existing search generic rule; dual axes unspecified mapping. |
 | Precision | float32 trunk, float64 representations/centers/potentials | unspecified by COT paper; reuse existing CommonMILModel precision contract. |
@@ -151,7 +151,7 @@ Scratch retained at `/var/folders/y9/9hfxsk810hv08cnh64bncjq80000gn/T/tmp.FtohdW
 
 Integration: explicitly call `MIL_CREDA_EEG.comparators.cot.training.register()`
 before shared search.run_phase_two_study. Shared search pools the three inner splits
-per epoch (v54 §4.5) under common trial budgets. Phase-one records come
+per epoch (v55 §4.5) under common trial budgets. Phase-one records come
 from the common group. Shared search.save_phase_two stores the selected full
 state; own load_phase_two verifies the extra source digest. The campaign refits the
 label-free (trial, epoch) on its own and stores it under a distinct root.

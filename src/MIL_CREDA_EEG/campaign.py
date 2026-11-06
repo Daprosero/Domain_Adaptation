@@ -1,6 +1,6 @@
 """The campaign: the plan's declared steps, wired to runnable local commands.
 
-Experiments plan v54, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
+Experiments plan v55, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
 The steps, in order (`STEPS`), each one a subcommand of
 `python -m MIL_CREDA_EEG.campaign <step> --config <file> [--product <dir>]`:
 
@@ -139,7 +139,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.mil_wrapper import COMPARATORS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["4.2", "4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3", "7.3",
                  "7.5", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
@@ -747,7 +747,7 @@ def _assignments(cfg: Mapping, bags: bag_data.BagSet) -> dict[str, assignment_mo
 def test_train_ratio(a: assignment_mod.Assignment, b: assignment_mod.Assignment) -> float:
     """Per rotation, target-test over training subjects summed over both directions; mean.
 
-    The training subjects are the refit's (plan v54, Sec. 4.5): every non-test fold."""
+    The training subjects are the refit's (plan v55, Sec. 4.5): every non-test fold."""
     ratios = []
     for r in sorted(a.rotations, key=int):
         views = [x.rotation(int(r)) for x in (a, b)]
@@ -1386,7 +1386,7 @@ def write_synthetic_set(out: str | Path, *, seed: int = 0, subjects: int = 32,
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m MIL_CREDA_EEG.campaign",
-                                     description="The BALLADEER campaign of plan v54, local only.")
+                                     description="The BALLADEER campaign of plan v55, local only.")
     parser.add_argument("step", choices=(*STEPS, "all", "synthetic"))
     parser.add_argument("--config", help="campaign config (JSON)")
     parser.add_argument("--product", default=str(DEFAULT_PRODUCT),

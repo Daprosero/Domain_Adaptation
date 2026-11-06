@@ -11,7 +11,7 @@ from MIL_CREDA_EEG import eegnet
 from MIL_CREDA_EEG.mil_creda_model import MILCREDAModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v54.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
     "sections": ["7.2", "7.3", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion"],
     "invariants": ["adaptmil_native_pool_is_permutation_invariant",

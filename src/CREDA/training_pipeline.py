@@ -174,10 +174,10 @@ def get_lambda(epoch, total_epochs, delta):
     return (1 - np.exp(-delta * p)) / (1 + np.exp(-delta * p))
 
 def entropy(p):
-    """Shannon's `H(p) = -sum_c p_c ln p_c`, for the BASELINES and not for r38.
+    """Shannon's `H(p) = -sum_c p_c ln p_c`, for the BASELINES and not for r44.
 
     **Not one of the formulation's estimators, and the `1e-5` is not one of its
-    epsilons.** r38 states a single entropy, Eq. (10)'s quadratic Renyi; this
+    epsilons.** r44 states a single entropy, Eq. (10)'s quadratic Renyi; this
     one belongs to the entropy-conditioning the CDAN and ADDA comparators
     published, which `train_cdan` reads at lines 451 and 466. Its `1e-5` guards
     a zero that IS reachable --- a confident softmax underflows to exactly zero
