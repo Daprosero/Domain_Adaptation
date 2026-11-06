@@ -194,6 +194,38 @@
    "slot": 2,
    "units": 12,
    "submittedAt": "2026-11-06T19:18:57Z"
+  },
+  {
+   "account": "trayectoria50",
+   "ref": "trayectoria50/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/trayectoria50/papersmith-v59-search",
+   "slot": 1,
+   "units": 2,
+   "submittedAt": "2026-11-06T20:12:37Z"
+  },
+  {
+   "account": "trayectoria50",
+   "ref": "trayectoria50/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/trayectoria50/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 2,
+   "submittedAt": "2026-11-06T20:12:40Z"
+  },
+  {
+   "account": "trayectoria51",
+   "ref": "trayectoria51/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/trayectoria51/papersmith-v59-search",
+   "slot": 1,
+   "units": 2,
+   "submittedAt": "2026-11-06T20:12:31Z"
+  },
+  {
+   "account": "trayectoria51",
+   "ref": "trayectoria51/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/trayectoria51/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 2,
+   "submittedAt": "2026-11-06T20:12:34Z"
   }
  ]
 }

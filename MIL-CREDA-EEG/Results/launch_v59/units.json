@@ -286,5 +286,13 @@
 "search.phase2.L6-to-Robots.AdaptMIL.outer1",
 "search.phase2.L6-to-Robots.AdaptMIL.outer3",
 "search.phase2.L6-to-Robots.MIL-CREDA.outer1",
-"search.phase2.L6-to-Robots.MIL-CREDA.outer3"
+"search.phase2.L6-to-Robots.MIL-CREDA.outer3",
+"search.phase1.L1-to-L6.MIL-CREDA.outer0",
+"search.phase1.L1-to-L6.MIL-CREDA.outer1",
+"search.phase1.L1-to-L6.MIL-CREDA.outer2",
+"search.phase1.L1-to-L6.MIL-CREDA.outer3",
+"search.phase2.L1-to-L6.MIL-CREDA.outer0",
+"search.phase2.L1-to-L6.MIL-CREDA.outer1",
+"search.phase2.L1-to-L6.MIL-CREDA.outer2",
+"search.phase2.L1-to-L6.MIL-CREDA.outer3"
 ]
