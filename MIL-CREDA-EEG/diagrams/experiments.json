@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "kind": "experiments",
+  "claim": "The full protocol tests whether MIL-CREDA ranks in the top three of nine strategies on the core transfers of three domain shifts, and gives each of its contributions its own experiment",
+  "focal": "compare",
+  "nodes": [
+    {
+      "id": "data",
+      "label": "EEG in 4 frozen folds, 10 transfers",
+      "role": "state",
+      "row": "spine"
+    },
+    {
+      "id": "search",
+      "label": "Select by nested search, 20 trials",
+      "role": "operator",
+      "row": "spine"
+    },
+    {
+      "id": "compare",
+      "label": "MIL-CREDA vs 8 rivals on unseen subjects",
+      "role": "focal",
+      "row": "spine"
+    },
+    {
+      "id": "tests",
+      "label": "Paired bootstrap, Holm",
+      "role": "operator",
+      "row": "spine"
+    },
+    {
+      "id": "a",
+      "label": "A: level, 6 transfers",
+      "role": "evidence",
+      "row": "evidence"
+    },
+    {
+      "id": "b",
+      "label": "B: task, 2 transfers",
+      "role": "evidence",
+      "row": "evidence"
+    },
+    {
+      "id": "c",
+      "label": "C: device, 2 transfers",
+      "role": "evidence",
+      "row": "evidence"
+    },
+    {
+      "id": "k1",
+      "label": "K1: attention",
+      "role": "evidence",
+      "row": "evidence"
+    },
+    {
+      "id": "k23",
+      "label": "K2, K3: pairing, ablation",
+      "role": "evidence",
+      "row": "evidence"
+    },
+    {
+      "id": "note",
+      "label": "BALLADEER, protocol v59; no target label in selection",
+      "role": "context",
+      "row": "context",
+      "near": "search"
+    }
+  ],
+  "edges": [
+    {
+      "from": "data",
+      "to": "search",
+      "semantics": "data",
+      "prominence": "primary"
+    },
+    {
+      "from": "search",
+      "to": "compare",
+      "semantics": "data",
+      "prominence": "primary"
+    },
+    {
+      "from": "compare",
+      "to": "tests",
+      "semantics": "data",
+      "prominence": "primary"
+    },
+    {
+      "from": "tests",
+      "to": "a",
+      "semantics": "data",
+      "prominence": "secondary"
+    },
+    {
+      "from": "tests",
+      "to": "b",
+      "semantics": "data",
+      "prominence": "secondary"
+    },
+    {
+      "from": "tests",
+      "to": "c",
+      "semantics": "data",
+      "prominence": "secondary"
+    },
+    {
+      "from": "tests",
+      "to": "k1",
+      "semantics": "data",
+      "prominence": "secondary"
+    },
+    {
+      "from": "tests",
+      "to": "k23",
+      "semantics": "data",
+      "prominence": "secondary"
+    }
+  ],
+  "sources": [
+    "Experimental_AGREED.md",
+    "experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md"
+  ]
+}
