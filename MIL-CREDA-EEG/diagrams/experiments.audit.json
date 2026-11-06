@@ -3,8 +3,8 @@
   "verdict": "pass",
   "failures": [],
   "messages": [],
-  "png_sha256": "a44b94adfeb7cdcbbdfd5b3dc26fe9f53e08c94a46a5a6af42b764a144093c46",
-  "pdf_sha256": "1340867dd9ed8a98a0704fe1b5e1d9f94fd9bb862cccd1ba02a40262bc5d35b0",
+  "png_sha256": "cab24ca75819ad66dc32475b15b9c37d3d93cf9230f5bdcbdf4b02cf09f22694",
+  "pdf_sha256": "e284e9986ed3a1ee87db2aef195bbc7ab7c0a930c89efb914c1bd3d3a5f57cba",
   "print": {
     "body_pt": 10.0,
     "body_source": "main.tex:fallback",
@@ -17,7 +17,7 @@
       "note": 7.6
     }
   },
-  "audited_at": "2026-11-06T16:58:26+00:00",
+  "audited_at": "2026-11-06T18:00:37+00:00",
   "report": {
     "verdict": "pass",
     "failures": [],
@@ -39,7 +39,7 @@
       "text_overlap": {
         "verdict": "pass",
         "reason": null,
-        "span_count": 80,
+        "span_count": 81,
         "shape_count": 17,
         "span_collisions": [],
         "boundary_crossings": [],
@@ -58,7 +58,7 @@
         "max_printed_pdf_pt": 8.9664,
         "smallest_printed_pt": 7.619,
         "largest_printed_pt": 8.821,
-        "span_count": 80,
+        "span_count": 81,
         "offending": []
       },
       "margins": {

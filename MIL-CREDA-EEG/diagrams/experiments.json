@@ -6,7 +6,7 @@
   "nodes": [
     {
       "id": "data",
-      "label": "EEG in 4 frozen folds, 10 transfers",
+      "label": "EEG in 4 frozen folds, 6 transfers",
       "role": "state",
       "row": "spine"
     },
@@ -30,7 +30,7 @@
     },
     {
       "id": "a",
-      "label": "A: level, 6 transfers",
+      "label": "A: level, 2 core transfers",
       "role": "evidence",
       "row": "evidence"
     },
