@@ -1,6 +1,6 @@
 """The Optuna searches of both phases, per transfer and outer fold.
 
-Experiments plan v57, Secs. 4.2, 4.5, 7.3 and 7.7. The selection is a nested
+Experiments plan v58, Secs. 4.2, 4.5, 7.3 and 7.7. The selection is a nested
 cross-validation. The outer level is the frozen four-fold partition, rotated:
 rotation r tests fold k and F is the other three folds. The inner level is the
 three inner splits of F, read from the partition document (`assignment.inner_splits`,
@@ -138,7 +138,7 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, mil_wrapper, model_store, partition, two_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
     "sections": ["4.2", "4.5", "5.4", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [

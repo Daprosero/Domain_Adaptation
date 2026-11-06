@@ -1,6 +1,6 @@
 """MIL-CREDA's two-phase training on EEG, for one transfer, rotation and seed.
 
-Experiments plan v57, Secs. 4.5, 7.3 and 7.7, over proposal r44 Eqs. 21 and
+Experiments plan v58, Secs. 4.5, 7.3 and 7.7, over proposal r44 Eqs. 21 and
 32-39. The phase mechanics follow the retired toy-set runner (git history,
 `src/MIL_CREDA_Benchmark/toy_run.py` before 9b733d7) as a reference; nothing of
 it is imported or restored, and the plan's rules govern where the two differ.
@@ -109,7 +109,7 @@ from MIL_CREDA_EEG.mil_creda_model import (CLASSES, TERM_BOUNDS, MILCREDAModel,
                                            adaptation_terms, source_term)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "equations": ["21", "28", "29", "30", "31", "32", "33", "38", "39"],

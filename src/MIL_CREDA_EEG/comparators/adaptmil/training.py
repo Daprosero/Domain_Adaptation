@@ -1,4 +1,4 @@
-"""Controlled source-first / target-only training (plan v57 §§4.5,7.3–7.4,7.7).
+"""Controlled source-first / target-only training (plan v58 §§4.5,7.3–7.4,7.7).
 
 Not the paper's align-first / attention-second schedule. Both phases run their
 epoch count whole and keep the last epoch (no patience, no restore, v56 §7.7);
@@ -18,7 +18,7 @@ from .model import AdaptMILModel
 from .objectives import alignment_objective, median_bandwidth, stage_two_objective
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
     "sections": ["4.5", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["adaptmil_source_pretraining_runs_its_epochs_and_keeps_the_last",

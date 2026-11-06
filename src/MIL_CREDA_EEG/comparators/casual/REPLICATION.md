@@ -16,7 +16,7 @@ This is a bounded search, not a claim that code cannot exist. Scratch HTML/text 
 
 ## Plan and equation analysis (before coding)
 
-Binding plan: `experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md`, §§4.5, 7.1–7.4, 7.7 (rebound from v40 on 2026-11-03, rebound to v54 on 2026-11-04, to v55 on 2026-11-05 and to v56 on 2026-11-05 with no change of behaviour: v56 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites); T6/S1–S5. This is explicitly a controlled variant, not reproduction of published image experiments.
+Binding plan: `experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md`, §§4.5, 7.1–7.4, 7.7 (rebound from v40 on 2026-11-03, rebound to v54 on 2026-11-04, to v55 on 2026-11-05 and to v56 on 2026-11-05 with no change of behaviour: v56 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites); T6/S1–S5. This is explicitly a controlled variant, not reproduction of published image experiments.
 
 - `losses.py`: classification, conditional entropy, joint conditioning, discriminator loss, support loss and VAT, one function per computational equation.
 - `training.py`: auxiliary discriminator, alternating updates, shared bridge and checkpoint reconstruction, full epoch budget and both validation selectors, explicit search registration and model-store wrappers.

@@ -23,7 +23,7 @@ from .losses import (CentroidMemory, calibrated_pseudo, calibration_weights,
                      estimate_prior, label_shift)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cca_phase_two_freezes_common_predictor", "cca_target_training_labels_are_unread",

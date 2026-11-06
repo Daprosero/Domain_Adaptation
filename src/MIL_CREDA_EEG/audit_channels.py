@@ -1,6 +1,6 @@
 """Channel audit: MARK, never act.
 
-Experiments plan v57, Sec. 2.4. Per record, a channel is defective when it is
+Experiments plan v58, Sec. 2.4. Per record, a channel is defective when it is
 
 1. absent although the rest of its cohort carries it;
 2. flat;
@@ -46,7 +46,7 @@ import numpy as np
 from scipy.signal import butter, sosfiltfilt, welch
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
     "sections": ["2.4"],
     "experiments": ["2.4"],
     "invariants": [
