@@ -8,7 +8,7 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel, COMMON_PHASE_ONE_FIXED
 from .training import adapt_target_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
     "sections": ["7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["casual_smoke_runs_common_phase_one_and_cpu_adaptation"],

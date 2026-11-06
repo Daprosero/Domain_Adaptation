@@ -373,8 +373,8 @@ def test_cs_ccs_package_is_a_controlled_variant(registries):
     assert "controlled" in package.__doc__ and "not a reproduction" in package.__doc__
     # The package, its trainer, its smoke and its divergences answer to v56 (Secs. 4.5,
     # 7.7: fixed epochs, no patience).
-    for module, revision in (("", "v56"), (".divergences", "v56"), (".training", "v56"),
-                             (".smoke", "v56")):
+    for module, revision in (("", "v57"), (".divergences", "v57"), (".training", "v57"),
+                             (".smoke", "v57")):
         prov = importlib.import_module("MIL_CREDA_EEG.comparators.cs_ccs" + module).__provenance__
         assert prov["revision"] == (
             f"experiments-plan-experimental-mil-creda-sobre-balladeer-{revision}.md")

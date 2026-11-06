@@ -1,6 +1,6 @@
 """Duration audit: how long each record really is, against its nominal length.
 
-Experiments plan v56, Sec. 2.6. The duration is measured and excludes nothing
+Experiments plan v57, Sec. 2.6. The duration is measured and excludes nothing
 here. A truncated session only contributes fewer windows; whether they reach a
 bag is decided by the bag cardinality floor, which belongs to the bag
 definition of Sec. 3.2 and not to this step. A restarted or concatenated
@@ -34,7 +34,7 @@ from __future__ import annotations
 import numpy as np
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
     "sections": ["2.6"],
     "experiments": ["2.6"],
     "invariants": [

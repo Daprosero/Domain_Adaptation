@@ -8,7 +8,7 @@ from .training import DEFAULT_PARAMS, train_phase_two
 from MIL_CREDA_EEG import assignment, search
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
     "sections": ["7.2", "7.3", "7.4"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cluda_synthetic_two_phase_smoke"],

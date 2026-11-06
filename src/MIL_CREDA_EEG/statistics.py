@@ -1,6 +1,6 @@
 """The report and variance design: subject-level metrics, pooled summaries and contrasts.
 
-Experiments plan v56, Secs. 4.4 and 4.6, with the significance tables of
+Experiments plan v57, Secs. 4.4 and 4.6, with the significance tables of
 Secs. 5.1-5.3, the global ranking of Sec. 5.4 and the tests of Secs. 6.1-6.3. Every function here reads
 predictions that already exist (one record per target test subject, rotation,
 seed and strategy, as `two_phase.predictions` writes them); nothing here trains.
@@ -137,7 +137,7 @@ from scipy import stats as sps
 from MIL_CREDA_EEG.two_phase import balanced_accuracy
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v57.md",
     "sections": ["4.4", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
                     "K2-emparejamiento", "K3-ablacion"],
