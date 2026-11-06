@@ -151,7 +151,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     optimizer = torch.optim.Adam([*model.target_trunk.parameters(), *model.projector.parameters()],
                                  lr=hyper["lr2"], weight_decay=hyper["wd2"], betas=(.5, .999))
     history, validation = [], []
-    for epoch in range(schedule["epochs2"]):
+    for epoch in two_phase.epoch_range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
         model.projector.train()
         batches = two_phase.shuffled_batches(len(d["target_train"]), schedule["bagsPerStep"], generator)

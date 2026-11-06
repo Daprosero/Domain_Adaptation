@@ -130,7 +130,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
                                 lr=params["lr2"], weight_decay=params["wd2"], momentum=.9)
     history, validation = [], []
     valid_labels = [b.label for b in d["target_valid"]]
-    for epoch in range(schedule["epochs2"]):
+    for epoch in two_phase.epoch_range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
         batches = two_phase.shuffled_batches(len(d["target_train"]),
                                              schedule["bagsPerStep"], generator)

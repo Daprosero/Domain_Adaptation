@@ -89,7 +89,7 @@ def train_source_phase(model, source_train, source_valid, hyper, generator, devi
                             *model.attention_parameters(), *model.head.parameters()],
                            hyper["lr1"], hyper["wd1"])
     history, validation = [], []
-    for epoch in range(hyper["epochs1"]):
+    for epoch in two_phase.epoch_range(hyper["epochs1"]):
         model.train()
         losses = []
         for indices in two_phase.interleaved_batches(source_train, hyper["bagsPerStep"],
@@ -176,7 +176,7 @@ def adapt_target_phase(model, source_train, target_train, target_valid, params, 
     sigma = _bandwidth(model, source_train, target_train, params["kernelMultiplier"], device)
     queues = two_phase.ClassQueues(source_train, model.classes, generator)
     history, validation = [], []
-    for epoch in range(schedule["epochs2"]):
+    for epoch in two_phase.epoch_range(schedule["epochs2"]):
         model.train()
         losses, lmmds = [], []
         for indices in two_phase.shuffled_batches(len(target_train), schedule["bagsPerStep"],

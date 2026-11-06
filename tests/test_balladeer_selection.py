@@ -64,7 +64,7 @@ def _scripted_trainer(seen: list):
         seen.append({"rotation": rotation, "valid": [b.subject for b in d["target_valid"]],
                      "train": [b.subject for b in d["target_train"]]})
         validation, history = [], []
-        for e in range(schedule["epochs2"]):
+        for e in tp.epoch_range(schedule["epochs2"]):
             p = [_probability(b.subject, params, e) for b in d["target_valid"]]
             G = torch.tensor([[1 - x, x] for x in p], dtype=torch.float64)
             Z = torch.tensor([_representation(b.subject, params, e) for b in d["target_valid"]],
@@ -223,7 +223,7 @@ def test_a_study_scored_by_an_earlier_rule_is_refused(tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
     study = _study(tmp_path, data, 0, [], monkeypatch, n_trials=1)
     study.set_user_attr("objective", "the best epoch's target-validation balanced accuracy")
-    with pytest.raises(search.SearchError, match="selection rule changed in plan v58"):
+    with pytest.raises(search.SearchError, match="search rule changed in plan v59"):
         _study(tmp_path, data, 0, [], monkeypatch, n_trials=2)
 
 

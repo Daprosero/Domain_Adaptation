@@ -138,7 +138,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     source_prior = counts / counts.sum()  # original train bags, NOT balanced draws
     weights = torch.ones(model.classes, dtype=torch.float64, device=device)
     target_prior, history, validation = None, [], []
-    for epoch in range(schedule["epochs2"]):
+    for epoch in two_phase.epoch_range(schedule["epochs2"]):
         if epoch == warmup_epochs:
             # evaluate restores modes; reads windows only, no target labels.
             target_prior = estimate_prior(two_phase.evaluate(model, target_train, "target", device),

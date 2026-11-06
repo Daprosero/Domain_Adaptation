@@ -1059,3 +1059,19 @@ def test_a_missing_phase_one_checkpoint_leaves_the_k2_diagnostics_not_computed(
     k3 = json.loads((copy / "Results" / "significance_K3-ablacion.json").read_text())
     rows = [r for r in k3 if "both terms vs global term only" in r["comparison"]]
     assert rows and all(r["inconclusive_no_room"] is (not _gate(diagnostics["L1->L6"])) for r in rows)
+
+
+def test_the_results_report_the_early_stopping_diagnostic(level_run):
+    """Plan v59: per phase-1 group and phase-2 strategy, the fraction of trials that reached
+    the epoch cap and of selected epochs equal to their trial's last trained epoch (the
+    rehearsal's cap is one epoch, so every fraction is 1)."""
+    _, product, _ = level_run
+    rows = _csv(product / "Results" / "A-nivel" / "tables" / "early_stopping.csv")
+    assert list(rows[0]) == list(campaign.EARLY_STOPPING_COLUMNS)
+    assert {(r["phase"], r["name"]) for r in rows} == {
+        ("1", "common"), ("1", "AdaptMIL"), ("1", "MIL-CREDA"),
+        ("2", "MIL-CREDA"), ("2", "COT"), ("2", "AdaptMIL")}
+    for r in rows:
+        assert float(r["fractionTrialsReachedCap"]) == 1.0
+        assert float(r["primarySelectedAtLastEpoch"]) == 1.0
+        assert (r["ensvSelectedAtLastEpoch"] == "") == (r["phase"] == "1")

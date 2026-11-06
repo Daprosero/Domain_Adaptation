@@ -134,7 +134,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     epochs = schedule["epochs2"]
     middle, late = ordered_thresholds(params)
     history, validation = [], []
-    for epoch in range(epochs):
+    for epoch in two_phase.epoch_range(epochs):
         alpha = losses.mmd_weight_schedule(epoch, epochs)
         threshold = losses.confidence_threshold(epoch, epochs, middle, late)
         two_phase.set_phase_two_modes(model)

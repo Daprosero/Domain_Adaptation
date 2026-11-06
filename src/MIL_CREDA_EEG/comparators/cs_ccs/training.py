@@ -157,7 +157,7 @@ def adapt(model: mil_wrapper.CommonMILModel, source_train, target_train, target_
     hyper = {**params, **schedule, **bandwidths, "momentum": MOMENTUM}
     valid_labels = [b.label for b in target_valid]
     history, validation = [], []
-    for epoch in range(schedule["epochs2"]):
+    for epoch in two_phase.epoch_range(schedule["epochs2"]):
         two_phase.set_phase_two_modes(model)
         sums = dict.fromkeys(HISTORY_KEYS, 0.)
         batches = two_phase.shuffled_batches(len(target_train), schedule["bagsPerStep"], generator)

@@ -84,8 +84,9 @@ commands run in this process, on `config["device"]` (default `cpu`). Placing a
 step on a remote worker belongs to `remote-execution`, behind the operator.
 
 **Required inputs (no default, `CampaignError` when absent).** The schedule
-(`epochs1` and `epochs2`, the search's epoch caps, and `bagsPerStep`: the pilot
-fixes them, Sec. 7.6; there is no patience, Sec. 7.7) and the strategies and
+(`epochs1` and `epochs2`, the search's epoch caps, at most `search.EPOCH_CAP`, and
+`bagsPerStep`: Sec. 7.6; each search trial stops on its pooled selection score's patience,
+`search.PATIENCE`, plan v59, and a refit has no early stopping) and the strategies and
 transfers to run. Plan v42 resolved every decision the earlier inputs stood in
 for -- the seed reduction (one report seed), K1's common attention, band edges
 and scope (Sec. 6.1), and the open comparator decisions (Sec. 7.7) -- so those
@@ -1312,6 +1313,19 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
 # ------------------------------------------------------------------ Sec. 5.4
 
 
+#: The declared diagnostic of the search's pooled early stopping (plan v59), per row.
+EARLY_STOPPING_COLUMNS = ("phase", "name", "studies", "trials", "trialsReachedCap",
+                          "fractionTrialsReachedCap", "primarySelectedAtLastEpoch",
+                          "ensvSelectedAtLastEpoch")
+
+
+def _stopping_row(diagnostic: Mapping) -> dict:
+    at_last = diagnostic["selectedAtLastTrainedEpoch"]
+    return {**{k: diagnostic[k] for k in EARLY_STOPPING_COLUMNS[1:6]},
+            "primarySelectedAtLastEpoch": (at_last.get("primary") or {}).get("fraction"),
+            "ensvSelectedAtLastEpoch": (at_last.get("ensv") or {}).get("fraction")}
+
+
 def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> dict:
     """Step 6: Sec. 5.4's figures and tables, and Sec. 4.5's two selection rules."""
     bags = bags or load_bags(cfg)
@@ -1324,6 +1338,7 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
         records = _read_predictions(product, experiment, current)
         free_records = _read_predictions(product, experiment, current, "ensv")
         hp, importance, detail, studies = [], [], [], {}
+        stopping: dict[tuple[int, str], list] = {}
         core_choices: dict[str, dict[str, dict]] = {}
         proportions = []
         for transfer in [t for t in transfers_of(cfg) if t.arm == arm]:
@@ -1336,6 +1351,9 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
                    for g in _groups(cfg["strategies"])}
             two = {s: {r: _stored_study(product, known, 2, s, r, cfg) for r in outer}
                    for s in cfg["strategies"]}
+            for phase, by_name in ((1, one), (2, two)):
+                for name, by_r in by_name.items():
+                    stopping.setdefault((phase, name), []).extend(by_r.values())
             chosen = {s: {rule: {r: search.select(study, rule) for r, study in by_r.items()}
                           for rule in search.RULES} for s, by_r in two.items()}
             # Sec. 5.4: phase 1's configuration and E1 per outer fold, in the one field the
@@ -1386,6 +1404,18 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
                 "Class proportions of each core transfer's sides (Sec. 8):",
                 *(f"- {p['Transferencia núcleo']}, {p['Lado']}: {p['yes']} yes, {p['no']} "
                   f"no of {p['Sujetos']} subjects" for p in proportions)]))
+        results.write_table(
+            root, experiment, "early_stopping",
+            [{"phase": phase, **_stopping_row(search.stopping_diagnostic(name, sts))}
+             for (phase, name), sts in sorted(stopping.items())],
+            columns=EARLY_STOPPING_COLUMNS,
+            note=("Plan v59, Secs. 4.5 and 7.6: each search trial trains at most "
+                  f"{search.EPOCH_CAP} epochs and stops when its pooled selection score has "
+                  f"not improved for {search.PATIENCE[1]} (phase 1) or {search.PATIENCE[2]} "
+                  "(phase 2) epochs. Per group or strategy, over every transfer and outer "
+                  "fold of this arm: the fraction of trials that reached the cap, and per "
+                  "rule the fraction of selected epochs equal to the last epoch their trial "
+                  "trained."))
         results.write_table(root, experiment, "selection_class_proportions", proportions,
                             columns=results.CLASS_PROPORTION_COLUMNS)
         results.write_table(root, experiment, "selected_configurations", detail)
