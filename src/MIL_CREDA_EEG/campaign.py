@@ -127,7 +127,7 @@ import argparse
 import json
 import types
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -261,8 +261,17 @@ def check_config(config: Mapping) -> dict:
     cfg.setdefault("device", "cpu")
     cfg.setdefault("synthetic", False)
     cfg["rehearsal"] = bool(cfg.get("rehearsal", False)) or bool(cfg["synthetic"])
+    if "rotations" in cfg:
+        rotations = sorted({int(r) for r in cfg["rotations"]})
+        if not rotations or not set(rotations) <= set(range(partition.N_FOLDS)):
+            raise CampaignError(f"rotations are among {list(range(partition.N_FOLDS))}; "
+                                f"got {cfg['rotations']}")
+        cfg["rotations"] = rotations
     if not cfg["rehearsal"]:
         short = []
+        if "rotations" in cfg:
+            short.append(f"rotations: {cfg['rotations']}, the plan runs every outer fold "
+                         f"(Sec. 4.5)")
         missing = [s for s in model_store.STRATEGIES if s not in strategies]
         if missing:
             short.append(f"strategies: missing {missing} (Sec. 7.1)")
@@ -278,6 +287,12 @@ def check_config(config: Mapping) -> dict:
                                 "\"rehearsal\": true for a reduced run: its results are "
                                 "labelled rehearsal, never the full comparison")
     return cfg
+
+
+def rotations_of(cfg: Mapping, rotations: Iterable) -> list[int]:
+    """The outer folds of this run: all of `rotations`, or a rehearsal's `rotations`."""
+    keep = cfg.get("rotations")
+    return sorted(int(r) for r in rotations if keep is None or int(r) in keep)
 
 
 def transfers_of(cfg: Mapping) -> list[assignment_mod.Transfer]:
@@ -415,7 +430,7 @@ def _selections(product: Path, data: search.SearchData, phase: int, name: str,
                 cfg: Mapping, rule: str = "primary") -> dict[int, dict]:
     """Sec. 4.5: per outer fold, the (configuration, epoch) `rule` selects in its study."""
     return {r: search.select(_stored_study(product, data, phase, name, r, cfg), rule)
-            for r in sorted(data.folds)}
+            for r in rotations_of(cfg, data.folds)}
 
 
 def _phase_two_selection(product: Path, data: search.SearchData, strategy: str,
@@ -539,7 +554,7 @@ def run_search(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None)
     done = {}
     for transfer in transfers_of(cfg):
         data = search.search_data(transfer, bags)
-        for r in sorted(data.rotations):
+        for r in rotations_of(cfg, data.rotations):
             for group in _groups(cfg["strategies"]):
                 study = phase_one_study(group, data, r, cfg, product)
                 _phase_one_checkpoint(group, data, r, search.select(study), cfg, product)
@@ -660,7 +675,7 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
         plans[transfer.name] = data, best_one, {
             r: {g: _stored_phase_one_checkpoint(g, data, r, best_one[g][r], cfg, product)
                 for g in best_one}
-            for r in sorted(data.rotations)}
+            for r in rotations_of(cfg, data.rotations)}
     for transfer in transfers_of(cfg):
         experiment = results.EXPERIMENT_OF_ARM[transfer.arm]
         data, best_one, stored_one = plans[transfer.name]
@@ -671,7 +686,7 @@ def run_final(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) 
         done = _predicted(product, experiment, current)
         done_free = _predicted(product, experiment, current, "ensv")
         free_root = _models(product) / ENSV_MODELS
-        for r in sorted(data.rotations):
+        for r in rotations_of(cfg, data.rotations):
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
             checkpoints = stored_one[r]
             records = {}
@@ -955,8 +970,8 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
         # Sec. 6.3: full MIL-CREDA's selection of both phases for each outer fold (Sec. 4.5)
         first = _selections(product, data, 1, "MIL-CREDA", cfg)
         selected = _phase_two_selection(product, data, "MIL-CREDA", cfg)
-        schedules = {r: _k3_schedule(cfg, first[r], selected[r]) for r in sorted(data.rotations)}
-        for r in sorted(data.rotations):
+        schedules = {r: _k3_schedule(cfg, first[r], selected[r]) for r in rotations_of(cfg, data.rotations)}
+        for r in rotations_of(cfg, data.rotations):
             phase_one, phase_two = first[r]["params"], selected[r]["params"]
             hyper_rows += [_variant_hyper_row("aggregation", v, transfer.name, r,
                                               mechanisms.aggregation_hyper(
@@ -965,7 +980,7 @@ def run_k3(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None) -> 
             hyper_rows += [_variant_hyper_row("ablation", v, transfer.name, r,
                                               {**phase_one, **phase_two, **schedules[r]})
                            for v in plan[transfer.name]["ablation"]]
-        for r in sorted(data.rotations):
+        for r in rotations_of(cfg, data.rotations):
             phase_one, phase_two = first[r]["params"], selected[r]["params"]
             test = two_phase.bag_tensors(assignment_mod.side_bags(a, bags, "target", r, "test"))
             for seed in cfg["reportSeeds"]:

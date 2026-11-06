@@ -67,12 +67,16 @@ its mounted directory, where the processed `manifest.csv` and the partition file
 are looked for. A ref mapped to null is refused: this target has no download. Before
 anything is loaded, every consumed processed file (`manifest.csv` and each kept
 record's NPZ) is verified against `MIL-CREDA-EEG/Manifests/processed_sha256.csv`, once
-per session (`verify_processed`).
+per session (`verify_processed`). `remoteInputs.product`, optional, names a merged
+product published as a dataset: a job that mounts it (the units after the merge) has its
+models, studies, runs and merged record restored into its product (`restore_product`);
+a job that does not (the search) ignores it, so both share one configuration digest.
 
-**Smoke** (`smoke`). One unit, the first by default, through `run_units` on the
-mounted data; under the runner it also writes the rehearsal `shard.json` into its
-working directory (`mode`, `evidence.commit`, `evidence.sourcesDigest`, the actual
-`environment.device` and the stamp fields), apart from the per-unit stamps.
+**Smoke** (`smoke`). The listed units, the first by default, through `run_units` on the
+mounted data, within an optional budget; under the runner it also writes the rehearsal
+`shard.json` into its working directory (`mode`, `evidence.commit`,
+`evidence.sourcesDigest`, `evidence.gpu`, the actual `environment.device` and the stamp
+fields), apart from the per-unit stamps.
 
 **Outputs.** Each unit writes `<shards>/<unit id>/` (default `Results/shards/`):
 `outputs/` with the files it created under `Models/`, `Results/hpo/` and
@@ -123,7 +127,9 @@ from pathlib import Path
 import torch
 
 from MIL_CREDA_EEG import assignment as assignment_mod
-from MIL_CREDA_EEG import bag_data, campaign, model_store, partition, preprocess, results, search
+from MIL_CREDA_EEG import (bag_data, campaign, model_store, partition, preprocess, results,
+                           search, two_phase)
+from MIL_CREDA_EEG.patience_exercise import GpuWitness
 
 __provenance__ = {
     "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
@@ -218,7 +224,7 @@ CAMPAIGN_FIELDS = ("commit", "requirementsDigest", "codeVersion", "dataChecksum"
                    "seeds", "deterministic", "torch")
 #: Config keys that locate the inputs or name the device, left out of `configDigest`:
 #: a mounted path differs per session and the device is stamped on its own.
-CONFIG_DIGEST_EXCLUDES = ("processedRoot", "partitionPath", "device")
+CONFIG_DIGEST_EXCLUDES = ("processedRoot", "partitionPath", "productRoot", "device")
 
 #: What a unit is given from the product, and what of its writes it keeps.
 SEED_PATTERNS = ("Models/*", "Results/hpo/*", "Results/separability/*", "Results/*/runs/*")
@@ -281,7 +287,7 @@ def enumerate_units(config: Mapping, product: str | Path) -> list[Unit]:
     groups = [g for g in model_store.GROUPS
               if any(search.PHASE_ONE_GROUP_OF[s] == g for s in strategies)]
     k3 = campaign.k3_plan(cfg, campaign.core_transfers(cfg, Path(product)))
-    outer = range(partition.N_FOLDS)
+    outer = campaign.rotations_of(cfg, range(partition.N_FOLDS))
     specs: list[dict] = []
     for t in transfers:
         specs += [dict(id=_phase_one_id(t, g, r), step="search", transfer=t.name, phase=1,
@@ -369,7 +375,31 @@ def resolve_inputs(config: Mapping, *, environ: Mapping[str, str] | None = None)
         else:
             name = Path(config.get("partitionPath") or partition.PARTITION_RELATIVE).name
             out[key] = str(_find(root, name))
+    ref = refs.get("product")
+    if ref in mounted:         # optional: only the jobs after the merge declare it
+        if mounted[ref] is None:
+            raise InputUnavailable(f"the product input {ref} was not mounted ({INPUTS_ENV} "
+                                   f"maps it to null) and this target has no download for it")
+        out["productRoot"] = str(_find(Path(mounted[ref]), MERGED_RECORD.name).parents[2])
     return out
+
+
+def restore_product(cfg: Mapping, product: Path) -> list[str]:
+    """Copy a mounted merged product (`productRoot`) into `product`: its stored models,
+    studies and runs and the merged record, the input of the units after the merge. A
+    file already in `product` (a carried one) is kept."""
+    source = cfg.get("productRoot")
+    if not source:
+        return []
+    restored = []
+    for rel, path in _files(Path(source)).items():
+        stored = _matches(rel, SEED_PATTERNS) and not rel.startswith(SHARDS_RELATIVE.as_posix())
+        target = product / rel
+        if (stored or rel == MERGED_RECORD.as_posix()) and not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, target)
+            restored.append(rel)
+    return restored
 
 
 #: (processed root, sha256 of the record) pairs already verified in this session.
@@ -475,7 +505,8 @@ def timing_estimate(path: str | Path, config: Mapping,
 
     A step is one trial (search) or one rotation (final, k3). The epoch time is the
     largest `secondsPerUnit` the record measured (`unit` `epoch`); the step's epochs
-    are their caps, so the estimate bounds the step from above: a trial trains the
+    are their caps, so the estimate bounds the step from above (rows of the config's
+    device only: a CPU row says nothing of a CUDA session): a trial trains the
     three inner splits of its outer fold for `epochs1` (phase 1) or `epochs2` (phase 2)
     epochs each, so a study of `nTrials` trials trains 20 x 3 = 60 times at the
     declared budget, and a phase-1 refit pass at most `epochs1`; a final rotation
@@ -494,15 +525,17 @@ def timing_estimate(path: str | Path, config: Mapping,
         record = json.loads(path.read_text(encoding="utf-8"))
     except ValueError as error:
         raise UnitError(f"{path} is not JSON ({error}); " + _measure_first(path)) from error
+    cfg = campaign.check_config(config)
+    kind = str(cfg["device"]).split(":")[0]
     rows = [m for m in (record.get("measurements") or [] if isinstance(record, dict) else [])
             if isinstance(m, dict) and m.get("unit") == "epoch"
-            and isinstance(m.get("secondsPerUnit"), (int, float))]
-    if not isinstance(record, dict) or record.get("schema") != 1 or not rows:
-        raise UnitError(f"{path} holds no measured epoch (a schema-1 record with "
-                        f"measurements of unit epoch and their secondsPerUnit); "
-                        + _measure_first(path))
+            and isinstance(m.get("secondsPerUnit"), (int, float))
+            and str(m.get("device", kind)).split(":")[0] == kind]
+    if not isinstance(record, dict) or record.get("schema") not in (1, 2) or not rows:
+        raise UnitError(f"{path} holds no measured epoch on {kind} (a schema-1 or schema-2 "
+                        f"record with measurements of unit epoch, that device and their "
+                        f"secondsPerUnit); " + _measure_first(path))
     per_epoch = max(float(m["secondsPerUnit"]) for m in rows)
-    cfg = campaign.check_config(config)
     schedule = cfg["schedule"]
     partition.load_partition(campaign._partition_path(cfg))      # refused when absent
     strategies = list(cfg["strategies"])
@@ -765,7 +798,7 @@ def execute_unit(unit: Unit, cfg: Mapping, product: Path,
     bags = bags_of()
     transfer = {t.name: t for t in assignment_mod.TRANSFERS}[unit.transfer]
     if unit.step != "search":
-        rotations = sorted(int(r) for r in bags.rotations)
+        rotations = campaign.rotations_of(cfg, bags.rotations)
         with _rotation_boundaries(unit, rotations, len(cfg["reportSeeds"]), guard):
             return campaign.RUNNERS[unit.step]({**cfg, "transfers": [unit.transfer]},
                                                product, bags)
@@ -840,7 +873,8 @@ def _check_completed(complete: Mapping[str, Path], merged: set[str],
                             + "; remove it to run the unit again")
 
 
-def run_units(config: Mapping, product: str | Path, *, units: Sequence[str] | None = None,
+def run_units(config: Mapping, product: str | Path | None = None, *,
+              units: Sequence[str] | None = None,
               shards_root: str | Path | None = None, workdir: str | Path | None = None,
               deadline: float | None = None, estimate: Callable[[Unit], float] | None = None,
               timing: str | Path | None = None, clock: Callable[[], float] = time.time,
@@ -852,9 +886,10 @@ def run_units(config: Mapping, product: str | Path, *, units: Sequence[str] | No
     the caller passes none it is read from the measured `timing` record (default
     `<product>/Results/timing.json`), and a run without one is refused."""
     environ = os.environ if environ is None else environ
-    product = Path(product)
+    product = Path(product) if product else campaign.DEFAULT_PRODUCT
     placement = device_placement(config, environ)
     cfg = resolve_inputs(campaign.check_config(config), environ=environ)
+    restore_product(cfg, product)
     shards_root = Path(shards_root) if shards_root else product / SHARDS_RELATIVE
     workdir = Path(workdir) if workdir else Path.cwd()
     chosen = select_units(enumerate_units(cfg, product), units, environ=environ)
@@ -919,37 +954,61 @@ def run_units(config: Mapping, product: str | Path, *, units: Sequence[str] | No
 
 
 def smoke(config: str | Path | Mapping, product: str | Path | None = None, *,
-          unit: str | None = None, shards_root: str | Path | None = None,
+          unit: str | None = None, units: Sequence[str] | None = None,
+          budget_seconds: float | None = None, shards_root: str | Path | None = None,
           workdir: str | Path | None = None, timing: str | Path | None = None,
           estimate: Callable[[Unit], float] | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
-    """The rehearsal callable: one unit (default the first one) on the mounted data.
+    """The rehearsal callable: `units` (default `unit`, default the first unit) on the
+    mounted data.
 
     It runs through `run_units`, under the same deadline, estimate, device and data
-    checks, and leaves its per-unit stamp in the shards root as any unit does. Under the
-    forge's runner (`FORGE_RUN_MODE` set) it also writes `shard.json` into its working
-    directory, the rehearsal evidence `smoke record` reads: `mode`, `evidence` (`commit`,
-    `sourcesDigest` -- the code version --, `codeVersion`, `unit`, `complete`),
-    `environment` (the unit stamp's environment: the actual `device` `{declared, kind,
-    name}`, `accelerator` and every identity field) and `runs` (the outcome)."""
+    checks, and leaves its per-unit stamps in the shards root as any unit does.
+    `budget_seconds` brings the deadline forward to that many seconds from now, so a
+    rehearsal of a bounded length stops cleanly with `partial.json`: its guard is the
+    budget alone (the measured estimate bounds a step at its epoch caps, which would stop
+    a short rehearsal before its slower steps) and the estimates are only recorded, in
+    `evidence.estimates`. Under the forge's
+    runner (`FORGE_RUN_MODE` set) it also writes `shard.json` into its working directory,
+    the rehearsal evidence `smoke record` reads: `mode`, `evidence` (`commit`,
+    `sourcesDigest` -- the code version --, `codeVersion`, `unit`, `units`, `complete`
+    and `gpu`, what certifies where training ran), `environment` (the unit stamp's
+    environment: the actual `device` `{declared, kind, name}`, `accelerator` and every
+    identity field) and `runs` (the outcome)."""
     environ = os.environ if environ is None else environ
     if isinstance(config, (str, Path)):
         config = json.loads(Path(config).read_text(encoding="utf-8"))
     product = Path(product) if product else campaign.DEFAULT_PRODUCT
     workdir = Path(workdir) if workdir else Path.cwd()
-    if unit is None:
+    chosen = list(units) if units else [unit] if unit else None
+    if chosen is None:
         cfg = resolve_inputs(campaign.check_config(config), environ=environ)
-        unit = enumerate_units(cfg, product)[0].id
-    outcome = run_units(config, product, units=[unit], shards_root=shards_root,
-                        workdir=workdir, timing=timing, estimate=estimate, environ=environ)
+        chosen = [enumerate_units(cfg, product)[0].id]
+    deadline, estimates = None, {}
+    if budget_seconds is not None:
+        deadline = min(time.time() + float(budget_seconds),
+                       float(environ.get(DEADLINE_ENV, "inf")))
+        if estimate is None:
+            cfg = resolve_inputs(campaign.check_config(config), environ=environ)
+            measured = timing_estimate(Path(timing) if timing else product / TIMING_RELATIVE,
+                                       cfg, product)
+            estimates = {u.id: measured(u) for u in enumerate_units(cfg, product)
+                         if u.id in chosen}
+            estimate = lambda unit: 0.0        # noqa: E731
     mode = environ.get(RUN_MODE_ENV)
+    with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness:
+        outcome = run_units(config, product, units=chosen, shards_root=shards_root,
+                            workdir=workdir, timing=timing, estimate=estimate,
+                            deadline=deadline, environ=environ)
     if mode:
         env = outcome["environment"]
         runs = {k: v for k, v in outcome.items() if k != "environment"}
+        finished = set(outcome["ran"] + outcome["skipped"])
         payload = {"mode": mode,
                    "evidence": {"commit": env["commit"], "sourcesDigest": env["codeVersion"],
-                                "codeVersion": env["codeVersion"], "unit": unit,
-                                "complete": unit in outcome["ran"] + outcome["skipped"]},
+                                "codeVersion": env["codeVersion"], "unit": chosen[0],
+                                "units": chosen, "complete": finished >= set(chosen),
+                                "gpu": witness.evidence(), "estimates": estimates},
                    "environment": env, "runs": runs}
         workdir.mkdir(parents=True, exist_ok=True)
         (workdir / STAMP_FILE).write_text(json.dumps(payload, indent=1, sort_keys=True,
