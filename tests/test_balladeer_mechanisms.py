@@ -20,7 +20,8 @@ from MIL_CREDA_EEG.mil_wrapper import CommonMILModel
 CHANNELS = 3
 
 
-def _bag(root, subject, condition, *, windows=6, label="yes", fold=0, marks=None, seed=0):
+def _bag(root, subject, condition, *, windows=6, label="yes", fold=0, marks=None, seed=0,
+         device="CGX"):
     rng = np.random.default_rng(seed)
     path = root / f"{subject}_{condition}.npz"
     marks = marks if marks is not None else {
@@ -29,7 +30,7 @@ def _bag(root, subject, condition, *, windows=6, label="yes", fold=0, marks=None
     np.savez(path, signal=rng.normal(size=(windows, CHANNELS, 512)).astype(np.float32),
              channels=np.array(["a", "b", "c"]), **marks)
     return bag_data.Bag(subject=subject, condition=condition, record_id=f"{subject}-{condition}",
-                        label=label, sex="M", fold=fold, device="CGX",
+                        label=label, sex="M", fold=fold, device=device,
                         channels=("a", "b", "c"), n_windows=windows, path=path)
 
 
@@ -42,17 +43,18 @@ def _model(sigma=2.0):
 
 def test_the_event_contrast_reads_only_the_slackline_levels_of_the_level_arm(tmp_path):
     assert mech.EVENT_CONDITIONS == ("L1", "L6", "L11")
-    assert mech.K1_CONTRASTS == {"level": ("contact", "event"), "task": ("contact",),
+    # v56 Sec. 6.1: the level arm keeps only the behavioural contrast
+    assert mech.K1_CONTRASTS == {"level": ("event",), "task": ("contact",),
                                  "device": ("contact",)}
     for condition in ("CogniFit", "Robots"):
         with pytest.raises(mech.MechanismError, match="event stream"):
             mech.event_windows(_bag(tmp_path, "S1", condition))
     events = {"integrity_mark": np.array([True, False, False, False]),
               "event_window": np.array([0, 1, 0, 0], bool)}
-    # the task and device arms run only the contact contrast, even with a Slackline target
+    # the task and device arms run only the contact contrast, on their EMOTIV bags
     for transfer in (assignment.Transfer("task", "Robots", "CogniFit"),
-                     assignment.Transfer("device", "Robots", "L6")):
-        bag = _bag(tmp_path, "S2", transfer.target, windows=4, marks=events)
+                     assignment.Transfer("device", "L6", "Robots")):
+        bag = _bag(tmp_path, "S2", transfer.target, windows=4, marks=events, device="EPOCX")
         rows = mech.k1_subject_rows(_model(), [bag], model_name="M", transfer=transfer,
                                     rotation=0, seed=1)
         assert rows[0]["arm"] == transfer.arm and rows[0]["marked_minus_clean"] is not None
@@ -62,6 +64,7 @@ def test_the_event_contrast_reads_only_the_slackline_levels_of_the_level_arm(tmp
                                  transfer=assignment.Transfer("level", "L1", "L6"), rotation=0,
                                  seed=1)
     assert level[0]["event_minus_rest"] is not None
+    assert level[0]["marked_minus_clean"] is None
     assert "weight_ratio_spearman" not in level[0]
     assert not hasattr(mech, "band_ratio") and "bands" not in str(
         __import__("inspect").signature(mech.k1_subject_rows))
@@ -119,44 +122,78 @@ def test_the_weight_contrast_is_marked_minus_clean_and_skips_subjects_without_ma
     assert mech.weight_contrast(w, [True] * 4) is None
 
 
+def test_the_marked_window_contrast_reads_only_emotiv_recordings(tmp_path):
+    marks = {"integrity_mark": np.array([True, False, False, False]),
+             "contact_bad": np.zeros((4, CHANNELS), dtype=bool)}
+    assert [c for c in bag_data.CONDITIONS if mech.is_emotiv(c)] == ["Robots", "CogniFit"]
+    # the device arm: the L6 side is not EMOTIV, so only the Robots side enters
+    transfer = assignment.Transfer("device", "Robots", "L6")
+    cgx = _bag(tmp_path, "S1", "L6", windows=4, marks=marks)
+    rows = mech.k1_subject_rows(_model(), [cgx], model_name="M", transfer=transfer,
+                                rotation=0, seed=1)
+    assert rows[0]["marked_minus_clean"] is None and rows[0]["emotiv"] is False
+    robots = _bag(tmp_path, "S2", "Robots", windows=4, marks=marks, device="EPOCX")
+    rows = mech.k1_subject_rows(_model(), [robots], model_name="M",
+                                transfer=assignment.Transfer("device", "L6", "Robots"),
+                                rotation=0, seed=1)
+    assert rows[0]["marked_minus_clean"] is not None and rows[0]["emotiv"] is True
+    # an EMOTIV bag without both kinds of window does not enter
+    clean = _bag(tmp_path, "S3", "CogniFit", windows=4, device="EPOCX",
+                 marks={"integrity_mark": np.zeros(4, bool)})
+    rows = mech.k1_subject_rows(_model(), [clean], model_name="M",
+                                transfer=assignment.Transfer("task", "Robots", "CogniFit"),
+                                rotation=0, seed=1)
+    assert rows[0]["marked_minus_clean"] is None and rows[0]["emotiv"] is True
+
+
 def _k1_rows(model, arm, transfer, *, shift=0.0, n=8):
     return [{"model": model, "arm": arm, "transfer": transfer, "pair": "x", "seed": 1,
              "rotation": i % 4, "subject": f"{transfer}:S{i}",
-             "marked_minus_clean": -0.1 * (i + 1) + shift,
+             "marked_minus_clean": -0.1 * (i + 1) + shift if arm != "level" else None,
              "event_minus_rest": 0.05 * (i + 1) if arm == "level" else None,
              "event_not_recorded": None} for i in range(n)]
 
 
-def test_k1_reads_one_report_seed_and_holms_the_three_level_criterion_tests():
+def test_k1_reads_one_report_seed_and_holms_three_criterion_tests_across_task_and_level():
     without = "MIL-CREDA [own without consensus]"
     assert mech.K1_WITHOUT_CONSENSUS == without
     assert set(mech.K1_EXCLUDED) == {"mean"} and "uniform" in mech.K1_EXCLUDED["mean"]
+    assert not hasattr(mech, "K1_CRITERION_ARM")
+    assert mech.K1_CRITERION == ("task marked-window tests and level event test, "
+                                 "Holm over three (Sec. 6.1, v56)")
     by_model = {
         "MIL-CREDA": _k1_rows("MIL-CREDA", "level", "L1->L11")
-        + _k1_rows("MIL-CREDA", "task", "Robots->CogniFit"),
+        + _k1_rows("MIL-CREDA", "task", "Robots->CogniFit")
+        + _k1_rows("MIL-CREDA", "device", "L6->Robots"),
         without: _k1_rows(without, "level", "L1->L11", shift=0.05)
-        + _k1_rows(without, "task", "Robots->CogniFit", shift=0.05),
+        + _k1_rows(without, "task", "Robots->CogniFit", shift=0.05)
+        + _k1_rows(without, "device", "L6->Robots", shift=0.05),
         "MIL-CREDA [published attention]": _k1_rows("MIL-CREDA [published attention]",
-                                                    "level", "L1->L11", shift=0.1)}
+                                                    "level", "L1->L11", shift=0.1)
+        + _k1_rows("MIL-CREDA [published attention]", "task", "Robots->CogniFit", shift=0.1)}
     table = mech.k1_tests(by_model)
-    level = [r for r in table if r["comparison"].startswith("K1-atencion:level:")]
-    criterion = [r for r in level if r["criterion"] == mech.K1_CRITERION]
+    criterion = [r for r in table if r["criterion"] == mech.K1_CRITERION]
     assert [r["comparison"] for r in criterion] == [
-        "K1-atencion:level:marked vs clean, MIL-CREDA",
-        f"K1-atencion:level:marked vs clean, MIL-CREDA vs {without}",
+        "K1-atencion:task:marked vs clean, MIL-CREDA",
+        f"K1-atencion:task:marked vs clean, MIL-CREDA vs {without}",
         "K1-atencion:level:event vs rest, MIL-CREDA"]
     assert st.holm([r["p_value"] for r in criterion]) == [r["p_adjusted"] for r in criterion]
     assert all("m=3" in r["correction"] for r in criterion)
-    task = [r for r in table if r["comparison"].startswith("K1-atencion:task:")]
-    assert [r["comparison"] for r in task] == [
-        "K1-atencion:task:marked vs clean, MIL-CREDA",
-        f"K1-atencion:task:marked vs clean, MIL-CREDA vs {without}"]
-    assert all(r["p_adjusted"] is None and r["criterion"].startswith("none") for r in task)
+    assert all(r["subjects"] == 8 for r in criterion)
+    level = [r for r in table if r["comparison"].startswith("K1-atencion:level:")
+             and "published" not in r["comparison"]]
+    assert [r["comparison"] for r in level] == ["K1-atencion:level:event vs rest, MIL-CREDA"]
+    device = [r for r in table if r["comparison"].startswith("K1-atencion:device:")]
+    assert [r["comparison"] for r in device] == [
+        "K1-atencion:device:marked vs clean, MIL-CREDA",
+        f"K1-atencion:device:marked vs clean, MIL-CREDA vs {without}"]
+    assert all(r.get("p_adjusted") is None and r["criterion"] == "none (support, Sec. 6.1)"
+               for r in device)
     references = [r for r in table if "published attention" in r["comparison"]]
     assert [r["comparison"] for r in references] == [
-        "K1-atencion:level:marked vs clean, MIL-CREDA [published attention]",
+        "K1-atencion:task:marked vs clean, MIL-CREDA [published attention]",
         "K1-atencion:level:event vs rest, MIL-CREDA [published attention]"]
-    assert all(r["p_adjusted"] is None and r["criterion"].startswith("none")
+    assert all(r.get("p_adjusted") is None and r["criterion"].startswith("none")
                for r in references)
     assert all(r["experiment"] == "K1-atencion" for r in table)
     # the paired contrast is MIL-CREDA minus the variant without consensus, per subject
@@ -359,13 +396,14 @@ def test_a_stored_k3_variant_model_is_rebuilt_for_its_attention(tmp_path):
 # ------------------------------------------------------------------ plan v44
 
 
-def test_the_provenance_binds_plan_v54():
+def test_the_provenance_binds_plan_v56():
     assert mech.__provenance__["revision"] == (
-        "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md")
+        "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md")
 
 
 def test_every_k1_and_k2_wilcoxon_row_carries_hodges_lehmann_and_its_interval():
-    table = mech.k1_tests({"MIL-CREDA": _k1_rows("MIL-CREDA", "level", "L1->L11")})
+    table = mech.k1_tests({"MIL-CREDA": _k1_rows("MIL-CREDA", "task", "Robots->CogniFit")
+                                         + _k1_rows("MIL-CREDA", "level", "L1->L11")})
     rows = [{"model": "MIL-CREDA", "transfer": t, "subject": f"S{i}",
              "separation": 0.1 * (i + 1)} for t in ("L1->L6", "L6->Robots") for i in range(8)]
     weaker = [{**r, "model": mech.K2_NO_LOCAL, "separation": r["separation"] / 2}
@@ -390,17 +428,18 @@ def test_every_k1_and_k2_wilcoxon_row_carries_hodges_lehmann_and_its_interval():
     assert row["effect_size"] == pytest.approx(-1.0)          # the rank-biserial stays
     out = mech.k1_test_table(table)
     assert list(out[0]) == list(mech.K1_TABLE_COLUMNS) == [
-        "Contraste", "Estadístico", "Valor de p",
+        "Contraste", "Sujetos", "Estadístico", "Valor de p",
         "Tamaño del efecto, correlación biserial de rangos", "Estimador de Hodges-Lehmann",
         "Intervalo de confianza al 95 % de Wilcoxon"]
     assert out[0]["Estimador de Hodges-Lehmann"] == pytest.approx(hl["estimate"])
+    assert out[0]["Sujetos"] == 8
 
 
 def test_the_k1_and_k2_test_tables_carry_the_plans_headers():
     k1 = mech.k1_test_table(mech.k1_tests(
         {"MIL-CREDA": _k1_rows("MIL-CREDA", "level", "L1->L11")}))
     assert list(mech.K1_TABLE_COLUMNS) == [
-        "Contraste", "Estadístico", "Valor de p",
+        "Contraste", "Sujetos", "Estadístico", "Valor de p",
         "Tamaño del efecto, correlación biserial de rangos", "Estimador de Hodges-Lehmann",
         "Intervalo de confianza al 95 % de Wilcoxon"]
     assert k1 and all(list(r) == list(mech.K1_TABLE_COLUMNS) for r in k1)
