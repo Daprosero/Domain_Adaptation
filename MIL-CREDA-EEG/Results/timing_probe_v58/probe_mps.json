@@ -1,0 +1,119 @@
+{
+ "transfer": "L1->L11",
+ "arm": "level",
+ "device": "mps",
+ "torch": "2.13.0",
+ "threads": 4,
+ "cpuCount": 8,
+ "platform": "macOS-26.5.2-arm64-arm-64bit",
+ "python": "3.12.13",
+ "mpsFallback": null,
+ "measuredAt": "2026-11-06T08:38:48.688197+00:00",
+ "epochs": 2,
+ "bagsPerStep": 8,
+ "rotation": 0,
+ "innerSplit": 0,
+ "bags": {
+  "source_train": 31,
+  "source_valid": 16,
+  "target_train": 32,
+  "target_valid": 17
+ },
+ "windows": {
+  "source_train": 2331,
+  "source_valid": 1202,
+  "target_train": 2711,
+  "target_valid": 1275
+ },
+ "refitBags": {
+  "source_train": 47,
+  "source_valid": 0,
+  "target_train": 49,
+  "target_valid": 0
+ },
+ "refitWindows": {
+  "source_train": 3533,
+  "source_valid": 0,
+  "target_train": 3986,
+  "target_valid": 0
+ },
+ "setup": {
+  "loadBagsSeconds": 0.2008111250033835,
+  "searchDataSeconds": 0.3658181670034537
+ },
+ "phase1": {
+  "common": {
+   "seconds": 0.024854165996657684,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": "TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.",
+   "peakRssMB": 901.484375,
+   "mpsDriverMB": 8.390625,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07
+   }
+  },
+  "AdaptMIL": {
+   "seconds": 0.007940958006656729,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": "TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.",
+   "peakRssMB": 901.5625,
+   "mpsDriverMB": 8.390625,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07
+   }
+  },
+  "MIL-CREDA": {
+   "seconds": 0.0077380830043694004,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": "TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64. Please use float32 instead.",
+   "peakRssMB": 901.5625,
+   "mpsDriverMB": 8.390625,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07,
+    "attentionGamma": 0.1102586414602692,
+    "attentionTemperature": 9.235987033331298,
+    "sigmaMultiplier": 1.0
+   }
+  }
+ },
+ "phase2": {
+  "AdaptMIL": {
+   "error": "no phase-1 checkpoint of AdaptMIL"
+  },
+  "UDA-DDA": {
+   "error": "no phase-1 checkpoint of common"
+  },
+  "CCA-LSC": {
+   "error": "no phase-1 checkpoint of common"
+  },
+  "CASUAL": {
+   "error": "no phase-1 checkpoint of common"
+  },
+  "COT": {
+   "error": "no phase-1 checkpoint of common"
+  },
+  "CS+CCS": {
+   "error": "no phase-1 checkpoint of common"
+  },
+  "CLUST — variante source-free": {
+   "error": "no phase-1 checkpoint of common"
+  },
+  "CLUDA": {
+   "error": "no phase-1 checkpoint of common"
+  },
+  "MIL-CREDA": {
+   "error": "no phase-1 checkpoint of MIL-CREDA"
+  }
+ },
+ "sourcePass": {},
+ "wallSeconds": 0.6751290840038564
+}

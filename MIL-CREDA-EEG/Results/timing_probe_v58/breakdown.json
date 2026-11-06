@@ -1,0 +1,541 @@
+{
+ "transfers": {
+  "L1->L6": {
+   "inner": {
+    "source_train": 2331,
+    "source_valid": 1276,
+    "target_train": 2331,
+    "target_valid": 1201
+   },
+   "refit": {
+    "source_train": 3607,
+    "source_valid": 0,
+    "target_train": 3532,
+    "target_valid": 0
+   }
+  },
+  "L1->L11": {
+   "inner": {
+    "source_train": 2331,
+    "source_valid": 1202,
+    "target_train": 2711,
+    "target_valid": 1275
+   },
+   "refit": {
+    "source_train": 3533,
+    "source_valid": 0,
+    "target_train": 3986,
+    "target_valid": 0
+   }
+  },
+  "L6->L1": {
+   "inner": {
+    "source_train": 2331,
+    "source_valid": 1201,
+    "target_train": 2331,
+    "target_valid": 1276
+   },
+   "refit": {
+    "source_train": 3532,
+    "source_valid": 0,
+    "target_train": 3607,
+    "target_valid": 0
+   }
+  },
+  "L6->L11": {
+   "inner": {
+    "source_train": 2331,
+    "source_valid": 1202,
+    "target_train": 2711,
+    "target_valid": 1200
+   },
+   "refit": {
+    "source_train": 3533,
+    "source_valid": 0,
+    "target_train": 3911,
+    "target_valid": 0
+   }
+  },
+  "L11->L1": {
+   "inner": {
+    "source_train": 2711,
+    "source_valid": 1275,
+    "target_train": 2331,
+    "target_valid": 1202
+   },
+   "refit": {
+    "source_train": 3986,
+    "source_valid": 0,
+    "target_train": 3533,
+    "target_valid": 0
+   }
+  },
+  "L11->L6": {
+   "inner": {
+    "source_train": 2711,
+    "source_valid": 1200,
+    "target_train": 2331,
+    "target_valid": 1202
+   },
+   "refit": {
+    "source_train": 3911,
+    "source_valid": 0,
+    "target_train": 3533,
+    "target_valid": 0
+   }
+  },
+  "Robots->CogniFit": {
+   "inner": {
+    "source_train": 1364,
+    "source_valid": 566,
+    "target_train": 9938,
+    "target_valid": 4585
+   },
+   "refit": {
+    "source_train": 1930,
+    "source_valid": 0,
+    "target_train": 14523,
+    "target_valid": 0
+   }
+  },
+  "CogniFit->Robots": {
+   "inner": {
+    "source_train": 9938,
+    "source_valid": 4585,
+    "target_train": 1364,
+    "target_valid": 566
+   },
+   "refit": {
+    "source_train": 14523,
+    "source_valid": 0,
+    "target_train": 1930,
+    "target_valid": 0
+   }
+  },
+  "L6->Robots": {
+   "inner": {
+    "source_train": 2477,
+    "source_valid": 1501,
+    "target_train": 2201,
+    "target_valid": 998
+   },
+   "refit": {
+    "source_train": 3978,
+    "source_valid": 0,
+    "target_train": 3199,
+    "target_valid": 0
+   }
+  },
+  "Robots->L6": {
+   "inner": {
+    "source_train": 2201,
+    "source_valid": 998,
+    "target_train": 2477,
+    "target_valid": 1501
+   },
+   "refit": {
+    "source_train": 3199,
+    "source_valid": 0,
+    "target_train": 3978,
+    "target_valid": 0
+   }
+  }
+ },
+ "core": [
+  "CogniFit->Robots",
+  "L1->L11",
+  "L11->L1",
+  "L6->Robots",
+  "Robots->CogniFit",
+  "Robots->L6"
+ ],
+ "k2Only": [
+  "L1->L6"
+ ],
+ "formula": "seconds(C1, C2) = coef1 * C1 + coef2 * C2 + fixed; see tools/timing_v58_record.py",
+ "devices": {
+  "cpu": {
+   "coef1": 136533.54358920243,
+   "coef2": 890214.1525237436,
+   "fixed": 4846.775849100166,
+   "epochs1": 7576,
+   "epochs2": 22468,
+   "epochTable": {
+    "phase1": {
+     "common": 14.471171540993964,
+     "AdaptMIL": 14.45247954200022,
+     "MIL-CREDA": 12.785167499998352
+    },
+    "phase2": {
+     "AdaptMIL": 22.971878083000774,
+     "UDA-DDA": 24.827721375011606,
+     "CCA-LSC": 31.344636694334138,
+     "CASUAL": 71.36157720800838,
+     "COT": 32.82994658300595,
+     "CS+CCS": 37.012689208990196,
+     "CLUST — variante source-free": 29.30020599999989,
+     "CLUDA": 33.427484125000774,
+     "MIL-CREDA": 27.187982249990455
+    },
+    "sourcePass": {
+     "common": 9.77690741600236,
+     "AdaptMIL": 9.728804667000077,
+     "MIL-CREDA": 10.055301582993707
+    },
+    "setup": 0.5691533750068629
+   },
+   "perUnitSecondsPerEpochOfCap": {
+    "search.phase1.common": {
+     "mean": 1142.6417387964025,
+     "max": 3628.6595759074935,
+     "units": 40
+    },
+    "search.phase1.AdaptMIL": {
+     "mean": 1141.1658210953863,
+     "max": 3623.972539965078,
+     "units": 40
+    },
+    "search.phase1.MIL-CREDA": {
+     "mean": 1009.5150887830569,
+     "max": 3205.8925116759237,
+     "units": 40
+    },
+    "search.phase2.AdaptMIL": {
+     "mean": 1573.585654296019,
+     "max": 5034.329787561134,
+     "units": 40
+    },
+    "search.phase2.UDA-DDA": {
+     "mean": 1700.711889703423,
+     "max": 5441.041295094749,
+     "units": 40
+    },
+    "search.phase2.CCA-LSC": {
+     "mean": 2147.123994960788,
+     "max": 6869.235402539412,
+     "units": 40
+    },
+    "search.phase2.CASUAL": {
+     "mean": 4888.3053338837435,
+     "max": 15639.022309258711,
+     "units": 40
+    },
+    "search.phase2.COT": {
+     "mean": 2248.868498590535,
+     "max": 7194.7438258943575,
+     "units": 40
+    },
+    "search.phase2.CS+CCS": {
+     "mean": 2535.388554464064,
+     "max": 8111.399648270352,
+     "units": 40
+    },
+    "search.phase2.CLUST — variante source-free": {
+     "mean": 2007.079423934291,
+     "max": 6421.194615194839,
+     "units": 40
+    },
+    "search.phase2.CLUDA": {
+     "mean": 2289.8001325034875,
+     "max": 7325.695289069529,
+     "units": 40
+    },
+    "search.phase2.MIL-CREDA": {
+     "mean": 1862.3909931638973,
+     "max": 5958.296853668955,
+     "units": 40
+    },
+    "final.fold-C1": {
+     "mean": 74.92732713419032,
+     "max": 237.94489022344223,
+     "units": 40
+    },
+    "final.fold-C2": {
+     "mean": 847.4838767023091,
+     "max": 2691.333932770847,
+     "units": 40
+    }
+   },
+   "probe": {
+    "transfer": "L1->L11",
+    "arm": "level",
+    "device": "cpu",
+    "torch": "2.13.0",
+    "threads": 4,
+    "cpuCount": 8,
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.13",
+    "mpsFallback": null,
+    "measuredAt": "2026-11-06T08:17:50.247412+00:00",
+    "epochs": 2,
+    "bagsPerStep": 8,
+    "rotation": 0,
+    "innerSplit": 0,
+    "bags": {
+     "source_train": 31,
+     "source_valid": 16,
+     "target_train": 32,
+     "target_valid": 17
+    },
+    "windows": {
+     "source_train": 2331,
+     "source_valid": 1202,
+     "target_train": 2711,
+     "target_valid": 1275
+    },
+    "refitBags": {
+     "source_train": 47,
+     "source_valid": 0,
+     "target_train": 49,
+     "target_valid": 0
+    },
+    "refitWindows": {
+     "source_train": 3533,
+     "source_valid": 0,
+     "target_train": 3986,
+     "target_valid": 0
+    },
+    "setup": {
+     "loadBagsSeconds": 0.1821694579994073,
+     "searchDataSeconds": 0.3869839170074556
+    },
+    "wallSeconds": 734.186622542009
+   },
+   "probeRaw": {
+    "phase1": {
+     "common": {
+      "seconds": 37.91167720800149,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       14.471171540993964
+      ],
+      "firstEpochSeconds": 23.42572654200194,
+      "error": null,
+      "peakRssMB": 4010.4375,
+      "mpsDriverMB": 0.375,
+      "params": {
+       "lr1": 0.007659687509525595,
+       "wd1": 4.62801552373352e-07
+      }
+     },
+     "AdaptMIL": {
+      "seconds": 30.04605945899675,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       14.45247954200022
+      ],
+      "firstEpochSeconds": 15.587998417002382,
+      "error": null,
+      "peakRssMB": 4053.609375,
+      "mpsDriverMB": 0.375,
+      "params": {
+       "lr1": 0.007659687509525595,
+       "wd1": 4.62801552373352e-07
+      }
+     },
+     "MIL-CREDA": {
+      "seconds": 33.90936416698969,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       12.785167499998352
+      ],
+      "firstEpochSeconds": 21.117678791997605,
+      "error": null,
+      "peakRssMB": 4169.859375,
+      "mpsDriverMB": 0.375,
+      "params": {
+       "lr1": 0.007659687509525595,
+       "wd1": 4.62801552373352e-07,
+       "attentionGamma": 0.1102586414602692,
+       "attentionTemperature": 9.235987033331298,
+       "sigmaMultiplier": 1.0
+      }
+     }
+    },
+    "phase2": {
+     "AdaptMIL": {
+      "seconds": 61.82890549999138,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       22.971878083000774
+      ],
+      "firstEpochSeconds": 38.837015333992895,
+      "error": null,
+      "peakRssMB": 4599.234375,
+      "mpsDriverMB": 0.375,
+      "group": "AdaptMIL"
+     },
+     "UDA-DDA": {
+      "seconds": 55.316349457993056,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       24.827721375011606
+      ],
+      "firstEpochSeconds": 30.44427579198964,
+      "error": null,
+      "peakRssMB": 4599.234375,
+      "mpsDriverMB": 0.375,
+      "group": "common"
+     },
+     "CCA-LSC": {
+      "seconds": 123.26157866700669,
+      "epochsRecorded": [
+       0,
+       1,
+       2,
+       3
+      ],
+      "steadyEpochSeconds": [
+       27.220796583002084,
+       29.664511249997304,
+       37.14860225000302
+      ],
+      "firstEpochSeconds": 29.187430750011117,
+      "error": null,
+      "peakRssMB": 4470.203125,
+      "mpsDriverMB": 0.375,
+      "group": "common",
+      "epochs": 4,
+      "mergedFrom": "separate run with epochs2=4 (CCA-LSC needs 3 warm-up epochs + 1 calibrated); its phase-1 common epoch there: 13.18 s",
+      "firstErrorAtEpochs2=2": "ValueError: phase 2 must include positive warmup and at least one calibrated epoch"
+     },
+     "CASUAL": {
+      "seconds": 141.84385374998965,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       71.36157720800838
+      ],
+      "firstEpochSeconds": 70.45882841698767,
+      "error": null,
+      "peakRssMB": 4783.390625,
+      "mpsDriverMB": 0.375,
+      "group": "common"
+     },
+     "COT": {
+      "seconds": 66.71071174999815,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       32.82994658300595
+      ],
+      "firstEpochSeconds": 33.871181166992756,
+      "error": null,
+      "peakRssMB": 4783.390625,
+      "mpsDriverMB": 0.375,
+      "group": "common"
+     },
+     "CS+CCS": {
+      "seconds": 85.9796259579889,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       37.012689208990196
+      ],
+      "firstEpochSeconds": 48.93327795799996,
+      "error": null,
+      "peakRssMB": 4783.390625,
+      "mpsDriverMB": 0.375,
+      "group": "common"
+     },
+     "CLUST — variante source-free": {
+      "seconds": 62.92753475000791,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       29.30020599999989
+      ],
+      "firstEpochSeconds": 33.61313554100343,
+      "error": null,
+      "peakRssMB": 4783.390625,
+      "mpsDriverMB": 0.375,
+      "group": "common"
+     },
+     "CLUDA": {
+      "seconds": 65.37380299999495,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       33.427484125000774
+      ],
+      "firstEpochSeconds": 31.934418249991722,
+      "error": null,
+      "peakRssMB": 4783.390625,
+      "mpsDriverMB": 0.375,
+      "group": "common"
+     },
+     "MIL-CREDA": {
+      "seconds": 61.53991066699382,
+      "epochsRecorded": [
+       0,
+       1
+      ],
+      "steadyEpochSeconds": [
+       27.187982249990455
+      ],
+      "firstEpochSeconds": 34.33907262500725,
+      "error": null,
+      "peakRssMB": 4783.390625,
+      "mpsDriverMB": 0.375,
+      "group": "MIL-CREDA"
+     }
+    },
+    "sourcePass": {
+     "common": {
+      "seconds": 9.77690741600236,
+      "epochsRecorded": [],
+      "steadyEpochSeconds": [],
+      "firstEpochSeconds": null,
+      "error": null,
+      "peakRssMB": 4010.4375,
+      "mpsDriverMB": 0.375
+     },
+     "AdaptMIL": {
+      "seconds": 9.728804667000077,
+      "epochsRecorded": [],
+      "steadyEpochSeconds": [],
+      "firstEpochSeconds": null,
+      "error": null,
+      "peakRssMB": 4053.609375,
+      "mpsDriverMB": 0.375
+     },
+     "MIL-CREDA": {
+      "seconds": 10.055301582993707,
+      "epochsRecorded": [],
+      "steadyEpochSeconds": [],
+      "firstEpochSeconds": null,
+      "error": null,
+      "peakRssMB": 4169.859375,
+      "mpsDriverMB": 0.375
+     }
+    }
+   },
+   "record": "MIL-CREDA-EEG/Results/timing.json"
+  }
+ }
+}

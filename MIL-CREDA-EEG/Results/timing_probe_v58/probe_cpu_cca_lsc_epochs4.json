@@ -1,0 +1,98 @@
+{
+ "transfer": "L1->L11",
+ "arm": "level",
+ "device": "cpu",
+ "torch": "2.13.0",
+ "threads": 4,
+ "cpuCount": 8,
+ "platform": "macOS-26.5.2-arm64-arm-64bit",
+ "python": "3.12.13",
+ "mpsFallback": null,
+ "measuredAt": "2026-11-06T08:35:44.957244+00:00",
+ "epochs": 2,
+ "bagsPerStep": 8,
+ "rotation": 0,
+ "innerSplit": 0,
+ "bags": {
+  "source_train": 31,
+  "source_valid": 16,
+  "target_train": 32,
+  "target_valid": 17
+ },
+ "windows": {
+  "source_train": 2331,
+  "source_valid": 1202,
+  "target_train": 2711,
+  "target_valid": 1275
+ },
+ "refitBags": {
+  "source_train": 47,
+  "source_valid": 0,
+  "target_train": 49,
+  "target_valid": 0
+ },
+ "refitWindows": {
+  "source_train": 3533,
+  "source_valid": 0,
+  "target_train": 3986,
+  "target_valid": 0
+ },
+ "setup": {
+  "loadBagsSeconds": 0.2014734580006916,
+  "searchDataSeconds": 0.4579914999922039
+ },
+ "phase1": {
+  "common": {
+   "seconds": 34.33344399998896,
+   "epochsRecorded": [
+    0,
+    1
+   ],
+   "steadyEpochSeconds": [
+    13.18020216700097
+   ],
+   "firstEpochSeconds": 21.14738424999814,
+   "error": null,
+   "peakRssMB": 4068.828125,
+   "mpsDriverMB": 0.375,
+   "params": {
+    "lr1": 0.007659687509525595,
+    "wd1": 4.62801552373352e-07
+   }
+  }
+ },
+ "phase2": {
+  "CCA-LSC": {
+   "seconds": 123.26157866700669,
+   "epochsRecorded": [
+    0,
+    1,
+    2,
+    3
+   ],
+   "steadyEpochSeconds": [
+    27.220796583002084,
+    29.664511249997304,
+    37.14860225000302
+   ],
+   "firstEpochSeconds": 29.187430750011117,
+   "error": null,
+   "peakRssMB": 4470.203125,
+   "mpsDriverMB": 0.375,
+   "group": "common",
+   "epochs": 4
+  }
+ },
+ "sourcePass": {
+  "common": {
+   "seconds": 9.795469582997612,
+   "epochsRecorded": [],
+   "steadyEpochSeconds": [],
+   "firstEpochSeconds": null,
+   "error": null,
+   "peakRssMB": 4068.828125,
+   "mpsDriverMB": 0.375
+  }
+ },
+ "wallSeconds": 168.27720458299154
+}
