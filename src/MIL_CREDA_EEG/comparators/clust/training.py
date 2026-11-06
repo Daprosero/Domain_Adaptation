@@ -4,10 +4,10 @@ No source data argument exists. Source weights, common attention and diagnostic
 head stay fixed. EMA components are auxiliary, never diagnostic heads. Phase 2
 runs its `epochs2` whole and keeps the last epoch (no early stopping, v56 §7.7);
 with target validation bags every epoch's validation predictions are recorded for
-the search's pooled selection, and without them (the refit) nothing is evaluated.
-`secondary_checkpoint` stays a per-run reading (the run's best label-free epoch,
-None in a refit) for `clust.save(selection="secondary")`; the campaign selects
-the label-free (trial, epoch) on the pooled predictions instead.
+the search's pooled selection (with each bag's representation, `two_phase.represent`),
+and without them (the refit) nothing is evaluated. The source pass of Sec. 4.5's
+centroid rule runs in `search`, outside this trainer (plan v58 §7.3): the
+adaptation reads no source data, and no run here selects anything.
 """
 from __future__ import annotations
 
@@ -124,7 +124,7 @@ def adaptation_step(model, target_bags, params, device):
 
 
 def adapt_target_phase(model, target_train, target_valid, params, schedule, generator,
-                       device="cpu", *, seed=0, fold=0, transfer="", label_free=False):
+                       device="cpu", *, seed=0, fold=0, transfer=""):
     """Exactly `epochs2` epochs, the last kept; validation labels only recorded for the
     search's selection, never used to adapt.
 
@@ -150,9 +150,7 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
     optimizer = torch.optim.Adam(model.target_trunk.parameters(), lr=params["lr2"],
                                  weight_decay=params["wd2"])
     history, seconds, validation = [], [], []
-    best_free, secondary = -math.inf, None
     labels = [b.label for b in target_valid]  # selection only, never adaptation
-    keeper = two_phase.LabelFreeBest(label_free)
     for epoch in range(int(epochs)):
         started = time.perf_counter()
         two_phase.set_phase_two_modes(model)
@@ -180,40 +178,29 @@ def adapt_target_phase(model, target_train, target_valid, params, schedule, gene
         # Eq.21–23, one detached update at the epoch boundary.
         model.clust_auxiliary.alpha.fill_(losses.dynamic_alpha(
             class_sum.new_tensor(means["feature"]), class_sum / seen))
-        ba, free = math.nan, math.nan
+        ba = math.nan
         if target_valid:
             g = two_phase.evaluate(model, target_valid, "target", device)
             ba = two_phase.balanced_accuracy(labels, g.argmax(-1).tolist())
-            free = two_phase.label_free_score(g)
-            validation.append(two_phase.validation_record(epoch, target_valid, g))
+            validation.append(two_phase.validation_record(
+                epoch, target_valid, g,
+                two_phase.represent(model, target_valid, "target", device)))
         seconds.append(time.perf_counter() - started)
         history.append({"epoch": epoch, "seed": seed, "fold": fold, "transfer": transfer,
                         "model": NAME + ":phase2", **means, "val_balanced_accuracy": ba,
-                        "label_free_score": free, "alpha": float(model.clust_auxiliary.alpha)})
-        keeper.offer(epoch, free, model)
-        if free > best_free:
-            best_free, secondary = free, {"epoch": epoch, "state": clone_state(model)}
+                        "alpha": float(model.clust_auxiliary.alpha)})
     current = model.state_dict()
     if any(not torch.equal(v.to(current[k]), current[k]) for k, v in frozen.items()):
         raise two_phase.FrozenPartsMoved("CLUST changed frozen phase-one state")
     model.eval()
     last = history[-1]
-    return two_phase.with_label_free({
-            "checkpoint": {"state": clone_state(model), "epoch": last["epoch"],
+    return {"checkpoint": {"state": clone_state(model), "epoch": last["epoch"],
                            "valid_balanced_accuracy": last["val_balanced_accuracy"],
-                           "label_free_score": last["label_free_score"],
                            "hyper": params},
-            "secondary_checkpoint": None if secondary is None else {
-                **secondary, "label_free_score": best_free,
-                "valid_balanced_accuracy": history[secondary["epoch"]]["val_balanced_accuracy"],
-                "hyper": params},
             "best_epoch": last["epoch"], "epochs": len(history), "history": history,
             "validation": validation,
             "seconds": seconds, "seconds_per_epoch": sum(seconds) / len(seconds),
-            "selection": {"primary": "pooled target-validation balanced accuracy, chosen "
-                                     "by the search",
-                          "secondary": "pooled label-free score, chosen by the search"}},
-        keeper)
+            "selection": two_phase.SELECTION}
 
 
 

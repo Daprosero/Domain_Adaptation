@@ -185,8 +185,8 @@ def test_the_upper_bound_epochs_are_chosen_on_the_pooled_inner_splits_and_refit_
 
     monkeypatch.setattr(controls.two_phase, "train_source_phase", spy)
     pooled = [0.5, 0.75, 0.75]
-    monkeypatch.setattr(controls.search, "pooled_series",
-                        lambda per_split, label_free: {"pooledBalancedAccuracy": pooled})
+    monkeypatch.setattr(controls.search, "pooled_balanced_accuracy_series",
+                        lambda per_split: pooled)
     out = controls.train_upper_bound(a, bags, 2, 3, {"lr1": 1e-2, "wd1": 1e-4},
                                      {**SCHEDULE, "epochs1": 3}, CPU)
     # three inner splits at the search seed over the whole cap, each with validation ...

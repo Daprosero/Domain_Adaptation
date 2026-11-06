@@ -22,8 +22,7 @@ __provenance__ = {
 }
 
 
-def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu", *,
-                    label_free=False):
+def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"):
     """Shared search trainer protocol; only target train/validation accessed."""
     state, meta = record
     expected = {"phase": 1, "name": "common", "rotation": rotation, "seed": search.PHASE_ONE_SEED,
@@ -41,8 +40,7 @@ def train_phase_two(data, rotation, seed, record, params, schedule, device="cpu"
     d = data.rotations[rotation]
     result = adapt_target_phase(model, d["target_train"], d["target_valid"], params,
                                 search.check_schedule(schedule), generator, device,
-                                seed=seed, fold=rotation, transfer=data.transfer.name,
-                                label_free=label_free)
+                                seed=seed, fold=rotation, transfer=data.transfer.name)
 
     return {"strategy": NAME, "model": model, "result": result, "hyper": dict(params),
             "channels": channels, "layer_copy": joint["layer_copy"]}
@@ -69,18 +67,17 @@ def code_version():
     return digest.hexdigest()
 
 
-def save(root, *, trained, transfer, rotation, seed, partition_sha256, selection="primary"):
-    """Shared store plus adapter provenance; use separate roots for the two rules."""
-    if selection not in ("primary", "secondary"):
-        raise ValueError("selection must be primary or secondary")
-    checkpoint = trained["result"]["checkpoint" if selection == "primary" else "secondary_checkpoint"]
+def save(root, *, trained, transfer, rotation, seed, partition_sha256):
+    """Shared store plus adapter provenance. A model is the last epoch of its run; the
+    rule that chose its (trial, epoch) is the search's (Sec. 4.5): a model of the EnsV
+    rule is another run, stored under another root."""
+    checkpoint = trained["result"]["checkpoint"]
     return model_store.save(root, transfer=transfer, rotation=rotation, seed=seed, phase=2,
                             name=NAME, state=checkpoint["state"], hyper=checkpoint["hyper"],
                             partition_sha256=partition_sha256, channels=trained["channels"],
-                            extra={"clust_code_version": code_version(), "selection": selection,
+                            extra={"clust_code_version": code_version(),
                                    "epoch": checkpoint["epoch"],
-                                   "valid_balanced_accuracy": checkpoint["valid_balanced_accuracy"],
-                                   "label_free_score": checkpoint["label_free_score"]})
+                                   "valid_balanced_accuracy": checkpoint["valid_balanced_accuracy"]})
 
 
 def load(path, **kwargs):

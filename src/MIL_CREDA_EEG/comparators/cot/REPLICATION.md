@@ -34,7 +34,7 @@ selects the cluster-transport mechanism, not the paper's default host algorithm.
   potential vector `(4,)`. Windows `(m,C,512)` use existing EEGNet and common
   attention to become bags `(B,256)`. C is 14 or 29, never intersected.
 - `training.py`: reuse common phase-1 checkpoint, shared bridge, batch helpers,
-  evaluate/BA/label-free metrics, search registration and model_store. Separate
+  evaluate/represent/BA metrics, search registration and model_store. Separate
   dual ascent on detached costs then descent on centers/target encoder with
   detached potentials; no labels of target training bags read. Checkpoints
   for primary AND secondary epoch selections retain auxiliary state.
@@ -154,7 +154,8 @@ before shared search.run_phase_two_study. Shared search pools the three inner sp
 per epoch (v56 §4.5) under common trial budgets. Phase-one records come
 from the common group. Shared search.save_phase_two stores the selected full
 state; own load_phase_two verifies the extra source digest. The campaign refits the
-label-free (trial, epoch) on its own and stores it under a distinct root.
+EnsV (trial, epoch) on its own where it differs from the primary one and stores it
+under a distinct root (plan v58 §4.5).
 History records already have the dashboard keys; use shared two_phase.write_history
 under MIL-CREDA/Results/history*.json at campaign time. No Results tree is written
 by these library hooks or synthetic tests.

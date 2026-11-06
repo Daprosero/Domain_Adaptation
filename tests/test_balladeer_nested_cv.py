@@ -4,12 +4,15 @@ Per outer test fold k, F is the other three frozen folds; the three inner splits
 validate one fold of F and train on the other two. Every training runs a fixed number of
 epochs (no early stopping); the search records validation per epoch and the refit runs
 exactly E epochs with no validation set. The selection score is the balanced accuracy of
-the subject-level confusion counts pooled over the three inner splits, per epoch; the
-label-free rule pools the target predictions the same way and never reads a label.
+the subject-level confusion counts pooled over the three inner splits, per epoch: on the
+source labels in phase 1, and in phase 2 through the centroid rule (plan v58), whose counts
+are those of source validation bags; EnsV reads the pooled target predictions. Neither
+phase-2 rule reads a target label.
 """
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -199,48 +202,90 @@ def _trial(value, attrs):
         user_attrs=attrs)
 
 
-def test_the_selection_is_the_argmax_of_the_pooled_score_over_trial_and_epoch():
+def _study(phase, *attrs):
     study = optuna.create_study(direction="maximize")
-    study.add_trial(_trial(0.7, {"pooledBalancedAccuracy": [0.5, 0.7, 0.6],
-                                 "pooledLabelFree": [0.1, 0.2, 0.3]}))
-    study.add_trial(_trial(0.8, {"pooledBalancedAccuracy": [0.6, 0.6, 0.8],
-                                 "pooledLabelFree": [0.4, 0.0, 0.0]}))
-    primary = search.select(study, "primary")
+    study.set_user_attr("phase", phase)
+    for a in attrs:
+        study.add_trial(_trial(0.0, a))
+    return study
+
+
+def test_the_selection_is_the_argmax_of_the_pooled_score_over_trial_and_epoch():
+    # phase 1 reads the source-validation series, phase 2 the centroid series
+    one = _study(1, {"pooledBalancedAccuracy": [0.5, 0.7, 0.6]},
+                 {"pooledBalancedAccuracy": [0.6, 0.6, 0.8]})
+    primary = search.select(one, "primary")
     assert (primary["trial"], primary["epoch"], primary["epochs"]) == (1, 2, 3)
     assert primary["score"] == 0.8
-    free = search.select(study, "label-free")
-    assert (free["trial"], free["epoch"], free["epochs"]) == (1, 0, 1)
+    two = _study(2, {"pooledCentroidBalancedAccuracy": [0.9, 0.1, 0.1],
+                     "pooledBalancedAccuracy": [0.0, 0.0, 0.0]},
+                 {"pooledCentroidBalancedAccuracy": [0.6, 0.6, 0.8],
+                  "pooledBalancedAccuracy": [1.0, 1.0, 1.0]})
+    chosen = search.select(two, "primary")
+    assert (chosen["trial"], chosen["epoch"], chosen["score"]) == (0, 0, 0.9)
+    with pytest.raises(search.SearchError, match="pooledCentroidBalancedAccuracy"):
+        search.select(_study(2, {"pooledBalancedAccuracy": [1.0]}), "primary")
+    with pytest.raises(search.SearchError, match="phase-2"):
+        search.select(one, "ensv")
+    with pytest.raises(search.SearchError, match="rule"):
+        search.select(two, "label-free")
     # ties: the lowest trial, then the earliest epoch
-    tie = optuna.create_study(direction="maximize")
-    tie.add_trial(_trial(0.5, {"pooledBalancedAccuracy": [0.4, 0.5, 0.5],
-                               "pooledLabelFree": [0.0, 0.0, 0.0]}))
-    tie.add_trial(_trial(0.5, {"pooledBalancedAccuracy": [0.5, 0.5, 0.5],
-                               "pooledLabelFree": [0.0, 0.0, 0.0]}))
+    tie = _study(2, {"pooledCentroidBalancedAccuracy": [0.4, 0.5, 0.5]},
+                 {"pooledCentroidBalancedAccuracy": [0.5, 0.5, 0.5]})
     chosen = search.select(tie, "primary")
     assert (chosen["trial"], chosen["epoch"]) == (0, 1)
 
 
-def test_the_label_free_selection_reads_no_target_label():
-    splits = [_split(["a", "b"], [1, 0], [0.9, 0.2]), _split(["c", "d"], [0, 1], [0.6, 0.3]),
-              _split(["e"], [1], [0.8])]
-    flipped = [{**s, "labels": [1 - y for y in s["labels"]]} for s in splits]
-    unlabelled = [{k: v for k, v in s.items() if k != "labels"} for s in splits]
-    score = tp.pooled_label_free_score(splits)
-    assert score == tp.pooled_label_free_score(flipped) == tp.pooled_label_free_score(
-        unlabelled)
-    G = torch.tensor([p for s in splits for p in s["probabilities"]], dtype=torch.float64)
-    assert score == pytest.approx(tp.label_free_score(G))
+def _ensv(subjects, *epochs):
+    """A phase-2 trial's EnsV record: per epoch the P(class 1) of each subject."""
+    return {"pooledCentroidBalancedAccuracy": [0.5] * len(epochs), "ensvSubjects": subjects,
+            "ensvProbabilities": [[[1 - p, p] for p in e] for e in epochs]}
+
+
+def test_ensv_selects_the_candidate_closest_to_the_ensemble_pseudo_labels():
+    # three bags; candidates: (t0, e0), (t0, e1), (t1, e0), (t1, e1)
+    study = _study(2, _ensv(["a", "b", "c"], [0.9, 0.9, 0.9], [0.8, 0.2, 0.7]),
+                   _ensv(["a", "b", "c"], [0.6, 0.1, 0.2], [0.9, 0.4, 0.8]))
+    # mean P(class 1): a 0.8, b 0.4, c 0.65 -> pseudo-labels 1, 0, 1
+    P = np.array([[0.9, 0.9, 0.9], [0.8, 0.2, 0.7], [0.6, 0.1, 0.2], [0.9, 0.4, 0.8]])
+    pseudo = (P.mean(0) > 0.5).astype(int)
+    assert pseudo.tolist() == [1, 0, 1]
+    accuracy = ((P > 0.5).astype(int) == pseudo).mean(1)
+    assert accuracy.tolist() == [2 / 3, 1.0, 2 / 3, 1.0]
+    chosen = search.select(study, "ensv")
+    # ties between (t0, e1) and (t1, e1): the lowest trial, then the earliest epoch
+    assert (chosen["rule"], chosen["trial"], chosen["epoch"], chosen["epochs"]) == \
+        ("ensv", 0, 1, 2)
+    assert chosen["score"] == 1.0
+    # every completed trial is read: the ensemble moves when a trial is added
+    more = _study(2, _ensv(["a", "b", "c"], [0.9, 0.9, 0.9], [0.8, 0.2, 0.7]),
+                  _ensv(["a", "b", "c"], [0.6, 0.1, 0.2], [0.9, 0.4, 0.8]),
+                  _ensv(["a", "b", "c"], [0.9, 0.9, 0.9], [0.9, 0.9, 0.9]))
+    assert (search.select(more, "ensv")["trial"], search.select(more, "ensv")["epoch"]) == \
+        (0, 0)
+    # the subjects are aligned by name, whatever order a trial recorded them in
+    shuffled = _study(2, _ensv(["a", "b", "c"], [0.9, 0.9, 0.9], [0.8, 0.2, 0.7]),
+                      _ensv(["c", "a", "b"], [0.2, 0.6, 0.1], [0.8, 0.9, 0.4]))
+    assert search.select(shuffled, "ensv")["trial"] == 0
+    assert search.select(shuffled, "ensv")["epoch"] == 1
+    with pytest.raises(search.SearchError, match="other target subjects"):
+        search.select(_study(2, _ensv(["a"], [0.9]), _ensv(["b"], [0.9])), "ensv")
 
 
 def test_the_pooled_series_check_each_validated_subject_once_per_epoch():
     a = [_split(["a"], [1], [0.9], 0), _split(["a"], [1], [0.1], 1)]
     b = [_split(["b"], [0], [0.1], 0), _split(["b"], [0], [0.9], 1)]
     c = [_split(["c"], [1], [0.8], 0), _split(["c"], [1], [0.8], 1)]
-    series = search.pooled_series([a, b, c])
-    assert series["pooledBalancedAccuracy"] == [1.0, 0.25]
-    assert len(series["pooledLabelFree"]) == 2
+    assert search.pooled_balanced_accuracy_series([a, b, c]) == [1.0, 0.25]
+    ensv = search.ensv_record([a, b, c])
+    assert ensv["ensvSubjects"] == ["a", "b", "c"]
+    assert ensv["ensvProbabilities"] == [[s[e]["probabilities"][0] for s in (a, b, c)]
+                                         for e in (0, 1)]
+    assert "labels" not in json.dumps(ensv)
     with pytest.raises(search.SearchError, match="epochs"):
-        search.pooled_series([a, b, c[:1]])
+        search.pooled_balanced_accuracy_series([a, b, c[:1]])
+    with pytest.raises(search.SearchError, match="once"):
+        search.ensv_record([a, a, c])
 
 
 # ------------------------------------------------------------------ studies and units

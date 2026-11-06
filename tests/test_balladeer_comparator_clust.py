@@ -204,21 +204,21 @@ def test_clust_teacher_momentum_is_one_minus_the_drawn_complement(monkeypatch):
 def test_clust_keeps_the_last_epoch_and_records_validation_and_dashboard_history(
         monkeypatch):
     m = model()
-    accuracies, free = iter([.9, .2]), iter([.1, .8])
+    accuracies = iter([.9, .2])
     monkeypatch.setattr(two_phase, "balanced_accuracy", lambda *a: next(accuracies))
-    monkeypatch.setattr(two_phase, "label_free_score", lambda *a: next(free))
     result = training.adapt_target_phase(m, bags(), bags("v"), params(), schedule(),
                                          torch.Generator().manual_seed(17), seed=7, fold=2,
                                          transfer="L6->Robots")
     # v50: no early stopping; the last epoch is kept even though epoch 0 scored best
     assert result["best_epoch"] == 1 == result["checkpoint"]["epoch"]
     assert all(torch.equal(v, m.state_dict()[k]) for k, v in result["checkpoint"]["state"].items())
-    # the per-run label-free reading `clust.save(selection="secondary")` reads
-    assert result["secondary_checkpoint"]["epoch"] == 1
+    # plan v58: no per-run secondary state; the search selects both rules' (trial, epoch)
+    assert "secondary_checkpoint" not in result
     assert [v["epoch"] for v in result["validation"]] == [0, 1]
+    assert all(len(v["representations"]) == len(v["subjects"]) for v in result["validation"])
     refit = training.adapt_target_phase(model(), bags(), [], params(), schedule(),
                                         torch.Generator().manual_seed(17))
-    assert refit["validation"] == [] and refit["secondary_checkpoint"] is None
+    assert refit["validation"] == [] and "secondary_checkpoint" not in refit
     assert refit["epochs"] == schedule()["epochs2"]
     row = result["history"][0]
     assert (row["seed"], row["fold"], row["transfer"]) == (7, 2, "L6->Robots")
@@ -296,13 +296,10 @@ def test_clust_store_checks_comparator_code_version(monkeypatch, tmp_path):
                   rotation=0, seed=17, partition_sha256=sha)
     path = clust.save(tmp_path / "primary", **kwargs)
     rebuilt, meta = clust.load(path, partition_path=partition_path)
-    assert meta["selection"] == "primary"
+    assert "label_free_score" not in meta
     assert all(torch.equal(v, rebuilt.state_dict()[k]) for k, v in m.state_dict().items())
-    secondary_path = clust.save(tmp_path / "secondary", selection="secondary", **kwargs)
-    secondary, meta = clust.load(secondary_path, partition_path=partition_path)
-    assert meta["selection"] == "secondary"
-    assert all(torch.equal(v, secondary.state_dict()[k])
-               for k, v in result["secondary_checkpoint"]["state"].items())
+    with pytest.raises(TypeError):
+        clust.save(tmp_path / "secondary", selection="secondary", **kwargs)
     with pytest.raises(model_store.ModelExists):
         clust.save(tmp_path / "primary", **kwargs)
     monkeypatch.setattr(clust, "code_version", lambda: "changed")

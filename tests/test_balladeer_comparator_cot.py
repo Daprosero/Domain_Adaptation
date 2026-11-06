@@ -179,7 +179,11 @@ def test_cot_selection_and_history_use_shared_metrics():
                            "target", torch.device("cpu"))
     assert result["checkpoint"]["valid_balanced_accuracy"] == two_phase.balanced_accuracy(
         [0, 1], G.argmax(1).tolist())
-    assert result["checkpoint"]["label_free_score"] == two_phase.label_free_score(G)
+    assert "label_free_score" not in result["checkpoint"]
+    torch.testing.assert_close(
+        torch.tensor(result["validation"][-1]["representations"], dtype=torch.float64),
+        two_phase.represent(out["model"], data.rotations[0]["target_valid"], "target",
+                            torch.device("cpu")))
     for row in h:
         assert {"epoch", "seed", "fold", "model", "loss", "cluster", "ot", "source_ce",
                 "cluster_share", "ot_share"} <= row.keys()
