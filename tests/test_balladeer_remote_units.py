@@ -710,3 +710,135 @@ def test_every_pinned_requirement_equals_its_installed_version():
     wrong = {n: (v, importlib.metadata.version(n)) for n, v in pins.items()
              if importlib.metadata.version(n) != v}
     assert wrong == {}
+
+
+# ------------------------------------------------------------------ v59 launch
+
+
+def test_a_rehearsal_may_restrict_the_outer_folds_and_a_full_run_may_not(tmp_path):
+    cfg = {**_config(tmp_path, strategies=("MIL-CREDA",)), "rotations": [0]}
+    ids = [u.id for u in remote_units.enumerate_units(cfg, _product(tmp_path))]
+    assert ids == ["search.phase1.L1-to-L6.MIL-CREDA.outer0",
+                   "search.phase1.L6-to-L1.MIL-CREDA.outer0",
+                   "search.phase2.L1-to-L6.MIL-CREDA.outer0",
+                   "search.phase2.L6-to-L1.MIL-CREDA.outer0",
+                   "final.L1-to-L6", "final.L6-to-L1", "k3.L1-to-L6", "k3.L6-to-L1"]
+    with pytest.raises(campaign.CampaignError, match="rotations"):
+        campaign.check_config({**cfg, "rotations": [9]})
+    with pytest.raises(campaign.CampaignError, match="rotations"):
+        campaign.check_config({**cfg, "synthetic": False, "rehearsal": False,
+                               "strategies": list(model_store.STRATEGIES),
+                               "transfers": [t.name for t in campaign.assignment_mod.TRANSFERS],
+                               "nTrials": 20})
+
+
+def test_the_final_step_of_a_restricted_rehearsal_runs_only_its_outer_folds(
+        tmp_path, registries, torch_flags):
+    cfg = {**_config(tmp_path, strategies=("MIL-CREDA",)), "rotations": [0],
+           "transfers": ["L1->L6"]}
+    product = _product(tmp_path)
+    ids = ["search.phase1.L1-to-L6.MIL-CREDA.outer0", "search.phase2.L1-to-L6.MIL-CREDA.outer0",
+           "final.L1-to-L6"]
+    outcome = remote_units.run_units(cfg, product, units=ids, workdir=tmp_path / "work",
+                                     estimate=lambda u: 0.0, environ={})
+    assert outcome["ran"] == ids and outcome["remaining"] == []
+    rows = [json.loads(x) for path in (product / remote_units.SHARDS_RELATIVE / ids[2]
+                                       ).rglob("predictions.jsonl")
+            for x in path.read_text().splitlines()]
+    assert rows and {r["rotation"] for r in rows} == {0}
+
+
+def _schema_two(tmp_path: Path) -> Path:
+    def row(device, seconds):
+        return {"measuredAt": "2026-11-06T00:00:00+00:00", "host": "h", "device": device,
+                "arm": "campaign", "unit": "epoch", "secondsPerUnit": seconds,
+                "unitsMeasured": 5, "candidate": device, "processes": 1, "threads": 2}
+    path = tmp_path / "timing.json"
+    path.write_text(json.dumps({"schema": 2, "measurements": [
+        row("cpu", 30.0), row("cuda:Tesla T4", 0.5)]}))
+    return path
+
+
+def test_a_schema_two_record_gives_the_estimate_of_the_declared_device(tmp_path):
+    path, product = _schema_two(tmp_path), _product(tmp_path)
+    units = remote_units.enumerate_units(_config(tmp_path), product)
+    gpu = remote_units.timing_estimate(path, {**_config(tmp_path), "device": "cuda"}, product)
+    cpu = remote_units.timing_estimate(path, _config(tmp_path), product)
+    assert gpu(units[0]) == 3 * SCHEDULE["epochs1"] * 0.5
+    assert cpu(units[0]) == 3 * SCHEDULE["epochs1"] * 30.0
+
+
+def test_a_record_with_no_row_of_the_declared_device_is_refused(tmp_path):
+    path, product = tmp_path / "timing.json", _product(tmp_path)
+    path.write_text(json.dumps({"schema": 2, "measurements": [
+        {"device": "cpu", "unit": "epoch", "secondsPerUnit": 1.0}]}))
+    with pytest.raises(remote_units.UnitError, match="cuda"):
+        remote_units.timing_estimate(path, {**_config(tmp_path), "device": "cuda"}, product)
+
+
+def test_the_smoke_runs_a_list_of_units_and_stamps_them(tmp_path, registries, torch_flags):
+    cfg, product, work = _config(tmp_path, strategies=("MIL-CREDA",)), _product(tmp_path), \
+        tmp_path / "work"
+    ids = ["search.phase1.L1-to-L6.MIL-CREDA.outer0", "search.phase2.L1-to-L6.MIL-CREDA.outer0"]
+    outcome = remote_units.smoke(cfg, product, units=ids, workdir=work,
+                                 estimate=lambda u: 0.0, environ={"FORGE_RUN_MODE": "smoke"})
+    assert outcome["ran"] == ids
+    stamp = json.loads((work / "shard.json").read_text())
+    assert stamp["evidence"]["units"] == ids and stamp["evidence"]["complete"] is True
+    assert stamp["evidence"]["gpu"]["optimizerSteps"] > 0
+    assert stamp["evidence"]["gpu"]["parameterDevices"]
+
+
+def test_a_smoke_budget_stops_it_cleanly_and_it_is_not_complete(tmp_path, torch_flags):
+    cfg, product, work = _config(tmp_path, strategies=("MIL-CREDA",)), _product(tmp_path), \
+        tmp_path / "work"
+    ids = ["search.phase1.L1-to-L6.MIL-CREDA.outer0"]
+    outcome = remote_units.smoke(cfg, product, units=ids, workdir=work, budget_seconds=10,
+                                 estimate=lambda u: 60.0, environ={"FORGE_RUN_MODE": "smoke"})
+    assert outcome["ran"] == [] and outcome["remaining"] == ids
+    assert json.loads((work / "partial.json").read_text())["remaining"] == ids
+    stamp = json.loads((work / "shard.json").read_text())
+    assert stamp["evidence"]["complete"] is False
+
+
+def test_a_mounted_merged_product_seeds_the_units_that_follow_the_merge(
+        tmp_path, registries, torch_flags):
+    """The final step reads the search of every notebook: the merged product comes back
+    as an input dataset, restored into the session's product before anything is checked."""
+    cfg = {**_config(tmp_path, strategies=("MIL-CREDA",)), "transfers": ["L1->L6"],
+           "rotations": [0]}
+    first, ids = _product(tmp_path), ["search.phase1.L1-to-L6.MIL-CREDA.outer0",
+                                      "search.phase2.L1-to-L6.MIL-CREDA.outer0"]
+    remote_units.run_units(cfg, first, units=ids, workdir=tmp_path / "work",
+                           estimate=lambda u: 0.0, environ={})
+    remote_units.merge(first, config=cfg)
+    mount = tmp_path / "mount" / "nested"
+    shutil.copytree(first, mount, ignore=shutil.ignore_patterns(".progress", "search.*"))
+    env = {remote_units.INPUTS_ENV: json.dumps({"owner/merged": str(mount.parent)})}
+    wave_two = {**cfg, "remoteInputs": {"product": "owner/merged"}}
+    second = tmp_path / "second"
+    second.mkdir()
+    outcome = remote_units.run_units(wave_two, second, units=["final.L1-to-L6"],
+                                     workdir=tmp_path / "work2", estimate=lambda u: 0.0,
+                                     environ=env)
+    assert outcome["ran"] == ["final.L1-to-L6"]
+    # the input is optional: a job that does not mount it is the search wave
+    resolved = remote_units.resolve_inputs(wave_two, environ={remote_units.INPUTS_ENV: "{}"})
+    assert "productRoot" not in resolved
+    assert remote_units.config_digest(cfg) != "" and \
+        remote_units.config_digest({**wave_two, "productRoot": "x"}) == \
+        remote_units.config_digest(wave_two)
+
+
+def test_a_budget_is_the_only_guard_of_a_smoke_and_records_the_measured_estimates(
+        tmp_path, registries, torch_flags):
+    cfg, product, work = _config(tmp_path, strategies=("MIL-CREDA",)), _product(tmp_path), \
+        tmp_path / "work"
+    (product / "Results").mkdir()
+    timing = _schema_two(product / "Results")
+    uid = "search.phase1.L1-to-L6.MIL-CREDA.outer0"
+    outcome = remote_units.smoke({**cfg, "device": "cpu"}, product, units=[uid], workdir=work,
+                                 budget_seconds=600, environ={"FORGE_RUN_MODE": "smoke"})
+    assert timing.is_file() and outcome["ran"] == [uid]
+    stamp = json.loads((work / "shard.json").read_text())
+    assert stamp["evidence"]["estimates"] == {uid: 3 * SCHEDULE["epochs1"] * 30.0}
