@@ -15,6 +15,7 @@ import json
 import math
 
 import numpy as np
+import optuna
 import pytest
 import torch
 
@@ -245,3 +246,123 @@ def test_the_study_records_its_outer_fold_and_inner_splits(tmp_path, monkeypatch
     chosen = search.select(study)
     assert chosen["testFold"] == chosen["excludedRotation"] == 3
     assert chosen["selectionRotations"] == [0, 1, 2]
+
+
+def _spied_study(tmp_path, data, rotation, monkeypatch, log, captured=None, n_trials=3):
+    """`_study` with the scripted trainer and source pass logging, in call order, each
+    ("train" or "source", outer fold) and, in `captured`, what the source pass returned."""
+    trainer, sources = _scripted_trainer([]), _scripted_sources([])
+
+    def train(strategy, data_, rotation_, *args, **kwargs):
+        log.append(("train", rotation_))
+        return trainer(strategy, data_, rotation_, *args, **kwargs)
+
+    def source(strategy, data_, rotation_, *args, **kwargs):
+        log.append(("source", rotation_))
+        out = sources(strategy, data_, rotation_, *args, **kwargs)
+        if captured is not None:
+            captured.append(out)
+        return out
+
+    monkeypatch.setattr(search, "train_phase_two", train)
+    monkeypatch.setattr(search, "source_representations", source)
+    monkeypatch.setattr(search, "_check_phase_one_record", lambda *a, **k: None)
+    return search.run_phase_two_study("MIL-CREDA", data, rotation, ({}, {"sigma": 1.0}),
+                                      SCHEDULE, root=tmp_path / f"spied{rotation}",
+                                      n_trials=n_trials)
+
+
+def test_no_target_label_changes_either_phase_two_selection(tmp_path, monkeypatch):
+    """Every target label of the transfer flipped, in every outer fold, inner split and
+    target role: both rules choose the same (trial, epoch) with the same score."""
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    target = {b.subject for view in [*data.rotations.values(), *data.inner.values()]
+              for role in ("target_train", "target_valid") for b in view[role]}
+    flipped = _flip(data, target, roles=("target_train", "target_valid"))
+    assert [b.label for b in flipped.rotations[0]["target_train"]] == \
+        [1 - b.label for b in data.rotations[0]["target_train"]]          # the flip is real
+    for rotation in (0, 3):
+        a = _study(tmp_path, data, rotation, [], monkeypatch, n_trials=3, name=f"a{rotation}")
+        b = _study(tmp_path, flipped, rotation, [], monkeypatch, n_trials=3,
+                   name=f"b{rotation}")
+        assert [t.value for t in a.trials] == [t.value for t in b.trials]
+        for rule in search.RULES:
+            x, y = search.select(a, rule), search.select(b, rule)
+            assert (x["trial"], x["epoch"], x["score"]) == (y["trial"], y["epoch"], y["score"])
+
+
+def test_the_ensv_selection_reads_every_completed_trial_of_the_study(tmp_path, monkeypatch):
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    study = _study(tmp_path, data, 1, [], monkeypatch, n_trials=4)
+    complete = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+    assert len(complete) == 4
+    # by hand: every (trial, epoch) of every completed trial is a candidate; the mean of
+    # their probabilities gives the pseudo-labels; the best agreement wins, the lowest trial
+    # and earliest epoch on ties
+    candidates = [(t.number, e, np.asarray(P, dtype=np.float64)) for t in complete
+                  for e, P in enumerate(t.user_attrs["ensvProbabilities"])]
+    assert len(candidates) == 4 * SCHEDULE["epochs2"]
+    pseudo = np.mean([P for _, _, P in candidates], axis=0).argmax(axis=1)
+    score, trial, epoch = max((float(np.mean(P.argmax(axis=1) == pseudo)), -n, -e)
+                              for n, e, P in candidates)
+    chosen = search.select(study, "ensv")
+    assert (chosen["trial"], chosen["epoch"]) == (-trial, -epoch)
+    assert chosen["score"] == pytest.approx(score)
+    # a trial that did not complete is no candidate, whatever its probabilities say
+    opposite = [[1.0, 0.0] if c == 1 else [0.0, 1.0] for c in pseudo]
+    inverted = [opposite] * 50
+    with_failed = np.mean([P for _, _, P in candidates] + [np.asarray(opposite)] * 50,
+                          axis=0).argmax(axis=1)
+    assert not np.array_equal(with_failed, pseudo)          # counted, it would move the vote
+    study.add_trial(optuna.trial.create_trial(
+        state=optuna.trial.TrialState.FAIL,
+        user_attrs={"ensvSubjects": complete[0].user_attrs["ensvSubjects"],
+                    "ensvProbabilities": inverted}))
+    again = search.select(study, "ensv")
+    assert (again["trial"], again["epoch"], again["score"]) == \
+        (chosen["trial"], chosen["epoch"], chosen["score"])
+
+
+def test_the_phase_two_objective_is_the_centroid_rule_and_reads_no_target_label(
+        tmp_path, monkeypatch):
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    study = _study(tmp_path, data, 0, [], monkeypatch, n_trials=2)
+    sources = _scripted_sources([])("MIL-CREDA", data, 0, None)
+    trainer = _scripted_trainer([])
+    for t in study.trials:
+        per_split = [trainer("MIL-CREDA", data.inner_view(0, i), 0, search.SEARCH_SEED, None,
+                             t.params, SCHEDULE)["result"]["validation"]
+                     for i in range(search.N_INNER)]
+        expected = search.pooled_centroid_series(per_split, sources)
+        assert t.user_attrs["pooledCentroidBalancedAccuracy"] == pytest.approx(expected)
+        assert t.value == pytest.approx(max(expected))
+        # the same records with their labels removed, or flipped, score the same
+        unlabelled = [[{k: v for k, v in r.items() if k != "labels"} for r in split]
+                      for split in per_split]
+        flipped = [[{**r, "labels": [1 - y for y in r["labels"]]} for r in split]
+                   for split in per_split]
+        assert search.pooled_centroid_series(unlabelled, sources) == expected
+        assert search.pooled_centroid_series(flipped, sources) == expected
+    assert any("centroid" in str(v) for v in study.user_attrs.values())
+
+
+def test_the_source_representations_are_computed_once_per_outer_fold_and_inner_split(
+        tmp_path, monkeypatch):
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    log, captured = [], []
+    for rotation in (0, 2):
+        _spied_study(tmp_path, data, rotation, monkeypatch, log, captured, n_trials=3)
+    # one source pass per outer fold's study, before its first training, whatever the
+    # number of trials; three trainings (one per inner split) per trial
+    assert [x for x in log if x[0] == "source"] == [("source", 0), ("source", 2)]
+    for rotation in (0, 2):
+        mine = [x for x in log if x[1] == rotation]
+        assert mine[0] == ("source", rotation)
+        assert mine.count(("train", rotation)) == 3 * search.N_INNER
+    # each pass holds one entry per inner split: that split's source validation bags
+    for rotation, out in zip((0, 2), captured):
+        assert len(out) == search.N_INNER
+        for i, split in enumerate(out):
+            bags = data.inner[(rotation, i)]["source_valid"]
+            assert split["subjects"] == [b.subject for b in bags]
+            assert split["labels"] == [b.label for b in bags]

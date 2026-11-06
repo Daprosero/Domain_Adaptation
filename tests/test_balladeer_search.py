@@ -206,6 +206,42 @@ def test_the_phase_one_objective_pools_the_source_validation_of_the_three_inner_
     assert search.select(study)["epochs"] == 2
 
 
+def test_the_objective_is_the_best_epochs_pooled_balanced_accuracy_over_the_inner_splits(
+        tmp_path, monkeypatch):
+    """Phase 1 (Sec. 4.5): per epoch, the balanced accuracy of the subject-level counts
+    pooled over the three inner splits, computed once (never the mean of the split ones);
+    the trial's value is the best epoch's, and the refit runs that epoch plus one."""
+    data = search.search_data(LEVEL, _bagset(tmp_path))
+    per_split = []
+
+    def score(subject: str, epoch: int) -> float:
+        return ((sum(map(ord, subject)) * 7 + epoch * 3) % 5) / 4      # 0, .25, ..., 1
+
+    def fake(group, data_, rotation, seed, hyper, device):
+        records = _records(data_.rotations[rotation]["source_valid"], hyper["epochs1"], score)
+        per_split.append(records)
+        return {"result": {"validation": records,
+                           "history": [{"val_balanced_accuracy": 0.0, "loss": 1.0}
+                                       for _ in records]}}
+
+    monkeypatch.setattr(search, "train_phase_one", fake)
+    epochs = 4
+    study = search.run_phase_one_study("common", data, 1, {**SCHEDULE, "epochs1": epochs},
+                                       root=tmp_path, n_trials=1)
+    trial = study.trials[0]
+    assert len(per_split) == search.N_INNER
+    expected = [tp.pooled_balanced_accuracy([split[e] for split in per_split])
+                for e in range(epochs)]
+    assert trial.user_attrs["pooledBalancedAccuracy"] == pytest.approx(expected)
+    best = int(np.argmax(expected))
+    assert trial.value == pytest.approx(expected[best])
+    assert trial.user_attrs["bestEpoch"] == best and trial.user_attrs["epochs"] == best + 1
+    mean_of_splits = [float(np.mean([tp.pooled_balanced_accuracy([split[e]])
+                                     for split in per_split])) for e in range(epochs)]
+    assert mean_of_splits != pytest.approx(expected)            # pooled, not averaged
+    assert search.select(study)["epochs"] == best + 1
+
+
 def test_the_search_never_loads_a_test_fold_bag(tmp_path):
     bags = _bagset(tmp_path)
     a = assignment.assign_from_bags(LEVEL, bags)

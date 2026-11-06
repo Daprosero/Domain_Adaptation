@@ -261,3 +261,61 @@ def test_the_source_pass_is_the_frozen_source_side_of_every_trial(setting, strat
     score = two_phase.pooled_centroid_balanced_accuracy(
         [_train(setting, strategy)["result"]["validation"][-1]], [sources[SPLIT]])
     assert 0.0 <= score <= 1.0
+
+
+@pytest.mark.parametrize("strategy", STRATEGIES)
+def test_the_phase_two_selection_reads_no_target_label(setting, strategy):
+    """With every target label of the inner split flipped, the recorded labels change and
+    the centroid score of every epoch does not."""
+    data, records = setting
+    sources = search.source_representations(
+        strategy, data, ROTATION, records[search.PHASE_ONE_GROUP_OF[strategy]])
+    base = _train(setting, strategy)["result"]["validation"]
+    flipped = _train(setting, strategy, True)["result"]["validation"]
+    assert [r["labels"] for r in flipped] == [[1 - y for y in r["labels"]] for r in base]
+    for b, f in zip(base, flipped, strict=True):
+        assert two_phase.pooled_centroid_balanced_accuracy([f], [sources[SPLIT]]) == \
+            two_phase.pooled_centroid_balanced_accuracy([b], [sources[SPLIT]])
+
+
+@pytest.mark.parametrize("strategy", STRATEGIES)
+def test_the_representation_is_the_vector_entering_the_predictive_head(setting, strategy):
+    """`represent` gives Z, and the model's own head applied to Z gives exactly the
+    probabilities `evaluate` predicts."""
+    model = _train(setting, strategy)["model"]
+    valid = setting[0].inner[(ROTATION, SPLIT)]["target_valid"]
+    Z = two_phase.represent(model, valid, "target", CPU)
+    G = two_phase.evaluate(model, valid, "target", CPU)
+    modes = {m: m.training for m in model.modules()}
+    model.eval()
+    try:
+        with torch.no_grad():
+            dtype = next(model.head.parameters()).dtype
+            through_head = model.head(Z.to(dtype))
+    finally:
+        for m, mode in modes.items():
+            m.train(mode)
+    np.testing.assert_allclose(through_head.to(torch.float64).numpy(),
+                               G.to(torch.float64).numpy(), rtol=1e-5, atol=1e-7)
+
+
+def test_the_source_pass_runs_in_the_search_never_in_a_trainer(setting, monkeypatch):
+    """No registered phase-2 trainer calls the source pass: with it replaced by one that
+    refuses, every trainer still trains; and none of their sources names it."""
+    for strategy, trainer in search.PHASE_TWO_TRAINERS.items():
+        assert "source_representations" not in inspect.getsource(trainer), strategy
+        module = inspect.getmodule(trainer)
+        if module is not search:
+            assert "source_representations" not in inspect.getsource(module), strategy
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a phase-2 trainer ran the source pass")
+
+    monkeypatch.setattr(search, "source_representations", refuse)
+    base, records = setting
+    for strategy in STRATEGIES:
+        record = records[search.PHASE_ONE_GROUP_OF[strategy]]
+        params = {**_sample(search.phase_two_space(strategy)), "lr2": LR2}
+        out = search.train_phase_two(strategy, base, ROTATION, SEED, record, params,
+                                     search.refit_schedule(SCHEDULE, 2, 2))   # a refit
+        assert out["result"]["epochs"] == 2, strategy
