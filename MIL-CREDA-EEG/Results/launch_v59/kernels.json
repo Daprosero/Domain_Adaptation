@@ -1,0 +1,199 @@
+{
+ "job": "v59-search",
+ "commit": "c10d4d0054cfd0f9cf838d289721370947bb49f6",
+ "accelerator": "NvidiaTeslaT4",
+ "kernels": [
+  {
+   "account": "daprosero",
+   "ref": "daprosero/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/daprosero/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:17:57Z"
+  },
+  {
+   "account": "daprosero",
+   "ref": "daprosero/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/daprosero/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:00Z"
+  },
+  {
+   "account": "daproserom2",
+   "ref": "daproserom2/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/daproserom2/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:03Z"
+  },
+  {
+   "account": "daproserom2",
+   "ref": "daproserom2/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/daproserom2/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:05Z"
+  },
+  {
+   "account": "andresalvarez",
+   "ref": "andresalvarez/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/andresalvarez/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:08Z"
+  },
+  {
+   "account": "andresalvarez",
+   "ref": "andresalvarez/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/andresalvarez/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:10Z"
+  },
+  {
+   "account": "sofiaescalante",
+   "ref": "sofiaescalante/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/sofiaescalante/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:13Z"
+  },
+  {
+   "account": "sofiaescalante",
+   "ref": "sofiaescalante/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/sofiaescalante/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:15Z"
+  },
+  {
+   "account": "amalvarezme",
+   "ref": "amalvarezme/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/amalvarezme/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:18Z"
+  },
+  {
+   "account": "amalvarezme",
+   "ref": "amalvarezme/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/amalvarezme/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:21Z"
+  },
+  {
+   "account": "diego9901",
+   "ref": "diego9901/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/diego9901/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:23Z"
+  },
+  {
+   "account": "diego9901",
+   "ref": "diego9901/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/diego9901/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:26Z"
+  },
+  {
+   "account": "sofiaescalante2401",
+   "ref": "sofiaescalante2401/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/sofiaescalante2401/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:28Z"
+  },
+  {
+   "account": "sofiaescalante2401",
+   "ref": "sofiaescalante2401/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/sofiaescalante2401/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:31Z"
+  },
+  {
+   "account": "collazosh",
+   "ref": "collazosh/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/collazosh/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:33Z"
+  },
+  {
+   "account": "collazosh",
+   "ref": "collazosh/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/collazosh/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:36Z"
+  },
+  {
+   "account": "manri09",
+   "ref": "manri09/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/manri09/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:39Z"
+  },
+  {
+   "account": "manri09",
+   "ref": "manri09/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/manri09/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:41Z"
+  },
+  {
+   "account": "katerineparra1234",
+   "ref": "katerineparra1234/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/katerineparra1234/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:44Z"
+  },
+  {
+   "account": "katerineparra1234",
+   "ref": "katerineparra1234/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/katerineparra1234/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:47Z"
+  },
+  {
+   "account": "jucaguirrear",
+   "ref": "jucaguirrear/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/jucaguirrear/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:49Z"
+  },
+  {
+   "account": "jucaguirrear",
+   "ref": "jucaguirrear/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/jucaguirrear/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:52Z"
+  },
+  {
+   "account": "juanouter",
+   "ref": "juanouter/papersmith-v59-search",
+   "url": "https://www.kaggle.com/code/juanouter/papersmith-v59-search",
+   "slot": 1,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:55Z"
+  },
+  {
+   "account": "juanouter",
+   "ref": "juanouter/papersmith-v59-search-slot-2",
+   "url": "https://www.kaggle.com/code/juanouter/papersmith-v59-search-slot-2",
+   "slot": 2,
+   "units": 12,
+   "submittedAt": "2026-11-06T19:18:57Z"
+  }
+ ]
+}
