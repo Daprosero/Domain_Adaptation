@@ -1,0 +1,107 @@
+[
+ {
+  "owner": "daproserom2",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "amalvarezme",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "andresalvarez",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "collazosh",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "cuentacolab",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "diego9901",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "juanouter",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "jucaguirrear",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "katerineparra1234",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "manri09",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "sofiaescalante",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "sofiaescalante2401",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "trayectoria50",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "trayectoria51",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ },
+ {
+  "owner": "daprosero",
+  "service": "kaggle-gpu",
+  "sessions": 2,
+  "sessionHours": 12,
+  "quotaHours": 6
+ }
+]

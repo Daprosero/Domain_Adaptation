@@ -1,0 +1,2 @@
+{"phase": 1, "name": "AdaptMIL", "transfer": "L6->Robots", "draw": 4, "error": "GroupNotRegistered: no architecture is registered for the phase-1 group 'AdaptMIL' yet", "seconds": 11.022494554519653}
+{"phase": 1, "name": "AdaptMIL", "transfer": "Robots->CogniFit", "draw": 0, "error": "GroupNotRegistered: no architecture is registered for the phase-1 group 'AdaptMIL' yet", "seconds": 5.991477727890015}

@@ -137,3 +137,27 @@ def test_gpu_witness_records_parameter_devices_steps_and_epoch_stamps():
     ev = w.evidence()
     assert ev["optimizerSteps"] == 3 and ev["parameterDevices"] == {"cpu": 6}
     assert ev["allParametersOnCuda"] is False and ev["epochsStamped"] == 3
+
+
+def _gpu_trial(**ev):
+    base = {"allParametersOnCuda": True, "cudaMaxMemoryAllocatedMB": 120.0,
+            "medianEpochSeconds": 0.7, "parameterDevices": {"cuda:0": 10}}
+    return {"phase": 2, "name": "COT", "transfer": "L1->L11", "draw": 0,
+            "gpuEvidence": {**base, **ev}}
+
+
+def test_certify_accepts_a_notebook_whose_every_trial_trained_on_cuda(tool):
+    result = {"device": {"cudaIsAvailable": True, "cudaDeviceName0": "Tesla T4"}}
+    assert tool.certify(result, [_gpu_trial(), _gpu_trial()])["certified"] is True
+
+
+def test_certify_refuses_missing_evidence_cpu_parameters_or_cpu_speed(tool):
+    gpu = {"device": {"cudaIsAvailable": True, "cudaDeviceName0": "Tesla T4"}}
+    assert not tool.certify({"device": {"cudaAvailable": True, "name": "Tesla T4"}},
+                            [{"phase": 1, "name": "common", "transfer": "A", "draw": 0}]
+                            )["certified"]
+    out = tool.certify(gpu, [_gpu_trial(allParametersOnCuda=False,
+                                        parameterDevices={"cpu": 4})])
+    assert not out["certified"] and "parameters on" in out["reasons"][0]
+    assert not tool.certify(gpu, [_gpu_trial(medianEpochSeconds=9.0)])["certified"]
+    assert not tool.certify(gpu, [_gpu_trial(cudaMaxMemoryAllocatedMB=0.0)])["certified"]
