@@ -179,6 +179,15 @@ def assign(trials: Sequence[Mapping], bins: int, transfer_setup: float = 0.0,
 # ------------------------------------------------------------------ remote run
 
 
+def registrations(trials: Sequence[Mapping]) -> list[str]:
+    """The strategies `campaign.register` must wire for `trials`: every phase-2 strategy,
+    and a phase-1 group registered by its own comparator unit (AdaptMIL)."""
+    names = {t["name"] for t in trials if t["phase"] == 2}
+    names |= {t["name"] for t in trials if t["phase"] == 1 and t["name"] in STRATEGIES
+              and t["name"] != "MIL-CREDA"}
+    return sorted(names)
+
+
 @contextmanager
 def _enqueued(search, params: Mapping):
     """Every study `search.make_study` creates meanwhile starts with `params` enqueued."""
@@ -250,7 +259,7 @@ def run(device: str = "cuda", trials: Sequence[Mapping] = (),
     bags = bag_data.load_bags(root)
     setup = {"loadBagsSeconds": time.time() - t0, "searchDataSeconds": {},
              "phaseOneRefitSeconds": {}}
-    campaign.register(sorted({t["name"] for t in trials if t["phase"] == 2}))
+    campaign.register(registrations(trials))
     by_name = {t.name: t for t in assignment.TRANSFERS}
     selections = {(s["group"], s["transfer"]): s for s in phase_one}
     datas, records, errors, done = {}, {}, {}, []

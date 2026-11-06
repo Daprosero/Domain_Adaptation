@@ -109,3 +109,12 @@ def test_unit_seconds_at_fixed_caps_match_the_campaign_cost(tool):
     extra_setup = len(steps["final"]) + len(steps["k3"]) - len(model["transfers"])
     assert total == pytest.approx(costs["coef1"] + costs["coef2"] + costs["fixed"]
                                   + extra_setup * model["table"]["setup"], rel=1e-9)
+
+
+def test_a_phase_one_adaptmil_trial_registers_its_own_unit():
+    trials = [{"phase": 1, "name": "AdaptMIL"}, {"phase": 1, "name": "common"},
+              {"phase": 1, "name": "MIL-CREDA"}, {"phase": 2, "name": "CASUAL"}]
+    assert px.registrations(trials) == ["AdaptMIL", "CASUAL"]
+    from MIL_CREDA_EEG import campaign, model_store
+    campaign.register(px.registrations([{"phase": 1, "name": "AdaptMIL"}]))
+    model_store.require_registered("AdaptMIL")
