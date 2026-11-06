@@ -31,6 +31,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+__provenance__ = {
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+    "sections": ["2.10", "5.4"],
+    "experiments": ["2.10", "A-nivel", "B-tarea", "C-dispositivo"],
+    "invariants": [
+        "figures_print_at_the_declared_size_and_text_range",
+        "save_writes_the_pdf_and_a_png_preview_through_ps_figures",
+    ],
+}
+
 #: `\\textwidth` in TeX points for the common article setups (a4, one
 #: column), keyed by body size. Pass `text_width_pt` for any other class.
 TEXT_WIDTH_PT = {10: 345.0, 11: 360.0, 12: 390.0}

@@ -48,6 +48,10 @@ def test_every_module_declares_provenance() -> None:
     the newest published revision of the family), never this one's.
     """
     bound = importlib.import_module("MIL_CREDA").__implementation__["revision"]
+    # The keyed form names one revision per document label; these modules answer to the
+    # proposal's (a bare string is the same revision, the pre-0.14.0 shape).
+    if isinstance(bound, dict):
+        bound = bound["proposal"]
     for module in MODULES:
         provenance = getattr(importlib.import_module(module), "__provenance__", None)
         assert provenance is not None, f"{module} has no __provenance__"

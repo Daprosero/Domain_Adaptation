@@ -26,3 +26,21 @@ common MIL wrapper of the non-MIL comparators, Eq. 15 at gamma = 0),
 model with its hyperparameters, partition hash and code version). Nothing in
 this file imports them, so importing the package still needs no torch.
 """
+
+#: What this package answers to, one revision per document label: the experiments
+#: protocol (read by `experimental-implementation`) and the proposal it tests (read by
+#: `proposal-implementation`). Premises quoted from the protocol: a bag is one subject in
+#: one condition (Sec. 3.2), the primary metric is balanced accuracy (Sec. 4.6).
+__implementation__ = {
+    "revision": {
+        "experiments": "experiments-plan-experimental-mil-creda-sobre-balladeer-v58.md",
+        "proposal": "research-concept-r44.md",
+    },
+    "premises": {
+        "prediction": "the ADHD diagnosis (yes/no) of the bag's subject",
+        "unit": "the bag, one subject in one condition",
+        "metric": "balanced accuracy, the mean of sensitivity and specificity, pooled over "
+                  "the target subjects",
+        "direction": "higher is better",
+    },
+}
