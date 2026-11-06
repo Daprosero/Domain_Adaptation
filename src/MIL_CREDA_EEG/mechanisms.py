@@ -104,6 +104,7 @@ import numpy as np
 import torch
 
 from MIL_CREDA.bag_kernel import bag_kernel_matrix
+from MIL_CREDA.confidence import pseudolabel
 from MIL_CREDA.local_term import class_correspondence
 from MIL_CREDA_Benchmark.poc_math import entropy_ratio
 from MIL_CREDA_EEG import aggregation_variants
@@ -192,6 +193,8 @@ K2_INCONCLUSIVE = "no concluyente (el mecanismo no tuvo margen)"
 #: Sec. 6.2's gate thresholds (v56): read where entropy < 0.9 OR room >= 1.0.
 K2_ENTROPY_MAX = 0.9
 K2_ROOM_MIN = 1.0
+#: A diagnostic whose stored model is missing: recorded with its reason, never gated.
+K2_NOT_COMPUTED = "no calculado"
 #: Sec. 6.2's diagnostics table, headers verbatim, in the plan's order.
 K2_DIAGNOSTICS_COLUMNS = (
     "Transferencia", "Sujetos de la sonda", "Mediana de la razón de entropía",
@@ -493,6 +496,27 @@ def _tensor(bag: bag_data.Bag) -> torch.Tensor:
 
 
 @torch.no_grad()
+def kernel_geometry(model, target: Sequence[torch.Tensor],
+                    source: Sequence[torch.Tensor]) -> dict:
+    """At the model's sigma: K_st[j, k] = kappa^B(target j, source k), the RKHS distances
+    D_ts[j, k] and D_ss[k, l] between source bags, and the target pseudo-labels (Eq. 22)."""
+    model.eval()
+    sigma = model.sigma
+    pt = model.bag_pairs(model.embed(list(target), "target", chunk=EVAL_CHUNK))
+    ps = model.bag_pairs(model.embed(list(source), "source", chunk=EVAL_CHUNK))
+    K_ts = bag_kernel_matrix(pt, ps, sigma)
+    K_ss = bag_kernel_matrix(ps, ps, sigma)
+    k_tt = torch.stack([bag_kernel_matrix([p], [p], sigma)[0, 0] for p in pt])
+    k_ss = torch.stack([bag_kernel_matrix([p], [p], sigma)[0, 0] for p in ps])
+    d2 = k_tt[:, None] + k_ss[None, :] - 2 * K_ts
+    d2_ss = k_ss[:, None] + k_ss[None, :] - 2 * K_ss
+    G_t = model.classify(model.represent(pt))
+    return {"K_st": K_ts.cpu().numpy(), "D_ts": torch.sqrt(d2.clamp_min(0)).cpu().numpy(),
+            "D_ss": torch.sqrt(d2_ss.clamp_min(0)).cpu().numpy(),
+            "pseudo": np.array([pseudolabel(g) for g in G_t])}
+
+
+@torch.no_grad()
 def kernel_distances(model, target: Sequence[torch.Tensor],
                      source: Sequence[torch.Tensor]) -> np.ndarray:
     """D[j, k]: RKHS distance between target bag j and source bag k at the model's sigma."""
@@ -597,8 +621,9 @@ def k2_tests(full_rows: Sequence[Mapping], no_local_rows: Sequence[Mapping] | No
 
 def k2_has_room(median_entropy_ratio: float, median_room_ratio: float) -> bool:
     """Sec. 6.2's reading gate (v56): read where entropy < 0.9 OR room >= 1.0."""
-    entropy = float(median_entropy_ratio)
-    room = float(median_room_ratio)
+    # None is a nan read back from JSON
+    entropy = float("nan") if median_entropy_ratio is None else float(median_entropy_ratio)
+    room = float("nan") if median_room_ratio is None else float(median_room_ratio)
     low_entropy = not np.isnan(entropy) and entropy < K2_ENTROPY_MAX
     enough_room = not np.isnan(room) and room >= K2_ROOM_MIN
     return bool(low_entropy or enough_room)
@@ -606,7 +631,8 @@ def k2_has_room(median_entropy_ratio: float, median_room_ratio: float) -> bool:
 
 def _k2_gate_extra(diagnostics: Mapping[str, Mapping] | None, transfer: str) -> dict:
     """The `inconclusive_no_room` flag and, when it fires, the K2 verdict."""
-    if not diagnostics or transfer not in diagnostics:
+    if not diagnostics or transfer not in diagnostics or \
+            diagnostics[transfer].get("not_computed"):
         return {}
     d = diagnostics[transfer]
     read = k2_has_room(d["median_entropy_ratio"], d["median_room_ratio"])
@@ -667,38 +693,98 @@ def k2_transfer_diagnostics(K_st, source_labels, target_classes, own_index,
         if D_end_no_local is not None:
             push_no_local.append(float(D_start[j, own])
                                  - float(np.asarray(D_end_no_local)[j, own]))
+    return _k2_aggregate(transfer, int(K_st.shape[0]), {
+        "entropy_ratio": ratios, "own_nearest": nearest_hits, "room_ratio": rooms,
+        "push_with_local": push_full, "push_without_local": push_no_local})
+
+
+def _k2_aggregate(transfer: str | None, probe_subjects: int,
+                  per_bag: Mapping[str, Sequence[float]]) -> dict:
+    ratios, hits, rooms = per_bag["entropy_ratio"], per_bag["own_nearest"], per_bag["room_ratio"]
+    full, no_local = per_bag["push_with_local"], per_bag["push_without_local"]
     return {"transfer": transfer,
-            "probe_subjects": int(K_st.shape[0]),
+            "probe_subjects": int(probe_subjects),
             "median_entropy_ratio": float(np.nanmedian(ratios)) if ratios else float("nan"),
-            "fraction_own_nearest": float(np.mean(nearest_hits)) if nearest_hits
-                                    else float("nan"),
+            "fraction_own_nearest": float(np.mean(hits)) if hits else float("nan"),
             "median_room_ratio": float(np.median(rooms)) if rooms else float("nan"),
-            "push_with_local": float(np.mean(push_full)) if push_full else None,
-            "push_without_local": float(np.mean(push_no_local)) if push_no_local else None}
+            "push_with_local": float(np.mean(full)) if full else None,
+            "push_without_local": float(np.mean(no_local)) if no_local else None,
+            "per_bag": {k: list(v) for k, v in per_bag.items()}}
+
+
+def k2_pool_diagnostics(transfer: str, parts: Sequence[Mapping]) -> dict:
+    """One transfer's diagnostics over its rotations: the per-bag values of every part
+    (`k2_transfer_diagnostics`) pooled, then the medians and means taken once."""
+    keys = ("entropy_ratio", "own_nearest", "room_ratio", "push_with_local",
+            "push_without_local")
+    pooled = {k: [v for p in parts for v in p["per_bag"][k]] for k in keys}
+    out = _k2_aggregate(transfer, sum(p["probe_subjects"] for p in parts), pooled)
+    out["rotations"] = len(parts)
+    return out
+
+
+def k2_phase_two_start(record):
+    """The MIL-CREDA model at the start of phase 2: the stored phase-1 checkpoint
+    `(state, meta)` -- source encoder, attention and head -- and the target encoder as the
+    bridge initialises it from the source encoder, at the frozen sigma."""
+    state, meta = record
+    if meta.get("phase") != 1 or meta.get("name") != two_phase.MODEL:
+        raise MechanismError(f"the start of phase 2 is MIL-CREDA's phase-1 checkpoint; got "
+                             f"phase {meta.get('phase')} of {meta.get('name')}")
+    if meta.get("sigma") is None:
+        raise MechanismError("the MIL-CREDA phase-1 checkpoint carries no sigma")
+    model = model_store.build_stored(two_phase.MODEL, meta["channels"]["source"],
+                                     meta["channels"]["target"], meta["hyper"])
+    _load_phase_one_state(model, state, float(meta["sigma"]))
+    two_phase.bridge(model)
+    model.eval()
+    return model
+
+
+def k2_rotation_diagnostics(start, full, no_local, pairs, *, tau_loc: float,
+                            transfer: str) -> dict:
+    """Sec. 6.2's diagnostics of one transfer, rotation and seed on its probe pairs
+    `(subject, target bag, source bag)`: `start` (`k2_phase_two_start`) measures the
+    geometry at the start of phase 2; `full` and `no_local` (None when not stored) the end."""
+    target = [_tensor(t) for _, t, _ in pairs]
+    source = [_tensor(s) for _, _, s in pairs]
+    geometry = kernel_geometry(start, target, source)
+    own = np.arange(len(pairs))
+    return k2_transfer_diagnostics(
+        geometry["K_st"], [two_phase.CLASSES.index(s.label) for _, _, s in pairs],
+        geometry["pseudo"], own,
+        geometry["D_ts"], geometry["D_ss"], tau_loc, transfer=transfer,
+        D_end_full=kernel_distances(full, target, source),
+        D_end_no_local=None if no_local is None else kernel_distances(no_local, target,
+                                                                       source))
 
 
 def k2_diagnostics_table(diagnostics: Sequence[Mapping]) -> list[dict]:
     """Sec. 6.2's diagnostics table: one row per transfer, headers verbatim."""
     out = []
     for d in diagnostics:
-        reading = (K2_INCONCLUSIVE
-                   if not k2_has_room(d["median_entropy_ratio"], d["median_room_ratio"])
-                   else "leída")
+        if d.get("not_computed"):
+            reading = f"{K2_NOT_COMPUTED}: {d['not_computed']}"
+        elif not k2_has_room(d["median_entropy_ratio"], d["median_room_ratio"]):
+            reading = K2_INCONCLUSIVE
+        else:
+            reading = "leída"
         out.append(dict(zip(K2_DIAGNOSTICS_COLUMNS,
                             (d.get("transfer"), d.get("probe_subjects"),
-                             d["median_entropy_ratio"], d.get("fraction_own_nearest"),
-                             d["median_room_ratio"], d.get("push_with_local"),
+                             d.get("median_entropy_ratio"), d.get("fraction_own_nearest"),
+                             d.get("median_room_ratio"), d.get("push_with_local"),
                              d.get("push_without_local"), reading))))
     return out
 
 
-def both_vs_global_only_inconclusive(direction_diagnostics: Sequence[Mapping]) -> bool:
+def both_vs_global_only_inconclusive(direction_diagnostics: Sequence[Mapping]) -> bool | None:
     """Sec. 6.3 (v56): the both-terms vs global-only row of a core pair is
     inconclusive only when NEITHER of its two directions meets the Sec. 6.2 gate.
+    Directions not computed are left out; None when no direction was computed.
     """
-    diags = list(direction_diagnostics)
+    diags = [d for d in direction_diagnostics if not d.get("not_computed")]
     if not diags:
-        return False
+        return None
     return not any(k2_has_room(d["median_entropy_ratio"], d["median_room_ratio"])
                    for d in diags)
 
@@ -797,15 +883,20 @@ def _variant_history(records: Sequence[Mapping], variant: str) -> list[dict]:
     return out
 
 
-def _adapt_from_phase_one(model, state: Mapping, sigma: float, data: search.SearchData,
-                          rotation: int, seed: int, hyper: Mapping, device: torch.device,
-                          term_selection: str) -> dict:
-    """Phase 2 from a phase-1 state, as `search.train_mil_creda_phase_two` runs it."""
+def _load_phase_one_state(model, state: Mapping, sigma: float) -> None:
+    """A phase-1 state into a MIL-CREDA model, at its sigma; only the target trunk may lack."""
     missing, unexpected = model.load_state_dict(state, strict=False)
     if unexpected or any(not k.startswith("target_trunk.") for k in missing):
         raise MechanismError(f"the phase-1 state does not fit (missing {missing}, unexpected "
                              f"{unexpected})")
     model.fix_sigma(sigma)
+
+
+def _adapt_from_phase_one(model, state: Mapping, sigma: float, data: search.SearchData,
+                          rotation: int, seed: int, hyper: Mapping, device: torch.device,
+                          term_selection: str) -> dict:
+    """Phase 2 from a phase-1 state, as `search.train_mil_creda_phase_two` runs it."""
+    _load_phase_one_state(model, state, sigma)
     generator = torch.Generator().manual_seed(seed)
     joint = two_phase.bridge(model)
     d = search._rotation(data, rotation)

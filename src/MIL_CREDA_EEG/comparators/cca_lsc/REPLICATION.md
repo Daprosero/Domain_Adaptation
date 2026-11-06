@@ -12,7 +12,7 @@ record the same route («Reimplementado desde el artículo»; repository without
 license, read only to audit, at commit
 `4c78f079026cfce7b55b0bf36d45251f3d134ed7`), so this route row stands. The
 modules of this package were not changed by v42 and stayed bound to v40; on
-2026-11-04 they were rebound to v54 on 2026-11-04 and to v55 on 2026-11-05 with no change of behaviour: v55 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites.
+2026-11-04 they were rebound to v54 on 2026-11-04, to v55 on 2026-11-05 and to v56 on 2026-11-05 with no change of behaviour: v56 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites.
 
 | Place searched | Answer |
 | --- | --- |
@@ -50,7 +50,7 @@ The ingested Table 6 image could not be rendered by this session's image reader;
 the HTML table was read instead. Garbled result tables are not used as config.
 
 Binding experiment source:
-`experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md`,
+`experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md`,
 Sections 4.5, 7.1–7.4 and 7.7. Task T6, S1–S5 in
 `odd/tasks/balladeer-implementacion-experimental.md` (read through `## Log`).
 This is explicitly a **controlled variant**, not reproduction of the paper's
@@ -138,8 +138,8 @@ an equation/default, not a claim about published performance.
 | 20 total image epochs; first 3 warmup; batch size 50; seed 100 | Paper 4.1 | Caller phase-2 cap/bagsPerStep/seed, not these image settings; deviation. Pinned upstream README lists DomainNet 30, not paper's 20; not adopted. |
 | Search lr2 [1e-5,1e-2], wd2 [1e-7,1e-2] log; three loss weights [1e-3,10] log | Plan 7.7 | Shared search + explicit `register()` extras; match to plan, not a reproduced paper HPO. |
 | Search calibrationHm [1e-3,10] log | Plan 7.7 calibration-parameter family and generic comparator rule | Positive calibration parameter uses generic loss-weight distribution; deviation from fixed paper hm. |
-| Search 20 trials, GPSampler, no pruning, distinct search/report seeds; each trial trains the three inner splits of its outer fold, scored per epoch by the balanced accuracy of the pooled inner-split counts | Plan v55 §§4.5, 7.7; `search.py` | Reuse existing engine; not run here. No second sampler or split. (Row corrected 2026-11-04: it described v40's four rotations and mean-minus-SD.) |
-| Selection: the full `epochs2` cap runs and the last epoch is kept (no early stopping, no restore); per-epoch target-validation predictions are recorded and the search picks (trial, E2) by pooled target-validation BA (primary) or pooled H(mean p)-mean H(p) (secondary); the refit runs exactly E2 epochs | Plan v55 §§4.5, 7.3, 7.7 | Shared metrics/evaluate; deviation from paper evaluation. Warmup epochs are eligible for selection. (Row corrected 2026-11-04: it described a best-epoch snapshot restore that v50 removed.) |
+| Search 20 trials, GPSampler, no pruning, distinct search/report seeds; each trial trains the three inner splits of its outer fold, scored per epoch by the balanced accuracy of the pooled inner-split counts | Plan v56 §§4.5, 7.7; `search.py` | Reuse existing engine; not run here. No second sampler or split. (Row corrected 2026-11-04: it described v40's four rotations and mean-minus-SD.) |
+| Selection: the full `epochs2` cap runs and the last epoch is kept (no early stopping, no restore); per-epoch target-validation predictions are recorded and the search picks (trial, E2) by pooled target-validation BA (primary) or pooled H(mean p)-mean H(p) (secondary); the refit runs exactly E2 epochs | Plan v56 §§4.5, 7.3, 7.7 | Shared metrics/evaluate; deviation from paper evaluation. Warmup epochs are eligible for selection. (Row corrected 2026-11-04: it described a best-epoch snapshot restore that v50 removed.) |
 | Centroid EMA decay .9, first observation initializes | unspecified: paper calls it moving average without decay/initialization formula | `CENTROID_DECAY`; first seen class=current, subsequent=.9 history+.1 current; detached memory. |
 | Confidence-normalized centroid denominator sum(w) | unspecified: paper says weighted centroid without exact denominator | Chosen normalized weighted mean, invariant to class weight scaling. |
 | Missing centroid class retained; unseen class excluded from both sums | unspecified: absent-class minibatch policy | Memory presence masks prevent zero placeholders from acting as observed centroids. |

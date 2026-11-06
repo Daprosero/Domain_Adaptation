@@ -1,6 +1,6 @@
 """What the BALLADEER release holds: subjects, tasks, sessions, files, labels.
 
-Experiments plan v55, Secs. 1, 3.2 and 10.3. Before any audit step measures a
+Experiments plan v56, Secs. 1, 3.2 and 10.3. Before any audit step measures a
 record, something has to say which records exist and whom they belong to. This
 module walks the release tree `<subject>/<task>/<session>/<file>` without
 opening a single data file, and reads `users_demographics.json`, the source of
@@ -26,7 +26,7 @@ from pathlib import Path
 import pandas as pd
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["3.2", "10.3"],
     "experiments": ["3.2", "10.3"],
     "invariants": [

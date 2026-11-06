@@ -1,6 +1,6 @@
 """The campaign's units of work, run one remote session at a time and merged back.
 
-Experiments plan v55, Secs. 4.2, 4.5, 4.6, 7.3, 7.6 and 7.7, under the forge's remote
+Experiments plan v56, Secs. 4.2, 4.5, 4.6, 7.3, 7.6 and 7.7, under the forge's remote
 contract (`remote-execution`: the session-chain rule, job inputs and the shard
 stamp; `remote-parallelism`: the reproducibility checklist). Code review blocker
 B5: the campaign had no shard-aware contract; the second review's R1-R4 (an active
@@ -126,7 +126,7 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, campaign, model_store, partition, preprocess, results, search
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v55.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v56.md",
     "sections": ["4.2", "4.5", "4.6", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "invariants": [
@@ -1038,7 +1038,7 @@ def merge(product: str | Path, roots: Sequence[str | Path] | None = None, *,
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m MIL_CREDA_EEG.remote_units",
-                                     description="The campaign's remote units (plan v55).")
+                                     description="The campaign's remote units (plan v56).")
     parser.add_argument("verb", choices=("list", "run", "merge", "smoke"))
     parser.add_argument("--config", required=True, help="campaign config (JSON)")
     parser.add_argument("--product", default=str(campaign.DEFAULT_PRODUCT))
