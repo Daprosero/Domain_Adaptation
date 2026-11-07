@@ -14,6 +14,11 @@ the run and without target labels, is alpha 0.5; 0.25 and 0.75 are read, never c
 the class-conditional term of Eq. 23 has one active class. `balanced` splits each target
 batch at its median probability, which uses no target label and assumes classes of similar
 size, as the source has.
+
+**Oracle, diagnostic only.** `oracle` hands Eq. 22 the true target labels. If phase 2 then
+beats `predict`, the brake is the quality of the pseudo-labels phase 1 gives; if it does not,
+the alignment itself is the brake. Every run also logs how often the pseudo-labels it used
+were right, which reads target labels and decides nothing.
 """
 
 from __future__ import annotations
@@ -41,7 +46,8 @@ CONDITIONS = {"lr3e-4": dict(lr2=3e-4), "lr1e-3": dict(lr2=1e-3), "lr3e-3": dict
               "train-spatial": dict(lr2=3e-3, train="depthwise"),
               "train-temporal": dict(lr2=3e-3, train="conv_temporal"),
               "balanced-3e-3": dict(lr2=3e-3, balanced=True),
-              "balanced-1e-2": dict(lr2=1e-2, balanced=True)}
+              "balanced-1e-2": dict(lr2=1e-2, balanced=True),
+              "oracle-3e-3": dict(lr2=3e-3, oracle=True), "oracle-1e-2": dict(lr2=1e-2, oracle=True)}
 #: What phase 2 sees each epoch, to find out what holds it back.
 SIGNALS = ("loss", "global", "local", "active_classes", "confidence_mean")
 
@@ -69,6 +75,30 @@ def balanced_pseudolabels(model):
     finally:
         model.classify = plain
         mil_creda_model.pseudolabel = rule
+
+
+@contextlib.contextmanager
+def observed_pseudolabels(oracle: bool):
+    """Count how often Eq. 22 is right; with `oracle`, hand it the true labels instead."""
+    step, rule, state = two_phase.phase_two_step, mil_creda_model.pseudolabel, {"hits": 0, "seen": 0}
+
+    def phase_two_step(model, source, target, *args, **kwargs):
+        state["labels"], state["next"] = [int(b.label) for b in target], 0
+        return step(model, source, target, *args, **kwargs)
+
+    def pseudolabel(g):
+        truth = state["labels"][state["next"]]
+        state["next"] += 1
+        guess = rule(g)
+        state["hits"] += int(guess == truth)
+        state["seen"] += 1
+        return truth if oracle else guess
+
+    two_phase.phase_two_step, mil_creda_model.pseudolabel = phase_two_step, pseudolabel
+    try:
+        yield state
+    finally:
+        two_phase.phase_two_step, mil_creda_model.pseudolabel = step, rule
 
 
 def blended(start: Mapping, adapted: Mapping, alpha: float) -> dict:
@@ -103,7 +133,8 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
             parameter.requires_grad_(key.startswith(spec["train"]))
     positive = sum(r["probability"] >= 0.5 for r in _scored(model, target, device)) / len(target)
     start = {k: v.detach().clone() for k, v in model.target_trunk.state_dict().items()}
-    with balanced_pseudolabels(model) if spec.get("balanced") else contextlib.nullcontext():
+    with balanced_pseudolabels(model) if spec.get("balanced") else contextlib.nullcontext(), \
+            observed_pseudolabels(bool(spec.get("oracle"))) as seen:
         result = two_phase.adapt_target_phase(model, {"checkpoint": {"sigma": meta["sigma"]}},
                                               joint["frozen_state"], source, target, test, hyper,
                                               generator, device, seed=seed, fold=rotation,
@@ -118,7 +149,8 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
         mixes[str(alpha)] = _scored(model, test, device)
     signals = [{k: round(float(h[k]), 4) for k in SIGNALS} for h in result["history"]]
     return {"before": before, "after": after, "epochs": epochs, "mixes": mixes,
-            "positive": positive, "signals": signals}
+            "positive": positive, "signals": signals,
+            "pseudoAccuracy": seen["hits"] / max(seen["seen"], 1)}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, condition: str, seed: int = 1,
@@ -142,12 +174,13 @@ def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
             a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[name], bags)
             before, after, labels, curves = [], [], [], [[] for _ in range(EPOCHS)]
             mixes: dict[str, list] = {str(x): [] for x in ALPHAS}
-            positives, signals = [], []
+            positives, signals, accuracy = [], [], []
             started = time.time()
             for rotation in range(4):
                 rows = run_rotation(name, CONDITIONS[condition], rotation, root, a, bags, device,
                                     seed)
                 positives.append(round(rows["positive"], 3))
+                accuracy.append(round(rows["pseudoAccuracy"], 3))
                 signals.append(rows["signals"])
                 for alpha, value in rows["mixes"].items():
                     mixes[alpha] += value
@@ -160,7 +193,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
             record = {"condition": condition, "seed": seed, "transfer": name,
                       "before": _summary(before), "after": _summary(after), "curve": pooled,
                       "mixes": {k: _summary(v) for k, v in mixes.items()},
-                      "positiveRate": positives, "signals": signals, "environment": environment,
+                      "positiveRate": positives, "pseudoAccuracy": accuracy, "signals": signals, "environment": environment,
                       "predictions": {"before": before, "after": after, "mixes": mixes}}
             (workdir / f"p2-{name.replace('->', '-to-')}.json").write_text(
                 json.dumps(record, default=str), encoding="utf-8")
