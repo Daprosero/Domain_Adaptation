@@ -10,6 +10,7 @@ One session runs one transfer, four rotations, sent as a single run of its job.
 from __future__ import annotations
 
 import contextlib
+import copy
 import json
 import os
 import time
@@ -21,12 +22,15 @@ import torch
 from MIL_CREDA_EEG import assignment as A
 from MIL_CREDA_EEG import campaign, model_store, remote_units, two_phase
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
-from MIL_CREDA_EEG.phase_one_sweep import _summary, patched
+from MIL_CREDA_EEG.phase_one_sweep import _summary, patched, recalibrate
 
 SELECTIONS = Path(__file__).with_name("beat_predict_selections.json")
 SEED, EPOCHS1, EPOCHS2 = 1, 40, 20
 FIXED = {"lr1": 1e-3, "lr2": 1e-4, "wd2": 1e-5, "tauLocal": 1.0}
 SPEC = {"BN_MOMENTUM": 0.1}
+#: Every side is scored with the statistics training left and with recalibrated ones.
+SIDES = ("sourceHeldOut", "predict", "milCreda", "sourceHeldOutRecalibrated",
+         "predictRecalibrated", "milCredaRecalibrated")
 
 
 def hyper_of(transfer: str, rotation: int, schedule: Mapping) -> dict:
@@ -57,9 +61,16 @@ def run_rotation(name: str, rotation: int, cfg: Mapping, a, bags, device) -> dic
     rows = {"sourceHeldOut": _scored(model, held, "source", device),
             "predict": _scored(model, test, "source", device)}
     joint = two_phase.bridge(model)
+    frozen = copy.deepcopy(model.source_trunk.state_dict())
+    recalibrate(model, source, device)
+    rows["sourceHeldOutRecalibrated"] = _scored(model, held, "source", device)
+    rows["predictRecalibrated"] = _scored(model, test, "source", device)
+    model.source_trunk.load_state_dict(frozen)
     two_phase.adapt_target_phase(model, phase1, joint["frozen_state"], source, target, [], hyper,
                                  generator, device, **common)
     rows["milCreda"] = _scored(model, test, "target", device)
+    recalibrate(model, target, device, trunk="target_trunk")
+    rows["milCredaRecalibrated"] = _scored(model, test, "target", device)
     return rows
 
 
@@ -78,7 +89,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str,
     bags = campaign.load_bags(cfg)
     a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[transfer], bags)
     mode = environ.get(remote_units.RUN_MODE_ENV)
-    pooled: dict[str, list] = {"sourceHeldOut": [], "predict": [], "milCreda": []}
+    pooled: dict[str, list] = {k: [] for k in SIDES}
     done = []
     path = workdir / "beat-predict.json"
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, \
