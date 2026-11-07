@@ -47,3 +47,10 @@ def test_recalibration_replaces_stale_batchnorm_statistics_and_keeps_the_weights
     assert not torch.allclose(bn.running_var, stale)
     assert bn.momentum == momentum and not bn.training and not model.source_trunk.training
     assert torch.equal(model.source_trunk.conv_temporal.weight, weights)
+
+
+def test_every_diagnostic_scores_with_recalibrated_batchnorm():
+    from MIL_CREDA_EEG import beat_predict, phase_two_terms
+    assert beat_predict.recalibrate is sweep.recalibrate
+    assert phase_two_terms.recalibrate is sweep.recalibrate
+    assert {"predictRecalibrated", "milCredaRecalibrated"} <= set(beat_predict.SIDES)
