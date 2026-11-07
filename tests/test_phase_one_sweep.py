@@ -76,3 +76,15 @@ def test_the_shallow_trunk_feeds_mil_creda_and_restores_the_plan_network():
         model.fix_sigma(5.0)
         assert two_phase.bridge(model)["layer_copy"]["copied"] == list(shallow_trunk.LAYERS)
     assert eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk and eegnet.HEAD_MAX_NORM == 0.25
+
+
+def test_the_fused_shallow_convolution_equals_the_two_layers():
+    from MIL_CREDA_EEG import shallow_trunk
+    torch.manual_seed(0)
+    trunk = shallow_trunk.ShallowTrunk(14).eval()
+    x = torch.randn(3, 14, 512)
+    two = trunk.conv_spatial(trunk.conv_temporal(x.unsqueeze(1)))
+    seen = {}
+    trunk.bn.register_forward_hook(lambda m, i, o: seen.update(x=i[0]))
+    trunk(x)
+    assert torch.allclose(seen["x"], two, atol=1e-4)

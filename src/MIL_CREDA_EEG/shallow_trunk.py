@@ -40,7 +40,13 @@ class ShallowTrunk(nn.Module):
         """No max-norm constraint in the original network."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.bn(self.conv_spatial(self.conv_temporal(x.unsqueeze(1))))
+        # Both convolutions are linear, so one fused kernel gives the same output and never
+        # holds the (n, FILTERS, channels, time) activation.
+        spatial = self.conv_spatial.weight[..., 0]
+        temporal = self.conv_temporal.weight[:, 0, 0]
+        kernel = torch.einsum("oic,ik->ock", spatial, temporal).unsqueeze(1)
+        bias = torch.einsum("oic,i->o", spatial, self.conv_temporal.bias)
+        h = self.bn(F.conv2d(x.unsqueeze(1), kernel, bias))
         h = F.avg_pool2d(h * h, (1, POOL), stride=(1, STRIDE))
         return self.drop(torch.log(h.clamp_min(1e-6))).flatten(1)
 
