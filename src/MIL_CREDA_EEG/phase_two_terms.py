@@ -138,6 +138,7 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
         model._sigma = sigma                    # diagnostic only: fix_sigma refuses a second value
     joint = two_phase.bridge(model)
     before = _scored(model, test, device)
+    spread = {"before": two_phase.within_bag_median_distance(model, target, "target", device)}
     if spec.get("fresh"):
         model.target_trunk.reset_parameters()
     if "train" in spec:
@@ -154,6 +155,7 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     epochs = [{"labels": r["labels"], "p": [q[1] for q in r["probabilities"]]}
               for r in result["validation"]]
     after = _scored(model, test, device)
+    spread["after"] = two_phase.within_bag_median_distance(model, target, "target", device)
     adapted = {k: v.detach().clone() for k, v in model.target_trunk.state_dict().items()}
     mixes = {}
     for alpha in ALPHAS:
@@ -162,7 +164,7 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     signals = [{k: round(float(h[k]), 4) for k in SIGNALS} for h in result["history"]]
     return {"before": before, "after": after, "epochs": epochs, "mixes": mixes,
             "positive": positive, "signals": signals,
-            "pseudoAccuracy": seen["hits"] / max(seen["seen"], 1), "sigma": [meta["sigma"], sigma]}
+            "pseudoAccuracy": seen["hits"] / max(seen["seen"], 1), "sigma": [meta["sigma"], sigma], "spread": spread}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, condition: str, seed: int = 1,
@@ -186,13 +188,14 @@ def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
             a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[name], bags)
             before, after, labels, curves = [], [], [], [[] for _ in range(EPOCHS)]
             mixes: dict[str, list] = {str(x): [] for x in ALPHAS}
-            positives, signals, accuracy = [], [], []
+            positives, signals, accuracy, spreads = [], [], [], []
             started = time.time()
             for rotation in range(4):
                 rows = run_rotation(name, CONDITIONS[condition], rotation, root, a, bags, device,
                                     seed)
                 positives.append(round(rows["positive"], 3))
                 accuracy.append(round(rows["pseudoAccuracy"], 3))
+                spreads.append({k: round(float(v), 5) for k, v in rows["spread"].items()})
                 signals.append(rows["signals"])
                 for alpha, value in rows["mixes"].items():
                     mixes[alpha] += value
@@ -205,7 +208,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
             record = {"condition": condition, "seed": seed, "transfer": name,
                       "before": _summary(before), "after": _summary(after), "curve": pooled,
                       "mixes": {k: _summary(v) for k, v in mixes.items()},
-                      "positiveRate": positives, "pseudoAccuracy": accuracy, "signals": signals, "environment": environment,
+                      "positiveRate": positives, "pseudoAccuracy": accuracy, "spread": spreads, "signals": signals, "environment": environment,
                       "predictions": {"before": before, "after": after, "mixes": mixes}}
             (workdir / f"p2-{name.replace('->', '-to-')}.json").write_text(
                 json.dumps(record, default=str), encoding="utf-8")
