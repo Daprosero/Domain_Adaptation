@@ -53,7 +53,8 @@ CONDITIONS = {"lr3e-4": dict(lr2=3e-4), "lr1e-3": dict(lr2=1e-3), "lr3e-3": dict
               "balanced-3e-3": dict(lr2=3e-3, balanced=True),
               "balanced-1e-2": dict(lr2=1e-2, balanced=True),
               "oracle-3e-3": dict(lr2=3e-3, oracle=True), "oracle-1e-2": dict(lr2=1e-2, oracle=True),
-              "resigma-3e-3": dict(lr2=3e-3, resigma=True), "resigma-1e-2": dict(lr2=1e-2, resigma=True)}
+              "resigma-3e-3": dict(lr2=3e-3, resigma=True), "resigma-1e-2": dict(lr2=1e-2, resigma=True),
+              "oracle-resigma-3e-3": dict(lr2=3e-3, resigma=True, oracle=True)}
 #: What phase 2 sees each epoch, to find out what holds it back.
 SIGNALS = ("loss", "global", "local", "active_classes", "confidence_mean")
 
