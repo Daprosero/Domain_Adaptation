@@ -53,4 +53,4 @@ def test_every_diagnostic_scores_with_recalibrated_batchnorm():
     from MIL_CREDA_EEG import beat_predict, phase_two_terms
     assert beat_predict.recalibrate is sweep.recalibrate
     assert phase_two_terms.recalibrate is sweep.recalibrate
-    assert {"predictRecalibrated", "milCredaRecalibrated"} <= set(beat_predict.SIDES)
+    assert beat_predict.SIDES == ("sourceHeldOut", "predict", "milCreda")
