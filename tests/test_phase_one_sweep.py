@@ -88,3 +88,11 @@ def test_the_fused_shallow_convolution_equals_the_two_layers():
     trunk.bn.register_forward_hook(lambda m, i, o: seen.update(x=i[0]))
     trunk(x)
     assert torch.allclose(seen["x"], two, atol=1e-4)
+
+
+def test_each_partial_condition_names_trainable_layers_of_the_trunk():
+    from MIL_CREDA_EEG.phase_two_terms import CONDITIONS
+    names = [k for k, _ in eegnet.EEGNetTrunk(14).named_parameters()]
+    for spec in CONDITIONS.values():
+        if "train" in spec:
+            assert any(n.startswith(spec["train"]) for n in names)

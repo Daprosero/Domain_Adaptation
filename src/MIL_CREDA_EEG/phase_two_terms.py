@@ -31,7 +31,12 @@ TRANSFERS = ("CogniFit->Robots", "Robots->CogniFit", "L1->L11", "L11->L1")
 EPOCHS = 20
 ALPHAS = (0.25, 0.5, 0.75)
 CONDITIONS = {"lr3e-4": dict(lr2=3e-4), "lr1e-3": dict(lr2=1e-3), "lr3e-3": dict(lr2=3e-3),
-              "lr1e-2": dict(lr2=1e-2), "stored": dict()}
+              "lr1e-2": dict(lr2=1e-2), "stored": dict(),
+              "fresh": dict(lr2=3e-3, fresh=True), "train-bn": dict(lr2=3e-3, train="bn"),
+              "train-spatial": dict(lr2=3e-3, train="depthwise"),
+              "train-temporal": dict(lr2=3e-3, train="conv_temporal")}
+#: What phase 2 sees each epoch, to find out what holds it back.
+SIGNALS = ("loss", "global", "local", "active_classes", "confidence_mean")
 
 
 def _scored(model, bags, device) -> list[dict]:
@@ -52,7 +57,7 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     model, meta = model_store.load_model(folder / "phase1__MIL-CREDA.pt", allow_code_mismatch=True)
     model = model.to(device)
     chosen = {"lr2": spec.get("lr2"), "wd2": 1e-5, "tauLocal": 1.0}
-    if not spec:
+    if "lr2" not in spec:
         chosen = json.loads((folder / "phase2__MIL-CREDA.json").read_text())["selection"]["params"]
         chosen = {k: chosen[k] for k in two_phase.PHASE_TWO_KEYS}
     hyper = two_phase.check_hyper({**{k: meta["hyper"][k] for k in two_phase.PHASE_ONE_KEYS},
@@ -65,6 +70,12 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     recalibrate(model, source, device)
     joint = two_phase.bridge(model)
     before = _scored(model, test, device)
+    if spec.get("fresh"):
+        model.target_trunk.reset_parameters()
+    if "train" in spec:
+        for key, parameter in model.target_trunk.named_parameters():
+            parameter.requires_grad_(key.startswith(spec["train"]))
+    positive = sum(r["probability"] >= 0.5 for r in _scored(model, target, device)) / len(target)
     start = {k: v.detach().clone() for k, v in model.target_trunk.state_dict().items()}
     result = two_phase.adapt_target_phase(model, {"checkpoint": {"sigma": meta["sigma"]}},
                                           joint["frozen_state"], source, target, test, hyper,
@@ -78,7 +89,9 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     for alpha in ALPHAS:
         model.target_trunk.load_state_dict(blended(start, adapted, alpha))
         mixes[str(alpha)] = _scored(model, test, device)
-    return {"before": before, "after": after, "epochs": epochs, "mixes": mixes}
+    signals = [{k: round(float(h[k]), 4) for k in SIGNALS} for h in result["history"]]
+    return {"before": before, "after": after, "epochs": epochs, "mixes": mixes,
+            "positive": positive, "signals": signals}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, condition: str, seed: int = 1,
@@ -102,10 +115,13 @@ def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
             a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[name], bags)
             before, after, labels, curves = [], [], [], [[] for _ in range(EPOCHS)]
             mixes: dict[str, list] = {str(x): [] for x in ALPHAS}
+            positives, signals = [], []
             started = time.time()
             for rotation in range(4):
                 rows = run_rotation(name, CONDITIONS[condition], rotation, root, a, bags, device,
                                     seed)
+                positives.append(round(rows["positive"], 3))
+                signals.append(rows["signals"])
                 for alpha, value in rows["mixes"].items():
                     mixes[alpha] += value
                 before += rows["before"]
@@ -117,7 +133,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
             record = {"condition": condition, "seed": seed, "transfer": name,
                       "before": _summary(before), "after": _summary(after), "curve": pooled,
                       "mixes": {k: _summary(v) for k, v in mixes.items()},
-                      "environment": environment,
+                      "positiveRate": positives, "signals": signals, "environment": environment,
                       "predictions": {"before": before, "after": after, "mixes": mixes}}
             (workdir / f"p2-{name.replace('->', '-to-')}.json").write_text(
                 json.dumps(record, default=str), encoding="utf-8")
