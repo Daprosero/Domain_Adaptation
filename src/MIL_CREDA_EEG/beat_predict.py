@@ -10,7 +10,6 @@ One session runs one transfer, four rotations, sent as a single run of its job.
 from __future__ import annotations
 
 import contextlib
-import copy
 import json
 import os
 import time
@@ -28,9 +27,8 @@ SELECTIONS = Path(__file__).with_name("beat_predict_selections.json")
 SEED, EPOCHS1, EPOCHS2 = 1, 40, 20
 FIXED = {"lr1": 1e-3, "lr2": 1e-4, "wd2": 1e-5, "tauLocal": 1.0}
 SPEC = {"BN_MOMENTUM": 0.1}
-#: Every side is scored with the statistics training left and with recalibrated ones.
-SIDES = ("sourceHeldOut", "predict", "milCreda", "sourceHeldOutRecalibrated",
-         "predictRecalibrated", "milCredaRecalibrated")
+#: Every side is scored with recalibrated BatchNorm statistics.
+SIDES = ("sourceHeldOut", "predict", "milCreda")
 
 
 def hyper_of(transfer: str, rotation: int, schedule: Mapping) -> dict:
@@ -58,19 +56,14 @@ def run_rotation(name: str, rotation: int, cfg: Mapping, a, bags, device) -> dic
                                     int(target[0].windows.shape[1]), hyper).to(device)
     common = {"seed": SEED, "fold": rotation, "transfer": name}
     phase1 = two_phase.train_source_phase(model, source, held, hyper, generator, device, **common)
+    recalibrate(model, source, device)
     rows = {"sourceHeldOut": _scored(model, held, "source", device),
             "predict": _scored(model, test, "source", device)}
     joint = two_phase.bridge(model)
-    frozen = copy.deepcopy(model.source_trunk.state_dict())
-    recalibrate(model, source, device)
-    rows["sourceHeldOutRecalibrated"] = _scored(model, held, "source", device)
-    rows["predictRecalibrated"] = _scored(model, test, "source", device)
-    model.source_trunk.load_state_dict(frozen)
     two_phase.adapt_target_phase(model, phase1, joint["frozen_state"], source, target, [], hyper,
                                  generator, device, **common)
-    rows["milCreda"] = _scored(model, test, "target", device)
     recalibrate(model, target, device, trunk="target_trunk")
-    rows["milCredaRecalibrated"] = _scored(model, test, "target", device)
+    rows["milCreda"] = _scored(model, test, "target", device)
     return rows
 
 

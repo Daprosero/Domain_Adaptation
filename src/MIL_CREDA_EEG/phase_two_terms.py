@@ -58,10 +58,8 @@ def run_rotation(spec: Mapping, rotation: int, root: Path, a, bags, device) -> d
                                           transfer=NAME, term_selection=spec["terms"])
     curve = [{k: round(float(h[k]), 4) for k in ("val_balanced_accuracy", "global", "local")}
              for h in result["history"]]
-    after = _scored(model, test, device)
     recalibrate(model, target, device, trunk="target_trunk")
-    return {"before": before, "after": after, "curve": curve,
-            "recalibrated": _scored(model, test, device)}
+    return {"before": before, "after": _scored(model, test, device), "curve": curve}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
@@ -80,20 +78,18 @@ def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
     a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[NAME], bags)
     root = Path(cfg["productRoot"])
     mode = environ.get(remote_units.RUN_MODE_ENV)
-    before, after, fresh, curves, done = [], [], [], [], []
+    before, after, curves, done = [], [], [], []
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness:
         for rotation in range(4):
             started = time.time()
             rows = run_rotation(CONDITIONS[condition], rotation, root, a, bags, device)
             before += rows["before"]
             after += rows["after"]
-            fresh += rows["recalibrated"]
             curves.append(rows["curve"])
             done.append(rotation)
             record = {"condition": condition, "rotations": done, "before": _summary(before),
-                      "after": _summary(after), "recalibrated": _summary(fresh), "curves": curves,
-                      "environment": environment,
-                      "predictions": {"before": before, "after": after, "recalibrated": fresh}}
+                      "after": _summary(after), "curves": curves, "environment": environment,
+                      "predictions": {"before": before, "after": after}}
             (workdir / "phase-two-terms.json").write_text(json.dumps(record, default=str),
                                                           encoding="utf-8")
             print(condition, rotation, round(time.time() - started), record["before"],

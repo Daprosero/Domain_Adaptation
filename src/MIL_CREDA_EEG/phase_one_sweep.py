@@ -12,8 +12,7 @@ the selections the v59 search stored for the two task transfers.
 
 **BatchNorm.** The plan's momentum of 0.01 leaves the running statistics far from the batch
 statistics after the few steps these runs take, and evaluation reads them. Every side is
-therefore scored twice: with the statistics training left, and as `recalibrated`, after
-`recalibrate` recomputes them from the source training bags with the weights untouched.
+scored after `recalibrate` recomputes them from the training bags, weights untouched.
 
 **Decision rule, fixed before the run.** Per subject, the mean probability over the three
 seeds. Each configuration against `stored-40` on held-out source subjects: paired
@@ -52,9 +51,7 @@ WIDE = dict(F1=16, F2=32)
 CONFIGS: dict[str, dict] = {
     "stored-E": dict(epochs="stored"),
     "stored-40": dict(),
-    "bn1": dict(BN_MOMENTUM=0.1),
     "lr1e-3": dict(lr=1e-3),
-    "lr1e-3-bn1": dict(lr=1e-3, BN_MOMENTUM=0.1),
     "head1": dict(OPEN),
     "drop0": dict(OPEN, DROPOUT=0.0),
     "drop5": dict(OPEN, DROPOUT=0.5),
@@ -144,7 +141,7 @@ def run_unit(unit: str, cfg: Mapping, bags, device: torch.device,
     transfer = {t.name: t for t in A.TRANSFERS}[transfer_name]
     a = A.assign_from_bags(transfer, bags)
     groups = ("train", "source", "target")
-    sides: dict[str, list] = {k: [] for k in (*groups, *(f"{g}Recalibrated" for g in groups))}
+    sides: dict[str, list] = {k: [] for k in groups}
     curves, started = [], time.time()
     with patched(spec):
         for r in range(4):
@@ -166,11 +163,9 @@ def run_unit(unit: str, cfg: Mapping, bags, device: torch.device,
                                                   seed=seed, fold=r, transfer=transfer_name)
             curves.append([round(float(h["val_balanced_accuracy"]), 4)
                            for h in result["history"]])
-            for side, group in zip(groups, (train, source, target)):
-                sides[side].extend(_side(model, group, device))
             recalibrate(model, train, device)
             for side, group in zip(groups, (train, source, target)):
-                sides[f"{side}Recalibrated"].extend(_side(model, group, device))
+                sides[side].extend(_side(model, group, device))
             del model, train, source, target
     return {"unit": unit, "config": name, "transfer": transfer_name, "seed": seed,
             "spec": spec, "seconds": round(time.time() - started),
@@ -218,8 +213,7 @@ def run(config: Mapping, product: str | Path | None = None, *,
             continue
         record["environment"] = {k: environment.get(k) for k in ("commit", "codeVersion", "device")}
         path.write_text(json.dumps(record, default=str), encoding="utf-8")
-        print({k: record[k] for k in ("unit", "seconds", "source", "target",
-                                      "sourceRecalibrated", "targetRecalibrated")}, flush=True)
+        print({k: record[k] for k in ("unit", "seconds", "train", "source", "target")}, flush=True)
         ran.append(unit)
     (workdir / "sweep-run.json").write_text(
         json.dumps({"ran": ran, "skipped": skipped, "failed": failed, "environment": environment},
