@@ -19,6 +19,11 @@ size, as the source has.
 beats `predict`, the brake is the quality of the pseudo-labels phase 1 gives; if it does not,
 the alignment itself is the brake. Every run also logs how often the pseudo-labels it used
 were right, which reads target labels and decides nothing.
+
+**Sigma.** Phase 1 fixes sigma from the untrained network and never updates it, and the
+trained embeddings are up to hundreds of times nearer or farther apart, so the bag kernel
+saturates near 1 or 0. `resigma` recomputes sigma with the same rule on the trained source
+trunk before `predict` and phase 2, so both read the same kernel.
 """
 
 from __future__ import annotations
@@ -47,7 +52,8 @@ CONDITIONS = {"lr3e-4": dict(lr2=3e-4), "lr1e-3": dict(lr2=1e-3), "lr3e-3": dict
               "train-temporal": dict(lr2=3e-3, train="conv_temporal"),
               "balanced-3e-3": dict(lr2=3e-3, balanced=True),
               "balanced-1e-2": dict(lr2=1e-2, balanced=True),
-              "oracle-3e-3": dict(lr2=3e-3, oracle=True), "oracle-1e-2": dict(lr2=1e-2, oracle=True)}
+              "oracle-3e-3": dict(lr2=3e-3, oracle=True), "oracle-1e-2": dict(lr2=1e-2, oracle=True),
+              "resigma-3e-3": dict(lr2=3e-3, resigma=True), "resigma-1e-2": dict(lr2=1e-2, resigma=True)}
 #: What phase 2 sees each epoch, to find out what holds it back.
 SIGNALS = ("loss", "global", "local", "active_classes", "confidence_mean")
 
@@ -124,6 +130,11 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     torch.manual_seed(seed)
     generator = torch.Generator().manual_seed(seed)
     recalibrate(model, source, device)
+    sigma = meta["sigma"]
+    if spec.get("resigma"):
+        median = two_phase.within_bag_median_distance(model, source, "source", device)
+        sigma = float(meta["hyper"]["sigmaMultiplier"]) * median
+        model._sigma = sigma                    # diagnostic only: fix_sigma refuses a second value
     joint = two_phase.bridge(model)
     before = _scored(model, test, device)
     if spec.get("fresh"):
@@ -135,7 +146,7 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     start = {k: v.detach().clone() for k, v in model.target_trunk.state_dict().items()}
     with balanced_pseudolabels(model) if spec.get("balanced") else contextlib.nullcontext(), \
             observed_pseudolabels(bool(spec.get("oracle"))) as seen:
-        result = two_phase.adapt_target_phase(model, {"checkpoint": {"sigma": meta["sigma"]}},
+        result = two_phase.adapt_target_phase(model, {"checkpoint": {"sigma": sigma}},
                                               joint["frozen_state"], source, target, test, hyper,
                                               generator, device, seed=seed, fold=rotation,
                                               transfer=name)
@@ -150,7 +161,7 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     signals = [{k: round(float(h[k]), 4) for k in SIGNALS} for h in result["history"]]
     return {"before": before, "after": after, "epochs": epochs, "mixes": mixes,
             "positive": positive, "signals": signals,
-            "pseudoAccuracy": seen["hits"] / max(seen["seen"], 1)}
+            "pseudoAccuracy": seen["hits"] / max(seen["seen"], 1), "sigma": [meta["sigma"], sigma]}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, condition: str, seed: int = 1,
