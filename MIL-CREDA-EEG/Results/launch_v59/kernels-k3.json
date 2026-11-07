@@ -1,0 +1,84 @@
+{
+ "job": "v59-k3",
+ "commit": "03e5698",
+ "accelerator": "NvidiaTeslaT4",
+ "kernels": [
+  {
+   "account": "trayectoria51",
+   "ref": "trayectoria51/papersmith-v59-k3",
+   "url": "https://www.kaggle.com/code/trayectoria51/papersmith-v59-k3",
+   "slot": 1,
+   "units": 1,
+   "unitIds": [
+    "k3.L1-to-L6"
+   ],
+   "submittedAt": "2026-11-07T04:50:00Z"
+  },
+  {
+   "account": "trayectoria51",
+   "ref": "trayectoria51/papersmith-v59-k3-slot-2",
+   "url": "https://www.kaggle.com/code/trayectoria51/papersmith-v59-k3-slot-2",
+   "slot": 2,
+   "units": 1,
+   "unitIds": [
+    "k3.CogniFit-to-Robots"
+   ],
+   "submittedAt": "2026-11-07T04:50:00Z"
+  },
+  {
+   "account": "trayectoria50",
+   "ref": "trayectoria50/papersmith-v59-k3",
+   "url": "https://www.kaggle.com/code/trayectoria50/papersmith-v59-k3",
+   "slot": 1,
+   "units": 1,
+   "unitIds": [
+    "k3.L1-to-L11"
+   ],
+   "submittedAt": "2026-11-07T04:50:00Z"
+  },
+  {
+   "account": "trayectoria50",
+   "ref": "trayectoria50/papersmith-v59-k3-slot-2",
+   "url": "https://www.kaggle.com/code/trayectoria50/papersmith-v59-k3-slot-2",
+   "slot": 2,
+   "units": 1,
+   "unitIds": [
+    "k3.L6-to-Robots"
+   ],
+   "submittedAt": "2026-11-07T04:50:00Z"
+  },
+  {
+   "account": "jucaguirrear",
+   "ref": "jucaguirrear/papersmith-v59-k3",
+   "url": "https://www.kaggle.com/code/jucaguirrear/papersmith-v59-k3",
+   "slot": 1,
+   "units": 1,
+   "unitIds": [
+    "k3.L11-to-L1"
+   ],
+   "submittedAt": "2026-11-07T04:50:00Z"
+  },
+  {
+   "account": "jucaguirrear",
+   "ref": "jucaguirrear/papersmith-v59-k3-slot-2",
+   "url": "https://www.kaggle.com/code/jucaguirrear/papersmith-v59-k3-slot-2",
+   "slot": 2,
+   "units": 1,
+   "unitIds": [
+    "k3.Robots-to-L6"
+   ],
+   "submittedAt": "2026-11-07T04:50:00Z"
+  },
+  {
+   "account": "juanouter",
+   "ref": "juanouter/papersmith-v59-k3",
+   "url": "https://www.kaggle.com/code/juanouter/papersmith-v59-k3",
+   "slot": 1,
+   "units": 1,
+   "unitIds": [
+    "k3.Robots-to-CogniFit"
+   ],
+   "submittedAt": "2026-11-07T04:50:00Z"
+  }
+ ]
+}
