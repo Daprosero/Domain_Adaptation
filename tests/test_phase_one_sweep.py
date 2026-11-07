@@ -54,3 +54,11 @@ def test_every_diagnostic_scores_with_recalibrated_batchnorm():
     assert beat_predict.recalibrate is sweep.recalibrate
     assert phase_two_terms.recalibrate is sweep.recalibrate
     assert beat_predict.SIDES == ("sourceHeldOut", "predict", "milCreda")
+
+
+def test_blending_interpolates_weights_and_keeps_integer_buffers():
+    from MIL_CREDA_EEG.phase_two_terms import blended
+    start = {"w": torch.zeros(2), "n": torch.tensor(1)}
+    adapted = {"w": torch.ones(2), "n": torch.tensor(5)}
+    mixed = blended(start, adapted, 0.25)
+    assert torch.allclose(mixed["w"], torch.full((2,), 0.25)) and mixed["n"] == 5
