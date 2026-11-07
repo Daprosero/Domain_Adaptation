@@ -62,3 +62,17 @@ def test_blending_interpolates_weights_and_keeps_integer_buffers():
     adapted = {"w": torch.ones(2), "n": torch.tensor(5)}
     mixed = blended(start, adapted, 0.25)
     assert torch.allclose(mixed["w"], torch.full((2,), 0.25)) and mixed["n"] == 5
+
+
+def test_the_shallow_trunk_feeds_mil_creda_and_restores_the_plan_network():
+    from MIL_CREDA_EEG import campaign, model_store, shallow_trunk, two_phase
+    campaign.register(["MIL-CREDA"])
+    hyper = {"attentionGamma": 0.5, "attentionTemperature": 1.0}
+    with shallow_trunk.installed():
+        model = model_store.build_model("MIL-CREDA", 14, 14, hyper)
+        assert isinstance(model.source_trunk, shallow_trunk.ShallowTrunk)
+        assert model.source_trunk(torch.randn(4, 14, 512)).shape == (4, 1160)
+        assert model.head.linear.in_features == 1160
+        model.fix_sigma(5.0)
+        assert two_phase.bridge(model)["layer_copy"]["copied"] == list(shallow_trunk.LAYERS)
+    assert eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk and eegnet.HEAD_MAX_NORM == 0.25
