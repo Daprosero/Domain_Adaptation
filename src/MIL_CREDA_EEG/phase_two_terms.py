@@ -5,6 +5,10 @@ model store. Target test labels are read per epoch to see the trajectory and cho
 nothing. The source trunk's BatchNorm is recalibrated on the source bags before the bridge,
 so `predict` and phase 2 start from the same model. `stored` reuses the phase-2 settings the
 v59 search selected. One session runs one condition over the task and level transfers.
+
+**Anchor.** Nothing in phase 2 ties the target trunk to the phase-1 weights it starts from.
+`blended` interpolates the two, `(1 - alpha) * start + alpha * adapted`. The rule, fixed before
+the run and without target labels, is alpha 0.5; 0.25 and 0.75 are read, never chosen from.
 """
 
 from __future__ import annotations
@@ -24,7 +28,8 @@ from MIL_CREDA_EEG.patience_exercise import GpuWitness
 from MIL_CREDA_EEG.phase_one_sweep import _summary, balanced_accuracy, recalibrate
 
 TRANSFERS = ("CogniFit->Robots", "Robots->CogniFit", "L1->L11", "L11->L1")
-EPOCHS, SEED = 20, 1
+EPOCHS = 20
+ALPHAS = (0.25, 0.5, 0.75)
 CONDITIONS = {"lr3e-4": dict(lr2=3e-4), "lr1e-3": dict(lr2=1e-3), "lr3e-3": dict(lr2=3e-3),
               "lr1e-2": dict(lr2=1e-2), "stored": dict()}
 
@@ -35,7 +40,14 @@ def _scored(model, bags, device) -> list[dict]:
             for b, q in zip(bags, p)]
 
 
-def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, device) -> dict:
+def blended(start: Mapping, adapted: Mapping, alpha: float) -> dict:
+    """The two states interpolated; integer buffers keep the adapted value."""
+    return {k: ((1 - alpha) * start[k] + alpha * v) if v.is_floating_point() else v
+            for k, v in adapted.items()}
+
+
+def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, device,
+                 seed: int) -> dict:
     folder = root / "Models/Balladeer" / name.replace("->", "-to-") / f"rotation{rotation}/seed1"
     model, meta = model_store.load_model(folder / "phase1__MIL-CREDA.pt", allow_code_mismatch=True)
     model = model.to(device)
@@ -48,21 +60,28 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
     source = two_phase.bag_tensors(A.side_bags(a, bags, "source", rotation, A.REFIT_ROLE))
     target = two_phase.bag_tensors(A.side_bags(a, bags, "target", rotation, A.REFIT_ROLE))
     test = two_phase.bag_tensors(A.side_bags(a, bags, "target", rotation, "test"))
-    torch.manual_seed(SEED)
-    generator = torch.Generator().manual_seed(SEED)
+    torch.manual_seed(seed)
+    generator = torch.Generator().manual_seed(seed)
     recalibrate(model, source, device)
     joint = two_phase.bridge(model)
     before = _scored(model, test, device)
+    start = {k: v.detach().clone() for k, v in model.target_trunk.state_dict().items()}
     result = two_phase.adapt_target_phase(model, {"checkpoint": {"sigma": meta["sigma"]}},
                                           joint["frozen_state"], source, target, test, hyper,
-                                          generator, device, seed=SEED, fold=rotation,
+                                          generator, device, seed=seed, fold=rotation,
                                           transfer=name)
     epochs = [{"labels": r["labels"], "p": [q[1] for q in r["probabilities"]]}
               for r in result["validation"]]
-    return {"before": before, "after": _scored(model, test, device), "epochs": epochs}
+    after = _scored(model, test, device)
+    adapted = {k: v.detach().clone() for k, v in model.target_trunk.state_dict().items()}
+    mixes = {}
+    for alpha in ALPHAS:
+        model.target_trunk.load_state_dict(blended(start, adapted, alpha))
+        mixes[str(alpha)] = _scored(model, test, device)
+    return {"before": before, "after": after, "epochs": epochs, "mixes": mixes}
 
 
-def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
+def smoke(config: Mapping, product: str | Path | None = None, *, condition: str, seed: int = 1,
           workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
     """Every transfer of `condition`, with the evidence a single run's fetch reads."""
     environ = os.environ if environ is None else environ
@@ -82,23 +101,29 @@ def smoke(config: Mapping, product: str | Path | None = None, *, condition: str,
         for name in TRANSFERS:
             a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[name], bags)
             before, after, labels, curves = [], [], [], [[] for _ in range(EPOCHS)]
+            mixes: dict[str, list] = {str(x): [] for x in ALPHAS}
             started = time.time()
             for rotation in range(4):
-                rows = run_rotation(name, CONDITIONS[condition], rotation, root, a, bags, device)
+                rows = run_rotation(name, CONDITIONS[condition], rotation, root, a, bags, device,
+                                    seed)
+                for alpha, value in rows["mixes"].items():
+                    mixes[alpha] += value
                 before += rows["before"]
                 after += rows["after"]
                 labels += rows["epochs"][0]["labels"]
                 for e, epoch in enumerate(rows["epochs"]):
                     curves[e] += epoch["p"]
             pooled = [round(balanced_accuracy(labels, c), 4) for c in curves if len(c) == len(labels)]
-            record = {"condition": condition, "transfer": name, "before": _summary(before),
-                      "after": _summary(after), "curve": pooled, "environment": environment,
-                      "predictions": {"before": before, "after": after}}
+            record = {"condition": condition, "seed": seed, "transfer": name,
+                      "before": _summary(before), "after": _summary(after), "curve": pooled,
+                      "mixes": {k: _summary(v) for k, v in mixes.items()},
+                      "environment": environment,
+                      "predictions": {"before": before, "after": after, "mixes": mixes}}
             (workdir / f"p2-{name.replace('->', '-to-')}.json").write_text(
                 json.dumps(record, default=str), encoding="utf-8")
             done.append(name)
-            print(condition, name, round(time.time() - started), record["before"], record["after"],
-                  pooled[::5], flush=True)
+            print(condition, seed, name, round(time.time() - started), record["before"],
+                  record["after"], record["mixes"], flush=True)
     if mode:
         payload = {"mode": mode,
                    "evidence": {"commit": environment["commit"],
