@@ -785,6 +785,24 @@ def _rotation_boundaries(unit: Unit, rotations: Sequence[int], seeds: int,
         results.append_predictions = real
 
 
+@contextlib.contextmanager
+def _pair_tables_after_merge(unit: Unit):
+    """A k3 unit holds one direction of its core pair, and `campaign.k3_tables` pools both.
+
+    The unit stores its models and predictions only; the tables are written from the
+    merged product, where both directions are present. The replacement is installed only
+    for the call and removed afterwards."""
+    if unit.step != "k3":
+        yield
+        return
+    real = campaign.k3_tables
+    campaign.k3_tables = lambda *args, **kwargs: []
+    try:
+        yield
+    finally:
+        campaign.k3_tables = real
+
+
 def _completed_trials(study) -> int:
     import optuna
     return sum(t.state == optuna.trial.TrialState.COMPLETE for t in study.trials)
@@ -805,7 +823,8 @@ def execute_unit(unit: Unit, cfg: Mapping, product: Path,
     transfer = {t.name: t for t in assignment_mod.TRANSFERS}[unit.transfer]
     if unit.step != "search":
         rotations = campaign.rotations_of(cfg, bags.rotations)
-        with _rotation_boundaries(unit, rotations, len(cfg["reportSeeds"]), guard):
+        with _rotation_boundaries(unit, rotations, len(cfg["reportSeeds"]), guard), \
+                _pair_tables_after_merge(unit):
             return campaign.RUNNERS[unit.step]({**cfg, "transfers": [unit.transfer]},
                                                product, bags)
     campaign.register(cfg["strategies"])

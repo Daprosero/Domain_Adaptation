@@ -873,3 +873,25 @@ def test_the_merge_joins_the_run_files_of_notebooks_that_each_started_them(
         sizes.append((unit / "outputs/Results/A-nivel/runs/history.jsonl").stat().st_size)
     remote_units.merge(product, roots, config=cfg)
     assert (product / "Results/A-nivel/runs/history.jsonl").stat().st_size == sum(sizes)
+
+
+def test_a_k3_unit_leaves_the_pair_tables_for_after_the_merge(monkeypatch, tmp_path):
+    """A k3 unit holds one direction of its core pair, so it cannot pool the pair's
+    tables: they are written from the merged product, not inside the unit."""
+    from types import SimpleNamespace
+
+    from MIL_CREDA_EEG import campaign as campaign_module
+    from MIL_CREDA_EEG import remote_units as units_module
+
+    calls = []
+    real = lambda *args, **kwargs: calls.append(args) or ["pair"]
+    monkeypatch.setattr(campaign_module, "k3_tables", real)
+    monkeypatch.setitem(campaign_module.RUNNERS, "k3", lambda cfg, product, bags: (
+        cfg["transfers"], campaign_module.k3_tables(cfg, product, bags, {}, [], None)))
+    unit = units_module.Unit(index=0, id="k3.L1-to-L6", step="k3", transfer="L1->L6")
+    result = units_module.execute_unit(unit, {"reportSeeds": [1]}, tmp_path,
+                                       lambda: SimpleNamespace(rotations=[0]))
+
+    assert result == (["L1->L6"], [])
+    assert calls == []
+    assert campaign_module.k3_tables is real
