@@ -9,6 +9,18 @@ target numbers are read, never used to choose.
 A unit is `sweep.<config>.<transfer>.seed<s>`, one JSON file under `sweep/` in the
 working directory. Stored hyperparameters come from `phase_one_sweep_selections.json`,
 the selections the v59 search stored for the two task transfers.
+
+**BatchNorm.** The plan's momentum of 0.01 leaves the running statistics far from the batch
+statistics after the few steps these runs take, and evaluation reads them. Every side is
+therefore scored twice: with the statistics training left, and as `recalibrated`, after
+`recalibrate` recomputes them from the source training bags with the weights untouched.
+
+**Decision rule, fixed before the run.** Per subject, the mean probability over the three
+seeds. Each configuration against `stored-40` on held-out source subjects: paired
+permutation test on the per-subject correct-class probability, Benjamini-Hochberg over the
+configurations, Friedman across them. The target side is read, never tested for choosing.
+These source subjects are outer test folds, so a winner here is a lead only: a later plan
+must select it again inside the inner splits, and this sweep is never reported as a result.
 """
 
 from __future__ import annotations
@@ -43,7 +55,6 @@ CONFIGS: dict[str, dict] = {
     "bn1": dict(BN_MOMENTUM=0.1),
     "lr1e-3": dict(lr=1e-3),
     "lr1e-3-bn1": dict(lr=1e-3, BN_MOMENTUM=0.1),
-    "lr1e-4": dict(lr=1e-4),
     "head1": dict(OPEN),
     "drop0": dict(OPEN, DROPOUT=0.0),
     "drop5": dict(OPEN, DROPOUT=0.5),
@@ -97,8 +108,30 @@ def _side(model, bags, device) -> list[dict]:
             for b, q in zip(bags, p)]
 
 
+def recalibrate(model, bags, device: torch.device, chunk: int = 512,
+                trunk: str = "source_trunk") -> None:
+    """Recompute one trunk's BatchNorm statistics from `bags`; no weight moves."""
+    encoder = getattr(model, trunk)
+    layers = [m for m in encoder.modules() if isinstance(m, torch.nn.BatchNorm2d)]
+    momenta = [m.momentum for m in layers]
+    model.eval()
+    for layer in layers:
+        layer.reset_running_stats()
+        layer.momentum = None                  # a cumulative average over every batch
+        layer.train()
+    with torch.no_grad():
+        for bag in bags:
+            for start in range(0, bag.windows.shape[0], chunk):
+                encoder(bag.windows[start:start + chunk].to(device))
+    for layer, momentum in zip(layers, momenta):
+        layer.momentum = momentum
+        layer.eval()
+
+
 def _summary(rows: Sequence[Mapping]) -> dict:
     y, p = [r["label"] for r in rows], [r["probability"] for r in rows]
+    if not np.isfinite(p).all():
+        return {"ba": None, "auc": None, "n": len(rows), "diverged": True}
     auc = float(roc_auc_score(y, p)) if np.ptp(p) > 0 else 0.5
     return {"ba": round(balanced_accuracy(y, p), 4), "auc": round(auc, 4), "n": len(rows)}
 
@@ -110,7 +143,8 @@ def run_unit(unit: str, cfg: Mapping, bags, device: torch.device,
     stored = json.loads(SELECTIONS.read_text(encoding="utf-8"))[transfer_name]
     transfer = {t.name: t for t in A.TRANSFERS}[transfer_name]
     a = A.assign_from_bags(transfer, bags)
-    sides: dict[str, list] = {"train": [], "source": [], "target": []}
+    groups = ("train", "source", "target")
+    sides: dict[str, list] = {k: [] for k in (*groups, *(f"{g}Recalibrated" for g in groups))}
     curves, started = [], time.time()
     with patched(spec):
         for r in range(4):
@@ -132,8 +166,11 @@ def run_unit(unit: str, cfg: Mapping, bags, device: torch.device,
                                                   seed=seed, fold=r, transfer=transfer_name)
             curves.append([round(float(h["val_balanced_accuracy"]), 4)
                            for h in result["history"]])
-            for side, group in (("train", train), ("source", source), ("target", target)):
+            for side, group in zip(groups, (train, source, target)):
                 sides[side].extend(_side(model, group, device))
+            recalibrate(model, train, device)
+            for side, group in zip(groups, (train, source, target)):
+                sides[f"{side}Recalibrated"].extend(_side(model, group, device))
             del model, train, source, target
     return {"unit": unit, "config": name, "transfer": transfer_name, "seed": seed,
             "spec": spec, "seconds": round(time.time() - started),
@@ -163,17 +200,31 @@ def run(config: Mapping, product: str | Path | None = None, *,
     bags = campaign.load_bags(cfg)
     folder = workdir / OUTPUT
     folder.mkdir(parents=True, exist_ok=True)
-    ran = []
+    ran, skipped, failed = [], [], {}
     for index, unit in enumerate(chosen):
+        path = folder / f"{unit}.json"
+        if path.exists():
+            skipped.append(unit)
+            continue
         if time.time() > deadline - 900:
             (workdir / "partial.json").write_text(json.dumps({"remaining": chosen[index:]}),
                                                   encoding="utf-8")
             break
-        record = run_unit(unit, cfg, bags, device, epochs)
-        (folder / f"{unit}.json").write_text(json.dumps(record), encoding="utf-8")
-        print({k: record[k] for k in ("unit", "seconds", "train", "source", "target")}, flush=True)
+        try:
+            record = run_unit(unit, cfg, bags, device, epochs)
+        except Exception as error:             # one bad unit never ends the session
+            failed[unit] = repr(error)
+            print({"unit": unit, "failed": repr(error)}, flush=True)
+            continue
+        record["environment"] = {k: environment.get(k) for k in ("commit", "codeVersion", "device")}
+        path.write_text(json.dumps(record, default=str), encoding="utf-8")
+        print({k: record[k] for k in ("unit", "seconds", "source", "target",
+                                      "sourceRecalibrated", "targetRecalibrated")}, flush=True)
         ran.append(unit)
-    return {"ran": ran, "skipped": [], "environment": environment}
+    (workdir / "sweep-run.json").write_text(
+        json.dumps({"ran": ran, "skipped": skipped, "failed": failed, "environment": environment},
+                   indent=1, default=str), encoding="utf-8")
+    return {"ran": ran, "skipped": skipped, "failed": failed, "environment": environment}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *,

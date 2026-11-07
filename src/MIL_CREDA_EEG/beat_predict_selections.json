@@ -1,0 +1,106 @@
+{
+ "Robots->CogniFit": {
+  "0": {
+   "wd1": 1e-07,
+   "attentionGamma": 0.0,
+   "attentionTemperature": 2.068395667192967,
+   "sigmaMultiplier": 0.5
+  },
+  "1": {
+   "wd1": 0.00024855099164169725,
+   "attentionGamma": 1.0,
+   "attentionTemperature": 0.1710862346139052,
+   "sigmaMultiplier": 1.5
+  },
+  "2": {
+   "wd1": 1e-07,
+   "attentionGamma": 1.0,
+   "attentionTemperature": 10.0,
+   "sigmaMultiplier": 1.5
+  },
+  "3": {
+   "wd1": 0.00018952679725612034,
+   "attentionGamma": 0.9652221664044639,
+   "attentionTemperature": 0.17491195224034617,
+   "sigmaMultiplier": 1.5
+  }
+ },
+ "CogniFit->Robots": {
+  "0": {
+   "wd1": 0.00018952679725612034,
+   "attentionGamma": 0.9652221664044639,
+   "attentionTemperature": 0.17491195224034617,
+   "sigmaMultiplier": 1.5
+  },
+  "1": {
+   "wd1": 5.868183122247138e-06,
+   "attentionGamma": 0.703045162930058,
+   "attentionTemperature": 0.6208526235679097,
+   "sigmaMultiplier": 0.5
+  },
+  "2": {
+   "wd1": 0.00013058815575042444,
+   "attentionGamma": 0.6654680310967587,
+   "attentionTemperature": 0.7006157601382148,
+   "sigmaMultiplier": 1.5
+  },
+  "3": {
+   "wd1": 0.0002549343271220297,
+   "attentionGamma": 1.0,
+   "attentionTemperature": 0.10000000000000002,
+   "sigmaMultiplier": 0.75
+  }
+ },
+ "L1->L11": {
+  "0": {
+   "wd1": 2.6578388938471563e-06,
+   "attentionGamma": 0.7902982824221764,
+   "attentionTemperature": 0.2906993391476176,
+   "sigmaMultiplier": 0.5
+  },
+  "1": {
+   "wd1": 0.00018952679725612034,
+   "attentionGamma": 0.9652221664044639,
+   "attentionTemperature": 0.17491195224034617,
+   "sigmaMultiplier": 1.5
+  },
+  "2": {
+   "wd1": 1e-07,
+   "attentionGamma": 0.8701117106662807,
+   "attentionTemperature": 0.10000000000000002,
+   "sigmaMultiplier": 1.5
+  },
+  "3": {
+   "wd1": 1e-07,
+   "attentionGamma": 0.3741349200162246,
+   "attentionTemperature": 0.45422801958519327,
+   "sigmaMultiplier": 0.5
+  }
+ },
+ "L11->L1": {
+  "0": {
+   "wd1": 1.8346056309418978e-07,
+   "attentionGamma": 0.6156190658393997,
+   "attentionTemperature": 0.522264616897979,
+   "sigmaMultiplier": 0.75
+  },
+  "1": {
+   "wd1": 1e-07,
+   "attentionGamma": 0.9999999999999999,
+   "attentionTemperature": 0.7075346463730632,
+   "sigmaMultiplier": 0.5
+  },
+  "2": {
+   "wd1": 9.368164736048496e-07,
+   "attentionGamma": 0.928385201941989,
+   "attentionTemperature": 5.8015202573290265,
+   "sigmaMultiplier": 0.75
+  },
+  "3": {
+   "wd1": 2.512430510467667e-07,
+   "attentionGamma": 0.6940556931108468,
+   "attentionTemperature": 0.9948503295934638,
+   "sigmaMultiplier": 0.5
+  }
+ }
+}

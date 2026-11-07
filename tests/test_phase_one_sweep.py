@@ -1,3 +1,8 @@
+from types import SimpleNamespace
+
+import torch
+
+
 from MIL_CREDA_EEG import eegnet, phase_one_sweep as sweep
 
 
@@ -19,3 +24,26 @@ def test_a_configuration_changes_the_network_and_leaves_the_plan_constants_intac
 
 def test_the_base_matches_the_plan_constants():
     assert all(getattr(eegnet, k) == v for k, v in sweep.BASE.items())
+
+
+def test_a_diverged_side_is_flagged_and_never_reads_as_chance():
+    rows = [{"label": 0, "probability": float("nan")}, {"label": 1, "probability": float("nan")}]
+    assert sweep._summary(rows) == {"ba": None, "auc": None, "n": 2, "diverged": True}
+
+
+def test_recalibration_replaces_stale_batchnorm_statistics_and_keeps_the_weights():
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.source_trunk = eegnet.EEGNetTrunk(14)
+
+    torch.manual_seed(0)
+    model = Model()
+    bag = SimpleNamespace(windows=100 * torch.randn(40, 14, 512))
+    weights = model.source_trunk.conv_temporal.weight.clone()
+    bn = model.source_trunk.bn1
+    momentum, stale = bn.momentum, bn.running_var.clone()
+    sweep.recalibrate(model, [bag], torch.device("cpu"))
+    assert not torch.allclose(bn.running_var, stale)
+    assert bn.momentum == momentum and not bn.training and not model.source_trunk.training
+    assert torch.equal(model.source_trunk.conv_temporal.weight, weights)
