@@ -9,6 +9,11 @@ v59 search selected. One session runs one condition over the task and level tran
 **Anchor.** Nothing in phase 2 ties the target trunk to the phase-1 weights it starts from.
 `blended` interpolates the two, `(1 - alpha) * start + alpha * adapted`. The rule, fixed before
 the run and without target labels, is alpha 0.5; 0.25 and 0.75 are read, never chosen from.
+
+**Balanced pseudo-labels.** Before phase 2 the model sends most target bags to one class, so
+the class-conditional term of Eq. 23 has one active class. `balanced` splits each target
+batch at its median probability, which uses no target label and assumes classes of similar
+size, as the source has.
 """
 
 from __future__ import annotations
@@ -23,7 +28,7 @@ from pathlib import Path
 import torch
 
 from MIL_CREDA_EEG import assignment as A
-from MIL_CREDA_EEG import campaign, model_store, remote_units, two_phase
+from MIL_CREDA_EEG import campaign, mil_creda_model, model_store, remote_units, two_phase
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
 from MIL_CREDA_EEG.phase_one_sweep import _summary, balanced_accuracy, recalibrate
 
@@ -34,7 +39,9 @@ CONDITIONS = {"lr3e-4": dict(lr2=3e-4), "lr1e-3": dict(lr2=1e-3), "lr3e-3": dict
               "lr1e-2": dict(lr2=1e-2), "stored": dict(),
               "fresh": dict(lr2=3e-3, fresh=True), "train-bn": dict(lr2=3e-3, train="bn"),
               "train-spatial": dict(lr2=3e-3, train="depthwise"),
-              "train-temporal": dict(lr2=3e-3, train="conv_temporal")}
+              "train-temporal": dict(lr2=3e-3, train="conv_temporal"),
+              "balanced-3e-3": dict(lr2=3e-3, balanced=True),
+              "balanced-1e-2": dict(lr2=1e-2, balanced=True)}
 #: What phase 2 sees each epoch, to find out what holds it back.
 SIGNALS = ("loss", "global", "local", "active_classes", "confidence_mean")
 
@@ -43,6 +50,25 @@ def _scored(model, bags, device) -> list[dict]:
     p = two_phase.evaluate(model, bags, "target", device)[:, 1].detach().cpu().numpy()
     return [{"subject": b.subject, "label": b.label, "probability": float(q)}
             for b, q in zip(bags, p)]
+
+
+@contextlib.contextmanager
+def balanced_pseudolabels(model):
+    """Eq. 22 replaced by a median split of the batch `classify` scored last."""
+    plain, rule, state = model.classify, mil_creda_model.pseudolabel, {}
+
+    def classify(*args, **kwargs):
+        G = plain(*args, **kwargs)
+        state["cut"] = G[:, 1].detach().median()
+        return G
+
+    model.classify = classify
+    mil_creda_model.pseudolabel = lambda g: int(g[1] >= state["cut"])
+    try:
+        yield
+    finally:
+        model.classify = plain
+        mil_creda_model.pseudolabel = rule
 
 
 def blended(start: Mapping, adapted: Mapping, alpha: float) -> dict:
@@ -77,10 +103,11 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
             parameter.requires_grad_(key.startswith(spec["train"]))
     positive = sum(r["probability"] >= 0.5 for r in _scored(model, target, device)) / len(target)
     start = {k: v.detach().clone() for k, v in model.target_trunk.state_dict().items()}
-    result = two_phase.adapt_target_phase(model, {"checkpoint": {"sigma": meta["sigma"]}},
-                                          joint["frozen_state"], source, target, test, hyper,
-                                          generator, device, seed=seed, fold=rotation,
-                                          transfer=name)
+    with balanced_pseudolabels(model) if spec.get("balanced") else contextlib.nullcontext():
+        result = two_phase.adapt_target_phase(model, {"checkpoint": {"sigma": meta["sigma"]}},
+                                              joint["frozen_state"], source, target, test, hyper,
+                                              generator, device, seed=seed, fold=rotation,
+                                              transfer=name)
     epochs = [{"labels": r["labels"], "p": [q[1] for q in r["probabilities"]]}
               for r in result["validation"]]
     after = _scored(model, test, device)

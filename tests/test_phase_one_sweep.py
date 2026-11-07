@@ -96,3 +96,15 @@ def test_each_partial_condition_names_trainable_layers_of_the_trunk():
     for spec in CONDITIONS.values():
         if "train" in spec:
             assert any(n.startswith(spec["train"]) for n in names)
+
+
+def test_balanced_pseudolabels_give_both_classes_and_restore_the_rule():
+    from MIL_CREDA_EEG import mil_creda_model, phase_two_terms
+    rule = mil_creda_model.pseudolabel
+    G = torch.tensor([[.1, .9], [.2, .8], [.3, .7], [.4, .6]])
+    model = SimpleNamespace(classify=lambda _: G)
+    with phase_two_terms.balanced_pseudolabels(model):
+        scored = model.classify(None)
+        labels = [mil_creda_model.pseudolabel(g) for g in scored]
+    assert set(labels) == {0, 1}
+    assert mil_creda_model.pseudolabel is rule
