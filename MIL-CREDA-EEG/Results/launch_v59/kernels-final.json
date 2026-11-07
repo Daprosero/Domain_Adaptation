@@ -1,0 +1,63 @@
+{
+ "job": "v59-final",
+ "commit": "c10d4d0054cfd0f9cf838d289721370947bb49f6",
+ "accelerator": "NvidiaTeslaT4",
+ "kernels": [
+  {
+   "account": "trayectoria50",
+   "ref": "trayectoria50/papersmith-v59-final",
+   "url": "https://www.kaggle.com/code/trayectoria50/papersmith-v59-final",
+   "slot": 1,
+   "units": 2,
+   "submittedAt": "2026-11-07T02:42:20Z"
+  },
+  {
+   "account": "trayectoria50",
+   "ref": "trayectoria50/papersmith-v59-final-slot-2",
+   "url": "https://www.kaggle.com/code/trayectoria50/papersmith-v59-final-slot-2",
+   "slot": 2,
+   "units": 2,
+   "submittedAt": "2026-11-07T02:42:20Z"
+  },
+  {
+   "account": "jucaguirrear",
+   "ref": "jucaguirrear/papersmith-v59-final",
+   "url": "https://www.kaggle.com/code/jucaguirrear/papersmith-v59-final",
+   "slot": 1,
+   "units": 2,
+   "submittedAt": "2026-11-07T02:42:20Z"
+  },
+  {
+   "account": "jucaguirrear",
+   "ref": "jucaguirrear/papersmith-v59-final-slot-2",
+   "url": "https://www.kaggle.com/code/jucaguirrear/papersmith-v59-final-slot-2",
+   "slot": 2,
+   "units": 2,
+   "submittedAt": "2026-11-07T02:42:20Z"
+  },
+  {
+   "account": "juanouter",
+   "ref": "juanouter/papersmith-v59-final",
+   "url": "https://www.kaggle.com/code/juanouter/papersmith-v59-final",
+   "slot": 1,
+   "units": 2,
+   "submittedAt": "2026-11-07T02:42:20Z"
+  },
+  {
+   "account": "juanouter",
+   "ref": "juanouter/papersmith-v59-final-slot-2",
+   "url": "https://www.kaggle.com/code/juanouter/papersmith-v59-final-slot-2",
+   "slot": 2,
+   "units": 2,
+   "submittedAt": "2026-11-07T02:42:20Z"
+  },
+  {
+   "account": "trayectoria51",
+   "ref": "trayectoria51/papersmith-v59-final-l1l6",
+   "url": "https://www.kaggle.com/code/trayectoria51/papersmith-v59-final-l1l6",
+   "slot": 1,
+   "units": 1,
+   "submittedAt": "2026-11-07T03:00:00Z"
+  }
+ ]
+}
