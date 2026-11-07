@@ -60,6 +60,8 @@ CONFIGS: dict[str, dict] = {
     "wide-k32": dict(OPEN, KERNEL_LENGTH=32, **WIDE),
     "wide-k128": dict(OPEN, KERNEL_LENGTH=128, **WIDE),
     "small-reg": dict(OPEN, wd=1e-2, DROPOUT=0.5, F1=4, F2=8),
+    "small": dict(F1=4, D=2, F2=8),
+    "tiny": dict(F1=2, D=1, F2=2),
     "d4": dict(OPEN, D=4, F2=32),
     "d1": dict(OPEN, D=1, F2=8),
     "sep32": dict(OPEN, SEPARABLE_LENGTH=32),
