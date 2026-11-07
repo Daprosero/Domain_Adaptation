@@ -24,6 +24,11 @@ were right, which reads target labels and decides nothing.
 trained embeddings are up to hundreds of times nearer or farther apart, so the bag kernel
 saturates near 1 or 0. `resigma` recomputes sigma with the same rule on the trained source
 trunk before `predict` and phase 2, so both read the same kernel.
+
+**Head kernel.** The bag kernel barely separates the classes even on seen source subjects,
+while the head separates them: the 256-d Gaussian geometry is dominated by variation the head
+ignores. `head` computes the phase-2 bag kernel on the embeddings projected onto the frozen
+head's weights, with sigma from that space, so the alignment acts where the classes differ.
 """
 
 from __future__ import annotations
@@ -35,6 +40,7 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from MIL_CREDA_EEG import assignment as A
@@ -54,7 +60,8 @@ CONDITIONS = {"lr3e-4": dict(lr2=3e-4), "lr1e-3": dict(lr2=1e-3), "lr3e-3": dict
               "balanced-1e-2": dict(lr2=1e-2, balanced=True),
               "oracle-3e-3": dict(lr2=3e-3, oracle=True), "oracle-1e-2": dict(lr2=1e-2, oracle=True),
               "resigma-3e-3": dict(lr2=3e-3, resigma=True), "resigma-1e-2": dict(lr2=1e-2, resigma=True),
-              "oracle-resigma-3e-3": dict(lr2=3e-3, resigma=True, oracle=True)}
+              "oracle-resigma-3e-3": dict(lr2=3e-3, resigma=True, oracle=True),
+              "head-3e-3": dict(lr2=3e-3, head=True), "head-oracle-3e-3": dict(lr2=3e-3, head=True, oracle=True)}
 #: What phase 2 sees each epoch, to find out what holds it back.
 SIGNALS = ("loss", "global", "local", "active_classes", "confidence_mean")
 
@@ -108,6 +115,30 @@ def observed_pseudolabels(oracle: bool):
         two_phase.phase_two_step, mil_creda_model.pseudolabel = step, rule
 
 
+@contextlib.contextmanager
+def head_kernel(model, source, device, multiplier: float):
+    """Phase-2 bag kernels on embeddings projected onto the frozen head's weights."""
+    plain = mil_creda_model.bag_kernel_matrix
+    W = model.head.linear.weight.detach().to(torch.float64).T
+    with torch.no_grad():
+        medians = []
+        for bag in source[:16]:
+            h = model.embed([bag.windows.to(device)], "source", 256)[0] @ W
+            if h.shape[0] > 1:
+                medians.append(float(torch.pdist(h).median()))
+    scale = multiplier * float(np.median(medians)) if medians else 1.0
+
+    def projected(pairs_a, pairs_b, sigma):
+        project = lambda pairs: [(h @ W, w) for h, w in pairs]
+        return plain(project(pairs_a), project(pairs_b), scale)
+
+    mil_creda_model.bag_kernel_matrix = projected
+    try:
+        yield scale
+    finally:
+        mil_creda_model.bag_kernel_matrix = plain
+
+
 def blended(start: Mapping, adapted: Mapping, alpha: float) -> dict:
     """The two states interpolated; integer buffers keep the adapted value."""
     return {k: ((1 - alpha) * start[k] + alpha * v) if v.is_floating_point() else v
@@ -146,8 +177,10 @@ def run_rotation(name: str, spec: Mapping, rotation: int, root: Path, a, bags, d
             parameter.requires_grad_(key.startswith(spec["train"]))
     positive = sum(r["probability"] >= 0.5 for r in _scored(model, target, device)) / len(target)
     start = {k: v.detach().clone() for k, v in model.target_trunk.state_dict().items()}
+    kernel = (head_kernel(model, source, device, float(meta["hyper"]["sigmaMultiplier"]))
+              if spec.get("head") else contextlib.nullcontext())
     with balanced_pseudolabels(model) if spec.get("balanced") else contextlib.nullcontext(), \
-            observed_pseudolabels(bool(spec.get("oracle"))) as seen:
+            observed_pseudolabels(bool(spec.get("oracle"))) as seen, kernel:
         result = two_phase.adapt_target_phase(model, {"checkpoint": {"sigma": sigma}},
                                               joint["frozen_state"], source, target, test, hyper,
                                               generator, device, seed=seed, fold=rotation,
