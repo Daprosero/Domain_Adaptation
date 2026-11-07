@@ -19,7 +19,7 @@ from pathlib import Path
 import torch
 
 from MIL_CREDA_EEG import assignment as A
-from MIL_CREDA_EEG import campaign, model_store, remote_units, two_phase
+from MIL_CREDA_EEG import campaign, model_store, remote_units, shallow_trunk, two_phase
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
 from MIL_CREDA_EEG.phase_one_sweep import _summary, patched, recalibrate
 
@@ -31,10 +31,10 @@ SPEC = {"BN_MOMENTUM": 0.1}
 SIDES = ("sourceHeldOut", "predict", "milCreda")
 
 
-def hyper_of(transfer: str, rotation: int, schedule: Mapping) -> dict:
+def hyper_of(transfer: str, rotation: int, schedule: Mapping, lr2: float = FIXED["lr2"]) -> dict:
     stored = json.loads(SELECTIONS.read_text(encoding="utf-8"))[transfer][str(rotation)]
     return two_phase.check_hyper({**{k: v for k, v in stored.items() if k != "wd1"},
-                                  "wd1": stored["wd1"], **FIXED, "epochs1": EPOCHS1,
+                                  "wd1": stored["wd1"], **FIXED, "lr2": lr2, "epochs1": EPOCHS1,
                                   "epochs2": EPOCHS2, "bagsPerStep": schedule["bagsPerStep"]})
 
 
@@ -44,17 +44,18 @@ def _scored(model, bags, domain: str, device) -> list[dict]:
             for b, q in zip(bags, p)]
 
 
-def run_rotation(name: str, rotation: int, cfg: Mapping, a, bags, device) -> dict:
-    hyper = hyper_of(name, rotation, cfg["schedule"])
+def run_rotation(name: str, rotation: int, cfg: Mapping, a, bags, device, seed: int = SEED,
+                 lr2: float = FIXED["lr2"]) -> dict:
+    hyper = hyper_of(name, rotation, cfg["schedule"], lr2)
     source = two_phase.bag_tensors(A.side_bags(a, bags, "source", rotation, A.REFIT_ROLE))
     held = two_phase.bag_tensors(A.side_bags(a, bags, "source", rotation, "test"))
     target = two_phase.bag_tensors(A.side_bags(a, bags, "target", rotation, A.REFIT_ROLE))
     test = two_phase.bag_tensors(A.side_bags(a, bags, "target", rotation, "test"))
-    torch.manual_seed(SEED)
-    generator = torch.Generator().manual_seed(SEED)
+    torch.manual_seed(seed)
+    generator = torch.Generator().manual_seed(seed)
     model = model_store.build_model("MIL-CREDA", int(source[0].windows.shape[1]),
                                     int(target[0].windows.shape[1]), hyper).to(device)
-    common = {"seed": SEED, "fold": rotation, "transfer": name}
+    common = {"seed": seed, "fold": rotation, "transfer": name}
     phase1 = two_phase.train_source_phase(model, source, held, hyper, generator, device, **common)
     recalibrate(model, source, device)
     rows = {"sourceHeldOut": _scored(model, held, "source", device),
@@ -68,7 +69,7 @@ def run_rotation(name: str, rotation: int, cfg: Mapping, a, bags, device) -> dic
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str,
-          workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
+          backbone: str = "eegnet", seed: int = SEED, lr2: float = FIXED["lr2"], workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
     """All four rotations of `transfer`, with the evidence a single run's fetch reads."""
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
@@ -85,15 +86,15 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str,
     pooled: dict[str, list] = {k: [] for k in SIDES}
     done = []
     path = workdir / "beat-predict.json"
-    with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, \
-            patched(SPEC):
+    trunk = shallow_trunk.installed() if backbone == "shallow" else patched(SPEC)
+    with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, trunk:
         for rotation in range(4):
             started = time.time()
-            rows = run_rotation(transfer, rotation, cfg, a, bags, device)
+            rows = run_rotation(transfer, rotation, cfg, a, bags, device, seed, lr2)
             for key, value in rows.items():
                 pooled[key].extend(value)
             done.append(rotation)
-            record = {"transfer": transfer, "rotations": done, "environment": environment,
+            record = {"transfer": transfer, "backbone": backbone, "seed": seed, "rotations": done, "environment": environment,
                       **{k: _summary(v) for k, v in pooled.items()}, "predictions": pooled}
             path.write_text(json.dumps(record, default=str), encoding="utf-8")
             print(transfer, rotation, round(time.time() - started),
