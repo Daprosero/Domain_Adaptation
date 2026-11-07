@@ -108,3 +108,14 @@ def test_balanced_pseudolabels_give_both_classes_and_restore_the_rule():
         labels = [mil_creda_model.pseudolabel(g) for g in scored]
     assert set(labels) == {0, 1}
     assert mil_creda_model.pseudolabel is rule
+
+
+def test_loso_settings_cover_the_four_transfers_and_build_a_hyper():
+    import json
+    from MIL_CREDA_EEG import loso, two_phase
+    chosen = json.loads(loso.SELECTIONS.read_text())
+    assert set(chosen) == {"Robots->CogniFit", "CogniFit->Robots", "L1->L11", "L11->L1"}
+    for values in chosen.values():
+        two_phase.check_hyper({**{k: values[k] for k in two_phase.PHASE_ONE_KEYS}, "lr2": 1e-3,
+                               "wd2": 1e-5, "tauLocal": 1.0, "epochs1": values["epochs1"],
+                               "epochs2": 20, "bagsPerStep": 8})
