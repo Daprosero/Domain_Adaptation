@@ -119,3 +119,19 @@ def test_loso_settings_cover_the_four_transfers_and_build_a_hyper():
         two_phase.check_hyper({**{k: values[k] for k in two_phase.PHASE_ONE_KEYS}, "lr2": 1e-3,
                                "wd2": 1e-5, "tauLocal": 1.0, "epochs1": values["epochs1"],
                                "epochs2": 20, "bagsPerStep": 8})
+
+
+def test_the_oracle_hands_true_labels_and_counts_the_rule_hits():
+    from MIL_CREDA_EEG import mil_creda_model, phase_two_terms, two_phase
+    step, rule = two_phase.phase_two_step, mil_creda_model.pseudolabel
+    bags = [SimpleNamespace(label=1), SimpleNamespace(label=0)]
+    G = torch.tensor([[.9, .1], [.8, .2]])
+    two_phase_step = lambda model, source, target, *a, **k: [mil_creda_model.pseudolabel(g) for g in G]
+    two_phase.phase_two_step = two_phase_step
+    try:
+        with phase_two_terms.observed_pseudolabels(oracle=True) as seen:
+            assert two_phase.phase_two_step(None, [], bags) == [1, 0]
+        assert seen["hits"] == 1 and seen["seen"] == 2
+    finally:
+        two_phase.phase_two_step = step
+    assert mil_creda_model.pseudolabel is rule
