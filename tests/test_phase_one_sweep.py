@@ -135,3 +135,16 @@ def test_the_oracle_hands_true_labels_and_counts_the_rule_hits():
     finally:
         two_phase.phase_two_step = step
     assert mil_creda_model.pseudolabel is rule
+
+
+def test_the_head_kernel_projects_embeddings_and_restores_the_plan_kernel():
+    from MIL_CREDA_EEG import mil_creda_model, phase_two_terms
+    plain = mil_creda_model.bag_kernel_matrix
+    W = torch.zeros(2, 4, dtype=torch.float64); W[0, 0] = 1.0; W[1, 1] = 1.0
+    model = SimpleNamespace(head=SimpleNamespace(linear=SimpleNamespace(weight=W)),
+                            embed=lambda bags, domain, chunk: [torch.randn(5, 4, dtype=torch.float64)])
+    pairs = [(torch.randn(5, 4, dtype=torch.float64), torch.full((5,), 0.2, dtype=torch.float64))]
+    with phase_two_terms.head_kernel(model, [SimpleNamespace(windows=torch.zeros(5, 14, 512))], "cpu", 1.0) as scale:
+        K = mil_creda_model.bag_kernel_matrix(pairs, pairs, 99.0)
+        assert scale > 0 and K.shape == (1, 1)
+    assert mil_creda_model.bag_kernel_matrix is plain
