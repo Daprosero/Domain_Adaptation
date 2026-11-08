@@ -30,7 +30,7 @@ from .losses import (adaptation_objective, classification_loss, conditional_entr
                      virtual_adversarial_loss)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["casual_alternation_updates_only_allowed_parameters",

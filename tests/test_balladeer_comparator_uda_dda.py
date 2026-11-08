@@ -254,7 +254,7 @@ def test_uda_keeps_the_last_epoch_and_records_validation_per_epoch(monkeypatch):
 
 
 def test_uda_schedule_horizon_is_the_phase_two_budget_whatever_the_epochs_trained(monkeypatch):
-    """Plan v59 7.4: the refit of E epochs follows the schedule the search validated."""
+    """Plan v60 7.4: the refit of E epochs follows the schedule the search validated."""
     model, source, _, target, _ = fixture()
     horizons = []
     real_weight, real_threshold = training.losses.mmd_weight_schedule, training.losses.confidence_threshold
@@ -334,9 +334,9 @@ def test_uda_package_is_a_controlled_variant_and_import_registers_nothing(regist
     assert uda_dda.__provenance__["sections"] == ["7.1", "7.4"]
     # The package, its trainer, its smoke and its losses answer to v56 (Secs. 4.5, 7.7:
     # fixed epochs, no patience).
-    for module, revision in ((uda_dda, "v59"), (training, "v59"), (losses, "v59"),
+    for module, revision in ((uda_dda, "v60"), (training, "v60"), (losses, "v60"),
                              (importlib.import_module(
-                                 "MIL_CREDA_EEG.comparators.uda_dda.smoke"), "v59")):
+                                 "MIL_CREDA_EEG.comparators.uda_dda.smoke"), "v60")):
         assert module.__provenance__["revision"] == (
             f"experiments-plan-experimental-mil-creda-sobre-balladeer-{revision}.md")
 

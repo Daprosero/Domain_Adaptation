@@ -25,7 +25,7 @@ main.py/models.py. `third_party/cluda/PIN.json` remains the existing pin, unchan
 **Route: independent controlled-variant implementation; read-only upstream audit,
 no upstream source vendored, no upstream patches.** No upstream training was run.
 
-Bound protocol is `experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md`
+Bound protocol is `experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md`
 (rebound from v54 on 2026-11-05, and to v56 on 2026-11-05 with no change of behaviour): v55 published the CLUDA replacements R1-R5, which
 state the official-code loss and the main.py:118-119 selection implemented here.
 Authority is operator L81, superseding L74–L75's paper-Eq. (3) choice and omission

@@ -1,6 +1,6 @@
 """Does phase 2 of MIL-CREDA beat source-only prediction from the same phase-1 model?
 
-Diagnostic, outside plan v59: it reports no result of the plan and writes nothing to the
+Diagnostic, outside plan v60: it reports no result of the plan and writes nothing to the
 model store. BatchNorm momentum is 0.1 in both phases and the settings are fixed before
 the run, never from target labels: lr1 1e-3 for 40 epochs; lr2 1e-4, wd2 1e-5, tauLocal 1
 for 20 epochs. The attention settings and wd1 are the stored source-selected ones.

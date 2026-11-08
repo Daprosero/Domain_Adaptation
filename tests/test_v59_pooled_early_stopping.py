@@ -1,4 +1,4 @@
-"""Experiments plan v59, Secs. 4.5 and 7.6: pooled early stopping of every search trial.
+"""Experiments plan v60, Secs. 4.5 and 7.6: pooled early stopping of every search trial.
 
 Each search trial trains up to `search.EPOCH_CAP` epochs and stops when the POOLED
 per-epoch selection score of its phase has not improved for `search.PATIENCE[phase]`
@@ -330,6 +330,6 @@ def test_a_v58_study_is_refused_naming_v59(tmp_path, monkeypatch):
     data = search.search_data(LEVEL, _bagset(tmp_path))
     _scripted_centroid(monkeypatch, [0.5] * 20)
     study = _phase_two(monkeypatch, tmp_path, data, {}, epochs=3, name="old")
-    study.set_user_attr("objective", "plan v59, Sec. 4.5, no target label: ...")
+    study.set_user_attr("objective", "plan v60, Sec. 4.5, no target label: ...")
     with pytest.raises(search.SearchError, match="v59"):
         _phase_two(monkeypatch, tmp_path, data, {}, epochs=3, n_trials=2, name="old")

@@ -1,6 +1,6 @@
 """The campaign: the plan's declared steps, wired to runnable local commands.
 
-Experiments plan v59, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
+Experiments plan v60, Secs. 4.2, 4.5, 4.6, 5.1-5.4, 6.1-6.3, 7.3, 7.5 and 7.7.
 The steps, in order (`STEPS`), each one a subcommand of
 `python -m MIL_CREDA_EEG.campaign <step> --config <file> [--product <dir>]`:
 
@@ -60,7 +60,7 @@ The steps, in order (`STEPS`), each one a subcommand of
    rival present with Holm over the arm's bootstrap family, and the Friedman
    ranking (`statistics`, `results`).
 5. `mechanisms` -- K1 per arm over the stored models of its core transfers
-   (`mechanisms.k1_tests`, plan v59: three criterion tests, Holm over the three --
+   (`mechanisms.k1_tests`, plan v60: three criterion tests, Holm over the three --
    the task arm's two marked-window tests on its EMOTIV bags and the level arm's
    event test --, the device arm's Robots side as support, every other attention
    as a reference), K2 over every
@@ -86,7 +86,7 @@ step on a remote worker belongs to `remote-execution`, behind the operator.
 **Required inputs (no default, `CampaignError` when absent).** The schedule
 (`epochs1` and `epochs2`, the search's epoch caps, at most `search.EPOCH_CAP`, and
 `bagsPerStep`: Sec. 7.6; each search trial stops on its pooled selection score's patience,
-`search.PATIENCE`, plan v59, and a refit has no early stopping) and the strategies and
+`search.PATIENCE`, plan v60, and a refit has no early stopping) and the strategies and
 transfers to run. Plan v42 resolved every decision the earlier inputs stood in
 for -- the seed reduction (one report seed), K1's common attention, band edges
 and scope (Sec. 6.1), and the open comparator decisions (Sec. 7.7) -- so those
@@ -143,7 +143,7 @@ from MIL_CREDA_EEG import two_phase
 from MIL_CREDA_EEG.mil_wrapper import COMPARATORS
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["4.2", "4.5", "4.6", "5.1", "5.2", "5.3", "5.4", "6.1", "6.2", "6.3", "7.3",
                  "7.5", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K1-atencion",
@@ -766,7 +766,7 @@ def _assignments(cfg: Mapping, bags: bag_data.BagSet) -> dict[str, assignment_mo
 def test_train_ratio(a: assignment_mod.Assignment, b: assignment_mod.Assignment) -> float:
     """Per rotation, target-test over training subjects summed over both directions; mean.
 
-    The training subjects are the refit's (plan v59, Sec. 4.5): every non-test fold."""
+    The training subjects are the refit's (plan v60, Sec. 4.5): every non-test fold."""
     ratios = []
     for r in sorted(a.rotations, key=int):
         views = [x.rotation(int(r)) for x in (a, b)]
@@ -1328,7 +1328,7 @@ def run_mechanisms(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = N
 # ------------------------------------------------------------------ Sec. 5.4
 
 
-#: The declared diagnostic of the search's pooled early stopping (plan v59), per row.
+#: The declared diagnostic of the search's pooled early stopping (plan v60), per row.
 EARLY_STOPPING_COLUMNS = ("phase", "name", "studies", "trials", "trialsReachedCap",
                           "fractionTrialsReachedCap", "primarySelectedAtLastEpoch",
                           "ensvSelectedAtLastEpoch")
@@ -1424,7 +1424,7 @@ def run_results(cfg: Mapping, product: Path, bags: bag_data.BagSet | None = None
             [{"phase": phase, **_stopping_row(search.stopping_diagnostic(name, sts))}
              for (phase, name), sts in sorted(stopping.items())],
             columns=EARLY_STOPPING_COLUMNS,
-            note=("Plan v59, Secs. 4.5 and 7.6: each search trial trains at most "
+            note=("Plan v60, Secs. 4.5 and 7.6: each search trial trains at most "
                   f"{search.EPOCH_CAP} epochs and stops when its pooled selection score has "
                   f"not improved for {search.PATIENCE[1]} (phase 1) or {search.PATIENCE[2]} "
                   "(phase 2) epochs. Per group or strategy, over every transfer and outer "
@@ -1553,7 +1553,7 @@ def write_synthetic_set(out: str | Path, *, seed: int = 0, subjects: int = 32,
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m MIL_CREDA_EEG.campaign",
-                                     description="The BALLADEER campaign of plan v59, local only.")
+                                     description="The BALLADEER campaign of plan v60, local only.")
     parser.add_argument("step", choices=(*STEPS, "all", "synthetic"))
     parser.add_argument("--config", help="campaign config (JSON)")
     parser.add_argument("--product", default=str(DEFAULT_PRODUCT),

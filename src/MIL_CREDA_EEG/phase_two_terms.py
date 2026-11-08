@@ -1,6 +1,6 @@
 """Can phase 2 beat source-only prediction from the stored phase-1 model, and at which step?
 
-Diagnostic, outside plan v59: it reports no result of the plan and writes nothing to the
+Diagnostic, outside plan v60: it reports no result of the plan and writes nothing to the
 model store. Target test labels are read per epoch to see the trajectory and choose
 nothing. The source trunk's BatchNorm is recalibrated on the source bags before the bridge,
 so `predict` and phase 2 start from the same model. `stored` reuses the phase-2 settings the

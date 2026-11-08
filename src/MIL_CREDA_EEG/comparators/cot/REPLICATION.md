@@ -20,7 +20,7 @@ Search failure is bounded to these places, not proof that code does not exist.
 
 ## Plan and equation analysis
 
-Binding: experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md §§4.5,
+Binding: experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md §§4.5,
 7.1–7.4 and 7.7 (written against v40; rebound to v54 on 2026-11-04, to v55 on 2026-11-05 and to v56 on 2026-11-05 with no change of behaviour: v56 keeps its §7.1 row and the §§4.5, 7.2–7.4, 7.7 rules this record cites). This is NOT reproduction of the image benchmarks. Source
 encoder, common attention and common head freeze in phase 2. Only target
 EEGNet and auxiliary centers/potentials train. No DANN/MMI addition: the plan
@@ -155,7 +155,7 @@ per epoch (v56 §4.5) under common trial budgets. Phase-one records come
 from the common group. Shared search.save_phase_two stores the selected full
 state; own load_phase_two verifies the extra source digest. The campaign refits the
 EnsV (trial, epoch) on its own where it differs from the primary one and stores it
-under a distinct root (plan v59 §4.5).
+under a distinct root (plan v60 §4.5).
 History records already have the dashboard keys; use shared two_phase.write_history
 under MIL-CREDA/Results/history*.json at campaign time. No Results tree is written
 by these library hooks or synthetic tests.

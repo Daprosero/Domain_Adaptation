@@ -1,4 +1,4 @@
-# Phase-1 and phase-2 diagnostics (toward plan v60)
+# Phase-1 and phase-2 diagnostics (experiments plan v60)
 
 Local diagnostic scripts behind the failure ledger `odd/tasks/v60-phase1-source-generalization.md`.
 They sit outside the plan's code files and choose nothing: every number is read on unseen subjects.

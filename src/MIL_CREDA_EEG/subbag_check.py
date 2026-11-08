@@ -1,6 +1,6 @@
 """Sub-bags in phase-1 training only: does a source model that cannot memorize transfer?
 
-Diagnostic, outside plan v59: it reports no result of the plan and writes nothing to the
+Diagnostic, outside plan v60: it reports no result of the plan and writes nothing to the
 model store. EEGNet carries the corrections already found necessary (inputs standardized by
 the source training statistics, the head free of its 0.25 max-norm, explicit L2, BatchNorm
 recalibrated, sigma recomputed on the trained network, balanced pseudo-labels in phase 2).

@@ -1,4 +1,4 @@
-"""A spectral instance encoder for the adaptation test, outside plan v59.
+"""A spectral instance encoder for the adaptation test, outside plan v60.
 
 Each window becomes its log absolute and log relative band power per channel (1-4, 4-8,
 8-13, 13-30, 30-45 Hz at 128 Hz), the features that generalized across subjects in the

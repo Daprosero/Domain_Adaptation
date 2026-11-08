@@ -2,7 +2,7 @@
 
 ## Code search and route (2026-11-02 UTC)
 
-Route: reimplementation of the ABMIL mechanism with the LMMD objective (AdaptMIL-LMMD, plan v59 §7.1/§7.3; MMD until v50), **controlled variant**, not a replication of published results. No upstream AdaptMIL repository was adopted; URL/commit/license: not applicable. No third-party files were copied.
+Route: reimplementation of the ABMIL mechanism with the LMMD objective (AdaptMIL-LMMD, plan v60 §7.1/§7.3; MMD until v50), **controlled variant**, not a replication of published results. No upstream AdaptMIL repository was adopted; URL/commit/license: not applicable. No third-party files were copied.
 
 | Place searched | Answer |
 |---|---|
@@ -34,11 +34,11 @@ Fetched raw HTML with the target interpreter and extracted every equation's LaTe
 
 ## Plan and equation analysis (before code)
 
-Binding plan: `experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md`, §§4.5, 7.1–7.4, 7.7 (originally written against v40, task T6/S1–S5; the LMMD switch follows the operator decision of 2026-11-04, `odd/tasks/pipeline-phase-review.md` L60, L62).
+Binding plan: `experiments/experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md`, §§4.5, 7.1–7.4, 7.7 (originally written against v40, task T6/S1–S5; the LMMD switch follows the operator decision of 2026-11-04, `odd/tasks/pipeline-phase-review.md` L60, L62).
 
 - `model.py`: existing EEGNetTrunk instances encode ragged bags `(mi,C,512)` into `(mi,256)`; native projection P maps each instance to `(mi,256)`; ABMIL scores `(mi,)`, weights softmax over instances, weighted sum `(256,)`; existing EEGNetHead maps stacked bags `(B,256)` to `(B,2)`. One projection, attention and head shared across domains. No common MIL wrapper, no MIL-CREDA consensus or L1 attention constraint.
 - `objectives.py`: mean pooling, Gaussian multi-kernel biased MMD, the four paper-equation reference functions (Eqs. 1–3 keep MK-MMD as the paper writes them), and the phase-2 LMMD. The controlled adaptation loss reads source labels and the frozen attention/head's target soft predictions as class weights, never target labels. Fixed scalar bandwidth derived only from training bags after the bridge.
-- `training.py`: supervised source phase fits EEGNet source + native ABMIL/projection + common head, for exactly `epochs1` epochs, last epoch kept (no early stopping, no restore; corrected 2026-11-04 from "source-validation early stopping and restoration"). Shared `two_phase.bridge` copies compatible EEGNet layers, freezes source/projection/attention/head and keeps source buffers fixed. Adaptation fits target EEGNet only using LMMD between **mean-pooled projected** bag vectors, the frozen head's target soft predictions as class weights (corrected 2026-11-04 from "MMD", the v50 variant); per-epoch target-validation predictions feed the search's pooled selection only. Shared evaluate, represent (the aggregated bag vector the head reads, for the centroid rule of plan v59 §4.5), balanced_accuracy, ClassQueues, batching and BagTensor are reused. Test evaluation is a separate caller operation.
+- `training.py`: supervised source phase fits EEGNet source + native ABMIL/projection + common head, for exactly `epochs1` epochs, last epoch kept (no early stopping, no restore; corrected 2026-11-04 from "source-validation early stopping and restoration"). Shared `two_phase.bridge` copies compatible EEGNet layers, freezes source/projection/attention/head and keeps source buffers fixed. Adaptation fits target EEGNet only using LMMD between **mean-pooled projected** bag vectors, the frozen head's target soft predictions as class weights (corrected 2026-11-04 from "MMD", the v50 variant); per-epoch target-validation predictions feed the search's pooled selection only. Shared evaluate, represent (the aggregated bag vector the head reads, for the centroid rule of plan v60 §4.5), balanced_accuracy, ClassQueues, batching and BagTensor are reused. Test evaluation is a separate caller operation.
 - `__init__.py`: explicit registration into existing model-store builder and phase-two search hook. No import-time registry mutation. The generic phase-one search trainer is hardcoded to the MIL-CREDA normalized CE; native CE pretraining is exposed separately, not silently routed through that trainer.
 
 Original-paper ordering is deliberately **not** implemented as the experiment scheduler. Reference objective functions do not claim to reproduce its training runs. The probe reports `nextStep: convert` from repository-wide mixed numpy/torch import inference; the read stage reference requires changing existing packages, outside this delegation. No conversion, comparison, GPU or remote action is taken here.
@@ -66,7 +66,7 @@ Original-paper ordering is deliberately **not** implemented as the experiment sc
 | Kernel mixture | unspecified | Mean of three Gaussian kernels at sigma times (.5,1,2), not TLlib equivalence claimed | unspecified |
 | Median bandwidth rule | Plan §7.7 specifies multiplier, not median scope/cadence | Initial joint source+target TRAINING mean-projected bag vectors; positive off-diagonal Euclidean median, fixed for phase2; collapsed median ->1 | unspecified |
 | Bandwidth multiplier search | Plan v56 §7.7 "el ancho de sus núcleos" | kernelMultiplier in {.5,.75,1,1.5}, shared distribution reused | match |
-| LMMD loss weight | Paper A: LMMD 1 (MMD 2.5); plan v59 §7.7 "el peso de la pérdida LMMD" | Key kept as `mmdWeight` (same search family and shared `search.LOSS_WEIGHT` distribution), now weighting LMMD; no production default | deviation: standardized search |
+| LMMD loss weight | Paper A: LMMD 1 (MMD 2.5); plan v60 §7.7 "el peso de la pérdida LMMD" | Key kept as `mmdWeight` (same search family and shared `search.LOSS_WEIGHT` distribution), now weighting LMMD; no production default | deviation: standardized search |
 | Phase1 loss | Plan §7.3; paper Eq.4 supervised objective | Raw mean bag CE, no MMD; fits source trunk/P/attention/head | deviation: source-first instead of mean-align-first |
 | Bridge | Plan §7.3 | Existing copy_compatible_layers via two_phase.bridge; mismatched spatial conv retains fresh initialization | match |
 | Phase2 trainable state | Plan §§7.3–7.4 | Target trunk only; P/attention/head and source params+BN buffers frozen | deviation: no native attention-learning second stage |

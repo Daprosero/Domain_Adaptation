@@ -1,6 +1,6 @@
 """The modality filter: where every column of every EEG file goes.
 
-Experiments plan v59, Sec. 2.1. Only EEG is kept from BALLADEER, and inside an
+Experiments plan v60, Sec. 2.1. Only EEG is kept from BALLADEER, and inside an
 EEG file there are three destinations, not two:
 
 * **signal** -- scalp EEG channels; the only columns the encoder will ever see;
@@ -36,7 +36,7 @@ import numpy as np
 import pandas as pd
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["2.1"],
     "experiments": ["2.1"],
     "invariants": [

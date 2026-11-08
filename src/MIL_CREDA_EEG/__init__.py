@@ -1,6 +1,6 @@
 """MIL_CREDA_EEG: the BALLADEER EEG data audit, preprocessing and data units.
 
-Experiments plan v59 (`experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md`;
+Experiments plan v60 (`experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md`;
 the audit was first written against v02), Secs. 2.1-2.6 and 2.10, for the audit. One
 module per audit step, each declaring the revision and section it implements in its
 own `__provenance__`. The data units -- the four-fold partition (`partition`), bags
@@ -33,7 +33,7 @@ this file imports them, so importing the package still needs no torch.
 #: one condition (Sec. 3.2), the primary metric is balanced accuracy (Sec. 4.6).
 __implementation__ = {
     "revision": {
-        "experiments": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+        "experiments": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
         "proposal": "research-concept-r44.md",
     },
     "premises": {

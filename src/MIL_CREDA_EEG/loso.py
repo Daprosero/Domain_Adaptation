@@ -1,6 +1,6 @@
 """Leave-one-subject-out check: does phase 2 beat source-only with more subjects per fit?
 
-Diagnostic, outside plan v59: it reports no result of the plan and writes nothing to the
+Diagnostic, outside plan v60: it reports no result of the plan and writes nothing to the
 model store. Phase 1 trains once on every source subject, at the source-selected settings
 of rotation 0 (`loso_selections.json`), and its BatchNorm statistics are recalibrated on
 the source. Then, for each target subject, phase 2 adapts on every other target subject,

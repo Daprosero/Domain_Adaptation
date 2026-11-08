@@ -1,4 +1,4 @@
-"""A trainable normalization at the EEGNet input, for the phase-1 check, outside plan v59.
+"""A trainable normalization at the EEGNet input, for the phase-1 check, outside plan v60.
 
 Amplitude and offset differ across tasks and devices. MIL-CREDA already keeps one trunk per
 domain, so a normalization layer at each trunk's input is domain-specific by construction.

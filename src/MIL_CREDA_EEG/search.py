@@ -1,6 +1,6 @@
 """The Optuna searches of both phases, per transfer and outer fold.
 
-Experiments plan v59, Secs. 4.2, 4.5, 7.3 and 7.7. The selection is a nested
+Experiments plan v60, Secs. 4.2, 4.5, 7.3 and 7.7. The selection is a nested
 cross-validation. The outer level is the frozen four-fold partition, rotated:
 rotation r tests fold k and F is the other three folds. The inner level is the
 three inner splits of F, read from the partition document (`assignment.inner_splits`,
@@ -19,7 +19,7 @@ the outer test fold's subjects.
 **A trial (Secs. 4.5, 7.7).** Each configuration is trained on the three inner
 splits of its outer fold with ONE training seed, `SEARCH_SEED`, distinct from
 the single report seed (`REPORT_SEEDS`, Sec. 4.6), recording every trained epoch's
-validation predictions. Plan v59 (Secs. 4.5, 7.6): a trial trains at most its epoch cap
+validation predictions. Plan v60 (Secs. 4.5, 7.6): a trial trains at most its epoch cap
 (`epochs1` or `epochs2`, at most `EPOCH_CAP` = 100) and stops when the POOLED per-epoch
 selection score of its phase has not improved for `PATIENCE[phase]` consecutive epochs
 (30 in phase 1, 10 in phase 2), never before a strategy's `MIN_TRAINED_EPOCHS` (CCA-LSC:
@@ -152,7 +152,7 @@ from MIL_CREDA_EEG import assignment as assignment_mod
 from MIL_CREDA_EEG import bag_data, mil_wrapper, model_store, partition, two_phase
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["4.2", "4.5", "5.4", "7.3", "7.6", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
@@ -207,7 +207,7 @@ PHASE_ONE_SEED = REPORT_SEEDS[0]
 #: The fields of a phase-1 checkpoint's sidecar that name it (`phase_one_checkpoint_identity`).
 PHASE_ONE_CHECKPOINT_FIELDS = ("transfer", "rotation", "seed", "phase", "name",
                                partition.HASH_FIELD, "state_sha256")
-#: Plan v59, Secs. 4.5 and 7.6: every search trial trains at most `EPOCH_CAP` epochs and
+#: Plan v60, Secs. 4.5 and 7.6: every search trial trains at most `EPOCH_CAP` epochs and
 #: stops when the POOLED per-epoch selection score of its phase (phase 1: source-validation
 #: balanced accuracy; phase 2: the centroid score; both over the three inner splits) has
 #: not improved for `PATIENCE[phase]` consecutive epochs. A refit has no early stopping.
@@ -444,12 +444,12 @@ PRIMARY_RULE = ("phase 1: the best epoch's source-validation balanced accuracy o
 #: What a study's sampler observes, part of its identity (`open_study` refuses a study
 #: scored by another objective, a v58 one included).
 PHASE_ONE_OBJECTIVE = (
-    "plan v59, Secs. 4.5 and 7.6: the best epoch's source-validation balanced accuracy of "
+    "plan v60, Secs. 4.5 and 7.6: the best epoch's source-validation balanced accuracy of "
     "the subject-level confusion counts pooled over the three inner splits; each trial "
     f"trains at most {EPOCH_CAP} epochs and stops when that pooled score has not improved "
     f"for {PATIENCE[1]} consecutive epochs")
 PHASE_TWO_OBJECTIVE = (
-    "plan v59, Secs. 4.5 and 7.6, no target label: the best epoch's centroid-rule balanced "
+    "plan v60, Secs. 4.5 and 7.6, no target label: the best epoch's centroid-rule balanced "
     "accuracy (the source validation bags of each inner split assigned to the nearest "
     "centroid of the adapted model's target validation pseudo-classes, scored against "
     "their source labels, counts pooled over the three inner splits), what the sampler "
@@ -619,7 +619,7 @@ def select(study: optuna.Study, rule: str = "primary") -> dict:
 
 @dataclass
 class PooledStop:
-    """Plan v59's stop of one search trial over its pooled per-epoch score: an epoch
+    """Plan v60's stop of one search trial over its pooled per-epoch score: an epoch
     improves when its score is strictly greater than every earlier one (a non-finite score
     never improves); after `update`, the trial stops when it trained `cap` epochs, or at
     least `minimum` epochs and the last `patience` ones did not improve."""
@@ -778,7 +778,7 @@ class _SplitControl:
 def train_inner_splits(train_split: Callable[[int], Mapping],
                        score: Callable[[Sequence[Mapping]], float], phase: int,
                        cap: int, minimum: int = 1) -> tuple[list[Mapping], dict]:
-    """Plan v59, Secs. 4.5 and 7.6: one search trial's trainings of its `N_INNER` inner
+    """Plan v60, Secs. 4.5 and 7.6: one search trial's trainings of its `N_INNER` inner
     splits (`train_split(i)` -> that split's trainer result), in lockstep, stopped by the
     pooled score `score(records of one epoch, one per split)` with `PATIENCE[phase]`, at
     most `cap` epochs and never before `minimum`. Returns the split results (each trainer
@@ -801,7 +801,7 @@ def train_inner_splits(train_split: Callable[[int], Mapping],
 
 
 def stopping_diagnostic(name: str, studies: Sequence[optuna.Study]) -> dict:
-    """Plan v59's declared diagnostic of the pooled early stopping, for one strategy (or
+    """Plan v60's declared diagnostic of the pooled early stopping, for one strategy (or
     phase-1 group) over its studies: the fraction of its trials that reached the epoch cap,
     and per selection rule the fraction of selected epochs equal to the last epoch their
     trial trained (a selection at the last trained epoch says the cap, not the patience,
@@ -829,7 +829,7 @@ def _search_cap(schedule: Mapping, phase: int) -> int:
     cap = int(schedule[f"epochs{phase}"])
     if cap > EPOCH_CAP:
         raise SearchError(f"epochs{phase} = {cap} exceeds the search's epoch cap of "
-                          f"{EPOCH_CAP} (plan v59, Secs. 4.5 and 7.6)")
+                          f"{EPOCH_CAP} (plan v60, Secs. 4.5 and 7.6)")
     return cap
 
 

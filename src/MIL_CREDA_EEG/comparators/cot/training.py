@@ -1,4 +1,4 @@
-"""COT Algorithm 1 under plan v59 §§4.5, 7.2–7.4, 7.7 (controlled variant).
+"""COT Algorithm 1 under plan v60 §§4.5, 7.2–7.4, 7.7 (controlled variant).
 
 Phase 2 runs its `epochs2` whole and keeps the last epoch (no early stopping, no
 restore); with target validation bags every epoch's validation predictions are
@@ -21,7 +21,7 @@ from MIL_CREDA_EEG.comparators.cot.losses import (
 from MIL_CREDA_EEG.comparators.cot.model import COTModel
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["4.5", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [
