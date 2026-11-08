@@ -140,6 +140,7 @@ def fit_deconfounding(src, groups):
 
 spectral_trunk.SpectralTrunk.features = deconfounded_features
 DECONF = sys.argv[2] == 'deconf'
+NOSTAGE0 = sys.argv[2] == 'nostage0'
 DUMP = sys.argv[3]
 def reps(m, bs, side):
     with torch.no_grad():
@@ -192,7 +193,7 @@ for name in sys.argv[4:]:
                 m.attention_gamma, m.attention_temperature = CONSENSUS                      # MIL-CREDA on
                 m._sigma = between_bag_sigma(m, src, 'source', seed=seed); ph1['checkpoint']['sigma'] = m._sigma
                 j = two_phase.bridge(m)
-                m.target_trunk.norm = sc.standard_of(m.target_trunk, tgt)                 # stage 0
+                m.target_trunk.norm = m.source_trunk.norm if NOSTAGE0 else sc.standard_of(m.target_trunk, tgt)   # stage 0
                 P.setdefault('stage 0 only (per-domain standardization)', []).extend(prob(m, test, 'target'))
                 ZT.setdefault('stage 0 only (per-domain standardization)', []).append(reps(m, test, 'target'))
                 for label, (lr2, terms, mu) in VARIANTS.items():
@@ -214,8 +215,8 @@ for name in sys.argv[4:]:
             am, n = age_matched_auc(Y, p, SUB)
             out[k] = {'BA': round(BA(Y, np.asarray(p) > .5), 3), 'AUC': round(AUC(Y, p), 3), 'ageMatchedAUC': am,
                       'domainAUC': domain_auc(np.concatenate(ZS), np.concatenate(ZT[k]))}
-        print('RESULT', 'deconf' if DECONF else 'plain', name, 'seed', seed, 'agePairs', n, json.dumps(out), flush=True)
+        print('RESULT', sys.argv[2], name, 'seed', seed, 'agePairs', n, json.dumps(out), flush=True)
         with open(DUMP, 'a') as fh:
-            fh.write(json.dumps({'deconf': DECONF, 'transfer': name, 'seed': seed, 'subjects': SUB,
+            fh.write(json.dumps({'deconf': sys.argv[2] != 'plain', 'transfer': name, 'seed': seed, 'subjects': SUB,
                                  'labels': [int(v) for v in Y], 'scores': {k: [float(v) for v in p] for k, p in P.items()},
                                  'domainAUC': {k: v['domainAUC'] for k, v in out.items()}}) + '\n')
