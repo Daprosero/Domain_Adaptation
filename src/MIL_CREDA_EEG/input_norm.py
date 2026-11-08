@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -52,6 +53,43 @@ class LogPowerTrunk(eegnet.EEGNetTrunk):
         h = self.bn3(self.separable_point(self.separable_depth(eegnet._same(h, eegnet.SEPARABLE_LENGTH))))
         h = self.drop2(self.pool2(self.elu2(h)))
         return h.flatten(1)
+
+
+#: Canonical EEG bands for the eight fixed temporal filters (Hz, at 128 Hz).
+BANDS = ((1, 4), (4, 8), (8, 13), (13, 20), (20, 30), (30, 45), (4, 13), (13, 45))
+
+
+class FixedBandTrunk(LogPowerTrunk):
+    """The log-power EEGNet with its temporal filters fixed to canonical bands, not trained.
+
+    A filter bank of band-pass FIR kernels (one per band, `KERNEL_LENGTH` taps) replaces the
+    learned temporal convolution; spatial filters, block 2 and the head stay learned. This is
+    the structure of FBCNet (Mane et al., 2021): fixed bands, learned spatial filters, log power.
+    """
+
+    def reset_parameters(self) -> None:
+        super().reset_parameters()
+        from scipy.signal import firwin
+        taps = eegnet.KERNEL_LENGTH - 1 if eegnet.KERNEL_LENGTH % 2 == 0 else eegnet.KERNEL_LENGTH
+        kernels = []
+        for lo, hi in BANDS[:eegnet.F1]:
+            k = firwin(taps, [lo, hi], pass_zero=False, fs=128)
+            kernels.append(np.pad(k, (0, eegnet.KERNEL_LENGTH - taps)))
+        with torch.no_grad():
+            self.conv_temporal.weight.copy_(torch.tensor(np.stack(kernels), dtype=torch.float32)
+                                            .reshape(eegnet.F1, 1, 1, eegnet.KERNEL_LENGTH))
+        self.conv_temporal.weight.requires_grad_(False)
+
+
+@contextlib.contextmanager
+def fixed_bands():
+    """The fixed-band log-power EEGNet while the block runs, the plan's one afterwards."""
+    plain = eegnet.EEGNetTrunk
+    eegnet.EEGNetTrunk = FixedBandTrunk
+    try:
+        yield
+    finally:
+        eegnet.EEGNetTrunk = plain
 
 
 @contextlib.contextmanager

@@ -111,13 +111,14 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
     started = time.time()
     trunk = (shallow_trunk.installed() if backbone == "shallow"
              else input_norm.log_power() if backbone == "eegnet-logpower"
+             else input_norm.fixed_bands() if backbone == "eegnet-fixedbands"
              else input_norm.installed(backbone.split("-")[1]) if backbone.startswith("eegnet-")
              else contextlib.nullcontext())
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, trunk, \
             patched({**SPEC, **(arch or {})}):
         for rotation in range(4):
             rows = run_rotation(transfer, rotation, subbag, cfg, a, bags, device, seed,
-                                scale=backbone in ("eegnet", "eegnet-logpower", "shallow"),
+                                scale=backbone in ("eegnet", "eegnet-logpower", "eegnet-fixedbands", "shallow"),
                                 recipe=RECIPES.get(backbone))
             for k, v in rows.items():
                 pooled[k] += v

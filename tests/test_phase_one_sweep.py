@@ -277,3 +277,16 @@ def test_the_log_power_block_keeps_eegnet_shapes_and_restores_it():
         out = trunk(torch.randn(3, 14, 512))
         assert out.shape == (3, 256) and torch.isfinite(out).all()
     assert eegnet.EEGNetTrunk is plain
+
+
+def test_fixed_bands_are_frozen_band_pass_filters():
+    from MIL_CREDA_EEG import input_norm
+    with input_norm.fixed_bands():
+        trunk = eegnet.EEGNetTrunk(14)
+        w = trunk.conv_temporal.weight
+        assert not w.requires_grad and w.shape == (8, 1, 1, 64)
+        t = torch.arange(512) / 128
+        alpha = torch.sin(2 * torch.pi * 10 * t).reshape(1, 1, 1, 512)
+        gain = torch.nn.functional.conv2d(alpha, w).pow(2).mean(dim=(2, 3))[0]
+        assert int(gain.argmax()) in (2, 6)       # the alpha (8-13) or 4-13 band passes 10 Hz most
+        assert trunk(torch.randn(2, 14, 512)).shape == (2, 256)
