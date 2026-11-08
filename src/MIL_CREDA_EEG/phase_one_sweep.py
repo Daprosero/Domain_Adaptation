@@ -40,7 +40,7 @@ from MIL_CREDA_EEG import campaign, eegnet, model_store, remote_units, search, t
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
 
 SELECTIONS = Path(__file__).with_name("phase_one_sweep_selections.json")
-TRANSFERS = {"RC": "Robots->CogniFit", "CR": "CogniFit->Robots"}
+TRANSFERS = {"RC": "Robots->CogniFit", "CR": "CogniFit->Robots", "L11": "L11->L1"}
 SEEDS = (1, 2, 3)
 EPOCHS = 40
 OUTPUT = "sweep"
@@ -51,6 +51,8 @@ WIDE = dict(F1=16, F2=32)
 CONFIGS: dict[str, dict] = {
     "stored-E": dict(epochs="stored"),
     "stored-40": dict(),
+    "filt-E": dict(epochs="stored", band="filt"),
+    "cap72-E": dict(epochs="stored", cap=72),
     "lr1e-3": dict(lr=1e-3),
     "head1": dict(OPEN),
     "drop0": dict(OPEN, DROPOUT=0.0),
@@ -94,6 +96,30 @@ def patched(spec: Mapping):
     finally:
         for key, value in saved.items():
             setattr(eegnet, key, value)
+
+
+SOS = None
+
+
+def prepared(bags, spec: Mapping) -> list:
+    """The input the configuration asks for: 1-45 Hz with common average, or a window cap."""
+    global SOS
+    if not spec.get("band") and not spec.get("cap"):
+        return bags
+    out = []
+    for b in bags:
+        w = b.windows
+        if spec.get("cap") and w.shape[0] > spec["cap"]:
+            keep = torch.linspace(0, w.shape[0] - 1, spec["cap"]).round().long()
+            w = w[keep]
+        if spec.get("band") == "filt":
+            from scipy.signal import butter, sosfiltfilt
+            SOS = SOS if SOS is not None else butter(4, [1, 45], "bandpass", fs=128, output="sos")
+            x = w.double().numpy()
+            x = sosfiltfilt(SOS, x - x.mean(-1, keepdims=True), axis=-1)
+            w = torch.from_numpy((x - x.mean(1, keepdims=True)).copy()).float()
+        out.append(two_phase.BagTensor(b.subject, b.condition, b.label, w))
+    return out
 
 
 def balanced_accuracy(labels: Sequence[int], probabilities: Sequence[float]) -> float:
@@ -154,9 +180,9 @@ def run_unit(unit: str, cfg: Mapping, bags, device: torch.device,
             epochs = epochs_override or epochs
             hyper = search.phase_one_hyper("MIL-CREDA", params,
                                            search.refit_schedule(cfg["schedule"], 1, epochs))
-            train = two_phase.bag_tensors(A.side_bags(a, bags, "source", r, A.REFIT_ROLE))
-            source = two_phase.bag_tensors(A.side_bags(a, bags, "source", r, "test"))
-            target = two_phase.bag_tensors(A.side_bags(a, bags, "target", r, "test"))
+            train = prepared(two_phase.bag_tensors(A.side_bags(a, bags, "source", r, A.REFIT_ROLE)), spec)
+            source = prepared(two_phase.bag_tensors(A.side_bags(a, bags, "source", r, "test")), spec)
+            target = prepared(two_phase.bag_tensors(A.side_bags(a, bags, "target", r, "test")), spec)
             torch.manual_seed(seed)
             generator = torch.Generator().manual_seed(seed)
             model = model_store.build_model("MIL-CREDA", int(train[0].windows.shape[1]),
