@@ -53,6 +53,8 @@ CONFIGS: dict[str, dict] = {
     "stored-40": dict(),
     "filt-E": dict(epochs="stored", band="filt"),
     "cap72-E": dict(epochs="stored", cap=72),
+    "zbag-E": dict(epochs="stored", zbag=True),
+    "zbag-filt-E": dict(epochs="stored", zbag=True, band="filt"),
     "lr1e-3": dict(lr=1e-3),
     "head1": dict(OPEN),
     "drop0": dict(OPEN, DROPOUT=0.0),
@@ -104,7 +106,7 @@ SOS = None
 def prepared(bags, spec: Mapping) -> list:
     """The input the configuration asks for: 1-45 Hz with common average, or a window cap."""
     global SOS
-    if not spec.get("band") and not spec.get("cap"):
+    if not spec.get("band") and not spec.get("cap") and not spec.get("zbag"):
         return bags
     out = []
     for b in bags:
@@ -118,6 +120,10 @@ def prepared(bags, spec: Mapping) -> list:
             x = w.double().numpy()
             x = sosfiltfilt(SOS, x - x.mean(-1, keepdims=True), axis=-1)
             w = torch.from_numpy((x - x.mean(1, keepdims=True)).copy()).float()
+        if spec.get("zbag"):                       # per subject, from its own windows only
+            mean = w.mean(dim=(0, 2), keepdim=True)
+            std = w.std(dim=(0, 2), keepdim=True).clamp_min(1e-6)
+            w = (w - mean) / std
         out.append(two_phase.BagTensor(b.subject, b.condition, b.label, w))
     return out
 

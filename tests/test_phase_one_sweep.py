@@ -158,3 +158,11 @@ def test_prepared_caps_windows_and_filters_without_touching_labels():
     filtered = sweep.prepared([bag], {"band": "filt"})[0]
     assert torch.allclose(filtered.windows.mean(1), torch.zeros(100, 512), atol=1e-4)
     assert sweep.prepared([bag], {}) == [bag]
+
+
+def test_zbag_standardizes_each_channel_within_its_own_bag():
+    from MIL_CREDA_EEG import two_phase
+    bag = two_phase.BagTensor("s", "c", 0, 5 + 3 * torch.randn(20, 14, 512))
+    z = sweep.prepared([bag], {"zbag": True})[0].windows
+    assert torch.allclose(z.mean(dim=(0, 2)), torch.zeros(14), atol=1e-4)
+    assert torch.allclose(z.std(dim=(0, 2)), torch.ones(14), atol=1e-3)
