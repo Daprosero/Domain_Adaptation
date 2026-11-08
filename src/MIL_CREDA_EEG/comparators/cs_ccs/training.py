@@ -25,7 +25,7 @@ from MIL_CREDA_EEG import eegnet, mil_wrapper, model_store, search, two_phase
 from .divergences import ccs_divergence, cs_divergence, median_bandwidth, normalise
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": [

@@ -1,6 +1,6 @@
 """The defect log: the audit pass and the per-record log of its marks.
 
-Experiments plan v59, Sec. 2.10. The plan's flow table -- initial, rate (2.2),
+Experiments plan v60, Sec. 2.10. The plan's flow table -- initial, rate (2.2),
 record without EEG (2.4), contact (2.5), undetermined diagnosis and EPOC+
 records (2.10), bag floor (3.2), final -- and its crosses by exclusion type are
 produced by `exclusions`, which applies those exclusions. This module is the
@@ -58,7 +58,7 @@ from MIL_CREDA_EEG.audit_rate import CGX_MENU, EMOTIV_MENU, audit_rate
 from MIL_CREDA_EEG.modality import emotiv_export_streams, read_record
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["2.6", "2.10"],
     "experiments": ["2.6", "2.10"],
     "invariants": [

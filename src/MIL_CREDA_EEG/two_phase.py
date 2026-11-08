@@ -1,6 +1,6 @@
 """MIL-CREDA's two-phase training on EEG, for one transfer, rotation and seed.
 
-Experiments plan v59, Secs. 4.5, 7.3 and 7.7, over proposal r44 Eqs. 21 and
+Experiments plan v60, Secs. 4.5, 7.3 and 7.7, over proposal r44 Eqs. 21 and
 32-39. The phase mechanics follow the retired toy-set runner (git history,
 `src/MIL_CREDA_Benchmark/toy_run.py` before 9b733d7) as a reference; nothing of
 it is imported or restored, and the plan's rules govern where the two differ.
@@ -10,7 +10,7 @@ training here keeps the weights of its last trained epoch; no epoch is restored.
 Outside a search trial it runs the epoch count it is given, whole (a refit runs
 exactly the selected E1 or E2). Inside a search trial the three inner splits'
 trainings advance together and stop when the trial's POOLED selection score has
-not improved for the phase's patience (plan v59): every trainer loops over
+not improved for the phase's patience (plan v60): every trainer loops over
 `epoch_range(count)`, which is `range(count)` unless the calling thread runs
 under an `epoch_control` the search installed, and `validation_record` hands each
 epoch's record to that control. Nothing in a trainer's numerics depends on it. With validation bags (a search
@@ -117,7 +117,7 @@ from MIL_CREDA_EEG.mil_creda_model import (CLASSES, TERM_BOUNDS, MILCREDAModel,
                                            adaptation_terms, source_term)
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["4.5", "7.3", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo", "K3-ablacion"],
     "equations": ["21", "28", "29", "30", "31", "32", "33", "38", "39"],
@@ -160,7 +160,7 @@ TERM_SELECTIONS = {"global term only": (LAMBDA_GLOBAL, 0.0),
 BOTH_TERMS = "both terms"
 #: Sec. 7.7: what each phase searches, and the schedule (7.6). The epochs are the
 #: search's caps (at most `search.EPOCH_CAP`; the search's pooled patience may stop a
-#: trial earlier, plan v59), or the selected E1 and E2 of a refit.
+#: trial earlier, plan v60), or the selected E1 and E2 of a refit.
 PHASE_ONE_KEYS = ("lr1", "wd1", "attentionGamma", "attentionTemperature", "sigmaMultiplier")
 PHASE_TWO_KEYS = ("lr2", "wd2", "tauLocal")
 SCHEDULE_KEYS = ("epochs1", "epochs2", "bagsPerStep")
@@ -254,7 +254,7 @@ _EPOCH_CONTROL = threading.local()
 
 @contextmanager
 def epoch_control(control) -> Iterator[None]:
-    """Run the calling thread's trainings under `control` (plan v59, Secs. 4.5, 7.6): an
+    """Run the calling thread's trainings under `control` (plan v60, Secs. 4.5, 7.6): an
     object with `collect(record)`, given every `validation_record` this thread builds,
     and `boundary(epoch) -> bool`, asked after each trained epoch whether to train the
     next one. The search's lockstep of the three inner splits installs it; nothing else."""
@@ -269,7 +269,7 @@ def epoch_control(control) -> Iterator[None]:
 def epoch_range(count: int) -> Iterator[int]:
     """The epochs a trainer runs: `range(count)`, or its prefix up to the epoch the
     calling thread's `epoch_control` stops at (the search's pooled early stopping, plan
-    v59). After each epoch the control is told it ended, including the last one, so the
+    v60). After each epoch the control is told it ended, including the last one, so the
     trainer's code after its loop runs only when the control lets it."""
     count = int(count)
     control = getattr(_EPOCH_CONTROL, "control", None)

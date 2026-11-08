@@ -7,7 +7,7 @@ from MIL_CREDA_EEG import mil_wrapper, two_phase
 from .training import DEFAULTS, adapt
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["cs_ccs_synthetic_smoke_executes"],

@@ -1,4 +1,4 @@
-"""Phase-1 sweep outside plan v59's search space: filters, regularization, learning rate.
+"""Phase-1 sweep outside plan v60's search space: filters, regularization, learning rate.
 
 Diagnostic, not a campaign step. It answers whether phase 1 of MIL-CREDA can learn the
 task pair under other settings, reading held-out source and target subjects of every

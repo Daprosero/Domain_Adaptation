@@ -1,6 +1,6 @@
 """A random search of EEGNet phase 1 with the corrections, chosen on the source inner splits.
 
-Diagnostic, outside plan v59: it reports no result of the plan and writes nothing to the
+Diagnostic, outside plan v60: it reports no result of the plan and writes nothing to the
 model store. Every trial keeps the corrections already found necessary (inputs standardized
 with the source training statistics, the head free of its 0.25 max-norm, BatchNorm
 recalibrated before scoring, explicit L2 instead of Adam weight decay) and samples learning

@@ -5,7 +5,7 @@ early stopping, no restore). With target validation bags (an inner split) every
 epoch's validation predictions are recorded for the search's pooled selection;
 without them (the refit) nothing is evaluated. The paper's MMD-weight and
 confidence schedules are rescaled to the phase-2 budget, `search.EPOCH_CAP` (plan
-v59 7.4 and 7.6), never to the epochs a run trains: a search trial stopped by
+v60 7.4 and 7.6), never to the epochs a run trains: a search trial stopped by
 patience and a refit of E2 epochs both follow the first epochs of the same schedule,
 so the refit trains what the search validated.
 """
@@ -21,7 +21,7 @@ from MIL_CREDA_EEG import eegnet, mil_wrapper, model_store, search, two_phase
 from . import losses
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["4.5", "7.1", "7.2", "7.3", "7.4", "7.7"],
     "experiments": ["A-nivel", "B-tarea", "C-dispositivo"],
     "invariants": ["uda_phase_two_freezes_common_predictor", "uda_target_training_labels_are_unread",

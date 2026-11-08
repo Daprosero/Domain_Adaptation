@@ -1,6 +1,6 @@
 """Four-second instances, and the side data each one carries.
 
-Experiments plan v59, Secs. 3.1, 2.3, 2.4, 2.5, 2.8 and 2.1. An instance is a
+Experiments plan v60, Secs. 3.1, 2.3, 2.4, 2.5, 2.8 and 2.1. An instance is a
 four-second window without overlap, cut from the signal already filtered and
 resampled (Sec. 2.7): 512 samples at 128 Hz. The partial last window is
 discarded, without a threshold (Sec. 3.1), and so is the first window of every
@@ -59,7 +59,7 @@ from MIL_CREDA_EEG.modality import EEGRecord
 from MIL_CREDA_EEG.preprocess_filter import TARGET_RATE, preprocess, scalp_signal
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["3.1", "2.3", "2.4", "2.5", "2.8", "2.1"],
     "experiments": ["3.1", "2.3", "2.4", "2.5", "2.8", "2.1"],
     "invariants": [

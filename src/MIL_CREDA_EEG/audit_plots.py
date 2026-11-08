@@ -1,6 +1,6 @@
 """Plain figures for the BALLADEER audit: bars, histograms, heatmaps, boxes.
 
-Experiments plan v59, Secs. 2.1-2.10 and 4.2. Every audit number is shown in a
+Experiments plan v60, Secs. 2.1-2.10 and 4.2. Every audit number is shown in a
 figure a reader can take in at a glance: one message per figure, both axis
 labels, and a one- or two-line caption under the plot saying what to look at.
 The text on the figures is in Spanish because the notebooks are; this module
@@ -29,7 +29,7 @@ import pandas as pd
 from MIL_CREDA_EEG import ps_figures
 
 __provenance__ = {
-    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v59.md",
+    "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v60.md",
     "sections": ["2.10"],
     "experiments": ["2.10"],
     "invariants": [

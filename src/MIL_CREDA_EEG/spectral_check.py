@@ -1,6 +1,6 @@
 """The phase-1 recipe that generalized in every source, with phase 2 on top. Diagnostic.
 
-Outside plan v59: it reports no result of the plan and writes nothing to the model store.
+Outside plan v60: it reports no result of the plan and writes nothing to the model store.
 Windows are filtered to 1-45 Hz and re-referenced to their common average, as the band-power
 check that generalized; at most `WINDOWS` evenly spaced windows per bag. The spectral encoder
 (`spectral_trunk`) reads log absolute and relative band power per channel, standardized by

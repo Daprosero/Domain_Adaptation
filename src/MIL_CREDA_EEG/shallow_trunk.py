@@ -1,4 +1,4 @@
-"""ShallowConvNet as an instance encoder for the backbone test, outside plan v59.
+"""ShallowConvNet as an instance encoder for the backbone test, outside plan v60.
 
 Schirrmeister et al. (2017, https://doi.org/10.1002/hbm.23730): temporal convolution, spatial
 convolution, square, mean pooling, log. The block computes a learned log band power, so it
