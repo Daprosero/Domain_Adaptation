@@ -59,6 +59,9 @@ CONFIGS: dict[str, dict] = {
     # The three changes that made the spectral encoder generalize, on EEGNet.
     "fix-l2-1e-2": dict(epochs=100, lr=1e-2, l2=1e-2, standard=True, uniform=True, HEAD_MAX_NORM=100.0),
     "fix-l2-1e-3": dict(epochs=100, lr=1e-2, l2=1e-3, standard=True, uniform=True, HEAD_MAX_NORM=100.0),
+    # Euclidean alignment (He and Wu, IEEE TBME 2020): each subject whitened by its own covariance.
+    "ea-E": dict(epochs="stored", ea=True),
+    "ea-fix": dict(epochs=100, lr=1e-2, l2=1e-3, ea=True, uniform=True, HEAD_MAX_NORM=100.0),
     "zbag-filt-E": dict(epochs="stored", zbag=True, band="filt"),
     "lr1e-3": dict(lr=1e-3),
     "head1": dict(OPEN),
@@ -111,7 +114,7 @@ SOS = None
 def prepared(bags, spec: Mapping) -> list:
     """The input the configuration asks for: 1-45 Hz with common average, or a window cap."""
     global SOS
-    if not spec.get("band") and not spec.get("cap") and not spec.get("zbag"):
+    if not any(spec.get(k) for k in ("band", "cap", "zbag", "ea")):
         return bags
     out = []
     for b in bags:
@@ -125,6 +128,12 @@ def prepared(bags, spec: Mapping) -> list:
             x = w.double().numpy()
             x = sosfiltfilt(SOS, x - x.mean(-1, keepdims=True), axis=-1)
             w = torch.from_numpy((x - x.mean(1, keepdims=True)).copy()).float()
+        if spec.get("ea"):                         # R^(-1/2) X, R the subject's mean covariance
+            x = w.double() - w.double().mean(-1, keepdim=True)
+            cov = torch.einsum("nct,ndt->cd", x, x) / (x.shape[0] * x.shape[2])
+            vals, vecs = torch.linalg.eigh(cov)
+            inv_sqrt = vecs @ torch.diag(vals.clamp_min(1e-10) ** -0.5) @ vecs.T
+            w = torch.einsum("cd,ndt->nct", inv_sqrt, x).float()
         if spec.get("zbag"):                       # per subject, from its own windows only
             mean = w.mean(dim=(0, 2), keepdim=True)
             std = w.std(dim=(0, 2), keepdim=True).clamp_min(1e-6)
