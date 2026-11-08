@@ -67,8 +67,9 @@ def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed
         phase1 = two_phase.train_source_phase(model, subbags(source, size, generator), [], hyper,
                                               generator, device, **common)
     recalibrate(model, source, device)
-    model._sigma = hyper["sigmaMultiplier"] * two_phase.within_bag_median_distance(
-        model, source, "source", device)
+    median = two_phase.within_bag_median_distance(model, source, "source", device)
+    if median > 0:           # a collapsed encoder (every window alike) keeps the phase-1 sigma
+        model._sigma = hyper["sigmaMultiplier"] * median
     phase1["checkpoint"]["sigma"] = model._sigma
     rows = {"train": _side(model, source, device), "source": _side(model, held, device)}
     if same:                 # source-only prediction needs the source montage on the target
