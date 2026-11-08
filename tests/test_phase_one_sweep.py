@@ -237,3 +237,23 @@ def test_the_shallow_trunk_keeps_its_layers_under_the_sweep_constants():
     with shallow_trunk.installed(), sweep.patched({"HEAD_MAX_NORM": 100.0, "DROPOUT": 0.5}):
         assert eegnet.EEGNetTrunk is shallow_trunk.ShallowTrunk and eegnet.HEAD_MAX_NORM == 100.0
     assert eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk
+
+
+def test_input_normalization_is_domain_specific_and_restores_eegnet():
+    from MIL_CREDA_EEG import campaign, input_norm, model_store, two_phase
+    campaign.register(["MIL-CREDA"])
+    plain = eegnet.EEGNetTrunk
+    for kind in ("batch", "layer"):
+        with input_norm.installed(kind):
+            model = model_store.build_model("MIL-CREDA", 14, 29, {"attentionGamma": 0.5, "attentionTemperature": 1.0})
+            assert model.source_trunk(5 + 3 * torch.randn(4, 14, 512)).shape == (4, 256)
+            model.fix_sigma(1.0)
+            assert "input_norm" in two_phase.bridge(model)["layer_copy"]["kept_initialization"]
+        assert eegnet.EEGNetTrunk is plain
+
+
+def test_window_norm_removes_each_window_scale():
+    from MIL_CREDA_EEG.input_norm import WindowNorm
+    x = torch.randn(3, 4, 512) * torch.tensor([1.0, 10.0, 100.0])[:, None, None]
+    y = WindowNorm(4)(x)
+    assert torch.allclose(y.mean(dim=(1, 2)), torch.zeros(3), atol=1e-4)

@@ -157,7 +157,7 @@ def recalibrate(model, bags, device: torch.device, chunk: int = 512,
                 trunk: str = "source_trunk") -> None:
     """Recompute one trunk's BatchNorm statistics from `bags`; no weight moves."""
     encoder = getattr(model, trunk)
-    layers = [m for m in encoder.modules() if isinstance(m, torch.nn.BatchNorm2d)]
+    layers = [m for m in encoder.modules() if isinstance(m, torch.nn.modules.batchnorm._BatchNorm)]
     momenta = [m.momentum for m in layers]
     model.eval()
     for layer in layers:
