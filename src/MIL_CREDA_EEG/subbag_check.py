@@ -92,7 +92,7 @@ def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, subbag: int,
-          seed: int = 1, backbone: str = "eegnet", workdir: str | Path | None = None,
+          seed: int = 1, backbone: str = "eegnet", arch: Mapping | None = None, workdir: str | Path | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
     """Four rotations of `transfer`, with the evidence a single run's fetch reads."""
     environ = os.environ if environ is None else environ
@@ -113,7 +113,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
              else input_norm.installed(backbone.split("-")[1]) if backbone.startswith("eegnet-")
              else contextlib.nullcontext())
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, trunk, \
-            patched(SPEC):
+            patched({**SPEC, **(arch or {})}):
         for rotation in range(4):
             rows = run_rotation(transfer, rotation, subbag, cfg, a, bags, device, seed,
                                 scale=not backbone.startswith("eegnet-"),
@@ -123,6 +123,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
             pooled = {k: v for k, v in pooled.items() if v or k in rows}
             print(transfer, subbag, seed, rotation, {k: _summary(v) for k, v in rows.items()}, flush=True)
     record = {"transfer": transfer, "subbag": subbag, "seed": seed, "backbone": backbone,
+              "arch": dict(arch or {}),
               "seconds": round(time.time() - started),
               **{k: _summary(v) for k, v in pooled.items()}, "rows": pooled, "environment": environment}
     (workdir / "subbag-check.json").write_text(json.dumps(record, default=str), encoding="utf-8")
