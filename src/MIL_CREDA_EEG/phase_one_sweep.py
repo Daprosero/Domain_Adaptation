@@ -54,6 +54,8 @@ CONFIGS: dict[str, dict] = {
     "filt-E": dict(epochs="stored", band="filt"),
     "cap72-E": dict(epochs="stored", cap=72),
     "zbag-E": dict(epochs="stored", zbag=True),
+    "headfree-E": dict(epochs="stored", HEAD_MAX_NORM=100.0),
+    "headfree-zbag-E": dict(epochs="stored", HEAD_MAX_NORM=100.0, zbag=True),
     "zbag-filt-E": dict(epochs="stored", zbag=True, band="filt"),
     "lr1e-3": dict(lr=1e-3),
     "head1": dict(OPEN),
