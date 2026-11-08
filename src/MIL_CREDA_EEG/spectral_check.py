@@ -5,7 +5,7 @@ Windows are filtered to 1-45 Hz and re-referenced to their common average, as th
 check that generalized; at most `WINDOWS` evenly spaced windows per bag. The spectral encoder
 (`spectral_trunk`) reads log absolute and relative band power per channel, standardized by
 each domain's own training windows (label-free for the target), then a learned linear map.
-Phase 1: near-uniform attention, explicit L2, lr 1e-2, 100 epochs. Phase 2: sigma recomputed
+Phase 1: near-uniform attention, explicit L2, lr 3e-3, 200 epochs. Phase 2: sigma recomputed
 on the trained network, balanced pseudo-labels, lr 1e-3, 20 epochs. No target label chooses.
 """
 
