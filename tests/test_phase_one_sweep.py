@@ -179,3 +179,26 @@ def test_the_spectral_trunk_reads_band_power_and_feeds_mil_creda():
     t = 2 * torch.pi * 10 * torch.arange(512) / 128
     alpha = spectral_trunk.SpectralTrunk(1).features(torch.sin(t).reshape(1, 1, 512))[0]
     assert int(alpha[:5].argmax()) == 2           # the 10 Hz power lands in the alpha band
+
+
+def test_explicit_l2_adds_the_weight_penalty_and_restores_the_term():
+    from MIL_CREDA_EEG import two_phase
+    plain = two_phase.source_term
+    w = torch.ones(2, 2)
+    model = SimpleNamespace(source_trunk=SimpleNamespace(named_parameters=lambda: [("a.weight", w)]),
+                            head=SimpleNamespace(linear=SimpleNamespace(weight=w)))
+    two_phase.source_term = lambda m, G, y: torch.tensor(0.0)
+    try:
+        with sweep.explicit_l2(0.5):
+            assert float(two_phase.source_term(model, None, None)) == 4.0
+    finally:
+        two_phase.source_term = plain
+
+
+def test_standardized_uses_the_training_statistics_for_every_group():
+    from MIL_CREDA_EEG import two_phase
+    tr = [two_phase.BagTensor("a", "c", 0, 3 + 2 * torch.randn(30, 4, 512))]
+    te = [two_phase.BagTensor("b", "c", 1, 3 + 2 * torch.randn(10, 4, 512))]
+    (s_tr,), (s_te,) = sweep.standardized(tr, te)
+    assert torch.allclose(s_tr.windows.mean(dim=(0, 2)), torch.zeros(4), atol=1e-3)
+    assert abs(float(s_te.windows.mean())) < 0.05 and s_te.label == 1
