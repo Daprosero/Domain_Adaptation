@@ -30,9 +30,9 @@ from MIL_CREDA_EEG.phase_one_sweep import _side, _summary, explicit_l2
 from MIL_CREDA_EEG.phase_two_terms import balanced_pseudolabels
 
 WINDOWS, L2 = 60, 1e-2
-HYPER = {"lr1": 1e-2, "wd1": 0.0, "attentionGamma": 0.0, "attentionTemperature": 10.0,
+HYPER = {"lr1": 3e-3, "wd1": 0.0, "attentionGamma": 0.0, "attentionTemperature": 10.0,
          "sigmaMultiplier": 1.0, "lr2": 1e-3, "wd2": 1e-5, "tauLocal": 1.0,
-         "epochs1": 100, "epochs2": 20}
+         "epochs1": 200, "epochs2": 20}
 SOS = butter(4, [1, 45], "bandpass", fs=128, output="sos")
 
 
