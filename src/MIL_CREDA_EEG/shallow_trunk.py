@@ -29,12 +29,13 @@ class ShallowTrunk(nn.Module):
     def __init__(self, channels: int, samples: int = eegnet.SAMPLES):
         super().__init__()
         self.channels, self.samples = int(channels), int(samples)
-        self.conv_temporal = nn.Conv2d(1, FILTERS, (1, KERNEL))
-        self.conv_spatial = nn.Conv2d(FILTERS, FILTERS, (self.channels, 1), bias=False)
-        self.bn = nn.BatchNorm2d(FILTERS)
+        filters = FILTERS                          # read at build time, so a search can set it
+        self.conv_temporal = nn.Conv2d(1, filters, (1, KERNEL))
+        self.conv_spatial = nn.Conv2d(filters, filters, (self.channels, 1), bias=False)
+        self.bn = nn.BatchNorm2d(filters)
         self.drop = nn.Dropout(DROPOUT)
         steps = (self.samples - KERNEL + 1 - POOL) // STRIDE + 1
-        self.output_dim = FILTERS * steps
+        self.output_dim = filters * steps
 
     def constrain(self) -> None:
         """No max-norm constraint in the original network."""

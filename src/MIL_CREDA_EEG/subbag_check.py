@@ -31,6 +31,8 @@ SPEC = {"HEAD_MAX_NORM": 100.0, "DROPOUT": 0.5}
 FIXED = {"lr1": 1e-2, "wd1": 0.0, "attentionGamma": 0.5, "attentionTemperature": 1.0,
          "sigmaMultiplier": 1.0, "lr2": 1e-3, "wd2": 1e-5, "tauLocal": 1.0}
 L2, EPOCHS1, EPOCHS2 = 1e-3, 50, 20
+#: Per-backbone phase-1 learning rate and L2; ShallowConvNet did not train at EEGNet's values.
+RECIPES = {"shallow": {"lr1": 1e-3, "l2": 1e-4}}
 
 
 def subbags(bags, size: int, generator: torch.Generator) -> list:
@@ -47,7 +49,8 @@ def subbags(bags, size: int, generator: torch.Generator) -> list:
 
 
 def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed: int,
-                 scale: bool = True) -> dict:
+                 scale: bool = True, recipe: Mapping | None = None) -> dict:
+    recipe = recipe or {}
     side = lambda s, role: two_phase.bag_tensors(A.side_bags(a, bags, s, rotation, role))
     source, held = side("source", A.REFIT_ROLE), side("source", "test")
     target, test = side("target", A.REFIT_ROLE), side("target", "test")
@@ -59,14 +62,15 @@ def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed
     else:                    # device arm: each montage scaled by its own training statistics
         source, held = standardized(source, held)
         target, test = standardized(target, test)
-    hyper = two_phase.check_hyper({**FIXED, "epochs1": EPOCHS1, "epochs2": EPOCHS2,
+    hyper = two_phase.check_hyper({**FIXED, "lr1": recipe.get("lr1", FIXED["lr1"]),
+                                   "epochs1": EPOCHS1, "epochs2": EPOCHS2,
                                    "bagsPerStep": cfg["schedule"]["bagsPerStep"]})
     torch.manual_seed(seed)
     generator = torch.Generator().manual_seed(seed)
     model = model_store.build_model("MIL-CREDA", int(source[0].windows.shape[1]),
                                     int(target[0].windows.shape[1]), hyper).to(device)
     common = {"seed": seed, "fold": rotation, "transfer": name}
-    with explicit_l2(L2):
+    with explicit_l2(recipe.get("l2", L2)):
         phase1 = two_phase.train_source_phase(model, subbags(source, size, generator), [], hyper,
                                               generator, device, **common)
     recalibrate(model, source, device)
@@ -112,7 +116,8 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
             patched(SPEC):
         for rotation in range(4):
             rows = run_rotation(transfer, rotation, subbag, cfg, a, bags, device, seed,
-                                scale=not backbone.startswith("eegnet-"))
+                                scale=not backbone.startswith("eegnet-"),
+                                recipe=RECIPES.get(backbone))
             for k, v in rows.items():
                 pooled[k] += v
             pooled = {k: v for k, v in pooled.items() if v or k in rows}
