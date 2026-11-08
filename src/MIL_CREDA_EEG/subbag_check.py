@@ -21,7 +21,7 @@ from pathlib import Path
 import torch
 
 from MIL_CREDA_EEG import assignment as A
-from MIL_CREDA_EEG import campaign, model_store, remote_units, search, two_phase
+from MIL_CREDA_EEG import campaign, model_store, remote_units, search, shallow_trunk, two_phase
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
 from MIL_CREDA_EEG.phase_one_sweep import (_side, _summary, explicit_l2, patched, recalibrate,
                                            standardized)
@@ -48,8 +48,14 @@ def subbags(bags, size: int, generator: torch.Generator) -> list:
 
 def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed: int) -> dict:
     side = lambda s, role: two_phase.bag_tensors(A.side_bags(a, bags, s, rotation, role))
-    source, held, target, test = standardized(side("source", A.REFIT_ROLE), side("source", "test"),
-                                              side("target", A.REFIT_ROLE), side("target", "test"))
+    source, held = side("source", A.REFIT_ROLE), side("source", "test")
+    target, test = side("target", A.REFIT_ROLE), side("target", "test")
+    same = source[0].windows.shape[1] == target[0].windows.shape[1]
+    if same:
+        source, held, target, test = standardized(source, held, target, test)
+    else:                    # device arm: each montage scaled by its own training statistics
+        source, held = standardized(source, held)
+        target, test = standardized(target, test)
     hyper = two_phase.check_hyper({**FIXED, "epochs1": EPOCHS1, "epochs2": EPOCHS2,
                                    "bagsPerStep": cfg["schedule"]["bagsPerStep"]})
     torch.manual_seed(seed)
@@ -64,8 +70,9 @@ def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed
     model._sigma = hyper["sigmaMultiplier"] * two_phase.within_bag_median_distance(
         model, source, "source", device)
     phase1["checkpoint"]["sigma"] = model._sigma
-    rows = {"train": _side(model, source, device), "source": _side(model, held, device),
-            "predict": _side(model, test, device)}
+    rows = {"train": _side(model, source, device), "source": _side(model, held, device)}
+    if same:                 # source-only prediction needs the source montage on the target
+        rows["predict"] = _side(model, test, device)
     joint = two_phase.bridge(model)
     with balanced_pseudolabels(model):
         two_phase.adapt_target_phase(model, phase1, joint["frozen_state"], source, target, [], hyper,
@@ -77,7 +84,7 @@ def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, subbag: int,
-          seed: int = 1, workdir: str | Path | None = None,
+          seed: int = 1, backbone: str = "eegnet", workdir: str | Path | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
     """Four rotations of `transfer`, with the evidence a single run's fetch reads."""
     environ = os.environ if environ is None else environ
@@ -94,14 +101,16 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
     mode = environ.get(remote_units.RUN_MODE_ENV)
     pooled: dict[str, list] = {k: [] for k in ("train", "source", "predict", "milCreda")}
     started = time.time()
-    with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, \
+    trunk = shallow_trunk.installed() if backbone == "shallow" else contextlib.nullcontext()
+    with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, trunk, \
             patched(SPEC):
         for rotation in range(4):
             rows = run_rotation(transfer, rotation, subbag, cfg, a, bags, device, seed)
             for k, v in rows.items():
                 pooled[k] += v
+            pooled = {k: v for k, v in pooled.items() if v or k in rows}
             print(transfer, subbag, seed, rotation, {k: _summary(v) for k, v in rows.items()}, flush=True)
-    record = {"transfer": transfer, "subbag": subbag, "seed": seed,
+    record = {"transfer": transfer, "subbag": subbag, "seed": seed, "backbone": backbone,
               "seconds": round(time.time() - started),
               **{k: _summary(v) for k, v in pooled.items()}, "rows": pooled, "environment": environment}
     (workdir / "subbag-check.json").write_text(json.dumps(record, default=str), encoding="utf-8")
