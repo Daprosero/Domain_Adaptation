@@ -62,7 +62,8 @@ def prepared(bags) -> list:
 
 def standard_of(trunk, bags) -> Standard:
     with torch.no_grad():
-        f = torch.nan_to_num(torch.cat([trunk.features(b.windows) for b in bags]))
+        device = trunk.masks.device              # the windows live on the CPU until read
+        f = torch.nan_to_num(torch.cat([trunk.features(b.windows.to(device)) for b in bags]))
     return Standard(f.mean(0), f.std(0) + 1e-6)
 
 
