@@ -42,3 +42,6 @@ Fixes in every EEGNet run: inputs standardized by the source training statistics
 - L3. D=1: L11 .573, L6 .43; no change.
 - L4. Ablation of the logistic model, unseen-source AUC (CogniFit / L11 / Robots): subject log .750/.687/.713; window log .768/.665/.713; subject linear .676/.616/.739; window linear .559/.536/.493. Learning from windows needs log compression.
 - L5. Log-power block 1 in EEGNet: Robots .636, CogniFit .588, L11 .526, L6 .399. Log compression alone does not fix it; the remaining difference with the linear model is learned versus fixed band filters.
+- L6. Fixed band-pass EEGNet (FBCNet structure): Robots .665, CogniFit .471, L11 .498, L6 .489. Fixing the bands does not close the gap.
+- L7. MIL-CREDA reading the logistic model's own features matches that model on L11 (.59-.60 vs .585): MIL is not the gap.
+- L8. Preprocessing ablation of the logistic model (CogniFit / L11 / Robots / L6): full .761/.713/.724/.626; no common average .827/.597/.618/.643; no filter .717/.701/.699/.649; mean of log .713/.681/.732/.600; FFT .743/.705/.721/.642; none .787/.632/.662/.644. Common average reference matters on L11 and Robots; the plan uses no re-reference.

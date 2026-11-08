@@ -290,3 +290,10 @@ def test_fixed_bands_are_frozen_band_pass_filters():
         gain = torch.nn.functional.conv2d(alpha, w).pow(2).mean(dim=(2, 3))[0]
         assert int(gain.argmax()) in (2, 6)       # the alpha (8-13) or 4-13 band passes 10 Hz most
         assert trunk(torch.randn(2, 14, 512)).shape == (2, 256)
+
+
+def test_common_average_removes_the_channel_mean_of_each_window():
+    from MIL_CREDA_EEG import subbag_check, two_phase
+    bag = two_phase.BagTensor("s", "c", 1, torch.randn(5, 14, 512) + 7)
+    ref = subbag_check.common_average([bag])[0]
+    assert torch.allclose(ref.windows.mean(dim=1), torch.zeros(5, 512), atol=1e-5) and ref.label == 1
