@@ -257,3 +257,13 @@ def test_window_norm_removes_each_window_scale():
     x = torch.randn(3, 4, 512) * torch.tensor([1.0, 10.0, 100.0])[:, None, None]
     y = WindowNorm(4)(x)
     assert torch.allclose(y.mean(dim=(1, 2)), torch.zeros(3), atol=1e-4)
+
+
+def test_the_search_samples_shallow_settings_and_builds_its_filters():
+    import numpy as np
+    from MIL_CREDA_EEG import phase_one_search as s, shallow_trunk
+    trial = s.sample(np.random.RandomState(0), "shallow")
+    assert trial["FILTERS"] in s.SHALLOW_FILTERS and 1e-4 <= trial["lr1"] <= 3e-3
+    with s.network("shallow", {**trial, "FILTERS": 20}):
+        assert eegnet.EEGNetTrunk(14).conv_temporal.out_channels == 20
+    assert shallow_trunk.FILTERS == 40 and eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk
