@@ -230,3 +230,10 @@ def test_subbags_keep_the_subject_and_label_and_cut_full_windows():
     assert len(parts) == 4 and all(p.windows.shape == (16, 14, 512) for p in parts)
     assert {p.subject for p in parts} == {"s1"} and {p.label for p in parts} == {1}
     assert subbag_check.subbags([bag], 0, torch.Generator()) == [bag]
+
+
+def test_the_shallow_trunk_keeps_its_layers_under_the_sweep_constants():
+    from MIL_CREDA_EEG import shallow_trunk
+    with shallow_trunk.installed(), sweep.patched({"HEAD_MAX_NORM": 100.0, "DROPOUT": 0.5}):
+        assert eegnet.EEGNetTrunk is shallow_trunk.ShallowTrunk and eegnet.HEAD_MAX_NORM == 100.0
+    assert eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk
