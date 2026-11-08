@@ -19,7 +19,7 @@ from pathlib import Path
 import torch
 
 from MIL_CREDA_EEG import assignment as A
-from MIL_CREDA_EEG import campaign, model_store, remote_units, shallow_trunk, two_phase
+from MIL_CREDA_EEG import campaign, model_store, remote_units, shallow_trunk, spectral_trunk, two_phase
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
 from MIL_CREDA_EEG.phase_one_sweep import _summary, patched, recalibrate
 
@@ -45,7 +45,7 @@ def _scored(model, bags, domain: str, device) -> list[dict]:
 
 
 def run_rotation(name: str, rotation: int, cfg: Mapping, a, bags, device, seed: int = SEED,
-                 lr2: float = FIXED["lr2"]) -> dict:
+                 lr2: float = FIXED["lr2"], fixes: bool = False) -> dict:
     hyper = hyper_of(name, rotation, cfg["schedule"], lr2)
     source = two_phase.bag_tensors(A.side_bags(a, bags, "source", rotation, A.REFIT_ROLE))
     held = two_phase.bag_tensors(A.side_bags(a, bags, "source", rotation, "test"))
@@ -60,16 +60,25 @@ def run_rotation(name: str, rotation: int, cfg: Mapping, a, bags, device, seed: 
     recalibrate(model, source, device)
     rows = {"sourceHeldOut": _scored(model, held, "source", device),
             "predict": _scored(model, test, "source", device)}
+    if fixes:                                  # sigma from the trained network
+        model._sigma = hyper["sigmaMultiplier"] * two_phase.within_bag_median_distance(
+            model, source, "source", device)
+        phase1["checkpoint"]["sigma"] = model._sigma
+        rows["predict"] = _scored(model, test, "source", device)
+        rows["sourceHeldOut"] = _scored(model, held, "source", device)
     joint = two_phase.bridge(model)
-    two_phase.adapt_target_phase(model, phase1, joint["frozen_state"], source, target, [], hyper,
-                                 generator, device, **common)
+    from MIL_CREDA_EEG.phase_two_terms import balanced_pseudolabels
+    with balanced_pseudolabels(model) if fixes else contextlib.nullcontext():
+        two_phase.adapt_target_phase(model, phase1, joint["frozen_state"], source, target, [], hyper,
+                                     generator, device, **common)
     recalibrate(model, target, device, trunk="target_trunk")
     rows["milCreda"] = _scored(model, test, "target", device)
     return rows
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str,
-          backbone: str = "eegnet", seed: int = SEED, lr2: float = FIXED["lr2"], workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
+          backbone: str = "eegnet", seed: int = SEED, lr2: float = FIXED["lr2"], fixes: bool = False,
+          workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
     """All four rotations of `transfer`, with the evidence a single run's fetch reads."""
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
@@ -86,11 +95,12 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str,
     pooled: dict[str, list] = {k: [] for k in SIDES}
     done = []
     path = workdir / "beat-predict.json"
-    trunk = shallow_trunk.installed() if backbone == "shallow" else patched(SPEC)
+    trunk = {"shallow": shallow_trunk.installed, "spectral": spectral_trunk.installed}.get(
+        backbone, lambda: patched(SPEC))()
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, trunk:
         for rotation in range(4):
             started = time.time()
-            rows = run_rotation(transfer, rotation, cfg, a, bags, device, seed, lr2)
+            rows = run_rotation(transfer, rotation, cfg, a, bags, device, seed, lr2, fixes)
             for key, value in rows.items():
                 pooled[key].extend(value)
             done.append(rotation)

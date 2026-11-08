@@ -166,3 +166,16 @@ def test_zbag_standardizes_each_channel_within_its_own_bag():
     z = sweep.prepared([bag], {"zbag": True})[0].windows
     assert torch.allclose(z.mean(dim=(0, 2)), torch.zeros(14), atol=1e-4)
     assert torch.allclose(z.std(dim=(0, 2)), torch.ones(14), atol=1e-3)
+
+
+def test_the_spectral_trunk_reads_band_power_and_feeds_mil_creda():
+    from MIL_CREDA_EEG import campaign, model_store, spectral_trunk, two_phase
+    campaign.register(["MIL-CREDA"])
+    with spectral_trunk.installed():
+        model = model_store.build_model("MIL-CREDA", 14, 14, {"attentionGamma": 0.5, "attentionTemperature": 1.0})
+        assert model.source_trunk(torch.randn(3, 14, 512)).shape == (3, 64)
+        model.fix_sigma(1.0)
+        assert two_phase.bridge(model)["layer_copy"]["copied"] == ["project"]
+    t = 2 * torch.pi * 10 * torch.arange(512) / 128
+    alpha = spectral_trunk.SpectralTrunk(1).features(torch.sin(t).reshape(1, 1, 512))[0]
+    assert int(alpha[:5].argmax()) == 2           # the 10 Hz power lands in the alpha band
