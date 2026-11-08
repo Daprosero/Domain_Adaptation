@@ -19,7 +19,9 @@ Objective: EEGNet phase 1 that generalizes to unseen source subjects in every so
 | T2 | S3 | CogniFit: bag size (sub-bags 72), input norm | inline, Kaggle | running |
 | T3 | S3 | L11, L6: spatial capacity (D=1), input norm | inline, Kaggle | running |
 | T4 | S3, S4 | Locate the failure inside the linear model | inline, local | done |
-| T5 | S3 | Fixed band-pass temporal filters with log power (FBCNet structure) | inline, Kaggle | running |
+| T5 | S3 | Fixed band-pass temporal filters with log power (FBCNet structure) | inline, Kaggle | done, fails |
+| T6 | S1, S3 | Spectral encoder with CAR and L2 inside MIL-CREDA (spectral_check.py) | inline, local + Kaggle | phase 1 solved in every source with signal |
+| T7 | S1 | Phase 2 on top of the solved phase 1 | inline, local | open |
 
 ## Failure ledger
 
@@ -45,3 +47,6 @@ Fixes in every EEGNet run: inputs standardized by the source training statistics
 - L6. Fixed band-pass EEGNet (FBCNet structure): Robots .665, CogniFit .471, L11 .498, L6 .489. Fixing the bands does not close the gap.
 - L7. MIL-CREDA reading the logistic model's own features matches that model on L11 (.59-.60 vs .585): MIL is not the gap.
 - L8. Preprocessing ablation of the logistic model (CogniFit / L11 / Robots / L6): full .761/.713/.724/.626; no common average .827/.597/.618/.643; no filter .717/.701/.699/.649; mean of log .713/.681/.732/.600; FFT .743/.705/.721/.642; none .787/.632/.662/.644. Common average reference matters on L11 and Robots; the plan uses no re-reference.
+- L9. EEGNet with common average reference: Robots .699, CogniFit .445, L11 .512, L6 .468. EEGNet stays at chance outside Robots with every fix tried (standardization, free head, explicit L2, BatchNorm recalibration, input BN/LN, D=1, sub-bags, log-power block, fixed bands, CAR, a 12-trial search).
+- L10. Phase-1 solution: MIL-CREDA with the spectral encoder (log absolute and relative band power per channel), windows filtered 1-45 Hz with common average reference (at most 60 per bag), features standardized by each domain's training windows, near-uniform attention, explicit L2 .01, lr1 1e-2, 100 epochs. Unseen-source AUC, seeds 1/2/3 (local): Robots .735/.743/.710, CogniFit .673/.658/.684, L11 .704/.436/.606, L6 .596/.568/.580, L1 -/.467/.441 (no signal). Kaggle seed 1 agrees: Robots .735 and .748, CogniFit .673, L11 .697, L6 .620, L1 .467. L11 is seed-sensitive (train AUC .68-.79): optimization under test.
+- L11. Full flow, Kaggle seed 1, target AUC predict / MIL-CREDA: R->C .794/.721, C->R .827/.621, L11->L1 .436/.417, L1->L11 .551/.520, L6->Robots -/.637, Robots->L6 -/.444. Phase 2 lowers a strong predict again: next problem, outside phase 1.
