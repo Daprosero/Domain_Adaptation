@@ -202,3 +202,13 @@ def test_standardized_uses_the_training_statistics_for_every_group():
     (s_tr,), (s_te,) = sweep.standardized(tr, te)
     assert torch.allclose(s_tr.windows.mean(dim=(0, 2)), torch.zeros(4), atol=1e-3)
     assert abs(float(s_te.windows.mean())) < 0.05 and s_te.label == 1
+
+
+def test_euclidean_alignment_whitens_each_subject_covariance():
+    from MIL_CREDA_EEG import two_phase
+    mix = torch.randn(4, 4)
+    bag = two_phase.BagTensor("s", "c", 0, torch.einsum("cd,ndt->nct", mix, torch.randn(30, 4, 512)))
+    w = sweep.prepared([bag], {"ea": True})[0].windows.double()
+    w = w - w.mean(-1, keepdim=True)
+    cov = torch.einsum("nct,ndt->cd", w, w) / (w.shape[0] * w.shape[2])
+    assert torch.allclose(cov, torch.eye(4, dtype=torch.float64), atol=1e-3)
