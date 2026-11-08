@@ -21,7 +21,7 @@ from pathlib import Path
 import torch
 
 from MIL_CREDA_EEG import assignment as A
-from MIL_CREDA_EEG import campaign, model_store, remote_units, search, shallow_trunk, two_phase
+from MIL_CREDA_EEG import campaign, input_norm, model_store, remote_units, search, shallow_trunk, two_phase
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
 from MIL_CREDA_EEG.phase_one_sweep import (_side, _summary, explicit_l2, patched, recalibrate,
                                            standardized)
@@ -46,12 +46,15 @@ def subbags(bags, size: int, generator: torch.Generator) -> list:
     return out
 
 
-def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed: int) -> dict:
+def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed: int,
+                 scale: bool = True) -> dict:
     side = lambda s, role: two_phase.bag_tensors(A.side_bags(a, bags, s, rotation, role))
     source, held = side("source", A.REFIT_ROLE), side("source", "test")
     target, test = side("target", A.REFIT_ROLE), side("target", "test")
     same = source[0].windows.shape[1] == target[0].windows.shape[1]
-    if same:
+    if not scale:            # the network's own input normalization replaces it
+        pass
+    elif same:
         source, held, target, test = standardized(source, held, target, test)
     else:                    # device arm: each montage scaled by its own training statistics
         source, held = standardized(source, held)
@@ -102,11 +105,14 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
     mode = environ.get(remote_units.RUN_MODE_ENV)
     pooled: dict[str, list] = {k: [] for k in ("train", "source", "predict", "milCreda")}
     started = time.time()
-    trunk = shallow_trunk.installed() if backbone == "shallow" else contextlib.nullcontext()
+    trunk = (shallow_trunk.installed() if backbone == "shallow"
+             else input_norm.installed(backbone.split("-")[1]) if backbone.startswith("eegnet-")
+             else contextlib.nullcontext())
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness, trunk, \
             patched(SPEC):
         for rotation in range(4):
-            rows = run_rotation(transfer, rotation, subbag, cfg, a, bags, device, seed)
+            rows = run_rotation(transfer, rotation, subbag, cfg, a, bags, device, seed,
+                                scale=not backbone.startswith("eegnet-"))
             for k, v in rows.items():
                 pooled[k] += v
             pooled = {k: v for k, v in pooled.items() if v or k in rows}
