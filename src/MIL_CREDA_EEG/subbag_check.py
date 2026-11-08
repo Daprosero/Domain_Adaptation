@@ -48,10 +48,17 @@ def subbags(bags, size: int, generator: torch.Generator) -> list:
     return out
 
 
+def common_average(bags) -> list:
+    """Re-reference every window to the mean over its channels (label-free, per window)."""
+    return [two_phase.BagTensor(b.subject, b.condition, b.label,
+                                b.windows - b.windows.mean(dim=1, keepdim=True)) for b in bags]
+
+
 def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed: int,
-                 scale: bool = True, recipe: Mapping | None = None) -> dict:
+                 scale: bool = True, recipe: Mapping | None = None, car: bool = False) -> dict:
     recipe = recipe or {}
-    side = lambda s, role: two_phase.bag_tensors(A.side_bags(a, bags, s, rotation, role))
+    reference = common_average if car else (lambda g: g)
+    side = lambda s, role: reference(two_phase.bag_tensors(A.side_bags(a, bags, s, rotation, role)))
     source, held = side("source", A.REFIT_ROLE), side("source", "test")
     target, test = side("target", A.REFIT_ROLE), side("target", "test")
     same = source[0].windows.shape[1] == target[0].windows.shape[1]
@@ -92,7 +99,8 @@ def run_rotation(name: str, rotation: int, size: int, cfg, a, bags, device, seed
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, subbag: int,
-          seed: int = 1, backbone: str = "eegnet", arch: Mapping | None = None, workdir: str | Path | None = None,
+          seed: int = 1, backbone: str = "eegnet", arch: Mapping | None = None, car: bool = False,
+          workdir: str | Path | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
     """Four rotations of `transfer`, with the evidence a single run's fetch reads."""
     environ = os.environ if environ is None else environ
@@ -119,13 +127,13 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
         for rotation in range(4):
             rows = run_rotation(transfer, rotation, subbag, cfg, a, bags, device, seed,
                                 scale=backbone in ("eegnet", "eegnet-logpower", "eegnet-fixedbands", "shallow"),
-                                recipe=RECIPES.get(backbone))
+                                recipe=RECIPES.get(backbone), car=car)
             for k, v in rows.items():
                 pooled[k] += v
             pooled = {k: v for k, v in pooled.items() if v or k in rows}
             print(transfer, subbag, seed, rotation, {k: _summary(v) for k, v in rows.items()}, flush=True)
     record = {"transfer": transfer, "subbag": subbag, "seed": seed, "backbone": backbone,
-              "arch": dict(arch or {}),
+              "arch": dict(arch or {}), "car": car,
               "seconds": round(time.time() - started),
               **{k: _summary(v) for k, v in pooled.items()}, "rows": pooled, "environment": environment}
     (workdir / "subbag-check.json").write_text(json.dumps(record, default=str), encoding="utf-8")
