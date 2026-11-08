@@ -21,7 +21,7 @@ Objective: EEGNet phase 1 that generalizes to unseen source subjects in every so
 | T4 | S3, S4 | Locate the failure inside the linear model | inline, local | done |
 | T5 | S3 | Fixed band-pass temporal filters with log power (FBCNet structure) | inline, Kaggle | done, fails |
 | T6 | S1, S3 | Spectral encoder with CAR and L2 inside MIL-CREDA (spectral_check.py) | inline, local + Kaggle | phase 1 solved in every source with signal |
-| T7 | S1 | Phase 2 on top of the solved phase 1 | inline, local | running |
+| T7 | S1 | Phase 2 on top of the solved phase 1 | inline, local | done: ties predict at best |
 
 ## Failure ledger
 
@@ -51,3 +51,5 @@ Fixes in every EEGNet run: inputs standardized by the source training statistics
 - L10. Phase-1 solution: MIL-CREDA with the spectral encoder (log absolute and relative band power per channel), windows filtered 1-45 Hz with common average reference (at most 60 per bag), features standardized by each domain's training windows, near-uniform attention, explicit L2 .01, lr1 1e-2, 100 epochs. Unseen-source AUC, seeds 1/2/3 (local): Robots .735/.743/.710, CogniFit .673/.658/.684, L11 .704/.436/.606, L6 .596/.568/.580, L1 -/.467/.441 (no signal). Kaggle seed 1 agrees: Robots .735 and .748, CogniFit .673, L11 .697, L6 .620, L1 .467. L11 is seed-sensitive (train AUC .68-.79): optimization under test.
 - L11. Full flow, Kaggle seed 1, target AUC predict / MIL-CREDA: R->C .794/.721, C->R .827/.621, L11->L1 .436/.417, L1->L11 .551/.520, L6->Robots -/.637, Robots->L6 -/.444. Phase 2 lowers a strong predict again: next problem, outside phase 1.
 - L12. Phase-1 recipe changed to lr1 3e-3, 200 epochs (L11 was seed-sensitive at 1e-2). Unseen-source AUC, seeds 1/2/3 (local): L11 .668/.689/.670, Robots .732/.721/.706, CogniFit .706/.691/.665, L6 .591/.607/.575. Stable on every source with signal; set in spectral_check HYPER.
+- L13. Phase 2 on the solved phase 1 (local, seeds 1/2/3, target AUC). C->R predict .798/.794/.805; R->C .798/.765/.772. Standardizing the target by its own windows alone costs C->R .07 (.728/.735/.761). Every adaptation that moves the target trunk lowers AUC in proportion to how far it moves: lr2 1e-3 x20 C->R .621/.533/.507, local term only worst (.548/.515/.566). Best setting: target keeps the source standardization, global term only, lr2 1e-4, blended .5 with the start: C->R .809/.783/.801, R->C .798/.757/.776, a tie with predict, never above it. Located cause: the alignment objective does not preserve the class direction; gentle settings only shrink the damage.
+
