@@ -221,3 +221,12 @@ def test_the_phase_one_search_samples_inside_its_space_and_is_seeded():
     assert a == b
     assert 1e-4 <= a["lr1"] <= 3e-2 and 1e-5 <= a["l2"] <= 3e-2
     assert (a["F1"], a["D"], a["F2"]) in s.SIZES and a["epochs"] in s.EPOCH_CHOICES
+
+
+def test_subbags_keep_the_subject_and_label_and_cut_full_windows():
+    from MIL_CREDA_EEG import subbag_check, two_phase
+    bag = two_phase.BagTensor("s1", "c", 1, torch.randn(70, 14, 512))
+    parts = subbag_check.subbags([bag], 16, torch.Generator().manual_seed(0))
+    assert len(parts) == 4 and all(p.windows.shape == (16, 14, 512) for p in parts)
+    assert {p.subject for p in parts} == {"s1"} and {p.label for p in parts} == {1}
+    assert subbag_check.subbags([bag], 0, torch.Generator()) == [bag]
