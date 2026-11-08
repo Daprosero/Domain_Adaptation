@@ -8,7 +8,7 @@ from MIL_CREDA_EEG import eegnet, phase_one_sweep as sweep
 
 def test_units_cover_every_config_transfer_and_seed_once():
     units = sweep.unit_ids()
-    assert len(units) == len(set(units)) == len(sweep.CONFIGS) * 2 * len(sweep.SEEDS)
+    assert len(units) == len(set(units)) == len(sweep.CONFIGS) * len(sweep.TRANSFERS) * len(sweep.SEEDS)
     assert sweep.parse("sweep.wide-k32.CR.seed2") == ("wide-k32", "CogniFit->Robots", 2)
 
 
@@ -148,3 +148,13 @@ def test_the_head_kernel_projects_embeddings_and_restores_the_plan_kernel():
         K = mil_creda_model.bag_kernel_matrix(pairs, pairs, 99.0)
         assert scale > 0 and K.shape == (1, 1)
     assert mil_creda_model.bag_kernel_matrix is plain
+
+
+def test_prepared_caps_windows_and_filters_without_touching_labels():
+    from MIL_CREDA_EEG import two_phase
+    bag = two_phase.BagTensor("s", "c", 1, torch.randn(100, 14, 512))
+    capped = sweep.prepared([bag], {"cap": 72})[0]
+    assert capped.windows.shape == (72, 14, 512) and capped.label == 1
+    filtered = sweep.prepared([bag], {"band": "filt"})[0]
+    assert torch.allclose(filtered.windows.mean(1), torch.zeros(100, 512), atol=1e-4)
+    assert sweep.prepared([bag], {}) == [bag]
