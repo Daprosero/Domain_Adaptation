@@ -18,7 +18,8 @@ Objective: EEGNet phase 1 that generalizes to unseen source subjects in every so
 | T1 | S1, S4 | Failure ledger per source with evidence | inline | open |
 | T2 | S3 | CogniFit: bag size (sub-bags 72), input norm | inline, Kaggle | running |
 | T3 | S3 | L11, L6: spatial capacity (D=1), input norm | inline, Kaggle | running |
-| T4 | S3, S4 | Next located tests from the ledger | inline | open |
+| T4 | S3, S4 | Locate the failure inside the linear model | inline, local | done |
+| T5 | S3 | Fixed band-pass temporal filters with log power (FBCNet structure) | inline, Kaggle | running |
 
 ## Failure ledger
 
@@ -27,9 +28,9 @@ Unseen-source AUC, pooled over the 4 outer rotations. Permutation null for these
 | Source | Signal exists? (band-power LR, permutation p) | EEGNet + fixes | Ruled out | Open |
 |---|---|---|---|---|
 | Robots | yes (.71) | .71-.78, works | - | - |
-| CogniFit | yes (.75, p .03) | .52-.54 | input scale (std, BN, LN), aggregation (6 kinds), Euclidean alignment, bag cap with old recipe, search (12 trials) | bag size with fixes, summary of windows |
-| L11 | yes (.72, p .005) | .55-.58 | input scale, aggregation, D=1, search | why the linear model wins |
-| L6 (device) | weak (.61, p .13) | .36-.40 | D=1 | signal strength |
+| CogniFit | yes (.75, p .03) | .52-.54 | input scale (std, BN, LN .64), aggregation (6 kinds), Euclidean alignment, bag size (sub-bags 72: .50, +LN .50), search (12 trials), log-power block 1 (.59) | learned temporal filters |
+| L11 | yes (.72, p .005) | .55-.58 | input scale, aggregation, D=1 (.57, +LN .59), search, log-power block 1 (.53) | learned temporal filters |
+| L6 (device) | weak (.61, p .13) | .36-.40 | D=1 (.43, +LN .47), log-power block 1 (.40) | signal strength |
 | L1 | no (.50, p .47) | .35-.40 | partition (folds balanced, no shared subject) | excluded: no detectable signal |
 
 Fixes in every EEGNet run: inputs standardized by the source training statistics, head max-norm lifted, explicit L2, BatchNorm recalibrated, sigma recomputed after phase 1.
@@ -39,3 +40,5 @@ Fixes in every EEGNet run: inputs standardized by the source training statistics
 - L1 (2026-11-08). User: "si buscas que el .predict en objetivo se suba estás matando las estrategias de adaptación"; phase 1 is judged by unseen-source generalization only.
 - L2. Signal quality marks (lost, interpolated, flat, saturated) are near zero in every source and do not differ by class: ruled out.
 - L3. D=1: L11 .573, L6 .43; no change.
+- L4. Ablation of the logistic model, unseen-source AUC (CogniFit / L11 / Robots): subject log .750/.687/.713; window log .768/.665/.713; subject linear .676/.616/.739; window linear .559/.536/.493. Learning from windows needs log compression.
+- L5. Log-power block 1 in EEGNet: Robots .636, CogniFit .588, L11 .526, L6 .399. Log compression alone does not fix it; the remaining difference with the linear model is learned versus fixed band filters.
