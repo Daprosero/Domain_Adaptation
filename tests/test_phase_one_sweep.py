@@ -297,3 +297,14 @@ def test_common_average_removes_the_channel_mean_of_each_window():
     bag = two_phase.BagTensor("s", "c", 1, torch.randn(5, 14, 512) + 7)
     ref = subbag_check.common_average([bag])[0]
     assert torch.allclose(ref.windows.mean(dim=1), torch.zeros(5, 512), atol=1e-5) and ref.label == 1
+
+
+def test_spectral_check_prepares_windows_and_standardizes_each_domain():
+    from MIL_CREDA_EEG import spectral_check, spectral_trunk, two_phase
+    bag = two_phase.BagTensor("s", "c", 1, torch.randn(130, 14, 512) + 3)
+    (p,) = spectral_check.prepared([bag])
+    assert p.windows.shape[0] <= 66 and torch.allclose(p.windows.mean(dim=1), torch.zeros_like(p.windows[:, 0]), atol=1e-4)
+    trunk = spectral_trunk.SpectralTrunk(14)
+    std = spectral_check.standard_of(trunk, [p])
+    z = std(trunk.features(p.windows))
+    assert torch.allclose(z.mean(0), torch.zeros(z.shape[1]), atol=1e-4)
