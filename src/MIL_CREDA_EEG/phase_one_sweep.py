@@ -40,7 +40,7 @@ from MIL_CREDA_EEG import campaign, eegnet, model_store, remote_units, search, t
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
 
 SELECTIONS = Path(__file__).with_name("phase_one_sweep_selections.json")
-TRANSFERS = {"RC": "Robots->CogniFit", "CR": "CogniFit->Robots", "L11": "L11->L1"}
+TRANSFERS = {"RC": "Robots->CogniFit", "CR": "CogniFit->Robots", "L11": "L11->L1", "L1": "L1->L11"}
 SEEDS = (1, 2, 3)
 EPOCHS = 40
 OUTPUT = "sweep"
@@ -56,6 +56,9 @@ CONFIGS: dict[str, dict] = {
     "zbag-E": dict(epochs="stored", zbag=True),
     "headfree-E": dict(epochs="stored", HEAD_MAX_NORM=100.0),
     "headfree-zbag-E": dict(epochs="stored", HEAD_MAX_NORM=100.0, zbag=True),
+    # The three changes that made the spectral encoder generalize, on EEGNet.
+    "fix-l2-1e-2": dict(epochs=100, lr=1e-2, l2=1e-2, standard=True, uniform=True, HEAD_MAX_NORM=100.0),
+    "fix-l2-1e-3": dict(epochs=100, lr=1e-2, l2=1e-3, standard=True, uniform=True, HEAD_MAX_NORM=100.0),
     "zbag-filt-E": dict(epochs="stored", zbag=True, band="filt"),
     "lr1e-3": dict(lr=1e-3),
     "head1": dict(OPEN),
@@ -169,6 +172,32 @@ def _summary(rows: Sequence[Mapping]) -> dict:
     return {"ba": round(balanced_accuracy(y, p), 4), "auc": round(auc, 4), "n": len(rows)}
 
 
+@contextlib.contextmanager
+def explicit_l2(lam: float):
+    """Eq. 21 plus lam times the squared weights of the source trunk and the head."""
+    plain = two_phase.source_term
+
+    def term(model, G, labels):
+        weights = [p for n, p in model.source_trunk.named_parameters() if "weight" in n]
+        return plain(model, G, labels) + lam * sum((w ** 2).sum() for w in
+                                                    (*weights, model.head.linear.weight))
+
+    two_phase.source_term = term
+    try:
+        yield
+    finally:
+        two_phase.source_term = plain
+
+
+def standardized(train, *groups):
+    """Every group scaled by the per-channel mean and std of the source training windows."""
+    flat = torch.cat([b.windows for b in train])
+    mean, std = flat.mean(dim=(0, 2), keepdim=True), flat.std(dim=(0, 2), keepdim=True).clamp_min(1e-6)
+    scale = lambda g: [two_phase.BagTensor(b.subject, b.condition, b.label, (b.windows - mean) / std)
+                       for b in g]
+    return [scale(g) for g in (train, *groups)]
+
+
 def run_unit(unit: str, cfg: Mapping, bags, device: torch.device,
              epochs_override: int | None = None) -> dict:
     name, transfer_name, seed = parse(unit)
@@ -184,19 +213,25 @@ def run_unit(unit: str, cfg: Mapping, bags, device: torch.device,
             params = dict(stored[str(r)]["params"])
             params["lr1"] = spec.get("lr", params["lr1"])
             params["wd1"] = spec.get("wd", params["wd1"])
-            epochs = int(stored[str(r)]["epochs"]) if spec.get("epochs") == "stored" else EPOCHS
+            epochs = (int(stored[str(r)]["epochs"]) if spec.get("epochs") == "stored"
+                      else int(spec.get("epochs", EPOCHS)))
+            if spec.get("uniform"):
+                params.update(attentionGamma=0.0, attentionTemperature=10.0)
             epochs = epochs_override or epochs
             hyper = search.phase_one_hyper("MIL-CREDA", params,
                                            search.refit_schedule(cfg["schedule"], 1, epochs))
             train = prepared(two_phase.bag_tensors(A.side_bags(a, bags, "source", r, A.REFIT_ROLE)), spec)
             source = prepared(two_phase.bag_tensors(A.side_bags(a, bags, "source", r, "test")), spec)
             target = prepared(two_phase.bag_tensors(A.side_bags(a, bags, "target", r, "test")), spec)
+            if spec.get("standard"):
+                train, source, target = standardized(train, source, target)
             torch.manual_seed(seed)
             generator = torch.Generator().manual_seed(seed)
             model = model_store.build_model("MIL-CREDA", int(train[0].windows.shape[1]),
                                             int(target[0].windows.shape[1]), hyper).to(device)
-            result = two_phase.train_source_phase(model, train, source, hyper, generator, device,
-                                                  seed=seed, fold=r, transfer=transfer_name)
+            with explicit_l2(spec["l2"]) if "l2" in spec else contextlib.nullcontext():
+                result = two_phase.train_source_phase(model, train, source, hyper, generator, device,
+                                                      seed=seed, fold=r, transfer=transfer_name)
             curves.append([round(float(h["val_balanced_accuracy"]), 4)
                            for h in result["history"]])
             recalibrate(model, train, device)

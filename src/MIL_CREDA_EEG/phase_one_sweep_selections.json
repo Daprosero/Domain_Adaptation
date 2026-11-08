@@ -124,5 +124,47 @@
    },
    "epochs": 22
   }
+ },
+ "L1->L11": {
+  "0": {
+   "params": {
+    "lr1": 0.022096521155101134,
+    "wd1": 2.6578388938471563e-06,
+    "attentionGamma": 0.7902982824221764,
+    "attentionTemperature": 0.2906993391476176,
+    "sigmaMultiplier": 0.5
+   },
+   "epochs": 60
+  },
+  "1": {
+   "params": {
+    "lr1": 0.022371506794140003,
+    "wd1": 0.00018952679725612034,
+    "attentionGamma": 0.9652221664044639,
+    "attentionTemperature": 0.17491195224034617,
+    "sigmaMultiplier": 1.5
+   },
+   "epochs": 39
+  },
+  "2": {
+   "params": {
+    "lr1": 0.08685270842621103,
+    "wd1": 1e-07,
+    "attentionGamma": 0.8701117106662807,
+    "attentionTemperature": 0.10000000000000002,
+    "sigmaMultiplier": 1.5
+   },
+   "epochs": 19
+  },
+  "3": {
+   "params": {
+    "lr1": 0.005311090223756354,
+    "wd1": 1e-07,
+    "attentionGamma": 0.3741349200162246,
+    "attentionTemperature": 0.45422801958519327,
+    "sigmaMultiplier": 0.5
+   },
+   "epochs": 37
+  }
  }
 }
