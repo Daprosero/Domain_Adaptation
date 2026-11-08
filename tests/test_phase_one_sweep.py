@@ -212,3 +212,12 @@ def test_euclidean_alignment_whitens_each_subject_covariance():
     w = w - w.mean(-1, keepdim=True)
     cov = torch.einsum("nct,ndt->cd", w, w) / (w.shape[0] * w.shape[2])
     assert torch.allclose(cov, torch.eye(4, dtype=torch.float64), atol=1e-3)
+
+
+def test_the_phase_one_search_samples_inside_its_space_and_is_seeded():
+    import numpy as np
+    from MIL_CREDA_EEG import phase_one_search as s
+    a = s.sample(np.random.RandomState(3)); b = s.sample(np.random.RandomState(3))
+    assert a == b
+    assert 1e-4 <= a["lr1"] <= 3e-2 and 1e-5 <= a["l2"] <= 3e-2
+    assert (a["F1"], a["D"], a["F2"]) in s.SIZES and a["epochs"] in s.EPOCH_CHOICES
