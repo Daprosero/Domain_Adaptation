@@ -267,3 +267,13 @@ def test_the_search_samples_shallow_settings_and_builds_its_filters():
     with s.network("shallow", {**trial, "FILTERS": 20}):
         assert eegnet.EEGNetTrunk(14).conv_temporal.out_channels == 20
     assert shallow_trunk.FILTERS == 40 and eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk
+
+
+def test_the_log_power_block_keeps_eegnet_shapes_and_restores_it():
+    from MIL_CREDA_EEG import input_norm
+    plain = eegnet.EEGNetTrunk
+    with input_norm.log_power():
+        trunk = eegnet.EEGNetTrunk(14)
+        out = trunk(torch.randn(3, 14, 512))
+        assert out.shape == (3, 256) and torch.isfinite(out).all()
+    assert eegnet.EEGNetTrunk is plain

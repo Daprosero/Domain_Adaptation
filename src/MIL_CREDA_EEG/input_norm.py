@@ -35,6 +35,36 @@ class WindowNorm(nn.Module):
         return (x - mean) / std * self.weight[:, None] + self.bias[:, None]
 
 
+class LogPowerTrunk(eegnet.EEGNetTrunk):
+    """EEGNet with block 1's ELU and average pooling replaced by log of mean square.
+
+    The spatially filtered signal is squared, averaged over the block-1 pooling window and
+    logged: a log band power per filter, the operation of FBCNet and ShallowConvNet. Located
+    reason: learning from windows without log compression fails across subjects here.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.dim() != 3 or x.shape[1] != self.channels or x.shape[2] != self.samples:
+            raise ValueError(f"expected (n, {self.channels}, {self.samples}) windows")
+        h = self.bn1(self.conv_temporal(eegnet._same(x.unsqueeze(1), eegnet.KERNEL_LENGTH)))
+        h = self.bn2(self.depthwise(h))
+        h = self.drop1(torch.log(self.pool1(h * h).clamp_min(1e-6)))
+        h = self.bn3(self.separable_point(self.separable_depth(eegnet._same(h, eegnet.SEPARABLE_LENGTH))))
+        h = self.drop2(self.pool2(self.elu2(h)))
+        return h.flatten(1)
+
+
+@contextlib.contextmanager
+def log_power():
+    """EEGNet with the log-power block 1 while the block runs, the plan's one afterwards."""
+    plain = eegnet.EEGNetTrunk
+    eegnet.EEGNetTrunk = LogPowerTrunk
+    try:
+        yield
+    finally:
+        eegnet.EEGNetTrunk = plain
+
+
 def trunk_class(kind: str, base: type) -> type:
     class NormTrunk(base):
         def __init__(self, channels: int, samples: int = eegnet.SAMPLES):
