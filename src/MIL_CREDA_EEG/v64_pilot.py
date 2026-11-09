@@ -177,6 +177,15 @@ def run_one(t, rotation: int, arm: str, seed: int, bags, preps: Mapping, device,
            "gateV63": GATE_V63[t.name][rotation],
            "nUnits": {"source": len(view["source_train"]), "target": len(view["target_train"]),
                       "test": len(test)}}
+    gates = (("milCreda", GATE_V63[t.name][rotation]), ("milCredaGate1", 1.0))
+    return train_and_score(data, view, test, rotation, seed, device, epochs1, epochs2, gates,
+                           out, started)
+
+
+def train_and_score(data, view: Mapping, test: list, rotation: int, seed: int, device,
+                    epochs1: int, epochs2: int, gates, out: dict, started: float) -> dict:
+    """Phase 1 of the common group (predict) and of MIL-CREDA, then MIL-CREDA's phase 2 at
+    each (label, gate) of `gates`; every prediction on `test` lands in `out`."""
     sched1 = {"epochs1": epochs1, "epochs2": epochs2, "bagsPerStep": BAGS_PER_STEP}
     record = None
     for group in ("common", "MIL-CREDA"):
@@ -188,7 +197,7 @@ def run_one(t, rotation: int, arm: str, seed: int, bags, preps: Mapping, device,
             # a collapsed encoder (between-bag sigma 0) is a result, recorded, never retried
             failed = f"failed: {type(error).__name__}: {error}"
             for key in (("predict",) if group == "common"
-                        else ("phase1", "milCreda", "milCredaGate1")):
+                        else ("phase1", *(label for label, _ in gates))):
                 out[key] = failed
             if group == "common":
                 continue
@@ -204,7 +213,7 @@ def run_one(t, rotation: int, arm: str, seed: int, bags, preps: Mapping, device,
             sigma = V.between_bag_sigma(model, view["source_train"], seed=seed)
             model._sigma = sigma
             record = (two_phase.phase_one_state(model), {"hyper": dict(hyper), "sigma": sigma})
-    for label, gate in (("milCreda", GATE_V63[t.name][rotation]), ("milCredaGate1", 1.0)):
+    for label, gate in gates:
         saved, search.PHASE_ONE_SEED = search.PHASE_ONE_SEED, seed
         try:
             o2 = V.train_mil_creda_phase_two(data, rotation, seed, record,
