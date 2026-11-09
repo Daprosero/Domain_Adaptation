@@ -35,10 +35,11 @@ are files, never redone. The carry paths are `Results/v63` and `Models/v63` (pro
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -49,6 +50,7 @@ import torch
 from MIL_CREDA_EEG import bag_data, campaign, model_store, partition, remote_units
 from MIL_CREDA_EEG import search, two_phase
 from MIL_CREDA_EEG import v63_filters as Fl
+from MIL_CREDA_EEG import v63_records as R
 from MIL_CREDA_EEG import v63_setup as V
 
 __provenance__ = {
@@ -66,6 +68,9 @@ __provenance__ = {
         "no_target_label_enters_a_selection",
         "a_diverged_trial_fails_inside_the_same_budget",
         "a_study_whose_trials_all_diverged_leaves_failed_records",
+        "the_k3_variants_refit_mil_credas_selection_on_the_core_transfers_only",
+        "the_ceilings_choose_nothing_and_use_the_folds_tuned_values",
+        "every_refit_record_keeps_what_the_mechanism_analyses_read",
     ],
 }
 
@@ -105,6 +110,8 @@ def check_config(config: Mapping) -> dict:
                          f"unknown {unknown}")
     cfg["permutations"] = int(cfg.get("permutations", Fl.PERMUTATIONS))
     cfg["ensvRefits"] = bool(cfg.get("ensvRefits", True))
+    cfg["k3"] = bool(cfg.get("k3", True))
+    cfg["ceilings"] = bool(cfg.get("ceilings", True))
     cfg["marginSeconds"] = float(cfg.get("marginSeconds", DEFAULT_MARGIN))
     cfg["threads"] = int(cfg.get("threads", 4))
     cfg["device"] = cfg.get("device", "cpu")
@@ -436,10 +443,45 @@ def write_record(path: Path, payload: Mapping) -> None:
 # ------------------------------------------------------------------ the units
 
 
+#: Sec. 6.3, the K3 variants that share MIL-CREDA's phase 1 and change only its phase 2;
+#: none has a search of its own ("Ninguna variante tiene búsqueda propia"): each refits
+#: MIL-CREDA's selected values of the outer fold, on the core transfers only.
+K3_VARIANTS = {"MIL-CREDA [global term only]": {"term_selection": "global term only"},
+               "MIL-CREDA [local term only]": {"term_selection": "local term only"},
+               "MIL-CREDA [own without consensus]": {"gamma": 0.0}}
+#: Sec. 5.4's ceilings, diagnostic: they choose nothing and no selection reads them.
+OWN_DOMAIN = "ceiling: own-domain model"
+LABELLED = "ceiling: phase 2 with target labels"
+
+
+@contextlib.contextmanager
+def labelled_phase_two() -> Iterator[None]:
+    """Phase 2 trained on the TARGET labels (Sec. 5.4, the task ceiling): each step's
+    objective is Eq. 21 over the target training bags of the batch (as
+    `tools/diagnostics/references.py`). Main thread only; restored on exit."""
+    plain = two_phase.phase_two_step
+
+    def step(model, source, target, tau_local, device, term_selection=two_phase.BOTH_TERMS):
+        out = plain(model, source, target, tau_local, device, term_selection=term_selection)
+        y = torch.tensor([b.label for b in target], device=device)
+        G = model.classify(model.represent(model.bag_pairs(
+            model.embed([b.windows.to(device) for b in target], "target"))))
+        out["objective"] = two_phase.source_term(model, G, y)
+        return out
+
+    two_phase.phase_two_step = step
+    try:
+        yield
+    finally:
+        two_phase.phase_two_step = plain
+
+
 def run_performance(t, rotation: int, cfg: Mapping, product: Path, bags, prep, cov: Covariates,
                     guard: Guard | None, device="cpu") -> dict:
     data = V.search_data(t, bags, prep, rotations=[rotation])
     test = V.test_bags(t, bags, rotation, prep)
+    channels = V.channels_of(t)
+    source_train = data.rotations[rotation]["source_train"]
     gate_auc = Fl.shift_gate_auc(t, bags, rotation, prep)
     gate = V.gate_weight(gate_auc)
     base = {"transfer": t.name, "arm": t.arm, "experiment": V.experiment_of(t),
@@ -449,6 +491,12 @@ def run_performance(t, rotation: int, cfg: Mapping, product: Path, bags, prep, c
     groups = [g for g in GROUPS if g == "common" or any(
         search.PHASE_ONE_GROUP_OF[s] == g for s in strategies)]
     selections, records = {}, {}
+
+    def rows(model, domain, src_model, pi: bool) -> dict:
+        return {**_rows(model, test, domain, src_model, cov, device),
+                **R.target_extras(model, test["target"], bags, channels, domain, device,
+                                  source_train if pi else None)}
+
     for g in groups:
         study = phase_one_study(g, data, rotation, cfg,
                                 study_path(product, t, 1, g, rotation), guard, device)
@@ -462,8 +510,39 @@ def run_performance(t, rotation: int, cfg: Mapping, product: Path, bags, prep, c
                 m = rebuild_phase_one(g, records[(g, seed)], device)
                 write_record(path, {**base, "method": method, "seed": seed, "phase": 1,
                                     "group": g, "selection": selections[g],
-                                    **_rows(m, test, "source", m, cov, device)})
+                                    **rows(m, "source", m, False)})
+
+    def refit(method: str, name: str, rule: str, g: str, sel: Mapping, train, extra: Mapping,
+              pi: bool) -> None:
+        for seed in cfg["seeds"]:
+            path = run_record_path(product, t, rotation, method, seed)
+            if path.is_file():
+                continue
+            record = records[(g, seed)]
+            schedule = search.refit_schedule(cfg["schedule"], 2, sel["epochs"])
+            saved, search.PHASE_ONE_SEED = search.PHASE_ONE_SEED, seed
+            try:
+                run = lambda: train(data, rotation, seed, record, sel["params"], schedule, device)
+                out = guard.timed("refit2", run) if guard else run()
+            except DIVERGED as error:              # recorded, never hidden nor retried
+                write_record(path, {**base, "method": method, "seed": seed, "phase": 2,
+                                    "group": g, "rule": rule, "selection": sel,
+                                    "failed": f"{type(error).__name__}: {error}"})
+                continue
+            finally:
+                search.PHASE_ONE_SEED = saved
+            V.save_state(model_path(product, t, rotation, seed, 2, name, rule),
+                         out["model"].state_dict(),
+                         {**base, "phase": 2, "name": method, "seed": seed, "rule": rule,
+                          "selection": sel, "hyper": out["result"]["checkpoint"]["hyper"],
+                          "channels": out["channels"], "shiftGate": gate})
+            src_model = rebuild_phase_one(g, record, device)
+            write_record(path, {**base, "method": method, "seed": seed, "phase": 2, "group": g,
+                                "rule": rule, "selection": sel, **extra,
+                                **rows(out["model"], "target", src_model, pi)})
+
     first = cfg["seeds"][0]
+    primary = {}
     for s in strategies:
         g = search.PHASE_ONE_GROUP_OF[s]
         study = phase_two_study(s, data, rotation, records[(g, first)], cfg,
@@ -477,44 +556,81 @@ def run_performance(t, rotation: int, cfg: Mapping, product: Path, bags, prep, c
                                         "group": g, "failed": reason})
             continue
         chosen = {"primary": search.select(study, "primary")}
+        primary[s] = chosen["primary"]
         ensv = search.select(study, "ensv")
         if cfg["ensvRefits"] and (ensv["trial"], ensv["epoch"]) != (
                 chosen["primary"]["trial"], chosen["primary"]["epoch"]):
             chosen["ensv"] = ensv
-        trainer = phase_two_trainer(s, gate)
+        extra = {"primarySelection": chosen["primary"], "ensvSelection": ensv,
+                 "shiftGateAuc": gate_auc, "shiftGate": gate if s == "MIL-CREDA" else None}
         for rule, sel in chosen.items():
-            method = s if rule == "primary" else f"{s} [EnsV]"
-            for seed in cfg["seeds"]:
-                path = run_record_path(product, t, rotation, method, seed)
-                if path.is_file():
-                    continue
-                record = records[(g, seed)]
-                schedule = search.refit_schedule(cfg["schedule"], 2, sel["epochs"])
-                saved, search.PHASE_ONE_SEED = search.PHASE_ONE_SEED, seed
-                try:
-                    run = lambda: trainer(data, rotation, seed, record, sel["params"], schedule,
-                                          device)
-                    out = guard.timed("refit2", run) if guard else run()
-                except DIVERGED as error:          # recorded, never hidden nor retried
-                    write_record(path, {**base, "method": method, "seed": seed, "phase": 2,
-                                        "group": g, "rule": rule, "selection": sel,
-                                        "failed": f"{type(error).__name__}: {error}"})
-                    continue
-                finally:
-                    search.PHASE_ONE_SEED = saved
-                V.save_state(model_path(product, t, rotation, seed, 2, s, rule),
-                             out["model"].state_dict(),
-                             {**base, "phase": 2, "name": s, "seed": seed, "rule": rule,
-                              "selection": sel, "hyper": out["result"]["checkpoint"]["hyper"],
-                              "channels": out["channels"], "shiftGate": gate})
-                src_model = rebuild_phase_one(g, record, device)
-                write_record(path, {**base, "method": method, "seed": seed, "phase": 2,
-                                    "group": g, "rule": rule, "selection": sel,
-                                    "primarySelection": chosen["primary"],
-                                    "ensvSelection": ensv, "shiftGateAuc": gate_auc,
-                                    "shiftGate": gate if s == "MIL-CREDA" else None,
-                                    **_rows(out["model"], test, "target", src_model, cov, device)})
+            refit(s if rule == "primary" else f"{s} [EnsV]", s, rule, g, sel,
+                  phase_two_trainer(s, gate), extra, s == "MIL-CREDA")
+    mc = primary.get("MIL-CREDA")
+    if mc is not None and cfg["k3"] and t in V.CORE:
+        for variant, knobs in K3_VARIANTS.items():
+            train = (lambda kn: lambda d, r, seed, rec, params, sch, dev:
+                     V.train_mil_creda_phase_two(d, r, seed, rec, params, sch, dev, gate=gate,
+                                                 **kn))(knobs)
+            refit(variant, variant, "primary", "MIL-CREDA", mc, train,
+                  {"experiment": "K3-ablacion", "variantOf": "MIL-CREDA", "knobs": knobs,
+                   "shiftGateAuc": gate_auc, "shiftGate": gate}, True)
+    if mc is not None and cfg["ceilings"]:
+        run_ceilings(t, rotation, cfg, product, data, test, records, selections["MIL-CREDA"],
+                     mc, gate, base, rows, guard, device)
     return {"unit": f"P:{t.name}:{rotation}", "shiftGateAuc": gate_auc, "shiftGate": gate}
+
+
+def run_ceilings(t, rotation: int, cfg: Mapping, product: Path, data, test, records,
+                 phase_one_sel: Mapping, phase_two_sel: Mapping, gate: float, base: Mapping,
+                 rows, guard: Guard | None, device="cpu") -> None:
+    """Sec. 5.4's two ceilings at the outer fold's tuned MIL-CREDA values, 10 seeds, no
+    search: the own-domain model (phase 1 on the TARGET training subjects with their
+    labels, scored on the target test subjects) and phase 2 trained with the target
+    labels. Diagnostic: no selection reads them."""
+    tgt = data.rotations[rotation]["target_train"]
+    own = search.SearchData(transfer=t, partition_sha256=data.partition_sha256,
+                            rotations={rotation: {"source_train": tgt, "source_valid": [],
+                                                  "target_train": tgt, "target_valid": []}})
+    extra = {"ceiling": True, "choosesNothing": True}
+    for seed in cfg["seeds"]:
+        path = run_record_path(product, t, rotation, OWN_DOMAIN, seed)
+        if path.is_file():
+            continue
+        schedule = search.refit_schedule(cfg["schedule"], 1, phase_one_sel["epochs"])
+        hyper = V.phase_one_hyper("MIL-CREDA", phase_one_sel["params"], schedule)
+
+        def run():
+            with V.phase_one_l2(phase_one_sel["params"]["l2"]):
+                return V.train_phase_one("MIL-CREDA", own, rotation, seed, hyper, device)
+
+        out = guard.timed("refit1", run) if guard else run()
+        m = out["model"].eval()
+        write_record(path, {**base, "method": OWN_DOMAIN, "seed": seed, "phase": 1,
+                            "selection": phase_one_sel, **extra, **rows(m, "source", m, False)})
+    for seed in cfg["seeds"]:
+        path = run_record_path(product, t, rotation, LABELLED, seed)
+        if path.is_file():
+            continue
+        record = records[("MIL-CREDA", seed)]
+        schedule = search.refit_schedule(cfg["schedule"], 2, phase_two_sel["epochs"])
+
+        def run():
+            with labelled_phase_two():
+                return V.train_mil_creda_phase_two(data, rotation, seed, record,
+                                                   phase_two_sel["params"], schedule, device,
+                                                   gate=gate)
+
+        try:
+            out = guard.timed("refit2", run) if guard else run()
+        except DIVERGED as error:
+            write_record(path, {**base, "method": LABELLED, "seed": seed, "phase": 2,
+                                **extra, "failed": f"{type(error).__name__}: {error}"})
+            continue
+        src_model = rebuild_phase_one("MIL-CREDA", record, device)
+        write_record(path, {**base, "method": LABELLED, "seed": seed, "phase": 2,
+                            "selection": phase_two_sel, **extra,
+                            **rows(out["model"], "target", src_model, False)})
 
 
 def run_target_filter(domain: str, cfg: Mapping, product: Path, bags, prep,

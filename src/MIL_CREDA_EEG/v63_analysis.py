@@ -335,8 +335,8 @@ def analyze(product: str | Path, *, resamples: int = RESAMPLES) -> dict:
             margin=MARGIN))
     statistics.apply_holm(ni, "non-inferiority over the no-shift transfers")
     sig += ni
-    rivals = sorted({m for (t, m) in metrics if m not in (REFERENCE, PREDICT)
-                     and not m.startswith("phase1") and "[EnsV]" not in m})
+    rivals = sorted({m for (t, m) in metrics
+                     if m in model_store.STRATEGIES and m != REFERENCE})
     for rival in rivals:
         rows = []
         for t in passing:
