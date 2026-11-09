@@ -63,6 +63,9 @@ ALPHA = 0.05
 RESAMPLES = statistics.BOOTSTRAP_RESAMPLES
 BOOT_SEED = statistics.BOOTSTRAP_SEED
 PREDICT = "predict"
+OWN_DOMAIN = "ceiling: own-domain model"
+LABELLED = "ceiling: phase 2 with target labels"
+CEILING_METHODS = (OWN_DOMAIN, LABELLED, PREDICT, "MIL-CREDA")
 REFERENCE = "MIL-CREDA"
 DOMAIN_C = 0.1
 
@@ -253,6 +256,48 @@ def friedman_holm(scores: Mapping[str, Sequence[float]], alpha: float = ALPHA) -
                       for (a, b), zz, pp, pa in zip(pairs, z, pv, adj)]}
 
 
+def holm_groups(ranking: Mapping) -> list[list[str]]:
+    """Maximal runs of strategies, in rank order, with no pair Holm separates."""
+    order = sorted(ranking["average_rank"], key=ranking["average_rank"].get)
+    rejected = {frozenset((p["a"], p["b"])) for p in ranking["pairs"] if p["reject"]}
+    groups = []
+    for i in range(len(order)):
+        j = i
+        while j + 1 < len(order) and all(frozenset((order[a], order[j + 1])) not in rejected
+                                         for a in range(i, j + 1)):
+            j += 1
+        g = order[i:j + 1]
+        if len(g) > 1 and not any(set(g) <= set(h) for h in groups):
+            groups.append(g)
+    return groups
+
+
+def cd_diagram(ranking: Mapping, path: Path) -> Path:
+    """Demsar's diagram: average ranks on an axis, a bar under every Holm group."""
+    from matplotlib import pyplot as plt
+    from MIL_CREDA_EEG.ps_figures import apply_style, save_figure
+    ranks = ranking["average_rank"]
+    order = sorted(ranks, key=ranks.get)
+    apply_style(body_pt=10, printed_width_fraction=1.0)
+    fig, ax = plt.subplots()
+    k = len(order)
+    ax.set_xlim(1, k); ax.set_ylim(-len(order) - 1, 2)
+    ax.hlines(0, 1, k, color="k", lw=0.8)
+    for i, m in enumerate(order):
+        x = ranks[m]
+        y = -1 - i
+        ax.plot([x, x], [0, y], color="k", lw=0.5)
+        ax.text(x, y, f" {m} ({x:.2f})", va="center", ha="left")
+    for g_i, g in enumerate(holm_groups(ranking)):
+        ax.hlines(0.6 + 0.3 * g_i, ranks[g[0]], ranks[g[-1]], color="tab:red", lw=2)
+    ax.set_yticks([])
+    ax.set_xlabel("average rank of balanced accuracy (1 = best); red bars: groups Holm does "
+                  "not separate")
+    save_figure(fig, path, png_preview=True)
+    plt.close(fig)
+    return path
+
+
 # ------------------------------------------------------------------ the report
 
 
@@ -376,6 +421,14 @@ def analyze(product: str | Path, *, resamples: int = RESAMPLES) -> dict:
                 correction=f"holm (pairs, m={len(ranking['pairs'])})", effect_size=None,
                 effect_size_name="average rank difference", ci_low=None, ci_high=None,
                 n=len(blocks), hypothesis="A-nivel", experiment="A-nivel", family="ranking"))
+    ceilings = [{"transfer": t, "method": m, "seeds": len(metrics[(t, m)][0]),
+                 **{k: metrics[(t, m)][1][k] for k in ("balanced_accuracy", "balanced_accuracy_sd",
+                                                       "auc", "auc_sd", "auc_age_removed")}}
+                for t in sorted({t for t, _ in metrics}) for m in CEILING_METHODS
+                if (t, m) in metrics]
+    if ceilings:
+        _write_csv(root / "tables" / "ceilings.csv", ceilings)
+    cd = cd_diagram(ranking, root / "figures" / "cd_diagram.pdf") if ranking else None
     (product / "Results").mkdir(parents=True, exist_ok=True)
     (product / "Results" / "significance_v63.json").write_text(
         json.dumps(sig, indent=1, default=float), encoding="utf-8")
@@ -391,6 +444,8 @@ def analyze(product: str | Path, *, resamples: int = RESAMPLES) -> dict:
                           "F-corrimiento/tables/shift_filter.csv",
                           *(f"{e}/tables/performance.csv" for e in V.EXPERIMENT_OF_ARM.values())],
                "significance": "Results/significance_v63.json",
+               "ceilings": "tables/ceilings.csv" if ceilings else None,
+               "cdDiagram": str(cd) if cd else None,
                "ranking": ranking and {"blocks": blocks, "average_rank": ranking["average_rank"],
                                        "p_value": ranking["p_value"]}}
     (root / "summary.json").write_text(json.dumps(summary, indent=1, default=float),

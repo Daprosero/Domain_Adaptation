@@ -105,3 +105,28 @@ def test_a_number_in_a_table_is_read_from_a_record(tmp_path):
     assert len(sup) == 1 and sup[0]["statistic"] > 0
     table = (root / "C-dispositivo" / "tables" / "performance.csv").read_text().splitlines()
     assert len(table) == 1 + 3 and "balanced_accuracy" in table[0]
+
+
+def test_the_ceiling_table_and_the_cd_diagram_are_written(tmp_path):
+    product = tmp_path / "P"
+    root = product / "Results" / "v63"
+    (root / "S0-codificador").mkdir(parents=True)
+    for d in ("L6", "Robots"):
+        (root / "S0-codificador" / f"target_filter_{d}.json").write_text(json.dumps(
+            {"auc": 0.8, "p_value": 0.01, "subjects": 40, "passes": True}))
+    rng = np.random.default_rng(1)
+    methods = ["MIL-CREDA", "predict", "COT", "CLUDA", An.OWN_DOMAIN, An.LABELLED]
+    for t, slug in (("L6->Robots", "L6-to-Robots"), ("Robots->L6", "Robots-to-L6")):
+        for method in methods:
+            for seed in (1, 2):
+                for r in range(4):
+                    y = [0, 1] * 5
+                    _record(root / "C-dispositivo" / "runs" / slug / f"outer{r}"
+                            / f"{method}__seed{seed}.json", t, method, seed, r, y,
+                            list(rng.uniform(size=10)))
+    summary = An.analyze(product, resamples=50)
+    table = (root / "tables" / "ceilings.csv").read_text().splitlines()
+    assert len(table) == 1 + 2 * 4 and An.OWN_DOMAIN in table[1] + "".join(table)
+    assert summary["cdDiagram"] and summary["cdDiagram"].endswith("cd_diagram.pdf")
+    sig = json.loads((product / "Results" / "significance_v63.json").read_text())
+    assert not any(An.OWN_DOMAIN in r["comparison"] or An.LABELLED in r["comparison"] for r in sig)
