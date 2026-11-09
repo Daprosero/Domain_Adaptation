@@ -24,7 +24,14 @@ def _bagset(root):
         for c in {0: ("L6",), 1: ("Robots",), 2: ("L6", "Robots")}[i % 3]:
             path = root / f"{s}_{c}.npz"
             shift = 0.5 if c == "Robots" else 0.0
-            np.savez(path, signal=(rng.normal(size=(4, 12, 512)) + shift).astype(np.float32))
+            marks = {"window_index": np.arange(4) * 2, "window_start_s": np.arange(4) * 4.0,
+                     "integrity_mark": np.zeros(4, bool), "rail_window": np.zeros(4, bool)}
+            if c == "Robots":
+                marks["contact_bad"] = np.eye(4, 12, dtype=bool)
+            else:
+                marks["event_window"] = np.array([True, False, False, True])
+            np.savez(path, signal=(rng.normal(size=(4, 12, 512)) + shift).astype(np.float32),
+                     **marks)
             bags.append(bag_data.Bag(subject=s, condition=c, record_id=f"{s}-{c}", label=label,
                                      sex="M", fold=fold, device="CGX", channels=V.SHARED,
                                      n_windows=4, path=path))
@@ -72,9 +79,10 @@ def test_each_seed_refits_from_its_own_phase_one_checkpoint_with_the_frozen_valu
     _perf(tmp_path, product, bags)
     runs = product / C.RESULTS / "C-dispositivo" / "runs" / "L6-to-Robots" / "outer0"
     recs = {p.name: json.loads(p.read_text()) for p in runs.glob("*.json")}
-    assert set(recs) == {"predict__seed1.json", "predict__seed2.json",
-                         "phase1-MIL-CREDA__seed1.json", "phase1-MIL-CREDA__seed2.json",
-                         "MIL-CREDA__seed1.json", "MIL-CREDA__seed2.json"}
+    methods = {"predict", "phase1-MIL-CREDA", "MIL-CREDA", "MIL-CREDA-global-term-only",
+               "MIL-CREDA-local-term-only", "MIL-CREDA-own-without-consensus",
+               "ceiling-own-domain-model", "ceiling-phase-2-with-target-labels"}
+    assert set(recs) == {f"{m}__seed{s}.json" for m in methods for s in (1, 2)}
     assert recs["MIL-CREDA__seed1.json"]["selection"] == recs["MIL-CREDA__seed2.json"]["selection"]
     m1 = C.model_path(product, V.transfer("L6->Robots"), 0, 1, 1, "MIL-CREDA")
     m2 = C.model_path(product, V.transfer("L6->Robots"), 0, 2, 1, "MIL-CREDA")
@@ -175,3 +183,52 @@ def test_a_study_whose_trials_all_diverged_leaves_failed_records(tmp_path, monke
         rec = json.loads((runs / f"MIL-CREDA__seed{seed}.json").read_text())
         assert "diverged" in rec["failed"] and "probabilities" not in rec
     assert (runs / "predict__seed1.json").is_file()
+
+
+
+def _recs(product):
+    runs = product / C.RESULTS / "C-dispositivo" / "runs" / "L6-to-Robots" / "outer0"
+    return {p.name.rsplit("__", 1)[0]: json.loads(p.read_text()) for p in runs.glob("*__seed1.json")}
+
+
+def test_the_k3_variants_refit_mil_credas_selection_on_the_core_transfers_only(tmp_path):
+    bags = _bagset(tmp_path)
+    _perf(tmp_path, tmp_path / "P", bags)
+    recs = _recs(tmp_path / "P")
+    for v in ("MIL-CREDA-global-term-only", "MIL-CREDA-local-term-only",
+              "MIL-CREDA-own-without-consensus"):
+        assert recs[v]["selection"] == recs["MIL-CREDA"]["selection"]
+        assert recs[v]["experiment"] == "K3-ablacion"
+    hpo = {p.name for p in (tmp_path / "P" / C.RESULTS / "hpo").glob("*.db")}
+    assert not any("term-only" in h or "consensus" in h for h in hpo)
+    assert all(t in V.CORE for t in V.TRANSFERS if t.name == "L6->Robots")
+    assert V.transfer("L1->Robots") not in V.CORE
+
+
+def test_the_ceilings_choose_nothing_and_use_the_folds_tuned_values(tmp_path):
+    bags = _bagset(tmp_path)
+    _perf(tmp_path, tmp_path / "P", bags)
+    recs = _recs(tmp_path / "P")
+    own, lab = recs["ceiling-own-domain-model"], recs["ceiling-phase-2-with-target-labels"]
+    assert own["choosesNothing"] and lab["choosesNothing"]
+    assert own["selection"] == recs["phase1-MIL-CREDA"]["selection"]
+    assert lab["selection"] == recs["MIL-CREDA"]["selection"]
+    hpo = sorted(p.name for p in (tmp_path / "P" / C.RESULTS / "hpo").glob("*.db"))
+    assert len(hpo) == 2 + 1          # common and MIL-CREDA phase 1, MIL-CREDA phase 2
+
+
+def test_every_refit_record_keeps_what_the_mechanism_analyses_read(tmp_path):
+    bags = _bagset(tmp_path)
+    _perf(tmp_path, tmp_path / "P", bags)
+    recs = _recs(tmp_path / "P")
+    for name, r in recs.items():
+        assert len(r["windows"]) == len(r["attention"]) == len(r["subjects"])
+        for w, a in zip(r["windows"], r["attention"]):
+            assert len(w["index"]) == len(a) and abs(sum(a) - 1) < 1e-6
+            assert w["contactBad"] is not None and w["event"] is None    # EMOTIV target
+        assert len(r["sourceRepresentations"]) == len(r["sourceSubjects"])
+    pi = recs["MIL-CREDA"]["correspondence"]
+    assert len(pi) == len(recs["MIL-CREDA"]["subjects"])
+    assert all(abs(sum(row) - 1) < 1e-6 for row in pi)
+    assert len(pi[0]) == len(recs["MIL-CREDA"]["correspondenceSourceSubjects"])
+    assert "correspondence" not in recs["predict"]

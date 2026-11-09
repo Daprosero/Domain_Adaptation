@@ -406,8 +406,11 @@ def mil_creda_hyper(meta_hyper: Mapping, params: Mapping, schedule: Mapping) -> 
 
 def train_mil_creda_phase_two(data: search.SearchData, rotation: int, seed: int, record,
                               params: Mapping, schedule: Mapping, device="cpu", *,
-                              gate: float) -> dict:
-    """MIL-CREDA's v63 phase 2 from one phase-1 checkpoint (state, meta)."""
+                              gate: float, term_selection: str = two_phase.BOTH_TERMS,
+                              gamma: float | None = None) -> dict:
+    """MIL-CREDA's v63 phase 2 from one phase-1 checkpoint (state, meta). The K3 variants
+    of Sec. 6.3 change only `term_selection` (global or local term only) or `gamma` (the
+    own aggregation without consensus, gamma 0 in phase 2 at the same temperature)."""
     state, meta = record
     sigma1 = meta.get("sigma")
     if sigma1 is None:
@@ -426,7 +429,8 @@ def train_mil_creda_phase_two(data: search.SearchData, rotation: int, seed: int,
         raise V63Error(f"the phase-1 state does not fit (missing {missing}, unexpected "
                        f"{unexpected})")
     model.fix_sigma(sigma1)
-    model.attention_gamma = PHASE_TWO_AGGREGATION["attentionGamma"]
+    model.attention_gamma = (PHASE_TWO_AGGREGATION["attentionGamma"] if gamma is None
+                             else float(gamma))
     model.attention_temperature = PHASE_TWO_AGGREGATION["attentionTemperature"]
     joint = two_phase.bridge(model)
     threshold = float(np.median(probabilities(model, d["target_train"], "target", device)))
@@ -434,8 +438,10 @@ def train_mil_creda_phase_two(data: search.SearchData, rotation: int, seed: int,
         result = two_phase.adapt_target_phase(
             model, {"checkpoint": {"sigma": sigma1}}, joint["frozen_state"], d["source_train"],
             d["target_train"], d["target_valid"], hyper, generator, device, seed=seed,
-            fold=rotation, transfer=data.transfer.name)
-    result["checkpoint"].update({"pseudolabelThreshold": threshold, "gate": gate, "mu": MU})
+            fold=rotation, transfer=data.transfer.name, term_selection=term_selection)
+    result["checkpoint"].update({"pseudolabelThreshold": threshold, "gate": gate, "mu": MU,
+                                 "termSelection": term_selection,
+                                 "attentionGamma": model.attention_gamma})
     return {"strategy": "MIL-CREDA", "model": model, "result": result, "hyper": hyper,
             "channels": channels}
 
