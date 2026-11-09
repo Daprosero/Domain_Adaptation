@@ -533,10 +533,16 @@ def installed() -> Iterator[None]:
 # ------------------------------------------------------------------ store
 
 
+TRAINING_MODULES = ("v63_campaign.py", "v63_filters.py", "v63_records.py", "v63_setup.py")
+
+
 def code_version() -> str:
-    """The v60 code version and every v63 module's bytes."""
+    """The v60 code version and the bytes of the v63 modules that train or record
+    (`TRAINING_MODULES`); the analysis modules read records and are left out, so adding or
+    editing one never changes the identity of a study or a stored model."""
     digest = hashlib.sha256(model_store.code_version().encode())
-    for path in sorted(Path(__file__).parent.glob("v63_*.py")):
+    for name in TRAINING_MODULES:
+        path = Path(__file__).parent / name
         digest.update(path.name.encode() + b"\0" + path.read_bytes() + b"\0")
     return digest.hexdigest()
 

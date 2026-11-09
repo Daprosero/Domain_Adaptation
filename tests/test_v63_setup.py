@@ -197,3 +197,10 @@ def test_every_arms_phase_one_adds_the_searched_explicit_l2():
     with pytest.raises(V.V63Error):
         with V.phase_one_l2(float("nan")):
             pass
+
+
+def test_the_code_version_reads_only_the_training_modules():
+    assert set(V.TRAINING_MODULES) == {"v63_campaign.py", "v63_filters.py", "v63_records.py",
+                                       "v63_setup.py"}
+    assert not any("analysis" in m or "saved" in m or "connectivity" in m
+                   for m in V.TRAINING_MODULES)
