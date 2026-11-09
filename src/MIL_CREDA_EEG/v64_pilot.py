@@ -181,8 +181,19 @@ def run_one(t, rotation: int, arm: str, seed: int, bags, preps: Mapping, device,
     record = None
     for group in ("common", "MIL-CREDA"):
         hyper = V.phase_one_hyper(group, {"lr1": FIXED["lr1"], "l2": FIXED["l2"]}, sched1)
-        with V.phase_one_l2(FIXED["l2"]):
-            trained = V.train_phase_one(group, data, rotation, seed, hyper, device)
+        try:
+            with V.phase_one_l2(FIXED["l2"]):
+                trained = V.train_phase_one(group, data, rotation, seed, hyper, device)
+        except (FloatingPointError, V.V63Error) as error:
+            # a collapsed encoder (between-bag sigma 0) is a result, recorded, never retried
+            failed = f"failed: {type(error).__name__}: {error}"
+            for key in (("predict",) if group == "common"
+                        else ("phase1", "milCreda", "milCredaGate1")):
+                out[key] = failed
+            if group == "common":
+                continue
+            out["seconds"] = round(time.time() - started, 1)
+            return out
         model = trained["model"]
         out["trunk"] = type(model.source_trunk).__name__
         recalibrate(model, view["source_train"], torch.device(device))
