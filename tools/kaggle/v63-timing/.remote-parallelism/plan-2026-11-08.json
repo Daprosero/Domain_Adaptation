@@ -1,0 +1,88 @@
+{
+  "timing": "implementations/Domain_Adaptation/tools/kaggle/v63-timing/Results/timing.json",
+  "plans": {
+    "full": {
+      "units": 64,
+      "unit": "one fold x seed pair, every arm on the same machine",
+      "options": [
+        {
+          "option": "local-cpu-1",
+          "kind": "local",
+          "candidates": [
+            "local-cpu-1"
+          ],
+          "device": "cpu",
+          "settings": {
+            "threads": 4
+          },
+          "processes": 1,
+          "unitSeconds": 12842.9,
+          "setupSeconds": 0,
+          "accounts": [],
+          "status": "over-local-limit",
+          "reason": "its makespan upper bound 986334.72 s exceeds the 20 minutes a run may take locally",
+          "makespanSeconds": {
+            "seconds": 821945.6,
+            "low": 657556.48,
+            "high": 986334.72
+          },
+          "slots": 1,
+          "quotaWeeks": 2,
+          "acceleratorHours": 0,
+          "perAccount": [
+            {
+              "account": "local",
+              "units": 64,
+              "acceleratorHours": 0,
+              "quotaHours": null,
+              "overQuota": null,
+              "quotaWeeks": null,
+              "quotaWaitSeconds": 0
+            }
+          ]
+        }
+      ],
+      "status": "no-eligible",
+      "recommended": null,
+      "measureFirst": [],
+      "lost": [
+        {
+          "option": "local-cpu-1",
+          "status": "over-local-limit",
+          "reason": "its makespan upper bound 986334.72 s exceeds the 20 minutes a run may take locally"
+        }
+      ],
+      "reason": "no measured candidate is eligible: measure one listed under unmeasured, or declare the accounts of the ones measured",
+      "unmeasured": [
+        {
+          "candidate": "kaggle:daprosero/cpu",
+          "measureWith": "a rehearsal on kaggle:daprosero that runs the timing probe there (generate-job --accelerator-kind cpu, submit --smoke, fetch --smoke) and appends its own row"
+        }
+      ]
+    }
+  },
+  "representationAdvice": [],
+  "dataSourceComparisons": [],
+  "accounts": [],
+  "ignoredAccounts": [],
+  "excludedAccounts": [],
+  "rules": {
+    "localLimitSeconds": 1200,
+    "pocBudgetSeconds": 18000,
+    "bound": "high",
+    "range": "\u00b120%, single-probe extrapolation",
+    "loadShareThreshold": 0.4,
+    "minSpeedup": 1.5,
+    "minSavedMinutes": 30,
+    "sessionMarginPercent": 80,
+    "resumable": true,
+    "checkpointMinutes": 5,
+    "quotaWeekMinutes": 10080,
+    "makespan": "the stage's units (one fold x seed pair, every arm on the same machine) packed onto the option's slots (processes locally, sessions x processes per account), each slot paying its setup once per session, from each candidate's own rows at its fastest measured setting",
+    "order": "smallest makespan upper bound, then fewest accelerator hours, then CPU, then local"
+  },
+  "unmeasuredMeans": "no row of that candidate: it is never extrapolated from another host or device",
+  "readOnly": true,
+  "launchAuthorization": false,
+  "recordedOn": "2026-11-08"
+}
