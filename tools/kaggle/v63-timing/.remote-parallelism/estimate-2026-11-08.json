@@ -1,0 +1,172 @@
+{
+  "estimates": {
+    "poc": {
+      "local": {
+        "seconds": 2385.11,
+        "low": 1908.09,
+        "high": 2862.13,
+        "formula": "mean secondsPerUnit per arm 0.15 s x 1300 epochs x 1 folds x 1 seeds x 12 arms + setupSeconds 0 s x 1 folds x 1 seeds = 2385.11 s; \u00b120%, single-probe extrapolation",
+        "measurements": 12,
+        "device": "cpu",
+        "secondsPerUnit": 0.15,
+        "perArm": {
+          "phase1:AdaptMIL": 0.06,
+          "phase1:MIL-CREDA": 0.06,
+          "phase1:common": 0.06,
+          "phase2:AdaptMIL": 0.13,
+          "phase2:CASUAL": 0.53,
+          "phase2:CCA-LSC": 0.14,
+          "phase2:CLUDA": 0.14,
+          "phase2:CLUST-variante-source-free": 0.11,
+          "phase2:COT": 0.12,
+          "phase2:CS-CCS": 0.13,
+          "phase2:MIL-CREDA": 0.21,
+          "phase2:UDA-DDA": 0.16
+        },
+        "setupSeconds": 0,
+        "candidate": "local-cpu-1",
+        "processes": 1,
+        "settings": {
+          "threads": 4
+        },
+        "settingsMeasured": 1,
+        "loadShare": null
+      },
+      "kaggle:daprosero": "unmeasured"
+    },
+    "full": {
+      "local": {
+        "seconds": 821945.6,
+        "low": 657556.48,
+        "high": 986334.72,
+        "formula": "mean secondsPerUnit per arm 0.15 s x 7000 epochs x 64 folds x 1 seeds x 12 arms + setupSeconds 0 s x 64 folds x 1 seeds = 821945.6 s; \u00b120%, single-probe extrapolation",
+        "measurements": 12,
+        "device": "cpu",
+        "secondsPerUnit": 0.15,
+        "perArm": {
+          "phase1:AdaptMIL": 0.06,
+          "phase1:MIL-CREDA": 0.06,
+          "phase1:common": 0.06,
+          "phase2:AdaptMIL": 0.13,
+          "phase2:CASUAL": 0.53,
+          "phase2:CCA-LSC": 0.14,
+          "phase2:CLUDA": 0.14,
+          "phase2:CLUST-variante-source-free": 0.11,
+          "phase2:COT": 0.12,
+          "phase2:CS-CCS": 0.13,
+          "phase2:MIL-CREDA": 0.21,
+          "phase2:UDA-DDA": 0.16
+        },
+        "setupSeconds": 0,
+        "candidate": "local-cpu-1",
+        "processes": 1,
+        "settings": {
+          "threads": 4
+        },
+        "settingsMeasured": 1,
+        "loadShare": null
+      },
+      "kaggle:daprosero": "unmeasured"
+    }
+  },
+  "placement": {
+    "poc": {
+      "where": "cloud",
+      "host": null,
+      "reason": "local upper bound 2862.13 s exceeds 20 minutes, so it runs on a cloud host; run a timing probe on a cloud host first",
+      "pocBudget": "unmeasured"
+    },
+    "full": {
+      "where": "cloud",
+      "host": null,
+      "reason": "local upper bound 986334.72 s exceeds 20 minutes, so it runs on a cloud host; run a timing probe on a cloud host first"
+    }
+  },
+  "placementRules": {
+    "localLimitSeconds": 1200,
+    "pocBudgetSeconds": 18000,
+    "bound": "high"
+  },
+  "timing": "implementations/Domain_Adaptation/tools/kaggle/v63-timing/Results/timing.json",
+  "range": "\u00b120%, single-probe extrapolation",
+  "unmeasuredMeans": "no measurement on that host; a remote host is never estimated from local timings",
+  "launchAuthorization": false,
+  "candidateEstimates": {
+    "poc": {
+      "local-cpu-1": {
+        "seconds": 2385.11,
+        "low": 1908.09,
+        "high": 2862.13,
+        "formula": "mean secondsPerUnit per arm 0.15 s x 1300 epochs x 1 folds x 1 seeds x 12 arms + setupSeconds 0 s x 1 folds x 1 seeds = 2385.11 s; \u00b120%, single-probe extrapolation",
+        "measurements": 12,
+        "device": "cpu",
+        "secondsPerUnit": 0.15,
+        "perArm": {
+          "phase1:AdaptMIL": 0.06,
+          "phase1:MIL-CREDA": 0.06,
+          "phase1:common": 0.06,
+          "phase2:AdaptMIL": 0.13,
+          "phase2:CASUAL": 0.53,
+          "phase2:CCA-LSC": 0.14,
+          "phase2:CLUDA": 0.14,
+          "phase2:CLUST-variante-source-free": 0.11,
+          "phase2:COT": 0.12,
+          "phase2:CS-CCS": 0.13,
+          "phase2:MIL-CREDA": 0.21,
+          "phase2:UDA-DDA": 0.16
+        },
+        "setupSeconds": 0,
+        "candidate": "local-cpu-1",
+        "processes": 1,
+        "settings": {
+          "threads": 4
+        },
+        "settingsMeasured": 1,
+        "loadShare": null
+      }
+    },
+    "full": {
+      "local-cpu-1": {
+        "seconds": 821945.6,
+        "low": 657556.48,
+        "high": 986334.72,
+        "formula": "mean secondsPerUnit per arm 0.15 s x 7000 epochs x 64 folds x 1 seeds x 12 arms + setupSeconds 0 s x 64 folds x 1 seeds = 821945.6 s; \u00b120%, single-probe extrapolation",
+        "measurements": 12,
+        "device": "cpu",
+        "secondsPerUnit": 0.15,
+        "perArm": {
+          "phase1:AdaptMIL": 0.06,
+          "phase1:MIL-CREDA": 0.06,
+          "phase1:common": 0.06,
+          "phase2:AdaptMIL": 0.13,
+          "phase2:CASUAL": 0.53,
+          "phase2:CCA-LSC": 0.14,
+          "phase2:CLUDA": 0.14,
+          "phase2:CLUST-variante-source-free": 0.11,
+          "phase2:COT": 0.12,
+          "phase2:CS-CCS": 0.13,
+          "phase2:MIL-CREDA": 0.21,
+          "phase2:UDA-DDA": 0.16
+        },
+        "setupSeconds": 0,
+        "candidate": "local-cpu-1",
+        "processes": 1,
+        "settings": {
+          "threads": 4
+        },
+        "settingsMeasured": 1,
+        "loadShare": null
+      }
+    }
+  },
+  "hostInfo": {
+    "local": {
+      "cpuCount": 8,
+      "ramGB": null,
+      "mps": false,
+      "cuda": false
+    }
+  },
+  "candidateNote": "each candidate is estimated from its own rows at its fastest measured setting; the estimate is serial work (processes and accounts are counted by plan)",
+  "recordedOn": "2026-11-08"
+}
