@@ -13,7 +13,8 @@ neutral phase-1 aggregation (gamma 0, temperature 10), the between-bag sigma and
   gate      the v63 shift gate multiplies the adaptation terms (else 1)
   preproc   1-45 Hz band-pass and common average reference (else the stored windows, v60)
 
-Variants: "v63" (all six), "faithful" (none) and "-<fix>" (all but one). The filtered and
+Variants: "v63" (all six), "faithful" (none), "-<fix>" (all but one) and "faithfulAtt"
+(faithful, with phase 2 also training the attention under the full Eq. 39). The filtered and
 the stored data each train their own phase 1 (predict and MIL-CREDA), shared by every
 variant on that data, so all phase-2 variants of one (rotation, seed) are paired.
 A unit id is "<transfer>:<rotation>".
@@ -28,6 +29,8 @@ import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+import torch
+
 from MIL_CREDA_EEG import mil_creda_model as M, remote_units, search, two_phase
 from MIL_CREDA_EEG import v63_campaign as C
 from MIL_CREDA_EEG import v63_setup as V
@@ -36,7 +39,62 @@ from MIL_CREDA_EEG import v64_pilot as P
 RESULTS = Path("Results") / "ablation-pilot"
 FIXES = ("detConf", "detG", "rowTau", "median", "gate", "preproc")
 VARIANTS = {"v63": frozenset(FIXES), "faithful": frozenset(),
-            **{f"-{f}": frozenset(FIXES) - {f} for f in FIXES}}
+            **{f"-{f}": frozenset(FIXES) - {f} for f in FIXES},
+            "faithfulAtt": frozenset()}
+#: Variants whose phase 2 also trains the attention phi with the full Eq. 39.
+TRAINS_ATTENTION = frozenset({"faithfulAtt"})
+ATTENTION_KEYS = ("V_R", "b_R", "v_R")
+
+
+@contextlib.contextmanager
+def attention_rules():
+    """Phase 2 trains phi as well (theta_s and the head stay frozen) under the full Eq. 39:
+    L_src now carries gradient (to phi only) beside the adaptation terms (to theta_t and
+    phi); phi joins the target trunk's Adam (same lr2, wd2) and keeps its l1 projection."""
+    held = {}
+    bridge_plain, step_plain, equal_plain = (two_phase.bridge, two_phase.phase_two_step,
+                                             two_phase._states_equal)
+    adam_plain = torch.optim.Adam
+
+    def bridge(model):
+        out = bridge_plain(model)
+        for p in model.attention_parameters():
+            p.requires_grad_(True)
+        constrain = model.constrain
+        model.constrain = lambda *m: constrain(*m, "attention") if "target_trunk" in m \
+            else constrain(*m)
+        held["model"] = model
+        return out
+
+    def adam(params, *args, **kwargs):
+        params = list(params)
+        if "model" in held:
+            params += held["model"].attention_parameters()
+        return adam_plain(params, *args, **kwargs)
+
+    def step(model, source, target, tau_local, device, term_selection=two_phase.BOTH_TERMS):
+        labels = torch.tensor([b.label for b in source], device=device)
+        pairs_s = model.bag_pairs(model.embed([b.windows.to(device) for b in source], "source"))
+        source_ce = M.source_term(model, model.classify(model.represent(pairs_s)), labels)
+        pairs_t = model.bag_pairs(model.embed([b.windows.to(device) for b in target], "target"))
+        terms = M.adaptation_terms(model, pairs_s, labels, pairs_t, tau_local)
+        return {**terms, "source_ce": source_ce.detach(),
+                "objective": two_phase.phase_two_objective(terms, term_selection) + source_ce}
+
+    def equal(a, b):
+        keep = lambda s: {k: v for k, v in s.items() if k not in ATTENTION_KEYS}
+        return equal_plain(keep(a), keep(b))
+
+    two_phase.bridge, two_phase.phase_two_step, two_phase._states_equal = bridge, step, equal
+    torch.optim.Adam = adam
+    try:
+        yield
+    finally:
+        two_phase.bridge, two_phase.phase_two_step = bridge_plain, step_plain
+        two_phase._states_equal = equal_plain
+        torch.optim.Adam = adam_plain
+        if "model" in held:
+            del held["model"].constrain
 
 
 @contextlib.contextmanager
@@ -121,7 +179,8 @@ def run_one(t, rotation: int, seed: int, bags, preps: Mapping, device,
             gate = P.GATE_V63[t.name][rotation] if "gate" in on else 1.0
             saved, search.PHASE_ONE_SEED = search.PHASE_ONE_SEED, seed
             try:
-                with fix_rules(on):
+                trains = attention_rules() if name in TRAINS_ATTENTION else contextlib.nullcontext()
+                with fix_rules(on), trains:
                     o2 = V.train_mil_creda_phase_two(data, rotation, seed, record,
                                                      {"lr2": P.FIXED["lr2"], "wd2": P.FIXED["wd2"]},
                                                      sched, device, gate=gate)
