@@ -1,12 +1,12 @@
 """Pilot before plan v64: can EEGNet enter MIL-CREDA with sub-bag augmentation?
 
 Diagnostic outside any plan: it reports no result of v63 and writes only under
-`Results/v64pilot`. Everything is plan v63 (subject-wise partition, phase-2 rules, between-bag
-sigma, L2-SP, shift gate) except the trunk, which is EEGNet instead of the spectral encoder,
-with the corrections v59 found necessary: inputs standardized per channel by the source
-training windows, the head free of its 0.25 max-norm, explicit L2, BatchNorm recalibrated on
-the source training bags after phase 1. Hyperparameters are fixed before the run (no search):
-lr1 1e-2, L2 1e-3, 50 phase-1 epochs; lr2 1e-3, wd2 1e-5, 20 phase-2 epochs.
+`Results/v64pilot-vanilla`. Everything is plan v63 (subject-wise partition, phase-2 rules,
+between-bag sigma, L2-SP, shift gate) except the trunk, which is EEGNet exactly as
+`eegnet.py` defines it (EEGNet-8,2 of the official code) with nothing added: no input
+standardization, its own max-norm constraints, no explicit L2, no BatchNorm recalibration.
+Hyperparameters are fixed before the run (no search): Adam at lr1 1e-3 (its default),
+50 phase-1 epochs; lr2 1e-3, wd2 1e-5, 20 phase-2 epochs.
 
 Three data arms, each split subject-wise (all units of a subject on its own side):
   whole   the v63 bags (<= 60 windows at step ceil(n / 60)).
@@ -38,12 +38,13 @@ from scipy.signal import sosfiltfilt
 from MIL_CREDA_EEG import eegnet, mil_creda_model as M, remote_units, search, two_phase
 from MIL_CREDA_EEG import v63_campaign as C
 from MIL_CREDA_EEG import v63_setup as V
-from MIL_CREDA_EEG.phase_one_sweep import recalibrate
 
-RESULTS = Path("Results") / "v64pilot"
+RESULTS = Path("Results") / "v64pilot-vanilla"
 ARMS = ("whole", "sub15", "blocks")
 SIZE, CAP = 15, 20
-FIXED = {"lr1": 1e-2, "l2": 1e-3, "lr2": 1e-3, "wd2": 1e-5}
+#: EEGNet as originally defined, nothing added: Adam at its default rate in phase 1 and no
+#: explicit L2; lr2 and wd2 are MIL-CREDA's own phase-2 values.
+FIXED = {"lr1": 1e-3, "l2": 0.0, "lr2": 1e-3, "wd2": 1e-5}
 EPOCHS1, EPOCHS2 = 50, 20
 BAGS_PER_STEP = 8
 #: The v63 shift gate per rotation, read from the stored v63 MIL-CREDA records (seed 1).
@@ -83,15 +84,22 @@ def overlapped(bag, channels=None) -> torch.Tensor:
     return torch.from_numpy(np.ascontiguousarray(w)).float()
 
 
-def ordered_blocks(bag, channels=None, size: int = SIZE, cap: int = CAP) -> list:
-    w = overlapped(bag, channels)
+def blocks_of(w: torch.Tensor, subject: str, condition: str, label: int,
+              size: int = SIZE, cap: int = CAP) -> list:
+    """Ordered contiguous blocks of `size` overlapped windows, <= `cap` spread evenly, a
+    bridge window left out between consecutive blocks so none shares a sample."""
     m = w.shape[0]
     k = min(cap, (m + 1) // (size + 1))
     starts = np.round(np.linspace(0, m - size, k)).astype(int) if k > 1 else np.array([0])
     if k > 1 and np.diff(starts).min() < size + 1:
         raise V.V63Error("two blocks would share a sample")
-    return [two_phase.BagTensor(f"{bag.subject}#{i}", bag.condition, _label(bag),
-                                w[s:s + size]) for i, s in enumerate(starts)]
+    return [two_phase.BagTensor(f"{subject}#{i}", condition, int(label), w[s:s + size])
+            for i, s in enumerate(starts)]
+
+
+def ordered_blocks(bag, channels=None, size: int = SIZE, cap: int = CAP) -> list:
+    return blocks_of(overlapped(bag, channels), bag.subject, bag.condition, _label(bag),
+                     size, cap)
 
 
 class BlockPrepared(V.Prepared):
@@ -136,12 +144,11 @@ def standardize(view: dict, test: list) -> list:
 @contextlib.contextmanager
 def eegnet_rules():
     """The v63 phase-2 rules without the spectral encoder; the spectral feature
-    standardization becomes a no-op, and EEGNet's head max-norm is released."""
+    standardization becomes a no-op. EEGNet itself is left exactly as defined."""
     nothing = contextlib.nullcontext
     patches = [(M, "confidences", V._detached_confidences),
                (M, "total_correspondence", V._correspondence), (M, "pseudolabel", V._pseudolabel),
                (two_phase, "phase_two_objective", V._objective),
-               (eegnet, "HEAD_MAX_NORM", 100.0),
                (V, "standardization", lambda norm, thread=False: nothing()),
                (V, "standard_of", lambda bags: None), (V, "standard_of_state", lambda s: None)]
     saved = [(o, n, getattr(o, n)) for o, n, _ in patches]
@@ -171,7 +178,6 @@ def run_one(t, rotation: int, arm: str, seed: int, bags, preps: Mapping, device,
         for k in ("source_train", "target_train"):
             view[k] = random_subbags(view[k], SIZE, g)
         test = random_subbags(test, SIZE, g)
-    test = standardize(view, test)
     out = {"transfer": t.name, "rotation": rotation, "arm": arm, "seed": seed,
            "trunk": None, "fixed": FIXED, "epochs1": epochs1, "epochs2": epochs2,
            "gateV63": GATE_V63[t.name][rotation],
@@ -205,7 +211,6 @@ def train_and_score(data, view: Mapping, test: list, rotation: int, seed: int, d
             return out
         model = trained["model"]
         out["trunk"] = type(model.source_trunk).__name__
-        recalibrate(model, view["source_train"], torch.device(device))
         key = "predict" if group == "common" else "phase1"
         out[key] = _rows(model.eval(), test, "source", device)
         out[f"{key}Train"] = _rows(model, view["source_train"], "source", device)
