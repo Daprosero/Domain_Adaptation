@@ -47,6 +47,8 @@ when this unit read it (resolved 2026-11-02).
 
 from __future__ import annotations
 
+import contextlib
+
 import math
 
 import torch
@@ -120,6 +122,21 @@ def _same(h: torch.Tensor, kernel: int) -> torch.Tensor:
     return F.pad(h, (total // 2, total - total // 2))
 
 
+@contextlib.contextmanager
+def configured(f1: int = F1, d: int = D, kernel_length: int = KERNEL_LENGTH,
+               dropout: float = DROPOUT):
+    """Build trunks with another EEGNet setting (F2 = F1 x D, the paper's rule): every
+    `EEGNetTrunk` constructed inside keeps it; trunks built outside keep EEGNet-8,2."""
+    global F1, D, F2, KERNEL_LENGTH, DROPOUT
+    saved = F1, D, F2, KERNEL_LENGTH, DROPOUT
+    F1, D, F2, KERNEL_LENGTH, DROPOUT = int(f1), int(d), int(f1) * int(d), int(kernel_length), \
+        float(dropout)
+    try:
+        yield
+    finally:
+        F1, D, F2, KERNEL_LENGTH, DROPOUT = saved
+
+
 class EEGNetTrunk(nn.Module):
     """EEGNet-8,2 up to its flatten: (n, channels, 512) -> (n, 256)."""
 
@@ -129,31 +146,35 @@ class EEGNetTrunk(nn.Module):
             raise ValueError(f"samples must be a multiple of {POOL1 * POOL2}")
         self.channels = int(channels)
         self.samples = int(samples)
-        self.conv_temporal = nn.Conv2d(1, F1, (1, KERNEL_LENGTH), bias=False)
-        self.bn1 = nn.BatchNorm2d(F1, momentum=BN_MOMENTUM, eps=BN_EPS)
-        self.depthwise = nn.Conv2d(F1, F1 * D, (self.channels, 1), groups=F1, bias=False)
-        self.bn2 = nn.BatchNorm2d(F1 * D, momentum=BN_MOMENTUM, eps=BN_EPS)
+        # The configuration is read once, here, from the module constants: a caller that
+        # needs another EEGNet setting rebinds them around construction (`configured`).
+        self.f1, self.d, self.f2 = int(F1), int(D), int(F2)
+        self.kernel_length, self.dropout = int(KERNEL_LENGTH), float(DROPOUT)
+        self.conv_temporal = nn.Conv2d(1, self.f1, (1, self.kernel_length), bias=False)
+        self.bn1 = nn.BatchNorm2d(self.f1, momentum=BN_MOMENTUM, eps=BN_EPS)
+        self.depthwise = nn.Conv2d(self.f1, self.f1 * self.d, (self.channels, 1), groups=self.f1, bias=False)
+        self.bn2 = nn.BatchNorm2d(self.f1 * self.d, momentum=BN_MOMENTUM, eps=BN_EPS)
         self.elu1 = nn.ELU()
         self.pool1 = nn.AvgPool2d((1, POOL1))
-        self.drop1 = nn.Dropout(DROPOUT)
-        self.separable_depth = nn.Conv2d(F1 * D, F1 * D, (1, SEPARABLE_LENGTH),
-                                         groups=F1 * D, bias=False)
-        self.separable_point = nn.Conv2d(F1 * D, F2, 1, bias=False)
-        self.bn3 = nn.BatchNorm2d(F2, momentum=BN_MOMENTUM, eps=BN_EPS)
+        self.drop1 = nn.Dropout(self.dropout)
+        self.separable_depth = nn.Conv2d(self.f1 * self.d, self.f1 * self.d, (1, SEPARABLE_LENGTH),
+                                         groups=self.f1 * self.d, bias=False)
+        self.separable_point = nn.Conv2d(self.f1 * self.d, self.f2, 1, bias=False)
+        self.bn3 = nn.BatchNorm2d(self.f2, momentum=BN_MOMENTUM, eps=BN_EPS)
         self.elu2 = nn.ELU()
         self.pool2 = nn.AvgPool2d((1, POOL2))
-        self.drop2 = nn.Dropout(DROPOUT)
-        self.output_dim = F2 * (self.samples // (POOL1 * POOL2))
+        self.drop2 = nn.Dropout(self.dropout)
+        self.output_dim = self.f2 * (self.samples // (POOL1 * POOL2))
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """The standard initialization of a fresh network (module docstring)."""
         C = self.channels
-        _glorot_uniform_(self.conv_temporal.weight, KERNEL_LENGTH, KERNEL_LENGTH * F1)
-        _glorot_uniform_(self.depthwise.weight, F1 * C, D * C)
-        _glorot_uniform_(self.separable_depth.weight, SEPARABLE_LENGTH * F1 * D,
+        _glorot_uniform_(self.conv_temporal.weight, self.kernel_length, self.kernel_length * self.f1)
+        _glorot_uniform_(self.depthwise.weight, self.f1 * C, self.d * C)
+        _glorot_uniform_(self.separable_depth.weight, SEPARABLE_LENGTH * self.f1 * self.d,
                          SEPARABLE_LENGTH)
-        _glorot_uniform_(self.separable_point.weight, F1 * D, F2)
+        _glorot_uniform_(self.separable_point.weight, self.f1 * self.d, self.f2)
         for bn in (self.bn1, self.bn2, self.bn3):
             bn.reset_parameters()
         self.constrain()
@@ -165,7 +186,7 @@ class EEGNetTrunk(nn.Module):
         if x.dim() != 3 or x.shape[1] != self.channels or x.shape[2] != self.samples:
             raise ValueError(f"expected (n, {self.channels}, {self.samples}) windows, "
                              f"got {tuple(x.shape)}")
-        h = self.bn1(self.conv_temporal(_same(x.unsqueeze(1), KERNEL_LENGTH)))
+        h = self.bn1(self.conv_temporal(_same(x.unsqueeze(1), self.kernel_length)))
         h = self.drop1(self.pool1(self.elu1(self.bn2(self.depthwise(h)))))
         h = self.bn3(self.separable_point(self.separable_depth(_same(h, SEPARABLE_LENGTH))))
         h = self.drop2(self.pool2(self.elu2(h)))
