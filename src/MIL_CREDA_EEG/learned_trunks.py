@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 
+import numpy as np
 import torch
 from torch import nn
 from torch.nn.utils import parametrizations
@@ -156,18 +157,126 @@ class TGARTrunk(nn.Module):
         return self.project(self.drop(z.flatten(1)))
 
 
+class _KerasEncoder(nn.Module):
+    """keras_nlp TransformerEncoder as STF-KernelSHAP's InspectableTransformerEncoder builds it:
+    multi-head self-attention with key_dim = value_dim = hidden // heads, no dropout, post-norm
+    (epsilon 1e-6), then a ReLU feed-forward of `intermediate` units, post-norm."""
+
+    def __init__(self, hidden: int, heads: int, intermediate: int):
+        super().__init__()
+        self.heads, self.key_dim = int(heads), max(1, int(hidden) // int(heads))
+        width = self.heads * self.key_dim
+        self.query, self.key, self.value = (nn.Linear(hidden, width) for _ in range(3))
+        self.output = nn.Linear(width, hidden)
+        self.attention_norm = nn.LayerNorm(hidden, eps=1e-6)
+        self.ff_in, self.ff_out = nn.Linear(hidden, intermediate), nn.Linear(intermediate, hidden)
+        self.ff_norm = nn.LayerNorm(hidden, eps=1e-6)
+        for layer in (self.query, self.key, self.value, self.output, self.ff_in, self.ff_out):
+            nn.init.xavier_uniform_(layer.weight)
+            nn.init.zeros_(layer.bias)
+
+    def forward(self, x):                                       # (n, T, hidden)
+        n, t, _ = x.shape
+        split = lambda z: z.view(n, t, self.heads, self.key_dim).transpose(1, 2)
+        q, k, v = split(self.query(x)), split(self.key(x)), split(self.value(x))
+        weights = torch.softmax(q @ k.transpose(-1, -2) / self.key_dim ** 0.5, dim=-1)
+        attended = (weights @ v).transpose(1, 2).reshape(n, t, -1)
+        h = self.attention_norm(x + self.output(attended))
+        return self.ff_norm(h + self.ff_out(torch.relu(self.ff_in(h))))
+
+
+class TGARSTFTrunk(nn.Module):
+    """T-GARNet as STF-KernelSHAP defines it (github.com/Daprosero/STF-KernelSHAP,
+    src/stf_kernelshap/modeling/models.py TGARNet, layers.py): layer norm over channels
+    (epsilon 1e-3), the transformer encoder over time, layer norm, ONE Gaussian channel kernel
+    (C x C), its normalized order-2 Renyi entropy, two 3x3 SELU convolutions each followed by
+    batch norm, flatten and dropout; the dense max-norm output is the common head
+    (HEAD_MAX_NORM = norm_rate). STF's defaults: filters 3, heads 3, intermediate 128, dropout
+    .3, norm_rate .25. STF searched sigma in [1, 20]; here sigma^2 = median off-diagonal squared
+    channel distance / 2 of the first batch (the default sigma 1 leaves a diagonal kernel on 512
+    normalized samples). Each forward appends its mean entropy to `entropies`, which the
+    Renyi term of the loss consumes (`renyi_loss`)."""
+
+    def __init__(self, channels: int, samples: int = eegnet.SAMPLES, filters: int = 3,
+                 heads: int = 3, intermediate: int = 128, dropout: float = 0.3):
+        super().__init__()
+        self.channels, self.samples = int(channels), int(samples)
+        self.norm = nn.Identity()
+        self.in_norm = nn.LayerNorm(self.channels, eps=1e-3)
+        self.encoder = _KerasEncoder(self.channels, heads, intermediate)
+        self.out_norm = nn.LayerNorm(self.channels, eps=1e-3)
+        self.scale = _Scale()
+        self.conv1 = nn.Conv2d(1, filters, 3, padding=1)
+        self.bn1 = nn.BatchNorm2d(filters, eps=1e-3, momentum=0.01)
+        self.conv2 = nn.Conv2d(filters, filters, 3, padding=1)
+        self.bn2 = nn.BatchNorm2d(filters, eps=1e-3, momentum=0.01)
+        for conv in (self.conv1, self.conv2):
+            nn.init.xavier_uniform_(conv.weight)
+            nn.init.zeros_(conv.bias)
+        self.drop = nn.Dropout(dropout)
+        self.output_dim = filters * self.channels * self.channels
+        self.entropies: list[torch.Tensor] = []
+
+    def constrain(self) -> None:
+        return None
+
+    def forward(self, x):
+        h = self.out_norm(self.encoder(self.in_norm(torch.nan_to_num(self.norm(x)).transpose(1, 2))))
+        h = h.transpose(1, 2)                                                          # (n, C, T)
+        d2 = torch.cdist(h, h) ** 2
+        if float(self.scale.value) == 0.0:
+            with torch.no_grad():
+                off = d2[:, ~torch.eye(self.channels, dtype=torch.bool, device=d2.device)]
+                self.scale.value.fill_(float(off.median().clamp_min(1e-6)) / 2.0)
+        K = torch.exp(-d2 / (2.0 * self.scale.value.to(d2.dtype)))                   # (n, C, C)
+        A = K / torch.diagonal(K, dim1=-2, dim2=-1).sum(-1).clamp_min(1e-8)[:, None, None]
+        H = -torch.log((A * A).sum((-1, -2)).clamp_min(1e-8)) / np.log(max(self.channels, 2))
+        self.entropies.append(H.mean())
+        z = self.bn1(torch.nn.functional.selu(self.conv1(K[:, None])))
+        z = self.bn2(torch.nn.functional.selu(self.conv2(z)))
+        return self.drop(z.flatten(1))
+
+
+@contextlib.contextmanager
+def renyi_loss(classification_weight: float = 0.5):
+    """STF's TGARNet objective: w x the classification loss + (1 - w) x the batch's mean Renyi
+    entropy (minimized), on the source trunk's forward of that batch."""
+    from MIL_CREDA_EEG import two_phase
+    plain = two_phase.source_term
+
+    def term(model, G, labels):
+        base = plain(model, G, labels)
+        ent = getattr(model.source_trunk, "entropies", None)
+        if not ent:
+            return base
+        H = torch.stack(ent).mean().to(base.dtype)
+        ent.clear()
+        return classification_weight * base + (1.0 - classification_weight) * H
+
+    two_phase.source_term = term
+    try:
+        yield
+    finally:
+        two_phase.source_term = plain
+
+
 TRUNKS = {
     "tsm": (TSMTrunk, ("norm", "temporal", "spatial", "bimap", "out_norm", "project"), ("norm", "spatial")),
     "tgar": (TGARTrunk, ("norm", "in_norm", "encoder", "out_norm", "scale", "conv1", "conv2", "bn2", "conv3",
                          "bn3", "project"), ("norm", "in_norm", "encoder", "out_norm", "project")),
+    "tgarstf": (TGARSTFTrunk, ("norm", "in_norm", "encoder", "out_norm", "scale", "conv1", "bn1",
+                               "conv2", "bn2"), ("norm", "in_norm", "encoder", "out_norm")),
 }
+#: The common head's max norm per trunk (STF's TGARNet: norm_rate .25).
+HEAD_MAX_NORM = {"tgarstf": 0.25}
 
 
 @contextlib.contextmanager
 def installed(kind: str):
     """`eegnet` builds this trunk while the block runs, and the plan's one afterwards."""
     cls, layers, dependent = TRUNKS[kind]
-    names = {"EEGNetTrunk": cls, "LAYERS": layers, "CHANNEL_DEPENDENT": dependent, "HEAD_MAX_NORM": 1.0}
+    names = {"EEGNetTrunk": cls, "LAYERS": layers, "CHANNEL_DEPENDENT": dependent,
+             "HEAD_MAX_NORM": HEAD_MAX_NORM.get(kind, 1.0)}
     saved = {k: getattr(eegnet, k) for k in names}
     for key, value in names.items():
         setattr(eegnet, key, value)
