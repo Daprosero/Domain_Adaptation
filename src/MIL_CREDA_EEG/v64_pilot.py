@@ -306,3 +306,18 @@ def run(config: Mapping, product: str | Path | None = None, *, units: Sequence[s
             json.dumps(payload, indent=1, sort_keys=True, ensure_ascii=False, default=str),
             encoding="utf-8")
     return {"ran": ran, "skipped": skipped, "remaining": remaining, "timing": timing}
+
+
+def run_many(config: Mapping, product: str | Path | None = None, *, plan: Sequence[Mapping],
+             workdir: str | Path | None = None,
+             environ: Mapping[str, str] | None = None) -> dict:
+    """`run` once per entry of `plan` ({"units", "seeds", "arms", "mu"}), in order, in one
+    session; each entry keeps its own results folder (mu None is v63's 10)."""
+    out = []
+    for entry in plan:
+        out.append(run(config, product, units=entry["units"], seeds=entry["seeds"],
+                       arms=entry.get("arms", ("blocks",)), mu=entry.get("mu"),
+                       workdir=workdir, environ=environ))
+    return {"ran": [r for o in out for r in o["ran"]],
+            "remaining": [r for o in out for r in o["remaining"]],
+            "timing": [o["timing"] for o in out]}
