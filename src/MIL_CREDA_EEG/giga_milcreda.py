@@ -142,7 +142,9 @@ def global_term(f_s, y_s, f_t, G_t, sigma: float, threshold: float) -> tuple[tor
 
 
 def phase_two(net: Net, xs, ys, xt, dev, g, epochs: int, sigma: float,
-              lr: float | None = None, wd: float | None = None, on_epoch=None) -> tuple:
+              lr: float | None = None, wd: float | None = None, on_epoch=None,
+              mu: float | None = None) -> tuple:
+    mu = FIXED["mu"] if mu is None else float(mu)
     trunk_t = copy.deepcopy(net.trunk)
     for p in trunk_t.parameters():
         p.requires_grad_(True)
@@ -163,7 +165,7 @@ def phase_two(net: Net, xs, ys, xt, dev, g, epochs: int, sigma: float,
             f_t, G_t = net.posteriors(xt[j].to(dev), trunk_t)
             term, n_active = global_term(f_s, ys[i].to(dev), f_t, G_t, sigma, threshold)
             prox = sum(((p - theta0[n]) ** 2).sum() for n, p in trunk_t.named_parameters())
-            loss = term + FIXED["mu"] * prox.to(term.dtype)
+            loss = term + mu * prox.to(term.dtype)
             opt.zero_grad(); loss.backward(); opt.step(); trunk_t.constrain()
             vals.append(float(term.detach())); active.append(n_active)
         curve.append({"global": float(np.mean(vals)), "activeClasses": float(np.mean(active))})
@@ -268,7 +270,7 @@ def _acc(net: Net, trunk, x, y, dev) -> float:
 
 def run_tuned(config: Mapping, product: str | Path | None = None, *, rotations: Sequence[int],
               seed: int = 1, trials: int = 8, epochs1: int = EPOCHS1, epochs2: int = EPOCHS2,
-              data: str | None = None, workdir: str | Path | None = None,
+              mu: float | None = None, data: str | None = None, workdir: str | Path | None = None,
               environ: Mapping[str, str] | None = None) -> dict:
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -290,7 +292,9 @@ def run_tuned(config: Mapping, product: str | Path | None = None, *, rotations: 
             [subj[s][1] if half is None else subj[s][1][half::2] for s in sids])))
     started, done = time.time(), []
     for r in rotations:
-        path = product / RESULTS_TUNED / f"rotation{r}__seed{seed}.json"
+        mu_ = FIXED["mu"] if mu is None else float(mu)
+        folder = RESULTS_TUNED if mu is None else Path(f"{RESULTS_TUNED}-mu{mu_:g}")
+        path = product / folder / f"rotation{r}__seed{seed}.json"
         if path.is_file():
             continue
         t0 = time.time()
@@ -336,7 +340,7 @@ def run_tuned(config: Mapping, product: str | Path | None = None, *, rotations: 
                 series = []
                 xe, ye = halves[1 - h]
                 phase_two(net, xs_i, ys_i, halves[h][0], dev, torch.Generator().manual_seed(seed),
-                          epochs2, sigma_i, lr=lr2, wd=wd2,
+                          epochs2, sigma_i, lr=lr2, wd=wd2, mu=mu_,
                           on_epoch=lambda tt: series.append(_acc(net, tt, xe, ye, dev)))
                 per_half.append(series)
             series = list(np.mean(per_half, axis=0))
@@ -361,7 +365,8 @@ def run_tuned(config: Mapping, product: str | Path | None = None, *, rotations: 
                          for yy, pp in zip(subj[s][1][h::2], _scores(net, net.trunk, x, dev))]
         for h in (0, 1):
             xa, _ = arr(tgt, h)
-            trunk_t, threshold, curve2 = phase_two(net, xs_t, ys, xa, dev, g, ep2, sigma, lr=lr2, wd=wd2)
+            trunk_t, threshold, curve2 = phase_two(net, xs_t, ys, xa, dev, g, ep2, sigma, lr=lr2,
+                                                   wd=wd2, mu=mu_)
             for s in tgt:
                 x = torch.from_numpy(np.ascontiguousarray(subj[s][0][1 - h::2], dtype=np.float32))
                 rows += [{"subject": s, "arm": "milCreda", "half": 1 - h, "y": int(yy), "p": float(pp)}
@@ -370,7 +375,7 @@ def run_tuned(config: Mapping, product: str | Path | None = None, *, rotations: 
                "lr2": lr2, "wd2": wd2, "epochs2": ep2, "innerAcc2": st2.best_value}
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"rotation": r, "seed": seed, "target": tgt, "innerTarget": itgt,
-                                    "trials": trials, "selection": sel, "mu": FIXED["mu"],
+                                    "trials": trials, "selection": sel, "mu": mu_,
                                     "seconds": round(time.time() - t0, 1), "rows": rows,
                                     "log": {"phase1": log1, "phase2": log2, "sigma": sigma},
                                     "environment": environment}, default=float))

@@ -233,14 +233,16 @@ def train_and_score(data, view: Mapping, test: list, rotation: int, seed: int, d
     return out
 
 
-def record_path(product: Path, t, rotation: int, arm: str, seed: int) -> Path:
-    return (product / RESULTS / t.name.replace("->", "-to-") / f"rotation{rotation}"
+def record_path(product: Path, t, rotation: int, arm: str, seed: int,
+                folder: Path = RESULTS) -> Path:
+    return (product / folder / t.name.replace("->", "-to-") / f"rotation{rotation}"
             / f"{arm}__seed{seed}.json")
 
 
 def run(config: Mapping, product: str | Path | None = None, *, units: Sequence[str],
         seeds: Sequence[int] = (1, 2, 3), arms: Sequence[str] = ARMS,
-        epochs1: int = EPOCHS1, epochs2: int = EPOCHS2, workdir: str | Path | None = None,
+        epochs1: int = EPOCHS1, epochs2: int = EPOCHS2, mu: float | None = None,
+        workdir: str | Path | None = None,
         environ: Mapping[str, str] | None = None) -> dict:
     """Every (unit, arm, seed) in order, resumable: a stored record is skipped. Stops before
     the session deadline (`FORGE_SESSION_DEADLINE`) with the step time measured so far."""
@@ -261,21 +263,30 @@ def run(config: Mapping, product: str | Path | None = None, *, units: Sequence[s
     preps = {False: V.Prepared(bags), True: BlockPrepared(bags)}
     ran, skipped, longest, started = [], [], 0.0, time.time()
     todo = [(u, a, s) for u in units for a in arms for s in seeds]
+    rules_plain = V.mil_creda_rules
+    if mu is not None:            # the L2-SP coefficient of MIL-CREDA's phase 2 (v63: 10)
+        V.mil_creda_rules = lambda model, threshold, gate, mu_=float(mu): rules_plain(
+            model, threshold, gate, mu=mu_)
+    folder = RESULTS if mu is None else Path(f"{RESULTS}-mu{float(mu):g}")
     with eegnet_rules():
+      try:
         for k, (u, arm, seed) in enumerate(todo):
             name, rotation = u.rsplit(":", 1)
             t, rotation = V.transfer(name), int(rotation)
-            path = record_path(product, t, rotation, arm, seed)
+            path = record_path(product, t, rotation, arm, seed, folder)
             if path.is_file():
                 skipped.append(f"{u}/{arm}/{seed}")
                 continue
             if time.time() + 1.5 * longest + C.DEFAULT_MARGIN > deadline:
                 break
             out = run_one(t, rotation, arm, seed, bags, preps, device, epochs1, epochs2)
+            out["mu"] = V.MU if mu is None else float(mu)
             longest = max(longest, out["seconds"])
             C.write_record(path, {**out, "environment": environment})
             ran.append(f"{u}/{arm}/{seed}")
             print(u, arm, seed, out["trunk"], out["nUnits"], f"{out['seconds']}s", flush=True)
+      finally:
+        V.mil_creda_rules = rules_plain
     remaining = [f"{u}/{a}/{s}" for u, a, s in todo
                  if f"{u}/{a}/{s}" not in ran and f"{u}/{a}/{s}" not in skipped]
     timing = {"longestStepSeconds": longest, "seconds": round(time.time() - started, 1),
