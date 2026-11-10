@@ -9,7 +9,8 @@ full Eq. 39 (theta_s and the head frozen), L2-SP mu 10, gate 1.
 
 Per outer rotation, with one inner split:
   phase 1, ONE base model shared by predict and MIL-CREDA (neutral aggregation, gamma 0 and
-    attention temperature 10, fixed): `N_TRIALS` trials over lr1 and l2, scored by the inner
+    attention temperature 10, fixed): `N_TRIALS_PHASE_ONE` trials over lr1, l2 and the EEGNet
+    setting (F1, D with F2 = F1 x D, temporal kernel length, dropout), scored by the inner
     source-validation balanced accuracy; refitted per seed, it is predict (scored through
     the source trunk) and the start of MIL-CREDA's phase 2;
   phase 2, MIL-CREDA: `N_TRIALS` trials over lr2, wd2, the phase-2 attention temperature,
@@ -30,20 +31,32 @@ from pathlib import Path
 
 import numpy as np
 import optuna
-from optuna.distributions import FloatDistribution
+from optuna.distributions import CategoricalDistribution, FloatDistribution
 
-from MIL_CREDA_EEG import ablation_pilot as AP, remote_units, search, two_phase
+from MIL_CREDA_EEG import ablation_pilot as AP, eegnet, remote_units, search, two_phase
 from MIL_CREDA_EEG import v63_campaign as C
 from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG import v64_pilot as P
 
 RESULTS = Path("Results") / "search-pilot"
-N_TRIALS = 10
+N_TRIALS = 10                # phase 2
+N_TRIALS_PHASE_ONE = 20      # phase 1 also searches the EEGNet configuration
 N_INNER = 1
 SAMPLER_SEED = 20261110
 SEARCH_SEED = search.SEARCH_SEED
 PHASE_ONE_SPACE = {"lr1": FloatDistribution(1e-4, 1e-1, log=True),
-                   "l2": FloatDistribution(1e-4, 1e-1, log=True)}
+                   "l2": FloatDistribution(1e-4, 1e-1, log=True),
+                   "f1": CategoricalDistribution((4, 8, 16)),
+                   "d": CategoricalDistribution((1, 2, 4)),
+                   "kernelLength": CategoricalDistribution((32, 64, 128)),
+                   "dropout": CategoricalDistribution((0.25, 0.5))}
+ARCHITECTURE = ("f1", "d", "kernelLength", "dropout")
+
+
+def architecture(params: Mapping):
+    """EEGNet with the searched setting (F2 = F1 x D); pooling and separable kernel fixed."""
+    return eegnet.configured(int(params["f1"]), int(params["d"]), int(params["kernelLength"]),
+                             float(params["dropout"]))
 PHASE_TWO_SPACE = {"lr2": FloatDistribution(1e-5, 1e-2, log=True),
                    "wd2": FloatDistribution(1e-7, 1e-2, log=True),
                    "tauAtt": FloatDistribution(0.1, 10.0, log=True),
@@ -102,17 +115,27 @@ def search_phase_one(group: str, data, rotation: int, sched: Mapping, device) ->
     def objective(trial):
         params = search.suggest(trial, PHASE_ONE_SPACE)
         hyper = phase_one_hyper(group, params, sched)
-        with V.phase_one_l2(params["l2"]):
-            outs, _ = search.train_inner_splits(
-                lambda i: V.train_phase_one(group, data.inner_view(rotation, i), rotation,
-                                            SEARCH_SEED, hyper, device, sigma=False)["result"],
-                two_phase.pooled_balanced_accuracy, 1, cap, 1)
+        models = []
+
+        def train(i):
+            trained = V.train_phase_one(group, data.inner_view(rotation, i), rotation,
+                                        SEARCH_SEED, hyper, device, sigma=False)
+            models.append((i, trained["model"]))
+            return trained["result"]
+
+        with V.phase_one_l2(params["l2"]), architecture(params):
+            outs, _ = search.train_inner_splits(train, two_phase.pooled_balanced_accuracy, 1,
+                                                cap, 1)
+            for i, model in models:      # an embedding collapse (sigma 0) fails the trial
+                V.between_bag_sigma(model, data.inner_view(rotation, i).rotations[rotation]
+                                    ["source_train"], seed=SEARCH_SEED)
         series = search.pooled_balanced_accuracy_series([o["validation"] for o in outs])
         best = int(np.nanargmax(series))
         trial.set_user_attr("bestEpoch", best)
         return float(series[best])
 
-    study.optimize(objective, n_trials=N_TRIALS, catch=(FloatingPointError, V.V63Error))
+    study.optimize(objective, n_trials=N_TRIALS_PHASE_ONE,
+                   catch=(FloatingPointError, V.V63Error))
     best = study.best_trial
     return {"params": best.params, "epochs": best.user_attrs["bestEpoch"] + 1,
             "value": best.value, "trials": _trials(study)}
@@ -120,15 +143,18 @@ def search_phase_one(group: str, data, rotation: int, sched: Mapping, device) ->
 
 def refit_phase_one(group: str, data, rotation: int, seed: int, chosen: Mapping,
                     sched: Mapping, device):
+    """The refitted base model and its phase-2 record; the record is None when the trunk's
+    embeddings collapsed (between-bag sigma 0), which fails that seed's phase 2 only."""
     hyper = phase_one_hyper(group, chosen["params"], sched, chosen["epochs"])
     with V.phase_one_l2(chosen["params"]["l2"]):
-        model = V.train_phase_one(group, data, rotation, seed, hyper, device)["model"]
-    meta = {"hyper": dict(hyper)}
-    if group == "MIL-CREDA":
-        meta["sigma"] = model._sigma if getattr(model, "_sigma", None) else \
-            V.between_bag_sigma(model, data.rotations[rotation]["source_train"], seed=seed)
-        model._sigma = meta["sigma"]
-    return model, (two_phase.phase_one_state(model), meta)
+        model = V.train_phase_one(group, data, rotation, seed, hyper, device,
+                                  sigma=False)["model"]
+    try:
+        sigma = V.between_bag_sigma(model, data.rotations[rotation]["source_train"], seed=seed)
+    except V.V63Error:
+        return model, None
+    model._sigma = sigma
+    return model, (two_phase.phase_one_state(model), {"hyper": dict(hyper), "sigma": sigma})
 
 
 def _phase_two(data, rotation: int, seed: int, record, params: Mapping, sched: Mapping, device):
@@ -173,12 +199,13 @@ def run_unit(t, rotation: int, seeds: Sequence[int], bags, prep, device, epochs1
     data = V.search_data(t, bags, prep, rotations=[rotation])
     test = V.test_bags(t, bags, rotation, prep)["target"]
     out = {"transfer": t.name, "rotation": rotation, "arm": "blocks", "stored": True,
-           "nTrials": N_TRIALS, "nInner": N_INNER, "epochCaps": [epochs1, epochs2], "mu": V.MU,
+           "nTrials": [N_TRIALS_PHASE_ONE, N_TRIALS], "nInner": N_INNER, "epochCaps": [epochs1, epochs2], "mu": V.MU,
            "nUnits": {"source": len(data.rotations[rotation]["source_train"]),
                       "target": len(data.rotations[rotation]["target_train"]),
                       "test": len(test)}, "seeds": {}}
     with settled_rules():
         chosen1 = search_phase_one(BASE, data, rotation, sched, device)
+    with settled_rules(), architecture(chosen1["params"]):
         out["phase1"] = chosen1
         print(rotation, "phase 1 chosen", chosen1["params"], chosen1["epochs"],
               round(chosen1["value"], 3), flush=True)
@@ -186,12 +213,17 @@ def run_unit(t, rotation: int, seeds: Sequence[int], bags, prep, device, epochs1
                 for seed in seeds}
         for seed, (model, _) in base.items():
             out["seeds"][str(seed)] = {"predict": P._rows(model.eval(), test, "source", device)}
-        chosen2 = search_phase_two(data, rotation, base[seeds[0]][1], sched, device)
+        usable = [seed for seed in seeds if base[seed][1] is not None]
+        out["collapsedSeeds"] = [seed for seed in seeds if base[seed][1] is None]
+        if not usable:
+            out["seconds"] = round(time.time() - started, 1)
+            return out
+        chosen2 = search_phase_two(data, rotation, base[usable[0]][1], sched, device)
         out["phase2"] = chosen2
         print(rotation, "phase 2 chosen", chosen2["params"], chosen2["epochs"],
               round(chosen2["value"], 3), flush=True)
         sched2 = {**sched, "epochs2": chosen2["epochs"]}
-        for seed in seeds:
+        for seed in usable:
             o2 = _phase_two(data, rotation, seed, base[seed][1], chosen2["params"], sched2,
                             device)
             out["seeds"][str(seed)]["milCreda"] = P._rows(o2["model"].eval(), test, "target",
