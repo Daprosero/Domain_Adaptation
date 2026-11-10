@@ -64,9 +64,10 @@ def _label(bag) -> int:
                else two_phase.CLASSES.index(bag.label))
 
 
-def overlapped(bag, channels=None) -> torch.Tensor:
+def overlapped(bag, channels=None, filtered: bool = True) -> torch.Tensor:
     """Every stored window plus the half-shifted window of each contiguous pair, filtered
-    and average-referenced as v63 does one window."""
+    and average-referenced as v63 does one window (`filtered` False: as stored, the v60
+    reading)."""
     with np.load(bag.path, allow_pickle=False) as z:
         w = z["signal"].astype(np.float64)
         start = z["window_start_s"]
@@ -79,8 +80,9 @@ def overlapped(bag, channels=None) -> torch.Tensor:
         if k + 1 < len(w) and abs(start[k + 1] - start[k] - 4.0) < 1e-6:
             out.append(np.concatenate([w[k][:, half:], w[k + 1][:, :half]], axis=-1))
     w = np.stack(out)
-    w = sosfiltfilt(V.SOS, w - w.mean(-1, keepdims=True), axis=-1)
-    w = w - w.mean(1, keepdims=True)
+    if filtered:
+        w = sosfiltfilt(V.SOS, w - w.mean(-1, keepdims=True), axis=-1)
+        w = w - w.mean(1, keepdims=True)
     return torch.from_numpy(np.ascontiguousarray(w)).float()
 
 
@@ -97,13 +99,18 @@ def blocks_of(w: torch.Tensor, subject: str, condition: str, label: int,
             for i, s in enumerate(starts)]
 
 
-def ordered_blocks(bag, channels=None, size: int = SIZE, cap: int = CAP) -> list:
-    return blocks_of(overlapped(bag, channels), bag.subject, bag.condition, _label(bag),
+def ordered_blocks(bag, channels=None, size: int = SIZE, cap: int = CAP,
+                   filtered: bool = True) -> list:
+    return blocks_of(overlapped(bag, channels, filtered), bag.subject, bag.condition, _label(bag),
                      size, cap)
 
 
 class BlockPrepared(V.Prepared):
     """`V.Prepared` that expands each raw bag into its ordered blocks."""
+
+    def __init__(self, bags, filtered: bool = True):
+        super().__init__(bags)
+        self.filtered = filtered
 
     def __call__(self, raw, channels):
         key_c = tuple(channels) if channels else None
@@ -111,7 +118,7 @@ class BlockPrepared(V.Prepared):
         for b in raw:
             key = (b.subject, b.condition, key_c)
             if key not in self._cache:
-                self._cache[key] = ordered_blocks(b, channels)
+                self._cache[key] = ordered_blocks(b, channels, filtered=self.filtered)
             out.extend(self._cache[key])
         return out
 
