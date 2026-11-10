@@ -44,7 +44,7 @@ N_TRIALS_PHASE_ONE = 20      # phase 1 also searches the EEGNet configuration
 N_INNER = 1
 SAMPLER_SEED = 20261110
 SEARCH_SEED = search.SEARCH_SEED
-PHASE_ONE_SPACE = {"lr1": FloatDistribution(1e-4, 1e-1, log=True),
+PHASE_ONE_SPACE = {"lr1": FloatDistribution(1e-4, 1e-2, log=True),
                    "l2": FloatDistribution(1e-4, 1e-1, log=True),
                    "f1": CategoricalDistribution((4, 8, 16)),
                    "d": CategoricalDistribution((1, 2, 4)),
@@ -213,6 +213,12 @@ def run_unit(t, rotation: int, seeds: Sequence[int], bags, prep, device, epochs1
                 for seed in seeds}
         for seed, (model, _) in base.items():
             out["seeds"][str(seed)] = {"predict": P._rows(model.eval(), test, "source", device)}
+        # Operator's gate: phase 2 runs only when some phase-1 network beats 0.5 balanced
+        # accuracy on the inner source validation; otherwise the run stops here.
+        out["phaseTwoGate"] = {"bestPhaseOneBA": chosen1["value"], "passes": chosen1["value"] > 0.5}
+        if not out["phaseTwoGate"]["passes"]:
+            out["seconds"] = round(time.time() - started, 1)
+            return out
         usable = [seed for seed in seeds if base[seed][1] is not None]
         out["collapsedSeeds"] = [seed for seed in seeds if base[seed][1] is None]
         if not usable:
