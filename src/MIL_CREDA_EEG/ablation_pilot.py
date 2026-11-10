@@ -94,14 +94,17 @@ def phase_one(data, view, test, rotation: int, seed: int, device, sched, out: di
 
 
 def run_one(t, rotation: int, seed: int, bags, preps: Mapping, device,
-            epochs1: int = P.EPOCHS1, epochs2: int = P.EPOCHS2) -> dict:
+            epochs1: int = P.EPOCHS1, epochs2: int = P.EPOCHS2,
+            variants: Mapping = VARIANTS, mu: float = V.MU) -> dict:
     started = time.time()
     sched = {"epochs1": epochs1, "epochs2": epochs2, "bagsPerStep": P.BAGS_PER_STEP}
     out = {"transfer": t.name, "rotation": rotation, "arm": "blocks", "seed": seed,
-           "fixed": P.FIXED, "epochs1": epochs1, "epochs2": epochs2, "mu": V.MU,
+           "fixed": P.FIXED, "epochs1": epochs1, "epochs2": epochs2, "mu": float(mu),
            "gateV63": P.GATE_V63[t.name][rotation],
-           "variants": {k: sorted(v) for k, v in VARIANTS.items()}}
+           "variants": {k: sorted(v) for k, v in variants.items()}}
     for filtered, tag in ((True, ""), (False, "Stored")):
+        if not any(("preproc" in on) == filtered for on in variants.values()):
+            continue
         data = V.search_data(t, bags, preps[filtered], rotations=[rotation])
         test = V.test_bags(t, bags, rotation, preps[filtered])["target"]
         view = data.rotations[rotation]
@@ -109,7 +112,7 @@ def run_one(t, rotation: int, seed: int, bags, preps: Mapping, device,
                                "target": len(view["target_train"]), "test": len(test)}
         with fix_rules(frozenset()):
             record = phase_one(data, view, test, rotation, seed, device, sched, out, tag)
-        for name, on in VARIANTS.items():
+        for name, on in variants.items():
             if ("preproc" in on) != filtered:
                 continue
             if record is None:
@@ -131,15 +134,16 @@ def run_one(t, rotation: int, seed: int, bags, preps: Mapping, device,
     return out
 
 
-def record_path(product: Path, t, rotation: int, seed: int) -> Path:
-    return (product / RESULTS / t.name.replace("->", "-to-") / f"rotation{rotation}"
+def record_path(product: Path, t, rotation: int, seed: int, folder: Path = RESULTS) -> Path:
+    return (product / folder / t.name.replace("->", "-to-") / f"rotation{rotation}"
             / f"seed{seed}.json")
 
 
 def run(config: Mapping, product: str | Path | None = None, *, units: Sequence[str],
         seeds: Sequence[int] = (1, 2, 3), epochs1: int = P.EPOCHS1, epochs2: int = P.EPOCHS2,
-        workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
-    """Every (unit, seed) in order, resumable; stops before the session deadline."""
+        variants: Sequence[str] | None = None, mu: float | None = None, workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
+    """Every (unit, seed) in order, resumable; stops before the session deadline. `variants`
+    keeps only those names; `mu` overrides L2-SP (v63: 10), results kept apart."""
     environ = os.environ if environ is None else environ
     product = Path(product) if product else C.DEFAULT_PRODUCT
     workdir = Path(workdir) if workdir else Path.cwd()
@@ -156,21 +160,31 @@ def run(config: Mapping, product: str | Path | None = None, *, units: Sequence[s
     bags = C.campaign.load_bags(cfg)
     preps = {True: P.BlockPrepared(bags), False: P.BlockPrepared(bags, filtered=False)}
     ran, skipped, longest, started = [], [], 0.0, time.time()
+    chosen = {k: VARIANTS[k] for k in (variants or VARIANTS)}
+    mu = V.MU if mu is None else float(mu)
+    folder = RESULTS if mu == V.MU and variants is None else Path(
+        f"{RESULTS}-{'+'.join(sorted(chosen))}-mu{mu:g}")
+    rules_plain = V.mil_creda_rules
+    V.mil_creda_rules = lambda model, threshold, gate, mu_=mu: rules_plain(
+        model, threshold, gate, mu=mu_)
     todo = [(u, s) for u in units for s in seeds]
-    for u, seed in todo:
-        name, rotation = u.rsplit(":", 1)
-        t, rotation = V.transfer(name), int(rotation)
-        path = record_path(product, t, rotation, seed)
-        if path.is_file():
-            skipped.append(f"{u}/{seed}")
-            continue
-        if time.time() + 1.5 * longest + C.DEFAULT_MARGIN > deadline:
-            break
-        out = run_one(t, rotation, seed, bags, preps, device, epochs1, epochs2)
-        longest = max(longest, out["seconds"])
-        C.write_record(path, {**out, "environment": environment})
-        ran.append(f"{u}/{seed}")
-        print(u, seed, out.get("trunk"), out["nUnits"], f"{out['seconds']}s", flush=True)
+    try:
+      for u, seed in todo:
+          name, rotation = u.rsplit(":", 1)
+          t, rotation = V.transfer(name), int(rotation)
+          path = record_path(product, t, rotation, seed, folder)
+          if path.is_file():
+              skipped.append(f"{u}/{seed}")
+              continue
+          if time.time() + 1.5 * longest + C.DEFAULT_MARGIN > deadline:
+              break
+          out = run_one(t, rotation, seed, bags, preps, device, epochs1, epochs2, chosen, mu)
+          longest = max(longest, out["seconds"])
+          C.write_record(path, {**out, "environment": environment})
+          ran.append(f"{u}/{seed}")
+          print(u, seed, out.get("trunk"), out.get("nUnits", out.get("nUnitsStored")), f"{out['seconds']}s", flush=True)
+    finally:
+        V.mil_creda_rules = rules_plain
     remaining = [f"{u}/{s}" for u, s in todo if f"{u}/{s}" not in ran + skipped]
     timing = {"longestStepSeconds": longest, "seconds": round(time.time() - started, 1),
               "device": environment.get("device")}
