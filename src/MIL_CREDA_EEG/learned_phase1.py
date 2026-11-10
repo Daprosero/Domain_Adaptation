@@ -27,12 +27,22 @@ from MIL_CREDA_EEG.phase_one_sweep import explicit_l2
 HYPER = {**sc.HYPER, "lr1": 1e-3, "epochs1": 100}
 
 
-def run_source(transfer, cfg, bags, device, kind, seed, epochs):
+def _blocks(raw):
+    """The "blocks" arm: 50%-overlap windows, 1-45 Hz and common average reference, cut into
+    ordered blocks of 15 (v64_pilot.ordered_blocks); each block is one training unit."""
+    from MIL_CREDA_EEG import v64_pilot
+    return [blk for b in raw for blk in v64_pilot.ordered_blocks(b, None, filtered=True)]
+
+
+def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole"):
     a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[transfer], bags)
     hyper = two_phase.check_hyper({**HYPER, "epochs1": epochs, "bagsPerStep": cfg["schedule"]["bagsPerStep"]})
     y, p = [], []
     for r in range(4):
-        side = lambda role: sc.prepared(two_phase.bag_tensors(A.side_bags(a, bags, "source", r, role)))
+        if arm == "blocks":
+            side = lambda role: _blocks(A.side_bags(a, bags, "source", r, role))
+        else:
+            side = lambda role: sc.prepared(two_phase.bag_tensors(A.side_bags(a, bags, "source", r, role)))
         train, test = side(A.REFIT_ROLE), side("test")
         with learned_trunks.installed(kind):
             torch.manual_seed(seed)
@@ -40,18 +50,25 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs):
             c = int(train[0].windows.shape[1])
             m = model_store.build_model("MIL-CREDA", c, c, hyper).to(device)
             m.source_trunk.norm = learned_trunks.input_standard_of(m.source_trunk, train)
-            with explicit_l2(sc.L2):
+            renyi = learned_trunks.renyi_loss() if kind == "tgarstf" else contextlib.nullcontext()
+            with renyi, explicit_l2(sc.L2):
                 two_phase.train_source_phase(m, train, [], hyper, g, device, seed=seed, fold=r, transfer=transfer)
-            y += [b.label for b in test]
-            p += np.nan_to_num(two_phase.evaluate(m, test, "source", device)[:, 1].detach().cpu().numpy(), nan=.5).tolist()
+            q = np.nan_to_num(two_phase.evaluate(m, test, "source", device)[:, 1].detach().cpu().numpy(), nan=.5)
+            per = {}                          # a subject's score is the mean over its bags or blocks
+            for b, v in zip(test, q):
+                per.setdefault(b.subject.split("#")[0], [b.label, []])[1].append(float(v))
+            y += [lab for lab, _ in per.values()]
+            p += [float(np.mean(vs)) for _, vs in per.values()]
         print(kind, transfer, seed, "rotation", r, "done", flush=True)
-    return {"source": transfer.split("->")[0], "kind": kind, "seed": seed, "epochs": epochs,
+    return {"source": transfer.split("->")[0], "kind": kind, "arm": arm, "seed": seed, "epochs": epochs,
+            "predictedPositive": round(float(np.mean(np.asarray(p) > .5)), 3),
             "AUC": round(float(roc_auc_score(y, p)), 3),
             "BA": round(float(balanced_accuracy_score(y, np.asarray(p) > .5)), 3), "n": len(y)}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, kind: str, seed: int = 1,
-          epochs: int = 100, workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
+          epochs: int = 100, arms=("whole",), workdir: str | Path | None = None,
+          environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
     placement = remote_units.device_placement(config, environ)
@@ -64,8 +81,11 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
     mode = environ.get(remote_units.RUN_MODE_ENV)
     started = time.time()
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness:
-        result = run_source(transfer, cfg, bags, device, kind, int(seed), int(epochs))
-    print(json.dumps(result), flush=True)
+        results = []
+        for arm in arms:
+            results.append(run_source(transfer, cfg, bags, device, kind, int(seed), int(epochs), arm))
+            print(json.dumps(results[-1]), flush=True)
+    result = results[0] if len(results) == 1 else {"arms": results}
     (workdir / "learned-phase1.json").write_text(json.dumps({**result, "seconds": round(time.time() - started),
                                                              "environment": environment}, default=str), encoding="utf-8")
     if mode:
