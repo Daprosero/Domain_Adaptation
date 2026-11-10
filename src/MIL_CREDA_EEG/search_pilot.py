@@ -7,13 +7,15 @@ ones settled in experiments v64 Sec. 10.4 plus the operator's decisions on its o
 none of the six v63 fixes, phase 2 training the target trunk and the attention under the
 full Eq. 39 (theta_s and the head frozen), L2-SP mu 10, gate 1.
 
-Per outer rotation, with one inner split and the same budget for both arms:
-  phase 1, predict (common group) and MIL-CREDA: `N_TRIALS` trials over lr1, l2 and the
-    attention temperature, scored by the inner source-validation balanced accuracy;
+Per outer rotation, with one inner split:
+  phase 1, ONE base model shared by predict and MIL-CREDA (neutral aggregation, gamma 0 and
+    attention temperature 10, fixed): `N_TRIALS` trials over lr1 and l2, scored by the inner
+    source-validation balanced accuracy; refitted per seed, it is predict (scored through
+    the source trunk) and the start of MIL-CREDA's phase 2;
   phase 2, MIL-CREDA: `N_TRIALS` trials over lr2, wd2, the phase-2 attention temperature,
-    tau_loc and gamma in [0.1, 1], scored by the label-free centroid rule.
-Each phase picks its best trial and epoch; both arms are then refitted on the rotation's
-training view for every seed and scored on its target test fold. A unit id is
+    tau_loc and gamma in [0.1, 1], scored by the label-free centroid rule, from the seed-1
+    base model; then refitted per seed from that seed's base model and scored on the
+    rotation's target test fold. A unit id is
 "<transfer>:<rotation>".
 """
 
@@ -41,14 +43,13 @@ N_INNER = 1
 SAMPLER_SEED = 20261110
 SEARCH_SEED = search.SEARCH_SEED
 PHASE_ONE_SPACE = {"lr1": FloatDistribution(1e-4, 1e-1, log=True),
-                   "l2": FloatDistribution(1e-4, 1e-1, log=True),
-                   "tauAtt": FloatDistribution(0.1, 10.0, log=True)}
+                   "l2": FloatDistribution(1e-4, 1e-1, log=True)}
 PHASE_TWO_SPACE = {"lr2": FloatDistribution(1e-5, 1e-2, log=True),
                    "wd2": FloatDistribution(1e-7, 1e-2, log=True),
                    "tauAtt": FloatDistribution(0.1, 10.0, log=True),
                    "tauLoc": FloatDistribution(0.1, 10.0, log=True),
                    "gamma": FloatDistribution(0.1, 1.0)}
-GROUPS = ("common", "MIL-CREDA")
+BASE = "MIL-CREDA"          # the shared phase-1 model, at the neutral aggregation
 
 
 @contextlib.contextmanager
@@ -78,10 +79,8 @@ def phase_two_values(params: Mapping):
 
 
 def phase_one_hyper(group: str, params: Mapping, sched: Mapping, epochs1: int | None = None):
-    hyper = V.phase_one_hyper(group, {"lr1": params["lr1"], "l2": params["l2"]},
-                              {**sched, "epochs1": epochs1 or sched["epochs1"]})
-    hyper["attentionTemperature"] = float(params["tauAtt"])
-    return hyper
+    return V.phase_one_hyper(group, {"lr1": params["lr1"], "l2": params["l2"]},
+                             {**sched, "epochs1": epochs1 or sched["epochs1"]})
 
 
 def _study(seed: int) -> optuna.Study:
@@ -179,28 +178,24 @@ def run_unit(t, rotation: int, seeds: Sequence[int], bags, prep, device, epochs1
                       "target": len(data.rotations[rotation]["target_train"]),
                       "test": len(test)}, "seeds": {}}
     with settled_rules():
-        chosen1 = {g: search_phase_one(g, data, rotation, sched, device) for g in GROUPS}
+        chosen1 = search_phase_one(BASE, data, rotation, sched, device)
         out["phase1"] = chosen1
-        print(rotation, "phase 1 chosen", {g: (c["params"], c["epochs"], round(c["value"], 3))
-                                           for g, c in chosen1.items()}, flush=True)
-        _, search_record = refit_phase_one("MIL-CREDA", data, rotation, seeds[0],
-                                           chosen1["MIL-CREDA"], sched, device)
-        chosen2 = search_phase_two(data, rotation, search_record, sched, device)
+        print(rotation, "phase 1 chosen", chosen1["params"], chosen1["epochs"],
+              round(chosen1["value"], 3), flush=True)
+        base = {seed: refit_phase_one(BASE, data, rotation, seed, chosen1, sched, device)
+                for seed in seeds}
+        for seed, (model, _) in base.items():
+            out["seeds"][str(seed)] = {"predict": P._rows(model.eval(), test, "source", device)}
+        chosen2 = search_phase_two(data, rotation, base[seeds[0]][1], sched, device)
         out["phase2"] = chosen2
         print(rotation, "phase 2 chosen", chosen2["params"], chosen2["epochs"],
               round(chosen2["value"], 3), flush=True)
         sched2 = {**sched, "epochs2": chosen2["epochs"]}
         for seed in seeds:
-            rows = {}
-            predict, _ = refit_phase_one("common", data, rotation, seed, chosen1["common"],
-                                         sched, device)
-            rows["predict"] = P._rows(predict.eval(), test, "source", device)
-            mc1, record = refit_phase_one("MIL-CREDA", data, rotation, seed,
-                                          chosen1["MIL-CREDA"], sched, device)
-            rows["phase1"] = P._rows(mc1.eval(), test, "source", device)
-            o2 = _phase_two(data, rotation, seed, record, chosen2["params"], sched2, device)
-            rows["milCreda"] = P._rows(o2["model"].eval(), test, "target", device)
-            out["seeds"][str(seed)] = rows
+            o2 = _phase_two(data, rotation, seed, base[seed][1], chosen2["params"], sched2,
+                            device)
+            out["seeds"][str(seed)]["milCreda"] = P._rows(o2["model"].eval(), test, "target",
+                                                          device)
             print(rotation, "seed", seed, "done", round(time.time() - started), "s", flush=True)
     out["seconds"] = round(time.time() - started, 1)
     return out
