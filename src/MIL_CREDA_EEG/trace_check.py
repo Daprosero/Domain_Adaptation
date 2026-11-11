@@ -209,6 +209,8 @@ def _snapshot(model, splits, device):
     out["calibrated"] = {"cut": _r(cut), "validBA": _r(balanced_accuracy_score(vy, vp > cut), 3),
                          "testBA": _r(balanced_accuracy_score(ty, tp > cut), 3),
                          "testPositive": _r(np.mean(tp > cut), 3)}
+    out["testScores"] = [[u.subject.split("#")[0], int(u.label), _r(float(q), 5)]
+                         for u, q in zip(splits["test"], tp)]
     Ztr, ytr = reps["train"]
     sc_ = StandardScaler().fit(Ztr)
     probe = LogisticRegression(C=1.0, max_iter=2000).fit(sc_.transform(Ztr), ytr)
@@ -239,7 +241,7 @@ def _input_amplitude(splits):
 
 
 def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, channel_scale=False,
-          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None):
+          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None, trunk_lr_scale=1.0):
     """`reject`: amplitude threshold in robust units (rejected), applied to all of a subject's
     windows before the evenly spaced selection; `attention`: {"temperature", "gamma"} for the
     phase-1 attention (default: the neutral aggregation, temperature 10, gamma 0)."""
@@ -266,11 +268,15 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
     m = model_store.build_model("MIL-CREDA", c, c, hyper).to(device)
     sigma = two_phase.phase_one_sigma(m, train, hyper["sigmaMultiplier"], device)
     params = [*m.source_trunk.parameters(), *m.attention_parameters(), *m.head.parameters()]
-    opt = torch.optim.Adam(params, lr=hyper["lr1"], weight_decay=hyper["wd1"])
+    trunk_ids = {id(p) for p in m.source_trunk.parameters()}
+    groups_ = [{"params": [p for p in params if id(p) not in trunk_ids]}]
+    if trunk_lr_scale > 0:                   # 0 freezes the trunk at its initialization
+        groups_.append({"params": [p for p in params if id(p) in trunk_ids], "lr": hyper["lr1"] * float(trunk_lr_scale)})
+    opt = torch.optim.Adam(groups_, lr=hyper["lr1"], weight_decay=hyper["wd1"])
     groups = _groups(m)
     l2w = _l2_weights(m, l2_batchnorm)
     l2ids = {id(p) for p in l2w}
-    record = {"arm": arm, "reject": reject, "windowsKept": kept,
+    record = {"arm": arm, "trunkLrScale": float(trunk_lr_scale), "reject": reject, "windowsKept": kept,
               "attentionTemperature": hyper["attentionTemperature"], "attentionGamma": hyper["attentionGamma"],
               "channelScale": bool(channel_scale), "highpass": highpass,
               "l2BatchNorm": bool(l2_batchnorm), "transfer": transfer, "seed": seed, "rotation": rotation, "l2": l2, "epochs": epochs,
@@ -352,7 +358,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Rob
                 runs.append(trace(t, cfg, bags, device, int(seed), int(epochs), int(rot),
                                   float(arm.get("l2", l2)), bool(arm.get("channelScale", False)),
                                   arm.get("highpass"), bool(arm.get("l2BatchNorm", True)), arm.get("name", ""),
-                                  arm.get("reject"), arm.get("attention")))
+                                  arm.get("reject"), arm.get("attention"), float(arm.get("trunkLrScale", 1.0))))
     (workdir / "trace-check.json").write_text(json.dumps({"runs": runs, "seconds": round(time.time() - started),
                                                          "environment": environment}, default=str), encoding="utf-8")
     if mode:
