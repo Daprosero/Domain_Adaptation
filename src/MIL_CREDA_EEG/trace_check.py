@@ -61,8 +61,84 @@ def _groups(model):
             "attention": list(model.attention_parameters())}
 
 
-def _l2_weights(model):
-    return [p for n, p in model.source_trunk.named_parameters() if "weight" in n] + [model.head.linear.weight]
+def _l2_weights(model, batchnorm=True):
+    """The explicit L2's weights, as phase_one_sweep.explicit_l2; `batchnorm` False leaves the
+    BatchNorm scales out."""
+    t = model.source_trunk
+    skip = set() if batchnorm else {id(p) for bn in (t.bn1, t.bn2, t.bn3) for p in bn.parameters()}
+    return [p for n, p in t.named_parameters() if "weight" in n and id(p) not in skip] + [model.head.linear.weight]
+
+
+def prepared(units, channel_scale=False, highpass=None):
+    """Label-free, per recording. `highpass` (Hz): zero-phase 4th-order Butterworth high-pass on
+    every window. `channel_scale`: every channel of a subject divided by its robust amplitude
+    (0.7413 x interquartile range over all of that subject's windows and samples)."""
+    if not channel_scale and not highpass:
+        return units
+    from scipy.signal import butter, sosfiltfilt
+    sos = butter(4, float(highpass), btype="highpass", fs=FS, output="sos") if highpass else None
+    by = {}
+    for u in units:
+        by.setdefault(u.subject.split("#")[0], []).append(u)
+    out = {}
+    for subject, us in by.items():
+        xs = [u.windows.double().numpy() for u in us]
+        if sos is not None:
+            xs = [sosfiltfilt(sos, x, axis=-1).copy() for x in xs]
+        if channel_scale:
+            flat = np.concatenate(xs).transpose(1, 0, 2).reshape(xs[0].shape[1], -1)
+            q75, q25 = np.percentile(flat, [75, 25], axis=1)
+            amp = np.maximum(0.7413 * (q75 - q25), 1e-6)[None, :, None]
+            xs = [x / amp for x in xs]
+        for u, x in zip(us, xs):
+            out[id(u)] = two_phase.BagTensor(u.subject, u.condition, u.label, torch.from_numpy(x).float())
+    return [out[id(u)] for u in units]
+
+
+def window_peaks(units):
+    """Each window's peak in robust units: max over channels and samples of |x| divided by that
+    channel's robust amplitude (0.7413 x interquartile range) over the subject's own windows."""
+    by = {}
+    for u in units:
+        by.setdefault(u.subject.split("#")[0], []).append(u)
+    out = {}
+    for us in by.values():
+        flat = torch.cat([u.windows for u in us]).double().numpy()
+        f = flat.transpose(1, 0, 2).reshape(flat.shape[1], -1)
+        q75, q25 = np.percentile(f, [75, 25], axis=1)
+        amp = np.maximum(0.7413 * (q75 - q25), 1e-6)[None, :, None]
+        for u in us:
+            out[id(u)] = (np.abs(u.windows.double().numpy()) / amp).max(axis=(1, 2))
+    return [out[id(u)] for u in units]
+
+
+def rejected(units, threshold, keep_min=10):
+    """Label-free amplitude rejection per recording: drop every window with any channel above
+    `threshold` robust units (window_peaks). A subject keeps at least its `keep_min` windows with
+    the lowest peaks, so nobody leaves the data."""
+    if not threshold:
+        return units, None
+    out, kept = [], []
+    for u, pk in zip(units, window_peaks(units)):
+        idx = np.where(pk <= threshold)[0]
+        if len(idx) < min(keep_min, len(pk)):
+            idx = np.sort(np.argsort(pk)[:min(keep_min, len(pk))])
+        kept.append(len(idx) / len(pk))
+        out.append(two_phase.BagTensor(u.subject, u.condition, u.label, u.windows[torch.as_tensor(idx)]))
+    return out, kept
+
+
+def _attention_vs_peak(model, units, device):
+    """Spearman correlation, per bag, between a window's attention weight and its peak in robust
+    units; the mean over bags (negative: artifact windows weigh less)."""
+    from scipy.stats import spearmanr
+    H = model.embed([u.windows.to(device) for u in units], "source", two_phase.EVAL_CHUNK)
+    rs = []
+    for (_, w), pk in zip(model.bag_pairs(H), window_peaks(units)):
+        w = w.detach().cpu().numpy().ravel()
+        if np.std(w) > 0 and np.std(pk) > 0:
+            rs.append(spearmanr(w, pk).correlation)
+    return _r(np.mean(rs), 3) if rs else None
 
 
 def _norm(ts):
@@ -117,6 +193,8 @@ def _snapshot(model, splits, device):
                 s, c = _variance_share(Hw, subj, lab)
                 rec["subjectVarShare"], rec["classVarShare"] = _r(s, 3), _r(c, 3)
                 rec["windowEmbeddingStd"] = _r(Hw.std(), 4)
+                rec["attentionMaxWeight"] = _r(float(np.mean([w.max().item() for _, w in model.bag_pairs(H)])), 4)
+                rec["attentionVsPeak"] = _attention_vs_peak(model, units, device)
             out[split] = rec
     finally:
         for h in hooks:
@@ -150,12 +228,26 @@ def _input_amplitude(splits):
     return out
 
 
-def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2):
+def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, channel_scale=False,
+          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None):
+    """`reject`: amplitude threshold in robust units (rejected), applied to all of a subject's
+    windows before the evenly spaced selection; `attention`: {"temperature", "gamma"} for the
+    phase-1 attention (default: the neutral aggregation, temperature 10, gamma 0)."""
     a = A.assign_from_bags(v63_setup.transfer(transfer), bags)
-    hyper = two_phase.check_hyper({**L.HYPER, "epochs1": epochs, "bagsPerStep": cfg["schedule"]["bagsPerStep"]})
-    role = lambda r: L._stored_whole(two_phase.bag_tensors(
-        A.side_bags(a, bags, "source", rotation, r, split=0) if r.startswith("inner")
-        else A.side_bags(a, bags, "source", rotation, r)))
+    att = attention or {}
+    hyper = two_phase.check_hyper({**L.HYPER, "epochs1": epochs, "bagsPerStep": cfg["schedule"]["bagsPerStep"],
+                                   "attentionTemperature": float(att.get("temperature", L.HYPER["attentionTemperature"])),
+                                   "attentionGamma": float(att.get("gamma", L.HYPER["attentionGamma"]))})
+    kept = {}
+
+    def role(r):
+        full = prepared(two_phase.bag_tensors(
+            A.side_bags(a, bags, "source", rotation, r, split=0) if r.startswith("inner")
+            else A.side_bags(a, bags, "source", rotation, r)), channel_scale, highpass)
+        full, k = rejected(full, reject)
+        if k is not None:
+            kept[r] = {"median": _r(np.median(k), 3), "min": _r(np.min(k), 3)}
+        return L._stored_whole(full)
     splits = {"train": role("inner_train"), "valid": role("inner_validation"), "test": role("test")}
     train = splits["train"]
     torch.manual_seed(seed)
@@ -166,9 +258,12 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2):
     params = [*m.source_trunk.parameters(), *m.attention_parameters(), *m.head.parameters()]
     opt = torch.optim.Adam(params, lr=hyper["lr1"], weight_decay=hyper["wd1"])
     groups = _groups(m)
-    l2w = _l2_weights(m)
+    l2w = _l2_weights(m, l2_batchnorm)
     l2ids = {id(p) for p in l2w}
-    record = {"transfer": transfer, "seed": seed, "rotation": rotation, "l2": l2, "epochs": epochs,
+    record = {"arm": arm, "reject": reject, "windowsKept": kept,
+              "attentionTemperature": hyper["attentionTemperature"], "attentionGamma": hyper["attentionGamma"],
+              "channelScale": bool(channel_scale), "highpass": highpass,
+              "l2BatchNorm": bool(l2_batchnorm), "transfer": transfer, "seed": seed, "rotation": rotation, "l2": l2, "epochs": epochs,
               "lr1": hyper["lr1"], "bagsPerStep": hyper["bagsPerStep"], "sigma": _r(sigma["sigma"]),
               "subjects": {k: len(v) for k, v in splits.items()},
               "positives": {k: _r(np.mean([u.label for u in v]), 3) for k, v in splits.items()},
@@ -218,14 +313,14 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2):
             "depthwiseAtCap": _r(float((dep >= 0.999 * float(dep.max())).float().mean()), 3)})
         if epoch in CHECKPOINTS or epoch == epochs - 1:
             record["snapshots"][str(epoch)] = _snapshot(m, splits, device)
-            print(transfer, "epoch", epoch, json.dumps({k: (v["BA"], v["AUC"]) for k, v in
+            print(arm, transfer, "epoch", epoch, json.dumps({k: (v["BA"], v["AUC"]) for k, v in
                                                         record["snapshots"][str(epoch)].items()}), flush=True)
     record["temporalPeaksHz"] = _peak_frequencies(m)
     return record
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Robots->CogniFit", "L11->L1"),
-          seed: int = 1, epochs: int = 100, rotation: int = 0, l2: float = sc.L2,
+          seed: int = 1, epochs: int = 100, rotation: int = 0, l2: float = sc.L2, arms=(None,),
           workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
@@ -239,7 +334,14 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Rob
     mode = environ.get(remote_units.RUN_MODE_ENV)
     started = time.time()
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness:
-        runs = [trace(t, cfg, bags, device, int(seed), int(epochs), int(rotation), float(l2)) for t in transfers]
+        runs = []
+        for arm in arms:                     # each {"name", "l2", "channelScale", "highpass", "l2BatchNorm"}
+            arm = arm or {}
+            for t in transfers:
+                runs.append(trace(t, cfg, bags, device, int(seed), int(epochs), int(rotation),
+                                  float(arm.get("l2", l2)), bool(arm.get("channelScale", False)),
+                                  arm.get("highpass"), bool(arm.get("l2BatchNorm", True)), arm.get("name", ""),
+                                  arm.get("reject"), arm.get("attention")))
     (workdir / "trace-check.json").write_text(json.dumps({"runs": runs, "seconds": round(time.time() - started),
                                                          "environment": environment}, default=str), encoding="utf-8")
     if mode:
