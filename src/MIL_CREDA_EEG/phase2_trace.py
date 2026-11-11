@@ -59,7 +59,12 @@ from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG.phase_one_sweep import explicit_l2
 
 ARMS = ("copy", "warm", "scratch")
-OBJECTIVES = ("adapt", "eq39", "eq39+l2sp")
+OBJECTIVES = ("adapt", "eq39", "eq39+l2sp", "eq39+prior")
+#: "eq39+prior": eq39 with Eq. 22 replaced by prior-matched pseudo-labels. At the start of each
+#: epoch the target-train bags are scored on the target path; a bag is labelled positive when
+#: its score exceeds the (1 - pi_s) quantile, pi_s the positive share of the SOURCE training
+#: bags. No target label is read.
+PRIOR_OBJECTIVES = ("eq39+prior",)
 #: Phase-1 aggregation, gamma 0 in both (consensus stays out of phase 1); phi trains in both.
 #: "neutral": temperature 10, fixed. "searched": the temperature of TAU_GRID with the best
 #: (BA@0.5 + AUC) / 2 on the source inner-validation subjects of split 0 (source labels only).
@@ -319,6 +324,20 @@ def _objective_rules(model, objective, mu):
                 yield
 
 
+@contextlib.contextmanager
+def _prior_rules(prior, state):
+    """Prior-matched Eq. 22: positive when the bag's score exceeds the epoch's quantile cut."""
+    if prior is None:
+        yield
+        return
+    saved = M.pseudolabel
+    M.pseudolabel = lambda g: int(float(g[1]) > state["cut"])
+    try:
+        yield
+    finally:
+        M.pseudolabel = saved
+
+
 def existing_path(model, source, target, hyper, seed, device, objective, mu, arm_init):
     """The uninstrumented phase 2: bridge, arm init, then `two_phase.adapt_target_phase`.
     Returns per-step objective values and the final target trunk."""
@@ -347,7 +366,7 @@ def existing_path(model, source, target, hyper, seed, device, objective, mu, arm
 
 
 def traced_path(model, source, target, target_labels, hyper, seed, device, objective, mu,
-                arm_init, ctx, epochs, equivalence_epochs, log=print):
+                arm_init, ctx, epochs, equivalence_epochs, log=print, prior=None):
     """The instrumented replica: same batches, same objective, same optimizer; the gradient is
     taken with autograd.grad and handed to Adam, term gradients read on the side."""
     train_phi = objective != "adapt"
@@ -370,8 +389,14 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     record = {"steps": [], "epochs": {}, "init": info}
     record["epochs"]["-1"] = snapshot(model, ctx, device)
     objective_values, theta_at_check = [], None
-    with _objective_rules(model, objective, mu):
+    cut_state = {"cut": 0.5}
+    record["priorCuts"] = []
+    with _objective_rules(model, objective, mu), _prior_rules(prior, cut_state):
         for epoch in range(epochs):
+            if prior is not None:   # label-free: target scores and the source prior only
+                q = _probabilities(model, target, "target", device)
+                cut_state["cut"] = float(np.quantile(q, 1.0 - prior))
+                record["priorCuts"].append(_s(cut_state["cut"]))
             two_phase.set_phase_two_modes(model)
             for step, batch in enumerate(two_phase.shuffled_batches(len(target), hyper["bagsPerStep"], g)):
                 src = [source[i] for i in queues.draw(per_class)]
@@ -524,19 +549,24 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
            "channels": {"source": cs, "target": ct}, "predictEquality": check, "objectives": {}}
     for objective in objectives:
         mu = MU if objective == "eq39+l2sp" and arm != "scratch" else 0.0
-        # equivalence: the existing path vs the replica, same seed and data
+        prior = (float(np.mean([b.label for b in source])) if objective in PRIOR_OBJECTIVES else None)
+        base_objective = "eq39" if objective in PRIOR_OBJECTIVES else objective
+        # equivalence: the existing path vs the replica, same seed and data (the prior rule is
+        # new, so its replica is checked against plain eq39 only over the epochs it shares: none)
         t2 = time.time()
         ex_hyper = _hyper(cfg, EQUIVALENCE_EPOCHS, tau1)
-        ex_steps, ex_theta = existing_path(phase_two_model(), source, target, ex_hyper, seed, device,
-                                           objective, mu, arm_init)
+        ex_steps, ex_theta = ([], None) if prior is not None else existing_path(
+            phase_two_model(), source, target, ex_hyper, seed, device, objective, mu, arm_init)
         existing_seconds = time.time() - t2
         t3 = time.time()
         model = phase_two_model()
         record, values, theta_check = traced_path(
-            model, source, target, [b.label for b in target], hyper, seed, device, objective, mu,
-            arm_init, ctx, PHASE_TWO["epochs2"], EQUIVALENCE_EPOCHS, log=log)
+            model, source, target, [b.label for b in target], hyper, seed, device, base_objective, mu,
+            arm_init, ctx, PHASE_TWO["epochs2"], EQUIVALENCE_EPOCHS, log=log, prior=prior)
         n = len(ex_steps)
-        equivalence = {"epochs": EQUIVALENCE_EPOCHS, "steps": n,
+        equivalence = {"note": "new rule: no existing path to compare", "sourcePrior": _s(prior),
+                       "targetPrior": _s(float(np.mean([b.label for b in target]))),
+                       "cuts": record["priorCuts"]} if prior is not None else {"epochs": EQUIVALENCE_EPOCHS, "steps": n,
                        "maxAbsObjective": _s(np.max(np.abs(np.asarray(ex_steps) - np.asarray(values[:n])))),
                        "maxAbsThetaT": _s(max(float((ex_theta[k] - theta_check[k]).abs().max()) for k in ex_theta)),
                        "existingPath": "two_phase.bridge + adapt_target_phase under ablation_pilot.fix_rules("
@@ -544,13 +574,13 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
                                                          ", ablation_pilot.attention_rules and "
                                                          f"v63_setup.mil_creda_rules(gate 1, mu {mu:g})")}
         out["objectives"][objective] = {
-            "objective": objective, "mu": mu, "phiTrained": objective != "adapt",
+            "objective": objective, "mu": mu, "prior": _s(prior), "phiTrained": objective != "adapt",
             "sourceGradient": objective != "adapt", "equivalence": equivalence,
             "predict": predict, "epochs": record["epochs"], "epochMeans": _epoch_means(record["steps"]),
             "steps": record["steps"], "cut": out["cut"],
             "seconds": {"existing": round(existing_seconds, 1), "traced": round(time.time() - t3, 1)}}
         log(arm, phase1_attention, objective, "rotation", rotation, "equivalence",
-            equivalence["maxAbsObjective"], equivalence["maxAbsThetaT"], flush=True)
+            equivalence.get("maxAbsObjective"), equivalence.get("maxAbsThetaT"), flush=True)
     return out
 
 
@@ -584,8 +614,11 @@ def summary(runs):
         if e != "-1":
             row.update({k: num(lambda r, k=k: r["epochMeans"][e][k]) for k in runs[0]["epochMeans"][e]})
         out["perEpoch"][e] = row
-    out["equivalence"] = {"maxAbsObjective": max(r["equivalence"]["maxAbsObjective"] for r in runs),
-                          "maxAbsThetaT": max(r["equivalence"]["maxAbsThetaT"] for r in runs)}
+    if all("maxAbsObjective" in r["equivalence"] for r in runs):
+        out["equivalence"] = {"maxAbsObjective": max(r["equivalence"]["maxAbsObjective"] for r in runs),
+                              "maxAbsThetaT": max(r["equivalence"]["maxAbsThetaT"] for r in runs)}
+    else:
+        out["equivalence"] = {"prior": [r["equivalence"] for r in runs]}
     return out
 
 
