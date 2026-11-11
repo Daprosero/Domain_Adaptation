@@ -38,6 +38,8 @@ from MIL_CREDA_EEG import ablation_pilot as AP, eegnet, remote_units, search, tw
 from MIL_CREDA_EEG import v63_campaign as C
 from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG import v64_pilot as P
+from MIL_CREDA_EEG import learned_phase1 as L
+from MIL_CREDA_EEG import trace_check as TC
 
 RESULTS = Path("Results") / "search-pilot"
 N_TRIALS = 10                # phase 2
@@ -52,6 +54,15 @@ PHASE_ONE_SPACE = {"lr1": FloatDistribution(1e-4, 1e-2, log=True),
                    "kernelLength": CategoricalDistribution((32, 64, 128)),
                    "dropout": CategoricalDistribution((0.25, 0.5))}
 ARCHITECTURE = ("f1", "d", "kernelLength", "dropout")
+# Plan v65 (Secs. 2.7, 2.8, 4.5, 7.7): 1 Hz high-pass and amplitude rejection on the stored
+# windows, ordered blocks counted as subjects (v64 Sec. 10.4), explicit L2 in [1e-7, 1e-3] without the BatchNorm parameters,
+# the BA at a cut calibrated on the source validation, and the phase-1 attention temperature
+# searched (gamma stays 0 in phase 1). Switched on by run(v65=True).
+V65 = False
+HIGHPASS, REJECT = 1.0, 20
+PHASE_ONE_SPACE_V65 = {**{k: v for k, v in PHASE_ONE_SPACE.items() if k != "l2"},
+                       "l2": FloatDistribution(1e-7, 1e-3, log=True),
+                       "tauAtt1": FloatDistribution(1.0, 10.0, log=True)}
 
 
 def architecture(params: Mapping):
@@ -142,6 +153,94 @@ class CleanBlockPrepared(V.Prepared):
         return out
 
 
+def v65_blocks(bag, channels=None) -> list:
+    """Plan v65's data path on one stored bag: every window high-passed at HIGHPASS Hz, the
+    half-shifted windows added (v64 Sec. 10.4 item 2) and the ordered blocks of v64 item 3;
+    a block leaves when any of its windows exceeds REJECT robust units (0.7413 x IQR of that
+    channel over the recording), label-free. A recording with no clean block keeps its block
+    with the lowest peak, so no subject leaves. Blocks are cut after the subject's fold is
+    assigned, so all blocks of a subject share its fold."""
+    w = np.asarray(bag.windows() if callable(bag.windows) else bag.windows, dtype=np.float64)
+    if channels is not None:
+        names = list(bag.channels)
+        w = w[:, [names.index(c) for c in channels]]
+    with np.load(bag.path, allow_pickle=False) as z:
+        start = z["window_start_s"]
+    from scipy.signal import butter, sosfiltfilt
+    w = sosfiltfilt(butter(4, HIGHPASS, btype="highpass", fs=TC.FS, output="sos"), w, axis=-1)
+    q75, q25 = np.percentile(w.transpose(1, 0, 2).reshape(w.shape[1], -1), [75, 25], axis=1)
+    amp = np.maximum(0.7413 * (q75 - q25), 1e-6)[None, :, None]
+    half, out, peak = w.shape[-1] // 2, [], []
+    for k in range(len(w)):
+        out.append(w[k])
+        if k + 1 < len(w) and abs(start[k + 1] - start[k] - 4.0) < 1e-6:
+            out.append(np.concatenate([w[k][:, half:], w[k + 1][:, :half]], axis=-1))
+    x = np.stack(out)
+    peak = (np.abs(x) / amp).max(axis=(1, 2))
+    x = torch.from_numpy(np.ascontiguousarray(x)).float()
+    size, cap, m = P.SIZE, P.CAP, x.shape[0]
+    k = min(cap, (m + 1) // (size + 1))
+    starts = np.round(np.linspace(0, m - size, k)).astype(int) if k > 1 else np.array([0])
+    worst = [float(peak[st:st + size].max()) for st in starts]
+    keep = [st for st, pk in zip(starts, worst) if pk <= REJECT] or [starts[int(np.argmin(worst))]]
+    return [two_phase.BagTensor(f"{bag.subject}#{i}", bag.condition, P._label(bag), x[st:st + size])
+            for i, st in enumerate(keep)]
+
+
+class V65BlockPrepared(V.Prepared):
+    """`V.Prepared` that expands each raw bag into its plan-v65 blocks (v65_blocks)."""
+
+    def __call__(self, raw, channels):
+        key_c = tuple(channels) if channels else None
+        out = []
+        for b in raw:
+            key = (b.subject, b.condition, key_c)
+            if key not in self._cache:
+                self._cache[key] = v65_blocks(b, channels)
+            out.extend(self._cache[key])
+        return out
+
+
+def unit_scale(units) -> float:
+    """Real subjects per training unit: the per-step explicit L2 times this gives each real
+    subject the same regularization per epoch whether it trains as one bag or as blocks."""
+    return len({u.subject.split("#")[0] for u in units}) / max(1, len(units))
+
+
+def calibrated_balanced_accuracy(records) -> float:
+    """Plan v65 Sec. 4.5: the pooled subject-level BA at the cut that maximizes it on these
+    source-validation subjects."""
+    from sklearn.metrics import balanced_accuracy_score
+    records = two_phase._pooled(records)
+    y = [int(v) for r in records for v in r["labels"]]
+    p = np.asarray([float(np.asarray(q)[1]) for r in records for q in r["probabilities"]])
+    grid = np.unique(p)
+    cands = list((grid[:-1] + grid[1:]) / 2) or [0.5]
+    return float(max(balanced_accuracy_score(y, p > t) for t in cands))
+
+
+@contextlib.contextmanager
+def phase_one_rules(params: Mapping, units=()):
+    """The phase-1 L2 of a trial or refit; under V65 without the BatchNorm parameters and with
+    the trial's phase-1 attention temperature (gamma 0)."""
+    if not V65:
+        with V.phase_one_l2(params["l2"]):
+            yield
+        return
+    lam, plain = float(params["l2"]) * unit_scale(units), two_phase.source_term
+    saved = V.PHASE_ONE_AGGREGATION
+
+    def term(model, G, labels):
+        return plain(model, G, labels) + lam * sum((w ** 2).sum() for w in TC._l2_weights(model, batchnorm=False))
+
+    two_phase.source_term = term
+    V.PHASE_ONE_AGGREGATION = {"attentionGamma": 0.0, "attentionTemperature": float(params["tauAtt1"])}
+    try:
+        yield
+    finally:
+        two_phase.source_term, V.PHASE_ONE_AGGREGATION = plain, saved
+
+
 def subject_means(rows) -> tuple[list, list]:
     per = {}
     for r in rows:
@@ -182,9 +281,9 @@ def search_phase_one(group: str, data, rotation: int, sched: Mapping, device) ->
     study = _study(SAMPLER_SEED + rotation)
 
     def objective(trial):
-        params = search.suggest(trial, PHASE_ONE_SPACE)
-        hyper = phase_one_hyper(group, params, sched)
+        params = search.suggest(trial, PHASE_ONE_SPACE_V65 if V65 else PHASE_ONE_SPACE)
         models = []
+        select = calibrated_balanced_accuracy if V65 else two_phase.pooled_balanced_accuracy
 
         def train(i):
             trained = V.train_phase_one(group, data.inner_view(rotation, i), rotation,
@@ -192,13 +291,14 @@ def search_phase_one(group: str, data, rotation: int, sched: Mapping, device) ->
             models.append((i, trained["model"]))
             return trained["result"]
 
-        with V.phase_one_l2(params["l2"]), architecture(params):
-            outs, _ = search.train_inner_splits(train, two_phase.pooled_balanced_accuracy, 1,
-                                                cap, 1)
+        with phase_one_rules(params, data.inner_view(rotation, 0).rotations[rotation]["source_train"]), \
+                architecture(params):
+            hyper = phase_one_hyper(group, params, sched)
+            outs, _ = search.train_inner_splits(train, select, 1, cap, 1)
             for i, model in models:      # an embedding collapse (sigma 0) fails the trial
                 V.between_bag_sigma(model, data.inner_view(rotation, i).rotations[rotation]
                                     ["source_train"], seed=SEARCH_SEED)
-        series = search.pooled_balanced_accuracy_series([o["validation"] for o in outs])
+        series = [select(recs) for recs in search._by_epoch([o["validation"] for o in outs])]
         best = int(np.nanargmax(series))
         trial.set_user_attr("bestEpoch", best)
         return float(series[best])
@@ -214,8 +314,8 @@ def refit_phase_one(group: str, data, rotation: int, seed: int, chosen: Mapping,
                     sched: Mapping, device):
     """The refitted base model and its phase-2 record; the record is None when the trunk's
     embeddings collapsed (between-bag sigma 0), which fails that seed's phase 2 only."""
-    hyper = phase_one_hyper(group, chosen["params"], sched, chosen["epochs"])
-    with V.phase_one_l2(chosen["params"]["l2"]):
+    with phase_one_rules(chosen["params"], data.rotations[rotation]["source_train"]):
+        hyper = phase_one_hyper(group, chosen["params"], sched, chosen["epochs"])
         model = V.train_phase_one(group, data, rotation, seed, hyper, device,
                                   sigma=False)["model"]
     try:
@@ -271,7 +371,7 @@ def run_unit(t, rotation: int, seeds: Sequence[int], bags, prep, device, epochs1
     data = V.search_data(t, bags, prep, rotations=[rotation])
     tests = V.test_bags(t, bags, rotation, prep)
     test, source_test = tests["target"], tests["source"]
-    out = {"transfer": t.name, "rotation": rotation, "arm": "blocks", "stored": True,
+    out = {"transfer": t.name, "rotation": rotation, "arm": "v65-blocks" if V65 else "blocks", "stored": True,
            "nTrials": [N_TRIALS_PHASE_ONE, N_TRIALS], "nInner": N_INNER, "epochCaps": [epochs1, epochs2], "mu": V.MU,
            "nUnits": {"source": len(data.rotations[rotation]["source_train"]),
                       "target": len(data.rotations[rotation]["target_train"]),
@@ -328,7 +428,7 @@ def _transfer(name: str):
 
 def run(config: Mapping, product: str | Path | None = None, *, units: Sequence[str],
         seeds: Sequence[int] = (1, 2, 3), epochs1: int = P.EPOCHS1, epochs2: int = P.EPOCHS2,
-        clean: bool = False, calibrate: bool = False, trials=None,
+        clean: bool = False, calibrate: bool = False, trials=None, v65: bool = False,
         workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
     product = Path(product) if product else C.DEFAULT_PRODUCT
@@ -342,11 +442,14 @@ def run(config: Mapping, product: str | Path | None = None, *, units: Sequence[s
                 "revision": "search-pilot"}
     environment = remote_units.environment_stamp(deterministic, identity, placement)
     bags = C.campaign.load_bags(cfg)
-    global N_TRIALS_PHASE_ONE, N_TRIALS
+    global N_TRIALS_PHASE_ONE, N_TRIALS, V65
+    V65 = bool(v65)
+    calibrate = calibrate or V65
     if trials is not None:
         N_TRIALS_PHASE_ONE, N_TRIALS = int(trials[0]), int(trials[1])
-    prep = CleanBlockPrepared(bags) if clean else P.BlockPrepared(bags, filtered=False)
-    res = RESULTS if not (clean or calibrate) else Path(f"{RESULTS}-{'clean' if clean else 'raw'}-{'cut' if calibrate else 'half'}")
+    prep = (V65BlockPrepared(bags) if V65 else CleanBlockPrepared(bags) if clean
+            else P.BlockPrepared(bags, filtered=False))
+    res = Path(f"{RESULTS}-v65") if V65 else RESULTS if not (clean or calibrate) else Path(f"{RESULTS}-{'clean' if clean else 'raw'}-{'cut' if calibrate else 'half'}")
     ran, started = [], time.time()
     for u in units:
         name, rotation = u.rsplit(":", 1)
