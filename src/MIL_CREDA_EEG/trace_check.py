@@ -241,7 +241,7 @@ def _input_amplitude(splits):
 
 
 def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, channel_scale=False,
-          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None, trunk_lr_scale=1.0, dropout=None):
+          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None, trunk_lr_scale=1.0, dropout=None, adversary=False):
     """`reject`: amplitude threshold in robust units (rejected), applied to all of a subject's
     windows before the evenly spaced selection; `attention`: {"temperature", "gamma"} for the
     phase-1 attention (default: the neutral aggregation, temperature 10, gamma 0)."""
@@ -273,11 +273,24 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
     groups_ = [{"params": [p for p in params if id(p) not in trunk_ids]}]
     if trunk_lr_scale > 0:                   # 0 freezes the trunk at its initialization
         groups_.append({"params": [p for p in params if id(p) in trunk_ids], "lr": hyper["lr1"] * float(trunk_lr_scale)})
+    adv_heads, adv_index = None, {}
+    if adversary:                            # class-conditional subject adversary (learned_phase1)
+        by = {}
+        for b in train:
+            by.setdefault(int(b.label), set()).add(b.subject.split("#")[0])
+        adv_heads = torch.nn.ModuleDict()
+        for cl, subs in by.items():
+            subs = sorted(subs)
+            adv_index.update({(cl, sj): i for i, sj in enumerate(subs)})
+            adv_heads[str(cl)] = torch.nn.Sequential(torch.nn.Linear(m.source_trunk.output_dim, 64),
+                                                     torch.nn.ReLU(), torch.nn.Linear(64, len(subs)))
+        adv_heads = adv_heads.to(device)
+        groups_.append({"params": list(adv_heads.parameters())})
     opt = torch.optim.Adam(groups_, lr=hyper["lr1"], weight_decay=hyper["wd1"])
     groups = _groups(m)
     l2w = _l2_weights(m, l2_batchnorm)
     l2ids = {id(p) for p in l2w}
-    record = {"arm": arm, "dropout": float(m.source_trunk.dropout), "trunkLrScale": float(trunk_lr_scale), "reject": reject, "windowsKept": kept,
+    record = {"arm": arm, "adversary": bool(adversary), "dropout": float(m.source_trunk.dropout), "trunkLrScale": float(trunk_lr_scale), "reject": reject, "windowsKept": kept,
               "attentionTemperature": hyper["attentionTemperature"], "attentionGamma": hyper["attentionGamma"],
               "channelScale": bool(channel_scale), "highpass": highpass,
               "l2BatchNorm": bool(l2_batchnorm), "transfer": transfer, "seed": seed, "rotation": rotation, "l2": l2, "epochs": epochs,
@@ -295,11 +308,27 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
         for batch in two_phase.interleaved_batches(train, hyper["bagsPerStep"], g):
             windows = [train[i].windows.to(device) for i in batch]
             labels = torch.tensor([train[i].label for i in batch], device=device)
-            G = m.predict(windows, "source")
+            H = m.embed(windows, "source")
+            G = m.classify(m.represent(m.bag_pairs(H)))
             ce = plain_source_term(m, G, labels)
             pen = l2 * sum((w ** 2).sum() for w in l2w)
-            grads = torch.autograd.grad(ce, params, allow_unused=True)
-            opt.zero_grad()
+            objective = ce
+            if adv_heads is not None:
+                lam = 2.0 / (1.0 + np.exp(-10.0 * epoch / max(1, epochs - 1))) - 1.0
+                terms = []
+                for i, h in zip(batch, H):
+                    cl, sj = int(train[i].label), train[i].subject.split("#")[0]
+                    target = torch.full((h.shape[0],), adv_index[(cl, sj)], device=device, dtype=torch.long)
+                    terms.append(torch.nn.functional.cross_entropy(
+                        adv_heads[str(cl)](L._Reverse.apply(h.float(), float(lam))), target))
+                adv_loss = torch.stack(terms).mean()
+                for q, gq in zip(adv_heads.parameters(), torch.autograd.grad(
+                        adv_loss, list(adv_heads.parameters()), retain_graph=True, allow_unused=True)):
+                    q.grad = torch.zeros_like(q) if gq is None else gq
+                objective = ce + adv_loss.to(ce.dtype)
+            grads = torch.autograd.grad(objective, params, allow_unused=True)
+            for p in params:
+                p.grad = None
             for p, gr in zip(params, grads):
                 gp = torch.zeros_like(p) if gr is None else gr
                 if id(p) in l2ids and l2:
@@ -359,7 +388,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Rob
                 runs.append(trace(t, cfg, bags, device, int(arm.get("seed", seed)), int(epochs), int(rot),
                                   float(arm.get("l2", l2)), bool(arm.get("channelScale", False)),
                                   arm.get("highpass"), bool(arm.get("l2BatchNorm", True)), arm.get("name", ""),
-                                  arm.get("reject"), arm.get("attention"), float(arm.get("trunkLrScale", 1.0)), arm.get("dropout")))
+                                  arm.get("reject"), arm.get("attention"), float(arm.get("trunkLrScale", 1.0)), arm.get("dropout"), bool(arm.get("adversary", False))))
     (workdir / "trace-check.json").write_text(json.dumps({"runs": runs, "seconds": round(time.time() - started),
                                                          "environment": environment}, default=str), encoding="utf-8")
     if mode:
