@@ -104,8 +104,72 @@ def _trunk(kind):
             yield
 
 
+class _Reverse(torch.autograd.Function):
+    """Gradient reversal (Ganin & Lempitsky, ICML 2015): identity forward, -lambda backward."""
+
+    @staticmethod
+    def forward(ctx, x, lam):
+        ctx.lam = lam
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad):
+        return -ctx.lam * grad, None
+
+
+def train_phase_one(model, train, hyper, generator, device, adversary: bool = False):
+    """Phase 1 exactly as two_phase.train_source_phase (Adam on trunk, attention and head,
+    interleaved class-balanced batches, constraints after each step, Eq. 21 with the active
+    explicit L2), optionally with a class-conditional subject adversary: one head per class
+    predicts, from every window embedding, which training subject of that class it comes
+    from; the trunk receives the reversed gradient, scaled by lambda = 2/(1+exp(-10 p)) - 1
+    over training progress p. It uses subject identities only, never a target label."""
+    hyper = two_phase.check_hyper(hyper)
+    two_phase.phase_one_sigma(model, train, hyper["sigmaMultiplier"], device)
+    params = [*model.source_trunk.parameters(), *model.attention_parameters(), *model.head.parameters()]
+    heads, index = None, {}
+    if adversary:
+        d = model.source_trunk.output_dim
+        by = {}
+        for b in train:
+            by.setdefault(int(b.label), []).append(b.subject.split("#")[0])
+        heads = torch.nn.ModuleDict()
+        for c, subs in by.items():
+            subs = sorted(set(subs))
+            index.update({(c, s): i for i, s in enumerate(subs)})
+            heads[str(c)] = torch.nn.Sequential(torch.nn.Linear(d, 64), torch.nn.ReLU(),
+                                                torch.nn.Linear(64, len(subs)))
+        heads = heads.to(device)
+        params += list(heads.parameters())
+    optimizer = torch.optim.Adam(params, lr=hyper["lr1"], weight_decay=hyper["wd1"])
+    epochs = int(hyper["epochs1"])
+    for epoch in range(epochs):
+        model.train()
+        lam = 2.0 / (1.0 + np.exp(-10.0 * epoch / max(1, epochs - 1))) - 1.0
+        for batch in two_phase.interleaved_batches(train, hyper["bagsPerStep"], generator):
+            bags = [train[i] for i in batch]
+            labels = torch.tensor([b.label for b in bags], device=device)
+            H = model.embed([b.windows.to(device) for b in bags], "source")
+            G = model.classify(model.represent(model.bag_pairs(H)))
+            loss = two_phase.source_term(model, G, labels)
+            if adversary:
+                ce = []
+                for b, h in zip(bags, H):
+                    c = int(b.label)
+                    target = torch.full((h.shape[0],), index[(c, b.subject.split("#")[0])],
+                                        device=device, dtype=torch.long)
+                    logits = heads[str(c)](_Reverse.apply(h.float(), float(lam)))
+                    ce.append(torch.nn.functional.cross_entropy(logits, target))
+                loss = loss + torch.stack(ce).mean().to(loss.dtype)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            model.constrain("source_trunk", "head", "attention")
+
+
 def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=False,
-               stored=False, rotations=(0, 1, 2, 3), clean=None, threshold="fixed", target=False):
+               stored=False, rotations=(0, 1, 2, 3), clean=None, threshold="fixed", target=False,
+               adversary=None):
     """`threshold` "fixed" scores at 0.5 after training on every non-test source subject;
     "source-validation" trains on inner split 0's training subjects, picks the cut that
     maximizes balanced accuracy on its validation subjects (source labels only) and applies
@@ -120,13 +184,18 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
     a = A.assign_from_bags(v63_setup.transfer(transfer), bags)
     hyper = two_phase.check_hyper({**HYPER, "epochs1": epochs, "bagsPerStep": cfg["schedule"]["bagsPerStep"]})
     y, p, cuts = [], [], []
+    train_y, train_p = [], []
     kept = []
     for r in rotations:
         tuned = threshold == "source-validation"
         raw = lambda role, side_="source": (A.side_bags(a, bags, side_, r, role, split=0)
                                             if role.startswith("inner")
                                             else A.side_bags(a, bags, side_, r, role))
-        if clean or target:
+        if arm == "cleanblocks":
+            from MIL_CREDA_EEG import search_pilot
+            prep = lambda role, side_="source": [blk for b in raw(role, side_)
+                                                 for blk in search_pilot.clean_blocks(b, channels)]
+        elif clean or target:
             prep = lambda role, side_="source": _cleaned_whole(raw(role, side_), clean, channels)
         elif arm == "blocks":
             prep = lambda role: _blocks(raw(role), filtered=not stored)
@@ -149,14 +218,21 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
             kept.append(float(np.mean([len(b.windows) for b in train])))
             renyi = learned_trunks.renyi_loss() if kind == "tgarstf" else contextlib.nullcontext()
             with renyi, explicit_l2(sc.L2):
-                two_phase.train_source_phase(m, train, [], hyper, g, device, seed=seed, fold=r, transfer=transfer)
+                if adversary is None:
+                    two_phase.train_source_phase(m, train, [], hyper, g, device, seed=seed, fold=r, transfer=transfer)
+                else:                         # one loop for every arm of the adversary comparison
+                    train_phase_one(m, train, hyper, g, device, adversary=bool(adversary))
             def subject_scores(units):
                 q = np.nan_to_num(two_phase.evaluate(m, units, "source", device)[:, 1].detach().cpu().numpy(), nan=.5)
-                per = {}                      # a subject's score is the mean over its bags or blocks
+                per = {}                      # blocks count as subjects (v64); whole bags are subjects
                 for b, v in zip(units, q):
-                    per.setdefault(b.subject.split("#")[0], [b.label, []])[1].append(float(v))
+                    key = b.subject if arm in ("blocks", "cleanblocks") else b.subject.split("#")[0]
+                    per.setdefault(key, [b.label, []])[1].append(float(v))
                 return [lab for lab, _ in per.values()], [float(np.mean(vs)) for _, vs in per.values()]
             ty, tp = subject_scores(test)
+            ry, rp = subject_scores(train)
+            train_y += ry
+            train_p += rp
             cut = 0.5
             if tuned:
                 vy, vp = subject_scores(valid)
@@ -177,6 +253,7 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
             "rotations": list(rotations), "meanTrainWindows": round(float(np.mean(kept)), 1),
             "seed": seed, "epochs": epochs,
             "threshold": threshold, "cuts": sorted(set(round(c, 4) for c in cuts)),
+            "adversary": adversary, "trainAUC": round(float(roc_auc_score(train_y, train_p)), 3),
             "predictedPositive": round(float(np.mean(np.asarray(p) > .5)), 3),
             "AUC": round(float(roc_auc_score(y, p)), 3),
             "BA": round(float(balanced_accuracy_score(y, np.asarray(p) > .5)), 3),
@@ -195,6 +272,7 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, kind: str, seed: int = 1,
           epochs: int = 100, arms=("whole",), eas=(False,), stored: bool = False,
           rotations=(0, 1, 2, 3), cleans=(None,), threshold: str = "fixed", target: bool = False,
+          adversaries=(None,),
           workdir: str | Path | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
@@ -213,10 +291,11 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
         for arm in arms:
             for ea in eas:
                 for clean in cleans:
+                  for adv in adversaries:
                     results.append(run_source(transfer, cfg, bags, device, kind, int(seed),
                                               int(epochs), arm, bool(ea), bool(stored),
                                               tuple(int(r) for r in rotations), clean, threshold,
-                                              bool(target)))
+                                              bool(target), adv))
                     print(json.dumps(results[-1]), flush=True)
     result = results[0] if len(results) == 1 else {"arms": results}
     (workdir / "learned-phase1.json").write_text(json.dumps({**result, "seconds": round(time.time() - started),
