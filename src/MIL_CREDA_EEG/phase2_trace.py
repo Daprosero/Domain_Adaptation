@@ -349,6 +349,50 @@ def _prior_rules(prior, state):
         M.pseudolabel = saved
 
 
+MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp")
+
+
+def _known(objective: str) -> bool:
+    head, *mods = objective.split("+")
+    return objective in OBJECTIVES or (head in ("eq39", "glob", "loc") and set(mods) <= set(MODIFIERS))
+
+
+class AffineStandard(torch.nn.Module):
+    """The fixed standardization followed by a learned per-feature scale and shift: the only
+    target parameters phase 2 moves under "+affine" (the projection stays at theta_t0)."""
+
+    def __init__(self, base):
+        super().__init__()
+        self.base = base
+        n = base.mean.numel()
+        self.scale = torch.nn.Parameter(torch.ones(n))
+        self.shift = torch.nn.Parameter(torch.zeros(n))
+
+    def forward(self, x):
+        return self.base(x) * self.scale + self.shift
+
+
+@contextlib.contextmanager
+def _knorm_rules(on):
+    """Normalized bag kernel k(a,b) / sqrt(k(a,a) k(b,b)): every self-similarity is 1."""
+    if not on:
+        yield
+        return
+    saved = M.bag_kernel_matrix
+
+    def normalized(rows, cols, sigma):
+        K = saved(rows, cols, sigma)
+        dr = torch.stack([saved([r], [r], sigma)[0, 0] for r in rows])
+        dc = torch.stack([saved([c], [c], sigma)[0, 0] for c in cols])
+        return K / torch.sqrt(dr[:, None] * dc[None, :]).clamp_min(1e-12)
+
+    M.bag_kernel_matrix = normalized
+    try:
+        yield
+    finally:
+        M.bag_kernel_matrix = saved
+
+
 @contextlib.contextmanager
 def _true_rules(on, queue):
     """Diagnostic Eq. 22: the true target label of each bag, in batch order."""
@@ -394,18 +438,24 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                 arm_init, ctx, epochs, equivalence_epochs, log=print, prior=None):
     """The instrumented replica: same batches, same objective, same optimizer; the gradient is
     taken with autograd.grad and handed to Adam, term gradients read on the side."""
-    true_pl = objective.endswith("+truePL")
+    mods = set(objective.split("+")[1:])
+    true_pl = "truePL" in mods
+    affine, knorm = "affine" in mods, "knorm" in mods
     oracle_ce = objective == "oracle-ce"
     head = objective.split("+")[0]
     selection = {"glob": "global term only", "loc": "local term only"}.get(head, two_phase.BOTH_TERMS)
-    objective = "eq39" if head in ("glob", "loc") or true_pl else objective
+    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm"} else objective
     train_phi = objective not in ("adapt", "oracle-ce")
     joint = two_phase.bridge(model)
     info = arm_init(model)
+    if affine:
+        model.target_trunk.norm = AffineStandard(model.target_trunk.norm).to(next(model.parameters()).device)
+        info["phaseTwoMoves"] = "per-feature scale and shift of the target standardization only"
     theta0 = {n: p.detach().clone() for n, p in model.target_trunk.named_parameters()}
     phi0 = [p.detach().clone() for p in model.attention_parameters()]
     ctx.update({"theta0": theta0, "phi0": phi0})
-    theta = list(model.target_trunk.parameters())
+    theta = ([model.target_trunk.norm.scale, model.target_trunk.norm.shift] if affine
+             else list(model.target_trunk.parameters()))
     phi = model.attention_parameters()
     for p in phi:                       # phi is differentiable for the readout in every variant
         p.requires_grad_(True)
@@ -423,7 +473,7 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     record["priorCuts"] = []
     pl_queue = []
     with _objective_rules(model, "adapt" if oracle_ce else objective, mu), \
-            _prior_rules(prior, cut_state), _true_rules(true_pl, pl_queue):
+            _prior_rules(prior, cut_state), _true_rules(true_pl, pl_queue), _knorm_rules(knorm):
         for epoch in range(epochs):
             if prior is not None:   # label-free: target scores and the source prior only
                 q = _probabilities(model, target, "target", device)
@@ -672,7 +722,7 @@ def smoke(config: Mapping, product=None, *, transfer: str, arm: str,
           environ: Mapping[str, str] | None = None) -> dict:
     """Every objective of one (arm, phase-1 attention), phase 1 shared per rotation."""
     objectives = [o for o in objectives if not (arm == "scratch" and o == "eq39+l2sp")]
-    if arm not in ARMS or not set(objectives) <= set(OBJECTIVES) or phase1_attention not in PHASE_ONE_ATTENTION:
+    if arm not in ARMS or not all(_known(o) for o in objectives) or phase1_attention not in PHASE_ONE_ATTENTION:
         raise ValueError(f"arm in {ARMS}, objectives in {OBJECTIVES}, phase1Attention in "
                          f"{list(PHASE_ONE_ATTENTION)}")
     environ = os.environ if environ is None else environ
@@ -728,11 +778,13 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--rotations", default="0,1,2,3")
     p.add_argument("--epochs2", type=int, default=PHASE_TWO["epochs2"])
+    p.add_argument("--lr2", type=float, default=PHASE_TWO["lr2"])
     p.add_argument("--config", default="tools/kaggle/rot8-task/run-config.json")
     p.add_argument("--workdir", required=True)
     args = p.parse_args(argv)
     torch.set_num_threads(1)
     PHASE_TWO["epochs2"] = int(args.epochs2)
+    PHASE_TWO["lr2"] = float(args.lr2)
     return smoke(local_config(args.config), transfer=args.transfer, arm=args.arm,
                  objectives=args.objectives.split(","), phase1_attention=args.phase1_attention,
                  seed=args.seed,
