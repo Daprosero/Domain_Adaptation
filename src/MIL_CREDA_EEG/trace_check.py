@@ -112,6 +112,24 @@ def window_peaks(units):
     return [out[id(u)] for u in units]
 
 
+def aligned(units):
+    """Euclidean alignment, label-free and per real subject (He and Wu, IEEE TBME 2020): every
+    window is multiplied by R^-1/2, where R is the mean spatial covariance of that subject's windows."""
+    by = {}
+    for u in units:
+        by.setdefault(u.subject.split("#")[0], []).append(u)
+    out = {}
+    for us in by.values():
+        x = torch.cat([u.windows for u in us]).double()
+        r = torch.einsum("nct,ndt->cd", x, x) / (x.shape[0] * x.shape[2])
+        w, v = torch.linalg.eigh(r)
+        inv = v @ torch.diag(w.clamp_min(1e-10 * w.max()).rsqrt()) @ v.T
+        for u in us:
+            out[id(u)] = two_phase.BagTensor(u.subject, u.condition, u.label,
+                                             torch.einsum("cd,ndt->nct", inv, u.windows.double()).float())
+    return [out[id(u)] for u in units]
+
+
 def rejected(units, threshold, keep_min=10):
     """Label-free amplitude rejection per recording: drop every window with any channel above
     `threshold` robust units (window_peaks). A subject keeps at least its `keep_min` windows with
@@ -241,8 +259,8 @@ def _input_amplitude(splits):
 
 
 def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, channel_scale=False,
-          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None, trunk_lr_scale=1.0, dropout=None, adversary=False):
-    """`reject`: amplitude threshold in robust units (rejected), applied to all of a subject's
+          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None, trunk_lr_scale=1.0, dropout=None, adversary=False, align=False):
+    """`align`: Euclidean alignment per subject after rejection. `reject`: amplitude threshold in robust units (rejected), applied to all of a subject's
     windows before the evenly spaced selection; `attention`: {"temperature", "gamma"} for the
     phase-1 attention (default: the neutral aggregation, temperature 10, gamma 0)."""
     a = A.assign_from_bags(v63_setup.transfer(transfer), bags)
@@ -259,6 +277,8 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
         full, k = rejected(full, reject)
         if k is not None:
             kept[r] = {"median": _r(np.median(k), 3), "min": _r(np.min(k), 3)}
+        if align:
+            full = aligned(full)
         return L._stored_whole(full)
     splits = {"train": role("inner_train"), "valid": role("inner_validation"), "test": role("test")}
     train = splits["train"]
@@ -290,7 +310,7 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
     groups = _groups(m)
     l2w = _l2_weights(m, l2_batchnorm)
     l2ids = {id(p) for p in l2w}
-    record = {"arm": arm, "adversary": bool(adversary), "dropout": float(m.source_trunk.dropout), "trunkLrScale": float(trunk_lr_scale), "reject": reject, "windowsKept": kept,
+    record = {"arm": arm, "align": bool(align), "adversary": bool(adversary), "dropout": float(m.source_trunk.dropout), "trunkLrScale": float(trunk_lr_scale), "reject": reject, "windowsKept": kept,
               "attentionTemperature": hyper["attentionTemperature"], "attentionGamma": hyper["attentionGamma"],
               "channelScale": bool(channel_scale), "highpass": highpass,
               "l2BatchNorm": bool(l2_batchnorm), "transfer": transfer, "seed": seed, "rotation": rotation, "l2": l2, "epochs": epochs,
@@ -388,7 +408,8 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Rob
                 runs.append(trace(t, cfg, bags, device, int(arm.get("seed", seed)), int(epochs), int(rot),
                                   float(arm.get("l2", l2)), bool(arm.get("channelScale", False)),
                                   arm.get("highpass"), bool(arm.get("l2BatchNorm", True)), arm.get("name", ""),
-                                  arm.get("reject"), arm.get("attention"), float(arm.get("trunkLrScale", 1.0)), arm.get("dropout"), bool(arm.get("adversary", False))))
+                                  arm.get("reject"), arm.get("attention"), float(arm.get("trunkLrScale", 1.0)), arm.get("dropout"), bool(arm.get("adversary", False)),
+                                  bool(arm.get("align", False))))
     (workdir / "trace-check.json").write_text(json.dumps({"runs": runs, "seconds": round(time.time() - started),
                                                          "environment": environment}, default=str), encoding="utf-8")
     if mode:
