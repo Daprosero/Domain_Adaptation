@@ -120,7 +120,7 @@ def metrics(y, p, cut) -> dict:
 
 def run_rotation(transfer: str, highpass: float, r: int, trials: int, seeds, cfg, bags, device) -> dict:
     from MIL_CREDA_EEG import v63_setup
-    t = v63_setup.transfer(transfer)
+    t = v63_setup.BY_NAME.get(transfer) or {x.name: x for x in A.TRANSFERS}[transfer]
     a = A.assign_from_bags(t, bags)
     channels = v63_setup.channels_of(t)
     get = lambda side, role, split=None: windows(A.side_bags(a, bags, side, r, role, split=split), highpass, channels)
