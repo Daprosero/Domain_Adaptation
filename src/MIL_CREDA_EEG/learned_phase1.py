@@ -99,13 +99,19 @@ def _trunk(kind):
 
 
 def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=False,
-               stored=False, rotations=(0, 1, 2, 3), clean=None):
+               stored=False, rotations=(0, 1, 2, 3), clean=None, threshold="fixed"):
+    """`threshold` "fixed" scores at 0.5 after training on every non-test source subject;
+    "source-validation" trains on inner split 0's training subjects, picks the cut that
+    maximizes balanced accuracy on its validation subjects (source labels only) and applies
+    that cut, unchanged, to the test subjects."""
     a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[transfer], bags)
     hyper = two_phase.check_hyper({**HYPER, "epochs1": epochs, "bagsPerStep": cfg["schedule"]["bagsPerStep"]})
-    y, p = [], []
+    y, p, cuts = [], [], []
     kept = []
     for r in rotations:
-        raw = lambda role: A.side_bags(a, bags, "source", r, role)
+        tuned = threshold == "source-validation"
+        raw = lambda role: (A.side_bags(a, bags, "source", r, role, split=0) if role.startswith("inner")
+                            else A.side_bags(a, bags, "source", r, role))
         if clean:
             prep = lambda role: _cleaned_whole(raw(role), clean)
         elif arm == "blocks":
@@ -115,7 +121,8 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
         else:
             prep = lambda role: sc.prepared(two_phase.bag_tensors(raw(role)))
         side = (lambda role: euclidean_aligned(prep(role))) if ea else prep
-        train, test = side(A.REFIT_ROLE), side("test")
+        train, test = side("inner_train" if tuned else A.REFIT_ROLE), side("test")
+        valid = side("inner_validation") if tuned else []
         with _trunk(kind):
             torch.manual_seed(seed)
             g = torch.Generator().manual_seed(seed)
@@ -129,25 +136,39 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
             renyi = learned_trunks.renyi_loss() if kind == "tgarstf" else contextlib.nullcontext()
             with renyi, explicit_l2(sc.L2):
                 two_phase.train_source_phase(m, train, [], hyper, g, device, seed=seed, fold=r, transfer=transfer)
-            q = np.nan_to_num(two_phase.evaluate(m, test, "source", device)[:, 1].detach().cpu().numpy(), nan=.5)
-            per = {}                          # a subject's score is the mean over its bags or blocks
-            for b, v in zip(test, q):
-                per.setdefault(b.subject.split("#")[0], [b.label, []])[1].append(float(v))
-            y += [lab for lab, _ in per.values()]
-            p += [float(np.mean(vs)) for _, vs in per.values()]
+            def subject_scores(units):
+                q = np.nan_to_num(two_phase.evaluate(m, units, "source", device)[:, 1].detach().cpu().numpy(), nan=.5)
+                per = {}                      # a subject's score is the mean over its bags or blocks
+                for b, v in zip(units, q):
+                    per.setdefault(b.subject.split("#")[0], [b.label, []])[1].append(float(v))
+                return [lab for lab, _ in per.values()], [float(np.mean(vs)) for _, vs in per.values()]
+            ty, tp = subject_scores(test)
+            cut = 0.5
+            if tuned:
+                vy, vp = subject_scores(valid)
+                grid = sorted(set(vp))
+                cands = [(grid[i] + grid[i + 1]) / 2 for i in range(len(grid) - 1)] or [0.5]
+                cut = max(cands, key=lambda t: (balanced_accuracy_score(vy, np.asarray(vp) > t), -abs(t - .5)))
+            y += ty
+            p += tp
+            cuts += [cut] * len(ty)
         print(kind, transfer, seed, "rotation", r, "done", flush=True)
     return {"source": transfer.split("->")[0], "kind": kind, "arm": arm, "ea": bool(ea),
             "filter": "stored 0.2-45 Hz" if stored else "1-45 Hz + CAR", "clean": clean,
             "rotations": list(rotations), "meanTrainWindows": round(float(np.mean(kept)), 1),
             "seed": seed, "epochs": epochs,
+            "threshold": threshold, "cuts": sorted(set(round(c, 4) for c in cuts)),
             "predictedPositive": round(float(np.mean(np.asarray(p) > .5)), 3),
             "AUC": round(float(roc_auc_score(y, p)), 3),
-            "BA": round(float(balanced_accuracy_score(y, np.asarray(p) > .5)), 3), "n": len(y)}
+            "BA": round(float(balanced_accuracy_score(y, np.asarray(p) > .5)), 3),
+            "BAatCut": round(float(balanced_accuracy_score(y, np.asarray(p) > np.asarray(cuts))), 3),
+            "predictedPositiveAtCut": round(float(np.mean(np.asarray(p) > np.asarray(cuts))), 3),
+            "n": len(y)}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, kind: str, seed: int = 1,
           epochs: int = 100, arms=("whole",), eas=(False,), stored: bool = False,
-          rotations=(0, 1, 2, 3), cleans=(None,),
+          rotations=(0, 1, 2, 3), cleans=(None,), threshold: str = "fixed",
           workdir: str | Path | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
@@ -168,7 +189,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
                 for clean in cleans:
                     results.append(run_source(transfer, cfg, bags, device, kind, int(seed),
                                               int(epochs), arm, bool(ea), bool(stored),
-                                              tuple(int(r) for r in rotations), clean))
+                                              tuple(int(r) for r in rotations), clean, threshold))
                     print(json.dumps(results[-1]), flush=True)
     result = results[0] if len(results) == 1 else {"arms": results}
     (workdir / "learned-phase1.json").write_text(json.dumps({**result, "seconds": round(time.time() - started),
