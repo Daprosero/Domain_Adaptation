@@ -33,7 +33,7 @@ from sklearn.metrics import balanced_accuracy_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
 from MIL_CREDA_EEG import assignment as A
-from MIL_CREDA_EEG import campaign, model_store, remote_units, two_phase, v63_setup
+from MIL_CREDA_EEG import campaign, eegnet, model_store, remote_units, two_phase, v63_setup
 from MIL_CREDA_EEG import learned_phase1 as L
 from MIL_CREDA_EEG import spectral_check as sc
 from MIL_CREDA_EEG.mil_creda_model import source_term as plain_source_term
@@ -241,7 +241,7 @@ def _input_amplitude(splits):
 
 
 def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, channel_scale=False,
-          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None, trunk_lr_scale=1.0):
+          highpass=None, l2_batchnorm=True, arm="", reject=None, attention=None, trunk_lr_scale=1.0, dropout=None):
     """`reject`: amplitude threshold in robust units (rejected), applied to all of a subject's
     windows before the evenly spaced selection; `attention`: {"temperature", "gamma"} for the
     phase-1 attention (default: the neutral aggregation, temperature 10, gamma 0)."""
@@ -265,7 +265,8 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
     torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
     c = int(train[0].windows.shape[1])
-    m = model_store.build_model("MIL-CREDA", c, c, hyper).to(device)
+    with eegnet.configured(dropout=eegnet.DROPOUT if dropout is None else float(dropout)):
+        m = model_store.build_model("MIL-CREDA", c, c, hyper).to(device)
     sigma = two_phase.phase_one_sigma(m, train, hyper["sigmaMultiplier"], device)
     params = [*m.source_trunk.parameters(), *m.attention_parameters(), *m.head.parameters()]
     trunk_ids = {id(p) for p in m.source_trunk.parameters()}
@@ -276,7 +277,7 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
     groups = _groups(m)
     l2w = _l2_weights(m, l2_batchnorm)
     l2ids = {id(p) for p in l2w}
-    record = {"arm": arm, "trunkLrScale": float(trunk_lr_scale), "reject": reject, "windowsKept": kept,
+    record = {"arm": arm, "dropout": float(m.source_trunk.dropout), "trunkLrScale": float(trunk_lr_scale), "reject": reject, "windowsKept": kept,
               "attentionTemperature": hyper["attentionTemperature"], "attentionGamma": hyper["attentionGamma"],
               "channelScale": bool(channel_scale), "highpass": highpass,
               "l2BatchNorm": bool(l2_batchnorm), "transfer": transfer, "seed": seed, "rotation": rotation, "l2": l2, "epochs": epochs,
@@ -358,7 +359,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Rob
                 runs.append(trace(t, cfg, bags, device, int(seed), int(epochs), int(rot),
                                   float(arm.get("l2", l2)), bool(arm.get("channelScale", False)),
                                   arm.get("highpass"), bool(arm.get("l2BatchNorm", True)), arm.get("name", ""),
-                                  arm.get("reject"), arm.get("attention"), float(arm.get("trunkLrScale", 1.0))))
+                                  arm.get("reject"), arm.get("attention"), float(arm.get("trunkLrScale", 1.0)), arm.get("dropout")))
     (workdir / "trace-check.json").write_text(json.dumps({"runs": runs, "seconds": round(time.time() - started),
                                                          "environment": environment}, default=str), encoding="utf-8")
     if mode:
