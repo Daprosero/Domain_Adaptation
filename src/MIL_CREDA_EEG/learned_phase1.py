@@ -217,7 +217,10 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
                 m.source_trunk.norm = learned_trunks.input_standard_of(m.source_trunk, train)
             kept.append(float(np.mean([len(b.windows) for b in train])))
             renyi = learned_trunks.renyi_loss() if kind == "tgarstf" else contextlib.nullcontext()
-            with renyi, explicit_l2(sc.L2):
+            # The explicit L2 enters every step; scale it so each real subject gets the same
+            # regularization per epoch whether it trains as one bag or as several blocks.
+            l2 = sc.L2 * len({b.subject.split("#")[0] for b in train}) / max(1, len(train))
+            with renyi, explicit_l2(l2):
                 if adversary is None:
                     two_phase.train_source_phase(m, train, [], hyper, g, device, seed=seed, fold=r, transfer=transfer)
                 else:                         # one loop for every arm of the adversary comparison
@@ -253,7 +256,7 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
             "rotations": list(rotations), "meanTrainWindows": round(float(np.mean(kept)), 1),
             "seed": seed, "epochs": epochs,
             "threshold": threshold, "cuts": sorted(set(round(c, 4) for c in cuts)),
-            "adversary": adversary, "trainAUC": round(float(roc_auc_score(train_y, train_p)), 3),
+            "l2": round(float(l2), 6), "adversary": adversary, "trainAUC": round(float(roc_auc_score(train_y, train_p)), 3),
             "predictedPositive": round(float(np.mean(np.asarray(p) > .5)), 3),
             "AUC": round(float(roc_auc_score(y, p)), 3),
             "BA": round(float(balanced_accuracy_score(y, np.asarray(p) > .5)), 3),
