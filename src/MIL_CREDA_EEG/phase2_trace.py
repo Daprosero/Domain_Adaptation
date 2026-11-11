@@ -58,8 +58,14 @@ from MIL_CREDA_EEG import spectral_check as sc
 from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG.phase_one_sweep import explicit_l2
 
-ARMS = ("copy", "warm", "scratch")
-OBJECTIVES = ("adapt", "eq39", "eq39+l2sp", "eq39+prior")
+ARMS = ("copy", "warm", "scratch", "copy-own", "warm-own")
+#: "-own": the same weights, but the target standardization is the label-free statistics of the
+#: target training bags on every slot (per-domain standardization, no learning).
+OBJECTIVES = ("adapt", "eq39", "eq39+l2sp", "eq39+prior", "eq39+truePL", "glob", "loc",
+              "glob+truePL", "loc+truePL", "oracle-ce")
+#: Diagnostic controls (target labels read, never a method): "+truePL" replaces Eq. 22 by the
+#: true target labels; "oracle-ce" trains theta_t on Eq. 21 with the true target labels, head
+#: frozen (upper bound of what theta_t can reach). "glob"/"loc": one term of Eq. 39 only.
 #: "eq39+prior": eq39 with Eq. 22 replaced by prior-matched pseudo-labels. At the start of each
 #: epoch the target-train bags are scored on the target path; a bag is labelled positive when
 #: its score exceeds the (1 - pi_s) quantile, pi_s the positive share of the SOURCE training
@@ -196,6 +202,8 @@ def initialise_target(model, arm, target_train, source_names, target_names):
     s, t = model.source_trunk, model.target_trunk
     info = {"arm": arm}
     with torch.no_grad():
+        own_std = arm.endswith("-own")
+        arm = arm[:-4] if own_std else arm
         if arm == "copy":
             if s.channels != t.channels or list(source_names) != list(target_names):
                 raise ValueError("the copy arm needs identical montages")
@@ -223,6 +231,9 @@ def initialise_target(model, arm, target_train, source_names, target_names):
             info["init"] = "standard nn.Linear init from the seeded build (torch.manual_seed(seed))"
         else:
             raise ValueError(f"arm is one of {ARMS}")
+        if own_std:
+            t.norm = sc.standard_of(t, target_train)
+            info["standardization"] = "label-free target training statistics on every slot"
     return info
 
 
@@ -338,6 +349,20 @@ def _prior_rules(prior, state):
         M.pseudolabel = saved
 
 
+@contextlib.contextmanager
+def _true_rules(on, queue):
+    """Diagnostic Eq. 22: the true target label of each bag, in batch order."""
+    if not on:
+        yield
+        return
+    saved = M.pseudolabel
+    M.pseudolabel = lambda g: queue.pop(0)
+    try:
+        yield
+    finally:
+        M.pseudolabel = saved
+
+
 def existing_path(model, source, target, hyper, seed, device, objective, mu, arm_init):
     """The uninstrumented phase 2: bridge, arm init, then `two_phase.adapt_target_phase`.
     Returns per-step objective values and the final target trunk."""
@@ -369,7 +394,12 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                 arm_init, ctx, epochs, equivalence_epochs, log=print, prior=None):
     """The instrumented replica: same batches, same objective, same optimizer; the gradient is
     taken with autograd.grad and handed to Adam, term gradients read on the side."""
-    train_phi = objective != "adapt"
+    true_pl = objective.endswith("+truePL")
+    oracle_ce = objective == "oracle-ce"
+    head = objective.split("+")[0]
+    selection = {"glob": "global term only", "loc": "local term only"}.get(head, two_phase.BOTH_TERMS)
+    objective = "eq39" if head in ("glob", "loc") or true_pl else objective
+    train_phi = objective not in ("adapt", "oracle-ce")
     joint = two_phase.bridge(model)
     info = arm_init(model)
     theta0 = {n: p.detach().clone() for n, p in model.target_trunk.named_parameters()}
@@ -391,7 +421,9 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     objective_values, theta_at_check = [], None
     cut_state = {"cut": 0.5}
     record["priorCuts"] = []
-    with _objective_rules(model, objective, mu), _prior_rules(prior, cut_state):
+    pl_queue = []
+    with _objective_rules(model, "adapt" if oracle_ce else objective, mu), \
+            _prior_rules(prior, cut_state), _true_rules(true_pl, pl_queue):
         for epoch in range(epochs):
             if prior is not None:   # label-free: target scores and the source prior only
                 q = _probabilities(model, target, "target", device)
@@ -406,10 +438,13 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                 pairs_s = model.bag_pairs(model.embed([b.windows.to(device) for b in src], "source"))
                 source_ce = M.source_term(model, model.classify(model.represent(pairs_s)), labels)
                 pairs_t = model.bag_pairs(model.embed([b.windows.to(device) for b in tgt], "target"))
+                pl_queue[:] = [int(v) for v in true_t.tolist()]
                 terms = M.adaptation_terms(model, pairs_s, labels, pairs_t, hyper["tauLocal"])
-                total = two_phase.phase_two_objective(terms, two_phase.BOTH_TERMS)
+                total = two_phase.phase_two_objective(terms, selection)
                 if train_phi:
                     total = total + source_ce
+                if oracle_ce:
+                    total = M.source_term(model, terms["G_target"], true_t)
                 prox = sum(((p - theta0[n]) ** 2).sum() for n, p in model.target_trunk.named_parameters())
                 l2sp_read = MU * prox                     # readout at the plan's mu
                 oracle = M.source_term(model, terms["G_target"], true_t)
@@ -551,11 +586,12 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
         mu = MU if objective == "eq39+l2sp" and arm != "scratch" else 0.0
         prior = (float(np.mean([b.label for b in source])) if objective in PRIOR_OBJECTIVES else None)
         base_objective = "eq39" if objective in PRIOR_OBJECTIVES else objective
+        new_rule = prior is not None or objective not in ("adapt", "eq39", "eq39+l2sp")
         # equivalence: the existing path vs the replica, same seed and data (the prior rule is
         # new, so its replica is checked against plain eq39 only over the epochs it shares: none)
         t2 = time.time()
         ex_hyper = _hyper(cfg, EQUIVALENCE_EPOCHS, tau1)
-        ex_steps, ex_theta = ([], None) if prior is not None else existing_path(
+        ex_steps, ex_theta = ([], None) if new_rule else existing_path(
             phase_two_model(), source, target, ex_hyper, seed, device, objective, mu, arm_init)
         existing_seconds = time.time() - t2
         t3 = time.time()
@@ -566,7 +602,7 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
         n = len(ex_steps)
         equivalence = {"note": "new rule: no existing path to compare", "sourcePrior": _s(prior),
                        "targetPrior": _s(float(np.mean([b.label for b in target]))),
-                       "cuts": record["priorCuts"]} if prior is not None else {"epochs": EQUIVALENCE_EPOCHS, "steps": n,
+                       "cuts": record["priorCuts"]} if new_rule else {"epochs": EQUIVALENCE_EPOCHS, "steps": n,
                        "maxAbsObjective": _s(np.max(np.abs(np.asarray(ex_steps) - np.asarray(values[:n])))),
                        "maxAbsThetaT": _s(max(float((ex_theta[k] - theta_check[k]).abs().max()) for k in ex_theta)),
                        "existingPath": "two_phase.bridge + adapt_target_phase under ablation_pilot.fix_rules("
