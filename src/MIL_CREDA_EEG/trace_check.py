@@ -173,6 +173,7 @@ def _snapshot(model, splits, device):
         hooks.append(getattr(trunk, name).register_forward_hook(hook))
     out = {}
     reps = {}
+    scores = {}
     try:
         for split, units in splits.items():
             acts.clear()
@@ -182,6 +183,7 @@ def _snapshot(model, splits, device):
             y = [u.label for u in units]
             Zn = Z.cpu().numpy()
             reps[split] = (Zn, y)
+            scores[split] = (np.asarray(y), G)
             rec = {"above": _r(np.mean(G > .5), 3), "pMin": _r(G.min()), "pMax": _r(G.max()),
                    "BA": _r(balanced_accuracy_score(y, G > .5), 3), "AUC": _safe_auc(y, G),
                    "zNorm": _r(np.linalg.norm(Zn, axis=1).mean(), 3)}
@@ -199,6 +201,14 @@ def _snapshot(model, splits, device):
     finally:
         for h in hooks:
             h.remove()
+    vy, vp = scores["valid"]                 # the cut that maximizes BA on the validation subjects
+    grid = np.sort(np.unique(vp))
+    cands = list((grid[:-1] + grid[1:]) / 2) or [0.5]
+    cut = max(cands, key=lambda t: (balanced_accuracy_score(vy, vp > t), -abs(t - .5)))
+    ty, tp = scores["test"]
+    out["calibrated"] = {"cut": _r(cut), "validBA": _r(balanced_accuracy_score(vy, vp > cut), 3),
+                         "testBA": _r(balanced_accuracy_score(ty, tp > cut), 3),
+                         "testPositive": _r(np.mean(tp > cut), 3)}
     Ztr, ytr = reps["train"]
     sc_ = StandardScaler().fit(Ztr)
     probe = LogisticRegression(C=1.0, max_iter=2000).fit(sc_.transform(Ztr), ytr)
@@ -313,7 +323,7 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
             "depthwiseAtCap": _r(float((dep >= 0.999 * float(dep.max())).float().mean()), 3)})
         if epoch in CHECKPOINTS or epoch == epochs - 1:
             record["snapshots"][str(epoch)] = _snapshot(m, splits, device)
-            print(arm, transfer, "epoch", epoch, json.dumps({k: (v["BA"], v["AUC"]) for k, v in
+            print(arm, transfer, "epoch", epoch, json.dumps({k: (v["BA"], v["AUC"]) if "BA" in v else v for k, v in
                                                         record["snapshots"][str(epoch)].items()}), flush=True)
     record["temporalPeaksHz"] = _peak_frequencies(m)
     return record
@@ -321,6 +331,7 @@ def trace(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, chann
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Robots->CogniFit", "L11->L1"),
           seed: int = 1, epochs: int = 100, rotation: int = 0, l2: float = sc.L2, arms=(None,),
+          rotations=None,
           workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
@@ -337,8 +348,8 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Rob
         runs = []
         for arm in arms:                     # each {"name", "l2", "channelScale", "highpass", "l2BatchNorm"}
             arm = arm or {}
-            for t in transfers:
-                runs.append(trace(t, cfg, bags, device, int(seed), int(epochs), int(rotation),
+            for t, rot in [(t, r) for t in transfers for r in (rotations or [rotation])]:
+                runs.append(trace(t, cfg, bags, device, int(seed), int(epochs), int(rot),
                                   float(arm.get("l2", l2)), bool(arm.get("channelScale", False)),
                                   arm.get("highpass"), bool(arm.get("l2BatchNorm", True)), arm.get("name", ""),
                                   arm.get("reject"), arm.get("attention")))
