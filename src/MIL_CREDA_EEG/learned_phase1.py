@@ -91,6 +91,30 @@ def _cleaned_whole(raw, rule, channels=None):
     return out
 
 
+def _filtered_whole(raw, car=True, reject=None, channels=None):
+    """The spectral check's windows with each added step switchable: 1-45 Hz band-pass on every
+    window, then the common average reference when `car`, then the label-free amplitude
+    rejection of plan v65 Sec. 2.8 when `reject` (robust units, per recording), then at most
+    WINDOWS evenly spaced. With car=True and reject=None it equals `sc.prepared`."""
+    from scipy.signal import sosfiltfilt
+    from MIL_CREDA_EEG import trace_check
+    out = []
+    for b in raw:
+        w = np.asarray(b.windows() if callable(b.windows) else b.windows, dtype=np.float64)
+        if channels is not None:
+            names = list(b.channels)
+            w = w[:, [names.index(c) for c in channels]]
+        w = sosfiltfilt(sc.SOS, w - w.mean(-1, keepdims=True), axis=-1)
+        if car:
+            w = w - w.mean(1, keepdims=True)
+        bt = two_phase.BagTensor(b.subject, b.condition, two_phase.CLASSES.index(b.label),
+                                 torch.from_numpy(np.ascontiguousarray(w)).float())
+        if reject:
+            bt = trace_check.rejected([bt], reject)[0][0]
+        out.append(_stored_whole([bt])[0])
+    return out
+
+
 @contextlib.contextmanager
 def _trunk(kind):
     if kind == "eegnet":                     # EEGNet-8,2 as defined: the plan's own trunk
@@ -169,7 +193,7 @@ def train_phase_one(model, train, hyper, generator, device, adversary: bool = Fa
 
 def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=False,
                stored=False, rotations=(0, 1, 2, 3), clean=None, threshold="fixed", target=False,
-               adversary=None):
+               adversary=None, car=True, reject=None, l2=None):
     """`threshold` "fixed" scores at 0.5 after training on every non-test source subject;
     "source-validation" trains on inner split 0's training subjects, picks the cut that
     maximizes balanced accuracy on its validation subjects (source labels only) and applies
@@ -191,7 +215,13 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
         raw = lambda role, side_="source": (A.side_bags(a, bags, side_, r, role, split=0)
                                             if role.startswith("inner")
                                             else A.side_bags(a, bags, side_, r, role))
-        if arm == "cleanblocks":
+        if arm == "filtered":
+            prep = lambda role, side_="source": _filtered_whole(raw(role, side_), car, reject, channels)
+        elif arm == "filteredblocks":       # blocks of the 1-45 Hz + CAR windows, blocks as subjects
+            from MIL_CREDA_EEG import v64_pilot
+            prep = lambda role, side_="source": [blk for b in raw(role, side_)
+                                                 for blk in v64_pilot.ordered_blocks(b, channels, filtered=True)]
+        elif arm == "cleanblocks":
             from MIL_CREDA_EEG import search_pilot
             prep = lambda role, side_="source": [blk for b in raw(role, side_)
                                                  for blk in search_pilot.clean_blocks(b, channels)]
@@ -219,8 +249,8 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
             renyi = learned_trunks.renyi_loss() if kind == "tgarstf" else contextlib.nullcontext()
             # The explicit L2 enters every step; scale it so each real subject gets the same
             # regularization per epoch whether it trains as one bag or as several blocks.
-            l2 = sc.L2 * len({b.subject.split("#")[0] for b in train}) / max(1, len(train))
-            with renyi, explicit_l2(l2):
+            l2v = (sc.L2 if l2 is None else float(l2)) * len({b.subject.split("#")[0] for b in train}) / max(1, len(train))
+            with renyi, explicit_l2(l2v):
                 if adversary is None:
                     two_phase.train_source_phase(m, train, [], hyper, g, device, seed=seed, fold=r, transfer=transfer)
                 else:                         # one loop for every arm of the adversary comparison
@@ -229,7 +259,7 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
                 q = np.nan_to_num(two_phase.evaluate(m, units, "source", device)[:, 1].detach().cpu().numpy(), nan=.5)
                 per = {}                      # blocks count as subjects (v64); whole bags are subjects
                 for b, v in zip(units, q):
-                    key = b.subject if arm in ("blocks", "cleanblocks") else b.subject.split("#")[0]
+                    key = b.subject if arm in ("blocks", "cleanblocks", "filteredblocks") else b.subject.split("#")[0]
                     per.setdefault(key, [b.label, []])[1].append(float(v))
                 return [lab for lab, _ in per.values()], [float(np.mean(vs)) for _, vs in per.values()]
             ty, tp = subject_scores(test)
@@ -256,7 +286,7 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
             "rotations": list(rotations), "meanTrainWindows": round(float(np.mean(kept)), 1),
             "seed": seed, "epochs": epochs,
             "threshold": threshold, "cuts": sorted(set(round(c, 4) for c in cuts)),
-            "l2": round(float(l2), 6), "adversary": adversary, "trainAUC": round(float(roc_auc_score(train_y, train_p)), 3),
+            "l2": round(float(l2v), 6), "car": bool(car), "reject": reject, "adversary": adversary, "trainAUC": round(float(roc_auc_score(train_y, train_p)), 3),
             "predictedPositive": round(float(np.mean(np.asarray(p) > .5)), 3),
             "AUC": round(float(roc_auc_score(y, p)), 3),
             "BA": round(float(balanced_accuracy_score(y, np.asarray(p) > .5)), 3),
@@ -275,7 +305,7 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, kind: str, seed: int = 1,
           epochs: int = 100, arms=("whole",), eas=(False,), stored: bool = False,
           rotations=(0, 1, 2, 3), cleans=(None,), threshold: str = "fixed", target: bool = False,
-          adversaries=(None,),
+          adversaries=(None,), variants=None,
           workdir: str | Path | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
@@ -291,7 +321,13 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
     started = time.time()
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness:
         results = []
-        for arm in arms:
+        for v in variants or []:          # each {"name", "arm", "car", "reject", "l2"}
+            results.append({"name": v.get("name", ""), **run_source(
+                transfer, cfg, bags, device, kind, int(v.get("seed", seed)), int(epochs),
+                v.get("arm", "filtered"), False, False, tuple(int(r) for r in rotations), None,
+                threshold, bool(target), None, bool(v.get("car", True)), v.get("reject"), v.get("l2"))})
+            print(json.dumps(results[-1]), flush=True)
+        for arm in ([] if variants else arms):
             for ea in eas:
                 for clean in cleans:
                   for adv in adversaries:
