@@ -60,18 +60,21 @@ def euclidean_aligned(units):
                                              u.windows.double()).float()) for u in units]
 
 
-def _cleaned_whole(raw, rule):
-    """The "whole" arm on the stored 0.2-45 Hz windows after a label-free window selection:
-    "contact" drops windows with bad contact on any electrode (Sec. 2.5's per-window rule, EMOTIV);
+def _cleaned_whole(raw, rule, channels=None):
+    """The "whole" arm on the stored 0.2-45 Hz windows after a label-free window selection.
+    `rule` names one or both of: "contact" drops windows with bad contact on any electrode
+    (Sec. 2.5's per-window rule; only where the record carries the indicator, EMOTIV);
     "ocular" drops, within each record, windows whose frontal peak-to-peak exceeds the record's
-    median + 3 MAD (Sec. 2.8's measure); then at most WINDOWS evenly spaced windows per bag."""
+    median + 3 MAD (Sec. 2.8's measure); joined by "+". `channels` keeps only those channels
+    (the shared montage of a device transfer). Then at most WINDOWS evenly spaced per bag."""
+    rules = set((rule or "").split("+")) - {""}
     out = []
     for b in raw:
         w, mk = b.windows(), b.marks()
         keep = np.ones(len(w), dtype=bool)
-        if rule == "contact":
+        if "contact" in rules and "contact_bad" in mk:
             keep &= ~np.asarray(mk["contact_bad"]).any(axis=1)
-        elif rule == "ocular":
+        if "ocular" in rules:
             fp = np.asarray(mk["frontal_ptp"], dtype=float)
             med = np.nanmedian(fp)
             mad = 1.4826 * np.nanmedian(np.abs(fp - med))
@@ -79,6 +82,9 @@ def _cleaned_whole(raw, rule):
         if not keep.any():
             keep[:] = True
         w = w[keep]
+        if channels is not None:
+            names = list(b.channels)
+            w = w[:, [names.index(c) for c in channels]]
         out.append(two_phase.BagTensor(b.subject, b.condition, two_phase.CLASSES.index(b.label),
                                        torch.from_numpy(np.ascontiguousarray(
                                            w[::max(1, len(w) // sc.WINDOWS)])).float()))
@@ -99,21 +105,29 @@ def _trunk(kind):
 
 
 def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=False,
-               stored=False, rotations=(0, 1, 2, 3), clean=None, threshold="fixed"):
+               stored=False, rotations=(0, 1, 2, 3), clean=None, threshold="fixed", target=False):
     """`threshold` "fixed" scores at 0.5 after training on every non-test source subject;
     "source-validation" trains on inner split 0's training subjects, picks the cut that
     maximizes balanced accuracy on its validation subjects (source labels only) and applies
-    that cut, unchanged, to the test subjects."""
-    a = A.assign_from_bags({t.name: t for t in A.TRANSFERS}[transfer], bags)
+    that cut, unchanged, to the test subjects. `target` also scores the same model and cut on
+    the target domain's test subjects (no target label is read before scoring; no adaptation:
+    predict), on the shared channels of a device transfer."""
+    from MIL_CREDA_EEG import v63_setup
+    tr = v63_setup.transfer(transfer)
+    channels = v63_setup.channels_of(tr) if target else None
+    ty_all, tp_all, tcuts = [], [], []
+    from MIL_CREDA_EEG import v63_setup
+    a = A.assign_from_bags(v63_setup.transfer(transfer), bags)
     hyper = two_phase.check_hyper({**HYPER, "epochs1": epochs, "bagsPerStep": cfg["schedule"]["bagsPerStep"]})
     y, p, cuts = [], [], []
     kept = []
     for r in rotations:
         tuned = threshold == "source-validation"
-        raw = lambda role: (A.side_bags(a, bags, "source", r, role, split=0) if role.startswith("inner")
-                            else A.side_bags(a, bags, "source", r, role))
-        if clean:
-            prep = lambda role: _cleaned_whole(raw(role), clean)
+        raw = lambda role, side_="source": (A.side_bags(a, bags, side_, r, role, split=0)
+                                            if role.startswith("inner")
+                                            else A.side_bags(a, bags, side_, r, role))
+        if clean or target:
+            prep = lambda role, side_="source": _cleaned_whole(raw(role, side_), clean, channels)
         elif arm == "blocks":
             prep = lambda role: _blocks(raw(role), filtered=not stored)
         elif stored:
@@ -152,6 +166,11 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
             y += ty
             p += tp
             cuts += [cut] * len(ty)
+            if target:
+                gy, gp = subject_scores(prep("test", "target"))
+                ty_all += gy
+                tp_all += gp
+                tcuts += [cut] * len(gy)
         print(kind, transfer, seed, "rotation", r, "done", flush=True)
     return {"source": transfer.split("->")[0], "kind": kind, "arm": arm, "ea": bool(ea),
             "filter": "stored 0.2-45 Hz" if stored else "1-45 Hz + CAR", "clean": clean,
@@ -163,12 +182,19 @@ def run_source(transfer, cfg, bags, device, kind, seed, epochs, arm="whole", ea=
             "BA": round(float(balanced_accuracy_score(y, np.asarray(p) > .5)), 3),
             "BAatCut": round(float(balanced_accuracy_score(y, np.asarray(p) > np.asarray(cuts))), 3),
             "predictedPositiveAtCut": round(float(np.mean(np.asarray(p) > np.asarray(cuts))), 3),
-            "n": len(y)}
+            "n": len(y),
+            **({"target": transfer.split("->")[1], "targetN": len(ty_all),
+                "targetAUC": round(float(roc_auc_score(ty_all, tp_all)), 3),
+                "targetBA": round(float(balanced_accuracy_score(ty_all, np.asarray(tp_all) > .5)), 3),
+                "targetPredictedPositive": round(float(np.mean(np.asarray(tp_all) > .5)), 3),
+                "targetBAatCut": round(float(balanced_accuracy_score(ty_all, np.asarray(tp_all) > np.asarray(tcuts))), 3),
+                "targetPredictedPositiveAtCut": round(float(np.mean(np.asarray(tp_all) > np.asarray(tcuts))), 3)}
+               if target else {})}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, kind: str, seed: int = 1,
           epochs: int = 100, arms=("whole",), eas=(False,), stored: bool = False,
-          rotations=(0, 1, 2, 3), cleans=(None,), threshold: str = "fixed",
+          rotations=(0, 1, 2, 3), cleans=(None,), threshold: str = "fixed", target: bool = False,
           workdir: str | Path | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
@@ -189,7 +215,8 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
                 for clean in cleans:
                     results.append(run_source(transfer, cfg, bags, device, kind, int(seed),
                                               int(epochs), arm, bool(ea), bool(stored),
-                                              tuple(int(r) for r in rotations), clean, threshold))
+                                              tuple(int(r) for r in rotations), clean, threshold,
+                                              bool(target)))
                     print(json.dumps(results[-1]), flush=True)
     result = results[0] if len(results) == 1 else {"arms": results}
     (workdir / "learned-phase1.json").write_text(json.dumps({**result, "seconds": round(time.time() - started),
