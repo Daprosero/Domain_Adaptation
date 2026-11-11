@@ -174,8 +174,19 @@ def summary(rotations: Sequence[Mapping], seed: str) -> dict:
     return res
 
 
+_SHARED = None
+
+
+def _one(job) -> dict:
+    """One (transfer, highpass, rotation) study in a worker process with one torch thread."""
+    torch.set_num_threads(1)
+    cfg, bags, device = _SHARED
+    transfer, hp, r, trials, seeds = job
+    return run_rotation(transfer, hp, r, trials, seeds, cfg, bags, device)
+
+
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, highpasses=(0.2, 1.0),
-          trials: int = 20, rotations=(0, 1, 2, 3), seeds=(1, 2),
+          trials: int = 20, rotations=(0, 1, 2, 3), seeds=(1, 2), workers: int = 4,
           workdir: str | Path | None = None, environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
@@ -189,9 +200,18 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
     mode = environ.get(remote_units.RUN_MODE_ENV)
     started = time.time()
     runs = []
+    global _SHARED
+    _SHARED = (cfg, bags, device)
+    jobs = [(transfer, float(hp), int(r), int(trials), tuple(seeds)) for hp in highpasses for r in rotations]
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness:
+        if int(workers) > 1 and device.type == "cpu":   # one process per rotation, one thread each
+            import multiprocessing as mp
+            with mp.get_context("fork").Pool(min(int(workers), len(jobs))) as pool:
+                done = pool.map(_one, jobs)
+        else:
+            done = [_one(j) for j in jobs]
         for hp in highpasses:
-            rots = [run_rotation(transfer, float(hp), int(r), trials, seeds, cfg, bags, device) for r in rotations]
+            rots = sorted([d for j, d in zip(jobs, done) if j[1] == float(hp)], key=lambda d: d["rotation"])
             runs.append({"transfer": transfer, "highpass": float(hp), "rotations": rots,
                          "pooled": {str(s): summary(rots, str(s)) for s in seeds}})
             print(transfer, hp, json.dumps(runs[-1]["pooled"]), flush=True)
