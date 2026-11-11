@@ -356,7 +356,7 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfers=("Rob
         for arm in arms:                     # each {"name", "l2", "channelScale", "highpass", "l2BatchNorm"}
             arm = arm or {}
             for t, rot in [(t, r) for t in transfers for r in (rotations or [rotation])]:
-                runs.append(trace(t, cfg, bags, device, int(seed), int(epochs), int(rot),
+                runs.append(trace(t, cfg, bags, device, int(arm.get("seed", seed)), int(epochs), int(rot),
                                   float(arm.get("l2", l2)), bool(arm.get("channelScale", False)),
                                   arm.get("highpass"), bool(arm.get("l2BatchNorm", True)), arm.get("name", ""),
                                   arm.get("reject"), arm.get("attention"), float(arm.get("trunkLrScale", 1.0)), arm.get("dropout")))
