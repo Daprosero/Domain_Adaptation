@@ -20,7 +20,7 @@ import torch
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score
 
 from MIL_CREDA_EEG import assignment as A
-from MIL_CREDA_EEG import campaign, model_store, remote_units, two_phase, v63_setup
+from MIL_CREDA_EEG import campaign, eegnet, model_store, remote_units, two_phase, v63_setup
 from MIL_CREDA_EEG import learned_phase1 as L
 from MIL_CREDA_EEG import spectral_check as sc
 from MIL_CREDA_EEG.patience_exercise import GpuWitness
@@ -55,19 +55,29 @@ def _own_batch(model, units, device):
     return torch.cat(out).cpu().numpy()
 
 
-def check(transfer, cfg, bags, device, seed, epochs, rotation=0):
+def check(transfer, cfg, bags, device, seed, epochs, rotation=0, l2=sc.L2, head_max_norm=None):
     a = A.assign_from_bags(v63_setup.transfer(transfer), bags)
     hyper = two_phase.check_hyper({**L.HYPER, "epochs1": epochs, "bagsPerStep": cfg["schedule"]["bagsPerStep"]})
     role = lambda r: L._stored_whole(two_phase.bag_tensors(
         A.side_bags(a, bags, "source", rotation, r, split=0) if r.startswith("inner")
         else A.side_bags(a, bags, "source", rotation, r)))
     splits = {"train": role("inner_train"), "valid": role("inner_validation"), "test": role("test")}
+    saved = eegnet.HEAD_MAX_NORM
+    if head_max_norm is not None:            # None keeps EEGNet's .25 on the bag-level head
+        eegnet.HEAD_MAX_NORM = float(head_max_norm)
+    try:
+        return _check(transfer, splits, hyper, device, seed, rotation, l2, head_max_norm)
+    finally:
+        eegnet.HEAD_MAX_NORM = saved
+
+
+def _check(transfer, splits, hyper, device, seed, rotation, l2, head_max_norm):
     with L._trunk("eegnet"):
         torch.manual_seed(seed)
         g = torch.Generator().manual_seed(seed)
         c = int(splits["train"][0].windows.shape[1])
         m = model_store.build_model("MIL-CREDA", c, c, hyper).to(device)
-        with explicit_l2(sc.L2):
+        with explicit_l2(l2):
             two_phase.train_source_phase(m, splits["train"], [], hyper, g, device, seed=seed, fold=rotation,
                                          transfer=transfer)
         score = lambda us: two_phase.evaluate(m, us, "source", device)[:, 1].detach().cpu().numpy()
@@ -76,11 +86,14 @@ def check(transfer, cfg, bags, device, seed, epochs, rotation=0):
                "ownBatch": {k: _summary(labels[k], _own_batch(m, us, device)) for k, us in splits.items()}}
         recalibrate(m, splits["train"], device)
         out["recalibrated"] = {k: _summary(labels[k], score(us)) for k, us in splits.items()}
-    return {"transfer": transfer, "seed": seed, "rotation": rotation, "epochs": epochs, **out}
+        head = float(torch.linalg.vector_norm(m.head.linear.weight, dim=1).max()) if hasattr(m.head, "linear") else None
+    return {"transfer": transfer, "seed": seed, "rotation": rotation, "l2": l2,
+            "headMaxNorm": head_max_norm if head_max_norm is not None else eegnet.HEAD_MAX_NORM,
+            "headRowNorm": head, **out}
 
 
 def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, seed: int = 1,
-          epochs: int = 100, rotation: int = 0, workdir: str | Path | None = None,
+          epochs: int = 100, rotation: int = 0, variants=(None,), workdir: str | Path | None = None,
           environ: Mapping[str, str] | None = None) -> dict:
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
@@ -94,8 +107,13 @@ def smoke(config: Mapping, product: str | Path | None = None, *, transfer: str, 
     mode = environ.get(remote_units.RUN_MODE_ENV)
     started = time.time()
     with GpuWitness(two_phase, torch) if mode else contextlib.nullcontext() as witness:
-        result = check(transfer, cfg, bags, device, int(seed), int(epochs), int(rotation))
-        print(json.dumps(result), flush=True)
+        runs = []
+        for v in variants:                   # each {"l2": .., "headMaxNorm": ..}; None is the default
+            v = v or {}
+            runs.append(check(transfer, cfg, bags, device, int(seed), int(epochs), int(rotation),
+                              float(v.get("l2", sc.L2)), v.get("headMaxNorm")))
+            print(json.dumps(runs[-1]), flush=True)
+        result = runs[0] if len(runs) == 1 else {"runs": runs}
     (workdir / "shift-check.json").write_text(json.dumps({**result, "seconds": round(time.time() - started),
                                                          "environment": environment}, default=str), encoding="utf-8")
     if mode:
