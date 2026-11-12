@@ -585,9 +585,14 @@ def existing_path(model, source, target, hyper, seed, device, objective, mu, arm
 
 
 def traced_path(model, source, target, target_labels, hyper, seed, device, objective, mu,
-                arm_init, ctx, epochs, equivalence_epochs, log=print, prior=None):
+                arm_init, ctx, epochs, equivalence_epochs, log=print, prior=None, light=False):
     """The instrumented replica: same batches, same objective, same optimizer; the gradient is
-    taken with autograd.grad and handed to Adam, term gradients read on the side."""
+    taken with autograd.grad and handed to Adam, term gradients read on the side.
+
+    `light` (xpilot's phase-2 search): the same updates, so the same end model, without the
+    snapshots, the per-step diagnostics or the epoch log. It reads no target label and no
+    target test bag (`target_labels` and `ctx["target_test"]` are not used; `ctx` needs only
+    "sigma"), and refuses the objectives that read target labels to train."""
     mods = set(objective.split("+")[1:])
     true_pl = "truePL" in mods
     cluster = "cluster" in mods       # Eq. 22 and the hard local mass from target clusters
@@ -598,6 +603,8 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     late = "late" in mods
     avg, avg_state = "avg" in mods, {"n": 0, "mean": None}
     oracle_ce = objective == "oracle-ce"
+    if light and (true_pl or cluster or oracle_ce):
+        raise ValueError(f"light phase 2 reads no target label: {objective!r} needs them")
     head = objective.split("+")[0]
     selection = {"glob": "global term only", "loc": "local term only"}.get(head, two_phase.BOTH_TERMS)
     objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf", "late", "avg", "cluster", "sep", "im"} else objective
@@ -623,7 +630,8 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     queues.generator = g
     per_class = hyper["bagsPerStep"] // model.classes
     record = {"steps": [], "epochs": {}, "init": info}
-    record["epochs"]["-1"] = snapshot(model, ctx, device)
+    if not light:
+        record["epochs"]["-1"] = snapshot(model, ctx, device)
     objective_values, theta_at_check = [], None
     cut_state = {"cut": 0.5}
     record["priorCuts"] = []
@@ -646,11 +654,11 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                 src = [source[i] for i in queues.draw(per_class)]
                 tgt = [target[i] for i in batch]
                 labels = torch.tensor([b.label for b in src], device=device)
-                true_t = torch.tensor([target_labels[i] for i in batch], device=device)
+                true_t = None if light else torch.tensor([target_labels[i] for i in batch], device=device)
                 pairs_s = model.bag_pairs(model.embed([b.windows.to(device) for b in src], "source"))
                 source_ce = M.source_term(model, model.classify(model.represent(pairs_s)), labels)
                 pairs_t = model.bag_pairs(model.embed([b.windows.to(device) for b in tgt], "target"))
-                pl_queue[:] = [int(v) for v in true_t.tolist()]
+                pl_queue[:] = [] if light else [int(v) for v in true_t.tolist()]
                 if cluster:
                     pl_queue[:] = [int(assigned[i]) for i in batch]
                 loc_queue[:] = pl_queue[:] if (true_pl or cluster) else []
@@ -668,6 +676,16 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                     total = total + source_ce
                 if oracle_ce:
                     total = M.source_term(model, terms["G_target"], true_t)
+                if light:       # the update only: the gradient of the total, handed to Adam
+                    params = theta + phi
+                    G_total = _grads(total, params)
+                    optimizer.zero_grad()
+                    for i, (p, gr) in enumerate(zip(params, G_total)):
+                        p.grad = gr.detach().clone() if (train_phi or i < len(theta)) else None
+                    optimizer.step()
+                    model.constrain(*(("target_trunk", "attention") if train_phi else ("target_trunk",)))
+                    objective_values.append(float(total.detach()))
+                    continue
                 prox = sum(((p - theta0[n]) ** 2).sum() for n, p in model.target_trunk.named_parameters())
                 l2sp_read = MU * prox                     # readout at the plan's mu
                 oracle = M.source_term(model, terms["G_target"], true_t)
@@ -704,6 +722,8 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                     "upd": _s(_norm([p.detach() - q for p, q in zip(theta, before)]) / max(_norm(before), 1e-30))})
             if epoch + 1 == equivalence_epochs:
                 theta_at_check = {n: p.detach().clone() for n, p in model.target_trunk.named_parameters()}
+            if light:   # the "avg" snapshot swaps the weights back: no effect on the end model
+                continue
             if avg and epoch >= LATE_START + LATE_RAMP:   # running mean of the moved weights
                 live = [p.detach().clone() for p in theta + phi]
                 avg_state["n"] += 1
