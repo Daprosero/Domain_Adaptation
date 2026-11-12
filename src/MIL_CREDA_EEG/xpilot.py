@@ -407,7 +407,7 @@ def search_phase2(sides, cfg, device, trials2, rotation, params1, unit):
 def build_sides(cfg, environ, *, experiment, rotation, half=0, direction="IEEE->Robots",
                 condition="Robots", setting="subject", effect=1.0, shift=0.0, n_subjects=60, sim_seed=0,
                 d_target=None, artifact_rate=0.0, artifact_class_corr=0.0, event_fraction=0.0,
-                paired=False) -> dict:
+                paired=False, spread=1.0) -> dict:
     """The bags and the subject-wise partition of one unit, shared by MIL-CREDA (smoke) and the
     comparators (xcompare), so every method sees the same subjects on the same sides."""
     sim_record = None
@@ -423,7 +423,7 @@ def build_sides(cfg, environ, *, experiment, rotation, half=0, direction="IEEE->
         if d_target is not None:            # the class effect stated as a target TBR Cohen's d
             effect = E.effect_for_d(float(d_target), event_fraction=float(event_fraction))
         opts = {"artifact_rate": float(artifact_rate), "artifact_class_corr": float(artifact_class_corr),
-                "event_fraction": float(event_fraction)}
+                "event_fraction": float(event_fraction), "spread": float(spread)}
         if setting == "subject":            # one device, subjects differ only
             bags = E.domain("SIM", n_subjects, E.device("1020", 0.0, 7 + sim_seed), effect, seed=sim_seed,
                             **opts)
@@ -439,7 +439,8 @@ def build_sides(cfg, environ, *, experiment, rotation, half=0, direction="IEEE->
         size = f"d{float(d_target):g}" if d_target is not None else f"e{effect:g}"
         extra = "".join([f"-a{artifact_rate:g}" if artifact_rate else "",
                          f"-c{artifact_class_corr:g}" if artifact_class_corr else "",
-                         f"-v{event_fraction:g}" if event_fraction else "", "-p" if paired else ""])
+                         f"-v{event_fraction:g}" if event_fraction else "", "-p" if paired else "",
+                         f"-u{spread:g}" if float(spread) != 1.0 else ""])
         unit = f"sim-{setting}-{size}-s{shift:g}{extra}:{rotation}:{half}"
         samples = E.WINDOW
         sim_record = {
@@ -448,7 +449,7 @@ def build_sides(cfg, environ, *, experiment, rotation, half=0, direction="IEEE->
                            "eeg_sim.effect_for_d: paired calibration, 1000 subjects, seed 0, "
                            "device('1020', 0, 0), Fz TBR, no artifacts"),
             "artifactRate": float(artifact_rate), "artifactClassCorr": float(artifact_class_corr),
-            "eventFraction": float(event_fraction), "paired": bool(paired),
+            "eventFraction": float(event_fraction), "paired": bool(paired), "subjectSpread": float(spread),
             "measuredD": {"source": round(E.tbr_effect_size(sides["source"] + sides["source_test"]), 4),
                           "target": round(E.tbr_effect_size(sides["target"] + sides["target_test"]), 4),
                           "rule": "eeg_sim.tbr_effect_size: Cohen's d of the per-subject TBR "
@@ -476,7 +477,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
           epochs2: int | None = None, setting: str = "subject", effect: float = 1.0, shift: float = 0.0,
           n_subjects: int = 60, sim_seed: int = 0, d_target: float | None = None,
           artifact_rate: float = 0.0, artifact_class_corr: float = 0.0, event_fraction: float = 0.0,
-          paired: bool = False, workdir=None,
+          paired: bool = False, spread: float = 1.0, workdir=None,
           environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2,
           shared: Mapping | None = None) -> dict:
     if experiment not in EXPERIMENTS:
@@ -499,7 +500,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
         condition=condition, setting=setting, effect=effect, shift=shift,
         n_subjects=n_subjects, sim_seed=sim_seed, d_target=d_target,
         artifact_rate=artifact_rate, artifact_class_corr=artifact_class_corr,
-        event_fraction=event_fraction, paired=paired)
+        event_fraction=event_fraction, paired=paired, spread=spread)
     sides, unit, samples, cfg = built["sides"], built["unit"], built["samples"], built["cfg"]
     sim_record, effect = built["sim_record"], built["effect"]
     runs = {}

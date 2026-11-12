@@ -303,6 +303,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
           setting: str = "subject", effect: float = 1.0, shift: float = 0.0, n_subjects: int = 60,
           sim_seed: int = 0, d_target: float | None = None, artifact_rate: float = 0.0,
           artifact_class_corr: float = 0.0, event_fraction: float = 0.0, paired: bool = False,
+          spread: float = 1.0,
           workdir=None, environ: Mapping[str, str] | None = None, shared: Mapping | None = None) -> dict:
     if experiment not in XP.EXPERIMENTS:
         raise ValueError(f"experiment in {XP.EXPERIMENTS}")
@@ -326,7 +327,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
                            direction=direction, condition=condition, setting=setting, effect=effect,
                            shift=shift, n_subjects=n_subjects, sim_seed=sim_seed, d_target=d_target,
                            artifact_rate=artifact_rate, artifact_class_corr=artifact_class_corr,
-                           event_fraction=event_fraction, paired=paired)
+                           event_fraction=event_fraction, paired=paired, spread=spread)
     sides, unit, samples, cfg = built["sides"], built["unit"], built["samples"], built["cfg"]
     sim_record, effect = built["sim_record"], built["effect"]
     out_methods, bases = {}, {}
