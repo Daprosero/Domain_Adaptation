@@ -92,6 +92,10 @@ CUT_RULE = ("the cut maximizing subject-level BA over source inner-validation su
             "between sorted scores, ties toward 0.5; chosen once per rotation and applied, "
             "unchanged, to every snapshot")
 TERMS = ("src", "glob", "loc", "l2sp", "total")
+#: optional read-only hook (xpilot's sim experiment): when True, every snapshot also carries
+#: the per-window attention weights of the target bags, read in eval mode without gradient
+#: (no dropout draw, no running-statistics update), so training is unchanged; off by default
+ATTENTION_EXPORT = False
 
 
 # ------------------------------------------------------------------ small helpers
@@ -306,6 +310,22 @@ def _attention_entropy(model, bags, device):
     return float(np.mean(out))
 
 
+@torch.no_grad()
+def attention_weights(model, bags, device) -> dict:
+    """Subject -> in-bag attention weight of every window (target path, eval mode)."""
+    modes = {m: m.training for m in model.modules()}
+    model.eval()
+    try:
+        out = {}
+        for b in bags:
+            (_, w), = model.bag_pairs(model.embed([b.windows.to(device)], "target"))
+            out[b.subject] = [_s(v, 4) for v in w.reshape(-1).tolist()]
+    finally:
+        for m, mode in modes.items():
+            m.train(mode)
+    return out
+
+
 def snapshot(model, ctx, device, keep_rows=True):
     """Target test/train metrics, source test AUC, drift, entropy and geometry."""
     out = {}
@@ -324,6 +344,9 @@ def snapshot(model, ctx, device, keep_rows=True):
         Zt = two_phase.represent(model, bags, "target", device)
         out[key] = _geometry(model, Zs, [b.label for b in ctx["source_train"]], Zt,
                              [b.label for b in bags])
+    if ATTENTION_EXPORT:
+        out["attention"] = {"targetTest": attention_weights(model, ctx["target_test"], device),
+                            "targetTrain": attention_weights(model, ctx["target_train"], device)}
     return out
 
 

@@ -34,7 +34,15 @@ Target labels are read only to score, and to group GiGA test subjects by their p
   1/f plus bursty oscillations). `setting` "subject" (one device, cross-subject), "device"
   (19-channel 10-20 source, 14-channel EMOTIV-like target grown by `shift`, warm arm) or
   "invert" (device plus the class effect flipped in the target); `effect` sizes the
-  ADHD-like frontal theta/beta change.
+  ADHD-like frontal theta/beta change, or `d_target` states it as the Cohen's d of the
+  subject-level Fz theta/beta ratio (translated by `eeg_sim.effect_for_d` on the clean
+  10-20 device, then used unchanged in both domains). Optional: `artifact_rate` (blinks and
+  muscle bursts per minute, class-independent unless `artifact_class_corr`),
+  `event_fraction` (windows where the class effect is concentrated) and `paired` (the
+  target holds the source's subjects, same identity and class, under its own device). The
+  output records per target-test and target-train bag its artifact, artifact-type and
+  event masks, the measured TBR d of source and target, and the per-window attention
+  weights of the target bags at predict and at the end of phase 2.
 """
 from __future__ import annotations
 
@@ -239,6 +247,36 @@ def window_samples(n):
         spectral_trunk.SpectralTrunk.__init__.__defaults__ = defaults
 
 
+@contextlib.contextmanager
+def attention_export(on: bool):
+    """Turn phase2_trace's read-only attention export on for the duration of a run."""
+    saved = P.ATTENTION_EXPORT
+    P.ATTENTION_EXPORT = bool(on)
+    try:
+        yield
+    finally:
+        P.ATTENTION_EXPORT = saved
+
+
+def _lift_attention(out):
+    """Move the snapshots' attention weights to out["attention"]: predict and the last
+    phase-2 epoch per objective, dropped from every other snapshot."""
+    lifted = {}
+    for name, rec in out["objectives"].items():
+        epochs = rec["epochs"]
+        last = max(epochs, key=int) if epochs else None
+        lifted[name] = {"predict": rec["predict"].get("attention"),
+                        "end": epochs[last].get("attention") if last is not None else None,
+                        "endEpoch": int(last) if last is not None else None}
+    for rec in out["objectives"].values():
+        rec["predict"].pop("attention", None)
+        for e in rec["epochs"].values():
+            e.pop("attention", None)
+    if any(v["predict"] is not None for v in lifted.values()):
+        out["attention"] = lifted
+    return out
+
+
 def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
     """Refit phase 1 at `searched` = (params, score, trials) with `seed`, then phase 2."""
     params, score, trials = searched
@@ -251,6 +289,7 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
         s_names = t_names = [f"ch{i}" for i in range(int(sides["source"][0].windows.shape[1]))]
     out = P.run_rotation(unit, cfg, None, None, device, seed, int(rotation), arm, [OBJECTIVE],
                          log=log, sides={**sides, "s_names": s_names, "t_names": t_names})
+    out = _lift_attention(out)
     out["arm"] = arm
     out["phase1Search"] = {"params": params, "score": score, "trials": int(trials)}
     out["subjectsSplit"] = sides["subjects"]
@@ -261,7 +300,9 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
 def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seeds: Sequence[int] = (1,),
           half: int = 0, direction: str = "IEEE->Robots", condition: str = "Robots", trials: int = 20,
           epochs2: int | None = None, setting: str = "subject", effect: float = 1.0, shift: float = 0.0,
-          n_subjects: int = 60, sim_seed: int = 0, workdir=None,
+          n_subjects: int = 60, sim_seed: int = 0, d_target: float | None = None,
+          artifact_rate: float = 0.0, artifact_class_corr: float = 0.0, event_fraction: float = 0.0,
+          paired: bool = False, workdir=None,
           environ: Mapping[str, str] | None = None) -> dict:
     if experiment not in EXPERIMENTS:
         raise ValueError(f"experiment in {EXPERIMENTS}")
@@ -278,6 +319,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
     if epochs2 is not None:
         P.PHASE_TWO["epochs2"] = int(epochs2)
     started = time.time()
+    sim_record = None
     if experiment == "giga":
         bags = giga_bags(find_giga(environ.get("GIGA_ROOT")))
         cfg = {**cfg, "schedule": {**cfg["schedule"], "bagsPerStep": 32}}
@@ -287,17 +329,41 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
         sides, unit, samples = cross_subject_sides(bags, rotation, half), f"ieee:{rotation}:{half}", IEEE_WINDOW
     elif experiment == "sim":
         from MIL_CREDA_EEG import eeg_sim as E
+        if d_target is not None:            # the class effect stated as a target TBR Cohen's d
+            effect = E.effect_for_d(float(d_target), event_fraction=float(event_fraction))
+        opts = {"artifact_rate": float(artifact_rate), "artifact_class_corr": float(artifact_class_corr),
+                "event_fraction": float(event_fraction)}
         if setting == "subject":            # one device, subjects differ only
-            bags = E.domain("SIM", n_subjects, E.device("1020", 0.0, 7 + sim_seed), effect, seed=sim_seed)
+            bags = E.domain("SIM", n_subjects, E.device("1020", 0.0, 7 + sim_seed), effect, seed=sim_seed,
+                            **opts)
             sides = cross_subject_sides(bags, rotation, half)
         else:                               # device shift, optionally with an inverted class effect
-            src = E.domain("SRC", n_subjects, E.device("1020", 0.0, 7 + sim_seed), effect, seed=sim_seed)
+            identity = sim_seed if paired else None     # paired: SRC-Sxxx and TGT-Sxxx are one subject
+            src = E.domain("SRC", n_subjects, E.device("1020", 0.0, 7 + sim_seed), effect, seed=sim_seed,
+                           identity_seed=identity, **opts)
             tgt = E.domain("TGT", n_subjects, E.device("emotiv", shift, 11 + sim_seed), effect,
-                           invert=(setting == "invert"), seed=sim_seed + 1)
+                           invert=(setting == "invert"), seed=sim_seed + 1, identity_seed=identity, **opts)
             sides = cross_dataset_sides(src, tgt, rotation)
             sides["s_names"], sides["t_names"] = list(E.TEN_TWENTY), list(E.EMOTIV)
-        unit = f"sim-{setting}-e{effect:g}-s{shift:g}:{rotation}:{half}"
+        size = f"d{float(d_target):g}" if d_target is not None else f"e{effect:g}"
+        extra = "".join([f"-a{artifact_rate:g}" if artifact_rate else "",
+                         f"-c{artifact_class_corr:g}" if artifact_class_corr else "",
+                         f"-v{event_fraction:g}" if event_fraction else "", "-p" if paired else ""])
+        unit = f"sim-{setting}-{size}-s{shift:g}{extra}:{rotation}:{half}"
         samples = E.WINDOW
+        sim_record = {
+            "dTarget": None if d_target is None else float(d_target),
+            "effectRule": (None if d_target is None else
+                           "eeg_sim.effect_for_d: paired calibration, 1000 subjects, seed 0, "
+                           "device('1020', 0, 0), Fz TBR, no artifacts"),
+            "artifactRate": float(artifact_rate), "artifactClassCorr": float(artifact_class_corr),
+            "eventFraction": float(event_fraction), "paired": bool(paired),
+            "measuredD": {"source": round(E.tbr_effect_size(sides["source"] + sides["source_test"]), 4),
+                          "target": round(E.tbr_effect_size(sides["target"] + sides["target_test"]), 4),
+                          "rule": "eeg_sim.tbr_effect_size: Cohen's d of the per-subject TBR "
+                                  "(Fz, or F3/F4 on EMOTIV), every subject of the side"},
+            "masks": {"targetTest": E.masks_of(sides["target_test"]),
+                      "targetTrain": E.masks_of(sides["target"])}}
     else:
         loaded = campaign.load_bags(cfg)
         ball_names = list(loaded.get(sorted(loaded.holders(condition))[0], condition).channels)
@@ -311,7 +377,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
         sides["t_names"] = names["BALLADEER" if src_is_ieee else "IEEE"]
         unit, samples = f"{direction}:{rotation}", IEEE_WINDOW
     runs = {}
-    with spectral_trunk.installed(), window_samples(samples):
+    with spectral_trunk.installed(), window_samples(samples), attention_export(experiment == "sim"):
         t0 = time.time()
         params, score = search_phase1(sides, cfg, device, trials, rotation)   # once per unit
         timing = {"loadSeconds": round(t0 - started, 1), "searchSeconds": round(time.time() - t0, 1),
@@ -324,8 +390,8 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
             timing["seedSeconds"][str(sd)] = round(time.time() - t1, 1)
             print(unit, "seed", sd, "done", round(time.time() - started), "s", flush=True)
     name = f"xpilot-{unit.replace(':', '-').replace('>', '').replace('-', '_')}.json"
-    sim = ({"setting": setting, "effect": effect, "shift": shift, "nSubjects": n_subjects, "simSeed": sim_seed}
-           if experiment == "sim" else None)
+    sim = ({"setting": setting, "effect": effect, "shift": shift, "nSubjects": n_subjects, "simSeed": sim_seed,
+            **sim_record} if experiment == "sim" else None)
     (workdir / name).write_text(json.dumps({"experiment": experiment, "unit": unit, "rotation": rotation, "sim": sim,
                                             "half": half, "objective": OBJECTIVE, "runs": runs,
                                             "phaseTwo": P.PHASE_TWO, "seconds": round(time.time() - started), "timing": timing,
