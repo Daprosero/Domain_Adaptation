@@ -83,6 +83,10 @@ PHASE_ONE_L2 = 0.01
 #: searched phase-1 settings per rotation, {rotation: {lr1, l2, width, tauAtt1, epochs}} from
 #: spectral_search (TPE on source inner splits only); empty means the fixed recipe above
 PHASE_ONE_SEARCHED: dict = {}
+# FULL_TRACE False (xpilot full_trace=False): phase 2 runs light (the same updates, so the same
+# end model, without per-step diagnostics or per-epoch snapshots), the existing-path equivalence
+# check is skipped, and only predict and the final epoch are recorded
+FULL_TRACE = True
 PHASE_TWO = {"lr2": 1e-3, "wd2": 1e-5, "epochs2": 20, "tauLocal": 1.0}
 PHASE_TWO_AGGREGATION = {"gamma": 0.5, "temperature": 1.0}
 MU = 10.0
@@ -861,24 +865,28 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
         # new, so its replica is checked against plain eq39 only over the epochs it shares: none)
         t2 = time.time()
         ex_hyper = _hyper(cfg, EQUIVALENCE_EPOCHS, tau1)
-        ex_steps, ex_theta = ([], None) if new_rule else existing_path(
+        ex_steps, ex_theta = ([], None) if (new_rule or not FULL_TRACE) else existing_path(
             phase_two_model(), source, target, ex_hyper, seed, device, objective, mu, arm_init)
         existing_seconds = time.time() - t2
         t3 = time.time()
         model = phase_two_model()
         record, values, theta_check = traced_path(
             model, source, target, [b.label for b in target], hyper, seed, device, base_objective, mu,
-            arm_init, ctx, PHASE_TWO["epochs2"], EQUIVALENCE_EPOCHS, log=log, prior=prior)
+            arm_init, ctx, PHASE_TWO["epochs2"], EQUIVALENCE_EPOCHS, log=log, prior=prior,
+            light=not FULL_TRACE)
+        if not FULL_TRACE:              # light: only the end model is read (predict is above)
+            record["epochs"][str(int(PHASE_TWO["epochs2"]) - 1)] = snapshot(model, ctx, device)
         n = len(ex_steps)
         equivalence = {"note": "new rule: no existing path to compare", "sourcePrior": _s(prior),
                        "targetPrior": _s(float(np.mean([b.label for b in target]))),
-                       "cuts": record["priorCuts"]} if new_rule else {"epochs": EQUIVALENCE_EPOCHS, "steps": n,
+                       "cuts": record["priorCuts"]} if new_rule else ({"note": "light run (FULL_TRACE "
+                       "False): equivalence check skipped"} if not FULL_TRACE else {"epochs": EQUIVALENCE_EPOCHS, "steps": n,
                        "maxAbsObjective": _s(np.max(np.abs(np.asarray(ex_steps) - np.asarray(values[:n])))),
                        "maxAbsThetaT": _s(max(float((ex_theta[k] - theta_check[k]).abs().max()) for k in ex_theta)),
                        "existingPath": "two_phase.bridge + adapt_target_phase under ablation_pilot.fix_rules("
                                        "frozenset())" + ("" if objective == "adapt" else
                                                          ", ablation_pilot.attention_rules and "
-                                                         f"v63_setup.mil_creda_rules(gate 1, mu {mu:g})")}
+                                                         f"v63_setup.mil_creda_rules(gate 1, mu {mu:g})")})
         out["objectives"][objective] = {
             "objective": objective, "mu": mu, "prior": _s(prior), "phiTrained": objective != "adapt",
             "sourceGradient": objective != "adapt", "equivalence": equivalence,
