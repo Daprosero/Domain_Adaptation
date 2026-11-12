@@ -5,7 +5,7 @@ encoder, a phase 1 searched once per unit (rotation, half) on SOURCE subjects on
 per seed (TPE, `spectral_search`'s
 space, score (BA@0.5 + AUC)/2 pooled over three subject-wise inner validations), then
 `phase2_trace.run_rotation` with the objective eq39+hardloc and the copy arm (both sides
-read the same channels). Compared on the target test subjects: predict (phase 1, no
+read the same channels; xds uses the warm arm). Compared on the target test subjects: predict (phase 1, no
 adaptation) against the end of phase 2.
 
 * "giga": GiGA motor imagery (Cho et al. 2017), cross-subject. A bag is one trial; its
@@ -16,8 +16,9 @@ adaptation) against the end of phase 2.
 * "ieee": IEEE ADHD (Nasrabadi et al.), cross-subject. A bag is one subject: 4 s windows at
   50% overlap, 50 Hz notch, then the v63 instance rule (<= 60 windows, 1-45 Hz, average).
 * "xds": cross-dataset ADHD between IEEE and one BALLADEER task (default Robots, the best
-  source domain known), both directions, on the IEEE channels the task also records (10 for
-  Robots). The source is the whole source dataset. Both sides use 4 s windows at 50% overlap:
+  source domain known), both directions, each dataset with ALL its channels (IEEE 19, Robots 14) and the
+  warm arm (shared channel slots copied from the source trunk, the others zeroed). The source
+  is the whole source dataset. Both sides use 4 s windows at 50% overlap:
   BALLADEER's stored contiguous 4 s windows gain the half-shifted window between neighbours.
 
 Partition, always by subject (no subject on two sides, ever):
@@ -193,7 +194,7 @@ def _sides(source, s_train, s_test, target, t_adapt, t_test):
 # ------------------------------------------------------------------ phase-1 search
 
 def search_phase1(sides, cfg, device, trials, rotation):
-    cs = ct = int(sides["source"][0].windows.shape[1])
+    cs, ct = int(sides["source"][0].windows.shape[1]), int(sides["target"][0].windows.shape[1])
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study = optuna.create_study(direction="maximize",
                                 sampler=optuna.samplers.TPESampler(seed=SAMPLER_SEED + int(rotation)))
@@ -237,9 +238,14 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
     params, score, trials = searched
     P.PHASE_ONE_SEARCHED.clear()
     P.PHASE_ONE_SEARCHED[int(rotation)] = params
-    names = [f"ch{i}" for i in range(int(sides["source"][0].windows.shape[1]))]   # same montage
-    out = P.run_rotation(unit, cfg, None, None, device, seed, int(rotation), "copy", [OBJECTIVE],
-                         log=log, sides={**sides, "s_names": names, "t_names": names})
+    if "s_names" in sides:      # two montages: warm arm (shared slots copied, the others zeroed)
+        arm, s_names, t_names = "warm", sides["s_names"], sides["t_names"]
+    else:                       # one montage: copy arm
+        arm = "copy"
+        s_names = t_names = [f"ch{i}" for i in range(int(sides["source"][0].windows.shape[1]))]
+    out = P.run_rotation(unit, cfg, None, None, device, seed, int(rotation), arm, [OBJECTIVE],
+                         log=log, sides={**sides, "s_names": s_names, "t_names": t_names})
+    out["arm"] = arm
     out["phase1Search"] = {"params": params, "score": score, "trials": int(trials)}
     out["subjectsSplit"] = sides["subjects"]
     out["targetTestUnits"] = [b.subject for b in sides["target_test"]]   # row order of the target test
@@ -272,13 +278,17 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
         bags = ieee_bags(X.find_ieee(environ.get("IEEE_ROOT")))
         sides, unit, samples = cross_subject_sides(bags, rotation, half), f"ieee:{rotation}:{half}", IEEE_WINDOW
     else:
-        shared = [c for c in X.IEEE_CHANNELS
-                  if c in campaign.load_bags(cfg).get(sorted(campaign.load_bags(cfg).holders(condition))[0],
-                                                       condition).channels]
-        ieee = ieee_bags(X.find_ieee(environ.get("IEEE_ROOT")), shared)
-        ball = balladeer_bags(cfg, condition, shared)
-        src, tgt = (ieee, ball) if direction.startswith("IEEE") else (ball, ieee)
-        sides, unit, samples = cross_dataset_sides(src, tgt, rotation), f"{direction}:{rotation}", IEEE_WINDOW
+        loaded = campaign.load_bags(cfg)
+        ball_names = list(loaded.get(sorted(loaded.holders(condition))[0], condition).channels)
+        ieee = ieee_bags(X.find_ieee(environ.get("IEEE_ROOT")))           # all 19 IEEE channels
+        ball = balladeer_bags(cfg, condition, ball_names)                  # all the task's channels
+        names = {"IEEE": list(X.IEEE_CHANNELS), "BALLADEER": ball_names}
+        src_is_ieee = direction.startswith("IEEE")
+        src, tgt = (ieee, ball) if src_is_ieee else (ball, ieee)
+        sides = cross_dataset_sides(src, tgt, rotation)
+        sides["s_names"] = names["IEEE" if src_is_ieee else "BALLADEER"]
+        sides["t_names"] = names["BALLADEER" if src_is_ieee else "IEEE"]
+        unit, samples = f"{direction}:{rotation}", IEEE_WINDOW
     runs = {}
     with spectral_trunk.installed(), window_samples(samples):
         t0 = time.time()
