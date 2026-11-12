@@ -349,7 +349,7 @@ def _prior_rules(prior, state):
         M.pseudolabel = saved
 
 
-MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp")
+MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf")
 
 
 def _known(objective: str) -> bool:
@@ -407,6 +407,56 @@ def _true_rules(on, queue):
         M.pseudolabel = saved
 
 
+CONF_SHARE = 0.3
+
+
+@contextlib.contextmanager
+def _conf_rules(on, state):
+    """L_loc over the most confident target bags only: the CONF_SHARE of each batch with the
+    largest |g_1 - g_0| of the frozen head (label-free). Read by the hard mass wrapper."""
+    if not on:
+        yield
+        return
+    saved = M.local_loss
+
+    def selected(d):
+        c = torch.tensor(state["conf"][-len(d):])
+        keep = torch.argsort(c, descending=True)[:max(1, int(np.ceil(CONF_SHARE * len(d))))]
+        state["conf"].clear()
+        return saved(d[keep.to(d.device)])
+
+    M.local_loss = selected
+    try:
+        yield
+    finally:
+        M.local_loss = saved
+
+
+@contextlib.contextmanager
+def _hardloc_rules(on, queue, state=None):
+    """Class-conditional Eq. 35 with a hard class: the mass g_j is replaced by the one-hot of
+    the true label (queue filled, "+truePL") or of the argmax pseudo-label. No gradient flows
+    through the mass, so each target bag is pulled only toward its own class's sources."""
+    if not on:
+        yield
+        return
+    saved = M.total_correspondence
+
+    def hard(similarities, source_labels, target_scores, tau):
+        g = torch.as_tensor(target_scores).reshape(-1)
+        if state is not None:
+            state["conf"].append(float((g[1] - g[0]).abs().detach()))
+        c = queue.pop(0) if queue else int(torch.argmax(g.detach()))
+        return saved(similarities, source_labels, torch.nn.functional.one_hot(
+            torch.tensor(c), g.numel()).to(g.dtype).to(g.device), tau)
+
+    M.total_correspondence = hard
+    try:
+        yield
+    finally:
+        M.total_correspondence = saved
+
+
 def existing_path(model, source, target, hyper, seed, device, objective, mu, arm_init):
     """The uninstrumented phase 2: bridge, arm init, then `two_phase.adapt_target_phase`.
     Returns per-step objective values and the final target trunk."""
@@ -441,10 +491,12 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     mods = set(objective.split("+")[1:])
     true_pl = "truePL" in mods
     affine, knorm = "affine" in mods, "knorm" in mods
+    hardloc = "hardloc" in mods
+    conf, conf_state = "conf" in mods, {"conf": []}
     oracle_ce = objective == "oracle-ce"
     head = objective.split("+")[0]
     selection = {"glob": "global term only", "loc": "local term only"}.get(head, two_phase.BOTH_TERMS)
-    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm"} else objective
+    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf"} else objective
     train_phi = objective not in ("adapt", "oracle-ce")
     joint = two_phase.bridge(model)
     info = arm_init(model)
@@ -471,9 +523,11 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     objective_values, theta_at_check = [], None
     cut_state = {"cut": 0.5}
     record["priorCuts"] = []
-    pl_queue = []
+    pl_queue, loc_queue = [], []
     with _objective_rules(model, "adapt" if oracle_ce else objective, mu), \
-            _prior_rules(prior, cut_state), _true_rules(true_pl, pl_queue), _knorm_rules(knorm):
+            _prior_rules(prior, cut_state), _true_rules(true_pl, pl_queue), _knorm_rules(knorm), \
+            _hardloc_rules(hardloc, loc_queue, conf_state), \
+            _conf_rules(conf, conf_state):
         for epoch in range(epochs):
             if prior is not None:   # label-free: target scores and the source prior only
                 q = _probabilities(model, target, "target", device)
@@ -489,6 +543,7 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                 source_ce = M.source_term(model, model.classify(model.represent(pairs_s)), labels)
                 pairs_t = model.bag_pairs(model.embed([b.windows.to(device) for b in tgt], "target"))
                 pl_queue[:] = [int(v) for v in true_t.tolist()]
+                loc_queue[:] = pl_queue[:] if true_pl else []
                 terms = M.adaptation_terms(model, pairs_s, labels, pairs_t, hyper["tauLocal"])
                 total = two_phase.phase_two_objective(terms, selection)
                 if train_phi:
