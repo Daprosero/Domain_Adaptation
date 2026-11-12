@@ -349,7 +349,7 @@ def _prior_rules(prior, state):
         M.pseudolabel = saved
 
 
-MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf", "late", "avg", "cluster")
+MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf", "late", "avg", "cluster", "sep", "im")
 
 
 def _known(objective: str) -> bool:
@@ -409,6 +409,39 @@ def _true_rules(on, queue):
 
 CONF_SHARE = 0.3
 KMEANS_ITERATIONS = 20
+SEP_WEIGHT, IM_WEIGHT = 1.0, 1.0
+
+
+def separation_term(model, pairs_s, labels_s, pairs_t, pseudo):
+    """CAN-style inter-class discrepancy, to be MAXIMISED: for each ordered pair c != c', the
+    squared bag-kernel MMD between target class c (pseudo-labels) and source class c', halved
+    so it lies in [0, 1]. The global term only pulls same-class sets together; this one also
+    pushes target bags of one class away from source bags of the other class."""
+    sigma = model.sigma
+    K_ss = M.bag_kernel_matrix(pairs_s, pairs_s, sigma)
+    K_st = M.bag_kernel_matrix(pairs_s, pairs_t, sigma)
+    K_tt = M.bag_kernel_matrix(pairs_t, pairs_t, sigma)
+    ls, lt = labels_s.reshape(-1).to(K_ss.device), torch.as_tensor(pseudo).reshape(-1).to(K_ss.device)
+    values = []
+    for c in range(model.classes):
+        for d in range(model.classes):
+            t_idx, s_idx = torch.nonzero(lt == c).reshape(-1), torch.nonzero(ls == d).reshape(-1)
+            if c == d or t_idx.numel() == 0 or s_idx.numel() == 0:
+                continue
+            mmd = (K_tt[t_idx][:, t_idx].mean() + K_ss[s_idx][:, s_idx].mean()
+                   - 2 * K_st[s_idx][:, t_idx].mean())
+            values.append(mmd / 2)
+    return torch.stack(values).mean() if values else torch.zeros((), device=K_ss.device)
+
+
+def information_term(G_t):
+    """SHOT-style information maximisation on the target predictions, to be MINIMISED:
+    mean per-bag entropy (confident predictions) minus the entropy of the batch-mean
+    prediction (both classes still used). Counters the confidence collapse of the global term."""
+    p = G_t.clamp_min(1e-8)
+    per_bag = -(p * p.log()).sum(1).mean()
+    mean = p.mean(0)
+    return per_bag + (mean * mean.log()).sum()
 
 
 def representations(model, bags, side, device) -> np.ndarray:
@@ -528,6 +561,7 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     mods = set(objective.split("+")[1:])
     true_pl = "truePL" in mods
     cluster = "cluster" in mods       # Eq. 22 and the hard local mass from target clusters
+    sep, im = "sep" in mods, "im" in mods
     affine, knorm = "affine" in mods, "knorm" in mods
     hardloc = "hardloc" in mods
     conf, conf_state = "conf" in mods, {"conf": []}
@@ -536,7 +570,7 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     oracle_ce = objective == "oracle-ce"
     head = objective.split("+")[0]
     selection = {"glob": "global term only", "loc": "local term only"}.get(head, two_phase.BOTH_TERMS)
-    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf", "late", "avg", "cluster"} else objective
+    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf", "late", "avg", "cluster", "sep", "im"} else objective
     train_phi = objective not in ("adapt", "oracle-ce")
     joint = two_phase.bridge(model)
     info = arm_init(model)
@@ -596,6 +630,10 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                     ramp = min(1.0, max(0.0, (epoch - LATE_START + 1) / LATE_RAMP))
                     lg, ll = two_phase.term_coefficients(two_phase.BOTH_TERMS)
                     total = lg * terms["global"] + ramp * ll * terms["local"]
+                if sep:
+                    total = total - SEP_WEIGHT * separation_term(model, pairs_s, labels, pairs_t, terms["pseudo"])
+                if im:
+                    total = total + IM_WEIGHT * information_term(terms["G_target"])
                 if train_phi:
                     total = total + source_ce
                 if oracle_ce:
