@@ -29,6 +29,12 @@ Partition, always by subject (no subject on two sides, ever):
 * cross-dataset: the source dataset keeps 1 in 5 subjects (per class) as its test; the
   target dataset is split in 4 folds per class, rotation r tests fold r and adapts the rest.
 Target labels are read only to score, and to group GiGA test subjects by their predict BA.
+
+* "sim": simulated EEG (`eeg_sim`, SEREEGA-style: lead field of a spherical head, NeuroDSP
+  1/f plus bursty oscillations). `setting` "subject" (one device, cross-subject), "device"
+  (19-channel 10-20 source, 14-channel EMOTIV-like target grown by `shift`, warm arm) or
+  "invert" (device plus the class effect flipped in the target); `effect` sizes the
+  ADHD-like frontal theta/beta change.
 """
 from __future__ import annotations
 
@@ -53,7 +59,7 @@ from MIL_CREDA_EEG import spectral_search as SS
 from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG import xds_pilot as X
 
-EXPERIMENTS = ("giga", "ieee", "xds")
+EXPERIMENTS = ("giga", "ieee", "xds", "sim")
 FOLDS, INNER, XDS_FOLDS = 5, 3, 5
 TRIALS_PER_CLASS = 25
 GIGA_WINDOW, GIGA_STEP = 128, 64
@@ -254,7 +260,9 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
 
 def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seeds: Sequence[int] = (1,),
           half: int = 0, direction: str = "IEEE->Robots", condition: str = "Robots", trials: int = 20,
-          epochs2: int | None = None, workdir=None, environ: Mapping[str, str] | None = None) -> dict:
+          epochs2: int | None = None, setting: str = "subject", effect: float = 1.0, shift: float = 0.0,
+          n_subjects: int = 60, sim_seed: int = 0, workdir=None,
+          environ: Mapping[str, str] | None = None) -> dict:
     if experiment not in EXPERIMENTS:
         raise ValueError(f"experiment in {EXPERIMENTS}")
     environ = os.environ if environ is None else environ
@@ -277,6 +285,19 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
     elif experiment == "ieee":
         bags = ieee_bags(X.find_ieee(environ.get("IEEE_ROOT")))
         sides, unit, samples = cross_subject_sides(bags, rotation, half), f"ieee:{rotation}:{half}", IEEE_WINDOW
+    elif experiment == "sim":
+        from MIL_CREDA_EEG import eeg_sim as E
+        if setting == "subject":            # one device, subjects differ only
+            bags = E.domain("SIM", n_subjects, E.device("1020", 0.0, 7 + sim_seed), effect, seed=sim_seed)
+            sides = cross_subject_sides(bags, rotation, half)
+        else:                               # device shift, optionally with an inverted class effect
+            src = E.domain("SRC", n_subjects, E.device("1020", 0.0, 7 + sim_seed), effect, seed=sim_seed)
+            tgt = E.domain("TGT", n_subjects, E.device("emotiv", shift, 11 + sim_seed), effect,
+                           invert=(setting == "invert"), seed=sim_seed + 1)
+            sides = cross_dataset_sides(src, tgt, rotation)
+            sides["s_names"], sides["t_names"] = list(E.TEN_TWENTY), list(E.EMOTIV)
+        unit = f"sim-{setting}-e{effect:g}-s{shift:g}:{rotation}:{half}"
+        samples = E.WINDOW
     else:
         loaded = campaign.load_bags(cfg)
         ball_names = list(loaded.get(sorted(loaded.holders(condition))[0], condition).channels)
@@ -303,7 +324,9 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
             timing["seedSeconds"][str(sd)] = round(time.time() - t1, 1)
             print(unit, "seed", sd, "done", round(time.time() - started), "s", flush=True)
     name = f"xpilot-{unit.replace(':', '-').replace('>', '').replace('-', '_')}.json"
-    (workdir / name).write_text(json.dumps({"experiment": experiment, "unit": unit, "rotation": rotation,
+    sim = ({"setting": setting, "effect": effect, "shift": shift, "nSubjects": n_subjects, "simSeed": sim_seed}
+           if experiment == "sim" else None)
+    (workdir / name).write_text(json.dumps({"experiment": experiment, "unit": unit, "rotation": rotation, "sim": sim,
                                             "half": half, "objective": OBJECTIVE, "runs": runs,
                                             "phaseTwo": P.PHASE_TWO, "seconds": round(time.time() - started), "timing": timing,
                                             "environment": environment}, default=str), encoding="utf-8")
