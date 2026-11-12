@@ -349,7 +349,7 @@ def _prior_rules(prior, state):
         M.pseudolabel = saved
 
 
-MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf")
+MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf", "late")
 
 
 def _known(objective: str) -> bool:
@@ -408,6 +408,7 @@ def _true_rules(on, queue):
 
 
 CONF_SHARE = 0.3
+LATE_START, LATE_RAMP = 10, 5    # "+late": L_loc off for 10 epochs, then a linear ramp over 5
 
 
 @contextlib.contextmanager
@@ -423,6 +424,7 @@ def _conf_rules(on, state):
         c = torch.tensor(state["conf"][-len(d):])
         keep = torch.argsort(c, descending=True)[:max(1, int(np.ceil(CONF_SHARE * len(d))))]
         state["conf"].clear()
+        state["keep"] = keep.tolist()
         return saved(d[keep.to(d.device)])
 
     M.local_loss = selected
@@ -493,10 +495,11 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     affine, knorm = "affine" in mods, "knorm" in mods
     hardloc = "hardloc" in mods
     conf, conf_state = "conf" in mods, {"conf": []}
+    late = "late" in mods
     oracle_ce = objective == "oracle-ce"
     head = objective.split("+")[0]
     selection = {"glob": "global term only", "loc": "local term only"}.get(head, two_phase.BOTH_TERMS)
-    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf"} else objective
+    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf", "late"} else objective
     train_phi = objective not in ("adapt", "oracle-ce")
     joint = two_phase.bridge(model)
     info = arm_init(model)
@@ -546,6 +549,10 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                 loc_queue[:] = pl_queue[:] if true_pl else []
                 terms = M.adaptation_terms(model, pairs_s, labels, pairs_t, hyper["tauLocal"])
                 total = two_phase.phase_two_objective(terms, selection)
+                if late:    # delayed, ramped local coefficient
+                    ramp = min(1.0, max(0.0, (epoch - LATE_START + 1) / LATE_RAMP))
+                    lg, ll = two_phase.term_coefficients(two_phase.BOTH_TERMS)
+                    total = lg * terms["global"] + ramp * ll * terms["local"]
                 if train_phi:
                     total = total + source_ce
                 if oracle_ce:
@@ -580,7 +587,9 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                     "pl": {"acc": _s(float((pseudo == true_t.cpu()).float().mean())),
                            "pos": _s(float((pseudo == 1).float().mean())),
                            "active": int(terms["active_classes"]),
-                           "conf": _s(terms["confidence_mean"])},
+                           "conf": _s(terms["confidence_mean"]),
+                           "accSel": (_s(float((pseudo[conf_state["keep"]] == true_t.cpu()[conf_state["keep"]])
+                                               .float().mean())) if conf and conf_state.get("keep") else None)},
                     "upd": _s(_norm([p.detach() - q for p, q in zip(theta, before)]) / max(_norm(before), 1e-30))})
             if epoch + 1 == equivalence_epochs:
                 theta_at_check = {n: p.detach().clone() for n, p in model.target_trunk.named_parameters()}
