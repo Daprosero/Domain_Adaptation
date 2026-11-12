@@ -80,6 +80,9 @@ SEARCH_RULE = ("each tau of the grid trains on source inner_train split 0 and is
                "inner_validation split 0 by (BA at 0.5 + AUC) / 2, subject level; the best tau "
                "(ties to the larger tau) is refitted on the refit role")
 PHASE_ONE_L2 = 0.01
+#: searched phase-1 settings per rotation, {rotation: {lr1, l2, width, tauAtt1, epochs}} from
+#: spectral_search (TPE on source inner splits only); empty means the fixed recipe above
+PHASE_ONE_SEARCHED: dict = {}
 PHASE_TWO = {"lr2": 1e-3, "wd2": 1e-5, "epochs2": 20, "tauLocal": 1.0}
 PHASE_TWO_AGGREGATION = {"gamma": 0.5, "temperature": 1.0}
 MU = 10.0
@@ -153,22 +156,26 @@ def _probabilities(model, bags, domain, device):
 # ------------------------------------------------------------------ phase 1
 
 
-def _hyper(cfg, epochs2=None, temperature=10.0):
+def _hyper(cfg, epochs2=None, temperature=10.0, searched=None):
     epochs2 = PHASE_TWO["epochs2"] if epochs2 is None else epochs2
-    return two_phase.check_hyper({**L.HYPER, "bagsPerStep": cfg["schedule"]["bagsPerStep"],
+    extra = ({"lr1": float(searched["lr1"]), "epochs1": int(searched["epochs"])} if searched else {})
+    return two_phase.check_hyper({**L.HYPER, **extra, "bagsPerStep": cfg["schedule"]["bagsPerStep"],
                                   "attentionGamma": 0.0, "attentionTemperature": float(temperature),
                                   "lr2": PHASE_TWO["lr2"], "wd2": PHASE_TWO["wd2"],
                                   "tauLocal": PHASE_TWO["tauLocal"], "epochs2": int(epochs2)})
 
 
-def phase_one(source, c_source, c_target, hyper, seed, device, *, transfer="", fold=0):
+def phase_one(source, c_source, c_target, hyper, seed, device, *, transfer="", fold=0, searched=None):
     """learned_phase1's recipe on `source` (built with both channel counts), then the
-    between-bag sigma of plan v63/v64 fixed on the model."""
+    between-bag sigma of plan v63/v64 fixed on the model. `searched` carries the
+    spectral_search width and L2 of this rotation (lr1, epochs and tau come in `hyper`)."""
+    from MIL_CREDA_EEG.spectral_search import width as _width
     torch.manual_seed(seed)
     g = torch.Generator().manual_seed(seed)
-    model = model_store.build_model("MIL-CREDA", c_source, c_target, hyper).to(device)
+    with _width(int(searched["width"]) if searched else spectral_trunk.WIDTH):
+        model = model_store.build_model("MIL-CREDA", c_source, c_target, hyper).to(device)
     model.source_trunk.norm = sc.standard_of(model.source_trunk, source).to(device)
-    with explicit_l2(PHASE_ONE_L2):
+    with explicit_l2(float(searched["l2"]) if searched else PHASE_ONE_L2):
         two_phase.train_source_phase(model, source, [], hyper, g, device, seed=seed, fold=fold,
                                      transfer=transfer)
     model._sigma = V.between_bag_sigma(model, source, "source", seed=seed)
@@ -736,9 +743,11 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
     # each candidate trains on its source training subjects and is scored on its validation ones
     inner_train, inner_valid = prep("source", "inner_train", 0), prep("source", "inner_validation", 0)
     grid = []
-    for tau in PHASE_ONE_ATTENTION[phase1_attention]:
-        cand = phase_one(inner_train, cs, ct, _hyper(cfg, temperature=tau), seed, device,
-                         transfer=transfer, fold=rotation)
+    searched = PHASE_ONE_SEARCHED.get(int(rotation)) or PHASE_ONE_SEARCHED.get(str(rotation))
+    taus = (float(searched["tauAtt1"]),) if searched else PHASE_ONE_ATTENTION[phase1_attention]
+    for tau in taus:
+        cand = phase_one(inner_train, cs, ct, _hyper(cfg, temperature=tau, searched=searched), seed, device,
+                         transfer=transfer, fold=rotation, searched=searched)
         vy, vp = _subjects(inner_valid, _probabilities(cand, inner_valid, "source", device))
         m = _metrics(vy, vp, 0.5)
         score = ((m["BA"] or 0.0) + (m["AUC"] or 0.0)) / 2
@@ -749,8 +758,9 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
     for g in grid:
         g.pop("_s")
     tau1, cut = best["tau"], best["cut"]
-    hyper = _hyper(cfg, temperature=tau1)
-    base = phase_one(source, cs, ct, hyper, seed, device, transfer=transfer, fold=rotation)
+    hyper = _hyper(cfg, temperature=tau1, searched=searched)
+    base = phase_one(source, cs, ct, hyper, seed, device, transfer=transfer, fold=rotation,
+                     searched=searched)
     phase1_seconds = time.time() - started
     sigma = base.sigma
     sy, sp = _subjects(source_test, _probabilities(base, source_test, "source", device))
@@ -910,6 +920,7 @@ def smoke(config: Mapping, product=None, *, transfer: str, arm: str,
     meta = [{k: v for k, v in r.items() if k != "objectives"} for r in rots]
     record = {"transfer": transfer, "arm": arm, "phase1Attention": phase1_attention,
               "objectives": objectives, "seed": seed, "rotations": list(rotations),
+              "phaseOneSearched": dict(PHASE_ONE_SEARCHED),
               "phaseOneL2": PHASE_ONE_L2, "phaseOneGrid": PHASE_ONE_ATTENTION[phase1_attention],
               "chosenTau": [r["phase1"]["temperature"] for r in rots],
               "phaseTwo": PHASE_TWO, "phaseTwoAggregation": PHASE_TWO_AGGREGATION,
@@ -924,6 +935,7 @@ def smoke(config: Mapping, product=None, *, transfer: str, arm: str,
 
 def remote(config: Mapping, product=None, *, transfer: str, arm: str, objectives: Sequence[str],
            seed: int = 1, lr2: float | None = None, epochs2: int | None = None,
+           phase1_searched: Mapping | None = None,
            rotations: Sequence[int] = (0, 1, 2, 3), workdir=None,
            environ: Mapping[str, str] | None = None) -> dict:
     """Remote entry: one trace with the given phase-2 step and budget, plus the run stamp."""
@@ -932,6 +944,8 @@ def remote(config: Mapping, product=None, *, transfer: str, arm: str, objectives
         PHASE_TWO["lr2"] = float(lr2)
     if epochs2 is not None:
         PHASE_TWO["epochs2"] = int(epochs2)
+    PHASE_ONE_SEARCHED.clear()
+    PHASE_ONE_SEARCHED.update({int(k): v for k, v in (phase1_searched or {}).items()})
     workdir = Path(workdir) if workdir else Path.cwd()
     out = smoke(config, product, transfer=transfer, arm=arm, objectives=list(objectives), seed=int(seed),
                 rotations=rotations, workdir=workdir, environ=environ)
