@@ -57,3 +57,25 @@ def test_planned_work_counts_seeds_and_skips(unit_run):
     ten = CU.planned_work(20, 20, list(range(10)), ("CLUDA",))
     assert ten - one == pytest.approx(9 * (158 + 31 + 7))
     assert CU.planned_work(20, 20, [1], ("AdaptMIL",)) == pytest.approx(20 * 57 + 20 * 38 + 158)
+
+
+def test_parallel_mode_yields_the_same_files_and_methods(tmp_path):
+    config = json.load(open(RUN_CONFIG))["run"]["kwargs"]["config"]
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(XP.SS.SPACE, "epochs", ("cat", (2,)))
+        mp.setitem(XP.SPACE2, "epochs2", ("cat", (1,)))
+        mp.setitem(P.PHASE_TWO, "epochs2", P.PHASE_TWO["epochs2"])
+        out = CU.run(config, seeds=(1,), trials=1, trials2=1, methods=("CLUDA", "CS+CCS", "AdaptMIL"),
+                     workdir=tmp_path, environ={"FORGE_RUN_MODE": "smoke"}, parallel=2,
+                     experiment="sim", rotation=0, setting="subject", shift=1.0, n_subjects=20)
+    assert out["parallel"] == 2
+    (xp,) = glob.glob(str(tmp_path / "xpilot-*.json"))
+    (xc,) = glob.glob(str(tmp_path / "xcompare-*.json"))
+    cmp = json.loads(Path(xc).read_text())
+    assert set(cmp["methods"]) == {"CLUDA", "CS+CCS", "AdaptMIL"}
+    assert "skipped" in cmp["methods"]["AdaptMIL"]
+    assert all("runs" in cmp["methods"][m] for m in ("CLUDA", "CS+CCS"))
+    assert {j["job"] for j in cmp["parallel"]["jobs"]} == {"MIL-CREDA", "CLUDA", "CS+CCS"}
+    assert all(j["error"] is None for j in cmp["parallel"]["jobs"])
+    assert "phase2Search" in json.loads(Path(xp).read_text())
+    assert (tmp_path / "stamp.json").exists() or any(tmp_path.glob("*.json"))

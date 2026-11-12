@@ -313,7 +313,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
     workdir.mkdir(parents=True, exist_ok=True)
-    torch.set_num_threads(max(1, (os.cpu_count() or 2)))
+    torch.set_num_threads(max(1, int(os.environ.get("MIL_CREDA_THREADS") or os.cpu_count() or 2)))
     placement = remote_units.device_placement(config, environ)
     cfg = remote_units.resolve_inputs(campaign.check_config(config), environ=environ)
     campaign.register([m for m in methods if m not in SKIPPED])
