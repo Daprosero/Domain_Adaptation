@@ -44,6 +44,30 @@ class Progress:
         return row
 
 
+_ACTIVE: Progress | None = None
+_WEIGHTS: dict = {}
+
+
+def activate(progress: Progress | None, weights: dict | None = None) -> None:
+    """Make `progress` the target of `tick` (None switches ticking off); `weights` maps a
+    step kind to its expected seconds, so steps of unequal cost count in proportion."""
+    global _ACTIVE, _WEIGHTS
+    _ACTIVE, _WEIGHTS = progress, dict(weights or {})
+
+
+def tick(kind: str, label: str) -> None:
+    """One finished step of `kind`; a no-op unless a Progress is active."""
+    if _ACTIVE is not None:
+        _ACTIVE.step(label, float(_WEIGHTS.get(kind, 1.0)))
+
+
+def optuna_callback(kind: str, name: str, n_trials: int):
+    """An Optuna study callback that ticks once per finished trial."""
+    def cb(study, trial):
+        tick(kind, f"{name} trial {trial.number + 1}/{int(n_trials)}")
+    return cb
+
+
 def probe(config=None, product=None, *, minutes: float = 5.0, every: float = 30.0,
           workdir=None, sleep=time.sleep) -> dict:
     """Log-visibility probe: one progress line every `every` seconds for `minutes` minutes."""

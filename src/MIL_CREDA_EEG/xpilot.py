@@ -65,6 +65,7 @@ from scipy.signal import filtfilt, iirnotch, sosfiltfilt
 from MIL_CREDA_EEG import campaign, eegnet, phase2_select, remote_units, spectral_trunk, two_phase
 from MIL_CREDA_EEG import phase2_trace as P
 from MIL_CREDA_EEG import spectral_search as SS
+from MIL_CREDA_EEG import progress as PG
 from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG import xds_pilot as X
 
@@ -236,7 +237,8 @@ def search_phase1(sides, cfg, device, trials, rotation):
         score = SS.selection_score(y, p)
         return 0.0 if not np.isfinite(score) else score
 
-    study.optimize(objective, n_trials=int(trials))
+    study.optimize(objective, n_trials=int(trials),
+                   callbacks=[PG.optuna_callback("p1", "phase-1 search", trials)])
     return study.best_trial.params, round(float(study.best_value), 4)
 
 
@@ -396,7 +398,8 @@ def search_phase2(sides, cfg, device, trials2, rotation, params1, unit):
         history.append({"params": params, "score": score})
         return score
 
-    study.optimize(objective, n_trials=int(trials2))
+    study.optimize(objective, n_trials=int(trials2),
+                   callbacks=[PG.optuna_callback("milcreda-search", "MIL-CREDA phase-2 search", trials2)])
     best = history[study.best_trial.number]
     return {"params": best["params"], "score": best["score"], "trials": history, "rule": SEARCH2_RULE}
 
@@ -474,7 +477,8 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
           n_subjects: int = 60, sim_seed: int = 0, d_target: float | None = None,
           artifact_rate: float = 0.0, artifact_class_corr: float = 0.0, event_fraction: float = 0.0,
           paired: bool = False, workdir=None,
-          environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2) -> dict:
+          environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2,
+          shared: Mapping | None = None) -> dict:
     if experiment not in EXPERIMENTS:
         raise ValueError(f"experiment in {EXPERIMENTS}")
     environ = os.environ if environ is None else environ
@@ -490,17 +494,19 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
     if epochs2 is not None:
         P.PHASE_TWO["epochs2"] = int(epochs2)
     started = time.time()
-    built = build_sides(cfg, environ, experiment=experiment, rotation=rotation, half=half, direction=direction,
-                        condition=condition, setting=setting, effect=effect, shift=shift,
-                        n_subjects=n_subjects, sim_seed=sim_seed, d_target=d_target,
-                        artifact_rate=artifact_rate, artifact_class_corr=artifact_class_corr,
-                        event_fraction=event_fraction, paired=paired)
+    built = shared["built"] if shared else build_sides(
+        cfg, environ, experiment=experiment, rotation=rotation, half=half, direction=direction,
+        condition=condition, setting=setting, effect=effect, shift=shift,
+        n_subjects=n_subjects, sim_seed=sim_seed, d_target=d_target,
+        artifact_rate=artifact_rate, artifact_class_corr=artifact_class_corr,
+        event_fraction=event_fraction, paired=paired)
     sides, unit, samples, cfg = built["sides"], built["unit"], built["samples"], built["cfg"]
     sim_record, effect = built["sim_record"], built["effect"]
     runs = {}
     with spectral_trunk.installed(), window_samples(samples), attention_export(experiment == "sim"):
         t0 = time.time()
-        params, score = search_phase1(sides, cfg, device, trials, rotation)   # once per unit
+        params, score = (shared["phase1"] if shared else
+                         search_phase1(sides, cfg, device, trials, rotation))   # once per unit
         timing = {"loadSeconds": round(t0 - started, 1), "searchSeconds": round(time.time() - t0, 1),
                   "seedSeconds": {}, "cpus": os.cpu_count(), "torchThreads": torch.get_num_threads(),
                   "bags": {k: len(sides[k]) for k in ("source", "source_test", "target", "target_test")}}
@@ -519,6 +525,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
                 runs[str(sd)] = run_unit(sides, cfg, device, int(sd), rotation, (params, score, trials), unit)
                 timing["seedSeconds"][str(sd)] = round(time.time() - t1, 1)
                 print(unit, "seed", sd, "done", round(time.time() - started), "s", flush=True)
+                PG.tick("milcreda-seed", f"MIL-CREDA seed {sd}")
             phase_two = (P.PHASE_TWO if found is None else
                          {**P.PHASE_TWO, "lambdaGlobal": two_phase.LAMBDA_GLOBAL,
                           "lambdaLocal": two_phase.LAMBDA_LOCAL})

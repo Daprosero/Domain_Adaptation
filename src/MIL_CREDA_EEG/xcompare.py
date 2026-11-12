@@ -53,6 +53,7 @@ import torch
 from optuna.distributions import CategoricalDistribution, FloatDistribution
 from sklearn.metrics import balanced_accuracy_score, cohen_kappa_score, roc_auc_score
 
+from MIL_CREDA_EEG import progress as PG
 from MIL_CREDA_EEG import campaign, eegnet, mil_wrapper, model_store, phase2_select, remote_units
 from MIL_CREDA_EEG import search, spectral_trunk, two_phase
 from MIL_CREDA_EEG import phase2_trace as P
@@ -282,7 +283,8 @@ def search_phase2(method, prepared, context, *, source, source_test, target, cfg
             score = selection_score(model, target, source_test, device)
         return float(score) if np.isfinite(score) else 0.0
 
-    study.optimize(objective, n_trials=int(trials2))
+    study.optimize(objective, n_trials=int(trials2),
+                   callbacks=[PG.optuna_callback(f"search:{method}", f"{method} phase-2 search", trials2)])
     best = dict(study.best_trial.params)
     best_epochs = int(best.pop("epochs2")) if "epochs2" in best else int(epochs2)
     return {"space": _describe(space), "params": best, "bestEpochs2": epochs_of(method, best_epochs),
@@ -301,7 +303,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
           setting: str = "subject", effect: float = 1.0, shift: float = 0.0, n_subjects: int = 60,
           sim_seed: int = 0, d_target: float | None = None, artifact_rate: float = 0.0,
           artifact_class_corr: float = 0.0, event_fraction: float = 0.0, paired: bool = False,
-          workdir=None, environ: Mapping[str, str] | None = None) -> dict:
+          workdir=None, environ: Mapping[str, str] | None = None, shared: Mapping | None = None) -> dict:
     if experiment not in XP.EXPERIMENTS:
         raise ValueError(f"experiment in {XP.EXPERIMENTS}")
     unknown = [m for m in methods if m not in ALL8]
@@ -320,7 +322,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
     fixed_epochs2 = None if epochs2 is None else int(epochs2)    # None: searched, like MIL-CREDA's
     epochs2 = int(P.PHASE_TWO["epochs2"] if epochs2 is None else epochs2)
     started = time.time()
-    built = XP.build_sides(cfg, environ, experiment=experiment, rotation=rotation, half=half,
+    built = shared["built"] if shared else XP.build_sides(cfg, environ, experiment=experiment, rotation=rotation, half=half,
                            direction=direction, condition=condition, setting=setting, effect=effect,
                            shift=shift, n_subjects=n_subjects, sim_seed=sim_seed, d_target=d_target,
                            artifact_rate=artifact_rate, artifact_class_corr=artifact_class_corr,
@@ -330,7 +332,8 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
     out_methods, bases = {}, {}
     with spectral_trunk.installed(), XP.window_samples(samples):
         t0 = time.time()
-        params1, score1 = XP.search_phase1(sides, cfg, device, trials, rotation)   # once per unit
+        params1, score1 = (shared["phase1"] if shared else
+                           XP.search_phase1(sides, cfg, device, trials, rotation))   # once per unit
         timing = {"loadSeconds": round(t0 - started, 1), "searchSeconds": round(time.time() - t0, 1),
                   "baseSeconds": {}, "cpus": os.cpu_count(), "torchThreads": torch.get_num_threads(),
                   "bags": {k: len(sides[k]) for k in ("source", "source_test", "target", "target_test")}}
@@ -340,6 +343,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
             if sd not in bases:
                 bases[sd] = shared_base(sides, cfg, device, sd, rotation, params1, unit)
                 timing["baseSeconds"][str(sd)] = bases[sd]["seconds"]
+                PG.tick("base", f"shared base seed {sd}")
             return bases[sd]
 
         for method in methods:
@@ -367,6 +371,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
                         final = snapshot(model, sides["target_test"], b["cut"], device)
                     rec["runs"][str(sd)] = {"predict": b["predict"], "final": final, "cut": P._s(b["cut"])}
                     rec["seconds"]["seeds"][str(sd)] = round(time.time() - t2, 1)
+                    PG.tick(f"seed:{method}", f"{method} seed {sd}")
                 out_methods[method] = rec
                 print(unit, method, "search", found["score"], "BA", {s: r["final"]["BA"]
                       for s, r in rec["runs"].items()}, round(time.time() - t1), "s", flush=True)
