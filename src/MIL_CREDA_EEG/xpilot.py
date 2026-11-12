@@ -297,28 +297,12 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
     return out
 
 
-def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seeds: Sequence[int] = (1,),
-          half: int = 0, direction: str = "IEEE->Robots", condition: str = "Robots", trials: int = 20,
-          epochs2: int | None = None, setting: str = "subject", effect: float = 1.0, shift: float = 0.0,
-          n_subjects: int = 60, sim_seed: int = 0, d_target: float | None = None,
-          artifact_rate: float = 0.0, artifact_class_corr: float = 0.0, event_fraction: float = 0.0,
-          paired: bool = False, workdir=None,
-          environ: Mapping[str, str] | None = None) -> dict:
-    if experiment not in EXPERIMENTS:
-        raise ValueError(f"experiment in {EXPERIMENTS}")
-    environ = os.environ if environ is None else environ
-    workdir = Path(workdir) if workdir else Path.cwd()
-    workdir.mkdir(parents=True, exist_ok=True)
-    torch.set_num_threads(max(1, (os.cpu_count() or 2)))
-    placement = remote_units.device_placement(config, environ)
-    cfg = remote_units.resolve_inputs(campaign.check_config(config), environ=environ)
-    campaign.register(cfg["strategies"])
-    environment = remote_units.environment_stamp(remote_units.set_deterministic(),
-                                                 remote_units.campaign_identity(cfg, environ), placement)
-    device = torch.device(cfg.get("device", "cpu"))
-    if epochs2 is not None:
-        P.PHASE_TWO["epochs2"] = int(epochs2)
-    started = time.time()
+def build_sides(cfg, environ, *, experiment, rotation, half=0, direction="IEEE->Robots",
+                condition="Robots", setting="subject", effect=1.0, shift=0.0, n_subjects=60, sim_seed=0,
+                d_target=None, artifact_rate=0.0, artifact_class_corr=0.0, event_fraction=0.0,
+                paired=False) -> dict:
+    """The bags and the subject-wise partition of one unit, shared by MIL-CREDA (smoke) and the
+    comparators (xcompare), so every method sees the same subjects on the same sides."""
     sim_record = None
     if experiment == "giga":
         bags = giga_bags(find_giga(environ.get("GIGA_ROOT")))
@@ -376,6 +360,39 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
         sides["s_names"] = names["IEEE" if src_is_ieee else "BALLADEER"]
         sides["t_names"] = names["BALLADEER" if src_is_ieee else "IEEE"]
         unit, samples = f"{direction}:{rotation}", IEEE_WINDOW
+    return {"sides": sides, "unit": unit, "samples": samples, "cfg": cfg, "sim_record": sim_record,
+            "effect": effect}
+
+
+def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seeds: Sequence[int] = (1,),
+          half: int = 0, direction: str = "IEEE->Robots", condition: str = "Robots", trials: int = 20,
+          epochs2: int | None = None, setting: str = "subject", effect: float = 1.0, shift: float = 0.0,
+          n_subjects: int = 60, sim_seed: int = 0, d_target: float | None = None,
+          artifact_rate: float = 0.0, artifact_class_corr: float = 0.0, event_fraction: float = 0.0,
+          paired: bool = False, workdir=None,
+          environ: Mapping[str, str] | None = None) -> dict:
+    if experiment not in EXPERIMENTS:
+        raise ValueError(f"experiment in {EXPERIMENTS}")
+    environ = os.environ if environ is None else environ
+    workdir = Path(workdir) if workdir else Path.cwd()
+    workdir.mkdir(parents=True, exist_ok=True)
+    torch.set_num_threads(max(1, (os.cpu_count() or 2)))
+    placement = remote_units.device_placement(config, environ)
+    cfg = remote_units.resolve_inputs(campaign.check_config(config), environ=environ)
+    campaign.register(cfg["strategies"])
+    environment = remote_units.environment_stamp(remote_units.set_deterministic(),
+                                                 remote_units.campaign_identity(cfg, environ), placement)
+    device = torch.device(cfg.get("device", "cpu"))
+    if epochs2 is not None:
+        P.PHASE_TWO["epochs2"] = int(epochs2)
+    started = time.time()
+    built = build_sides(cfg, environ, experiment=experiment, rotation=rotation, half=half, direction=direction,
+                        condition=condition, setting=setting, effect=effect, shift=shift,
+                        n_subjects=n_subjects, sim_seed=sim_seed, d_target=d_target,
+                        artifact_rate=artifact_rate, artifact_class_corr=artifact_class_corr,
+                        event_fraction=event_fraction, paired=paired)
+    sides, unit, samples, cfg = built["sides"], built["unit"], built["samples"], built["cfg"]
+    sim_record, effect = built["sim_record"], built["effect"]
     runs = {}
     with spectral_trunk.installed(), window_samples(samples), attention_export(experiment == "sim"):
         t0 = time.time()
