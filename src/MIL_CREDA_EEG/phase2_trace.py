@@ -776,10 +776,12 @@ def _epoch_means(steps):
 
 
 def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives,
-                 phase1_attention="neutral", log=print, sides=None):
+                 phase1_attention="neutral", log=print, sides=None, given=None):
     """Phase 1 once (cut model and base model), then every objective from that base.
     `sides` hands the prepared bag lists directly (other datasets: xpilot); otherwise they
-    come from the BALLADEER assignment `a`."""
+    come from the BALLADEER assignment `a`. `given` = {"base", "cut"} hands a phase-1 base and
+    cut already fitted by this same recipe (xcompare.shared_base, searched phase 1, this seed),
+    so every method of a unit starts from the very same model; phase 1 is then not refit."""
     if sides is None:
         prep = lambda side, role, split=None: L._filtered_whole(
             A.side_bags(a, bags, side, rotation, role, split=split), car=True, reject=None, channels=None)
@@ -800,7 +802,7 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
     grid = []
     searched = PHASE_ONE_SEARCHED.get(int(rotation)) or PHASE_ONE_SEARCHED.get(str(rotation))
     taus = (float(searched["tauAtt1"]),) if searched else PHASE_ONE_ATTENTION[phase1_attention]
-    for tau in taus:
+    for tau in (() if given else taus):
         cand = phase_one(inner_train, cs, ct, _hyper(cfg, temperature=tau, searched=searched), seed, device,
                          transfer=transfer, fold=rotation, searched=searched)
         vy, vp = _subjects(inner_valid, _probabilities(cand, inner_valid, "source", device))
@@ -809,13 +811,17 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
         grid.append({"tau": tau, "BA": m["BA"], "AUC": m["AUC"], "score": _s(score),
                      "cut": best_cut(vy, vp), "_s": score})
         del cand
-    best = max(grid, key=lambda g: (g["_s"], g["tau"]))
-    for g in grid:
-        g.pop("_s")
-    tau1, cut = best["tau"], best["cut"]
+    if given:
+        tau1, cut = taus[0], float(given["cut"])
+        grid = [{"tau": tau1, "cut": cut, "note": "shared base (xcompare.shared_base)"}]
+    else:
+        best = max(grid, key=lambda g: (g["_s"], g["tau"]))
+        for g in grid:
+            g.pop("_s")
+        tau1, cut = best["tau"], best["cut"]
     hyper = _hyper(cfg, temperature=tau1, searched=searched)
-    base = phase_one(source, cs, ct, hyper, seed, device, transfer=transfer, fold=rotation,
-                     searched=searched)
+    base = given["base"] if given else phase_one(source, cs, ct, hyper, seed, device, transfer=transfer,
+                                                 fold=rotation, searched=searched)
     phase1_seconds = time.time() - started
     sigma = base.sigma
     sy, sp = _subjects(source_test, _probabilities(base, source_test, "source", device))

@@ -306,14 +306,15 @@ def _arm_names(sides):
     return "copy", names, names     # one montage: copy arm
 
 
-def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
-    """Refit phase 1 at `searched` = (params, score, trials) with `seed`, then phase 2."""
+def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print, given=None):
+    """Refit phase 1 at `searched` = (params, score, trials) with `seed` (or take the `given`
+    shared base and cut), then phase 2."""
     params, score, trials = searched
     P.PHASE_ONE_SEARCHED.clear()
     P.PHASE_ONE_SEARCHED[int(rotation)] = params
     arm, s_names, t_names = _arm_names(sides)
     out = P.run_rotation(unit, cfg, None, None, device, seed, int(rotation), arm, [OBJECTIVE],
-                         log=log, sides={**sides, "s_names": s_names, "t_names": t_names})
+                         log=log, sides={**sides, "s_names": s_names, "t_names": t_names}, given=given)
     out = _lift_attention(out)
     out["arm"] = arm
     out["phase1Search"] = {"params": params, "score": score, "trials": int(trials)}
@@ -538,7 +539,9 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
         with settings:
             for sd in seeds:
                 t1 = time.time()
-                runs[str(sd)] = run_unit(sides, cfg, device, int(sd), rotation, (params, score, trials), unit)
+                given = shared["base_of"](int(sd)) if shared and "base_of" in shared else None
+                runs[str(sd)] = run_unit(sides, cfg, device, int(sd), rotation, (params, score, trials), unit,
+                                         given=given)
                 timing["seedSeconds"][str(sd)] = round(time.time() - t1, 1)
                 print(unit, "seed", sd, "done", round(time.time() - started), "s", flush=True)
                 PG.tick("milcreda-seed", f"MIL-CREDA seed {sd}")

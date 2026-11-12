@@ -341,7 +341,10 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
         print(unit, "phase-1 search", params1, score1, timing["searchSeconds"], "s", flush=True)
 
         def base_of(sd):
-            if sd not in bases:
+            if sd not in bases and shared and "base_of" in shared:     # the unit's one base per seed
+                bases[sd] = shared["base_of"](int(sd))
+                timing["baseSeconds"][str(sd)] = bases[sd]["seconds"]
+            elif sd not in bases:
                 bases[sd] = shared_base(sides, cfg, device, sd, rotation, params1, unit)
                 timing["baseSeconds"][str(sd)] = bases[sd]["seconds"]
                 PG.tick("base", f"shared base seed {sd}")

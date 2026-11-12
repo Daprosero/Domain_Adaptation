@@ -55,8 +55,8 @@ def test_progress_rows_cover_every_stage_and_reach_the_plan(unit_run):
 def test_planned_work_counts_seeds_and_skips(unit_run):
     one = CU.planned_work(20, 20, [1], ("CLUDA",))
     ten = CU.planned_work(20, 20, list(range(10)), ("CLUDA",))
-    assert ten - one == pytest.approx(9 * (158 + 31 + 7))
-    assert CU.planned_work(20, 20, [1], ("AdaptMIL",)) == pytest.approx(20 * 57 + 20 * 38 + 158)
+    assert ten - one == pytest.approx(9 * (53 + 55 + 7))
+    assert CU.planned_work(20, 20, [1], ("AdaptMIL",)) == pytest.approx(20 * 57 + 20 * 38 + 53 + 55)
 
 
 def test_parallel_mode_yields_the_same_files_and_methods(tmp_path):
@@ -79,3 +79,32 @@ def test_parallel_mode_yields_the_same_files_and_methods(tmp_path):
     assert all(j["error"] is None for j in cmp["parallel"]["jobs"])
     assert "phase2Search" in json.loads(Path(xp).read_text())
     assert (tmp_path / "stamp.json").exists() or any(tmp_path.glob("*.json"))
+
+
+def test_one_base_per_seed_is_shared_by_milcreda_and_the_comparators(unit_run):
+    (xp,) = glob.glob(str(unit_run["dir"] / "xpilot-*.json"))
+    (xc,) = glob.glob(str(unit_run["dir"] / "xcompare-*.json"))
+    mil, cmp = json.loads(Path(xp).read_text()), json.loads(Path(xc).read_text())
+    run = mil["runs"]["1"]
+    assert run["cut"] == cmp["base"]["1"]["cut"]
+    assert run["phase1"]["grid"][0]["note"].startswith("shared base")
+    assert run["objectives"][XP.OBJECTIVE]["predict"]["targetTest"]["rows"] == cmp["base"]["1"]["predict"]["rows"]
+
+
+def test_shared_base_gives_milcreda_the_same_result_as_its_own_refit(unit_run, tmp_path):
+    config = json.load(open(RUN_CONFIG))["run"]["kwargs"]["config"]
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(XP.SS.SPACE, "epochs", ("cat", (2,)))
+        mp.setitem(XP.SPACE2, "epochs2", ("cat", (1,)))
+        mp.setitem(P.PHASE_TWO, "epochs2", P.PHASE_TWO["epochs2"])
+        XP.smoke(config, seeds=(1,), trials=1, trials2=1, workdir=tmp_path, environ={}, search2=True,
+                 experiment="sim", rotation=0, setting="subject", shift=1.0, n_subjects=20)
+    (own,) = glob.glob(str(tmp_path / "xpilot-*.json"))
+    (shared,) = glob.glob(str(unit_run["dir"] / "xpilot-*.json"))
+    a = json.loads(Path(own).read_text())["runs"]["1"]
+    b = json.loads(Path(shared).read_text())["runs"]["1"]
+    assert a["cut"] == b["cut"]
+    oa, ob = a["objectives"][XP.OBJECTIVE], b["objectives"][XP.OBJECTIVE]
+    assert oa["predict"]["targetTest"]["rows"] == ob["predict"]["targetTest"]["rows"]
+    last = str(max(int(k) for k in oa["epochs"]))
+    assert oa["epochs"][last]["targetTest"]["rows"] == ob["epochs"][last]["targetTest"]["rows"]

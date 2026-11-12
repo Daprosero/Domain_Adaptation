@@ -26,9 +26,10 @@ from MIL_CREDA_EEG import xcompare as XC
 from MIL_CREDA_EEG import xpilot as XP
 
 # seconds per step measured in the timing probe (timing_phase2_diagnostics.json); search
-# entries are per trial (study seconds / 20 trials), seed entries per report seed
+# entries are per trial (study seconds / 20 trials), seed entries per report seed. MIL-CREDA's
+# seed is light (full_trace False, qm-lite 2026-11-12: 108 s) minus the shared base (~55 s)
 PROBE_SECONDS = {
-    "p1": 57.0, "milcreda-search": 38.0, "milcreda-seed": 158.0, "base": 31.0,
+    "p1": 57.0, "milcreda-search": 38.0, "milcreda-seed": 53.0, "base": 55.0,
     "search:UDA-DDA": 20.0, "seed:UDA-DDA": 22.0,
     "search:CCA-LSC": 17.0, "seed:CCA-LSC": 20.0,
     "search:CASUAL": 29.0, "seed:CASUAL": 15.0,
@@ -48,10 +49,9 @@ def planned_work(trials: int, trials2: int, seeds: Sequence, methods: Sequence[s
     """Expected seconds of the declared steps, the denominator of the progress estimate."""
     w = lambda k: PROBE_SECONDS.get(k, DEFAULT_SECONDS)
     n = len(seeds)
-    total = trials * w("p1") + trials2 * w("milcreda-search") + n * w("milcreda-seed")
+    total = trials * w("p1") + trials2 * w("milcreda-search") + n * (w("milcreda-seed") + w("base"))
     run = [m for m in methods if m not in XC.SKIPPED]
     if run:
-        total += n * w("base")
         total += sum(trials2 * w(f"search:{m}") + n * w(f"seed:{m}") for m in run)
     return total
 
@@ -186,6 +186,16 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
         common = dict(seeds=seeds, trials=trials, trials2=trials2, workdir=workdir, environ=environ,
                       shared=shared, **unit)
         if int(parallel) <= 1:
+            bases = {}
+
+            def base_of(sd):            # one phase-1 base and cut per seed, shared by all 8 methods
+                if sd not in bases:
+                    bases[sd] = XC.shared_base(built["sides"], built["cfg"], device, sd,
+                                               unit.get("rotation", 0), phase1[0], name)
+                    PG.tick("base", f"shared base seed {sd}")
+                return bases[sd]
+
+            common["shared"] = {**shared, "base_of": base_of}
             mil = XP.smoke(config, product, search2=True, full_trace=full_trace, **common)
             cmp = XC.smoke(config, product, methods=methods, **common)
             files = {"xpilot": mil, "xcompare": cmp.get("file")}
