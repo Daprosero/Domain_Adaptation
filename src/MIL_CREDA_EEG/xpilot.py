@@ -189,11 +189,16 @@ def search_phase1(sides, cfg, device, trials, rotation):
         params = SS.suggest(trial)
         y, p = [], []
         for tr, va in sides["inner"]:
-            m = P.phase_one(tr, cs, ct, P._hyper(cfg, temperature=params["tauAtt1"], searched=params),
-                            SS.SEARCH_SEED, device, searched=params)
+            try:
+                m = P.phase_one(tr, cs, ct, P._hyper(cfg, temperature=params["tauAtt1"], searched=params),
+                                SS.SEARCH_SEED, device, searched=params)
+            except V.V63Error:          # collapsed encoder: every bag at one point, sigma undefined
+                trial.set_user_attr("collapsed", True)
+                return 0.0
             vy, vp = P._subjects(va, P._probabilities(m, va, "source", device))
             y, p = y + vy, p + vp
-        return SS.selection_score(y, p)
+        score = SS.selection_score(y, p)
+        return 0.0 if not np.isfinite(score) else score
 
     study.optimize(objective, n_trials=int(trials))
     return study.best_trial.params, round(float(study.best_value), 4)
