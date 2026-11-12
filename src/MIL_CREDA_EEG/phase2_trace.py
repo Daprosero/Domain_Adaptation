@@ -349,7 +349,7 @@ def _prior_rules(prior, state):
         M.pseudolabel = saved
 
 
-MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf", "late")
+MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf", "late", "avg")
 
 
 def _known(objective: str) -> bool:
@@ -496,10 +496,11 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     hardloc = "hardloc" in mods
     conf, conf_state = "conf" in mods, {"conf": []}
     late = "late" in mods
+    avg, avg_state = "avg" in mods, {"n": 0, "mean": None}
     oracle_ce = objective == "oracle-ce"
     head = objective.split("+")[0]
     selection = {"glob": "global term only", "loc": "local term only"}.get(head, two_phase.BOTH_TERMS)
-    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf", "late"} else objective
+    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf", "late", "avg"} else objective
     train_phi = objective not in ("adapt", "oracle-ce")
     joint = two_phase.bridge(model)
     info = arm_init(model)
@@ -593,7 +594,21 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                     "upd": _s(_norm([p.detach() - q for p, q in zip(theta, before)]) / max(_norm(before), 1e-30))})
             if epoch + 1 == equivalence_epochs:
                 theta_at_check = {n: p.detach().clone() for n, p in model.target_trunk.named_parameters()}
-            record["epochs"][str(epoch)] = snapshot(model, ctx, device)
+            if avg and epoch >= LATE_START + LATE_RAMP:   # running mean of the moved weights
+                live = [p.detach().clone() for p in theta + phi]
+                avg_state["n"] += 1
+                if avg_state["mean"] is None:
+                    avg_state["mean"] = [w.clone() for w in live]
+                else:
+                    avg_state["mean"] = [m + (w - m) / avg_state["n"] for m, w in zip(avg_state["mean"], live)]
+                with torch.no_grad():   # snapshot the averaged model, then resume from the live one
+                    for p, m in zip(theta + phi, avg_state["mean"]):
+                        p.copy_(m)
+                    record["epochs"][str(epoch)] = snapshot(model, ctx, device)
+                    for p, w in zip(theta + phi, live):
+                        p.copy_(w)
+            else:
+                record["epochs"][str(epoch)] = snapshot(model, ctx, device)
             e = record["epochs"][str(epoch)]
             log(objective, "epoch", epoch, "test", e["targetTest"]["AUC"], e["targetTest"]["BAcut"],
                 "train", e["targetTrain"]["AUC"], flush=True)
@@ -825,6 +840,32 @@ def smoke(config: Mapping, product=None, *, transfer: str, arm: str,
               "environment": environment}
     (workdir / "phase2-trace.json").write_text(json.dumps(record, default=str), encoding="utf-8")
     return {"ran": [transfer], "seconds": record["seconds"]}
+
+
+def remote(config: Mapping, product=None, *, transfer: str, arm: str, objectives: Sequence[str],
+           seed: int = 1, lr2: float | None = None, epochs2: int | None = None,
+           rotations: Sequence[int] = (0, 1, 2, 3), workdir=None,
+           environ: Mapping[str, str] | None = None) -> dict:
+    """Remote entry: one trace with the given phase-2 step and budget, plus the run stamp."""
+    environ = os.environ if environ is None else environ
+    if lr2 is not None:
+        PHASE_TWO["lr2"] = float(lr2)
+    if epochs2 is not None:
+        PHASE_TWO["epochs2"] = int(epochs2)
+    workdir = Path(workdir) if workdir else Path.cwd()
+    out = smoke(config, product, transfer=transfer, arm=arm, objectives=list(objectives), seed=int(seed),
+                rotations=rotations, workdir=workdir, environ=environ)
+    mode = environ.get(remote_units.RUN_MODE_ENV)
+    if mode:
+        environment = json.loads((workdir / "phase2-trace.json").read_text(encoding="utf-8"))["environment"]
+        payload = {"mode": mode,
+                   "evidence": {"commit": environment["commit"], "sourcesDigest": environment["codeVersion"],
+                                "codeVersion": environment["codeVersion"], "unit": transfer, "units": [transfer],
+                                "complete": True, "gpu": None, "estimates": {}},
+                   "environment": environment, "runs": {"ran": [transfer], "skipped": []}}
+        (Path.cwd() / remote_units.STAMP_FILE).write_text(
+            json.dumps(payload, indent=1, sort_keys=True, ensure_ascii=False, default=str), encoding="utf-8")
+    return out
 
 
 def _pooled_phase1(rots):
