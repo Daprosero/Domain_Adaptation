@@ -349,7 +349,7 @@ def _prior_rules(prior, state):
         M.pseudolabel = saved
 
 
-MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf", "late", "avg")
+MODIFIERS = ("truePL", "affine", "knorm", "prior", "l2sp", "hardloc", "conf", "late", "avg", "cluster")
 
 
 def _known(objective: str) -> bool:
@@ -408,6 +408,41 @@ def _true_rules(on, queue):
 
 
 CONF_SHARE = 0.3
+KMEANS_ITERATIONS = 20
+
+
+def representations(model, bags, side, device) -> np.ndarray:
+    """Bag representations (the classifier's input) with the trunk frozen."""
+    model.eval()
+    with torch.no_grad():
+        pairs = model.bag_pairs(model.embed([b.windows.to(device) for b in bags], side))
+        return model.represent(pairs).detach().cpu().numpy().astype(np.float64)
+
+
+def _unit(x):
+    return x / np.clip(np.linalg.norm(x, axis=1, keepdims=True), 1e-12, None)
+
+
+def spherical_kmeans(z, centroids, iterations=KMEANS_ITERATIONS):
+    """Cosine k-means on the target, seeded with the source class centroids (SHOT/CAN style):
+    cluster k keeps the class of the source centroid it started from. Label-free."""
+    zn, c = _unit(z), _unit(centroids)
+    assign = np.argmax(zn @ c.T, axis=1)
+    for _ in range(iterations):
+        c = _unit(np.stack([zn[assign == k].mean(0) if np.any(assign == k) else c[k]
+                            for k in range(len(c))]))
+        nxt = np.argmax(zn @ c.T, axis=1)
+        if np.array_equal(nxt, assign):
+            break
+        assign = nxt
+    return assign
+
+
+def cluster_labels(model, source, target, device) -> np.ndarray:
+    zs = representations(model, source, "source", device)
+    zt = representations(model, target, "target", device)
+    ys = np.array([b.label for b in source])
+    return spherical_kmeans(zt, np.stack([zs[ys == k].mean(0) for k in range(model.classes)]))
 LATE_START, LATE_RAMP = 10, 5    # "+late": L_loc off for 10 epochs, then a linear ramp over 5
 
 
@@ -492,6 +527,7 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     taken with autograd.grad and handed to Adam, term gradients read on the side."""
     mods = set(objective.split("+")[1:])
     true_pl = "truePL" in mods
+    cluster = "cluster" in mods       # Eq. 22 and the hard local mass from target clusters
     affine, knorm = "affine" in mods, "knorm" in mods
     hardloc = "hardloc" in mods
     conf, conf_state = "conf" in mods, {"conf": []}
@@ -500,7 +536,7 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     oracle_ce = objective == "oracle-ce"
     head = objective.split("+")[0]
     selection = {"glob": "global term only", "loc": "local term only"}.get(head, two_phase.BOTH_TERMS)
-    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf", "late", "avg"} else objective
+    objective = "eq39" if head in ("glob", "loc") or mods & {"truePL", "affine", "knorm", "hardloc", "conf", "late", "avg", "cluster"} else objective
     train_phi = objective not in ("adapt", "oracle-ce")
     joint = two_phase.bridge(model)
     info = arm_init(model)
@@ -529,7 +565,7 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
     record["priorCuts"] = []
     pl_queue, loc_queue = [], []
     with _objective_rules(model, "adapt" if oracle_ce else objective, mu), \
-            _prior_rules(prior, cut_state), _true_rules(true_pl, pl_queue), _knorm_rules(knorm), \
+            _prior_rules(prior, cut_state), _true_rules(true_pl or cluster, pl_queue), _knorm_rules(knorm), \
             _hardloc_rules(hardloc, loc_queue, conf_state), \
             _conf_rules(conf, conf_state):
         for epoch in range(epochs):
@@ -537,6 +573,10 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                 q = _probabilities(model, target, "target", device)
                 cut_state["cut"] = float(np.quantile(q, 1.0 - prior))
                 record["priorCuts"].append(_s(cut_state["cut"]))
+            if cluster:
+                assigned = cluster_labels(model, source, target, device)
+                record.setdefault("clusterAccuracy", []).append(
+                    _s(float(np.mean(assigned == np.asarray(target_labels)))))
             two_phase.set_phase_two_modes(model)
             for step, batch in enumerate(two_phase.shuffled_batches(len(target), hyper["bagsPerStep"], g)):
                 src = [source[i] for i in queues.draw(per_class)]
@@ -547,7 +587,9 @@ def traced_path(model, source, target, target_labels, hyper, seed, device, objec
                 source_ce = M.source_term(model, model.classify(model.represent(pairs_s)), labels)
                 pairs_t = model.bag_pairs(model.embed([b.windows.to(device) for b in tgt], "target"))
                 pl_queue[:] = [int(v) for v in true_t.tolist()]
-                loc_queue[:] = pl_queue[:] if true_pl else []
+                if cluster:
+                    pl_queue[:] = [int(assigned[i]) for i in batch]
+                loc_queue[:] = pl_queue[:] if (true_pl or cluster) else []
                 terms = M.adaptation_terms(model, pairs_s, labels, pairs_t, hyper["tauLocal"])
                 total = two_phase.phase_two_objective(terms, selection)
                 if late:    # delayed, ramped local coefficient
