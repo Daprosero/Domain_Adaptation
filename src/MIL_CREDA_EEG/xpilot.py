@@ -47,6 +47,7 @@ Target labels are read only to score, and to group GiGA test subjects by their p
 from __future__ import annotations
 
 import contextlib
+import copy
 import glob
 import json
 import math
@@ -61,7 +62,7 @@ import scipy.io
 import torch
 from scipy.signal import filtfilt, iirnotch, sosfiltfilt
 
-from MIL_CREDA_EEG import campaign, eegnet, remote_units, spectral_trunk, two_phase
+from MIL_CREDA_EEG import campaign, eegnet, phase2_select, remote_units, spectral_trunk, two_phase
 from MIL_CREDA_EEG import phase2_trace as P
 from MIL_CREDA_EEG import spectral_search as SS
 from MIL_CREDA_EEG import v63_setup as V
@@ -74,6 +75,13 @@ GIGA_WINDOW, GIGA_STEP = 128, 64
 IEEE_WINDOW = 512
 OBJECTIVE = "eq39+hardloc"
 SAMPLER_SEED = 20261112
+#: the opt-in phase-2 search (smoke(search2=True)): TPE over this space, wd2 stays fixed
+SPACE2 = {"lr2": ("log", (1e-4, 1e-2)), "epochs2": ("cat", (10, 20, 40)),
+          "lambda_global": ("log", (0.1, 10.0)), "lambda_local": ("log", (0.1, 10.0)),
+          "tau_local": ("log", (0.1, 10.0))}
+TRIALS2 = 20
+SEARCH2_SEED = 1
+SEARCH2_RULE = "phase2_select.centroid_score on the target adapt half + held-out source test bags"
 
 
 # ------------------------------------------------------------------ data
@@ -277,16 +285,20 @@ def _lift_attention(out):
     return out
 
 
+def _arm_names(sides):
+    """(arm, source names, target names) of a unit."""
+    if "s_names" in sides:      # two montages: warm arm (shared slots copied, the others zeroed)
+        return "warm", sides["s_names"], sides["t_names"]
+    names = [f"ch{i}" for i in range(int(sides["source"][0].windows.shape[1]))]
+    return "copy", names, names     # one montage: copy arm
+
+
 def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
     """Refit phase 1 at `searched` = (params, score, trials) with `seed`, then phase 2."""
     params, score, trials = searched
     P.PHASE_ONE_SEARCHED.clear()
     P.PHASE_ONE_SEARCHED[int(rotation)] = params
-    if "s_names" in sides:      # two montages: warm arm (shared slots copied, the others zeroed)
-        arm, s_names, t_names = "warm", sides["s_names"], sides["t_names"]
-    else:                       # one montage: copy arm
-        arm = "copy"
-        s_names = t_names = [f"ch{i}" for i in range(int(sides["source"][0].windows.shape[1]))]
+    arm, s_names, t_names = _arm_names(sides)
     out = P.run_rotation(unit, cfg, None, None, device, seed, int(rotation), arm, [OBJECTIVE],
                          log=log, sides={**sides, "s_names": s_names, "t_names": t_names})
     out = _lift_attention(out)
@@ -295,6 +307,98 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
     out["subjectsSplit"] = sides["subjects"]
     out["targetTestUnits"] = [b.subject for b in sides["target_test"]]   # row order of the target test
     return out
+
+
+# ------------------------------------------------------------------ phase-2 search (opt-in)
+
+@contextlib.contextmanager
+def phase2_settings(*, lr2, epochs2, lambda_global, lambda_local, tau_local):
+    """Phase 2 at these settings for the duration of the block, defaults restored after:
+    phase2_trace.PHASE_TWO (lr2, epochs2, tauLocal) and Eq. 39's coefficients
+    (two_phase.LAMBDA_GLOBAL/LAMBDA_LOCAL and the "both terms" selection the objective reads)."""
+    saved = (dict(P.PHASE_TWO), two_phase.LAMBDA_GLOBAL, two_phase.LAMBDA_LOCAL,
+             two_phase.TERM_SELECTIONS[two_phase.BOTH_TERMS])
+    P.PHASE_TWO.update({"lr2": float(lr2), "epochs2": int(epochs2), "tauLocal": float(tau_local)})
+    two_phase.LAMBDA_GLOBAL, two_phase.LAMBDA_LOCAL = float(lambda_global), float(lambda_local)
+    two_phase.TERM_SELECTIONS[two_phase.BOTH_TERMS] = (float(lambda_global), float(lambda_local))
+    try:
+        yield
+    finally:
+        P.PHASE_TWO.clear()
+        P.PHASE_TWO.update(saved[0])
+        two_phase.LAMBDA_GLOBAL, two_phase.LAMBDA_LOCAL = saved[1], saved[2]
+        two_phase.TERM_SELECTIONS[two_phase.BOTH_TERMS] = saved[3]
+
+
+def phase2_base(sides, cfg, device, seed, rotation, params1, unit):
+    """The phase-1 base model run_rotation fits for phase 2 (searched params, all the source
+    training subjects, `seed`); phase 2's settings do not enter it, so a search fits it once."""
+    cs, ct = int(sides["source"][0].windows.shape[1]), int(sides["target"][0].windows.shape[1])
+    hyper = P._hyper(cfg, temperature=float(params1["tauAtt1"]), searched=params1)
+    return P.phase_one(sides["source"], cs, ct, hyper, seed, device, transfer=unit, fold=int(rotation),
+                       searched=params1)
+
+
+def _blind_reps(model, bags, side, device):
+    """Bag representations (the head's input) and the predicted class (Eq. 22); no label read."""
+    model.eval()
+    with torch.no_grad():
+        Z = model.represent(model.bag_pairs(model.embed([b.windows.to(device) for b in bags], side)))
+        pred = model.classify(Z).argmax(1)
+    return Z.detach().cpu().numpy().astype(np.float64), pred.cpu().numpy()
+
+
+def phase2_trial(base, sides, cfg, device, seed, params1, params2):
+    """Phase 2 (OBJECTIVE) from a copy of `base` at `params2`, on the unlabelled target adapt
+    half, then its label-free score. The end model equals run_rotation's at the same settings.
+    Reads sides["source"], ["source_test"] and ["target"] (windows only); never the target test."""
+    arm, s_names, t_names = _arm_names(sides)
+    source, target = sides["source"], sides["target"]
+    with phase2_settings(**params2):
+        hyper = P._hyper(cfg, temperature=float(params1["tauAtt1"]), searched=params1)
+        model = copy.deepcopy(base)
+        model.attention_gamma = P.PHASE_TWO_AGGREGATION["gamma"]
+        model.attention_temperature = P.PHASE_TWO_AGGREGATION["temperature"]
+        P.traced_path(model, source, target, None, hyper, seed, device, OBJECTIVE, 0.0,
+                      lambda m: P.initialise_target(m, arm, target, s_names, t_names),
+                      {"sigma": base.sigma}, P.PHASE_TWO["epochs2"], P.EQUIVALENCE_EPOCHS,
+                      log=lambda *a, **k: None, light=True)
+    zt, pseudo = _blind_reps(model, target, "target", device)
+    zs, _ = _blind_reps(model, sides["source_test"], "source", device)
+    score = phase2_select.centroid_score(zt, pseudo, zs, [b.label for b in sides["source_test"]])
+    return {"model": model, "score": float(score)}
+
+
+def _suggest2(trial):
+    out = {}
+    for name, (kind, values) in SPACE2.items():
+        out[name] = (trial.suggest_categorical(name, list(values)) if kind == "cat" else
+                     trial.suggest_float(name, values[0], values[1], log=True))
+    return out
+
+
+def search_phase2(sides, cfg, device, trials2, rotation, params1, unit):
+    """TPE over SPACE2, once per unit: phase 1 at `params1` and seed SEARCH2_SEED (fit once),
+    each trial's phase 2 on the target adapt half, scored by phase2_select.centroid_score."""
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    study = optuna.create_study(direction="maximize",
+                                sampler=optuna.samplers.TPESampler(seed=SAMPLER_SEED + int(rotation)))
+    base = phase2_base(sides, cfg, device, SEARCH2_SEED, rotation, params1, unit)
+    history = []
+
+    def objective(trial):
+        params = _suggest2(trial)
+        try:
+            score = phase2_trial(base, sides, cfg, device, SEARCH2_SEED, params1, params)["score"]
+        except V.V63Error:
+            score = 0.0
+        score = round(float(score), 4) if np.isfinite(score) else 0.0
+        history.append({"params": params, "score": score})
+        return score
+
+    study.optimize(objective, n_trials=int(trials2))
+    best = history[study.best_trial.number]
+    return {"params": best["params"], "score": best["score"], "trials": history, "rule": SEARCH2_RULE}
 
 
 def build_sides(cfg, environ, *, experiment, rotation, half=0, direction="IEEE->Robots",
@@ -370,7 +474,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
           n_subjects: int = 60, sim_seed: int = 0, d_target: float | None = None,
           artifact_rate: float = 0.0, artifact_class_corr: float = 0.0, event_fraction: float = 0.0,
           paired: bool = False, workdir=None,
-          environ: Mapping[str, str] | None = None) -> dict:
+          environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2) -> dict:
     if experiment not in EXPERIMENTS:
         raise ValueError(f"experiment in {EXPERIMENTS}")
     environ = os.environ if environ is None else environ
@@ -401,18 +505,33 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
                   "seedSeconds": {}, "cpus": os.cpu_count(), "torchThreads": torch.get_num_threads(),
                   "bags": {k: len(sides[k]) for k in ("source", "source_test", "target", "target_test")}}
         print(unit, "phase-1 search", params, score, timing["searchSeconds"], "s", flush=True)
-        for sd in seeds:
-            t1 = time.time()
-            runs[str(sd)] = run_unit(sides, cfg, device, int(sd), rotation, (params, score, trials), unit)
-            timing["seedSeconds"][str(sd)] = round(time.time() - t1, 1)
-            print(unit, "seed", sd, "done", round(time.time() - started), "s", flush=True)
+        found, settings = None, contextlib.nullcontext()
+        if search2:                                                       # once per unit too
+            t2 = time.time()
+            found = search_phase2(sides, cfg, device, trials2, rotation, params, unit)
+            timing["search2Seconds"] = round(time.time() - t2, 1)
+            settings = phase2_settings(**found["params"])
+            print(unit, "phase-2 search", found["params"], found["score"], timing["search2Seconds"], "s",
+                  flush=True)
+        with settings:
+            for sd in seeds:
+                t1 = time.time()
+                runs[str(sd)] = run_unit(sides, cfg, device, int(sd), rotation, (params, score, trials), unit)
+                timing["seedSeconds"][str(sd)] = round(time.time() - t1, 1)
+                print(unit, "seed", sd, "done", round(time.time() - started), "s", flush=True)
+            phase_two = (P.PHASE_TWO if found is None else
+                         {**P.PHASE_TWO, "lambdaGlobal": two_phase.LAMBDA_GLOBAL,
+                          "lambdaLocal": two_phase.LAMBDA_LOCAL})
     name = f"xpilot-{unit.replace(':', '-').replace('>', '').replace('-', '_')}.json"
     sim = ({"setting": setting, "effect": effect, "shift": shift, "nSubjects": n_subjects, "simSeed": sim_seed,
             **sim_record} if experiment == "sim" else None)
-    (workdir / name).write_text(json.dumps({"experiment": experiment, "unit": unit, "rotation": rotation, "sim": sim,
-                                            "half": half, "objective": OBJECTIVE, "runs": runs,
-                                            "phaseTwo": P.PHASE_TWO, "seconds": round(time.time() - started), "timing": timing,
-                                            "environment": environment}, default=str), encoding="utf-8")
+    record = {"experiment": experiment, "unit": unit, "rotation": rotation, "sim": sim,
+              "half": half, "objective": OBJECTIVE, "runs": runs,
+              "phaseTwo": phase_two, "seconds": round(time.time() - started), "timing": timing,
+              "environment": environment}
+    if found is not None:
+        record["phase2Search"] = found
+    (workdir / name).write_text(json.dumps(record, default=str), encoding="utf-8")
     mode = environ.get(remote_units.RUN_MODE_ENV)
     if mode:
         payload = {"mode": mode,
