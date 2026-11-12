@@ -729,19 +729,27 @@ def _epoch_means(steps):
 
 
 def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives,
-                 phase1_attention="neutral", log=print):
-    """Phase 1 once (cut model and base model), then every objective from that base."""
-    prep = lambda side, role, split=None: L._filtered_whole(
-        A.side_bags(a, bags, side, rotation, role, split=split), car=True, reject=None, channels=None)
-    source, source_test = prep("source", A.REFIT_ROLE), prep("source", "test")
-    target, target_test = prep("target", A.REFIT_ROLE), prep("target", "test")
-    names = lambda side: list(A.side_bags(a, bags, side, rotation, "test")[0].channels)
-    s_names, t_names = names("source"), names("target")
+                 phase1_attention="neutral", log=print, sides=None):
+    """Phase 1 once (cut model and base model), then every objective from that base.
+    `sides` hands the prepared bag lists directly (other datasets: xpilot); otherwise they
+    come from the BALLADEER assignment `a`."""
+    if sides is None:
+        prep = lambda side, role, split=None: L._filtered_whole(
+            A.side_bags(a, bags, side, rotation, role, split=split), car=True, reject=None, channels=None)
+        names = lambda side: list(A.side_bags(a, bags, side, rotation, "test")[0].channels)
+        sides = {"source": prep("source", A.REFIT_ROLE), "source_test": prep("source", "test"),
+                 "target": prep("target", A.REFIT_ROLE), "target_test": prep("target", "test"),
+                 "inner_train": prep("source", "inner_train", 0),
+                 "inner_valid": prep("source", "inner_validation", 0),
+                 "s_names": names("source"), "t_names": names("target")}
+    source, source_test = sides["source"], sides["source_test"]
+    target, target_test = sides["target"], sides["target_test"]
+    s_names, t_names = sides["s_names"], sides["t_names"]
     cs, ct = int(source[0].windows.shape[1]), int(target[0].windows.shape[1])
     started = time.time()
     # the phase-1 temperature (searched or fixed) and the decision cut, both from inner split 0:
     # each candidate trains on its source training subjects and is scored on its validation ones
-    inner_train, inner_valid = prep("source", "inner_train", 0), prep("source", "inner_validation", 0)
+    inner_train, inner_valid = sides["inner_train"], sides["inner_valid"]
     grid = []
     searched = PHASE_ONE_SEARCHED.get(int(rotation)) or PHASE_ONE_SEARCHED.get(str(rotation))
     taus = (float(searched["tauAtt1"]),) if searched else PHASE_ONE_ATTENTION[phase1_attention]
