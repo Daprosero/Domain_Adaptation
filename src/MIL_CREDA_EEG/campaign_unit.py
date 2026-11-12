@@ -108,7 +108,7 @@ def _job(job: str) -> dict:
     common = {**f["common"], "workdir": sub}
     try:
         if job == "MIL-CREDA":
-            XP.smoke(f["config"], f["product"], search2=True, **common)
+            XP.smoke(f["config"], f["product"], search2=True, full_trace=f["full_trace"], **common)
         else:
             XC.smoke(f["config"], f["product"], methods=(job,), **common)
         error = None
@@ -156,7 +156,7 @@ PARALLEL_PROCESSES = 4
 
 def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: int = 20, trials2: int = 20,
         methods: Sequence[str] = XC.ALL8, workdir=None, environ: Mapping[str, str] | None = None,
-        parallel: int = 1, **unit) -> dict:
+        parallel: int = 1, full_trace: bool = True, **unit) -> dict:
     """`parallel` > 1 runs MIL-CREDA and each comparator as separate jobs over that many forked
     processes of one torch thread each, after the shared phase-1 search; 1 runs them in sequence."""
     unknown = [k for k in unit if k not in BUILD_KEYS]
@@ -186,7 +186,7 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
         common = dict(seeds=seeds, trials=trials, trials2=trials2, workdir=workdir, environ=environ,
                       shared=shared, **unit)
         if int(parallel) <= 1:
-            mil = XP.smoke(config, product, search2=True, **common)
+            mil = XP.smoke(config, product, search2=True, full_trace=full_trace, **common)
             cmp = XC.smoke(config, product, methods=methods, **common)
             files = {"xpilot": mil, "xcompare": cmp.get("file")}
         else:
@@ -194,7 +194,7 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
             jobs.sort(key=lambda j: -job_seconds(j, trials2, seeds))          # longest first
             payload = {"config": config, "product": product, "common": {**common, "environ": dict(environ)},
                        "workdir": str(workdir), "name": name, "trials2": trials2, "seeds": list(seeds),
-                       "settings": _settings(), "threads": 1}
+                       "settings": _settings(), "threads": 1, "full_trace": bool(full_trace)}
             print(f"[{name}] {len(jobs)} jobs over {int(parallel)} processes", flush=True)
             with mp.get_context("spawn").Pool(int(parallel), initializer=_init, initargs=(payload,),
                                               maxtasksperchild=1) as pool:

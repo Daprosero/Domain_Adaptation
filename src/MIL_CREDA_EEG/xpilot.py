@@ -268,6 +268,17 @@ def attention_export(on: bool):
         P.ATTENTION_EXPORT = saved
 
 
+@contextlib.contextmanager
+def full_trace_mode(on: bool):
+    """phase2_trace.FULL_TRACE for the duration of a run, restored after."""
+    saved = P.FULL_TRACE
+    P.FULL_TRACE = bool(on)
+    try:
+        yield
+    finally:
+        P.FULL_TRACE = saved
+
+
 def _lift_attention(out):
     """Move the snapshots' attention weights to out["attention"]: predict and the last
     phase-2 epoch per objective, dropped from every other snapshot."""
@@ -479,7 +490,10 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
           artifact_rate: float = 0.0, artifact_class_corr: float = 0.0, event_fraction: float = 0.0,
           paired: bool = False, spread: float = 1.0, workdir=None,
           environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2,
-          shared: Mapping | None = None) -> dict:
+          shared: Mapping | None = None, full_trace: bool = True) -> dict:
+    """One pilot unit: phase-1 search, optional phase-2 search, then `seeds`. `full_trace` False
+    (grid units): phase 2 runs light and records only predict and the
+    final epoch, with no attention export and no equivalence check; the end model is the same."""
     if experiment not in EXPERIMENTS:
         raise ValueError(f"experiment in {EXPERIMENTS}")
     environ = os.environ if environ is None else environ
@@ -504,7 +518,8 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
     sides, unit, samples, cfg = built["sides"], built["unit"], built["samples"], built["cfg"]
     sim_record, effect = built["sim_record"], built["effect"]
     runs = {}
-    with spectral_trunk.installed(), window_samples(samples), attention_export(experiment == "sim"):
+    with spectral_trunk.installed(), window_samples(samples), \
+            attention_export(experiment == "sim" and full_trace), full_trace_mode(full_trace):
         t0 = time.time()
         params, score = (shared["phase1"] if shared else
                          search_phase1(sides, cfg, device, trials, rotation))   # once per unit
@@ -539,6 +554,8 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
               "environment": environment}
     if found is not None:
         record["phase2Search"] = found
+    if not full_trace:
+        record["fullTrace"] = False
     (workdir / name).write_text(json.dumps(record, default=str), encoding="utf-8")
     mode = environ.get(remote_units.RUN_MODE_ENV)
     if mode:
