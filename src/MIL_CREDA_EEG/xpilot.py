@@ -258,15 +258,21 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
         sides, unit, samples = cross_dataset_sides(src, tgt, rotation), f"{direction}:{rotation}", IEEE_WINDOW
     runs = {}
     with spectral_trunk.installed(), window_samples(samples):
+        t0 = time.time()
         params, score = search_phase1(sides, cfg, device, trials, rotation)   # once per unit
-        print(unit, "phase-1 search", params, score, round(time.time() - started), "s", flush=True)
+        timing = {"loadSeconds": round(t0 - started, 1), "searchSeconds": round(time.time() - t0, 1),
+                  "seedSeconds": {}, "cpus": os.cpu_count(), "torchThreads": torch.get_num_threads(),
+                  "bags": {k: len(sides[k]) for k in ("source", "source_test", "target", "target_test")}}
+        print(unit, "phase-1 search", params, score, timing["searchSeconds"], "s", flush=True)
         for sd in seeds:
+            t1 = time.time()
             runs[str(sd)] = run_unit(sides, cfg, device, int(sd), rotation, (params, score, trials), unit)
+            timing["seedSeconds"][str(sd)] = round(time.time() - t1, 1)
             print(unit, "seed", sd, "done", round(time.time() - started), "s", flush=True)
     name = f"xpilot-{unit.replace(':', '-').replace('>', '').replace('-', '_')}.json"
     (workdir / name).write_text(json.dumps({"experiment": experiment, "unit": unit, "rotation": rotation,
                                             "half": half, "objective": OBJECTIVE, "runs": runs,
-                                            "phaseTwo": P.PHASE_TWO, "seconds": round(time.time() - started),
+                                            "phaseTwo": P.PHASE_TWO, "seconds": round(time.time() - started), "timing": timing,
                                             "environment": environment}, default=str), encoding="utf-8")
     mode = environ.get(remote_units.RUN_MODE_ENV)
     if mode:
