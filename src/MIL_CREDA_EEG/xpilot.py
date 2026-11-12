@@ -11,7 +11,8 @@ adaptation) against the end of phase 2.
 * "giga": GiGA motor imagery (Cho et al. 2017), cross-subject. A bag is one trial; its
   instances are 1 s windows at a 0.5 s step over the stored 2.5-5 s segment (0.5-3 s after
   the cue), all with the trial's label. 1-45 Hz band-pass on the whole segment, then common
-  average, then the cut. At most TRIALS_PER_CLASS trials per class per subject (the first ones, by index).
+  average, then the cut. TRIALS_PER_SUBJECT trials per subject, evenly spaced over the session by index;
+  no label is read to choose them.
 * "ieee": IEEE ADHD (Nasrabadi et al.), cross-subject. A bag is one subject: 4 s windows at
   50% overlap, 50 Hz notch, then the v63 instance rule (<= 60 windows, 1-45 Hz, average).
 * "xds": cross-dataset ADHD between IEEE and one BALLADEER task (default L1, the largest),
@@ -52,7 +53,7 @@ from MIL_CREDA_EEG import xds_pilot as X
 
 EXPERIMENTS = ("giga", "ieee", "xds")
 FOLDS, INNER, XDS_FOLDS = 5, 3, 4
-TRIALS_PER_CLASS = 25
+TRIALS_PER_SUBJECT = 50
 GIGA_WINDOW, GIGA_STEP = 128, 64
 IEEE_WINDOW = 512
 OBJECTIVE = "eq39+hardloc"
@@ -78,11 +79,11 @@ def giga_bags(root) -> list[two_phase.BagTensor]:
         x = sosfiltfilt(V.SOS, x - x.mean(-1, keepdims=True), axis=-1)
         x = x - x.mean(1, keepdims=True)                       # common average
         starts = range(0, x.shape[-1] - GIGA_WINDOW + 1, GIGA_STEP)
-        for c in (0, 1):
-            for t in np.flatnonzero(y == c)[:TRIALS_PER_CLASS]:
-                w = np.stack([x[t, :, s:s + GIGA_WINDOW] for s in starts])
-                out.append(two_phase.BagTensor(f"G{sid:02d}-t{t:03d}", "GiGA", int(c),
-                                               torch.from_numpy(np.ascontiguousarray(w)).float()))
+        # label-free: TRIALS_PER_SUBJECT trials evenly spaced over the whole session, by index
+        for t in np.unique(np.linspace(0, len(y) - 1, min(TRIALS_PER_SUBJECT, len(y))).round().astype(int)):
+            w = np.stack([x[t, :, s:s + GIGA_WINDOW] for s in starts])
+            out.append(two_phase.BagTensor(f"G{sid:02d}-t{t:03d}", "GiGA", int(y[t]),
+                                           torch.from_numpy(np.ascontiguousarray(w)).float()))
     return out
 
 
