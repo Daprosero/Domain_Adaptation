@@ -130,15 +130,17 @@ def _global_seed(seed: int):
 # ------------------------------------------------------------------ subjects
 
 
-def subject_identity(rng) -> dict:
+def subject_identity(rng, spread: float = 1.0) -> dict:
     """What makes a subject: IAF, aperiodic exponent, per-source theta/beta peak and gain.
-    Drawn in the order the original generator drew them."""
-    iaf, exponent = rng.normal(10.0, 1.0), rng.normal(-1.8, 0.2)
+    Drawn in the order the original generator drew them. `spread` scales every between-subject
+    standard deviation (1.0 reproduces the original draws exactly; the draw order is unchanged)."""
+    k = float(spread)
+    iaf, exponent = rng.normal(10.0, 1.0 * k), rng.normal(-1.8, 0.2 * k)
     theta, beta, gain = [], [], []
     for _ in SOURCES:
-        theta.append(rng.normal(6.0, 0.5))
-        beta.append(rng.normal(20.0, 2.0))
-        gain.append(rng.lognormal(0.0, 0.2))
+        theta.append(rng.normal(6.0, 0.5 * k))
+        beta.append(rng.normal(20.0, 2.0 * k))
+        gain.append(rng.lognormal(0.0, 0.2 * k))
     return {"iaf": float(iaf), "exponent": float(exponent), "thetaFreq": [float(v) for v in theta],
             "betaFreq": [float(v) for v in beta], "gain": [float(v) for v in gain]}
 
@@ -195,13 +197,14 @@ def event_cover(rng, fraction: float) -> tuple[np.ndarray, np.ndarray, list[int]
     return soft, cover, picked
 
 
-def subject_parts(label, dev, seed, *, identity_seed=None, index=0, event_fraction=0.0) -> dict:
+def subject_parts(label, dev, seed, *, identity_seed=None, index=0, event_fraction=0.0,
+                  spread: float = 1.0) -> dict:
     """Everything one subject's recording is made of, before the class effect is applied.
     `seed` drives the recording (oscillation bursts, sensor noise, events); the identity
     comes from `identity_seed` when given, else from the recording's own generator."""
     rng = np.random.default_rng(seed)
-    ident = (subject_identity(np.random.default_rng([int(identity_seed), int(index), 0x1D]))
-             if identity_seed is not None else subject_identity(rng))
+    ident = (subject_identity(np.random.default_rng([int(identity_seed), int(index), 0x1D]), spread)
+             if identity_seed is not None else subject_identity(rng, spread))
     with _global_seed(seed):
         comps = source_components(ident)
     noise = rng.standard_normal((len(MONTAGES[dev["montage"]]), comps.shape[-1]))
@@ -309,9 +312,9 @@ def _windows(x) -> np.ndarray:
 
 def subject_bag(name, label, dev, effect, invert, seed, *, identity_seed=None, index=0,
                 artifact_rate=0.0, artifact_class_corr=0.0, event_fraction=0.0,
-                event_outside=EVENT_OUTSIDE) -> two_phase.BagTensor:
+                event_outside=EVENT_OUTSIDE, spread: float = 1.0) -> two_phase.BagTensor:
     parts = subject_parts(label, dev, seed, identity_seed=identity_seed, index=index,
-                          event_fraction=event_fraction)
+                          event_fraction=event_fraction, spread=spread)
     x = lead_field(dev["montage"]) @ source_signals(parts, effect, invert, event_fraction, event_outside)
     x = x / (np.std(x) + 1e-12)
     arng = np.random.default_rng([int(seed), 0xA7])          # artifacts: never the label's draws
@@ -335,14 +338,14 @@ def subject_bag(name, label, dev, effect, invert, seed, *, identity_seed=None, i
 
 def domain(tag, n_subjects, dev, effect, invert=False, seed=0, *, identity_seed=None,
            artifact_rate=0.0, artifact_class_corr=0.0, event_fraction=0.0,
-           event_outside=EVENT_OUTSIDE) -> list[two_phase.BagTensor]:
+           event_outside=EVENT_OUTSIDE, spread: float = 1.0) -> list[two_phase.BagTensor]:
     """`n_subjects` subjects, balanced classes, of one simulated domain. With the same
     `identity_seed`, two domains hold the same subjects (identity and class) under their own
     devices and recordings; subject i is `<tag>-S<i>` in both, so the suffix pairs them."""
     return [subject_bag(f"{tag}-S{i:03d}", i % 2, dev, effect, invert, seed * 100003 + i,
                         identity_seed=identity_seed, index=i, artifact_rate=artifact_rate,
                         artifact_class_corr=artifact_class_corr, event_fraction=event_fraction,
-                        event_outside=event_outside)
+                        event_outside=event_outside, spread=spread)
             for i in range(n_subjects)]
 
 

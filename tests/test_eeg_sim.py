@@ -199,3 +199,13 @@ def test_xpilot_sim_default_path_unchanged_by_the_attention_hook(tmp_path, monke
     without = _tiny(tmp_path / "off", monkeypatch)
     assert "attention" not in without["runs"]["1"]
     assert _metrics(with_hook) == _metrics(without)
+
+
+def test_subject_spread_one_reproduces_identity_and_two_widens_it():
+    import numpy as np
+    from MIL_CREDA_EEG import eeg_sim as E
+    a = E.subject_identity(np.random.default_rng(5))
+    b = E.subject_identity(np.random.default_rng(5), 1.0)
+    assert a == b
+    iaf = lambda k: np.std([E.subject_identity(np.random.default_rng(i), k)["iaf"] for i in range(400)])
+    assert 1.8 < iaf(2.0) / iaf(1.0) < 2.2

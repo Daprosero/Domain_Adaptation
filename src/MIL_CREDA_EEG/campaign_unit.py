@@ -37,7 +37,7 @@ DEFAULT_SECONDS = 15.0
 
 BUILD_KEYS = ("experiment", "rotation", "half", "direction", "condition", "setting", "effect", "shift",
               "n_subjects", "sim_seed", "d_target", "artifact_rate", "artifact_class_corr",
-              "event_fraction", "paired")
+              "event_fraction", "paired", "spread")
 
 
 def planned_work(trials: int, trials2: int, seeds: Sequence, methods: Sequence[str]) -> float:
