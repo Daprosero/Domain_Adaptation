@@ -15,9 +15,10 @@ adaptation) against the end of phase 2.
   paradigm). GiGA is the control: TRIALS_PER_CLASS trials per class per subject, the first ones.
 * "ieee": IEEE ADHD (Nasrabadi et al.), cross-subject. A bag is one subject: 4 s windows at
   50% overlap, 50 Hz notch, then the v63 instance rule (<= 60 windows, 1-45 Hz, average).
-* "xds": cross-dataset ADHD between IEEE and one BALLADEER task (default L1, the largest),
-  both directions, on the 19 IEEE channels (all present in L1). The source is the whole
-  source dataset; BALLADEER's bags are its stored 4 s windows.
+* "xds": cross-dataset ADHD between IEEE and one BALLADEER task (default Robots, the best
+  source domain known), both directions, on the IEEE channels the task also records (10 for
+  Robots). The source is the whole source dataset. Both sides use 4 s windows at 50% overlap:
+  BALLADEER's stored contiguous 4 s windows gain the half-shifted window between neighbours.
 
 Partition, always by subject (no subject on two sides, ever):
 * cross-subject: subject i (sorted, per class) goes to fold i % 5. Rotation r: the target is
@@ -104,6 +105,17 @@ def ieee_bags(root, channels=X.IEEE_CHANNELS) -> list[two_phase.BagTensor]:
     return out
 
 
+def half_overlap(w, starts, seconds=4.0):
+    """4 s windows at 50% overlap from stored contiguous 4 s windows: between two windows that
+    start exactly `seconds` apart, the second half of one plus the first half of the next."""
+    half, out = w.shape[-1] // 2, []
+    for k in range(len(w)):
+        out.append(w[k])
+        if k + 1 < len(w) and abs(float(starts[k + 1]) - float(starts[k]) - seconds) < 1e-6:
+            out.append(np.concatenate([w[k][:, half:], w[k + 1][:, :half]], axis=-1))
+    return np.stack(out)
+
+
 def balladeer_bags(cfg, condition, channels) -> list[two_phase.BagTensor]:
     bags = campaign.load_bags(cfg)
     out = []
@@ -112,6 +124,7 @@ def balladeer_bags(cfg, condition, channels) -> list[two_phase.BagTensor]:
         w = np.asarray(bag.windows(), dtype=np.float64)
         names = list(bag.channels)
         w = w[:, [names.index(c) for c in channels]]
+        w = half_overlap(w, bag.marks()["window_start_s"])
         label = int(bag.label if isinstance(bag.label, (int, np.integer))
                     else two_phase.CLASSES.index(bag.label))
         out.append(two_phase.BagTensor(s, condition, label, X.instances(w)))
@@ -234,7 +247,7 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print):
 
 
 def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seeds: Sequence[int] = (1,),
-          half: int = 0, direction: str = "IEEE->L1", condition: str = "L1", trials: int = 20,
+          half: int = 0, direction: str = "IEEE->Robots", condition: str = "Robots", trials: int = 20,
           epochs2: int | None = None, workdir=None, environ: Mapping[str, str] | None = None) -> dict:
     if experiment not in EXPERIMENTS:
         raise ValueError(f"experiment in {EXPERIMENTS}")
@@ -259,8 +272,11 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
         bags = ieee_bags(X.find_ieee(environ.get("IEEE_ROOT")))
         sides, unit, samples = cross_subject_sides(bags, rotation, half), f"ieee:{rotation}:{half}", IEEE_WINDOW
     else:
-        ieee = ieee_bags(X.find_ieee(environ.get("IEEE_ROOT")))
-        ball = balladeer_bags(cfg, condition, X.IEEE_CHANNELS)
+        shared = [c for c in X.IEEE_CHANNELS
+                  if c in campaign.load_bags(cfg).get(sorted(campaign.load_bags(cfg).holders(condition))[0],
+                                                       condition).channels]
+        ieee = ieee_bags(X.find_ieee(environ.get("IEEE_ROOT")), shared)
+        ball = balladeer_bags(cfg, condition, shared)
         src, tgt = (ieee, ball) if direction.startswith("IEEE") else (ball, ieee)
         sides, unit, samples = cross_dataset_sides(src, tgt, rotation), f"{direction}:{rotation}", IEEE_WINDOW
     runs = {}
