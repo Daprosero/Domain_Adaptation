@@ -108,3 +108,31 @@ def test_shared_base_gives_milcreda_the_same_result_as_its_own_refit(unit_run, t
     assert oa["predict"]["targetTest"]["rows"] == ob["predict"]["targetTest"]["rows"]
     last = str(max(int(k) for k in oa["epochs"]))
     assert oa["epochs"][last]["targetTest"]["rows"] == ob["epochs"][last]["targetTest"]["rows"]
+
+
+def test_a_collapsing_best_trial_falls_back_to_the_next_ranked_one(tmp_path):
+    from MIL_CREDA_EEG import v63_setup as V
+    from MIL_CREDA_EEG import xcompare as XC
+    config = json.load(open(RUN_CONFIG))["run"]["kwargs"]["config"]
+    real = XC.shared_base
+    first = {}
+
+    def flaky(sides, cfg, device, seed, rotation, params1, unit):
+        first.setdefault("params", dict(params1))
+        if dict(params1) == first["params"]:
+            raise V.V63Error("the between-bag median distance is 0.0")
+        return real(sides, cfg, device, seed, rotation, params1, unit)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(XP.SS.SPACE, "epochs", ("cat", (2,)))
+        mp.setitem(XP.SPACE2, "epochs2", ("cat", (1,)))
+        mp.setitem(P.PHASE_TWO, "epochs2", P.PHASE_TWO["epochs2"])
+        mp.setattr(XC, "shared_base", flaky)
+        out = CU.run(config, seeds=(1,), trials=2, trials2=1, methods=("CLUDA",), workdir=tmp_path,
+                     environ={}, experiment="sim", rotation=0, setting="subject", shift=1.0, n_subjects=20)
+    sel = out["files"]["phase1Selection"]
+    assert sel["rank"] == 1 and len(sel["collapsed"]) == 1
+    assert sel["collapsed"][0]["params"] == first["params"] == XP.LAST_PHASE1_RANKED[0][0]
+    (xp,) = glob.glob(str(tmp_path / "xpilot-*.json"))
+    assert json.loads(Path(xp).read_text())["runs"]["1"]["phase1Search"]["params"] == XP.LAST_PHASE1_RANKED[1][0]
+    assert json.loads((tmp_path / "phase1-selection.json").read_text())["rank"] == 1

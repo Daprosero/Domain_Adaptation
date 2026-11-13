@@ -239,7 +239,14 @@ def search_phase1(sides, cfg, device, trials, rotation):
 
     study.optimize(objective, n_trials=int(trials),
                    callbacks=[PG.optuna_callback("p1", "phase-1 search", trials)])
+    done = [t for t in study.trials if t.value is not None]
+    LAST_PHASE1_RANKED[:] = [(dict(t.params), round(float(t.value), 4))         # best first, ties by order
+                             for t in sorted(done, key=lambda t: (-t.value, t.number))]
     return study.best_trial.params, round(float(study.best_value), 4)
+
+
+# the last phase-1 search's completed trials, best first (campaign_unit's non-degenerate rule)
+LAST_PHASE1_RANKED: list = []
 
 
 # ------------------------------------------------------------------ one unit
