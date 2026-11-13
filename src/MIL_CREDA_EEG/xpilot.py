@@ -81,6 +81,9 @@ SPACE2 = {"lr2": ("log", (1e-4, 1e-2)), "epochs2": ("cat", (10, 20, 40)),
           "lambda_global": ("log", (0.1, 10.0)), "lambda_local": ("log", (0.1, 10.0)),
           "tau_local": ("log", (0.1, 10.0))}
 TRIALS2 = 20
+#: opt-in (smoke(search_attention=True)): the phase-2 aggregation joins the search, each range holding the
+#: value the earlier campaigns fixed (gamma 0.5, attention temperature 1.0)
+ATTENTION_SPACE = {"gamma": ("lin", (0.0, 1.0)), "tau_att": ("log", (1.0, 10.0))}
 SEARCH2_SEED = 1
 SEARCH2_RULE = "phase2_select.centroid_score on the target adapt half + held-out source test bags"
 
@@ -333,13 +336,17 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print, give
 # ------------------------------------------------------------------ phase-2 search (opt-in)
 
 @contextlib.contextmanager
-def phase2_settings(*, lr2, epochs2, lambda_global, lambda_local, tau_local):
+def phase2_settings(*, lr2, epochs2, lambda_global, lambda_local, tau_local, gamma=None, tau_att=None):
     """Phase 2 at these settings for the duration of the block, defaults restored after:
     phase2_trace.PHASE_TWO (lr2, epochs2, tauLocal) and Eq. 39's coefficients
     (two_phase.LAMBDA_GLOBAL/LAMBDA_LOCAL and the "both terms" selection the objective reads)."""
     saved = (dict(P.PHASE_TWO), two_phase.LAMBDA_GLOBAL, two_phase.LAMBDA_LOCAL,
-             two_phase.TERM_SELECTIONS[two_phase.BOTH_TERMS])
+             two_phase.TERM_SELECTIONS[two_phase.BOTH_TERMS], dict(P.PHASE_TWO_AGGREGATION))
     P.PHASE_TWO.update({"lr2": float(lr2), "epochs2": int(epochs2), "tauLocal": float(tau_local)})
+    if gamma is not None:
+        P.PHASE_TWO_AGGREGATION["gamma"] = float(gamma)
+    if tau_att is not None:
+        P.PHASE_TWO_AGGREGATION["temperature"] = float(tau_att)
     two_phase.LAMBDA_GLOBAL, two_phase.LAMBDA_LOCAL = float(lambda_global), float(lambda_local)
     two_phase.TERM_SELECTIONS[two_phase.BOTH_TERMS] = (float(lambda_global), float(lambda_local))
     try:
@@ -349,6 +356,8 @@ def phase2_settings(*, lr2, epochs2, lambda_global, lambda_local, tau_local):
         P.PHASE_TWO.update(saved[0])
         two_phase.LAMBDA_GLOBAL, two_phase.LAMBDA_LOCAL = saved[1], saved[2]
         two_phase.TERM_SELECTIONS[two_phase.BOTH_TERMS] = saved[3]
+        P.PHASE_TWO_AGGREGATION.clear()
+        P.PHASE_TWO_AGGREGATION.update(saved[4])
 
 
 def phase2_base(sides, cfg, device, seed, rotation, params1, unit):
@@ -394,7 +403,7 @@ def _suggest2(trial):
     out = {}
     for name, (kind, values) in SPACE2.items():
         out[name] = (trial.suggest_categorical(name, list(values)) if kind == "cat" else
-                     trial.suggest_float(name, values[0], values[1], log=True))
+                     trial.suggest_float(name, values[0], values[1], log=(kind == "log")))
     return out
 
 
@@ -520,7 +529,8 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
           paired: bool = False, spread: float = 1.0, workdir=None,
           environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2,
           shared: Mapping | None = None, full_trace: bool = True,
-          phase2_params: Mapping | None = None, pick: str = "centroid") -> dict:
+          phase2_params: Mapping | None = None, pick: str = "centroid",
+          search_attention: bool = False) -> dict:
     """One pilot unit: phase-1 search, optional phase-2 search, then `seeds`. `phase2_params`
     (SPACE2 keys) skips the phase-2 search and runs the seeds at those settings, chosen elsewhere
     without target labels. `full_trace` False
@@ -564,12 +574,20 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
             missing = sorted(set(SPACE2) - set(phase2_params))
             if missing:
                 raise ValueError(f"phase2_params lacks {missing}")
-            found = {"params": {k: phase2_params[k] for k in SPACE2}, "score": None, "trials": [],
+            found = {"params": {k: phase2_params[k] for k in (*SPACE2, *ATTENTION_SPACE) if k in phase2_params},
+                     "score": None, "trials": [],
                      "fixed": True, "rule": "given: chosen before this run, without target labels"}
             settings = phase2_settings(**found["params"])
         elif search2:                                                     # once per unit too
             t2 = time.time()
-            found = search_phase2(sides, cfg, device, trials2, rotation, params, unit, pick=pick)
+            saved_space = dict(SPACE2)
+            if search_attention:
+                SPACE2.update(ATTENTION_SPACE)
+            try:
+                found = search_phase2(sides, cfg, device, trials2, rotation, params, unit, pick=pick)
+            finally:
+                SPACE2.clear(); SPACE2.update(saved_space)
+            found["searchAttention"] = bool(search_attention)
             timing["search2Seconds"] = round(time.time() - t2, 1)
             settings = phase2_settings(**found["params"])
             print(unit, "phase-2 search", found["params"], found["score"], timing["search2Seconds"], "s",
