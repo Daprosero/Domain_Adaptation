@@ -157,12 +157,24 @@ PARALLEL_PROCESSES = 4
 
 def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: int = 20, trials2: int = 20,
         methods: Sequence[str] = XC.ALL8, workdir=None, environ: Mapping[str, str] | None = None,
-        parallel: int = 1, full_trace: bool = True, **unit) -> dict:
+        parallel: int = 1, full_trace: bool = True, phase1_params: Mapping | None = None,
+        phase2_fixed: Mapping[str, Mapping] | None = None, **unit) -> dict:
     """`parallel` > 1 runs MIL-CREDA and each comparator as separate jobs over that many forked
-    processes of one torch thread each, after the shared phase-1 search; 1 runs them in sequence."""
+    processes of one torch thread each, after the shared phase-1 search; 1 runs them in sequence.
+    `phase1_params` skips the phase-1 search (parameters searched before for this unit, which do not
+    depend on the phase-2 choice); `phase2_fixed` {"MIL-CREDA": SPACE2 params, method: params with
+    "epochs2"} skips every phase-2 search and runs only the seeds at settings chosen beforehand
+    without target labels. Both run in sequence only."""
     unknown = [k for k in unit if k not in BUILD_KEYS]
     if unknown:
         raise ValueError(f"unit keys are among {BUILD_KEYS}; got {unknown}")
+    if phase2_fixed is not None:
+        need = ["MIL-CREDA"] + [m for m in methods if m not in XC.SKIPPED]
+        missing = [m for m in need if m not in phase2_fixed]
+        if missing:
+            raise ValueError(f"phase2_fixed lacks {missing}")
+    if (phase1_params is not None or phase2_fixed is not None) and int(parallel) > 1:
+        raise ValueError("phase1_params and phase2_fixed run in sequence only (parallel=1)")
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
     workdir.mkdir(parents=True, exist_ok=True)
@@ -171,13 +183,17 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
     cfg = remote_units.resolve_inputs(campaign.check_config(config), environ=environ)
     built = XP.build_sides(cfg, environ, **unit)
     name = built["unit"]
-    progress = PG.Progress(name, planned_work(trials, trials2, seeds, methods), workdir)
+    progress = PG.Progress(name, planned_work(0 if phase1_params is not None else trials,
+                                              0 if phase2_fixed is not None else trials2,
+                                              seeds, methods), workdir)
     PG.activate(progress, PROBE_SECONDS)
     try:
         print(f"[{name}] bags built in {time.time() - started:.0f} s", flush=True)
         device = torch.device(built["cfg"].get("device", "cpu"))
         args = (built["sides"], built["cfg"], device, trials, unit.get("rotation", 0), built["samples"])
-        if int(parallel) <= 1:
+        if phase1_params is not None:
+            phase1 = (dict(phase1_params), None)
+        elif int(parallel) <= 1:
             phase1 = _phase1(*args)
         else:   # spawn, never fork: torch's autograd and OpenMP pools are not fork-safe
             payload = {"phase1_args": args, "settings": _settings(), "threads": os.cpu_count() or 1}
@@ -190,7 +206,7 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
             # selection rule: the highest-scoring phase-1 trial whose refits do not collapse (sigma 0);
             # the search's scores and path are unchanged, so a unit whose best trial does not
             # collapse gets exactly the result it had before this rule
-            ranked = list(XP.LAST_PHASE1_RANKED) or [phase1]
+            ranked = [phase1] if phase1_params is not None else (list(XP.LAST_PHASE1_RANKED) or [phase1])
             tried = []
             for rank, cand in enumerate(ranked):
                 bases = {}
@@ -204,8 +220,9 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
 
                 common["shared"] = {"built": built, "phase1": cand, "base_of": base_of}
                 try:
-                    mil = XP.smoke(config, product, search2=True, full_trace=full_trace, **common)
-                    cmp = XC.smoke(config, product, methods=methods, **common)
+                    mil = XP.smoke(config, product, search2=True, full_trace=full_trace,
+                                   phase2_params=(phase2_fixed or {}).get("MIL-CREDA"), **common)
+                    cmp = XC.smoke(config, product, methods=methods, phase2_fixed=phase2_fixed, **common)
                 except V.V63Error as e:
                     tried.append({"rank": rank, "params": cand[0], "score": cand[1], "error": str(e)})
                     print(f"[{name}] phase-1 trial rank {rank} collapses ({e}); next trial", flush=True)
@@ -213,7 +230,8 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
                 break
             else:
                 raise V.V63Error(f"every phase-1 trial collapses ({len(tried)} tried)")
-            selection = {"rule": "highest-scoring phase-1 trial whose refits do not collapse",
+            selection = {"rule": ("given: searched before for this unit" if phase1_params is not None
+                                  else "highest-scoring phase-1 trial whose refits do not collapse"),
                          "rank": rank, "params": cand[0], "score": cand[1], "collapsed": tried}
             (workdir / "phase1-selection.json").write_text(json.dumps(selection, default=str), encoding="utf-8")
             files = {"xpilot": mil, "xcompare": cmp.get("file"), "phase1Selection": selection}

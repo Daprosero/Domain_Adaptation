@@ -304,7 +304,10 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
           sim_seed: int = 0, d_target: float | None = None, artifact_rate: float = 0.0,
           artifact_class_corr: float = 0.0, event_fraction: float = 0.0, paired: bool = False,
           spread: float = 1.0,
-          workdir=None, environ: Mapping[str, str] | None = None, shared: Mapping | None = None) -> dict:
+          workdir=None, environ: Mapping[str, str] | None = None, shared: Mapping | None = None,
+          phase2_fixed: Mapping[str, Mapping] | None = None) -> dict:
+    """`phase2_fixed` {method: {its phase-2 params..., "epochs2": e}} skips that method's
+    phase-2 search and runs its seeds at those settings, chosen elsewhere without target labels."""
     if experiment not in XP.EXPERIMENTS:
         raise ValueError(f"experiment in {XP.EXPERIMENTS}")
     unknown = [m for m in methods if m not in ALL8]
@@ -356,12 +359,19 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
                 continue
             t1 = time.time()
             try:
-                b1 = base_of(SEARCH_SEED)
-                t1 = time.time()
-                found = search_phase2(method, b1["prepared"], b1["context"], source=sides["source"],
-                                      source_test=sides["source_test"], target=sides["target"], cfg=cfg,
-                                      device=device, trials2=trials2, rotation=rotation, unit=unit,
-                                      epochs2=fixed_epochs2)
+                if phase2_fixed is not None and method in phase2_fixed:
+                    given = dict(phase2_fixed[method])
+                    e2 = int(given.pop("epochs2"))
+                    found = {"params": given, "bestEpochs2": epochs_of(method, e2), "epochs2Given": e2,
+                             "score": None, "fixed": True,
+                             "rule": "given: chosen before this run, without target labels"}
+                else:
+                    b1 = base_of(SEARCH_SEED)
+                    t1 = time.time()
+                    found = search_phase2(method, b1["prepared"], b1["context"], source=sides["source"],
+                                          source_test=sides["source_test"], target=sides["target"],
+                                          cfg=cfg, device=device, trials2=trials2, rotation=rotation,
+                                          unit=unit, epochs2=fixed_epochs2)
                 rec = {"phase2Search": found, "runs": {},
                        "seconds": {"search": round(time.time() - t1, 1), "seeds": {}}}
                 for sd in seeds:

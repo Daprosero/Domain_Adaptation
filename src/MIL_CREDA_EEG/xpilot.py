@@ -498,8 +498,11 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
           artifact_rate: float = 0.0, artifact_class_corr: float = 0.0, event_fraction: float = 0.0,
           paired: bool = False, spread: float = 1.0, workdir=None,
           environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2,
-          shared: Mapping | None = None, full_trace: bool = True) -> dict:
-    """One pilot unit: phase-1 search, optional phase-2 search, then `seeds`. `full_trace` False
+          shared: Mapping | None = None, full_trace: bool = True,
+          phase2_params: Mapping | None = None) -> dict:
+    """One pilot unit: phase-1 search, optional phase-2 search, then `seeds`. `phase2_params`
+    (SPACE2 keys) skips the phase-2 search and runs the seeds at those settings, chosen elsewhere
+    without target labels. `full_trace` False
     (grid units): phase 2 runs light and records only predict and the
     final epoch, with no attention export and no equivalence check; the end model is the same."""
     if experiment not in EXPERIMENTS:
@@ -536,7 +539,14 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
                   "bags": {k: len(sides[k]) for k in ("source", "source_test", "target", "target_test")}}
         print(unit, "phase-1 search", params, score, timing["searchSeconds"], "s", flush=True)
         found, settings = None, contextlib.nullcontext()
-        if search2:                                                       # once per unit too
+        if phase2_params is not None:                                     # chosen elsewhere
+            missing = sorted(set(SPACE2) - set(phase2_params))
+            if missing:
+                raise ValueError(f"phase2_params lacks {missing}")
+            found = {"params": {k: phase2_params[k] for k in SPACE2}, "score": None, "trials": [],
+                     "fixed": True, "rule": "given: chosen before this run, without target labels"}
+            settings = phase2_settings(**found["params"])
+        elif search2:                                                     # once per unit too
             t2 = time.time()
             found = search_phase2(sides, cfg, device, trials2, rotation, params, unit)
             timing["search2Seconds"] = round(time.time() - t2, 1)
