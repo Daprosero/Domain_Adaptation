@@ -40,3 +40,20 @@ def test_replay_picks_the_same_trials_as_the_campaign_search(tmp_path):
     assert [r["params"] for r in rows] == [t["params"] for t in found["trials"]]
     assert [r["ruleBA"] for r in rows] == [t["score"] for t in found["trials"]]
     assert all("targetBA" in r and "ruleMargin" in r for r in rows)
+
+
+def test_given_phase1_skips_the_search_and_keeps_artifacts(tmp_path, monkeypatch):
+    config = json.load(open(RUN_CONFIG))["run"]["kwargs"]["config"]
+    monkeypatch.setitem(XP.SS.SPACE, "epochs", ("cat", (2,)))
+    monkeypatch.setitem(XP.SPACE2, "epochs2", ("cat", (1,)))
+    monkeypatch.setitem(P.PHASE_TWO, "epochs2", P.PHASE_TWO["epochs2"])
+    monkeypatch.setattr(XP, "search_phase1", lambda *a, **k: (_ for _ in ()).throw(AssertionError("searched")))
+    p1 = {"lr1": 1e-3, "l2": 1e-3, "width": 32, "tauAtt1": 2.0, "epochs": 2}
+    D.run(config, experiment="sim", rotation=0, half=0, trials2=2, workdir=tmp_path, environ={},
+          phase1_params=p1, artifacts=True, setting="subject", shift=1.0, n_subjects=20)
+    (f,) = glob.glob(str(tmp_path / "selection-diag-*.json"))
+    out = json.loads(Path(f).read_text())
+    assert out["phase1"]["params"] == p1
+    art = out["trials"][0]["art"]
+    assert len(art["zTarget"]) == len(art["pTarget"]) == len(art["pseudoTarget"])
+    assert len(art["zSource"]) == len(art["ySource"]) and len(art["pTest"]) == len(art["yTest"])
