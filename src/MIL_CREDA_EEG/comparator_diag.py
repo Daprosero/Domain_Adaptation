@@ -46,7 +46,8 @@ def replay(method, base, sides, cfg, device, trials2, rotation, unit):
             score = XC.selection_score(model, sides["target"], sides["source_test"], device)
             snap = XC.snapshot(model, sides["target_test"], cut, device)
         score = float(score) if np.isfinite(score) else 0.0
-        row.update(ruleScore=round(score, 4), targetBA=snap["BA"], targetAUC=snap["AUC"])
+        row.update(ruleScore=round(score, 4), targetBA=snap["BA"], targetAUC=snap["AUC"],
+                   targetKappa=snap["kappa"], rows=snap["rows"])
         rows.append(row)
         return score
 
