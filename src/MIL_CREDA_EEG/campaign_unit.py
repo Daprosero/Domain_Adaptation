@@ -20,6 +20,7 @@ from typing import Mapping, Sequence
 import torch
 
 from MIL_CREDA_EEG import campaign, remote_units, spectral_trunk
+from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG import phase2_trace as P
 from MIL_CREDA_EEG import progress as PG
 from MIL_CREDA_EEG import xcompare as XC
@@ -186,19 +187,36 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
         common = dict(seeds=seeds, trials=trials, trials2=trials2, workdir=workdir, environ=environ,
                       shared=shared, **unit)
         if int(parallel) <= 1:
-            bases = {}
+            # selection rule: the highest-scoring phase-1 trial whose refits do not collapse (sigma 0);
+            # the search's scores and path are unchanged, so a unit whose best trial does not
+            # collapse gets exactly the result it had before this rule
+            ranked = list(XP.LAST_PHASE1_RANKED) or [phase1]
+            tried = []
+            for rank, cand in enumerate(ranked):
+                bases = {}
 
-            def base_of(sd):            # one phase-1 base and cut per seed, shared by all 8 methods
-                if sd not in bases:
-                    bases[sd] = XC.shared_base(built["sides"], built["cfg"], device, sd,
-                                               unit.get("rotation", 0), phase1[0], name)
-                    PG.tick("base", f"shared base seed {sd}")
-                return bases[sd]
+                def base_of(sd, cand=cand, bases=bases):   # one base and cut per seed, all 8 methods
+                    if sd not in bases:
+                        bases[sd] = XC.shared_base(built["sides"], built["cfg"], device, sd,
+                                                   unit.get("rotation", 0), cand[0], name)
+                        PG.tick("base", f"shared base seed {sd}")
+                    return bases[sd]
 
-            common["shared"] = {**shared, "base_of": base_of}
-            mil = XP.smoke(config, product, search2=True, full_trace=full_trace, **common)
-            cmp = XC.smoke(config, product, methods=methods, **common)
-            files = {"xpilot": mil, "xcompare": cmp.get("file")}
+                common["shared"] = {"built": built, "phase1": cand, "base_of": base_of}
+                try:
+                    mil = XP.smoke(config, product, search2=True, full_trace=full_trace, **common)
+                    cmp = XC.smoke(config, product, methods=methods, **common)
+                except V.V63Error as e:
+                    tried.append({"rank": rank, "params": cand[0], "score": cand[1], "error": str(e)})
+                    print(f"[{name}] phase-1 trial rank {rank} collapses ({e}); next trial", flush=True)
+                    continue
+                break
+            else:
+                raise V.V63Error(f"every phase-1 trial collapses ({len(tried)} tried)")
+            selection = {"rule": "highest-scoring phase-1 trial whose refits do not collapse",
+                         "rank": rank, "params": cand[0], "score": cand[1], "collapsed": tried}
+            (workdir / "phase1-selection.json").write_text(json.dumps(selection, default=str), encoding="utf-8")
+            files = {"xpilot": mil, "xcompare": cmp.get("file"), "phase1Selection": selection}
         else:
             jobs = ["MIL-CREDA"] + [m for m in methods if m not in XC.SKIPPED]
             jobs.sort(key=lambda j: -job_seconds(j, trials2, seeds))          # longest first
