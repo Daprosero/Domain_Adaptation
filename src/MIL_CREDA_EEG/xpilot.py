@@ -411,7 +411,7 @@ def search_phase2(sides, cfg, device, trials2, rotation, params1, unit):
         params = _suggest2(trial)
         try:
             score = phase2_trial(base, sides, cfg, device, SEARCH2_SEED, params1, params)["score"]
-        except V.V63Error:
+        except (V.V63Error, FloatingPointError):     # collapsed or diverged trial
             score = 0.0
         score = round(float(score), 4) if np.isfinite(score) else 0.0
         history.append({"params": params, "score": score})
@@ -547,8 +547,12 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
             for sd in seeds:
                 t1 = time.time()
                 given = shared["base_of"](int(sd)) if shared and "base_of" in shared else None
-                runs[str(sd)] = run_unit(sides, cfg, device, int(sd), rotation, (params, score, trials), unit,
-                                         given=given)
+                try:
+                    runs[str(sd)] = run_unit(sides, cfg, device, int(sd), rotation, (params, score, trials),
+                                             unit, given=given)
+                except FloatingPointError as e:      # this seed's phase 2 diverged: keep the others
+                    runs[str(sd)] = {"failed": f"FloatingPointError: {e}"}
+                    print(unit, "seed", sd, "diverged:", e, flush=True)
                 timing["seedSeconds"][str(sd)] = round(time.time() - t1, 1)
                 print(unit, "seed", sd, "done", round(time.time() - started), "s", flush=True)
                 PG.tick("milcreda-seed", f"MIL-CREDA seed {sd}")
