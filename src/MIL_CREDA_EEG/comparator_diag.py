@@ -22,7 +22,7 @@ from MIL_CREDA_EEG import xcompare as XC
 from MIL_CREDA_EEG import xpilot as XP
 
 
-def replay(method, base, sides, cfg, device, trials2, rotation, unit):
+def replay(method, base, sides, cfg, device, trials2, rotation, unit, artifacts=False):
     prepared, context, cut = base["prepared"], base["context"], base["cut"]
     space = search.phase_two_space(method)
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -45,6 +45,15 @@ def replay(method, base, sides, cfg, device, trials2, rotation, unit):
                 return 0.0
             score = XC.selection_score(model, sides["target"], sides["source_test"], device)
             snap = XC.snapshot(model, sides["target_test"], cut, device)
+            if artifacts:                # everything a label-free validator reads, for offline scoring
+                pt = XC.two_phase.evaluate(model, sides["target"], "target", device).cpu().numpy()
+                ps = XC.two_phase.evaluate(model, sides["source_test"], "source", device).cpu().numpy()
+                row["art"] = {
+                    "zTarget": np.round(XC.two_phase.represent(model, sides["target"], "target", device).numpy(), 5).tolist(),
+                    "pTarget": np.round(pt[:, 1], 5).tolist(), "pseudoTarget": pt.argmax(1).tolist(),
+                    "zSource": np.round(XC.two_phase.represent(model, sides["source_test"], "source", device).numpy(), 5).tolist(),
+                    "pSource": np.round(ps[:, 1], 5).tolist(), "ySource": [int(b.label) for b in sides["source_test"]],
+                    "pTest": [q for _, q in snap["rows"]], "yTest": [int(a) for a, _ in snap["rows"]]}
         score = float(score) if np.isfinite(score) else 0.0
         row.update(ruleScore=round(score, 4), targetBA=snap["BA"], targetAUC=snap["AUC"],
                    targetKappa=snap["kappa"], rows=snap["rows"])
@@ -56,7 +65,7 @@ def replay(method, base, sides, cfg, device, trials2, rotation, unit):
 
 
 def run(config, product=None, *, experiment="ieee", rotation=0, half=0, trials2=20, phase1_params=None,
-        methods=XC.ALL8, workdir=None, environ=None, **unit) -> dict:
+        methods=XC.ALL8, workdir=None, environ=None, artifacts=False, **unit) -> dict:
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
     workdir.mkdir(parents=True, exist_ok=True)
@@ -75,7 +84,7 @@ def run(config, product=None, *, experiment="ieee", rotation=0, half=0, trials2=
                 continue
             t0 = time.time()
             try:
-                out["methods"][m] = {"trials": replay(m, base, sides, cfg, device, trials2, rotation, name)}
+                out["methods"][m] = {"trials": replay(m, base, sides, cfg, device, trials2, rotation, name, artifacts)}
             except Exception as e:               # one comparator failing must not lose the others
                 out["methods"][m] = {"failed": f"{type(e).__name__}: {e}"}
             out["methods"][m]["seconds"] = round(time.time() - t0, 1)
