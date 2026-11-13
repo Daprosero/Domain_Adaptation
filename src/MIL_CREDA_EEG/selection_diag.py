@@ -46,12 +46,36 @@ def centroid_margin(target_reps, target_pseudo, source_reps, source_labels) -> f
     return float(np.mean((wrong - right) / (dist.mean() + 1e-12)))
 
 
+def _instances(model, bags, side, device):
+    """Per-window representations (Eq. 13, the head's input space) and each window's bag index."""
+    model.eval()
+    with torch.no_grad():
+        H = model.embed([b.windows.to(device) for b in bags], side)
+    Z = torch.cat([h.detach().cpu() for h in H]).numpy().astype(np.float64)
+    idx = np.concatenate([np.full(len(h), i) for i, h in enumerate(H)])
+    return Z, idx
+
+
+def _centroid_scores(zt, qt, zs, ys):
+    """Nearest-centroid BA and mean normalised margin of labelled source points to target centroids."""
+    from sklearn.metrics import balanced_accuracy_score
+    classes = np.unique(ys)
+    if any(not np.any(qt == c) for c in classes):
+        return 0.0, -1.0
+    cen = np.stack([zt[qt == c].mean(0) for c in classes])
+    d = np.sqrt(((zs[:, None, :] - cen[None]) ** 2).sum(-1))
+    ba = float(balanced_accuracy_score(ys, classes[np.argmin(d, 1)]))
+    i = np.searchsorted(classes, ys)
+    m = float(np.mean((d[np.arange(len(ys)), 1 - i] - d[np.arange(len(ys)), i]) / (d.mean() + 1e-12)))
+    return ba, m
+
+
 def _r(a, k=5):
     return np.round(np.asarray(a, dtype=np.float64), k).tolist()
 
 
 def run(config, product=None, *, experiment="ieee", rotation=0, half=0, trials=20, trials2=20,
-        workdir=None, environ=None, phase1_params=None, artifacts=False, **unit) -> dict:
+        workdir=None, environ=None, phase1_params=None, artifacts=False, extra=False, **unit) -> dict:
     """`phase1_params` skips the phase-1 search (the campaign's searched parameters for this unit);
     `artifacts` keeps, per trial, the representations and probabilities every label-free validator
     needs (target adapt, source test with labels, target test with labels) for offline scoring."""
@@ -99,6 +123,20 @@ def run(config, product=None, *, experiment="ieee", rotation=0, half=0, trials=2
                 y, p = P._subjects(sides["target_test"], P._probabilities(model, sides["target_test"], "target", device))
                 m = P._metrics(y, p, cut)
                 row["targetBA"], row["targetAUC"] = m["BA"], m["AUC"]
+                if extra:                      # larger source sets for the rule: inner validation, windows
+                    inner = {b.subject: b for _, va in sides["inner"] for b in va}
+                    inner = list(inner.values())
+                    zi, _ = XP._blind_reps(model, inner, "source", device)
+                    yi = np.array([b.label for b in inner])
+                    row["ruleInnerBA"], row["ruleInnerMargin"] = _centroid_scores(
+                        zt, np.asarray(pseudo), zi, yi)
+                    Ht, it = _instances(model, sides["target"], "target", device)
+                    qt = np.asarray(pseudo)[it]
+                    for tag, bags in (("SourceTest", sides["source_test"]), ("Inner", inner)):
+                        Hs, js = _instances(model, bags, "source", device)
+                        ys_i = np.array([bags[k].label for k in js])
+                        row[f"inst{tag}BA"], row[f"inst{tag}Margin"] = _centroid_scores(Ht, qt, Hs, ys_i)
+                    row["innerBags"] = len(inner)
                 if artifacts:
                     ys, ps = P._subjects(sides["source_test"], P._probabilities(model, sides["source_test"], "source", device))
                     _, pa = P._subjects(sides["target"], P._probabilities(model, sides["target"], "target", device))
