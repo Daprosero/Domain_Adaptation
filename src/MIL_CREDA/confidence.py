@@ -60,6 +60,8 @@ def pseudolabel(g: torch.Tensor) -> int:
     among equal maxima is a backend detail. Eq. (22) fixes it, so the code does.
     """
     g = as_tensor(g).reshape(-1)
+    if not bool(torch.isfinite(g).all()):     # a diverged model: no class is maximal
+        raise FloatingPointError("Eq. (22) on non-finite class scores")
     maximizers = torch.nonzero(g == g.max(), as_tuple=False).reshape(-1)
     return int(maximizers.min())
 
