@@ -158,13 +158,14 @@ PARALLEL_PROCESSES = 4
 def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: int = 20, trials2: int = 20,
         methods: Sequence[str] = XC.ALL8, workdir=None, environ: Mapping[str, str] | None = None,
         parallel: int = 1, full_trace: bool = True, phase1_params: Mapping | None = None,
-        phase2_fixed: Mapping[str, Mapping] | None = None, **unit) -> dict:
+        phase2_fixed: Mapping[str, Mapping] | None = None, pick: str = "centroid", **unit) -> dict:
     """`parallel` > 1 runs MIL-CREDA and each comparator as separate jobs over that many forked
     processes of one torch thread each, after the shared phase-1 search; 1 runs them in sequence.
     `phase1_params` skips the phase-1 search (parameters searched before for this unit, which do not
     depend on the phase-2 choice); `phase2_fixed` {"MIL-CREDA": SPACE2 params, method: params with
     "epochs2"} skips every phase-2 search and runs only the seeds at settings chosen beforehand
-    without target labels. Both run in sequence only."""
+    without target labels. Both run in sequence only. `pick` chooses the label-free criterion that
+    picks each method's phase-2 configuration among its searched trials ("centroid" or "cef")."""
     unknown = [k for k in unit if k not in BUILD_KEYS]
     if unknown:
         raise ValueError(f"unit keys are among {BUILD_KEYS}; got {unknown}")
@@ -173,8 +174,8 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
         missing = [m for m in need if m not in phase2_fixed]
         if missing:
             raise ValueError(f"phase2_fixed lacks {missing}")
-    if (phase1_params is not None or phase2_fixed is not None) and int(parallel) > 1:
-        raise ValueError("phase1_params and phase2_fixed run in sequence only (parallel=1)")
+    if (phase1_params is not None or phase2_fixed is not None or pick != "centroid") and int(parallel) > 1:
+        raise ValueError("phase1_params, phase2_fixed and pick run in sequence only (parallel=1)")
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
     workdir.mkdir(parents=True, exist_ok=True)
@@ -221,8 +222,9 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
                 common["shared"] = {"built": built, "phase1": cand, "base_of": base_of}
                 try:
                     mil = XP.smoke(config, product, search2=True, full_trace=full_trace,
-                                   phase2_params=(phase2_fixed or {}).get("MIL-CREDA"), **common)
-                    cmp = XC.smoke(config, product, methods=methods, phase2_fixed=phase2_fixed, **common)
+                                   phase2_params=(phase2_fixed or {}).get("MIL-CREDA"), pick=pick, **common)
+                    cmp = XC.smoke(config, product, methods=methods, phase2_fixed=phase2_fixed, pick=pick,
+                                   **common)
                 except V.V63Error as e:
                     tried.append({"rank": rank, "params": cand[0], "score": cand[1], "error": str(e)})
                     print(f"[{name}] phase-1 trial rank {rank} collapses ({e}); next trial", flush=True)
