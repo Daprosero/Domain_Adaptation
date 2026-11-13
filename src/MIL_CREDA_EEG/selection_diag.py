@@ -46,8 +46,15 @@ def centroid_margin(target_reps, target_pseudo, source_reps, source_labels) -> f
     return float(np.mean((wrong - right) / (dist.mean() + 1e-12)))
 
 
+def _r(a, k=5):
+    return np.round(np.asarray(a, dtype=np.float64), k).tolist()
+
+
 def run(config, product=None, *, experiment="ieee", rotation=0, half=0, trials=20, trials2=20,
-        workdir=None, environ=None, **unit) -> dict:
+        workdir=None, environ=None, phase1_params=None, artifacts=False, **unit) -> dict:
+    """`phase1_params` skips the phase-1 search (the campaign's searched parameters for this unit);
+    `artifacts` keeps, per trial, the representations and probabilities every label-free validator
+    needs (target adapt, source test with labels, target test with labels) for offline scoring."""
     environ = os.environ if environ is None else environ
     workdir = Path(workdir) if workdir else Path.cwd()
     workdir.mkdir(parents=True, exist_ok=True)
@@ -59,8 +66,11 @@ def run(config, product=None, *, experiment="ieee", rotation=0, half=0, trials=2
     device = torch.device(cfg.get("device", "cpu"))
     rows = []
     with spectral_trunk.installed(), XP.window_samples(built["samples"]):
-        params1, score1 = XP.search_phase1(sides, cfg, device, trials, rotation)
-        ranked = list(XP.LAST_PHASE1_RANKED) or [(params1, score1)]
+        if phase1_params is not None:
+            ranked = [(dict(phase1_params), None)]
+        else:
+            params1, score1 = XP.search_phase1(sides, cfg, device, trials, rotation)
+            ranked = list(XP.LAST_PHASE1_RANKED) or [(params1, score1)]
         for rank, (p1, s1) in enumerate(ranked):     # the campaign's non-collapsing rule
             try:
                 cut = XC.shared_base(sides, cfg, device, XP.SEARCH2_SEED, rotation, p1, name)["cut"]
@@ -89,6 +99,12 @@ def run(config, product=None, *, experiment="ieee", rotation=0, half=0, trials=2
                 y, p = P._subjects(sides["target_test"], P._probabilities(model, sides["target_test"], "target", device))
                 m = P._metrics(y, p, cut)
                 row["targetBA"], row["targetAUC"] = m["BA"], m["AUC"]
+                if artifacts:
+                    ys, ps = P._subjects(sides["source_test"], P._probabilities(model, sides["source_test"], "source", device))
+                    _, pa = P._subjects(sides["target"], P._probabilities(model, sides["target"], "target", device))
+                    row["art"] = {"zTarget": _r(zt), "pseudoTarget": [int(v) for v in pseudo], "pTarget": _r(pa),
+                                  "zSource": _r(zs), "ySource": [int(v) for v in labels_s], "pSource": _r(ps),
+                                  "pTest": _r(p), "yTest": [int(v) for v in y]}
                 score = row["ruleBA"]
             except V.V63Error as e:
                 row["error"] = str(e)
