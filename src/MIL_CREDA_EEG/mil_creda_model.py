@@ -193,7 +193,8 @@ class MILCREDAModel(nn.Module):
         for H_k in H:
             logits = relevance_logits(H_k, self.V_R, self.b_R, self.v_R,
                                       self.attention_gamma, sigma)
-            out.append((H_k, bag_weights(logits, self.attention_temperature)))
+            out.append((H_k, pooled_weights(logits, self.attention_temperature,
+                                            getattr(self, "pooling", "attention"))))
         return out
 
     @staticmethod
@@ -208,6 +209,21 @@ class MILCREDAModel(nn.Module):
     def predict(self, bags: Sequence[torch.Tensor], domain: str,
                 chunk: int | None = None) -> torch.Tensor:
         return self.classify(self.represent(self.bag_pairs(self.embed(bags, domain, chunk))))
+
+
+def pooled_weights(logits: torch.Tensor, tau: float, pooling: str = "attention") -> torch.Tensor:
+    """In-bag weights: Eq. 16 ("attention"), or the K3 ablations (v70 Sec. 8.3) that replace it with a
+    uniform mean ("mean", 1/K) or an unnormalised sum ("sum", 1 per window). Only phase-2 copies built
+    for those ablations carry a non-default `pooling`; every other model uses Eq. 16."""
+    if pooling == "attention":
+        return bag_weights(logits, tau)
+    n = torch.as_tensor(logits).reshape(-1).shape[0]
+    like = torch.as_tensor(logits).reshape(-1)
+    if pooling == "mean":
+        return torch.full((n,), 1.0 / n, dtype=like.dtype, device=like.device)
+    if pooling == "sum":
+        return torch.ones(n, dtype=like.dtype, device=like.device)
+    raise ValueError(f"pooling in ('attention', 'mean', 'sum'), got {pooling!r}")
 
 
 def one_hot(labels: torch.Tensor, classes: int) -> torch.Tensor:
