@@ -83,6 +83,12 @@ SPACE2 = {"lr2": ("log", (1e-4, 1e-2)), "epochs2": ("cat", (10, 20, 40)),
 TRIALS2 = 20
 #: opt-in (smoke(search_attention=True)): the phase-2 aggregation joins the search, each range holding the
 #: value the earlier campaigns fixed (gamma 0.5, attention temperature 1.0)
+#: K3 ablations of MIL-CREDA's phase 2 (v70 Sec. 8.3; smoke(variant=...)): aggregation changes and the
+#: adaptation term held at 0 (removed from the search); phase 1 and the shared base are never touched
+VARIANTS = {"full": ({}, {}), "nocons": ({"gamma": 0.0}, {}), "mean": ({"gamma": 0.0, "pooling": "mean"}, {}),
+            "sum": ({"gamma": 0.0, "pooling": "sum"}, {}), "global": ({}, {"lambda_local": 0.0}),
+            "local": ({}, {"lambda_global": 0.0})}
+PHASE2_FIXED: dict = {}
 ATTENTION_SPACE = {"gamma": ("lin", (0.0, 1.0)), "tau_att": ("log", (1.0, 10.0))}
 SEARCH2_SEED = 1
 SEARCH2_RULE = "phase2_select.centroid_score on the target adapt half + held-out source test bags"
@@ -336,6 +342,25 @@ def run_unit(sides, cfg, device, seed, rotation, searched, unit, log=print, give
 # ------------------------------------------------------------------ phase-2 search (opt-in)
 
 @contextlib.contextmanager
+def phase2_variant(variant: str):
+    """Apply a K3 ablation (VARIANTS) to phase 2 for the duration of the block; everything restored after."""
+    if variant not in VARIANTS:
+        raise ValueError(f"variant in {sorted(VARIANTS)}, got {variant!r}")
+    agg, fixed = VARIANTS[variant]
+    saved = (dict(P.PHASE_TWO_AGGREGATION), dict(SPACE2), dict(PHASE2_FIXED))
+    P.PHASE_TWO_AGGREGATION.update(agg)
+    for k in fixed:
+        SPACE2.pop(k, None)
+    PHASE2_FIXED.update(fixed)
+    try:
+        yield
+    finally:
+        P.PHASE_TWO_AGGREGATION.clear(); P.PHASE_TWO_AGGREGATION.update(saved[0])
+        SPACE2.clear(); SPACE2.update(saved[1])
+        PHASE2_FIXED.clear(); PHASE2_FIXED.update(saved[2])
+
+
+@contextlib.contextmanager
 def phase2_settings(*, lr2, epochs2, lambda_global, lambda_local, tau_local, gamma=None, tau_att=None):
     """Phase 2 at these settings for the duration of the block, defaults restored after:
     phase2_trace.PHASE_TWO (lr2, epochs2, tauLocal) and Eq. 39's coefficients
@@ -389,6 +414,7 @@ def phase2_trial(base, sides, cfg, device, seed, params1, params2):
         model = copy.deepcopy(base)
         model.attention_gamma = P.PHASE_TWO_AGGREGATION["gamma"]
         model.attention_temperature = P.PHASE_TWO_AGGREGATION["temperature"]
+        model.pooling = P.PHASE_TWO_AGGREGATION.get("pooling", "attention")
         P.traced_path(model, source, target, None, hyper, seed, device, OBJECTIVE, 0.0,
                       lambda m: P.initialise_target(m, arm, target, s_names, t_names),
                       {"sigma": base.sigma}, P.PHASE_TWO["epochs2"], P.EQUIVALENCE_EPOCHS,
@@ -421,7 +447,7 @@ def search_phase2(sides, cfg, device, trials2, rotation, params1, unit, pick="ce
     history = []
 
     def objective(trial):
-        params = _suggest2(trial)
+        params = {**_suggest2(trial), **PHASE2_FIXED}
         cef = None
         try:
             out = phase2_trial(base, sides, cfg, device, SEARCH2_SEED, params1, params)
@@ -530,7 +556,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
           environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2,
           shared: Mapping | None = None, full_trace: bool = True,
           phase2_params: Mapping | None = None, pick: str = "centroid",
-          search_attention: bool = False) -> dict:
+          search_attention: bool = False, variant: str = "full") -> dict:
     """One pilot unit: phase-1 search, optional phase-2 search, then `seeds`. `phase2_params`
     (SPACE2 keys) skips the phase-2 search and runs the seeds at those settings, chosen elsewhere
     without target labels. `full_trace` False
@@ -561,7 +587,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
     sim_record, effect = built["sim_record"], built["effect"]
     runs = {}
     with spectral_trunk.installed(), window_samples(samples), \
-            attention_export(experiment == "sim" and full_trace), full_trace_mode(full_trace):
+            attention_export(experiment == "sim" and full_trace), full_trace_mode(full_trace), phase2_variant(variant):
         t0 = time.time()
         params, score = (shared["phase1"] if shared else
                          search_phase1(sides, cfg, device, trials, rotation))   # once per unit
@@ -588,6 +614,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
             finally:
                 SPACE2.clear(); SPACE2.update(saved_space)
             found["searchAttention"] = bool(search_attention)
+            found["variant"] = variant
             timing["search2Seconds"] = round(time.time() - t2, 1)
             settings = phase2_settings(**found["params"])
             print(unit, "phase-2 search", found["params"], found["score"], timing["search2Seconds"], "s",

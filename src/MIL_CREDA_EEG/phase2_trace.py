@@ -88,7 +88,7 @@ PHASE_ONE_SEARCHED: dict = {}
 # check is skipped, and only predict and the final epoch are recorded
 FULL_TRACE = True
 PHASE_TWO = {"lr2": 1e-3, "wd2": 1e-5, "epochs2": 20, "tauLocal": 1.0}
-PHASE_TWO_AGGREGATION = {"gamma": 0.5, "temperature": 1.0}
+PHASE_TWO_AGGREGATION = {"gamma": 0.5, "temperature": 1.0, "pooling": "attention"}
 MU = 10.0
 EQUIVALENCE_EPOCHS = 2
 CUT_RULE = ("the cut maximizing subject-level BA over source inner-validation subjects (split 0) "
@@ -835,6 +835,7 @@ def run_rotation(transfer, cfg, a, bags, device, seed, rotation, arm, objectives
         m = copy.deepcopy(base)
         m.attention_gamma = PHASE_TWO_AGGREGATION["gamma"]
         m.attention_temperature = PHASE_TWO_AGGREGATION["temperature"]
+        m.pooling = PHASE_TWO_AGGREGATION.get("pooling", "attention")
         return m
 
     # predict: the target path right after the arm init, at the PHASE-1 aggregation

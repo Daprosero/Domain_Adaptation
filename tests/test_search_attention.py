@@ -36,11 +36,11 @@ def test_attention_is_searched_recorded_and_restored(tmp_path):
     s = json.loads(Path(xp).read_text())["phase2Search"]
     for t in s["trials"]:
         assert 0.0 <= t["params"]["gamma"] <= 1.0 and 1.0 <= t["params"]["tau_att"] <= 10.0
-    assert seen and seen[0] == {"gamma": s["params"]["gamma"], "temperature": s["params"]["tau_att"]}
+    assert seen and seen[0] == {"gamma": s["params"]["gamma"], "temperature": s["params"]["tau_att"], "pooling": "attention"}
     assert P.PHASE_TWO_AGGREGATION == before and dict(XP.SPACE2) == space
     (xc,) = glob.glob(str(tmp_path / "xcompare-*.json"))
     assert json.loads(Path(xc).read_text())["methods"] == {}
 
 
 def test_default_search_leaves_attention_fixed(tmp_path):
-    assert "gamma" not in XP.SPACE2 and P.PHASE_TWO_AGGREGATION == {"gamma": 0.5, "temperature": 1.0}
+    assert "gamma" not in XP.SPACE2 and P.PHASE_TWO_AGGREGATION == {"gamma": 0.5, "temperature": 1.0, "pooling": "attention"}

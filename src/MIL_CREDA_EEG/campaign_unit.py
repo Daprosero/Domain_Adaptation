@@ -159,7 +159,7 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
         methods: Sequence[str] = XC.ALL8, workdir=None, environ: Mapping[str, str] | None = None,
         parallel: int = 1, full_trace: bool = True, phase1_params: Mapping | None = None,
         phase2_fixed: Mapping[str, Mapping] | None = None, pick: str = "centroid",
-        search_attention: bool = False, **unit) -> dict:
+        search_attention: bool = False, variant: str = "full", **unit) -> dict:
     """`parallel` > 1 runs MIL-CREDA and each comparator as separate jobs over that many forked
     processes of one torch thread each, after the shared phase-1 search; 1 runs them in sequence.
     `phase1_params` skips the phase-1 search (parameters searched before for this unit, which do not
@@ -225,7 +225,7 @@ def run(config: Mapping, product=None, *, seeds: Sequence[int] = (1,), trials: i
                 try:
                     mil = XP.smoke(config, product, search2=True, full_trace=full_trace,
                                    phase2_params=(phase2_fixed or {}).get("MIL-CREDA"), pick=pick,
-                                   search_attention=search_attention, **common)
+                                   search_attention=search_attention, variant=variant, **common)
                     cmp = XC.smoke(config, product, methods=methods, phase2_fixed=phase2_fixed, pick=pick,
                                    **common)
                 except V.V63Error as e:

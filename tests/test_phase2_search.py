@@ -221,7 +221,7 @@ def test_smoke_search2_records_the_search_and_runs_every_seed_with_its_best(tmp_
     assert set(out) == TOP_KEYS | {"phase2Search"}
     assert set(out["timing"]) == TIMING_KEYS | {"search2Seconds"}
     found = out["phase2Search"]
-    assert set(found) == {"params", "score", "trials", "rule"} and len(found["trials"]) == 2
+    assert {"params", "score", "trials", "rule", "pick", "pickedTrial"} <= set(found) and len(found["trials"]) == 2
     best = found["params"]
     assert out["phaseTwo"]["lr2"] == best["lr2"] and out["phaseTwo"]["epochs2"] == best["epochs2"]
     assert out["phaseTwo"]["tauLocal"] == best["tau_local"]
