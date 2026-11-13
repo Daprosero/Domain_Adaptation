@@ -69,7 +69,7 @@ from MIL_CREDA_EEG import progress as PG
 from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG import xds_pilot as X
 
-EXPERIMENTS = ("giga", "ieee", "xds", "sim")
+EXPERIMENTS = ("giga", "ieee", "xds", "sim", "balladeer")
 FOLDS, INNER, XDS_FOLDS = 5, 3, 5
 TRIALS_PER_CLASS = 25
 GIGA_WINDOW, GIGA_STEP = 128, 64
@@ -484,6 +484,18 @@ def build_sides(cfg, environ, *, experiment, rotation, half=0, direction="IEEE->
                                   "(Fz, or F3/F4 on EMOTIV), every subject of the side"},
             "masks": {"targetTest": E.masks_of(sides["target_test"]),
                       "targetTrain": E.masks_of(sides["target"])}}
+    elif experiment == "balladeer":         # BALLADEER condition -> condition, e.g. "CogniFit->Robots"
+        from MIL_CREDA_EEG import assignment as AS
+        src_c, tgt_c = direction.split("->")
+        loaded = campaign.load_bags(cfg)
+        a = AS.assign_from_bags(AS.Transfer("task", src_c, tgt_c), loaded)   # subject-disjoint sides
+        view = a.rotation(int(rotation))
+        names = {c: list(loaded.get(sorted(loaded.holders(c))[0], c).channels) for c in (src_c, tgt_c)}
+        src, tgt = balladeer_bags(cfg, src_c, names[src_c]), balladeer_bags(cfg, tgt_c, names[tgt_c])
+        sides = _sides(src, view["source_nontest"], view["source_test"], tgt, view["target_nontest"],
+                       view["target_test"])
+        sides["s_names"], sides["t_names"] = names[src_c], names[tgt_c]
+        unit, samples = f"ball:{direction}:{rotation}", IEEE_WINDOW
     else:
         loaded = campaign.load_bags(cfg)
         ball_names = list(loaded.get(sorted(loaded.holders(condition))[0], condition).channels)
