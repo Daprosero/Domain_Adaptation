@@ -36,3 +36,22 @@ def centroid_score(target_reps, target_pseudo, source_reps, source_labels) -> fl
     centroids = np.stack([t[q == c].mean(0) for c in classes])
     dist = ((s[:, None, :] - centroids[None, :, :]) ** 2).sum(-1)
     return float(balanced_accuracy_score(y, classes[np.argmin(dist, axis=1)]))
+
+
+def cef_score(target_pseudo) -> float:
+    """CREDA's effective number of predicted classes on the target adapt half: exp of the
+    entropy of the argmax pseudo-label histogram (no label read). Chosen as the phase-2
+    pick by the pre-registered synthetic development study (task doc L16-L17)."""
+    q = np.asarray(target_pseudo).astype(int).reshape(-1)
+    h = np.bincount(q, minlength=2) / max(len(q), 1)
+    h = h[h > 0]
+    return float(np.exp(-(h * np.log(h)).sum()))
+
+
+PICKS = ("centroid", "cef")
+
+
+def first_best(values) -> int:
+    """Index of the first maximum (search order breaks ties); None values never win."""
+    v = [float("-inf") if x is None else float(x) for x in values]
+    return int(np.argmax(v))

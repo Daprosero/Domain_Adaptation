@@ -259,10 +259,14 @@ def selection_score(model, target, source_test, device) -> float:
 
 
 def search_phase2(method, prepared, context, *, source, source_test, target, cfg, device, trials2,
-                  rotation, unit, epochs2, seed=SEARCH_SEED) -> dict:
+                  rotation, unit, epochs2, seed=SEARCH_SEED, pick="centroid") -> dict:
     """One TPE study over the method's own phase-2 space, from the base of `seed`. Receives the
     source training bags, the source test bags and the target ADAPT half only; it never sees
-    the target test bags, and reads no target label."""
+    the target test bags, and reads no target label. The sampler always follows the centroid
+    score; `pick` "cef" takes, among the same trials, the first one with the highest
+    phase2_select.cef_score (a non-finite trial is never picked)."""
+    if pick not in phase2_select.PICKS:
+        raise ValueError(f"pick in {phase2_select.PICKS}")
     space = search.phase_two_space(method)
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study = optuna.create_study(direction="maximize",
@@ -281,14 +285,19 @@ def search_phase2(method, prepared, context, *, source, source_test, target, cfg
                 trial.set_user_attr("nonFinite", str(e))
                 return 0.0
             score = selection_score(model, target, source_test, device)
+            pseudo = two_phase.evaluate(model, target, "target", device).argmax(1).cpu().numpy()
+            trial.set_user_attr("cef", phase2_select.cef_score(pseudo))
         return float(score) if np.isfinite(score) else 0.0
 
     study.optimize(objective, n_trials=int(trials2),
                    callbacks=[PG.optuna_callback(f"search:{method}", f"{method} phase-2 search", trials2)])
-    best = dict(study.best_trial.params)
+    cefs = [t.user_attrs.get("cef") for t in study.trials]
+    picked = study.best_trial.number if pick == "centroid" else phase2_select.first_best(cefs)
+    best = dict(study.trials[picked].params)
     best_epochs = int(best.pop("epochs2")) if "epochs2" in best else int(epochs2)
     return {"space": _describe(space), "params": best, "bestEpochs2": epochs_of(method, best_epochs),
-            "score": round(float(study.best_value), 4), "trials": int(trials2), "seed": int(seed),
+            "score": round(float(study.trials[picked].value), 4), "trials": int(trials2),
+            "pick": pick, "pickedTrial": int(picked), "trialCef": [None if c is None else round(c, 6) for c in cefs], "seed": int(seed),
             "epochs2Searched": epochs2 is None, "rule": SELECTION_RULE, "why": SPACE_NOTES.get(method),
             "trialScores": [None if t.value is None else round(float(t.value), 4) for t in study.trials],
             "nonFinite": [t.number for t in study.trials if "nonFinite" in t.user_attrs]}
@@ -305,7 +314,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
           artifact_class_corr: float = 0.0, event_fraction: float = 0.0, paired: bool = False,
           spread: float = 1.0,
           workdir=None, environ: Mapping[str, str] | None = None, shared: Mapping | None = None,
-          phase2_fixed: Mapping[str, Mapping] | None = None) -> dict:
+          phase2_fixed: Mapping[str, Mapping] | None = None, pick: str = "centroid") -> dict:
     """`phase2_fixed` {method: {its phase-2 params..., "epochs2": e}} skips that method's
     phase-2 search and runs its seeds at those settings, chosen elsewhere without target labels."""
     if experiment not in XP.EXPERIMENTS:
@@ -371,7 +380,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, half
                     found = search_phase2(method, b1["prepared"], b1["context"], source=sides["source"],
                                           source_test=sides["source_test"], target=sides["target"],
                                           cfg=cfg, device=device, trials2=trials2, rotation=rotation,
-                                          unit=unit, epochs2=fixed_epochs2)
+                                          unit=unit, epochs2=fixed_epochs2, pick=pick)
                 rec = {"phase2Search": found, "runs": {},
                        "seconds": {"search": round(time.time() - t1, 1), "seeds": {}}}
                 for sd in seeds:

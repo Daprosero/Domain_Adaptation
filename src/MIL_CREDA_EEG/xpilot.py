@@ -387,7 +387,7 @@ def phase2_trial(base, sides, cfg, device, seed, params1, params2):
     zt, pseudo = _blind_reps(model, target, "target", device)
     zs, _ = _blind_reps(model, sides["source_test"], "source", device)
     score = phase2_select.centroid_score(zt, pseudo, zs, [b.label for b in sides["source_test"]])
-    return {"model": model, "score": float(score)}
+    return {"model": model, "score": float(score), "cef": phase2_select.cef_score(pseudo)}
 
 
 def _suggest2(trial):
@@ -398,9 +398,13 @@ def _suggest2(trial):
     return out
 
 
-def search_phase2(sides, cfg, device, trials2, rotation, params1, unit):
+def search_phase2(sides, cfg, device, trials2, rotation, params1, unit, pick="centroid"):
     """TPE over SPACE2, once per unit: phase 1 at `params1` and seed SEARCH2_SEED (fit once),
-    each trial's phase 2 on the target adapt half, scored by phase2_select.centroid_score."""
+    each trial's phase 2 on the target adapt half, scored by phase2_select.centroid_score. The
+    sampler always follows that score; `pick` "cef" takes, among the same trials, the first one
+    with the highest phase2_select.cef_score (a failed trial is never picked)."""
+    if pick not in phase2_select.PICKS:
+        raise ValueError(f"pick in {phase2_select.PICKS}")
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study = optuna.create_study(direction="maximize",
                                 sampler=optuna.samplers.TPESampler(seed=SAMPLER_SEED + int(rotation)))
@@ -409,18 +413,23 @@ def search_phase2(sides, cfg, device, trials2, rotation, params1, unit):
 
     def objective(trial):
         params = _suggest2(trial)
+        cef = None
         try:
-            score = phase2_trial(base, sides, cfg, device, SEARCH2_SEED, params1, params)["score"]
+            out = phase2_trial(base, sides, cfg, device, SEARCH2_SEED, params1, params)
+            score, cef = out["score"], out["cef"]
         except (V.V63Error, FloatingPointError):     # collapsed or diverged trial
             score = 0.0
         score = round(float(score), 4) if np.isfinite(score) else 0.0
-        history.append({"params": params, "score": score})
+        history.append({"params": params, "score": score, "cef": cef})
         return score
 
     study.optimize(objective, n_trials=int(trials2),
                    callbacks=[PG.optuna_callback("milcreda-search", "MIL-CREDA phase-2 search", trials2)])
-    best = history[study.best_trial.number]
-    return {"params": best["params"], "score": best["score"], "trials": history, "rule": SEARCH2_RULE}
+    picked = (study.best_trial.number if pick == "centroid" else
+              phase2_select.first_best([h["cef"] for h in history]))
+    best = history[picked]
+    return {"params": best["params"], "score": best["score"], "trials": history, "rule": SEARCH2_RULE,
+            "pick": pick, "pickedTrial": int(picked)}
 
 
 def build_sides(cfg, environ, *, experiment, rotation, half=0, direction="IEEE->Robots",
@@ -499,7 +508,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
           paired: bool = False, spread: float = 1.0, workdir=None,
           environ: Mapping[str, str] | None = None, search2: bool = False, trials2: int = TRIALS2,
           shared: Mapping | None = None, full_trace: bool = True,
-          phase2_params: Mapping | None = None) -> dict:
+          phase2_params: Mapping | None = None, pick: str = "centroid") -> dict:
     """One pilot unit: phase-1 search, optional phase-2 search, then `seeds`. `phase2_params`
     (SPACE2 keys) skips the phase-2 search and runs the seeds at those settings, chosen elsewhere
     without target labels. `full_trace` False
@@ -548,7 +557,7 @@ def smoke(config: Mapping, product=None, *, experiment: str, rotation: int, seed
             settings = phase2_settings(**found["params"])
         elif search2:                                                     # once per unit too
             t2 = time.time()
-            found = search_phase2(sides, cfg, device, trials2, rotation, params, unit)
+            found = search_phase2(sides, cfg, device, trials2, rotation, params, unit, pick=pick)
             timing["search2Seconds"] = round(time.time() - t2, 1)
             settings = phase2_settings(**found["params"])
             print(unit, "phase-2 search", found["params"], found["score"], timing["search2Seconds"], "s",
