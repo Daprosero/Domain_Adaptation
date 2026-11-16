@@ -35,3 +35,20 @@ def test_units_are_the_twelve_dev_units_and_the_six_d1_boundary_units():
 
 def test_training_seed_depends_on_seed_and_trial_only():
     assert C.train_seed(2, 37) == C.train_seed(2, 37) != C.train_seed(3, 37)
+
+
+def test_worker_processes_reproduce_the_single_process_rows(tmp_path):
+    kw = dict(unit_key="d1p5-s1p5-r0", seed=1, shard=0, shards=1, trials=2, epochs=2, eval_subjects=6,
+              methods=("COT", "CLUDA"), threads=1)
+    one = C.run(workdir=tmp_path / "one", procs=1, **kw)
+    two = C.run(workdir=tmp_path / "two", procs=2, **kw)
+    assert one == two == {"file": "criteria-d1p5-s1p5-r0-k1-sh0of1.json", "methods": {"COT": 2, "CLUDA": 2}}
+    import json
+    a, b = (json.loads((tmp_path / d / one["file"]).read_text()) for d in ("one", "two"))
+    assert (a["procs"], b["procs"], a["threads"], b["threads"]) == (1, 2, 1, 1)
+    for m in kw["methods"]:
+        for i in ("0", "1"):
+            ra, rb = a["methods"][m]["trials"][i], b["methods"][m]["trials"][i]
+            assert {k: v for k, v in ra.items() if k != "seconds"} == {k: v for k, v in rb.items() if k != "seconds"}
+    assert sorted(p.name for p in (tmp_path / "two" / "criteria-d1p5-s1p5-r0-k1-sh0of1").iterdir()) == \
+        ["CLUDA-0.npz", "CLUDA-1.npz", "COT-0.npz", "COT-1.npz"]
