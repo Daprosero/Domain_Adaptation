@@ -1,5 +1,5 @@
 """Phase-1 bases of the oracle screening, computed once so every method of every notebook starts phase 2
-from the same file. One synthetic development unit, seeds 1-3: xcompare.shared_base at the unit's recorded
+from the same file. One synthetic development unit, seed 1 only (phase 1 is frozen): xcompare.shared_base at the unit's recorded
 phase-1 settings (cut from the inner split, base on all source training subjects, the bridged and
 target-initialised copy the comparators start from). Usage: make_bases.py <unit d1p5-s0p5-r0> <outdir>"""
 import glob, json, os, subprocess, sys, time
@@ -19,7 +19,7 @@ sides, name, cfg = built["sides"], built["unit"], built["cfg"]
 commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True,
                         cwd=os.path.dirname(XC.__file__)).stdout.strip()
 with spectral_trunk.installed(), XP.window_samples(built["samples"]), XP.full_trace_mode(False):
-    for sd in (1, 2, 3):
+    for sd in (1,):
         t0 = time.time(); b = XC.shared_base(sides, cfg, torch.device("cpu"), sd, rot, p1, name)
         rec = {"unitKey": unit_key, "unit": name, "seed": sd, "rotation": rot, "phase1": p1, "unitKwargs": unit,
                "config": kw["config"], "cut": float(b["cut"]), "arm": b["arm"], "context": b["context"],
