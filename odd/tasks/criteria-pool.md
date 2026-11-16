@@ -23,3 +23,4 @@ Branch: Diego. Delivery: ask-on-risk. Test runner: `.venv/bin/python -m pytest t
 - L1 (2026-11-15) "listo, me gusta, hacele al plan" — plan as approved in the session (criteria-selection test, Musgrave-style shared random pool).
 - L2 Measured: tau_local [0.1, 10] gives a uniform Eq. 34 correspondence (entropy >= .99); range moved to [1e-3, 1].
 - L3 Suite: 829 passed, 1 pre-existing failure (test_the_old_creda_comparators_are_gone, from 4a0e6393). Operator authorized commit + push; launch stays pending ("que quede solo el envío").
+- L4 (2026-11-16) Kaggle smoke (1 process, os.cpu_count threads): 625 s per 8-method trial set, 4x the Mac. Local throughput (8-method sets/hour): Mac 1x4 23, 4x2 32.7; WSL i7-10750H 1x6 13.7, 3x2 14.0, 6x1 16.5. "probá en kaggle con 4 procesos de 1 hilo" -> `run(procs, threads)`: a spawn pool shares the shard's trials; rows equal the single-process ones (test).

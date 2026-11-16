@@ -14,7 +14,9 @@ No label-free criterion is computed or read here.
 """
 from __future__ import annotations
 
+import contextlib
 import json
+import multiprocessing
 import os
 import time
 from pathlib import Path
@@ -46,6 +48,9 @@ TAU_LOCAL = (1e-3, 1.0)
 DEV_UNITS = tuple(f"d{d}-s{s}-r{r}" for d in ("1p5", "2p5") for s in ("0p5", "1p5", "3") for r in (0, 1))
 BOUNDARY_UNITS = tuple(f"d1-s{s}-r{r}" for s in ("0p5", "1p5", "3") for r in (0, 1))
 UNITS = DEV_UNITS + BOUNDARY_UNITS
+#: measured seconds per 100-epoch trial relative to the fastest method (local, 2026-11-15); only
+#: the order trials are handed to workers in depends on it
+SLOWNESS = {"CASUAL": 6.0, "MIL-CREDA": 3.6, "CLUDA": 1.5, "UDA-DDA": 1.4}
 
 
 def space(method: str) -> dict:
@@ -121,15 +126,12 @@ def _outputs(model, bags, side, dev):
     return P, Z
 
 
-def run(unit_key: str, seed: int, shard: int, shards: int = SHARDS, trials: int = TRIALS,
-        methods: Sequence[str] = METHODS, eval_subjects: int = O.EVAL_SUBJECTS, workdir=None, bases=None,
-        epochs: int = EPOCHS2) -> dict:
-    workdir = Path(workdir) if workdir else Path.cwd()
-    workdir.mkdir(parents=True, exist_ok=True)
-    torch.set_num_threads(max(1, int(os.environ.get("MIL_CREDA_THREADS") or os.cpu_count() or 2)))
-    unknown = [m for m in methods if m not in METHODS]
-    if unknown:
-        raise ValueError(f"methods are among {list(METHODS)}; got {unknown}")
+#: the per-process state a worker builds once: base, sides, evaluation pool, entered contexts
+_STATE: dict = {}
+
+
+def _setup(unit_key, methods, eval_subjects, bases, threads) -> dict:
+    torch.set_num_threads(max(1, int(threads)))
     with spectral_trunk.installed():
         b = torch.load(base_file(unit_key, bases), weights_only=False)
     cfg = remote_units.resolve_inputs(campaign.check_config(b["config"]), environ={})
@@ -139,41 +141,93 @@ def run(unit_key: str, seed: int, shard: int, shards: int = SHARDS, trials: int 
         raise ValueError(f"base {b['unit']} does not match the rebuilt unit {name}")
     pool = O.eval_pool(b, built["effect"], eval_subjects)
     campaign.register([m for m in methods if m != "MIL-CREDA"])
-    dev, rot, cut = torch.device("cpu"), int(b["rotation"]), float(b["cut"])
+    stack = contextlib.ExitStack()
+    for ctx in (spectral_trunk.installed(), XP.window_samples(built["samples"]), XP.full_trace_mode(False)):
+        stack.enter_context(ctx)
+    return {"b": b, "sides": sides, "name": name, "cfg": cfg, "pool": pool, "stack": stack,
+            "dev": torch.device("cpu"), "rot": int(b["rotation"]), "cut": float(b["cut"])}
+
+
+def _init_worker(unit_key, methods, eval_subjects, bases, threads):
+    _STATE.update(_setup(unit_key, methods, eval_subjects, bases, threads))
+
+
+def _trial(task) -> tuple:
+    """One (method, trial): trains it, saves its arrays, returns its row. Depends on the task only,
+    so the process that runs it and the order trials run in change nothing."""
+    method, i, p, seed, epochs, arr_dir = task
+    s, t0 = _STATE, time.time()
+    try:
+        model, totals = train(method, p, s["b"], s["sides"], s["cfg"], s["dev"], train_seed(seed, i),
+                              s["rot"], s["name"], epochs)
+    except FloatingPointError:     # the trainer's own non-finite refusal
+        return method, i, {"params": p, "nonFinite": True}
+    sides, dev, cut = s["sides"], s["dev"], s["cut"]
+    with _wrapper(method, s["b"], p.get("tau_att", 1.0)):
+        on_pool = XC.snapshot(model, s["pool"], cut, dev)
+        on_test = XC.snapshot(model, sides["target_test"], cut, dev)
+        Pt, Zt = _outputs(model, sides["target"], "target", dev)
+        Ps, Zs = _outputs(model, sides["source_test"], "source", dev)
+    np.savez_compressed(Path(arr_dir) / f"{method.split(' ')[0]}-{i}.npz", Pt=Pt, Zt=Zt, Ps=Ps, Zs=Zs)
+    return method, i, {"params": p, "BApool": on_pool["BA"], "AUCpool": on_pool["AUC"],
+                       "BAtest12": on_test["BA"], "AUCtest12": on_test["AUC"],
+                       "stepTotals": totals, "seconds": round(time.time() - t0, 1)}
+
+
+def run(unit_key: str, seed: int, shard: int, shards: int = SHARDS, trials: int = TRIALS,
+        methods: Sequence[str] = METHODS, eval_subjects: int = O.EVAL_SUBJECTS, workdir=None, bases=None,
+        epochs: int = EPOCHS2, procs: int = 1, threads: int | None = None) -> dict:
+    """`procs` worker processes, each with `threads` torch threads, share the shard's trials (the
+    small phase-2 models do not use many threads, so several single-threaded trials at once beat
+    one many-threaded trial). Every row depends on its (method, trial) only."""
+    workdir = Path(workdir) if workdir else Path.cwd()
+    workdir.mkdir(parents=True, exist_ok=True)
+    threads = int(threads or os.environ.get("MIL_CREDA_THREADS") or os.cpu_count() or 2)
+    unknown = [m for m in methods if m not in METHODS]
+    if unknown:
+        raise ValueError(f"methods are among {list(METHODS)}; got {unknown}")
+    _STATE.clear()
+    _STATE.update(_setup(unit_key, methods, eval_subjects, bases, threads))
+    b, sides, name = _STATE["b"], _STATE["sides"], _STATE["name"]
     stem = f"criteria-{unit_key}-k{int(seed)}-sh{int(shard)}of{int(shards)}"
     out_path, arr_dir = workdir / f"{stem}.json", workdir / stem
     arr_dir.mkdir(exist_ok=True)
     out = json.loads(out_path.read_text()) if out_path.exists() else {
         "unitKey": unit_key, "unit": name, "seed": int(seed), "shard": int(shard), "shards": int(shards),
-        "trials": int(trials), "epochs2": int(epochs), "cut": cut, "baseCommit": b["commit"],
-        "baseSeed": 1, "evalSubjects": len(pool), "schedule": "lr2*(1+10p)^-0.75",
+        "trials": int(trials), "epochs2": int(epochs), "cut": _STATE["cut"], "baseCommit": b["commit"],
+        "baseSeed": 1, "evalSubjects": len(_STATE["pool"]), "schedule": "lr2*(1+10p)^-0.75",
         "oracle": "BA at the base's cut on the evaluation pool (true labels)",
         "sourceTestLabels": [int(x.label) for x in sides["source_test"]],
         "targetSubjects": [x.subject for x in sides["target"]], "methods": {}}
-    with spectral_trunk.installed(), XP.window_samples(built["samples"]), XP.full_trace_mode(False):
-        for method in methods:
-            rows = out["methods"].setdefault(method, {"trials": {}})["trials"]
-            settings = draw(method, seed, trials)
-            for i in shard_trials(shard, shards, trials):
-                if str(i) in rows:
-                    continue
-                p, t0 = settings[i], time.time()
-                try:
-                    model, totals = train(method, p, b, sides, cfg, dev, train_seed(seed, i), rot, name, epochs)
-                except FloatingPointError:     # the trainer's own non-finite refusal
-                    rows[str(i)] = {"params": p, "nonFinite": True}
-                    out_path.write_text(json.dumps(out))
-                    continue
-                with _wrapper(method, b, p.get("tau_att", 1.0)):
-                    on_pool = XC.snapshot(model, pool, cut, dev)
-                    on_test = XC.snapshot(model, sides["target_test"], cut, dev)
-                    Pt, Zt = _outputs(model, sides["target"], "target", dev)
-                    Ps, Zs = _outputs(model, sides["source_test"], "source", dev)
-                np.savez_compressed(arr_dir / f"{method.split(' ')[0]}-{i}.npz", Pt=Pt, Zt=Zt, Ps=Ps, Zs=Zs)
-                rows[str(i)] = {"params": p, "BApool": on_pool["BA"], "AUCpool": on_pool["AUC"],
-                                "BAtest12": on_test["BA"], "AUCtest12": on_test["AUC"],
-                                "stepTotals": totals, "seconds": round(time.time() - t0, 1)}
-                out_path.write_text(json.dumps(out))
-            print(unit_key, seed, shard, method, "done", len(rows), flush=True)
+    out["procs"], out["threads"] = int(procs), threads
+    tasks = []
+    for method in methods:
+        rows = out["methods"].setdefault(method, {"trials": {}})["trials"]
+        settings = draw(method, seed, trials)
+        tasks += [(method, i, settings[i], int(seed), int(epochs), str(arr_dir))
+                  for i in shard_trials(shard, shards, trials) if str(i) not in rows]
+    # the slowest methods first, so no worker is left alone with one at the end
+    tasks.sort(key=lambda t: -SLOWNESS.get(t[0], 1.0))
+
+    def record(result):
+        method, i, row = result
+        out["methods"][method]["trials"][str(i)] = row
+        out_path.write_text(json.dumps(out))
+
+    try:
+        if int(procs) <= 1:
+            for t in tasks:
+                record(_trial(t))
+        else:
+            _STATE["stack"].close()
+            ctx = multiprocessing.get_context("spawn")
+            with ctx.Pool(int(procs), initializer=_init_worker,
+                          initargs=(unit_key, tuple(methods), eval_subjects, bases, threads)) as workers:
+                for result in workers.imap_unordered(_trial, tasks, chunksize=1):
+                    record(result)
+    finally:
+        _STATE["stack"].close()
+    for method in methods:
+        print(unit_key, seed, shard, method, "done", len(out["methods"][method]["trials"]), flush=True)
     out_path.write_text(json.dumps(out))
     return {"file": out_path.name, "methods": {m: len(v["trials"]) for m, v in out["methods"].items()}}
