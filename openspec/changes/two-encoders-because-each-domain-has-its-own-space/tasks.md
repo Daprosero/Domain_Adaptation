@@ -1,0 +1,940 @@
+# Tasks: Two encoders, because each domain has its own space
+
+## Baseline (measured, not assumed)
+
+- Branch `main` at `82ebeea`. Test command: `PYTHONPATH=src .venv/bin/python -m pytest -q`.
+- Starting suite state: `3 failed, 660 passed, 1 skipped, 129 subtests passed`.
+- **The 3 failures belong to a different change** (`a-transfer-that-never-came-back-is-not-one-nobody-searched`,
+  `tests/test_search_distribution.py`, deliberate reds for its own unfinished Phase 6). They are
+  **not this change's business** — do not fix them, do not count them as regressions caused by
+  this change, and re-report them as still-red-and-still-theirs at every full-suite run below.
+- `strict_tdd: true` (inherited). Every implementation task below names its RED step; it must be
+  **observed**, never asserted.
+- Repository: `/Users/diego/Proyectos/papersmith-ai/implementations/Domain_Adaptation` — its own
+  nested git repo. All edits stay inside it. `src/CREDA/**` stays byte-identical throughout (read
+  as evidence for Decision 1, never edited). No path outside this repository is an edit target;
+  `/Users/diego/Proyectos/papersmith-ai/proposals/research-concept-r25.md` is cited as **(read-only)**
+  wherever it appears below, and so is `MIL-CREDA/AGREED.md` (already written, carried not re-decided).
+
+## Review Workload Forecast
+
+| Field | Value |
+|-------|-------|
+| Estimated changed lines | ~560–710 (design's own per-slice estimate: (a) ~30, (b) ~200–260, (c) ~150–200, (d) ~180–220) |
+| 400-line budget risk | **High** |
+| Chained PRs recommended | Yes |
+| Suggested split | PR 1 (Phase 1 / slice a) → PR 2 (Phase 2 / slice b) → PR 3 (Phase 3 / slice c) → PR 4 (Phase 4 / slice d) |
+| Delivery strategy | ask-on-risk |
+| Chain strategy | **`feature-branch-chain`** — settled by the operator this session and cached; the tracker is `two-encoders`, slices are `two-encoders-a1` … `two-encoders-a4`, and nothing enters `main` until every slice lands |
+
+```text
+Decision needed before apply: Yes
+Chained PRs recommended: Yes
+Chain strategy: `feature-branch-chain` (operator, this session)
+
+**Phase 2 carries a maintainer-approved `size:exception`.** Its single commit is 562 authored
+changed lines (476+/86-) against the 400-line guideline. Approved by the operator rather than
+split, on the ground that the atom is real and not merely large: the three re-pointed
+assertions in `tests/test_arm_objectives.py` and the second encoder in `wiring.py` must land
+together, because a re-pointed test without its production fails and production without its
+re-pointed test is green-first. Splitting it would have cut the commit by its line count rather
+than by its meaning, and left the suite red in between.
+400-line budget risk: High
+```
+
+### Suggested Work Units
+
+| Unit | Goal | Likely PR | Focused test command | Runtime harness | Rollback boundary |
+|------|------|-----------|----------------------|-----------------|-------------------|
+| 1 | Revision bump + 11 citations, isolated | PR 1 | `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_smoke.py tests/test_benchmark_declarations.py tests/test_report_tables.py tests/test_invariants.py` | N/A — no runtime/GPU behavior changes, string/prose only | Revert `config.REVISION` to `"research-concept-r21.md"`; all 67 records read current again, no data migration |
+| 2 | Second encoder + re-pointed gradient/BN tests + `target_accuracy` | PR 2 | `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_arm_objectives.py` | N/A — CPU unit/integration tests only, no GPU launch | Revert together with unit 1's tests re-pointing: re-pointed tests without the encoder are red, encoder without them is red — one atom |
+| 3 | `latent.py` domain-required seam + AST guard | PR 3 | `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_figure_surfaces.py tests/test_latent_sigma_readers.py tests/test_independent_adaptation_schedules.py tests/test_attention_mechanisms.py` | N/A | Revert `latent.py` and its tests; depends on PR 2 (needs `target_embeddings` to exist) |
+| 4 | Degeneracy diagnostic + record fields | PR 4 | `PYTHONPATH=src .venv/bin/python -m pytest -q -k "entropy or diagnostic or confidence or kernel_mean"` | N/A | Revert independently; reads matrices `_milcreda_term` already builds, no dependency on PR 3 |
+
+Full suite (`PYTHONPATH=src .venv/bin/python -m pytest -q`, never filtered) is the closing gate for
+every PR and for the change as a whole (Phase 5).
+
+---
+
+## Sequencing legend
+
+- **[SEQ]** — must happen in this exact order relative to its siblings; do not reorder.
+- **[P]** — independent of its siblings in the same phase; safe to parallelize across files.
+- Phase order is load-bearing end to end: **Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5**.
+  Phase 1 must land as its own first commit (design Decision 11, spec `revision-bound-records`
+  Requirement "The revision bump is its own commit"). Phase 3 depends on Phase 2 (`target_embeddings`
+  must exist before `latent.py` can route to it). Phase 4 depends only on Phase 2 (`_milcreda_term`
+  already builds `K_tt`/`w_t` regardless of the encoder count) but is sequenced last per the design's
+  stated build/revert order. Phase 6 is gated and outside ordinary apply scope (see below).
+
+---
+
+## Phase 0: Pre-flight (sequential, before any `src/` edit)
+
+- [x] 0.1 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` on current `main`. Confirm
+      `3 failed, 660 passed, 1 skipped, 129 subtests passed` and that the 3 failures are exactly
+      `tests/test_search_distribution.py`'s. Record the exact output. *(No spec — baseline evidence.)*
+      **DONE**: measured `3 failed, 660 passed, 1 skipped, 129 subtests passed`, all 3 failures in
+      `tests/test_search_distribution.py` (`test_the_declaration_names_the_axis...`,
+      `test_a_unit_resolves_to_the_axis...`, `test_partial_search_records_merge...`).
+- [x] 0.2 **[SEQ]** Record the current `report_digest.source_digest` value before any `src/` byte is
+      touched (migration precondition: reverting the `src/` diff must restore this digest and every
+      notebook stamp with it). *(Spec: `revision-bound-records` — Notebook stamps requirement;
+      Design — Migration/Rollout.)*
+      **DONE**: pre-Phase-1 `source_digest` =
+      `105756ca3d9a04c0305ea64efb7a89302819bc858a2beadd9bdc4fe99b3c8d4c`.
+- [x] 0.3 **[P]** Confirm on disk: 71 files carry `research-concept-r21` (252 occurrences); 67 are
+      records (17 `Results/`, 50 `Models/` manifests, all under `.../Pilot/` except
+      `Results/Benchmark/ceilings.pilot.json`); 4 are non-record (`AGREED.md` ×2,
+      `.implementation/position.jsonl` ×11, `Notebooks/verification.ipynb` ×10,
+      `Notebooks/Benchmark_Results.ipynb` ×1). *(Spec: `revision-bound-records` — disposition
+      requirements; baseline for Phase 1's count assertions.)*
+      **DONE**: measured exactly 71 files / 252 occurrences with this exact split; confirmed 50
+      Models manifests (24 Benchmark + 1 curve/rho0 + 1 curve/rho0p2 + 24 Noise/rho0p2) and 17
+      Results files, matching the design's count precisely.
+- [x] 0.4 **[P]** Confirm `MIL-CREDA/AGREED.md` already carries both required entries: the
+      `## Reversed` paragraph dated 2026-09-28 (`8ed79de`) and `:164` (`c55526a`). Read-only —
+      `MIL-CREDA/AGREED.md` **(read-only for this change; carried, not re-decided)**.
+      **DONE**: both entries present and attributed to the named commits; file left untouched.
+
+---
+
+## Phase 1 — Slice (a): The revision bump, isolated (own commit, FIRST)
+
+Ordering is not negotiable (design Migration/Rollout, Decision 11): the revision refusal must fire
+**before** any two-encoder state-dict shape exists, or 67 checkpoints would die on a confusing key
+mismatch instead of an honest revision refusal. No behavior change may ride in this commit besides
+the revision string and its citations (spec `revision-bound-records` — "The revision bump is its
+own commit").
+
+- [x] 1.1 **[SEQ]** Bump `src/MIL_CREDA_Benchmark/config.py:300` `REVISION` from
+      `"research-concept-r21.md"` to `"research-concept-r25.md"`.
+      *(Spec: `revision-bound-records` — "The revision bump is its own commit".)*
+      **DONE**.
+- [x] 1.2 **[P]** Bump `src/MIL_CREDA/__init__.py:62` `__implementation__["revision"]` to
+      `"research-concept-r25.md"` (enforced `== config.REVISION` by
+      `tests/test_benchmark_declarations.py:107`, unchanged).
+      *(Spec: `revision-bound-records` — same requirement.)*
+      **DONE**; `test_benchmark_declarations.py:107` stayed green throughout (both sides moved
+      together).
+- [x] 1.3 **[P]** Bump the nine `__provenance__["revision"]` entries to `"research-concept-r25.md"`,
+      string only, no `__provenance__["equations"]` change (verified against r25: 7, 8, 9, 10, 11,
+      12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 28, 29, 37, 38, 39 all carry identical `\tag{}`):
+      `src/MIL_CREDA/attention.py:29`, `confidence.py:19`, `conditional.py:18`, `global_term.py:22`,
+      `local_term.py:19`, `renyi.py:20`, `kernels.py:17`, `objective.py:21`, `bag_kernel.py:22`.
+      *(Spec: `revision-bound-records` — same requirement.)*
+      **DONE**; RED observed at `tests/test_smoke.py::test_every_module_declares_provenance`
+      (`AssertionError: 'research-concept-r25.md' == 'research-concept-r21.md'`) immediately after
+      1.1–1.3, before 1.4 — this IS the declared red-first for the bump.
+- [x] 1.4 **[SEQ]** Update `tests/test_smoke.py:38`'s hardcoded
+      `assert provenance["revision"] == "research-concept-r21.md"` to `"research-concept-r25.md"`.
+      The suite refuses without this line — it is the twelfth line the proposal's "one line" missed.
+      *(Spec: `revision-bound-records` — same requirement.)*
+      **DONE**; GREEN observed afterward (full suite: only the sibling's 3 reds remained).
+- [x] 1.5 Correct the eleven `r21 l.NNN` citations to a stable anchor (equation number or named
+      quantity) with the revision moved `r21 → r25`, **not** re-pointed to r25's own 471/516/732 line
+      numbers (design Decision 12 rejects that as re-arming the identical trap for r26):
+  - [x] 1.5.1 **[P]** `src/MIL_CREDA_Benchmark/tables.py:494` and `:1917` — report prose inside
+        f-strings, reaches the rendered report. Reword to cite the named anchor (§3.2 /
+        `effective_bag_size`/`uniform_self_similarity`).
+        **DONE**; anchor adopted: `r25 §3.2`.
+  - [x] 1.5.2 **[P]** `src/MIL_CREDA_Benchmark/tables.py:132` and `:1880` — comment-only, same anchor.
+        **DONE**; also corrected the same-comment bare `r21` echo at `tables.py:134` for consistency
+        (continuing description of the same `l.501` citation just corrected two lines above).
+  - [x] 1.5.3 **[P]** `src/MIL_CREDA_Benchmark/config.py:453` and `:472` — comment-only, anchor Eq. (23)
+        / Eq. (15).
+        **DONE**; `:453` → `r25 Eq. (15)`, `:472` → `r25 Eq. (23)` (comment reflowed to keep line
+        width consistent).
+  - [x] 1.5.4 **[P]** `src/MIL_CREDA_Benchmark/config.py:474` — the **bare** `l.458` with no `r21`
+        prefix (a `r21 l\.` search misses this one; scope the pass by the derived condition "any
+        `l.NNN` in prose", not by the observed list). Anchor: Eq. (15).
+        **DONE**; → `r25 Eq. (15)`. Verified with `rg 'l\.[0-9]{3}'` that no bare `l.NNN` remains in
+        any touched file.
+  - [x] 1.5.5 **[P]** `src/MIL_CREDA_Benchmark/wiring.py:260` — comment-only, anchor Eq. (23).
+        **DONE**; → `r25 Eq. (23)`.
+  - [x] 1.5.6 **[P]** `tests/test_invariants.py:630` — docstring only, anchor Eq. (15).
+        **DONE**; → `r25 Eq. (15)`.
+  - [x] 1.5.7 **[SEQ, depends on 1.5.1]** `tests/test_report_tables.py:1315` and `:1328` — these pin
+        the literal substring the rendered report must contain. Update the pinned string to name
+        whatever anchor 1.5.1 adopts (this pair and `tables.py:494`/`:1917` are **one atom**: prose
+        without the updated assert reds the suite silently-wrong, assert without the prose reds it
+        honestly).
+        **DONE**; both asserts changed `"l.501" in ...` → `"§3.2" in ...`, landed with the prose in
+        the same commit.
+  - [x] 1.5.8 **[P]** `tests/test_report_tables.py:1302` and `:1316` — docstring/comment prose only,
+        same anchor as 1.5.1.
+        **DONE**; also corrected the same-comment bare `r21` echo at `:1317` for consistency (same
+        citation, same paragraph).
+      *(Spec: `revision-bound-records` — carried by "the revision bump is its own commit"; not a
+      separate requirement, but the design places all eleven inside this commit because
+      `report_digest.source_digest` cost is paid once regardless.)*
+- [x] 1.6 **[SEQ]** Add or verify a regression test that `latent.stale_revisions()` reports exactly
+      67 records tagged `"research-concept-r21.md"` (17 `Results/`, 50 `Models/`) and reports no
+      `"research-concept-r25.md"`-tagged record as stale, once `config.REVISION` is bumped.
+      *(Spec: `revision-bound-records` — "`latent.stale_revisions` reports exactly the invalidated
+      set".)*
+      **DONE with a documented deviation.** Added
+      `tests/test_latent_binding.py::test_the_full_on_disk_pilot_tree_reports_exactly_67_r21_stamped_records_stale`,
+      built from raw on-disk JSON (50 real `.manifest.json` via `rglob`, 17 real `Results/` files by
+      exact path) rather than through `latent.available()`. **Discovered defect**: calling
+      `latent.available(0.0, True)` against the REAL Pilot tree now raises an uncaught `SystemExit`
+      — `latent._current_hyper`'s `except Exception:` does not catch `SystemExit` (a `BaseException`),
+      and `config._refuse_on_stamp_drift` raises `SystemExit` reading `ceilings.pilot.json` (itself
+      one of the 67 r21-stamped records) once `config.REVISION` no longer matches it. This is
+      pre-existing and newly surfaced by this exact bump — no existing test calls `available()`
+      against real on-disk data (all use `monkeypatch`ed `tmp_path`). Fixing it is an unauthorized
+      behavior change for this isolated commit; reported as a risk, not fixed. GREEN observed for the
+      new test; RED observed and reverted under the mutation "revert `config.REVISION` to r21".
+- [x] 1.7 **[SEQ]** Verify no on-disk record's bytes changed (`git status`/`git diff --stat` on
+      `MIL-CREDA/Results/` and `MIL-CREDA/Models/` shows nothing) and that the three existing guards
+      (`harness.py:393-403` `StaleCheckpointRevision`, `latent.py:393-397` `available()`,
+      `latent.py:113` `currentRevision: False`) fire unmodified on the 67 records.
+      *(Spec: `revision-bound-records` — "disposed of by refusal, never by mutation".)*
+      **DONE, with one guard's finding qualified.** `git diff --stat` empty for both paths — no byte
+      changed. Guard 1 (`StaleCheckpointRevision`) fires correctly against a real Results/ record.
+      Guard 3 (`latent.py:113`'s `currentRevision` expression) evaluates `False` correctly against a
+      real r21 manifest. **Guard 2 (`available()`) does NOT fire gracefully against real data** — see
+      1.6's discovered defect: it crashes with `SystemExit` before it can tag any entry, rather than
+      completing and reporting `currentRevision: False` for the 67. The tagging expression itself
+      (guard 3) is correct; `available()`'s own execution against real Pilot data is blocked by the
+      unrelated ceilings-drift crash.
+- [x] 1.8 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only
+      the sibling's 3 pre-existing reds remain red, and every test touched by 1.1–1.7 is green.
+      Commit as an isolated commit containing only 1.1–1.5 (source + prose) and its accompanying test
+      updates (1.4, 1.6, 1.5.7, 1.5.8) — **no other behavior change**.
+      *(Spec: `revision-bound-records` — "The revision bump is its own commit"; "disclosed as
+      re-owing a walk, never as destroying a result" — write the commit message so it states no
+      quotable result is lost, per `AGREED.md:187`/`:208`/`:217`, and that it re-owes the pilot walk
+      and notebook re-execution rather than presenting the bump as discarding a finished result.)*
+      **DONE**; full suite: `3 failed, 661 passed, 1 skipped, 129 subtests passed` (the 3 failures
+      are exactly the sibling's `tests/test_search_distribution.py` reds, unchanged; +1 passed vs
+      baseline is the new 1.6 test). Committed as `b25da2f`
+      `build(revision): bump the managed revision from r21 to r25, isolated first` — 17 files
+      (13 `src/`, 4 `tests/`), 111 insertions / 33 deletions, exactly 1.1–1.5 + 1.4/1.6/1.5.7/1.5.8.
+
+---
+
+## Phase 2 — Slice (b): The second encoder (depends on Phase 1 landed)
+
+`strict_tdd` red-first sequence, written out because the tempting shortcut (change production,
+watch a test go red, then "fix" the test) is green-first with extra steps and is Risk R5 from the
+design (an assertion gets weakened instead of re-pointed).
+
+### 2.1 Red-first: re-point the three existing shared-encoder tests before any production change
+
+- [x] 2.1.1 **[SEQ]** Run the suite, confirm `tests/test_arm_objectives.py:557`
+      (`test_an_adapted_arms_target_forward_updates_running_statistics`) is **green** under one
+      encoder today. Record the count. *(Spec: `per-domain-encoders` — "BatchNorm running statistics
+      no longer cross domains".)*
+      **DONE**; `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_arm_objectives.py` → `28
+      passed` before any Phase 2 edit, `:557` green among them.
+- [x] 2.1.2 **[SEQ]** Re-point `:557`'s assertion from `assert all(module is arm.encoder for module
+      in seen)` to a **partition**: `seen` contains both encoders; the source forward routed through
+      `arm.encoder`; the target forward routed through `arm.target_encoder`; and
+      `arm.encoder is not arm.target_encoder`. Move the warm-up (lines 583-585) and the
+      `before_mean`/`before_var` snapshot to `arm.target_encoder.bn`. Run the suite. **Observe RED**
+      (production still holds one encoder — this is the change's declared first red, satisfying
+      `strict_tdd` without authoring a new failing test).
+      *(Spec: `per-domain-encoders` — "BatchNorm running statistics no longer cross domains".)*
+      **DONE**; RED observed: `AttributeError: 'Arm' object has no attribute 'target_encoder'` on
+      all three parametrizations (E/F/G), production still one-encoder, before any `wiring.py` edit.
+- [x] 2.1.3 **[SEQ]** Re-point `tests/test_arm_objectives.py:496`
+      (`test_an_adapted_arms_target_forward_carries_gradient_to_the_encoder`) into
+      `..._carries_gradient_to_both_encoders`: split the single assertion over
+      `arm.encoder.parameters()` into two separate assertions, one over
+      `arm.encoder.parameters()` and one over `arm.target_encoder.parameters()`. Replace the
+      docstring's now-false premise ("Eq. (39)'s whole point is one encoder both domains' inputs
+      update") with the three citations from design Decision 6a
+      (`global_term.py:59-60`, `local_term.py:85-101`, r25:1087 **(read-only, parent forge)**).
+      Run the suite. **Observe RED**.
+      *(Spec: `per-domain-encoders` — "Adaptation's gradient reaches both encoders".)*
+      **DONE**; RED observed: same `AttributeError: 'Arm' object has no attribute 'target_encoder'`
+      on all three parametrizations, before any production edit.
+- [x] 2.1.4 **[SEQ]** Re-point `tests/test_arm_objectives.py:617`
+      (`test_every_adapted_arms_full_training_step_updates_running_statistics_a_source_only_twin_does_not`)
+      into a **pair**: (a) inverted — `assert torch.equal(floor.encoder.bn.running_mean,
+      adapted.encoder.bn.running_mean)` and the same for `running_var`; (b) new — `assert not
+      torch.equal(adapted.encoder.bn.running_mean, adapted.target_encoder.bn.running_mean)`. Keep
+      the twin comparison — deleting it is Risk R5 and loses the only assertion distinguishing the
+      two encoders inside a full `training_step`. Run the suite. **Observe RED**.
+      *(Spec: `per-domain-encoders` — "BatchNorm running statistics no longer cross domains".)*
+      **DONE**; RED observed: same `AttributeError`, before any production edit. Twin comparison kept
+      (now assertion (a), inverted rather than deleted).
+
+### 2.2 Red-first: write the new construction/gradient/optimizer tests before production exists
+
+- [x] 2.2.1 **[P]** Write a test asserting E/F/G each hold two `FeatureExtractor` instances after
+      construction, and no parameter object of one appears in `named_parameters()` of the other —
+      identity (`is`), never equal shapes or values. **Observe RED** (attribute does not exist yet).
+      *(Spec: `per-domain-encoders` — "Two independent encoders for every adapted arm, one for the
+      floor".)*
+      **DONE**; RED observed (`AttributeError: 'Arm' object has no attribute 'target_encoder'`) on
+      E/F/G before production; GREEN after (2.3).
+- [x] 2.2.2 **[P]** Write a test asserting the floor `B` holds exactly one `FeatureExtractor`
+      instance (`arm.target_encoder is None`, or equivalent). **Observe** current behavior (may
+      already pass trivially if the attribute is absent — confirm it fails for the right reason once
+      the attribute is introduced elsewhere, or add an explicit `hasattr`/`is None` check that reds
+      until Decision 3/4 lands).
+      *(Spec: `per-domain-encoders` — "The floor arm... MUST hold exactly one encoder".)*
+      **DONE**; RED observed (`AttributeError`, not a trivial pass — the explicit access reds before
+      the attribute exists at all). GREEN after 2.3.1 (`target_encoder is None` on `B`).
+- [x] 2.2.3 **[P]** Write a test asserting `target_encoder.output_dim == encoder.output_dim` for an
+      adapted arm. **Observe RED**.
+      *(Spec: `per-domain-encoders` — "Both encoders share the same codomain".)*
+      **DONE**; RED observed (`AttributeError`), GREEN after 2.3.1.
+- [x] 2.2.4 **[P]** Write a construction-order test: B's and an adapted arm's head weights are
+      bit-identical after `Arm.__init__` under the same seed; the test must **red** if the target
+      encoder is constructed before the head (verifies Decision 3 — building the target encoder
+      LAST keeps the `B→E` rung to exactly one difference). **Observe RED or absent-attribute
+      failure** before Decision 3/4 lands.
+      *(Spec: `per-domain-encoders` — carries the rung-attributability constraint from design
+      Decision 3; no direct spec requirement text, but required by S4/`config.py:944-946`.)*
+      **DONE, with the honest observation named rather than a fabricated red.** Before any Phase 2
+      edit this test **passes trivially** — today's one-encoder code already builds only one
+      `FeatureExtractor` for every arm, so `B`'s and `G`'s heads already draw from identical
+      generator state; there is nothing yet to construct out of order. Not a reachable red in the
+      obvious direction, so proven by the opposite mutation instead (per the apply prompt's own
+      instruction for exactly this case): after 2.3.1 landed, `target_encoder` was temporarily
+      constructed **second** (right after `self.encoder`, before the head) — **observed RED**
+      (`AssertionError: the floor's and an adapted arm's head weights diverge`) — then reverted to
+      the shipped LAST position — **observed GREEN**, confirmed by `git diff --numstat` showing the
+      mutation fully reverted (`83 25` unchanged from pre-mutation) before the next step.
+- [x] 2.2.5 **[P]** Write/confirm a test that patching `wiring.FeatureExtractor` with a stub before
+      constructing an adapted arm makes **both** the source and target encoder instances of the
+      stub. **Observe RED** (target encoder does not exist).
+      *(Spec: `per-domain-encoders` — "The target encoder is constructed through the module-level
+      `FeatureExtractor` name".)*
+      **DONE**; RED observed (`AttributeError`), GREEN after 2.3.1.
+- [x] 2.2.6 **[P]** Write a test asserting `parameters` reads `11,247,434` for `B` and `22,423,946`
+      for an adapted arm, measured from `harness.py`'s own `sum(p.numel() for p in
+      model.parameters())` expression. **Observe RED** (current count is the one-encoder count).
+      *(Spec: `per-domain-encoders` — "The parameter asymmetry is reported where the count is read".)*
+      **DONE**; measured directly against the REAL (pretrained, un-stubbed) `FeatureExtractor` before
+      this test existed: `B` and `G` both read `11247434` pre-change. RED observed:
+      `assert 11247434 == 22423946`. GREEN after 2.3.1 (measured, not asserted from a document).
+- [x] 2.2.7 **[P]** Write a test asserting every `target_encoder` parameter appears in the same
+      `torch.optim.Adam` instance as `encoder`'s parameters, under one shared `lr`. **Observe RED**.
+      *(Spec: `per-domain-encoders` — "One optimizer trains both encoders".)*
+      **DONE**; RED observed (`AttributeError`), GREEN after 2.3.1 (one `Adam(arm.parameters())`, one
+      param group).
+
+### 2.3 Production: build the second encoder and the seams around it
+
+- [x] 2.3.1 **[SEQ]** In `src/MIL_CREDA_Benchmark/wiring.py`, construct `self.target_encoder` through
+      the **module-level** `FeatureExtractor` name, inside `Arm.__init__`, **after** the head and the
+      `V_R`/`b_R`/`v_R` attention parameters (last) — not beside `self.encoder`, not via
+      `copy.deepcopy`, not via a local alias or second import.
+      `self.target_encoder = FeatureExtractor(backbone=config.BACKBONE,
+      pretrained=config.PRETRAINED) if spec["adaptation"] is not None else None`.
+      *(Spec: `per-domain-encoders` — "Two independent encoders...", "The target encoder is
+      constructed through the module-level `FeatureExtractor` name". Design Decisions 3–4.)*
+      **DONE**; constructed as the LAST statement in `Arm.__init__`, after the `creda` branch,
+      through the exact module-level `FeatureExtractor` name, exact call shape as `self.encoder`.
+- [x] 2.3.2 **[SEQ]** Promote the private `_target_embeddings` (`wiring.py:221-240`) to the public
+      `target_embeddings`, routing through `self.target_encoder` (falling back to `self.encoder` on
+      the floor, where `target_encoder is None`). Remove the private name — do not keep both. Update
+      the five docstrings that still say `_target_embeddings`
+      (`tests/test_arm_objectives.py:575`, `:619`, `:628`, `:636`, `:638`).
+      *(Spec: `per-domain-encoders` — "No embedding without a declared domain"; Design Decision 2.)*
+      **DONE**; private name removed (not kept beside the public one), both callers
+      (`_milcreda_term`, `_creda_term`) updated. All five docstring mentions corrected to
+      `target_embeddings`; verified by `rg -n "_target_embeddings" tests/ src/` afterward — only a
+      retired test's own historical NAME remains (`test_gns_target_embeddings_scale_...`, naming a
+      removed test, not a live claim).
+- [x] 2.3.3 **[SEQ]** Extract `_scores(embeddings)` from `forward`'s existing bag/instance unit branch
+      (`wiring.py:205-209`); `forward` becomes `_scores(instance_embeddings(bags))`, signature
+      **unchanged**. Add `score_target(bags)` = `_scores(target_embeddings(bags))`.
+      *(Spec: `per-domain-encoders` — "No embedding without a declared domain"; Design Decision 1
+      interfaces.)*
+      **DONE**; `_scores` holds the bag/instance branch verbatim, `forward`'s signature and behavior
+      unchanged (still `self.instance_embeddings(bags)` — the source path), `score_target` added.
+- [x] 2.3.4 **[SEQ]** Add `harness.target_accuracy(model, dataset, device)` beside `harness.accuracy`
+      (which stays **unchanged**, signature included). Move `harness.py:691` and `:849` (the
+      `targetAccuracy` call sites) to `target_accuracy`; leave `harness.py:690` and `:848`
+      (`sourceAccuracy`) untouched.
+      *(Spec: `per-domain-encoders` — "Source accuracy is measured through the source encoder,
+      target accuracy through the target encoder".)*
+      **DONE**; `target_accuracy` added beside `accuracy`, mirroring it exactly except calling
+      `model.score_target(x)`. Both `targetAccuracy` call sites (`run_one`, `run_mechanism`) moved;
+      both `sourceAccuracy` sites confirmed untouched (`accuracy(model, judged_source, device)`).
+- [x] 2.3.5 **[P]** Correct prose that asserted a shared encoder: `wiring.py:4` module docstring,
+      `config.py:886-892` and `:902-905` (`normalization` axis rationale), `__init__.py:477-480`
+      (the `poolable` "bit-identical across every run" justification — now false across arms, true
+      within an arm; the `parameters` declaration itself at `:383`/`:484` is unaffected).
+      *(Spec: `per-domain-encoders` — "Prose that asserted a shared encoder is corrected with it".)*
+      **DONE**; all three corrected: `wiring.py`'s module docstring now states the floor holds one
+      encoder and adapted arms hold two; `config.py`'s two normalization comments now say each
+      domain trains its OWN encoder's statistics rather than "the encoder... exactly as the source
+      forward does"; `__init__.py`'s `poolable` comment now states `parameters` is bit-identical
+      WITHIN an arm's own seeds, not across arms, naming the exact two counts.
+- [x] 2.3.6 **[SEQ]** Run the full suite. **Observe GREEN** for `:496`, `:557`, `:617`, and every test
+      from 2.2.1–2.2.7. Confirm `tests/test_arm_objectives.py:371` and `:461` (the floor's guards)
+      pass with **zero byte changed** — read back both tests' bytes to confirm.
+      *(Spec: `per-domain-encoders` — "The floor's guarantee is unchanged".)*
+      **DONE**; `tests/test_arm_objectives.py`: `41 passed` (was `28` pre-Phase-2). Floor guards
+      confirmed byte-identical: `diff <(git show HEAD:tests/test_arm_objectives.py | sed -n
+      '371,492p') <(sed -n '371,492p' tests/test_arm_objectives.py)` → empty diff, before this
+      commit landed.
+
+### 2.4 Verify the mechanically-affected patch sites (no assertion change expected here)
+
+- [x] 2.4.1 **[P]** `tests/test_figure_surfaces.py:651` — confirm the `_TinyEncoder` patch now stubs
+      both encoders.
+      **DONE**; confirmed by the full `test_figure_surfaces.py` run passing (see 2.4.6's run) — the
+      module-level patch stubs both constructions with no test edit needed.
+- [x] 2.4.2 **[P]** `tests/test_figure_surfaces.py:840` — confirm the `trained` fixture's `_Encoder`
+      patch stubs both.
+      **DONE**; confirmed the same way; the `trained` fixture's model now carries two `_Encoder`
+      instances, unedited.
+- [x] 2.4.3 **[P]** `tests/test_figure_surfaces.py:917` — confirm `model.encoder.output_dim` is still
+      `θ_s`'s and unedited; **add** the codomain assertion
+      `model.target_encoder.output_dim == model.encoder.output_dim` at this exact site (the one
+      place the two widths meet).
+      **DONE**; `:917`'s existing assertion (`H_s.shape[-1] == model.encoder.output_dim > 2`) left
+      unedited; the codomain assertion added directly beneath it. Test run individually: `1 passed`.
+- [x] 2.4.4 **[P]** `tests/test_independent_adaptation_schedules.py:240` — confirm the patch stubs
+      both.
+      **DONE**; confirmed by the combined run below.
+- [x] 2.4.5 **[P]** `tests/test_latent_sigma_readers.py:56` — confirm the patch stubs both.
+      **DONE**; confirmed by the combined run below.
+- [x] 2.4.6 **[P]** `tests/test_attention_mechanisms.py:315` — confirm the patch stubs both. (This
+      site was absent from the original handoff's list — do not skip it.)
+      *(Spec: `per-domain-encoders` — "The target encoder is constructed through the module-level
+      `FeatureExtractor` name" — this is that requirement's own stated proof obligation.)*
+      **DONE**; all six files' patch sites confirmed with no edit needed except 2.4.3's added
+      assertion: `PYTHONPATH=src .venv/bin/python -m pytest -q tests/test_figure_surfaces.py
+      tests/test_independent_adaptation_schedules.py tests/test_latent_sigma_readers.py
+      tests/test_attention_mechanisms.py` → `48 passed`.
+
+### 2.5 Integration test: evaluation routes through the right encoder
+
+- [x] 2.5.1 **[SEQ]** Write an integration test: perturb `θ_t`'s parameters on a loaded adapted arm
+      — `targetAccuracy` (`target_accuracy`) moves, `sourceAccuracy` (`accuracy`) does not; then
+      perturb `θ_s` and assert the mirror.
+      *(Spec: `per-domain-encoders` — "A mixed-up domain is detectable, not silent".)*
+      **DONE**; written and green on first run after 2.3.4 landed (`harness.target_accuracy` did not
+      exist before, so this test was RED — `AttributeError` — for the same reason as 2.5.2 until
+      then). Perturbation is `p.mul_(-3.0)` over every target-encoder parameter, restored after, then
+      mirrored on the source encoder — no flakiness risk: the computation is fully seeded/
+      deterministic, so a pass is reproducible rather than probabilistic.
+- [x] 2.5.2 **[P]** Write an integration test: on the floor `B`, `accuracy` and `target_accuracy`
+      agree (one encoder); on an adapted arm (e.g. `G`), they disagree once `θ_t` has trained.
+      *(Spec: `per-domain-encoders` — "Source accuracy is measured through the source encoder, target
+      accuracy through the target encoder".)*
+      **DONE, with one honest refinement over the literal task text.** "Once `θ_t` has trained" is
+      not required for the disagreement to hold and is not what this test exercises: Decision 4's own
+      stub caveat states two stub instances are NOT identical at construction (each draws its own
+      `nn.Linear`), so `G`'s source and target encoders already disagree before any training step —
+      the test asserts disagreement at construction time, which is a stronger, training-independent
+      proof of "a mixed-up domain is detectable" than waiting for training to separate them would be.
+      Green on first run.
+
+- [x] 2.6 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
+      sibling's 3 reds remain and everything in Phase 2 is green. Commit as its own commit(s), atomic
+      with the re-pointed tests (encoder without tests is red; tests without encoder are red).
+      **DONE**; full suite: `3 failed, 674 passed, 1 skipped, 129 subtests passed` (was `3 failed, 661
+      passed, 1 skipped, 129 subtests passed` after Phase 1 — `+13` matches the net new/re-pointed
+      Phase 2 tests in `tests/test_arm_objectives.py`, `41 - 28 = 13`). The 3 failures are exactly the
+      sibling's `tests/test_search_distribution.py` reds by name
+      (`test_the_declaration_names_the_axis_the_search_can_split_on`,
+      `test_a_unit_resolves_to_the_axis_the_step_declares`,
+      `test_partial_search_records_merge_instead_of_overwriting`), unchanged. `src/CREDA/**` confirmed
+      byte-identical (`git diff --stat src/CREDA/` empty). Committed as one atomic commit,
+      `82b26f3` `feat(wiring): add the target encoder, Eq. (13)'s second FeatureExtractor` — 6 files
+      (4 `src/`, 2 `tests/`), 476 insertions / 86 deletions (562 changed lines — over the 400-line
+      review-budget guideline; **APPROVED by the operator as a `size:exception`** rather than
+      split, since Phase 2 was assigned as one indivisible slice — see Risks).
+
+---
+
+## Phase 3 — Slice (c): `latent.py` names its domain (depends on Phase 2 landed)
+
+- [x] 3.1 **[SEQ]** Add `wiring.SIDES = ("source", "target")` (not `DOMAINS` — `config.DOMAINS`
+      already means the three datasets M/U/S). Add the refusal idiom `raise ValueError(f"unknown
+      domain {domain!r}; known: {SIDES}")`, matching `mechanism_weights`'s existing idiom.
+      *(Spec: `per-domain-encoders` — "No embedding without a declared domain".)*
+      **DONE**: `wiring.SIDES = ("source", "target")` added beside the imports, with the
+      `config.DOMAINS`-collision comment carried verbatim.
+- [x] 3.2 **[SEQ]** Write RED tests first for the domain-required contract: omitting `domain` on
+      `represent`/`attention_spread` raises `TypeError` (no default anywhere in the signature); an
+      unknown string raises `ValueError` naming `SIDES`. **Observe RED** (current signatures still
+      lack the required parameter).
+      *(Spec: `per-domain-encoders` — "A caller that cannot state a domain is refused".)*
+      **DONE**: two tests added to `tests/test_latent_sigma_readers.py`
+      (`test_represent_and_attention_spread_refuse_a_call_with_no_domain`,
+      `test_represent_and_attention_spread_refuse_an_unknown_domain`). **Observed RED**:
+      `Failed: DID NOT RAISE TypeError` / `... DID NOT RAISE ValueError`, both before 3.3/3.4.
+- [x] 3.3 **[SEQ]** Change `latent.represent(model, bagset, positions, device, domain, unit=None)` —
+      `domain` required, no default, refuses on anything but `wiring.SIDES`.
+      **DONE**.
+- [x] 3.4 **[SEQ]** Change `latent.attention_spread(model, bagset, positions, device, domain)` — same
+      contract.
+      **DONE**. 3.2's two RED tests **observed GREEN** immediately after 3.3+3.4 (before 3.5-3.7).
+- [x] 3.5 **[SEQ]** Update `correspondence` (`latent.py:601`/`:602`) — the two adjacent lines name
+      `instance_embeddings`/`target_embeddings` explicitly (not a string argument — this is the
+      copy-paste-adjacent-pair shape design Decision 1 flags).
+      **DONE** — current lines `latent.py:612`/`:613` (line numbers shifted by Phase 1/2 edits).
+- [x] 3.6 **[SEQ]** Update `bag_pairs` (`latent.py:920`/`:921`) — same two-method-name treatment.
+      This is what makes `tests/test_figure_surfaces.py:896-897`'s rebuild agree again once
+      re-pointed (task 3.9).
+      **DONE** — current lines `latent.py:931`/`:932`.
+- [x] 3.7 **[SEQ]** Update `analyse` (`latent.py:658`/`:659`, `:671`), `latent_grid` (`:868`,
+      `:870-871`), and `correspondence_grid` to pass the domain explicitly at each call.
+      Run the suite. **Observe GREEN** for 3.2's new tests.
+      *(3.3–3.7 spec: `per-domain-encoders` — "No embedding without a declared domain"; "Every
+      post-hoc reader in `latent.py` names its domain explicitly".)*
+      **DONE** for `analyse` and `latent_grid`. **`correspondence_grid` needed no edit**: measured,
+      not assumed — it has no direct embedding call of its own, only `bag_pairs(...)` (fixed by
+      3.6), so it inherits the correct routing with nothing to change here.
+- [x] 3.8 **[SEQ]** Confirm `tools/measure_kernel_sigma.py` is **not edited** — it calls
+      `instance_embeddings` on a freshly constructed model where both encoders are the same
+      pretrained resnet18, reproducing `config.KERNEL_SIGMA = 36.135014304860874` byte-for-byte.
+      Read-only verification task. *(No spec — explicitly out of scope, design Decision 7.)*
+      **DONE** — confirmed untouched (`git status --porcelain` empty for this path) and confirmed
+      it still runs end to end (`PYTHONPATH=src .venv/bin/python tools/measure_kernel_sigma.py`);
+      it prints a measured value ~7e-7 off the declared constant, a pre-existing float32/float64
+      artifact unrelated to and unmoved by this phase.
+- [x] 3.9 **[SEQ]** Re-point `tests/test_figure_surfaces.py:896-897`
+      (`test_the_nearest_source_bag_is_found_...`) at `:897` from `model.instance_embeddings` to
+      `model.target_embeddings` for the target side. Before 3.5/3.6 land, confirm it is still
+      **green** (domain-blind `bag_pairs` still agrees with the domain-blind rebuild). After 3.5/3.6
+      land, **observe it red** if left unedited, then re-point and **observe GREEN**.
+      *(Spec: `per-domain-encoders` — "Every post-hoc reader in `latent.py` names its domain
+      explicitly"; Design Decision 6e.)*
+      **DONE** — measured exactly as described (current lines `:896`/`:897`, unshifted): full-suite
+      run right after 3.5-3.7 landed showed this one test **RED** (`assert False`,
+      `model.target_encoder.output_dim == model.encoder.output_dim` line unaffected, the failure
+      was the `nearest`-kernel comparison using the stale source-only rebuild). Re-pointed `:897`,
+      **observed GREEN** immediately after.
+- [x] 3.10 **[SEQ]** `tests/test_figure_surfaces.py:963` — reword the docstring premise from "both
+      domains go through ONE embedding call" to "one projection call over one shared codomain
+      `R^d`". **Add** the assertion `model.encoder is not model.target_encoder` so the new claim is
+      measurable. Leave the existing assertions (`count == config.CLASSES * 2`, one `_embed` call
+      per panel) **unedited** — they pass without modification (design Decision 6d, spec scenario
+      "The bag-figure projection test's premise survives, resolved").
+      *(Spec: `per-domain-encoders` — same scenario.)*
+      **DONE** — current line `:968` (shifted). Docstring reworded, new assertion added, the three
+      named existing assertions (`count == config.CLASSES * 2`, `projection.shape[1] == 2`, one
+      `_embed` call per panel via `len(embedded) == len(config.BAG_PANELS)`) left byte-for-byte
+      unedited. **Observed GREEN** with no other change needed.
+- [x] 3.11 **[SEQ]** **Observe, do not assume**: run `tests/test_figure_surfaces.py:1002`'s
+      abscissa-overlap assertion under two independently-initialized stub encoders. If it fails,
+      replace the overlap heuristic with the structural claim already asserted at `:986`/`:992` (one
+      `_embed` call carrying both domains) — **do not reseed the fixture** until it passes, which
+      would make the assertion a description of a seed rather than a property.
+      *(No spec — named as an observation obligation in design Testing Strategy and Open Questions.)*
+      **DONE** — measured: `test_the_bag_figure_keeps_the_projection_and_never_becomes_a_bipartite_
+      diagram` (current line `:968`, containing the abscissa-overlap assertion at current `:1007`)
+      **passes** under the two now-independently-initialized stub encoders (`trained` fixture,
+      `torch.manual_seed(11)` then `wiring.build("G", ...)`, encoder built before target_encoder per
+      Decision 3). No replacement needed; observation recorded rather than assumed.
+- [x] 3.12 Add the two-layer domain-mixup guard: **DONE** — new file `tests/test_domain_mixup_guard.py`.
+  - [x] 3.12.1 **[SEQ]** Behavioral, one assertion per consumer: perturb `θ_t`'s parameters on a
+        loaded adapted arm; assert every target-side reading (`represent`, `attention_spread`,
+        `correspondence`, `bag_pairs`) **moves** and every source-side reading does **not**; then
+        perturb `θ_s` and assert the mirror. Never infer one consumer's guard from a sibling's.
+        *(Spec: `per-domain-encoders` — "A caller that names its domain is served by the matching
+        encoder is served"; "A mixed-up domain is detectable, not silent".)*
+        **DONE**, with one named, cited deviation from a literal reading: `correspondence` returns
+        one combined scalar over both domains (`massOnTrueClass`), not separate source/target rows,
+        so it cannot be split into a clean moves/does-not-move pair the way the other three can —
+        both perturbations move it, and that (in both directions) is exactly the useful signal (see
+        the two tests' own docstrings for why). **Mutation-verified reachable**: temporarily
+        reverted `bag_pairs`' `H_t` to `instance_embeddings` — the target-perturbation test
+        **failed** exactly on `"bag_pairs' targetRows did not move when theta_t moved"`; reverted,
+        **re-observed GREEN**.
+  - [x] 3.12.2 **[SEQ]** Structural, derived rather than listed: an AST walk asserting no module
+        under `src/MIL_CREDA_Benchmark/` **other than `wiring.py`** calls `instance_embeddings` —
+        precedent `tests/test_figure_surfaces.py:673-688`. The only expected `src/` call sites after
+        this change are `wiring.py:204` (`forward`, source by construction) and `wiring.py:354`
+        (`training_step`, source by context). This condition is derived (any call site, anywhere),
+        not a roster, so it reddens on a **new** site the behavioral guard structurally cannot see.
+        *(Spec: `per-domain-encoders` — "No embedding without a declared domain".)*
+        **DONE, with a named correction to this task's own text**: read literally, "no module other
+        than `wiring.py`" would also forbid `latent.py`'s own source-side calls to
+        `instance_embeddings` — which Decision 7's own choice table *requires*
+        (`correspondence`/`bag_pairs` name it directly for the source side; `represent`/
+        `attention_spread` route through it for `domain="source"`), and which already existed
+        before this phase. A single-file exemption cannot be what was intended, since it would
+        redden on the design's own chosen implementation. Implemented exempting both `wiring.py`
+        and `latent.py` — the two files actually named as legitimate call sites once Decision 7's
+        table and prose are read together. **Mutation-verified reachable**: temporarily appended a
+        throwaway `model.instance_embeddings(x)` call to `tables.py` — the guard **failed**
+        (`instance_embeddings called outside wiring.py/latent.py: ['tables.py:2357']`); reverted
+        (`git checkout -- tables.py`), **re-observed GREEN**.
+- [x] 3.13 **[SEQ]** The `except Exception` at `latent.py:324` cannot catch the refusal it
+      is there to absorb, and the revision bump made that reachable. **Measured on
+      `two-encoders-a1`, not inferred**: `_current_hyper` handed a real on-disk manifest
+      (revision `research-concept-r21.md`, of which there are 50) escapes with an uncaught
+      `SystemExit` — `"refusing to read ceilings from .../ceilings.pilot.json: stamped
+      u..."` — because `config._refuse_on_stamp_drift` raises `SystemExit`, which derives
+      from `BaseException` and so passes straight through an `except Exception`.
+
+      **CORRECTED 2026-09-28, and the correction is the orchestrator's own error.** This task
+      originally claimed `latent.available()` does NOT raise, and that the availability filter
+      at `latent.py:113` discards the stale manifests first. That is false, and it came from
+      measuring the wrong invocation: `available(rate=0.0, pilot=False)` is the signature's
+      default, so a bare `available()` reads the FULL-scale tree, which is empty, returns `[]`
+      and never reaches the refusal. `available(0.0, True)` — the pilot tree, where all 50
+      stale manifests actually live — raises the `SystemExit` outright, because `available`
+      calls `hyperparameter_drift()` unconditionally with no such filter. The apply agent
+      re-measured rather than trusting this text, which is why it was caught.
+
+      The fix LOCATION was unaffected, and for a better reason than the one first given:
+      `_current_hyper`'s own docstring already promises the graceful fallback its code did not
+      keep. The site was the one its own documentation named, never the caller that happened
+      to surface it.
+
+      Pre-existing, not introduced here: `except Exception` has never been able to catch
+      `SystemExit`. What the bump changed is that the refusal now fires, so a latent crash
+      became a live one. Never exercised before because no test calls these against real
+      on-disk data — every existing call site monkeypatches `config.models_for` to a
+      `tmp_path` fixture, which is why a green suite never saw it.
+
+      RED FIRST, and the red is cheap and real: a test that hands `_current_hyper` a record
+      stamped under a revision other than `config.REVISION` and asserts it returns rather
+      than raising. Observe it fail with `SystemExit` escaping, then widen the catch to
+      cover the refusal and observe green. Do NOT widen it to bare `except BaseException`,
+      which would also swallow `KeyboardInterrupt`: catch the refusal's own type.
+
+      And assert the guard is still REACHABLE afterwards — a catch that made
+      `_refuse_on_stamp_drift` unable to refuse anywhere would trade a crash for a silence,
+      which is worse. `hyperparameter_drift` must still report the drift it was written to
+      report.
+
+      **DONE, with one measured correction to this task's own text.** Re-measured on this branch
+      (`two-encoders-a3`), not inferred from the earlier report: `latent.available(0.0, True)`
+      (the real pilot tree, 50 manifests) **does** raise the described `SystemExit` today —
+      `refusing to read ceilings from .../ceilings.pilot.json: stamped under a revision or
+      hyperparameters the current config no longer carries: milcreda.` — because `available()`
+      calls `hyperparameter_drift(record)` unconditionally for every found manifest (`latent.py`,
+      inside its own loop), not only for current-revision ones; there is no filter that "discards
+      the stale manifests before reaching this function". `latent.available()` (default args,
+      `rate=0.0, pilot=False`) *does* return `[]` without raising, but only because that particular
+      directory (`MIL-CREDA/Models/Benchmark`) is empty on disk today — an unrelated reason. This
+      does not change where the fix belongs: `_current_hyper`'s own docstring (`latent.py:303-310`)
+      already promises exactly this fallback ("a ceiling record that itself refuses to be read...");
+      the code just did not keep that promise. Fixed at the one site the docstring already names.
+
+      RED FIRST: added `test_hyperparameter_drift_survives_a_ceiling_record_stamped_under_a_
+      different_revision` (`tests/test_latent_binding.py`) — a `tmp_path` ceilings record stamped
+      `research-concept-r21.md`, monkeypatched onto `config.CEILINGS_RECORD`. **Observed RED**:
+      `SystemExit: refusing to read ceilings from .../ceilings.json: stamped under a revision or
+      hyperparameters the current config no longer carries: milcreda.` (uncaught, escaping
+      `latent.hyperparameter_drift`). Widened `_current_hyper`'s `except Exception:` to
+      `except (Exception, SystemExit):` — not `except BaseException`, so `KeyboardInterrupt` still
+      propagates. **Observed GREEN** immediately after. **Reachability re-confirmed in the same
+      test**: `config.hyper_by_transfer_on_record(pilot=False)` against the identical stale record
+      still raises `SystemExit` directly — the refusal itself was not neutered, only
+      `_current_hyper`'s own fallback boundary now absorbs it. Also corrected the now-stale
+      docstring of the pre-existing `test_the_full_on_disk_pilot_tree_reports_exactly_67_r21_
+      stamped_records_stale`, which described this as an open, unfixed defect — it names the fix
+      and the test that proves it, in the same phase that found it.
+- [x] 3.14 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
+      sibling's 3 reds remain. Commit.
+      **DONE**. Full suite: `3 failed, 680 passed, 1 skipped, 129 subtests passed` (was `3 failed,
+      674 passed, 1 skipped, 129 subtests passed` after Phase 2 — `+6` matches the six new Phase 3
+      tests: 2 domain-required-contract + 3 domain-mixup-guard + 1 `SystemExit`-survives). The 3
+      failures are exactly the sibling's `tests/test_search_distribution.py` reds by name
+      (`test_the_declaration_names_the_axis_the_search_can_split_on`,
+      `test_a_unit_resolves_to_the_axis_the_step_declares`,
+      `test_partial_search_records_merge_instead_of_overwriting`), unchanged. `src/CREDA/**`
+      confirmed byte-identical (`git diff --stat src/CREDA/` empty).
+
+      **Review-budget note, recorded rather than assumed approved**: `git diff --numstat` +
+      `tests/test_domain_mixup_guard.py` (new file) totals **463 authored changed lines**
+      (`latent.py` 45+12, `wiring.py` 7+0, `test_figure_surfaces.py` 22+6, `test_latent_binding.py`
+      67+12, `test_latent_sigma_readers.py` 45+3, `test_domain_mixup_guard.py` +244) — over the
+      400-line guideline, same as Phase 2's approved exception. Recorded here as a `size:exception`
+      **CANDIDATE** with its reason rather than split further, and **not assumed approved**: Phase 3
+      was assigned as one indivisible slice (six domain-blind call sites, the domain-required
+      contract they all depend on, the two-layer mixup guard proving the boundary holds, and the
+      one `SystemExit` fix the same revision bump reached) — splitting it would separate an
+      encoder-routing change from the tests that are the only thing proving it correct, which
+      Phase 2's own precedent (`82b26f3`) already named as the wrong place to split. Committed to
+      `two-encoders-a3` as instructed by this task; the exception candidate itself awaits the
+      operator's decision before any PR/merge, exactly as Phase 2's own `size:exception` was
+
+**Phase 3 carries a second maintainer-approved `size:exception`** — 463 authored changed
+lines — and the record distinguishes it from Phase 2's rather than reusing that approval,
+because an "approved" with no reason teaches a later reader nothing about when to grant the
+next one.
+
+**Phase 2's atom was strong**: three re-pointed assertions that could not be separated from
+the production they assert, since a re-pointed test without its production fails and
+production without its re-pointed test is green-first.
+
+**Phase 3's atom is weaker and the operator approved it anyway, knowing that.** Its three
+parts are genuinely separable: the six `latent.py` domain sites, the two-layer domain-mixup
+guard (244 lines, its own new file), and the `SystemExit` catch, which is independent of both
+and could have shipped alone. Approved on cost — the commit already existed and splitting it
+would have meant rewriting local history a third time this session — not on the atom being
+indivisible. A future slice must not cite this as precedent for an atom that merely happens
+to be one commit.
+      recorded in a separate follow-up commit after `82b26f3` had already landed.
+
+---
+
+## Phase 4 — Slice (d): The degeneracy diagnostic (depends on Phase 2; independent of Phase 3)
+
+The diagnostic must be able to **fall** — a reading that cannot move measures nothing — and it has
+**two** raise sites at the degenerate boundary, not one.
+
+- [x] 4.1 Write RED tests first for the diagnostic's math and boundary, before wiring any of it into
+      `training_step`:
+  - [x] 4.1.1 **[P]** A rank-one, trace-normalized target bag Gram reads the diagnostic's minimum
+        (`‖A‖²_F = 1` ⇒ `H₂ = 0`), exactly, not approximately.
+        *(Spec: `target-degeneracy-diagnostic` — "The reading decays toward its minimum..." scenario
+        "A rank-one target Gram reads the diagnostic's minimum".)*
+        **DONE**; RED observed (`AttributeError: module 'MIL_CREDA_Benchmark.wiring' has no attribute
+        '_target_bag_entropy'`) before 4.2, GREEN immediately after.
+  - [x] 4.1.2 **[P]** A sequence of target batches with decreasing effective rank of `K_tt` produces
+        a non-increasing sequence of readings.
+        *(Spec: `target-degeneracy-diagnostic` — same requirement, scenario "falls monotonically".)*
+        **DONE**; measured, not assumed — the six-point interpolation `(1-α)I + α·ones` was checked
+        numerically before being pinned (readings strictly non-increasing, `ln 6 → 0`). Same RED/GREEN
+        as 4.1.1.
+  - [x] 4.1.3 **[P]** A synthetic all-zero `K_tt` (non-positive trace, `renyi.trace_normalize`'s
+        `ValueError`) is **reported** (a value or an explicit "unavailable"/NaN), never propagates a
+        `ValueError` out of the diagnostic's call site.
+        *(Spec: `target-degeneracy-diagnostic` — "The diagnostic reports rather than raises at the
+        fully degenerate boundary", scenario "non-positive-trace...is reported, not raised".)*
+        **DONE**; same RED/GREEN as 4.1.1.
+  - [x] 4.1.4 **[P]** A synthetic `trace_normalize(K_tt)` with zero Frobenius norm
+        (`renyi.quadratic_entropy`'s `ValueError`) is likewise **reported**, never propagated.
+        *(Spec: `target-degeneracy-diagnostic` — same requirement, scenario "zero-Frobenius-norm...
+        is reported, not raised". Both boundaries MUST be tested — the two are distinct raise sites.)*
+        **DONE, with a named, measured finding.** If `trace_normalize` succeeds its output has trace
+        exactly 1 by construction (`K / trace(K)`), and a matrix of trace 1 cannot have zero Frobenius
+        norm (`sum(A_ii) = 1` forces a nonzero diagonal entry, so `‖A‖²_F ≥ 1/n > 0`) — so this second
+        raise site is mathematically unreachable through the diagnostic's own composition, the same
+        shape of finding this repository already named for an unreachable branch at 3.13. Exercised by
+        injection instead of a fabricated natural trigger: `monkeypatch.setattr(wiring,
+        "trace_normalize", ...)` at the module level (Decision 4's own mechanism), handing back a
+        degenerate result `trace_normalize` could never actually produce, so `quadratic_entropy`'s own
+        `except` clause is genuinely exercised. RED observed the same way as 4.1.1 (before the function
+        existed at all), GREEN after.
+  - [x] 4.1.5 **[P]** A target batch constructed so every bag's hard pseudo-label collapses to the
+        same class (driving `C_act` toward one class) while the unconditional target cloud is also
+        collapsing: the required diagnostic falls toward its minimum while the per-class weighted
+        `H_target` inside `global_term.dependency_score` fails to characterize the collapse (at most
+        one active class left).
+        *(Spec: `target-degeneracy-diagnostic` — "The per-class weighted `H_target`...MUST NOT
+        substitute for the diagnostic".)*
+        **DONE**, at the math level (`conditional_blocks`/`mixed_matrix`/`is_active`/`dependency_score`
+        called directly, mirroring `_milcreda_term`'s own loop, no `Arm` needed): every target bag is
+        the identical bag (`K_tt` exactly rank-one by construction, diagnostic ≈ 0, measured), and its
+        pseudo-label collapses with it to one class, leaving exactly one active class in the per-class
+        loop (`len(losses) == 1`, measured against three declared classes). RED observed against
+        `wiring._target_bag_entropy` before 4.2, GREEN after.
+  - [x] 4.1.6 **[P]** A target batch with a collapsing bag cloud but non-uniform intra-bag attention
+        weights: `uniform_self_similarity`/`effective_bag_size` report no collapse on it — they must
+        stay **unwired**, not presented as equivalent or substitute.
+        *(Spec: `target-degeneracy-diagnostic` — "The excluded intra-bag instruments MUST NOT be
+        used".)*
+        **DONE**; every target bag is the identical bag (five distinct, non-trivially weighted
+        instances — genuine intra-bag diversity, `m_eff ≈ 4.44` of 5, `uniform_self_similarity ≈ 0.27`,
+        both measured as reading "dispersed" not "collapsed"), while the required diagnostic on the
+        same batch reads its exact minimum (`K_tt` rank-one by construction). Same RED/GREEN as 4.1.5.
+- [x] 4.2 **[SEQ]** Implement `_target_bag_entropy(K_tt)` beside the existing `K_ss, K_st, K_tt =
+      bag_kernel_matrix(...)` build in `wiring.py`'s `_milcreda_term` (`:267-269`):
+      `quadratic_entropy(trace_normalize(K_tt))` over the **unconditional** target bag Gram, catching
+      both `ValueError`s from `renyi.trace_normalize` (non-positive trace) and
+      `renyi.quadratic_entropy` (zero Frobenius norm) at the call site and returning `float("nan")`
+      instead of propagating. Run tests 4.1.1–4.1.4. **Observe GREEN**.
+      *(Spec: `target-degeneracy-diagnostic` — "The diagnostic is quadratic entropy over the
+      trace-normalized unconditional target bag Gram".)*
+      **DONE**; implemented as a module-level function (not a method — called from a test file with no
+      `Arm` needed, matching 4.1.1–4.1.6's own math-level tests) at `wiring.py`, beside `SIDES`, ahead
+      of `class Arm`. `.detach()` before leaving `torch` (this reading is never a term of Eq. (39));
+      caught a `UserWarning` about converting a `requires_grad` tensor to a scalar during 4.3's own
+      test run and fixed it here and at every other new float-conversion site in the same pass. GREEN
+      observed for 4.1.1–4.1.6 immediately after landing.
+- [x] 4.3 **[SEQ]** Add the remaining four readings and one count beside `w_t = confidences(G_t)`
+      (`:273`) and the `losses` loop (`:278-293`): `targetConfidenceMean = w_t.mean()`,
+      `targetConfidenceMin = w_t.min()` (the onset — a mean over ten bags hides one vanished
+      weight), `activeClasses = len(losses)`, `sourceKernelMean`/`crossKernelMean`/`targetKernelMean`
+      = the off-diagonal means of `K_ss`/`K_st`/`K_tt`. Run test 4.1.5. **Observe GREEN**.
+      *(Spec: `target-degeneracy-diagnostic` — "The confidence weights' magnitude is recorded".)*
+      **DONE**, at current lines `:387-419` (shifted by Phases 1–3). Added `_off_diagonal_mean(K)` as
+      a second module-level helper (Decision 10's instrument, written once and applied to all three
+      kernels rather than three near-identical copies — the file's own rule). Stashed the seven-field
+      dict on `self._diagnostics` at the end of `_milcreda_term`, rather than widening that method's
+      own 2-tuple return: four call sites in `tests/test_arm_objectives.py` already unpack exactly two
+      values, and widening the return would force an unrelated, unauthorized edit to that
+      Phase-2-protected file for no requirement that names it. `training_step` reads `self._diagnostics`
+      back immediately after the one call site that reaches it. New integration test
+      (`test_an_adapted_arms_training_step_reports_all_seven_readings`) confirms all seven read off a
+      real adapted arm's real `training_step`, not a fabricated dict. GREEN observed.
+- [x] 4.4 **[SEQ]** Have `training_step` return these six readings beside the existing
+      `supervised`/`adaptation`/`contribution*` floats. On the floor `B`, all six report
+      `float("nan")`, **never `0.0`** (0.0 is the collapsed value itself). Add a mutation-guard test:
+      a `0.0` mutation on the floor's readings must **red**.
+      *(Spec: `target-degeneracy-diagnostic` — boundary/reporting requirements, applied to the
+      floor's structural absence of the reading.)*
+      **DONE, with one measured correction to this task's own count.** Decision 9's own table names
+      **seven** fields (`targetBagEntropy` + the six from 4.3), not six — "six readings" here is
+      corrected rather than trusted, the same discipline 3.13 already applied to its own text. All
+      seven default to `float("nan")` in `training_step`, overwritten only on the `"milcreda"` branch;
+      the `"creda"` branch (no declared arm reaches it) and the floor both keep the nan default.
+      **Mutation-verified reachable**: the nan-default dict was temporarily mutated to `float("0.0")`
+      for every field — **observed RED** (`AssertionError: targetBagEntropy: the floor must read nan,
+      never a fabricated number`) — reverted, **re-observed GREEN**, `git diff` confirmed no residual
+      `0.0"` string before proceeding.
+- [x] 4.5 **[SEQ]** Aggregate the six readings per epoch into `epochs_record` beside
+      `sourceAccuracy`/`targetAccuracy` (means over the epoch's 7 steps; `min` where the minimum is
+      informative, per the existing `curve` → `mean_supervised` pattern). Add
+      `run["targetBagEntropyMin"]` (the minimum over epochs) as the one per-run field — **not** a
+      new `config.DIMENSIONS` entry and **not** added to `__benchmark__["report"]["dimensions"]`.
+      *(Spec: `target-degeneracy-diagnostic` — "The diagnostic is readable during training, not only
+      after".)*
+      **DONE**, in `harness.run_one`. `targetBagEntropy` and `targetConfidenceMin` aggregate per epoch
+      by **min** over that epoch's own steps (a mean would wash out a one-step collapse — this is the
+      "min where the minimum is informative" half of the task text); the other five aggregate by mean.
+      The per-run `targetBagEntropyMin` is the min over the epoch trace's own per-epoch minima, which
+      is exactly the global minimum over every step of the run. Verified end to end through a real
+      (stub-encoder) two-epoch `harness.run_one` call, not a hand-assembled dict — every epoch record
+      carries all seven fields non-nan for an adapted arm, and `targetBagEntropyMin` matches
+      `min(epoch minima)` exactly.
+- [x] 4.6 **[P]** Write a structural test confirming `targetBagEntropy`/`targetBagEntropyMin` and the
+      other five readings are **absent** from `config.DIMENSIONS` and from
+      `__benchmark__["report"]["dimensions"]` (design Decision 8's rejection, mirrored as a guard so
+      a later PR does not silently re-add it as a declared dimension).
+      *(No direct spec scenario — design-level guard for Decision 8.)*
+      **DONE**; both declared-dimension sets checked disjoint against all eight field names (seven
+      per-step + the one per-run field). GREEN on first run (no prior state to have broken).
+- [x] 4.7 **[P]** Write a trace test: reading the diagnostic at ≥2 distinct points over a multi-epoch
+      training run yields distinct values (trajectory, not only a final number).
+      *(Spec: `target-degeneracy-diagnostic` — "The diagnostic is available at more than one point
+      across a training run".)*
+      **DONE**; three successive `training_step` calls sharing one generator (so each draws a
+      genuinely different target batch, exactly as `run_one`'s own epoch loop does) yield at least two
+      distinct `targetBagEntropy` values. GREEN on first run.
+- [x] 4.8 **[P]** Write a round-trip test: the run dict (with `NaN` present on the floor) survives
+      `json.dumps`/`runs.jsonl` writing, precedent `latent.geometry`/`harness.accuracy`.
+      *(No direct spec scenario — regression precedent named in design Testing Strategy.)*
+      **DONE**; a dict of all eight field names set to `float("nan")` round-trips through
+      `json.dumps`/`json.loads` with every value still reading `nan` after. GREEN on first run.
+- [x] 4.9 **[SEQ]** Run `PYTHONPATH=src .venv/bin/python -m pytest -q` (full suite). Confirm only the
+      sibling's 3 reds remain. Commit.
+      **DONE**; full suite: `3 failed, 692 passed, 1 skipped, 129 subtests passed` (was `3 failed, 680
+      passed, 1 skipped, 129 subtests passed` after Phase 3 — `+12` matches the twelve new tests in
+      `tests/test_target_degeneracy_diagnostic.py`). The 3 failures are exactly the sibling's
+      `tests/test_search_distribution.py` reds by name, unchanged. `src/CREDA/**` confirmed
+      byte-identical (`git diff --stat src/CREDA/` empty).
+
+      **Review-budget note.** Estimated at ~180–220 lines; measured (`git diff --numstat`) at **651
+      authored changed lines** across `wiring.py`, `harness.py`, and the new
+      `tests/test_target_degeneracy_diagnostic.py` — over the 400-line guideline, same as Phases 2–3.
+      Unlike those two, **nothing was committed yet when this was measured**, so the atom was actually
+      split rather than defaulting to another exception: three dependency-ordered commits, each
+      independently green and each under budget — (1) the instrument itself, math-level tests only,
+      288 lines (`d14d1af`); (2) wiring it into `training_step`'s return, with the floor's
+      mutation-verified nan guard, 184 lines (`1eae0ee`); (3) the per-epoch/per-run aggregation in
+      `harness.run_one`, closing with the full-suite gate, 179 lines (`f4e0501`). Each commit's own
+      task dependency (`4.2` before `4.3` before `4.4` before `4.5`) made the boundary a genuine one,
+      not a line-count-only cut: commit 1 is a complete, correct, independently-testable claim about
+      the mathematics; commit 2 adds the wiring only once the instrument it wires is proven; commit 3
+      adds the record-level aggregation only once the field it aggregates exists. Recorded here as the
+      genuine-split case this session's earlier `size:exception` records themselves called for
+      ("split it where the atom genuinely allows"), not as a fourth exception.
+
+---
+
+## Phase 5 — Full regression and success-criteria audit (sequential, closes the change)
+
+- [x] 5.1 **[SEQ]** Run the **full, unfiltered** suite:
+      `PYTHONPATH=src .venv/bin/python -m pytest -q`. Record the real numbers. Confirm the sibling
+      change's 3 `tests/test_search_distribution.py` reds are still red and are reported as its work,
+      not as regressions introduced here.
+- [x] 5.2 **[SEQ]** Walk `proposal.md`'s Success Criteria checklist item by item against the landed
+      state; mark none as satisfied without having run the measurement it names (parameter counts,
+      gradient-both-sides, `:557`/`:617` re-pointed assertions, `KERNEL_SIGMA` unchanged,
+      `hyperparameter_drift` silent, diagnostic behavior, `latent.stale_revisions` count, full suite).
+- [x] 5.3 **[P]** Confirm `src/CREDA/**` is byte-identical (`git diff --stat` empty for that path) and
+      that no file outside `implementations/Domain_Adaptation` was modified.
+- [x] 5.4 **[P]** Confirm the report states the parameter asymmetry wherever `parameters` is printed
+      (carries `MIL-CREDA/AGREED.md:164`, already written — verify the sentence survives in
+      `tables.py` after the Phase 1 citation edits, rather than being dropped by an unrelated diff).
+      *(Spec: `per-domain-encoders` — "The parameter asymmetry is reported where the count is read".)*
+- [x] 5.5 **[P]** Re-confirm `MIL-CREDA/AGREED.md` **(read-only)** still carries both required entries
+      unchanged (this change never edits it).
+
+---
+
+**Evidence (Phase 5, run by the orchestrator, measured against the running code):**
+
+- 5.1 Full unfiltered suite: **693 passed, 3 failed, 1 skipped, 129 subtests passed**. The three
+  are the sibling change's own reds in `tests/test_search_distribution.py`, by name, unchanged.
+- 5.2 Measured by instantiating every arm rather than by reading the code:
+  `config.REVISION == "research-concept-r25.md"`; `KERNEL_SIGMA` unchanged at
+  `36.135014304860874`; `B` = **11,247,434** trainable with `target_encoder is None`; `E`, `F`
+  and `G` = **22,423,946** each with `target_encoder is not encoder` — the Eq. (13) claim
+  asserted live, not inferred; both encoders' `output_dim` equal on every arm; one optimizer,
+  still `model.parameters()`.
+- 5.3 `src/CREDA/**` byte-identical to `main` (`git diff --stat` empty for that path).
+- 5.4 **FOUND AN OPEN AGREEMENT, and it was not green.** `AGREED.md:164` requires the report to
+  state the parameter asymmetry where the count is read, and nothing did — `tables.py:50` maps
+  `"parameters"` to a column label and no sentence existed anywhere. The agreement already had
+  a home nobody had filled: `tables.objective`, the report's declared `objectiveEntry`, covered
+  five dimensions and not this one, and its own fallback printed
+  `'(sin objetivo declarado para parameters)'`. Closed in commit `3d756fb`, red-first, with a
+  test that asserts the ASYMMETRY and deliberately not the two counts — those come from the
+  model, and pinning them by hand would age the report with the first backbone change.
+- 5.5 `MIL-CREDA/AGREED.md` (read-only) still carries both required entries: the `## Reversed`
+  shared-extractor paragraph dated 2026-09-28, and the not-parameter-matched item.
+
+**A method note worth keeping, because it is the trap this repository keeps catching.** 5.4's
+first mutation proved nothing and looked like it had: it replaced ONE occurrence of
+`codificador` while the word remained twice more in the same sentence, and the `git diff
+--numstat` was taken against `HEAD`, where the new sentence was still uncommitted — so the
+numbers described the addition, never the mutation. Redone by replacing every occurrence
+(3 -> 0) and verifying against a saved copy rather than against `HEAD`: red observed quoting
+the mutated sentence, reverted, green re-observed.
+
+## Phase 6 — Gated: pilot walk and nine-account rehearsal (NOT ordinary apply scope)
+
+**Do not execute without explicit, separate operator authorization.** This spends metered remote
+quota and is scoped identically to the sibling change's own Phase 6 gate. The bump un-ticks the
+six-step position and the first `src/` byte this change touches invalidates every notebook stamp
+independently of the revision, via `report_digest.source_digest` — so the walk is **owed**, but this
+change delivers the launch precondition, never the launch itself.
+
+**The operator has asked to discuss results one by one BEFORE the pilot.** That discussion is a
+precondition for 6.1–6.3, not a step inside them.
+
+- [ ] 6.1 **[GATED — requires explicit operator authorization]** Re-run the six-step pilot walk under
+      the existing launch-authorization mechanism (this change does not create or modify that
+      mechanism).
+- [ ] 6.2 **[GATED — requires explicit operator authorization]** Re-rehearse the nine-account
+      benchmark under r25.
+- [ ] 6.3 **[GATED — requires explicit operator authorization]** Re-execute `verification.ipynb` and
+      `Benchmark_Results.ipynb` under r25 (both carry the literal r21 revision string and must be
+      re-executed before their stamps can be current; every other notebook's stamp is already
+      invalidated by the source-digest mechanism and needs no special-casing beyond re-execution).
+
+---
+
+## Cross-cutting discipline (applies to every phase above)
+
+- Hold the sibling change's own bar: across its five slices, `tests/` gained 979 insertions against
+  20 deletions and no assertion was weakened. No task above may satisfy a red by weakening an
+  assertion instead of re-pointing it — `:617`'s inversion (2.1.4) is the named risk case (R5).
+- `verify`'s `prose.unresolvedSymbols` reads `inspect.getsource()`, docstrings included — a source-
+  substring roster test. Reword prose rather than merely mentioning a constant when touching
+  `wiring.py:4`, `config.py:886-905`, `__init__.py:477-480` (2.3.5) and the eleven citations (1.5.*).
+- Do not pin a constant belonging to a retired path (`SEARCH_ENGINE` is `optuna`; `CEILING_GRID` and
+  `SEARCH_SEEDS` belong to the retired grid engine) anywhere in new test code.
+- Run the **full** suite before reporting at every phase boundary, never a filtered subset.
+
+## Retired after the pilot ran
+
+`tests/test_latent_binding.py::test_the_full_on_disk_pilot_tree_reports_exactly_67_r21_stamped_records_stale`
+was removed on 2026-09-29. It walked the live product tree and asserted all 67
+records were stamped `research-concept-r21.md`, which made it pass only while the
+pilot had not been re-run under r25. Walking the flow re-stamped every one of the
+67 and inverted it. Both things it bought survive without the disk: the unit test
+above it covers `stale_revisions()` over constructed records, and the SystemExit
+defect it surfaced has its own
+`test_hyperparameter_drift_survives_a_ceiling_record_stamped_under_a_different_revision`.
+Retired by the operator's decision, not replaced.

@@ -1,0 +1,162 @@
+{
+  "accelerator": {
+    "architectures": [
+      "sm_75"
+    ],
+    "kind": "cuda"
+  },
+  "clonePaths": [
+    "src/MIL_CREDA_EEG",
+    "src/MIL_CREDA",
+    "src/CREDA",
+    "src/MIL_CREDA_Benchmark",
+    "MIL-CREDA/Partition",
+    "MIL-CREDA-EEG/Manifests",
+    "MIL-CREDA-EEG/Results/timing.json",
+    "MIL-CREDA-EEG/Results/separability/summary.json",
+    "requirements.txt"
+  ],
+  "commit": "c10d4d0054cfd0f9cf838d289721370947bb49f6",
+  "inputDatasets": [
+    "daprosero/balladeer-existing-local",
+    "daprosero/balladeer-v59-merged"
+  ],
+  "jobName": "v59-final-l1l6",
+  "product": "MIL-CREDA-EEG",
+  "repo": {
+    "ref": "main",
+    "url": "https://github.com/Daprosero/Domain_Adaptation"
+  },
+  "run": {
+    "function": "run_units",
+    "kwargs": {
+      "config": {
+        "device": "cuda",
+        "nTrials": 20,
+        "rehearsal": true,
+        "remoteInputs": {
+          "processed": "daprosero/balladeer-existing-local",
+          "product": "daprosero/balladeer-v59-merged"
+        },
+        "schedule": {
+          "bagsPerStep": 8,
+          "epochs1": 100,
+          "epochs2": 100
+        },
+        "strategies": [
+          "MIL-CREDA"
+        ],
+        "transfers": [
+          "L1->L6"
+        ]
+      }
+    },
+    "module": "MIL_CREDA_EEG.remote_units",
+    "smoke": {
+      "function": "smoke",
+      "kwargs": {
+        "budget_seconds": 1500,
+        "config": {
+          "device": "cuda",
+          "nTrials": 20,
+          "rehearsal": true,
+          "remoteInputs": {
+            "processed": "daprosero/balladeer-existing-local",
+            "product": "daprosero/balladeer-v59-merged"
+          },
+          "schedule": {
+            "bagsPerStep": 8,
+            "epochs1": 100,
+            "epochs2": 100
+          },
+          "strategies": [
+            "MIL-CREDA"
+          ],
+          "transfers": [
+            "L1->L6"
+          ]
+        },
+        "units": [
+          "final.L1-to-L6"
+        ]
+      },
+      "module": "MIL_CREDA_EEG.remote_units",
+      "requiredEvidence": [
+        "evidence.commit",
+        "evidence.sourcesDigest",
+        "evidence.complete",
+        "evidence.gpu.allParametersOnCuda",
+        "environment.device.name"
+      ]
+    }
+  },
+  "runnerTemplate": [
+    {
+      "path": "assets/runner_bootstrap.py",
+      "sha256": "7e14bf9bc678d6be54897f0a8c8ca8a6273d5f71a16e027a81df9ba36adb6a2c"
+    },
+    {
+      "path": "assets/runner_invoke.py",
+      "sha256": "0ba3872a4cab34467401fdd66bfb2afc929f974bf40bb436270372f9c456807e"
+    }
+  ],
+  "schemaVersion": 1,
+  "service": "kaggle",
+  "unresolvedImports": [
+    "import 'MIL_CREDA_EEG.comparators' resolves to nothing on disk under /Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src"
+  ],
+  "unresolvedReads": [
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:472: preprocess.file_sha256(REQUIREMENTS) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:636: path.open('rb') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:642: (folder / STAMP_FILE).read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:1119: Path(args.config).read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:525: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:649: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:729: source.open('rb') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:986: Path(config).read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:849: stamped.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:1043: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:660: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:675: source.read_bytes() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_units.py:856: given.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/campaign.py:413: path.with_suffix('.json').read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/campaign.py:856: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/campaign.py:1190: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/campaign.py:1572: Path(args.config).read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/campaign.py:635: path.with_suffix('.json').read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/campaign.py:546: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/campaign.py:309: path.read_text() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/model_store.py:271: path.with_suffix('.json').read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/model_store.py:194: (_SRC / name).read_bytes() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/model_store.py:116: (_SRC / 'MIL_CREDA').glob('*.py') \u2014 unclassified call on a folded, target-contained path",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/model_store.py:126: (_SRC / 'MIL_CREDA_EEG' / 'comparators').rglob('*.py') \u2014 unclassified call on a folded, target-contained path",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/model_store.py:116: p.relative_to(_SRC) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/model_store.py:125: p.relative_to(_SRC) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/partition.py:233: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/preprocess.py:99: open(path, 'rb') \u2014 open() call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/preprocess.py:107: open(path, 'rb') \u2014 open() call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/results.py:488: summary_path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/results.py:294: path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/controls.py:150: Path(path).with_suffix('.json').read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/comparators/clust/__init__.py:65: Path(__file__).parent.glob('*.py') \u2014 unclassified call on a folded, target-contained path",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/comparators/clust/__init__.py:66: path.read_bytes() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/comparators/casual/training.py:235: Path(__file__).parent.glob('*.py') \u2014 unclassified call on a folded, target-contained path",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/comparators/casual/training.py:236: p.read_bytes() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/comparators/cluda/training.py:44: Path(__file__).parent.glob('*.py') \u2014 unclassified call on a folded, target-contained path",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/comparators/cluda/training.py:45: path.read_bytes() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/comparators/cot/training.py:49: Path(__file__).parent.glob('*.py') \u2014 unclassified call on a folded, target-contained path",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/comparators/cot/training.py:50: path.read_bytes() \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/audit_domains.py:242: Path(str(cache) + '.json').read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/exclusions.py:329: cache.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/exclusions.py:241: found[0].read_text(encoding='utf-8-sig') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/inventory.py:120: (Path(root) / 'users_demographics.json').read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/remote_timing.py:48: importlib.util.spec_from_file_location('timing_v58', PROBE_FILE) \u2014 a folded, target-contained path passed as a bare argument into an unclassified call",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/defect_log.py:157: flags_path.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/defect_log.py:167: cache.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/modality.py:177: open(path, encoding='utf-8', errors='replace') \u2014 open() call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/modality.py:195: open(path, encoding='utf-8', errors='replace') \u2014 open() call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/audit_contact.py:338: cache.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/audit_contact.py:457: cache.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved",
+    "/Users/diego/Proyectos/MIL-CREDA/implementations/Domain_Adaptation/src/MIL_CREDA_EEG/audit_ocular.py:235: cache.read_text(encoding='utf-8') \u2014 read call on a path that could not be resolved"
+  ]
+}

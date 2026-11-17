@@ -1,0 +1,248 @@
+"""Section 4's attention-mechanism comparison: what each mechanism computes.
+
+Comparison-only plumbing (`wiring.MECHANISMS`/`mechanism_weights`/
+`MechanismArm`) -- no declared arm reads any of it, and
+`config.ARMS`'s own `G` still trains under Eq. (15)/(16) exactly as before this
+file existed. Every test here recomputes a mechanism's own definition by hand,
+never by calling the function under test a second time: a copy that called
+itself back would pass on a value it never checked.
+"""
+
+from __future__ import annotations
+
+import math
+
+import pytest
+import torch
+
+from MIL_CREDA_Benchmark import wiring
+
+torch.manual_seed(0)
+
+
+def _bag(m: int = 5, d: int = 4) -> torch.Tensor:
+    """One bag's instance embeddings, small and fixed."""
+    return torch.randn(m, d)
+
+
+# ------------------------------------------------------------------------ ours
+
+def test_ours_is_eq15s_hybrid_with_the_l1_ball_projection() -> None:
+    """`"ours"` is exactly `MIL_CREDA.attention.relevance_logits` -- the
+    hybrid of `R_phi` (l1-ball-constrained `v_R`) plus `gamma` times the
+    consensus term -- recomputed here from the same primitives
+    `relevance_logits` itself is built from, never by calling
+    `mechanism_weights` and comparing it to itself.
+
+    **This test had been red since r31 landed, and the rename is the repair.**
+    It imported `_l1_ball_reparametrization`, which divided `v_R` by
+    `max(1, ||v_R||_1)` INSIDE the forward -- r30's form. r31 states
+    `||v_R||_1 <= 1` as a CONSTRAINT and maintains it by projecting after each
+    optimizer step, so the forward reads the raw parameter and the helper
+    became `project_onto_l1_ball`, which mutates in place and returns whether
+    it bound. The import failed outright; this file was carrying an
+    `ImportError`, not a weaker check.
+
+    Reachable red: `mechanism_weights("ours", ...)` dropping the consensus
+    term, or reading a `v_R` outside the ball -- the projection below is what
+    puts the fixture's own `v_R` inside it.
+    """
+    from MIL_CREDA.attention import gaussian_kernel, project_onto_l1_ball
+
+    H = _bag()
+    V_R = torch.randn(3, H.shape[1])
+    b_R = torch.randn(3)
+    v_R = torch.randn(3)
+    gamma, sigma, tau = 0.7, 2.0, 1.3
+
+    # r31's maintenance, applied once before the forward, exactly as the arm's
+    # constructor does it: the forward then reads the parameter itself.
+    project_onto_l1_ball(v_R)
+    assert float(v_R.abs().sum()) <= 1.0 + 1e-6
+    hidden = torch.tanh(H @ V_R.transpose(0, 1) + b_R)
+    relevance = hidden @ v_R
+    K = gaussian_kernel(H, H, sigma)
+    # r34's leave-one-out average, masking the diagonal before the sum rather
+    # than subtracting it after: `K.sum(dim=1) - K.diagonal()` cancels an
+    # off-diagonal entry below the machine epsilon relative to the diagonal's
+    # 1.0. r33 read `K.sum(dim=1) / m` here, self term included.
+    m = H.shape[0]
+    off_diagonal = K * (1.0 - torch.eye(m, dtype=K.dtype))
+    consensus = off_diagonal.sum(dim=1) / (m - 1)
+    logits = relevance + gamma * consensus
+    expected = torch.softmax(logits / tau, dim=0)
+
+    got = wiring.mechanism_weights(
+        "ours", H, {"V_R": V_R, "b_R": b_R, "v_R": v_R, "gamma": gamma,
+                    "sigma": sigma, "tau_att": tau})
+    assert torch.allclose(got, expected, atol=1e-6)
+    # And a mutation actually changes the fixture: gamma=0 drops the
+    # consensus term entirely, which must move the result.
+    without_consensus = wiring.mechanism_weights(
+        "ours", H, {"V_R": V_R, "b_R": b_R, "v_R": v_R, "gamma": 0.0,
+                    "sigma": sigma, "tau_att": tau})
+    assert not torch.allclose(got, without_consensus)
+
+
+# ------------------------------------------------------------- abmil-published
+
+def test_abmil_published_uses_v_r_raw_and_no_consensus() -> None:
+    """The published mechanism: `R(h) = v_R^T tanh(V_R h + b_R)`, `v_R`
+    UNCONSTRAINED -- never passed through the l1-ball reparametrization --
+    and no `gamma * consensus` term added anywhere.
+
+    Reachable red: `_abmil_published_logits` silently normalizing `v_R`, or
+    a stray `+ gamma * consensus` term added to its logits.
+    """
+    H = _bag()
+    V_R = torch.randn(3, H.shape[1])
+    b_R = torch.randn(3)
+    v_R = torch.randn(3) * 5.0  # deliberately outside the unit l1 ball
+    tau = 0.8
+
+    hidden = torch.tanh(H @ V_R.transpose(0, 1) + b_R)
+    expected_logits = hidden @ v_R
+    expected = torch.softmax(expected_logits / tau, dim=0)
+
+    got = wiring.mechanism_weights(
+        "abmil-published", H, {"V_R": V_R, "b_R": b_R, "v_R": v_R, "tau_att": tau})
+    assert torch.allclose(got, expected, atol=1e-6)
+
+    # It disagrees with "ours" on the SAME raw parameters, precisely because
+    # "ours" applies the l1-ball reparametrization and adds a consensus term
+    # this mechanism never sees.
+    ours = wiring.mechanism_weights(
+        "ours", H, {"V_R": V_R, "b_R": b_R, "v_R": v_R, "gamma": 0.5,
+                    "sigma": 2.0, "tau_att": tau})
+    assert not torch.allclose(got, ours)
+
+
+# ----------------------------------------------------------------- abmil-gated
+
+def test_abmil_gated_is_the_published_gated_form() -> None:
+    """`a = w^T (tanh(Vh) (dot) sigm(Uh))`, recomputed with plain tensor ops
+    and independent `V`/`U`/`w` -- never `V_R`/`b_R`/`v_R`.
+
+    Reachable red: `_abmil_gated_logits` swapping the elementwise product for
+    a sum, or reusing one projection for both `tanh` and `sigm`.
+    """
+    H = _bag()
+    V = torch.randn(3, H.shape[1])
+    U = torch.randn(3, H.shape[1])
+    w = torch.randn(3)
+    tau = 1.0
+
+    expected_logits = (torch.tanh(H @ V.transpose(0, 1))
+                       * torch.sigmoid(H @ U.transpose(0, 1))) @ w
+    expected = torch.softmax(expected_logits / tau, dim=0)
+
+    got = wiring.mechanism_weights(
+        "abmil-gated", H, {"V": V, "U": U, "w": w, "tau_att": tau})
+    assert torch.allclose(got, expected, atol=1e-6)
+
+    # Swapping V and U changes the result -- tanh and sigm read different
+    # projections and are not interchangeable.
+    swapped = wiring.mechanism_weights(
+        "abmil-gated", H, {"V": U, "U": V, "w": w, "tau_att": tau})
+    assert not torch.allclose(got, swapped)
+
+
+# ------------------------------------------------------------------------- max
+
+def test_max_pooling_is_the_winning_instance_whole_and_its_one_hot() -> None:
+    """Max pooling, instance-level: the bag is the instance holding the largest
+    activation in it, entire -- `beta` one on that instance and zero on the
+    other twenty-nine, and `z` its own `d` coordinates rather than `d`
+    coordinates collected from `d` different instances.
+
+    The winner is recomputed here from `H` directly, never by calling the
+    function under test a second time.
+
+    Reachable red: rank the instances by their sum instead of their maximum
+    (this fixture's two candidates disagree), or return the coordinatewise
+    maximum, which equals no row of `H`.
+    """
+    from MIL_CREDA.attention import bag_embedding
+
+    H = _bag()
+    # one instance holds the largest single activation, another the largest
+    # total, so the two rankings cannot both be right on this fixture
+    H = H.clone()
+    H[2] = 0.1
+    H[2, 3] = 9.0          # the largest single activation in the bag
+    H[4] = 2.5             # the largest total, with no peak of its own
+
+    assert int(torch.argmax(H.sum(dim=1))) == 4, "the fixture does not separate them"
+    beta = wiring.mechanism_weights("max", H, {})
+    expected = torch.zeros(H.shape[0])
+    expected[2] = 1.0
+    assert torch.allclose(beta, expected)
+
+    z = bag_embedding(H, beta)
+    assert torch.allclose(z, H[2]), "the bag is not the winning instance, entire"
+
+
+# ------------------------------------------------------------------------ mean
+
+def test_mean_pooling_equals_eq16_with_uniform_weights() -> None:
+    """Mean pooling IS Eq. (16) with `beta_a = 1/m` for every instance --
+    the exact claim this comparison's own report makes
+    (`tables.render_mechanisms`'s docstring lists mean pooling as one of the
+    five). Recomputed two ways and both must agree: the bare arithmetic mean
+    of `H`'s rows, and `MIL_CREDA.attention.bag_weights`/`bag_embedding`
+    fed a manually-built uniform-logit vector (so temperature and softmax
+    normalization are exercised too, not sidestepped).
+
+    Reachable red: `mechanism_weights("mean", ...)` returning any
+    non-uniform vector, or Eq. (19) computing the mean some
+    other way than a weighted sum with those weights.
+    """
+    from MIL_CREDA.attention import bag_embedding, bag_weights
+
+    H = _bag()
+    m = H.shape[0]
+
+    weights = wiring.mechanism_weights("mean", H, {})
+    assert torch.allclose(weights, torch.full((m,), 1.0 / m))
+
+    # Eq. (16) applied to a uniform logit vector reduces to the same uniform
+    # weights, whatever the temperature -- the softmax of a constant is
+    # constant.
+    uniform_logits = torch.zeros(m)
+    via_eq16 = bag_weights(uniform_logits, tau_att=3.7)
+    assert torch.allclose(via_eq16, weights, atol=1e-6)
+
+    got = bag_embedding(H, wiring.mechanism_weights("mean", H, {}))
+    assert torch.allclose(got, H.mean(dim=0), atol=1e-6)
+    assert torch.allclose(got, bag_embedding(H, weights), atol=1e-6)
+
+
+def test_the_five_mechanisms_give_five_different_embeddings_on_the_same_bag(
+) -> None:
+    """Not a rounding difference: on one fixed bag, the five mechanisms'
+    embeddings are pairwise distinct. A comparison whose five branches
+    silently collapsed to one function would still pass every test above in
+    isolation; this is the one that would catch it."""
+    from MIL_CREDA.attention import bag_embedding
+
+    H = _bag()
+    width = H.shape[1]
+    common = {"V_R": torch.randn(3, width), "b_R": torch.randn(3),
+             "v_R": torch.randn(3), "gamma": 0.5, "sigma": 2.0, "tau_att": 1.0}
+    gated = {"V": torch.randn(3, width), "U": torch.randn(3, width),
+            "w": torch.randn(3), "tau_att": 1.0}
+    params = {"ours": common, "abmil-published": common,
+             "abmil-gated": gated, "max": {}, "mean": {}}
+
+    embeddings = {m: bag_embedding(H, wiring.mechanism_weights(m, H, params[m]))
+                 for m in wiring.MECHANISMS}
+    values = list(embeddings.values())
+    for i in range(len(values)):
+        for j in range(i + 1, len(values)):
+            assert not torch.allclose(values[i], values[j]), (
+                list(embeddings)[i], list(embeddings)[j])
+
+
+def test_mechanism_weights_refuses_an_unknown_mechanism() -> None:
+    with pytest.raises(ValueError):
+        wiring.mechanism_weights("not-a-mechanism", _bag(), {})

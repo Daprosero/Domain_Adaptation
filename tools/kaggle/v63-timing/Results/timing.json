@@ -1,0 +1,171 @@
+{
+  "schema": 2,
+  "hosts": {
+    "local": {
+      "cpuCount": 8,
+      "ramGB": null,
+      "mps": false,
+      "cuda": false
+    }
+  },
+  "measurements": [
+    {
+      "measuredAt": "2026-11-09T04:36:48.420332+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase1:AdaptMIL",
+      "unit": "epoch",
+      "secondsPerUnit": 0.0575,
+      "unitsMeasured": 312,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.445410+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase1:MIL-CREDA",
+      "unit": "epoch",
+      "secondsPerUnit": 0.0609,
+      "unitsMeasured": 531,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.470554+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase1:common",
+      "unit": "epoch",
+      "secondsPerUnit": 0.0596,
+      "unitsMeasured": 444,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.498980+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:AdaptMIL",
+      "unit": "epoch",
+      "secondsPerUnit": 0.1293,
+      "unitsMeasured": 99,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.524994+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:CASUAL",
+      "unit": "epoch",
+      "secondsPerUnit": 0.5282,
+      "unitsMeasured": 33,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.583433+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:CCA-LSC",
+      "unit": "epoch",
+      "secondsPerUnit": 0.1392,
+      "unitsMeasured": 102,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.613999+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:CLUDA",
+      "unit": "epoch",
+      "secondsPerUnit": 0.1412,
+      "unitsMeasured": 159,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.641834+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:CLUST-variante-source-free",
+      "unit": "epoch",
+      "secondsPerUnit": 0.1144,
+      "unitsMeasured": 129,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.674481+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:COT",
+      "unit": "epoch",
+      "secondsPerUnit": 0.1174,
+      "unitsMeasured": 144,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.704086+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:CS-CCS",
+      "unit": "epoch",
+      "secondsPerUnit": 0.1254,
+      "unitsMeasured": 99,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.734960+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:MIL-CREDA",
+      "unit": "epoch",
+      "secondsPerUnit": 0.2052,
+      "unitsMeasured": 99,
+      "processes": 1,
+      "threads": 4
+    },
+    {
+      "measuredAt": "2026-11-09T04:36:48.767551+00:00",
+      "host": "local",
+      "candidate": "local-cpu-1",
+      "device": "cpu",
+      "arm": "phase2:UDA-DDA",
+      "unit": "epoch",
+      "secondsPerUnit": 0.1564,
+      "unitsMeasured": 129,
+      "processes": 1,
+      "threads": 4
+    }
+  ],
+  "scales": {
+    "poc": {
+      "arms": 12,
+      "folds": 1,
+      "seeds": 1,
+      "epochs": 1300
+    },
+    "full": {
+      "arms": 12,
+      "folds": 64,
+      "seeds": 1,
+      "epochs": 7000
+    }
+  }
+}

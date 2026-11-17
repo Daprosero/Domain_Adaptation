@@ -1,0 +1,3 @@
+# Derived audit tables and per-record caches stay local, as they did under MIL-CREDA/.
+/Results/audit/*.csv
+/Results/audit/records/

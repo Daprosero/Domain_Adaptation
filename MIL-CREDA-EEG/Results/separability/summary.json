@@ -1,0 +1,330 @@
+{
+  "revision": "experiments-plan-experimental-mil-creda-sobre-balladeer-v50.md",
+  "partition_sha256": "c56736832ed661257f3a3fced9e26a448ab087eced317b4bead3ed59a9a577d9",
+  "instrument": {
+    "features": "audit_domains log band power",
+    "bands": [
+      "delta",
+      "theta",
+      "alpha",
+      "beta",
+      "gamma_low"
+    ],
+    "classifier": "median imputation + scaling + L2 logistic, C=1",
+    "cv": "StratifiedGroupKFold(5) by subject",
+    "n_permutations": 200,
+    "seed": 20261025
+  },
+  "core": {
+    "device": [
+      "L6->Robots",
+      "Robots->L6"
+    ],
+    "level": [
+      "L1->L11",
+      "L11->L1"
+    ],
+    "task": [
+      "CogniFit->Robots",
+      "Robots->CogniFit"
+    ]
+  },
+  "control": {
+    "device": [],
+    "level": [
+      "L1->L6",
+      "L11->L6",
+      "L6->L1",
+      "L6->L11"
+    ],
+    "task": []
+  },
+  "pairs": {
+    "device:L6|Robots": 0.9776,
+    "level:L1|L11": 0.6362,
+    "level:L1|L6": 0.5078,
+    "level:L11|L6": 0.4453,
+    "task:CogniFit|Robots": 0.6646
+  },
+  "eligibility": {
+    "level:L1->L6": {
+      "transfer": "L1->L6",
+      "arm": "level",
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 9
+        },
+        "target": {
+          "no": 5,
+          "yes": 10
+        }
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 41
+      }
+    },
+    "level:L1->L11": {
+      "transfer": "L1->L11",
+      "arm": "level",
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 9
+        },
+        "target": {
+          "no": 5,
+          "yes": 10
+        }
+      },
+      "pooled_target": {
+        "no": 23,
+        "yes": 41
+      }
+    },
+    "level:L6->L1": {
+      "transfer": "L6->L1",
+      "arm": "level",
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 10
+        },
+        "target": {
+          "no": 5,
+          "yes": 9
+        }
+      },
+      "pooled_target": {
+        "no": 23,
+        "yes": 40
+      }
+    },
+    "level:L6->L11": {
+      "transfer": "L6->L11",
+      "arm": "level",
+      "min_per_fold": {
+        "source": {
+          "no": 4,
+          "yes": 9
+        },
+        "target": {
+          "no": 5,
+          "yes": 10
+        }
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 41
+      }
+    },
+    "level:L11->L1": {
+      "transfer": "L11->L1",
+      "arm": "level",
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 10
+        },
+        "target": {
+          "no": 5,
+          "yes": 9
+        }
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 41
+      }
+    },
+    "level:L11->L6": {
+      "transfer": "L11->L6",
+      "arm": "level",
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 10
+        },
+        "target": {
+          "no": 4,
+          "yes": 9
+        }
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 40
+      }
+    },
+    "task:Robots->CogniFit": {
+      "transfer": "Robots->CogniFit",
+      "arm": "task",
+      "min_per_fold": {
+        "source": {
+          "no": 3,
+          "yes": 2
+        },
+        "target": {
+          "no": 3,
+          "yes": 2
+        }
+      },
+      "pooled_target": {
+        "no": 16,
+        "yes": 17
+      }
+    },
+    "task:CogniFit->Robots": {
+      "transfer": "CogniFit->Robots",
+      "arm": "task",
+      "min_per_fold": {
+        "source": {
+          "no": 3,
+          "yes": 2
+        },
+        "target": {
+          "no": 3,
+          "yes": 2
+        }
+      },
+      "pooled_target": {
+        "no": 17,
+        "yes": 16
+      }
+    },
+    "device:L6->Robots": {
+      "transfer": "L6->Robots",
+      "arm": "device",
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 10
+        },
+        "target": {
+          "no": 5,
+          "yes": 4
+        }
+      },
+      "pooled_target": {
+        "no": 23,
+        "yes": 29
+      }
+    },
+    "device:Robots->L6": {
+      "transfer": "Robots->L6",
+      "arm": "device",
+      "min_per_fold": {
+        "source": {
+          "no": 5,
+          "yes": 4
+        },
+        "target": {
+          "no": 5,
+          "yes": 10
+        }
+      },
+      "pooled_target": {
+        "no": 22,
+        "yes": 53
+      }
+    }
+  },
+  "pairs_pooled": {
+    "device:L6|Robots": {
+      "pooled_target": {
+        "no": 45,
+        "yes": 82
+      },
+      "by_direction": {
+        "L6->Robots": {
+          "no": 23,
+          "yes": 29
+        },
+        "Robots->L6": {
+          "no": 22,
+          "yes": 53
+        }
+      }
+    },
+    "level:L1|L11": {
+      "pooled_target": {
+        "no": 45,
+        "yes": 82
+      },
+      "by_direction": {
+        "L1->L11": {
+          "no": 23,
+          "yes": 41
+        },
+        "L11->L1": {
+          "no": 22,
+          "yes": 41
+        }
+      }
+    },
+    "level:L1|L6": {
+      "pooled_target": {
+        "no": 45,
+        "yes": 81
+      },
+      "by_direction": {
+        "L1->L6": {
+          "no": 22,
+          "yes": 41
+        },
+        "L6->L1": {
+          "no": 23,
+          "yes": 40
+        }
+      }
+    },
+    "level:L11|L6": {
+      "pooled_target": {
+        "no": 44,
+        "yes": 81
+      },
+      "by_direction": {
+        "L11->L6": {
+          "no": 22,
+          "yes": 40
+        },
+        "L6->L11": {
+          "no": 22,
+          "yes": 41
+        }
+      }
+    },
+    "task:CogniFit|Robots": {
+      "pooled_target": {
+        "no": 33,
+        "yes": 33
+      },
+      "by_direction": {
+        "CogniFit->Robots": {
+          "no": 17,
+          "yes": 16
+        },
+        "Robots->CogniFit": {
+          "no": 16,
+          "yes": 17
+        }
+      }
+    }
+  },
+  "eligibility_limitation": "El mínimo por fold queda como limitación declarada de la selección.",
+  "timing": {
+    "wall_seconds": 159.2,
+    "workers": 4,
+    "seconds_per_transfer": {
+      "level:L1->L6": 63.6,
+      "level:L1->L11": 63.6,
+      "level:L6->L1": 64.0,
+      "level:L6->L11": 63.2,
+      "level:L11->L1": 61.5,
+      "level:L11->L6": 60.5,
+      "task:Robots->CogniFit": 47.8,
+      "task:CogniFit->Robots": 48.2,
+      "device:L6->Robots": 45.3,
+      "device:Robots->L6": 45.4
+    }
+  }
+}

@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Embudo CREDA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,650&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the funnel reads left to right as columns (stage → filter), one row per family; detail follows below in the same order. */
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#18212e; --muted:#5b6676; --rule:#d9dee6;
+  --pass:#0f7a6c; --pass-soft:#d8efeb; --drop:#b4452f; --drop-soft:#f6e1dc;
+  --ref:#5a4fb3; --ref-soft:#e6e3f7; --warn:#9a6a00; --warn-soft:#f6ecd2;
+  --display:"Literata",Georgia,"Times New Roman",serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161e; --panel:#18202b; --ink:#e4e9f0; --muted:#9aa6b6; --rule:#2c3747;
+  --pass:#4fc2b0; --pass-soft:#16352f; --drop:#e07e68; --drop-soft:#3a201a;
+  --ref:#a49bf0; --ref-soft:#262247; --warn:#e2b04a; --warn-soft:#352a12; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161e; --panel:#18202b; --ink:#e4e9f0; --muted:#9aa6b6; --rule:#2c3747;
+  --pass:#4fc2b0; --pass-soft:#16352f; --drop:#e07e68; --drop-soft:#3a201a;
+  --ref:#a49bf0; --ref-soft:#262247; --warn:#e2b04a; --warn-soft:#352a12; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:20px;padding-block:32px 64px;display:flex;flex-direction:column;gap:40px}
+h1,h2,h3{font-family:var(--display);font-weight:650;text-wrap:balance;margin:0}
+h1{font-size:2rem;line-height:1.15}
+h2{font-size:1.4rem}
+h3{font-size:1.05rem}
+p{margin:0;max-width:72ch}
+.lede{color:var(--muted);font-size:1.02rem}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.m{font-family:var(--mono);font-size:.86em}
+.math{font-family:"Literata",Georgia,serif;font-style:normal;background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:6px 10px;display:block;overflow-x:auto;white-space:nowrap;font-size:.95rem}
+section{display:flex;flex-direction:column;gap:16px}
+
+/* criteria */
+.criteria{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.crit{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.crit b{font-family:var(--mono);font-size:.8rem}
+.crit.ref{border-color:var(--ref)}
+.crit span{color:var(--muted);font-size:.86rem}
+
+/* totals funnel */
+.totals{display:flex;flex-direction:column;gap:6px}
+.trow{display:grid;grid-template-columns:150px 1fr 56px;align-items:center;gap:10px}
+.trow .lab{font-size:.85rem;color:var(--muted)}
+.bar{height:22px;border-radius:4px;background:var(--pass)}
+.trow .n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-weight:500}
+
+/* matrix */
+.scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:980px}
+th,td{padding:10px 10px;vertical-align:top;border-bottom:1px solid var(--rule);text-align:left}
+thead th{font-family:var(--mono);font-size:.74rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--bg)}
+tbody th{font-family:var(--display);font-weight:650;font-size:.95rem;width:170px}
+tbody th small{display:block;font-family:var(--body);font-weight:400;color:var(--muted);font-size:.78rem;margin-top:2px}
+.cell{display:flex;flex-direction:column;gap:4px}
+.cnt{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:1.05rem;font-weight:500}
+.cnt.zero{color:var(--drop)}
+.out{font-size:.78rem;color:var(--drop);background:var(--drop-soft);border-radius:4px;padding:3px 6px}
+.keep{font-size:.78rem;color:var(--pass);background:var(--pass-soft);border-radius:4px;padding:3px 6px}
+.refn{font-size:.78rem;color:var(--ref);background:var(--ref-soft);border-radius:4px;padding:3px 6px}
+tfoot td{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:500;background:var(--bg)}
+
+/* family cards */
+.fams{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+.fam{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.fam .who{font-size:.84rem;color:var(--muted)}
+.verdict{font-size:.85rem;border-left:3px solid var(--drop);padding-left:10px}
+.verdict.pass{border-left-color:var(--pass)}
+
+/* final comparison */
+.cmp td,.cmp th{font-size:.86rem}
+.y{color:var(--pass);font-weight:600}.n0{color:var(--drop);font-weight:600}.p{color:var(--warn);font-weight:600}
+
+.three{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.box{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.box.ours{border-color:var(--pass)}.box.inh{border-color:var(--ref)}.box.todo{border-color:var(--warn)}
+.box ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:.88rem}
+
+.ideas{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:16px}
+.idea{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.risk{align-self:flex-start;font-family:var(--mono);font-size:.74rem;padding:3px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn)}
+.idea ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:5px;font-size:.88rem}
+.foot{color:var(--muted);font-size:.8rem;border-top:1px solid var(--rule);padding-top:12px}
+@media (max-width:560px){h1{font-size:1.55rem}.trow{grid-template-columns:96px 1fr 44px}.ideas,.fams{grid-template-columns:1fr}}
+
+/* per-method matrix */
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;font-size:.84rem;color:var(--muted)}
+.legend span.item{display:inline-flex;gap:6px;align-items:center}
+.family{gap:10px}
+.famhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.famhead .who{font-size:.84rem;color:var(--muted)}
+.tally{font-family:var(--mono);font-size:.74rem;color:var(--muted);flex-basis:100%}
+table.mx{min-width:880px}
+table.mx.two{min-width:520px}
+table.near{min-width:900px}
+table.near td,table.near th{font-size:.84rem;vertical-align:top}
+table.near small{display:block;color:var(--muted);font-size:.76rem;font-weight:400;font-family:var(--body);margin-top:2px}
+table.near tr.ref{background:var(--pass-soft)}
+table.near tr.twin{background:var(--ref-soft)}
+table.mx th,table.mx td{padding:7px 8px;vertical-align:middle}
+th.sg{font-family:var(--body);font-weight:500;font-size:.8rem;color:var(--muted);width:150px;vertical-align:top;background:var(--bg);border-right:1px solid var(--rule)}
+th.mn{font-family:var(--mono);font-weight:500;font-size:.84rem;width:170px}
+th.mn small{display:block;font-family:var(--body);font-weight:400;color:var(--muted);font-size:.74rem}
+.mk{color:var(--warn);font-weight:600;margin-left:2px}
+tr.surv th.mn{color:var(--pass)}
+.ch{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:baseline;font-size:.76rem;line-height:1.3;border-radius:4px;padding:2px 7px;border:1px solid transparent;font-weight:600;max-width:210px}
+.ch .why{font-weight:400}
+.ch.ok{color:var(--pass);background:var(--pass-soft)}
+.ch.no{color:var(--drop);background:var(--drop-soft)}
+.ch.no.soft{font-weight:500}
+.ch.na,.ch.unk{color:var(--muted);background:var(--bg);border-color:var(--rule)}
+.ch.unk{font-weight:600}
+.ch.weak{color:var(--warn);background:var(--warn-soft);font-weight:600}
+.ch.pend{color:var(--warn);background:var(--warn-soft);border:1px dashed var(--warn);font-weight:500}
+.core{display:flex;flex-direction:column;gap:4px;max-width:none}
+.bar.pend{background:repeating-linear-gradient(90deg,var(--warn-soft) 0 8px,transparent 8px 14px);border:1px dashed var(--warn)}
+.bar.info{background:var(--ref)}
+.trow.sep{margin-top:6px;padding-top:8px;border-top:1px dashed var(--rule)}
+.crit.info{border-style:dashed;border-color:var(--ref)}
+.crit.pend{border-color:var(--warn)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:10px">
+  <span class="eyebrow">Estado del arte · adaptación de dominio condicional no supervisada</span>
+  <h1>El embudo, método por método</h1>
+  <p class="lede">Cada fila es un método; cada columna, una condición. Un método sigue mientras su casilla está en verde: tras su primer rojo, las siguientes quedan en gris.</p>
+</header>
+
+<section>
+  <h2>Las condiciones</h2>
+  <div class="criteria">
+    <div class="crit"><b>F1 · Alineación por clase</b><span>Alinea P(Z | Y = c) o condiciona la alineación a la clase. Si no, sale; su variante condicional publicada vuelve a entrar como fila propia.</span></div>
+    <div class="crit"><b>F2 · Sin etiquetas del objetivo</b><span>Usa pseudo-etiquetas, clústeres o predicciones blandas. Si usa etiquetas del objetivo, sale.</span></div>
+    <div class="crit"><b>F3 · Transversal a la arquitectura</b><span>La adaptación se escribe como una pérdida sobre f y g de un único extractor φ y una única cabeza h, elegidos por nosotros e iguales para todos; en inferencia el modelo es exactamente h∘φ. Críticos, proyecciones, memorias, centroides y maestros EMA valen si viven solo en la pérdida. Sale si exige un backbone propio, cabezas o clasificadores extra, BN por dominio, generadores o tocar capas internas de φ. «Frontera» marca los casos que dependen de una decisión nuestra.</span></div>
+    <div class="crit ref"><b>Tras el embudo · Doble codificador</b><span>¿Se puede llevar al escenario de CREDA con doble codificador, un codificador fuente y uno objetivo, cambiando solo la pérdida? Es el único criterio que se aplica a los que pasan F1, F2 y F3.</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>El embudo completo</h2>
+  <div class="totals" aria-label="Métodos que quedan tras cada condición">
+    <div class="trow"><span class="lab">Clasificados</span><div class="bar" style="width:100%"></div><span class="n">116</span></div>
+    <div class="trow"><span class="lab">F1 · por clase</span><div class="bar" style="width:56.9%"></div><span class="n">66</span></div>
+    <div class="trow"><span class="lab">F2 · sin etiquetas</span><div class="bar" style="width:56.0%"></div><span class="n">65</span></div>
+    <div class="trow"><span class="lab">F3 · transversal</span><div class="bar" style="width:38.8%"></div><span class="n">45</span></div>
+  </div>
+  <p class="lede">El embudo por familias llega hasta F3: 116 → 66 → 65 → 45, más 7 en frontera; en la ponderación de la fuente pasan F3 4 de sus 5. Desde ahí sigue la subtabla «Los que se acercan a CREDA», que se queda con los que se pueden llevar al escenario de CREDA con doble codificador. Las tablas listan 115 métodos de cinco familias generales (65 pasan F1 y F2), más la familia de ponderación de la fuente, que se presenta aparte. Los recuentos son los del informe completo (122 cribados, 6 sin clasificar).</p>
+  <div class="legend" aria-label="Leyenda">
+    <span class="item"><span class="ch ok">sí</span> pasa</span>
+    <span class="item"><span class="ch no">no <span class="why">motivo</span></span> sale aquí</span>
+    <span class="item"><span class="ch na">—</span> ya eliminado antes</span>
+    <span class="item"><span class="ch weak">frontera</span> depende de una decisión nuestra (F3)</span>
+    <span class="item"><span class="ch unk">?</span> no determinable con las notas</span>
+    <span class="item"><span class="mk">*</span> evidencia débil</span>
+    <span class="item"><span class="mk">†</span> en el límite</span>
+  </div>
+</section>
+
+<section>
+  <h2>Cada familia, método por método</h2>
+  <p class="lede">h<sub>j</sub> = F<sub>θ</sub>(x<sub>j</sub>) es el embedding de una muestra y Φ<sub>σ</sub>(h<sub>j</sub>) su imagen en ℋ<sub>I</sub> bajo el kernel κ<sup>I</sup><sub>σ</sub>; g<sub>j</sub><sup>t</sup> la salida del clasificador; w<sub>j</sub><sup>t</sup> la confianza; μ̂<sub>c</sub> una media de clase. Reescribir cada método en la notación de CREDA es una lectura derivada, no la notación de sus autores.</p>
+
+<section class="family" id="fam-adv">
+  <div class="famhead"><h3>Adversaria</h3><span class="who">un discriminador juega contra el extractor</span>
+  <span class="tally">31 métodos · 18 pasan F1 · 18 pasan F2 · 11 pasan F3</span></div>
+  <p class="verdict"><b>Por qué se descartan.</b> Necesitan un discriminador y un juego min-max. Salen en F1 las que no ven la clase: las marginales y de píxel (DANN, ADDA, CyCADA), los envoltorios (BSP, SDAT, ELS) y las que miden la confianza sobre el dominio en lugar de la clase (RADA, TADA). Ninguna sale en F2: todas trabajan sin etiquetas del objetivo.</p>
+  <div class="scroll" role="region" aria-label="Adversaria: método por filtro" tabindex="0">
+  <table class="mx two">
+    <thead><tr><th>Subfamilia</th><th>Método (sigla)</th><th>F1 · alineación por clase</th><th>F2 · sin etiquetas del objetivo</th><th>F3 · transversal a la arquitectura</th></tr></thead>
+    <tbody>
+      <tr><th scope="rowgroup" rowspan="5" class="sg">Marginales y de píxel</th><th scope="row" class="mn">DANN</th><td><span class="ch no">no <span class="why">variante → CDAN, MADA</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">ADDA</th><td><span class="ch no">no <span class="why">discriminador sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">CoGAN</th><td><span class="ch no">no <span class="why">conjunta de imágenes, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">PixelDA</th><td><span class="ch no">no <span class="why">discriminador sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">CyCADA</th><td><span class="ch no">no <span class="why">preserva etiqueta, no alinea</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="6" class="sg">Envoltorios</th><th scope="row" class="mn">BSP</th><td><span class="ch no">no <span class="why">envoltorio, no condicional</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">GVB</th><td><span class="ch no">no <span class="why">base marginal tipo DANN</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">SDAT</th><td><span class="ch no">no <span class="why">optimizador, no condicional</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">ELS</th><td><span class="ch no">no <span class="why">envoltorio, no condicional</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">GH / GH++</th><td><span class="ch no">no <span class="why">envoltorio, no condicional</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">AFN</th><td><span class="ch no">no <span class="why">norma de rasgos, no adversaria</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="2" class="sg">Confianza sobre el dominio</th><th scope="row" class="mn">RADA</th><td><span class="ch no">no <span class="why">entropía del discriminador de dominio</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">TADA</th><td><span class="ch no">no <span class="why">atención por entropía de dominio</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="12" class="sg">Críticos condicionados por la clase</th><th scope="row" class="mn">MADA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">DAAN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">CDAN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">CDAN+E</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">NOUN / PRONOUN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">DADA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">cabeza K+1 con neurona de dominio</span></span></td></tr>
+      <tr><th scope="row" class="mn">SymNets</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">tres clasificadores, infiere con C^t</span></span></td></tr>
+      <tr><th scope="row" class="mn">ToAlign</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">InAIt<span class="mk">†</span></th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">cabeza c+1 y reponderación en prueba</span></span></td></tr>
+      <tr><th scope="row" class="mn">CAT<span class="mk">†</span></th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">SRADA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">BACG<span class="mk">*</span><small>retirado</small></th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch weak">frontera <span class="why">cabeza Dirichlet; artículo retirado, no verificable</span></span></td></tr>
+      <tr><th scope="rowgroup" rowspan="6" class="sg">Discrepancia de hipótesis</th><th scope="row" class="mn">MCD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">dos clasificadores; su desacuerdo es el método</span></span></td></tr>
+      <tr><th scope="row" class="mn">SWD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">par de clasificadores de MCD</span></span></td></tr>
+      <tr><th scope="row" class="mn">MDD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí <span class="why">cabeza auxiliar solo en la pérdida; se resuelve en el filtro del representante</span></span></td></tr>
+      <tr><th scope="row" class="mn">f-DAL</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí <span class="why">cabeza auxiliar solo en la pérdida; se resuelve en el filtro del representante</span></span></td></tr>
+      <tr><th scope="row" class="mn">DALN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">CGDM<span class="mk">†</span></th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">dos clasificadores, predice promediando</span></span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="core"><span class="eyebrow">Núcleo en notación de CREDA</span><span class="math">min<sub>θ</sub> max<sub>D</sub>  Σ<sub>j</sub> w<sub>j</sub> · log D(h<sub>j</sub> ⊗ g<sub>j</sub>),   w<sub>j</sub> = 1 + e<sup>−H(g<sub>j</sub>)</sup>   (CDAN+E)</span></p>
+</section>
+<section class="family" id="fam-disc">
+  <div class="famhead"><h3>Discrepancia</h3><span class="who">kernel, momentos, transporte óptimo</span>
+  <span class="tally">32 métodos · 22 pasan F1 · 22 pasan F2 · 16 pasan F3</span></div>
+  <p class="verdict"><b>Por qué se descartan.</b> Alinean medias, momentos, subespacios o planes de transporte. Salen en F1 las solo marginales (TCA, DAN, RTN, CORAL, CMD, HoMM), MIDA, que busca independencia del dominio y no de la clase, y las dos del espacio original (SA, GFK), que alinean un subespacio por dominio, sin mirar la clase. Ninguna sale en F2: las condicionales usan pseudo-etiquetas, no etiquetas del objetivo.</p>
+  <div class="scroll" role="region" aria-label="Discrepancia: método por filtro" tabindex="0">
+  <table class="mx two">
+    <thead><tr><th>Subfamilia</th><th>Método (sigla)</th><th>F1 · alineación por clase</th><th>F2 · sin etiquetas del objetivo</th><th>F3 · transversal a la arquitectura</th></tr></thead>
+    <tbody>
+      <tr><th scope="rowgroup" rowspan="10" class="sg">MMD superficial (familia JDA)</th><th scope="row" class="mn">TCA</th><td><span class="ch no">no <span class="why">variante → JDA</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">MIDA (Yan)</th><td><span class="ch no">no <span class="why">independencia del dominio, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">JDA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">BDA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">VDA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">DICD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">JGSA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">dos proyecciones por dominio; objetivo con B</span></span></td></tr>
+      <tr><th scope="row" class="mn">ARTL</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">MEDA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch weak">frontera <span class="why">GFK es una transformación propia en inferencia</span></span></td></tr>
+      <tr><th scope="row" class="mn">DJP-MMD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="9" class="sg">MMD profundo</th><th scope="row" class="mn">DAN</th><td><span class="ch no">no <span class="why">variante → DSAN</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">RTN</th><td><span class="ch no">no <span class="why">MMD marginal tensorial</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">JAN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">WMMD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">CAN / CDD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch weak">frontera <span class="why">BN por dominio en el método publicado</span></span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">DSAN / LMMD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">DCAN / CMMD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">TPN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">infiere por distancia a prototipos, no con h</span></span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">CPDA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch weak">frontera <span class="why">necesita φ temporal; con vector degenera</span></span></td></tr>
+      <tr><th scope="rowgroup" rowspan="5" class="sg">Momentos</th><th scope="row" class="mn">CORAL</th><td><span class="ch no">no <span class="why">covarianzas marginales</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">Deep CORAL</th><td><span class="ch no">no <span class="why">covarianzas marginales</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">CMD</th><td><span class="ch no">no <span class="why">momentos marginales</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">HoMM</th><td><span class="ch no">no <span class="why">variante → COT</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">COT</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="2" class="sg">Espacio original: subespacios</th><th scope="row" class="mn">SA</th><td><span class="ch no">no <span class="why">subespacios PCA por dominio, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">GFK</th><td><span class="ch no">no <span class="why">kernel geodésico entre subespacios, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="6" class="sg">Transporte óptimo</th><th scope="row" class="mn">JDOT</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">DeepJDOT</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">ETD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">RWOT</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">PCT</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch weak">frontera <span class="why">prototipos = pesos de h; exige h lineal</span></span></td></tr>
+      <tr><th scope="row" class="mn">MARS</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="core"><span class="eyebrow">Núcleo en notación de CREDA</span><span class="math">Σ<sub>c</sub> ‖μ̂<sub>c</sub><sup>s</sup> − μ̂<sub>c</sub><sup>t</sup>‖²<sub>ℋ</sub> − <sup>1</sup>⁄<sub>C(C−1)</sub> Σ<sub>c≠c′</sub> ‖μ̂<sub>c</sub><sup>s</sup> − μ̂<sub>c′</sub><sup>t</sup>‖²<sub>ℋ</sub>   (CDD)</span></p>
+</section>
+<section class="family" id="fam-info">
+  <div class="famhead"><h3>Información</h3><span class="who">Rényi, Cauchy–Schwarz, información mutua</span>
+  <span class="tally">6 métodos · 5 pasan F1 · 5 pasan F2 · 4 pasan F3</span></div>
+  <p class="verdict"><b>Por qué se descartan.</b> Es una familia pequeña y reciente. Sale en F1 RJSD, cuyo uso en adaptación es una conjunta de capas sin clase. Ninguna sale en F2.</p>
+  <div class="scroll" role="region" aria-label="Información: método por filtro" tabindex="0">
+  <table class="mx two">
+    <thead><tr><th>Subfamilia</th><th>Método (sigla)</th><th>F1 · alineación por clase</th><th>F2 · sin etiquetas del objetivo</th><th>F3 · transversal a la arquitectura</th></tr></thead>
+    <tbody>
+      <tr class="surv"><th scope="rowgroup" rowspan="2" class="sg">Rényi matricial</th><th scope="row" class="mn">CREDA<small>referencia</small></th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">DARES<span class="mk">*</span><small>software</small></th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch weak">frontera <span class="why">muestreo espacial; exige φ denso por píxel</span></span></td></tr>
+      <tr><th scope="rowgroup" rowspan="2" class="sg">Cauchy–Schwarz y Jensen</th><th scope="row" class="mn">CS-DA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">RJSD</th><td><span class="ch no">no <span class="why">conjunta de capas, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="2" class="sg">Información mutua</th><th scope="row" class="mn">Independencia condicional (arXiv 2203.03212)</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">SIDA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="core"><span class="eyebrow">Núcleo en notación de CREDA</span><span class="math">J = ½[H₂(K<sub>s</sub>) + H₂(K̃<sub>t</sub>)] − H₂(K<sub>mix</sub>),   w<sub>j</sub> = 1 − Ĥ₂(g<sub>j</sub>)/ln C   (CREDA)</span></p>
+</section>
+<section class="family" id="fam-self">
+  <div class="famhead"><h3>Autoentrenamiento / SFDA / maestro–alumno</h3><span class="who">pseudo-etiquetas, prototipos, sin fuente, destilación</span>
+  <span class="tally">31 métodos · 17 pasan F1 · 17 pasan F2 · 14 pasan F3</span></div>
+  <p class="verdict"><b>Por qué se descartan.</b> Entrenan con sus propias pseudo-etiquetas. Salen en F1 las que seleccionan o regularizan predicciones sin estructura por clase (CBST, MCC, BNM, AdaMatch), las sin fuente que solo maximizan información o fiabilidad (U-SFAN, C-SFDA, DIFO) y la destilación sin clase (DINE, KD-DA, MT-MTDA). Ninguna sale en F2.</p>
+  <div class="scroll" role="region" aria-label="Autoentrenamiento / SFDA / maestro–alumno: método por filtro" tabindex="0">
+  <table class="mx two">
+    <thead><tr><th>Subfamilia</th><th>Método (sigla)</th><th>F1 · alineación por clase</th><th>F2 · sin etiquetas del objetivo</th><th>F3 · transversal a la arquitectura</th></tr></thead>
+    <tbody>
+      <tr><th scope="rowgroup" rowspan="12" class="sg">Pseudo-etiquetado (UDA)</th><th scope="row" class="mn">CBST</th><td><span class="ch no">no <span class="why">selección equilibrada, no alineación</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">CRST</th><td><span class="ch no">no <span class="why">selección equilibrada, no alineación</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">MCC</th><td><span class="ch no">no <span class="why">confusión entre clases, sin alineación</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">BNM</th><td><span class="ch no">no <span class="why">norma nuclear marginal</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">AdaMatch</th><td><span class="ch no">no <span class="why">alineación marginal</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">CST</th><td><span class="ch no">no <span class="why">consistencia cíclica, sin alineación</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">MSTN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">PFAN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">ProDA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">ATDOC-NC</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">ATDOC-NA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">PCL</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="13" class="sg">Sin fuente (SFDA)</th><th scope="row" class="mn">SHOT</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">SHOT++</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">NRC</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">AaD</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">G-SFDA</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">máscara de atención por dominio sobre φ en inferencia</span></span></td></tr>
+      <tr><th scope="row" class="mn">SF(DA)²</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">DaC</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">A2Net</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">dos clasificadores C_s y C_t</span></span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">CoWA-JMDS</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">PLUE</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td></tr>
+      <tr><th scope="row" class="mn">U-SFAN</th><td><span class="ch no">no <span class="why">solo entropía IM (código)</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">C-SFDA</th><td><span class="ch no">no <span class="why">fiabilidad sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">DIFO</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="6" class="sg">Maestro–alumno y destilación</th><th scope="row" class="mn">Self-ensembling</th><td><span class="ch no">no <span class="why">consistencia y balance marginal</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">DINE</th><td><span class="ch no">no <span class="why">destilación sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">KD-DA</th><td><span class="ch no">no <span class="why">confianza por dominio, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">MT-MTDA</th><td><span class="ch no">no <span class="why">destilación multimaestro, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">DTBS</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">DDSR<span class="mk">†</span></th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch weak">frontera <span class="why">maestro CLIP y subred que recorta capas de φ</span></span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="core"><span class="eyebrow">Núcleo en notación de CREDA</span><span class="math">Σ<sub>j</sub> w<sub>j</sub> · CE(ỹ<sub>j</sub>, g<sub>j</sub>)   o   Σ<sub>j</sub> w<sub>j</sub> ‖h<sub>j</sub> − p<sub>ỹ<sub>j</sub></sub>‖²,  w con gradiente cortado</span></p>
+</section>
+<section class="family" id="fam-tta">
+  <div class="famhead"><h3>Transformadores y TTA</h3><span class="who">atención, CLIP, adaptación en prueba</span>
+  <span class="tally">15 métodos · 3 pasan F1 · 3 pasan F2 · 0 pasan F3</span></div>
+  <p class="verdict"><b>Por qué se descartan.</b> Adaptan en la prueba o por atención y consistencia. Salen en F1 todas las que no alinean por clase (Tent, EATA, SAR, MIC, TVT, PMTrans); solo CDTrans, T3A y TAST tienen estructura por clase. Ninguna sale en F2.</p>
+  <div class="scroll" role="region" aria-label="Transformadores y TTA: método por filtro" tabindex="0">
+  <table class="mx two">
+    <thead><tr><th>Subfamilia</th><th>Método (sigla)</th><th>F1 · alineación por clase</th><th>F2 · sin etiquetas del objetivo</th><th>F3 · transversal a la arquitectura</th></tr></thead>
+    <tbody>
+      <tr><th scope="rowgroup" rowspan="7" class="sg">Transformadores y CLIP</th><th scope="row" class="mn">CDTrans</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">exige ViT con atención cruzada</span></span></td></tr>
+      <tr><th scope="row" class="mn">TVT</th><td><span class="ch no">no <span class="why">atención, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">SSRT</th><td><span class="ch no">no <span class="why">consistencia, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">PMTrans</th><td><span class="ch no">no <span class="why">mezcla de parches, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">MIC</th><td><span class="ch no">no <span class="why">consistencia enmascarada, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">DAPL</th><td><span class="ch no">no <span class="why">prompts de dominio, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">PADCLIP</th><td><span class="ch no">no <span class="why">pseudo-etiquetas CLIP, sin alineación</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="rowgroup" rowspan="8" class="sg">Adaptación en prueba (TTA)</th><th scope="row" class="mn">Tent</th><td><span class="ch no">no <span class="why">minimiza entropía, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">EATA</th><td><span class="ch no">no <span class="why">selección sin alineación</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">SAR</th><td><span class="ch no">no <span class="why">filtro de entropía, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">CoTTA</th><td><span class="ch no">no <span class="why">maestro promediado, sin clase</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">RoTTA</th><td><span class="ch no">no <span class="why">memoria balanceada, no alineación</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr><th scope="row" class="mn">DeYO</th><td><span class="ch no">no <span class="why">selección sin alineación</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">T3A</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">reemplaza la cabeza por prototipos en prueba</span></span></td></tr>
+      <tr class="surv"><th scope="row" class="mn">TAST<span class="mk">†</span></th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">ensamble de módulos que predicen en prueba</span></span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="core"><span class="eyebrow">Núcleo en notación de CREDA</span><span class="math">p<sub>c</sub> = media de los soportes de clase c con menor H(g)   (T3A)</span></p>
+</section>
+
+  <p class="foot">* evidencia débil (resumen, título o README). † en el límite (mecanismo no verificado del todo). Las variantes que vuelven a entrar (CDAN desde DANN, DSAN desde DAN, JDA desde TCA, COT desde HoMM) llevan la marca «variante → X» en el F1 de su padre.</p>
+</section>
+
+
+
+<section class="family" id="excepcion">
+  <div class="famhead"><h3>Ponderación y selección de la fuente</h3><span class="who">multifuente, adaptación parcial, importancia, currículo, transporte desbalanceado</span>
+  <span class="tally">18 métodos (19 filas) · 5 pasan F1 · 5 pasan F2 · 4 pasan F3</span></div>
+  <p class="verdict"><b>Por qué se descartan.</b> Su rasgo común es pesar o elegir lo que se transfiere de la fuente, por clase, por muestra o por dominio. La mayoría lo hace sobre la distribución marginal y sale en F1; TrAdaBoost necesita objetivo etiquetado y sale en F2.</p>
+  <div class="scroll" role="region" aria-label="Ponderación y selección de la fuente" tabindex="0">
+  <table class="mx">
+    <thead><tr><th>Subfamilia</th><th>Método (sigla)</th><th>F1 · por clase</th><th>F2 · sin etiquetas</th><th>F3 · transversal a la arquitectura</th><th>Qué pondera de la fuente</th></tr></thead>
+    <tbody id="excepcion-rows">
+      <tr><th scope="rowgroup" rowspan="6" class="sg">Adaptación parcial</th><th scope="row" class="mn">SAN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí <span class="why">clase: excluye clases fuente atípicas</span></span></td></tr>
+      <tr><th scope="row" class="mn">PADA</th><td><span class="ch no">no <span class="why">un discriminador</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">clase: γ = softmax objetivo medio</span></span></td></tr>
+      <tr><th scope="row" class="mn">IWAN</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">muestra: discriminador auxiliar</span></span></td></tr>
+      <tr><th scope="row" class="mn">ETN</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">muestra: ponderación progresiva</span></span></td></tr>
+      <tr><th scope="row" class="mn">BA³US</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">clase + aumento con fuente</span></span></td></tr>
+      <tr><th scope="row" class="mn">DRCN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch no">no <span class="why">bloque residual solo-objetivo en inferencia</span></span></td><td><span class="ch ok">sí <span class="why">clase: alineación por clase ponderada</span></span></td></tr>
+      <tr><th scope="rowgroup" rowspan="6" class="sg">Importancia y label shift</th><th scope="row" class="mn">KMM</th><td><span class="ch no">no <span class="why">covariate shift, sin clase</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">muestra: media RKHS fuente ponderada</span></span></td></tr>
+      <tr><th scope="row" class="mn">KLIEP</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">muestra: cociente de densidades</span></span></td></tr>
+      <tr><th scope="row" class="mn">TrAdaBoost</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch no">no <span class="why">necesita objetivo etiquetado</span></span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">muestra: boosting rebaja fuente mal clasificada</span></span></td></tr>
+      <tr><th scope="row" class="mn">BBSE</th><td><span class="ch unk">n/a</span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">clase: w<sub>y</sub> = q(y)/p(y)</span></span></td></tr>
+      <tr><th scope="row" class="mn">IWDAN</th><td><span class="ch no">no <span class="why">un discriminador marginal</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">clase: cocientes de clase estimados</span></span></td></tr>
+      <tr><th scope="row" class="mn">IWCDAN</th><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí <span class="why">clase: cocientes de clase estimados</span></span></td></tr>
+      <tr><th scope="rowgroup" rowspan="4" class="sg">Multifuente</th><th scope="row" class="mn">MDAN</th><td><span class="ch no">no <span class="why">adversario marginal</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">dominio: máximo suave de pérdidas</span></span></td></tr>
+      <tr><th scope="row" class="mn">M3SDA</th><td><span class="ch no">no <span class="why">momentos marginales</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">dominio: pesos en inferencia</span></span></td></tr>
+      <tr><th scope="row" class="mn">DARN</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">dominio: optimiza una cota</span></span></td></tr>
+      <tr><th scope="row" class="mn">CMSS</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">muestra/dominio: currículo adversario</span></span></td></tr>
+      <tr><th scope="rowgroup" rowspan="1" class="sg">Currículo</th><th scope="row" class="mn">TCL</th><td><span class="ch no">no <span class="why">sin alineación por clase</span></span></td><td><span class="ch ok">sí</span></td><td><span class="ch na" title="eliminado en un filtro anterior">—</span></td><td><span class="ch ok">sí <span class="why">muestra: rebaja fuente ruidosa</span></span></td></tr>
+      <tr><th scope="rowgroup" rowspan="2" class="sg">Transporte óptimo desbalanceado</th><th scope="row" class="mn">JUMBOT</th><td><span class="ch ok">sí · conjunta</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí <span class="why">muestra (implícito): masa fuente sin transportar</span></span></td></tr>
+      <tr><th scope="row" class="mn">m-POT</th><td><span class="ch ok">sí · conjunta</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí</span></td><td><span class="ch ok">sí <span class="why">muestra (implícito): transporte parcial</span></span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  
+
+</section>
+
+<section id="cerca-creda">
+  <h2>Los que se acercan a CREDA</h2>
+  <p class="lede">La pérdida de CREDA recibe f<sub>s</sub>, f<sub>t</sub> y las predicciones g, vengan de uno o de dos codificadores. La comparación se hace con la arquitectura fija, un codificador fuente y uno objetivo, cambiando solo la pérdida. La tabla parte de todos los métodos que pasan F1 y F2, muestra cuáles pasan F3 y, entre esos, aplica un único criterio: ¿se puede llevar el método al escenario de CREDA con doble codificador? De los que se llevan, elige un representante por familia e indica si se eligió por ser el más parecido o el más reciente.</p>
+  <div class="scroll" role="region" aria-label="Los que se acercan a CREDA" tabindex="0">
+  <table class="cmp near">
+    <thead><tr><th>Familia</th><th>Todos los que pasan F1 + F2</th><th>Pasan F3 · transversal</th><th>Se llevan a dos codificadores</th><th>Representante</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Adversaria</th><td>MADA, DAAN, CDAN, CDAN+E, NOUN/PRONOUN, DADA, SymNets, ToAlign, InAIt<span class="mk">†</span>, CAT<span class="mk">†</span>, SRADA, BACG<span class="mk">*</span>, MCD, SWD, MDD, f-DAL, DALN, CGDM<span class="mk">†</span></td><td>MADA, DAAN, CDAN, CDAN+E, NOUN/PRONOUN, ToAlign, CAT, SRADA, DALN, MDD, f-DAL <small>· frontera: BACG</small></td><td>CDAN, CDAN+E, MADA, DAAN, SRADA, BACG<span class="mk">*</span><small>(F3 frontera)</small>, CAT<span class="mk">†</span>, f-DAL, DALN, ToAlign</td><td><b>CDAN+E</b><small>más parecido: alinea por clase con un crítico sobre h ⊗ g y pondera por entropía</small></td></tr>
+      <tr><th scope="row">Discrepancia (kernel, momentos, OT)</th><td>JDA, BDA, VDA, DICD, JGSA, ARTL, MEDA, DJP-MMD, JAN, WMMD, CAN/CDD, DSAN/LMMD, DCAN/CMMD, TPN, CPDA, COT, JDOT, DeepJDOT, ETD, RWOT, PCT, MARS</td><td>JDA, BDA, VDA, DICD, ARTL, DJP-MMD, JAN, WMMD, DSAN/LMMD, DCAN/CMMD, COT, JDOT, DeepJDOT, ETD, RWOT, MARS <small>· frontera: MEDA, CAN/CDD, CPDA, PCT</small></td><td>JAN, WMMD, CAN/CDD<small>(F3 frontera)</small>, DSAN/LMMD, DCAN/CMMD, CPDA<small>(F3 frontera)</small>, COT, DeepJDOT, ETD, RWOT, PCT<small>(F3 frontera)</small>, MARS <small>· TPN sale por F3</small></td><td><b>DSAN/LMMD</b><small>más parecido: MMD condicional por clase sobre embeddings en un RKHS</small></td></tr>
+      <tr><th scope="row">Información</th><td>CREDA, DARES<span class="mk">*</span>, CS-DA, independencia condicional (arXiv 2203.03212), SIDA</td><td>CREDA, CS-DA, independencia condicional (arXiv 2203.03212), SIDA <small>· frontera: DARES</small></td><td>CREDA, CS-DA, DARES<span class="mk">*</span><small>(F3 frontera)</small></td><td><b>CS-DA</b><small>más parecido tras CREDA (referencia), y el más reciente con revisión por pares (UAI 2024)</small></td></tr>
+      <tr><th scope="row">Autoentrenamiento / SFDA</th><td>MSTN, PFAN, ProDA, ATDOC-NC, ATDOC-NA, PCL, SHOT, SHOT++, NRC, AaD, G-SFDA, SF(DA)², DaC, A2Net, CoWA-JMDS, PLUE, DDSR<span class="mk">†</span></td><td>MSTN, PFAN, ProDA, ATDOC-NC, ATDOC-NA, PCL, SHOT, SHOT++, NRC, AaD, SF(DA)², DaC, CoWA-JMDS, PLUE <small>· frontera: DDSR</small></td><td>todos los que pasan F3 (los sin fuente usan solo f<sub>t</sub>) <small>· DDSR en frontera</small></td><td><b>PFAN</b><small>más parecido: alinea prototipos de clase entre f<sub>s</sub> y f<sub>t</sub></small></td></tr>
+      <tr><th scope="row">Ponderan la fuente</th><td>SAN, DRCN, IWCDAN, JUMBOT, m-POT</td><td>SAN, IWCDAN, JUMBOT, m-POT</td><td>JUMBOT, m-POT, IWCDAN, SAN</td><td><b>JUMBOT</b><small>más parecido: transporte conjunto por pares fuente–objetivo, condicionado por la clase</small></td></tr>
+      <tr><th scope="row">Transformadores y TTA</th><td>CDTrans, T3A, TAST<span class="mk">†</span></td><td>ninguno</td><td>ninguno</td><td><b>—</b><small>la familia sale de la comparación</small></td></tr>
+      <tr><th scope="row">Sin fuente (SFDA)<small>subconjunto de autoentrenamiento</small></th><td>SHOT, SHOT++, NRC, AaD, G-SFDA, SF(DA)², DaC, A2Net, CoWA-JMDS, PLUE, DDSR<span class="mk">†</span></td><td>SHOT, SHOT++, NRC, AaD, SF(DA)², DaC, CoWA-JMDS, PLUE <small>· frontera: DDSR</small></td><td>todos los que pasan F3: codificador objetivo inicializado desde la fuente congelada <small>· DDSR en frontera</small></td><td><b>SHOT</b><small>más parecido: fuente congelada y codificador objetivo aparte; pseudoetiquetas por centroides de h e información mutua sobre g, sin mecanismos adicionales</small></td></tr>
+      <tr style="background:var(--pass-soft)"><th scope="row">CREDA<small>referencia</small></th><td>—</td><td>sí</td><td>sí, por construcción</td><td><b>CREDA</b></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="foot">La columna de portabilidad es una lectura derivada de la forma publicada de cada pérdida, no un resultado publicado.</p>
+</section>
+
+
+
+<section>
+  <h2>Métodos que se deben comparar para validar CREDA</h2>
+  <p class="lede">Siete comparadores: el piso y un representante de cada familia que pasa F1, F2 y F3 y se lleva a dos codificadores. Cada uno contrasta una propiedad de CREDA. Todos se montan sobre la misma arquitectura de dos codificadores y operan sobre los embeddings h = F<sub>θ</sub>(x).</p>
+  <div class="scroll" role="region" aria-label="Comparadores obligatorios" tabindex="0">
+  <table class="cmp">
+    <thead><tr><th>Método</th><th>Familia</th><th>Qué valida</th><th>Código</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">Solo fuente</th><td>—</td><td>el piso: ¿adaptar sirve?</td><td><span class="ch ok">en el repositorio</span></td></tr>
+      <tr><th scope="row">SHOT</th><td>sin fuente, pseudoetiquetas</td><td>¿usar la fuente al adaptar aporta? Misma arquitectura de dos codificadores, sin datos fuente</td><td><span class="ch unk">público, por verificar</span></td></tr>
+      <tr><th scope="row">CDAN+E</th><td>adversaria, condicional</td><td>¿la alineación por Rényi matricial, sin juego adversario, supera a un crítico condicionado por la clase con peso por entropía?</td><td><span class="ch ok">en el repositorio</span></td></tr>
+      <tr><th scope="row">DSAN/LMMD</th><td>discrepancia, condicional</td><td>¿la brecha de Rényi entre las Gram de cada clase supera a la MMD condicional de primer orden?</td><td><span class="ch unk">público, por verificar</span></td></tr>
+      <tr><th scope="row">CS-DA</th><td>información, condicional</td><td>¿alinear P(Z | Y = c) con Rényi matricial supera a la divergencia de Cauchy–Schwarz condicional, que alinea p(ŷ | z)?</td><td><span class="ch unk">público, por verificar</span></td></tr>
+      <tr><th scope="row">PFAN</th><td>autoentrenamiento, prototipos</td><td>¿alinear distribuciones de clase supera a alinear prototipos de clase con umbral?</td><td><span class="ch unk">por verificar</span></td></tr>
+      <tr><th scope="row">JUMBOT</th><td>ponderación de la fuente</td><td>¿alinear distribuciones por clase supera al transporte óptimo conjunto entre pares fuente–objetivo?</td><td><span class="ch unk">público, por verificar</span></td></tr>
+      <tr style="background:var(--pass-soft)"><th scope="row">CREDA</th><td>información, condicional</td><td>la referencia</td><td><span class="ch ok">en el repositorio</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="foot">CREDA es la referencia frente a la que se lee cada comparador. «Por verificar» indica que el código público no se revisó en este análisis.</p>
+</section>
+
+<p class="foot">Fuente: informe «Embudo SOTA condicional MIL CREDA» y sus notas de investigación (octubre de 2026). Las ecuaciones de varios métodos adversariales se reconstruyeron de memoria y deben verificarse contra los artículos antes de citarse. Falta una búsqueda en Google Scholar.</p>
+
+</div>
+
+</body>
+</html>

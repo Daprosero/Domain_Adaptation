@@ -1,0 +1,31 @@
+{
+ "builtWith": "make_bases.py (xcompare.shared_base at each unit's recorded phase-1 settings)",
+ "builtFromCommit": "cfdee1c4",
+ "files": {
+  "d1-s0p5-r0-s1.pt": "f11d624fea2ca248eb6a0ab937a48a77dc3207e1395aba358b0f8c259da5bc2a",
+  "d1-s0p5-r1-s1.pt": "d80634c0de872df296a5db918000452a3cb94008856b3cedc89437f6d5ac13b6",
+  "d1-s1p5-r0-s1.pt": "491f534bdb4b72dc92a8647abc46e2f0ae2e2cf1825a418c3db03b84eb94a60b",
+  "d1-s1p5-r1-s1.pt": "620e989e5f0bd02e54fe82f55b4af375546b65a9e07b6cae89a7a1e4a5732389",
+  "d1-s3-r0-s1.pt": "104ab7a688007a30f37f75781737dc2edda74e9695ed7a4eb963cf131c93476d",
+  "d1-s3-r1-s1.pt": "b6d868420a8eda6e587bdf6fc4262d1a10d3738161ecceee1b17e48305fe14ca",
+  "d1p5-s0p5-r0-s1.pt": "33d4251e44f851664fe7d05706f561ace180600bdb345a8a6628f69b3a4fb87c",
+  "d1p5-s0p5-r1-s1.pt": "b5b9b5a497bc7125668985dcfe06b5dfb71a9038042b021a7c8e94733d056c39",
+  "d1p5-s1p5-r0-s1.pt": "b87b07278e724e6159d1c6b48af92d2cf30566ec875a90021c9c707d7ab78d8d",
+  "d1p5-s1p5-r1-s1.pt": "86adac3d21e368d687e8e6191d0fb9dfffe60917c8f461859afc6599ced43d1e",
+  "d1p5-s3-r0-s1.pt": "56d345f9352ff485ff28a2b7d708e32eddce063417381275529a99dbcf63de51",
+  "d1p5-s3-r1-s1.pt": "2c1998fd5eced98bc060e043fcacc68d2e260b039defcb1f81364fd9dc8e7ebc",
+  "d2p5-s0p5-r0-s1.pt": "b05787fc2fc912e390a68bb165ed2f4be5c45dec1799376c9db848e0b072642f",
+  "d2p5-s0p5-r1-s1.pt": "745cdde169a0c56793f42f8246bc417d9098e362c7323ab5a40d35c592306a0c",
+  "d2p5-s1p5-r0-s1.pt": "c3d6b34b372486d5134225d29ccd5b14599d8d8b29311c4e7388bfaa875f0956",
+  "d2p5-s1p5-r1-s1.pt": "52792c24332c9126c57855e40a9bdb0584e6997eecbffc4910fa5dba55ca7949",
+  "d2p5-s3-r0-s1.pt": "d48e9c40116080c41b2c5f0c8df3145f2406f5e44b82ddd8eb191d13cae348b4",
+  "d2p5-s3-r1-s1.pt": "f2c2117f2a20f28f55a0ec00d18c7829ad778e95b7c75bea3db9660273416f6b",
+  "d0p6-s0p5-r0-s1.pt": "2c0c485f564fad15bf478b67b2549ee2610d631d071d3868f726f49cc7ddd27d",
+  "d0p6-s0p5-r1-s1.pt": "b4d2e2f3e4807cba60dc4a430c410db3a9750f31627a146695038d6867000d7f",
+  "d0p6-s1p5-r0-s1.pt": "06503fd922b7fbe04f1197fb098bbaedf0631bc50f69366d32f3c5f9ec5bb848",
+  "d0p6-s1p5-r1-s1.pt": "659213b21770570a03bd7ffa47398895aaeb57ee886b10bdbcf9b46ab77f285b",
+  "d0p6-s3-r0-s1.pt": "381f2e419e56f35300bdbe3e5acb73cc5bd779609d2a38409c19a0c92f048372",
+  "d0p6-s3-r1-s1.pt": "6b87349e804ea29511bb540db8141002072ba6c20475237007687bf42da0b61d"
+ },
+ "seeds": "phase 1 is fitted once per unit (seed 1) and frozen; seeds 2-3 were removed so no method can start from them"
+}
