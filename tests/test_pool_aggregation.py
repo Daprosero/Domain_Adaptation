@@ -1,4 +1,5 @@
 """The pool aggregation ablation: its pick check, its aggregations and one short real run."""
+import copy
 import json
 
 import numpy as np
@@ -236,3 +237,19 @@ def test_the_mid_snapshot_leaves_the_run_unchanged():
             assert torch.equal(a, b)
     finally:
         s["stack"].close()
+
+
+def test_a_published_attention_follows_a_base_wider_than_the_default_trunk():
+    from MIL_CREDA_EEG.mil_creda_model import MILCREDAModel
+    narrow = MILCREDAModel(4, 3, attention_gamma=0.5, attention_temperature=1.0)
+    narrow.fix_sigma(1.5)
+    wide = copy.deepcopy(narrow)
+    d = 2 * narrow.source_trunk.output_dim
+    wide.source_trunk.output_dim = d
+    for variant in ("published attention", "gated attention"):
+        a = PA.variant_base(variant, wide, 7)
+        assert a.V.shape[1] == d and torch.equal(a.V, PA.variant_base(variant, wide, 7).V)
+        if variant == "gated attention":
+            assert a.U.shape[1] == d
+        n = PA.variant_base(variant, narrow, 7)
+        assert n.V.shape[1] == narrow.source_trunk.output_dim
