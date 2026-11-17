@@ -172,6 +172,13 @@ def variant_base(variant: str, base, seed: int):
         torch.manual_seed(int(seed))
         model = AV.build(variant, base.source_trunk.channels, base.target_trunk.channels,
                          AV.variant_hyper(variant, {}))
+        d = base.source_trunk.output_dim
+        if model.V.shape[1] != d:
+            # the base's searched embedding is wider or narrower than the default trunk's: redraw
+            # V (and U) over that width from the same stream, so default-width units keep their draw
+            for name in ("V", "U"):
+                if hasattr(model, name):
+                    setattr(model, name, model._glorot(getattr(model, name).shape[0], d))
     for name in ("source_trunk", "target_trunk", "head"):
         setattr(model, name, copy.deepcopy(getattr(base, name)))
     if model.V.shape[1] != base.source_trunk.output_dim:
