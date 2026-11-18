@@ -45,6 +45,11 @@ TAU_ATT = (1.0, 10.0)
 #: Eq. 34's softmax(kappa / tau_local) is uniform for tau_local >= 0.1 on the measured kappa spread
 #: (median within-class range 0.05), so the range reaches down to a hard match
 TAU_LOCAL = (1e-3, 1.0)
+#: the adjusted MIL-CREDA space (2026-11-17). The three loss terms lie in [0, 1], so each adaptation
+#: weight stays at or below the supervised one and never switches off; tau_local runs from a hard match to
+#: a near-uniform one on the measured kappa spread of both datasets (normalized entropy 0 at 1e-3, 0.98 at
+#: 0.3 on the ADHD units). The other settings keep their ranges.
+ADJUSTED = {"lambda_global": (0.1, 1.0), "lambda_local": (0.1, 1.0), "tau_local": (1e-3, 0.3)}
 DEV_UNITS = tuple(f"d{d}-s{s}-r{r}" for d in ("1p5", "2p5") for s in ("0p5", "1p5", "3") for r in (0, 1))
 BOUNDARY_UNITS = tuple(f"d1-s{s}-r{r}" for s in ("0p5", "1p5", "3") for r in (0, 1))
 UNITS = DEV_UNITS + BOUNDARY_UNITS
@@ -53,25 +58,27 @@ UNITS = DEV_UNITS + BOUNDARY_UNITS
 SLOWNESS = {"CASUAL": 6.0, "MIL-CREDA": 3.6, "CLUDA": 1.5, "UDA-DDA": 1.4}
 
 
-def space(method: str) -> dict:
+def space(method: str, adjusted: bool = False) -> dict:
     """The method's phase-2 space: MIL-CREDA's seven settings, or a comparator's own space plus the
-    attention temperature of its common MIL wrapper. epochs2 is fixed (EPOCHS2), never searched."""
+    attention temperature of its common MIL wrapper. epochs2 is fixed (EPOCHS2), never searched.
+    `adjusted` narrows MIL-CREDA to ADJUSTED; the comparators ignore it."""
     if method == "MIL-CREDA":
         out = {}
         for k, (kind, (lo, hi)) in O.MIL_SPACE.items():
             lo, hi = TAU_LOCAL if k == "tau_local" else (lo, hi)
+            lo, hi = ADJUSTED[k] if adjusted and k in ADJUSTED else (lo, hi)
             out[k] = FloatDistribution(lo, hi, log=(kind == "log"))
         return out
     campaign.register([method])
     return {**search.phase_two_space(method), "tau_att": FloatDistribution(*TAU_ATT, log=True)}
 
 
-def draw(method: str, seed: int, trials: int = TRIALS) -> list[dict]:
+def draw(method: str, seed: int, trials: int = TRIALS, adjusted: bool = False) -> list[dict]:
     """The `trials` settings of `method` under phase-2 seed `seed`, in order."""
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study = optuna.create_study(sampler=optuna.samplers.RandomSampler(
         seed=SAMPLER_SEED + 1000 * int(seed) + METHODS.index(method)))
-    dists = space(method)
+    dists = space(method, adjusted)
     return [dict(study.ask(dists).params) for _ in range(int(trials))]
 
 
