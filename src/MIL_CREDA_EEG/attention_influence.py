@@ -141,6 +141,69 @@ def run_ieee(unit_key: str, tag: str = "cef", threads: int | None = 1, workdir=N
     return out
 
 
+def run_alignment(unit_key: str, threads: int | None = 1, workdir=None, bases=None, ieee_root=None) -> dict:
+    """ADHD local-term alignment for one unit: MIL-CREDA's cef pick trained with and without the local term
+    (lambda_local = 0), same training seed; bag representations of the target-test and source subjects at
+    the start, middle and end of phase 2, and the source subjects' attention-weighted PLV descriptors.
+    Refuses unless the with-term run reproduces the reported test BA and AUC. Writes `alignment-<unit_key>.json`."""
+    from MIL_CREDA_EEG import ieee_pool as I, v63_connectivity as V
+    t0 = time.time()
+    pick = json.loads(IEEE_PICKS["cef"].read_text())["units"][unit_key]
+    trial = int(pick["trial"])
+    params = C.draw(METHOD, I.PHASE2_SEED)[trial]
+    tseed = C.train_seed(I.PHASE2_SEED, trial)
+    threads = int(threads or os.environ.get("MIL_CREDA_THREADS") or os.cpu_count() or 2)
+    s = I._setup(unit_key, [METHOD], bases or I.BASES, threads, ieee_root)
+    out = {"unitKey": unit_key, "trial": trial, "params": params, "trainSeed": tseed, "threads": threads,
+           "pickBA": pick["BA"], "pickAUC": pick["AUC"]}
+    try:
+        tt, src = s["sides"]["target_test"], s["sides"]["source"]
+        out["subjects"], out["labels"] = [b.subject for b in tt], [int(b.label) for b in tt]
+        take = lambda m: {"t": PA.representations(m, tt, "target"), "s": PA.representations(m, src, "source")}
+        for tag, q in (("local", dict(params)), ("noLocal", {**params, "lambda_local": 0.0})):
+            with PA.mid_snapshot(take, I.EPOCHS2, 0) as st, PA.mid_snapshot(take, I.EPOCHS2, I.EPOCHS2 // 2) as md:
+                model, _ = C.train(METHOD, q, s["b"], s["sides"], s["cfg"], s["dev"], tseed, s["rot"],
+                                   s["name"], I.EPOCHS2)
+            end = take(model)
+            out[tag] = {k: {"t": v["t"].tolist(), "s": v["s"].tolist()}
+                        for k, v in (("start", st["taken"]), ("mid", md["taken"]), ("end", end))}
+            if tag == "local":
+                with C._wrapper(METHOD, s["b"], params.get("tau_att", 1.0)), torch.no_grad():
+                    on_test = XC.snapshot(model, tt, s["cut"], s["dev"])
+                    sa = {b.subject: np.asarray(mechanisms.attention_weights(model, b.windows, "source"), float)
+                          for b in src}
+                diff = max(abs(float(on_test["BA"]) - float(pick["BA"])), abs(float(on_test["AUC"]) - float(pick["AUC"])))
+                out.update(BAtest=on_test["BA"], AUCtest=on_test["AUC"], reproduction=diff,
+                           reproduces=diff <= IEEE_TOLERANCE)
+                if not out["reproduces"]:
+                    break
+                out["sourceLabels"] = {b.subject: int(b.label) for b in src}
+                out["sourceDescriptors"] = {b.subject: V.descriptors(V.weighted_graph(
+                    V.window_plv(b.windows.numpy()), sa[b.subject])).tolist() for b in src}
+    finally:
+        s["stack"].close()
+    out["seconds"] = round(time.time() - t0, 1)
+    workdir = Path(workdir) if workdir else Path.cwd()
+    workdir.mkdir(parents=True, exist_ok=True)
+    (workdir / f"alignment-{unit_key}.json").write_text(json.dumps(out))
+    if not out["reproduces"]:
+        raise RuntimeError(f"{unit_key}: alignment run does not reproduce the cef pick ({out['reproduction']})")
+    return out
+
+
+def run_alignment_all(threads: int | None = 1, workdir=None, units=None) -> dict:
+    """Every ADHD unit's alignment run, one after another."""
+    from MIL_CREDA_EEG import ieee_pool as I
+    done = {}
+    for u in units or I.UNITS:
+        try:
+            done[u] = run_alignment(u, threads, workdir)["reproduction"]
+        except RuntimeError as e:
+            done[u] = str(e)
+    Path(workdir or Path.cwd()).joinpath("alignment-done.json").write_text(json.dumps(done))
+    return done
+
+
 def run_ieee_all(tag: str = "cef", threads: int | None = 1, workdir=None, units=None) -> dict:
     """Every ADHD unit for one pick tag, one after another (each run is short)."""
     from MIL_CREDA_EEG import ieee_pool as I
