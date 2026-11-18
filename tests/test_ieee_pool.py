@@ -44,16 +44,6 @@ def test_the_draws_are_the_synthetic_pool_draws_at_phase_two_seed_one():
         assert I.draw(m) == C.draw(m, 1)
 
 
-def test_the_adjusted_draw_keeps_mil_creda_inside_the_coherent_zone():
-    adjusted = I.draw("MIL-CREDA", adjusted=True)
-    assert len(adjusted) == 100 and adjusted != I.draw("MIL-CREDA")
-    for p in adjusted:
-        assert 0.1 <= p["lambda_global"] <= 1.0 and 0.1 <= p["lambda_local"] <= 1.0
-        assert 1e-3 <= p["tau_local"] <= 0.3
-    assert set(adjusted[0]) == set(I.draw("MIL-CREDA")[0])
-    assert I.draw("UDA-DDA", adjusted=True) == I.draw("UDA-DDA")     # the comparators keep their space
-
-
 def test_eight_shards_partition_the_hundred_trials_in_twelve_or_thirteen():
     parts = [list(I.shard_trials(s)) for s in range(I.SHARDS)]
     assert I.SHARDS == 8

@@ -32,12 +32,13 @@ BASES = Path(__file__).resolve().parents[2] / "MIL-CREDA-EEG" / "Manifests" / "o
 EVAL_SUBJECTS = 120
 EVAL_SEED_OFFSET = 101
 EPOCHS2 = (10, 20, 40)
-#: MIL-CREDA's screening space: the comparators' shared lr2 / wd2 ranges, xpilot.SPACE2's loss
-#: coefficients and xpilot.ATTENTION_SPACE's aggregation, so no MIL-CREDA setting is fixed in advance
-MIL_SPACE = {"lr2": ("log", (1e-5, 1e-2)), "wd2": ("log", (1e-7, 1e-2)),
-             "lambda_global": ("log", (0.1, 10.0)), "lambda_local": ("log", (0.1, 10.0)),
-             "tau_local": ("log", (0.1, 10.0)), "gamma": ("lin", (0.0, 1.0)),
-             "tau_att": ("log", (1.0, 10.0))}
+#: MIL-CREDA's space (protocol v81): the comparators' shared lr2 / wd2 ranges; each loss weight in [0.1, 1],
+#: since the three loss terms lie in [0, 1]; tau_local from a hard match to a near-uniform one on the measured
+#: kappa spread of both datasets; tau_att over the attention's working range; gamma in [0, 1]
+MIL_SPACE = {"lr2": ("log", (1e-4, 1e-2)), "wd2": ("log", (1e-7, 1e-2)),
+             "lambda_global": ("log", (0.1, 1.0)), "lambda_local": ("log", (0.1, 1.0)),
+             "tau_local": ("log", (1e-3, 0.3)), "gamma": ("lin", (0.0, 1.0)),
+             "tau_att": ("log", (0.01, 1.0))}
 METHODS = ("MIL-CREDA", *[m for m in XC.ALL8 if m not in XC.SKIPPED])
 
 
