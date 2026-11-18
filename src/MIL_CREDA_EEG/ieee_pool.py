@@ -24,7 +24,7 @@ is reported as an upper bound only. No label-free criterion is computed or read 
 
 Usage:
   python -m MIL_CREDA_EEG.ieee_pool bases <rehearsal_dir> <out_dir> [--units ieee-r0h0 ...]
-  python -m MIL_CREDA_EEG.ieee_pool run <unit> <shard> [--shards 8] [--procs 4] [--workdir .]
+  python -m MIL_CREDA_EEG.ieee_pool run <unit> <shard> [--shards 8] [--procs 4] [--workdir .] [--adjusted]
 """
 from __future__ import annotations
 
@@ -77,9 +77,10 @@ def base_file(unit_key: str, bases=None) -> Path:
     return Path(bases or BASES) / f"{unit_key}-s1.pt"
 
 
-def draw(method: str, trials: int = TRIALS) -> list[dict]:
-    """The synthetic pool's own draw: `criteria_pool.draw(method, 1)`."""
-    return C.draw(method, PHASE2_SEED, trials)
+def draw(method: str, trials: int = TRIALS, adjusted: bool = False) -> list[dict]:
+    """The synthetic pool's own draw: `criteria_pool.draw(method, 1)`; `adjusted` narrows MIL-CREDA
+    to `criteria_pool.ADJUSTED`."""
+    return C.draw(method, PHASE2_SEED, trials, adjusted)
 
 
 def shard_trials(shard: int, shards: int = SHARDS, trials: int = TRIALS) -> range:
@@ -224,10 +225,11 @@ def _trial(task) -> tuple:
 
 def run(unit_key: str, shard: int, shards: int = SHARDS, trials: int = TRIALS, methods: Sequence[str] = METHODS,
         workdir=None, bases=None, epochs: int = EPOCHS2, procs: int = 4, threads: int = 1, mid: bool = True,
-        ieee_root=None) -> dict:
+        ieee_root=None, adjusted: bool = False) -> dict:
     """`procs` worker processes, each with `threads` torch threads, share the shard's trials, as in
     `criteria_pool.run`. Every row depends on its (method, trial) only. `mid` False skips
-    MIL-CREDA's mid-run snapshot (the final outputs are identical either way)."""
+    MIL-CREDA's mid-run snapshot (the final outputs are identical either way). `adjusted` draws
+    MIL-CREDA from `criteria_pool.ADJUSTED` and writes to its own files (stem suffix -adj)."""
     workdir = Path(workdir) if workdir else Path.cwd()
     workdir.mkdir(parents=True, exist_ok=True)
     unknown = [m for m in methods if m not in METHODS]
@@ -237,7 +239,7 @@ def run(unit_key: str, shard: int, shards: int = SHARDS, trials: int = TRIALS, m
     _STATE.clear()
     _STATE.update(_setup(unit_key, methods, bases, threads, ieee_root))
     b, sides, name = _STATE["b"], _STATE["sides"], _STATE["name"]
-    stem = f"ieeepool-{unit_key}-sh{int(shard)}of{int(shards)}"
+    stem = f"ieeepool-{unit_key}-sh{int(shard)}of{int(shards)}" + ("-adj" if adjusted else "")
     out_path, arr_dir = workdir / f"{stem}.json", workdir / stem
     arr_dir.mkdir(exist_ok=True)
     subjects = lambda side: [x.subject for x in sides[side]]
@@ -246,6 +248,7 @@ def run(unit_key: str, shard: int, shards: int = SHARDS, trials: int = TRIALS, m
         "unitKey": unit_key, "unit": name, "shard": int(shard), "shards": int(shards), "trials": int(trials),
         "epochs2": int(epochs), "cut": _STATE["cut"], "baseCommit": b["commit"], "baseSeed": 1,
         "phase2Seed": PHASE2_SEED, "schedule": "lr2*(1+10p)^-0.75",
+        "space": {"adjusted": C.ADJUSTED} if adjusted else "full",
         "oracle": "best BA at the base's cut on the target-test half (upper bound only)",
         "phase1Predict": {k: b["predict"].get(k) for k in ("BA", "AUC", "kappa")},
         "targetTestLabels": labels("target_test"), "targetTestSubjects": subjects("target_test"),
@@ -255,7 +258,7 @@ def run(unit_key: str, shard: int, shards: int = SHARDS, trials: int = TRIALS, m
     tasks = []
     for method in methods:
         rows = out["methods"].setdefault(method, {"trials": {}})["trials"]
-        settings = draw(method, trials)
+        settings = draw(method, trials, adjusted)
         tasks += [(method, i, settings[i], int(epochs), str(arr_dir), bool(mid))
                   for i in shard_trials(shard, shards, trials) if str(i) not in rows]
     # the slowest methods first, so no worker is left alone with one at the end
@@ -303,6 +306,7 @@ def main(argv=None):
     rp.add_argument("--epochs", type=int, default=EPOCHS2)
     rp.add_argument("--procs", type=int, default=4)
     rp.add_argument("--threads", type=int, default=1)
+    rp.add_argument("--adjusted", action="store_true", help="draw MIL-CREDA from criteria_pool.ADJUSTED")
     a = ap.parse_args(argv)
     if a.cmd == "bases":
         for u in a.units:
@@ -311,7 +315,7 @@ def main(argv=None):
         print("BASES_DONE", " ".join(a.units), flush=True)
     else:
         print(json.dumps(run(a.unit, a.shard, a.shards, a.trials, a.methods, a.workdir, a.bases, a.epochs,
-                             a.procs, a.threads)), flush=True)
+                             a.procs, a.threads, adjusted=a.adjusted)), flush=True)
 
 
 if __name__ == "__main__":
