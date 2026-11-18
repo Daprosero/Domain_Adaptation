@@ -5,11 +5,11 @@ from MIL_CREDA_EEG import criteria_pool as C
 def test_spaces_search_everything_and_keep_gamma_and_tau_local_to_mil_creda():
     mil = C.space("MIL-CREDA")
     assert set(mil) == {"lr2", "wd2", "lambda_global", "lambda_local", "tau_local", "gamma", "tau_att"}
-    assert (mil["tau_local"].low, mil["tau_local"].high, mil["tau_local"].log) == (1e-3, 1.0, True)
-    assert (mil["tau_att"].low, mil["tau_att"].high) == (1.0, 10.0)
+    assert (mil["tau_local"].low, mil["tau_local"].high, mil["tau_local"].log) == (1e-3, 0.3, True)
+    assert (mil["tau_att"].low, mil["tau_att"].high) == (0.01, 1.0)
     for m in C.METHODS[1:]:
         s = C.space(m)
-        assert (s["tau_att"].low, s["tau_att"].high, s["tau_att"].log) == (1.0, 10.0, True)
+        assert (s["tau_att"].low, s["tau_att"].high, s["tau_att"].log) == (0.01, 1.0, True)
         assert "gamma" not in s and "tau_local" not in s and "epochs2" not in s
         assert {"lr2", "wd2"} <= set(s)
     assert C.EPOCHS2 == 100 and C.TRIALS == 100 and C.SEEDS == (1, 2, 3, 4, 5)

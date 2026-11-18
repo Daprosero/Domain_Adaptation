@@ -225,7 +225,7 @@ SCHEDULE_KEYS = two_phase.SCHEDULE_KEYS
 # ------------------------------------------------------------------ spaces (Sec. 7.7)
 
 LR1 = FloatDistribution(1e-4, 1e-1, log=True)
-LR2 = FloatDistribution(1e-5, 1e-2, log=True)
+LR2 = FloatDistribution(1e-4, 1e-2, log=True)            # protocol v81: [1e-5, 1e-4) underperformed
 WEIGHT_DECAY = FloatDistribution(1e-7, 1e-2, log=True)
 #: The generic rule for the comparators' own phase-2 parameters.
 LOSS_WEIGHT = FloatDistribution(1e-3, 10.0, log=True)

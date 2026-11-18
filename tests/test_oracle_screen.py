@@ -23,6 +23,6 @@ def test_eval_pool_refuses_other_settings():
 
 def test_mil_creda_space_fixes_nothing_in_advance():
     assert {"wd2", "gamma", "tau_att", "lr2", "lambda_global", "lambda_local", "tau_local"} == set(O.MIL_SPACE)
-    assert O.MIL_SPACE["lr2"][1] == (1e-5, 1e-2) and O.MIL_SPACE["wd2"][1] == (1e-7, 1e-2)
+    assert O.MIL_SPACE["lr2"][1] == (1e-4, 1e-2) and O.MIL_SPACE["wd2"][1] == (1e-7, 1e-2)
     assert O.EPOCHS2 == (10, 20, 40)
     assert "AdaptMIL" not in O.METHODS and O.METHODS[0] == "MIL-CREDA" and len(O.METHODS) == 8
