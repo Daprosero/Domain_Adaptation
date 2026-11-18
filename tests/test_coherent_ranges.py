@@ -1,6 +1,6 @@
 """Protocol v81 ranges: every searched range follows the method's own scales, in both phases.
 
-Phase 1 (shared base): lr1 log [1e-5, 1e-1], l2 log [1e-4, 1], tauAtt1 log [0.01, 1]. Phase 2: lr2 log [1e-4, 1e-2]
+Phase 1 (shared base): lr1 log [1e-4, 1e-2] and l2 log [1e-4, 1e-1] as in v80, tauAtt1 log [0.01, 1]. Phase 2: lr2 log [1e-4, 1e-2]
 for every method; tau_att log [0.01, 1] for MIL-CREDA and the comparators' common MIL wrapper; MIL-CREDA's
 eta_glob and eta_loc log [0.1, 1] and tau_local log [1e-3, 0.3]. Everything else keeps its v80 range.
 """
@@ -12,8 +12,8 @@ from MIL_CREDA_EEG import spectral_search as SS
 
 
 def test_phase_one_space():
-    assert SS.SPACE["lr1"] == ("log", 1e-5, 1e-1)
-    assert SS.SPACE["l2"] == ("log", 1e-4, 1.0)
+    assert SS.SPACE["lr1"] == ("log", 1e-4, 1e-2)
+    assert SS.SPACE["l2"] == ("log", 1e-4, 1e-1)
     assert SS.SPACE["tauAtt1"] == ("log", 0.01, 1.0)
     assert SS.SPACE["width"] == ("cat", (32, 64, 128)) and SS.SPACE["epochs"] == ("cat", (50, 100, 200))
 
