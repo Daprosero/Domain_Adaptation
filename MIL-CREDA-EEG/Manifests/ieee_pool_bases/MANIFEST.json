@@ -1,0 +1,16 @@
+{
+ "builtWith": "python -m MIL_CREDA_EEG.ieee_pool bases (xcompare.shared_base at each rotation's recorded TPE phase-1 settings, seed 1)",
+ "builtFromCommit": "34bbb3c4",
+ "files": {
+  "ieee-r0h0-s1.pt": "88b00e7a7549d6427db7ee688111d94a808b602d9094529cba774c6abd3e8dbd",
+  "ieee-r0h1-s1.pt": "7c33b5694d6d45575935e27a85f48f3d6257ef891e2d405f53e049497e6e2e9c",
+  "ieee-r1h0-s1.pt": "192e07d5569494249d19088b0be2c36b8cdfa0ba49314423afde46ef885e1e5c",
+  "ieee-r1h1-s1.pt": "ac27671f37ded10b7a46911173e6fe0572679a8b2a3bb356493ab2698325071a",
+  "ieee-r2h0-s1.pt": "e10a52dd53f5736f938c7ba4301f2601a9c931b071c9f8f27777494e0d7555c6",
+  "ieee-r2h1-s1.pt": "880ed36c288dd527c60c86cefa7db6768b56d6bac884fb90c9e02b577859e297",
+  "ieee-r3h0-s1.pt": "2920bcbbe52c0e09d38cc28e8e4a1fae8c31b6660bcb769f027450467435353e",
+  "ieee-r3h1-s1.pt": "4b0f2f1171ae0279a8bd739963a05fb8daf1feb552f2b5e0dcec3c95c0676533",
+  "ieee-r4h0-s1.pt": "354b9cf070760b1f3edb2726944c0c7a4f9c87381edc62391a20495a9286c26f",
+  "ieee-r4h1-s1.pt": "fdd66974d7f8b366e3b65cb868ff249a4b354861c9a308616849588ef5e9af07"
+ }
+}
