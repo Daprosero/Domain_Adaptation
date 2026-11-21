@@ -1,0 +1,75 @@
+{
+ "source": "ADHD v82 shared pool (ix-r*h*-s*, ieee-pool-slim d7a4ef3e), MIL-CREDA cef pick per unit: first maximum of cef in trial order; BA/AUC on the target-test half",
+ "units": {
+  "ieee-r0h0": {
+   "trial": 4,
+   "cef": 2.0,
+   "BA": 0.63095,
+   "AUC": 0.61905,
+   "kappa": 0.25287
+  },
+  "ieee-r0h1": {
+   "trial": 4,
+   "cef": 1.9940857527753038,
+   "BA": 0.58333,
+   "AUC": 0.61111,
+   "kappa": 0.16667
+  },
+  "ieee-r1h0": {
+   "trial": 3,
+   "cef": 2.0,
+   "BA": 0.75,
+   "AUC": 0.91667,
+   "kappa": 0.5
+  },
+  "ieee-r1h1": {
+   "trial": 4,
+   "cef": 2.0,
+   "BA": 0.58333,
+   "AUC": 0.72222,
+   "kappa": 0.16667
+  },
+  "ieee-r2h0": {
+   "trial": 3,
+   "cef": 2.0,
+   "BA": 0.58333,
+   "AUC": 0.52778,
+   "kappa": 0.16667
+  },
+  "ieee-r2h1": {
+   "trial": 28,
+   "cef": 2.0,
+   "BA": 0.5,
+   "AUC": 0.69444,
+   "kappa": 0.0
+  },
+  "ieee-r3h0": {
+   "trial": 0,
+   "cef": 2.0,
+   "BA": 0.66667,
+   "AUC": 0.69444,
+   "kappa": 0.33333
+  },
+  "ieee-r3h1": {
+   "trial": 21,
+   "cef": 2.0,
+   "BA": 0.83333,
+   "AUC": 0.97222,
+   "kappa": 0.66667
+  },
+  "ieee-r4h0": {
+   "trial": 10,
+   "cef": 2.0,
+   "BA": 0.75,
+   "AUC": 0.66667,
+   "kappa": 0.5
+  },
+  "ieee-r4h1": {
+   "trial": 13,
+   "cef": 2.0,
+   "BA": 0.75,
+   "AUC": 0.77778,
+   "kappa": 0.5
+  }
+ }
+}

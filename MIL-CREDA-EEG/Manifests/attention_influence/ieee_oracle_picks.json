@@ -1,0 +1,75 @@
+{
+ "source": "ADHD v82 shared pool (ix-r*h*-s*, ieee-pool-slim d7a4ef3e), MIL-CREDA oracle pick per unit: maximum test BA (oracle, diagnostic); BA/AUC on the target-test half",
+ "units": {
+  "ieee-r0h0": {
+   "trial": 74,
+   "BA": 0.78571,
+   "n": 100,
+   "AUC": 0.90476,
+   "kappa": 0.55172
+  },
+  "ieee-r0h1": {
+   "trial": 7,
+   "BA": 0.75,
+   "n": 100,
+   "AUC": 0.72222,
+   "kappa": 0.5
+  },
+  "ieee-r1h0": {
+   "trial": 2,
+   "BA": 0.91667,
+   "n": 100,
+   "AUC": 1.0,
+   "kappa": 0.83333
+  },
+  "ieee-r1h1": {
+   "trial": 0,
+   "BA": 0.83333,
+   "n": 100,
+   "AUC": 0.72222,
+   "kappa": 0.66667
+  },
+  "ieee-r2h0": {
+   "trial": 33,
+   "BA": 0.83333,
+   "n": 100,
+   "AUC": 0.91667,
+   "kappa": 0.66667
+  },
+  "ieee-r2h1": {
+   "trial": 52,
+   "BA": 0.75,
+   "n": 100,
+   "AUC": 0.80556,
+   "kappa": 0.5
+  },
+  "ieee-r3h0": {
+   "trial": 46,
+   "BA": 0.83333,
+   "n": 100,
+   "AUC": 0.77778,
+   "kappa": 0.66667
+  },
+  "ieee-r3h1": {
+   "trial": 82,
+   "BA": 0.91667,
+   "n": 100,
+   "AUC": 0.86111,
+   "kappa": 0.83333
+  },
+  "ieee-r4h0": {
+   "trial": 10,
+   "BA": 0.75,
+   "n": 100,
+   "AUC": 0.66667,
+   "kappa": 0.5
+  },
+  "ieee-r4h1": {
+   "trial": 2,
+   "BA": 0.83333,
+   "n": 100,
+   "AUC": 0.72222,
+   "kappa": 0.66667
+  }
+ }
+}
