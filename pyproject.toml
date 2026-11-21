@@ -8,6 +8,7 @@ build-backend = "setuptools.build_meta"
 testpaths = ["tests"]
 # Import the packages straight from src/ — no install step, no network.
 pythonpath = ["src"]
+markers = ["slow: smoke runs of a reproduction stage that train models (minutes)"]
 
 [tool.ruff]
 line-length = 100

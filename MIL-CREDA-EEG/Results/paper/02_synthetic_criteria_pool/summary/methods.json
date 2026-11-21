@@ -1,0 +1,175 @@
+{
+ "protocol": "experiments-plan-experimental-mil-creda-sobre-balladeer-v82.md",
+ "experiment": "A-mapa",
+ "hypothesis": "H1",
+ "units": [
+  "d0p6-s0p5-r0",
+  "d0p6-s0p5-r1",
+  "d0p6-s1p5-r0",
+  "d0p6-s1p5-r1",
+  "d0p6-s3-r0",
+  "d0p6-s3-r1",
+  "d1-s0p5-r0",
+  "d1-s0p5-r1",
+  "d1-s1p5-r0",
+  "d1-s1p5-r1",
+  "d1-s3-r0",
+  "d1-s3-r1",
+  "d1p5-s0p5-r0",
+  "d1p5-s0p5-r1",
+  "d1p5-s1p5-r0",
+  "d1p5-s1p5-r1",
+  "d1p5-s3-r0",
+  "d1p5-s3-r1",
+  "d2p5-s0p5-r0",
+  "d2p5-s0p5-r1",
+  "d2p5-s1p5-r0",
+  "d2p5-s1p5-r1",
+  "d2p5-s3-r0",
+  "d2p5-s3-r1"
+ ],
+ "nUnits": 24,
+ "pick": "cef",
+ "friedmanP": 0.004863763441203,
+ "nemenyiCD": 2.45,
+ "table": [
+  {
+   "method": "MIL-CREDA",
+   "meanRank": 3.33,
+   "meanBA": 0.721
+  },
+  {
+   "method": "UDA-DDA",
+   "meanRank": 3.79,
+   "meanBA": 0.707
+  },
+  {
+   "method": "CCA-LSC",
+   "meanRank": 5.96,
+   "meanBA": 0.666
+  },
+  {
+   "method": "CASUAL",
+   "meanRank": 4.62,
+   "meanBA": 0.7
+  },
+  {
+   "method": "COT",
+   "meanRank": 5.58,
+   "meanBA": 0.688
+  },
+  {
+   "method": "CS+CCS",
+   "meanRank": 5.27,
+   "meanBA": 0.688
+  },
+  {
+   "method": "CLUST",
+   "meanRank": 5.48,
+   "meanBA": 0.684
+  },
+  {
+   "method": "CLUDA",
+   "meanRank": 5.17,
+   "meanBA": 0.655
+  },
+  {
+   "method": "Phase 1",
+   "meanRank": 5.79,
+   "meanBA": 0.576
+  }
+ ],
+ "milcredaVs": [
+  {
+   "method": "UDA-DDA",
+   "p": 0.11129684377531748,
+   "pHolm": 0.1880388055043792,
+   "cliffDelta": 0.06,
+   "wins": 14,
+   "ties": 2,
+   "losses": 8
+  },
+  {
+   "method": "CCA-LSC",
+   "p": 0.0019268149823214447,
+   "pHolm": 0.013487704876250112,
+   "cliffDelta": 0.17,
+   "wins": 18,
+   "ties": 2,
+   "losses": 4
+  },
+  {
+   "method": "CASUAL",
+   "p": 0.0940194027521896,
+   "pHolm": 0.1880388055043792,
+   "cliffDelta": 0.07,
+   "wins": 14,
+   "ties": 1,
+   "losses": 9
+  },
+  {
+   "method": "COT",
+   "p": 0.020782782979103902,
+   "pHolm": 0.07679468232147331,
+   "cliffDelta": 0.1,
+   "wins": 16,
+   "ties": 3,
+   "losses": 5
+  },
+  {
+   "method": "CS+CCS",
+   "p": 0.014826905127372376,
+   "pHolm": 0.07679468232147331,
+   "cliffDelta": 0.15,
+   "wins": 17,
+   "ties": 1,
+   "losses": 6
+  },
+  {
+   "method": "CLUST",
+   "p": 0.0009186108055763086,
+   "pHolm": 0.007348886444610469,
+   "cliffDelta": 0.19,
+   "wins": 19,
+   "ties": 2,
+   "losses": 3
+  },
+  {
+   "method": "CLUDA",
+   "p": 0.017678880894915434,
+   "pHolm": 0.07679468232147331,
+   "cliffDelta": 0.14,
+   "wins": 16,
+   "ties": 0,
+   "losses": 8
+  },
+  {
+   "method": "Phase 1",
+   "p": 0.012799113720245552,
+   "pHolm": 0.07679468232147331,
+   "cliffDelta": 0.22,
+   "wins": 15,
+   "ties": 3,
+   "losses": 6
+  }
+ ],
+ "phase1Cells": {
+  "cells": "d >= 1, shift >= 0.5",
+  "n": 18,
+  "positive": 12,
+  "zero": 2,
+  "negative": 4,
+  "meanDiff": 0.189,
+  "p": 0.009652525457813487
+ },
+ "oracleMeanBA": {
+  "MIL-CREDA": 0.781,
+  "UDA-DDA": 0.766,
+  "CCA-LSC": 0.739,
+  "CASUAL": 0.745,
+  "COT": 0.744,
+  "CS+CCS": 0.747,
+  "CLUST": 0.749,
+  "CLUDA": 0.71
+ }
+}

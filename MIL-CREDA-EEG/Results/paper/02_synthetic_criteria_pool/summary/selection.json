@@ -1,0 +1,260 @@
+{
+ "protocol": "experiments-plan-experimental-mil-creda-sobre-balladeer-v82.md",
+ "experiment": "S-seleccion",
+ "hypothesis": "H3",
+ "units": [
+  "d0p6-s0p5-r0",
+  "d0p6-s0p5-r1",
+  "d0p6-s1p5-r0",
+  "d0p6-s1p5-r1",
+  "d0p6-s3-r0",
+  "d0p6-s3-r1",
+  "d1-s0p5-r0",
+  "d1-s0p5-r1",
+  "d1-s1p5-r0",
+  "d1-s1p5-r1",
+  "d1-s3-r0",
+  "d1-s3-r1",
+  "d1p5-s0p5-r0",
+  "d1p5-s0p5-r1",
+  "d1p5-s1p5-r0",
+  "d1p5-s1p5-r1",
+  "d1p5-s3-r0",
+  "d1p5-s3-r1",
+  "d2p5-s0p5-r0",
+  "d2p5-s0p5-r1",
+  "d2p5-s1p5-r0",
+  "d2p5-s1p5-r1",
+  "d2p5-s3-r0",
+  "d2p5-s3-r1"
+ ],
+ "nUnits": 24,
+ "pairs": 192,
+ "alpha": 0.05,
+ "friedmanP": 0.006311961025979906,
+ "table": [
+  {
+   "criterion": "Oracle (upper bound)",
+   "key": "oracle",
+   "methods": {
+    "MIL-CREDA": 0.781,
+    "UDA-DDA": 0.766,
+    "CCA-LSC": 0.739,
+    "CASUAL": 0.745,
+    "COT": 0.744,
+    "CS+CCS": 0.747,
+    "CLUST": 0.749,
+    "CLUDA": 0.71
+   },
+   "meanBA": 0.748,
+   "meanRank": 1.25
+  },
+  {
+   "criterion": "cef",
+   "key": "cef",
+   "methods": {
+    "MIL-CREDA": 0.721,
+    "UDA-DDA": 0.707,
+    "CCA-LSC": 0.666,
+    "CASUAL": 0.7,
+    "COT": 0.688,
+    "CS+CCS": 0.688,
+    "CLUST": 0.684,
+    "CLUDA": 0.655
+   },
+   "meanBA": 0.689,
+   "meanRank": 4.71
+  },
+  {
+   "criterion": "Centroid rule",
+   "key": "centroid BA",
+   "methods": {
+    "MIL-CREDA": 0.719,
+    "UDA-DDA": 0.653,
+    "CCA-LSC": 0.67,
+    "CASUAL": 0.658,
+    "COT": 0.645,
+    "CS+CCS": 0.69,
+    "CLUST": 0.637,
+    "CLUDA": 0.605
+   },
+   "meanBA": 0.66,
+   "meanRank": 4.88,
+   "pRaw": 0.03830889579510613,
+   "pHolm": 0.07919694213982369,
+   "cliff": 0.03,
+   "unitWins": 15,
+   "unitLosses": 9,
+   "meanDiff": 0.029
+  },
+  {
+   "criterion": "Source accuracy",
+   "key": "source BA",
+   "methods": {
+    "MIL-CREDA": 0.698,
+    "UDA-DDA": 0.668,
+    "CCA-LSC": 0.636,
+    "CASUAL": 0.585,
+    "COT": 0.616,
+    "CS+CCS": 0.669,
+    "CLUST": 0.619,
+    "CLUDA": 0.58
+   },
+   "meanBA": 0.634,
+   "meanRank": 5.05,
+   "pRaw": 0.02779893171672892,
+   "pHolm": 0.07919694213982369,
+   "cliff": 0.04,
+   "unitWins": 14,
+   "unitLosses": 10,
+   "meanDiff": 0.055
+  },
+  {
+   "criterion": "BNM",
+   "key": "BNM",
+   "methods": {
+    "MIL-CREDA": 0.675,
+    "UDA-DDA": 0.705,
+    "CCA-LSC": 0.644,
+    "CASUAL": 0.68,
+    "COT": 0.525,
+    "CS+CCS": 0.679,
+    "CLUST": 0.677,
+    "CLUDA": 0.603
+   },
+   "meanBA": 0.649,
+   "meanRank": 5.15,
+   "pRaw": 0.0026970835172786607,
+   "pHolm": 0.014116124514845863,
+   "cliff": 0.14,
+   "unitWins": 17,
+   "unitLosses": 7,
+   "meanDiff": 0.04
+  },
+  {
+   "criterion": "IM",
+   "key": "IM",
+   "methods": {
+    "MIL-CREDA": 0.681,
+    "UDA-DDA": 0.709,
+    "CCA-LSC": 0.645,
+    "CASUAL": 0.682,
+    "COT": 0.525,
+    "CS+CCS": 0.674,
+    "CLUST": 0.677,
+    "CLUDA": 0.615
+   },
+   "meanBA": 0.651,
+   "meanRank": 5.16,
+   "pRaw": 0.002352687419140977,
+   "pHolm": 0.014116124514845863,
+   "cliff": 0.14,
+   "unitWins": 17,
+   "unitLosses": 6,
+   "meanDiff": 0.038
+  },
+  {
+   "criterion": "ClassAMI",
+   "key": "ClassAMI",
+   "methods": {
+    "MIL-CREDA": 0.574,
+    "UDA-DDA": 0.666,
+    "CCA-LSC": 0.639,
+    "CASUAL": 0.648,
+    "COT": 0.545,
+    "CS+CCS": 0.664,
+    "CLUST": 0.617,
+    "CLUDA": 0.543
+   },
+   "meanBA": 0.612,
+   "meanRank": 5.71,
+   "pRaw": 0.0008462667465209961,
+   "pHolm": 0.005923867225646973,
+   "cliff": 0.2,
+   "unitWins": 19,
+   "unitLosses": 5,
+   "meanDiff": 0.076
+  },
+  {
+   "criterion": "Entropy",
+   "key": "entropy",
+   "methods": {
+    "MIL-CREDA": 0.522,
+    "UDA-DDA": 0.56,
+    "CCA-LSC": 0.5,
+    "CASUAL": 0.5,
+    "COT": 0.505,
+    "CS+CCS": 0.5,
+    "CLUST": 0.521,
+    "CLUDA": 0.499
+   },
+   "meanBA": 0.513,
+   "meanRank": 6.46,
+   "pRaw": 0.026398980713274563,
+   "pHolm": 0.07919694213982369,
+   "cliff": 0.14,
+   "unitWins": 13,
+   "unitLosses": 10,
+   "meanDiff": 0.175
+  },
+  {
+   "criterion": "SND",
+   "key": "SND",
+   "methods": {
+    "MIL-CREDA": 0.499,
+    "UDA-DDA": 0.506,
+    "CCA-LSC": 0.5,
+    "CASUAL": 0.5,
+    "COT": 0.501,
+    "CS+CCS": 0.498,
+    "CLUST": 0.526,
+    "CLUDA": 0.499
+   },
+   "meanBA": 0.504,
+   "meanRank": 6.64,
+   "pRaw": 0.01627091479437473,
+   "pHolm": 0.06508365917749892,
+   "cliff": 0.2,
+   "unitWins": 13,
+   "unitLosses": 10,
+   "meanDiff": 0.185
+  }
+ ],
+ "byClassEffect": {
+  "IM": {
+   "winsHighD": 11,
+   "nHighD": 12,
+   "meanDiffLowD": 0.0019098958333333416
+  },
+  "BNM": {
+   "winsHighD": 11,
+   "nHighD": 12,
+   "meanDiffLowD": 0.0019966666666666744
+  },
+  "ClassAMI": {
+   "winsHighD": 12,
+   "nHighD": 12,
+   "meanDiffLowD": 0.0013893750000000028
+  },
+  "Source accuracy": {
+   "winsHighD": 12,
+   "nHighD": 12,
+   "meanDiffLowD": -0.011371145833333327
+  },
+  "Centroid rule": {
+   "winsHighD": 10,
+   "nHighD": 12,
+   "meanDiffLowD": -0.0038191666666666604
+  },
+  "SND": {
+   "winsHighD": 12,
+   "nHighD": 12,
+   "meanDiffLowD": -0.008853958333333337
+  },
+  "Entropy": {
+   "winsHighD": 12,
+   "nHighD": 12,
+   "meanDiffLowD": -0.013888749999999991
+  }
+ }
+}

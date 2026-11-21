@@ -1,0 +1,119 @@
+{
+ "source": "criteria pool v82 (protocol v82 final-rule bases, ieee-pool-slim 820ce461 lineage), seed 1; cef = exp entropy of argmax histogram of Pt; first max over finite trials in trial order",
+ "units": {
+  "d1p5-s1p5-r0": {
+   "UDA-DDA": {
+    "trial": 43,
+    "cef": 2.0,
+    "BApool": 0.9,
+    "AUCpool": 0.96778,
+    "BAtest12": 0.91667,
+    "params": {
+     "lr2": 0.0009266291615414303,
+     "wd2": 6.922205472023597e-06,
+     "mmdWeight": 0.003292396938375137,
+     "cmmdWeight": 0.0010171391125545083,
+     "kernelMultiplier": 0.75,
+     "confidenceA": 0.7150125599436868,
+     "confidenceB": 0.9468560131583168,
+     "tau_att": 0.29247715559710874
+    }
+   },
+   "CCA-LSC": {
+    "trial": 20,
+    "cef": 1.9982641399314511,
+    "BApool": 0.69167,
+    "AUCpool": 0.82389,
+    "BAtest12": 0.75,
+    "params": {
+     "lr2": 0.00039166794759820574,
+     "wd2": 0.0017099605461408113,
+     "centroidWeight": 0.015919829040744637,
+     "discriminativeWeight": 0.02309341201290071,
+     "adversarialWeight": 0.4275395045263134,
+     "calibrationHm": 0.18362365373851577,
+     "priorThreshold": 0.8547942780830298,
+     "tau_att": 0.014830462120940158
+    }
+   },
+   "CASUAL": {
+    "trial": 86,
+    "cef": 1.9930595659329764,
+    "BApool": 0.86667,
+    "AUCpool": 0.92528,
+    "BAtest12": 0.75,
+    "params": {
+     "lr2": 0.0001559229011680116,
+     "wd2": 8.44414367942519e-05,
+     "lambda_align": 1.9273444048673314,
+     "lambda_entropy": 0.03294176896698255,
+     "lambda_vat": 0.03005169206464473,
+     "vat_radius_fraction": 0.09468170450263969,
+     "tau_att": 0.623188807103614
+    }
+   },
+   "COT": {
+    "trial": 15,
+    "cef": 2.0,
+    "BApool": 0.825,
+    "AUCpool": 0.93778,
+    "BAtest12": 0.75,
+    "params": {
+     "lr2": 0.0007928083377073708,
+     "wd2": 3.1708242186564384e-05,
+     "alphaCluster": 0.012227060235665567,
+     "alphaOT": 0.6157137727758937,
+     "dualLR": 2.163992161072152,
+     "dualMultiplier": 0.75,
+     "tau_att": 0.03032017754675287
+    }
+   },
+   "CS+CCS": {
+    "trial": 7,
+    "cef": 2.0,
+    "BApool": 0.875,
+    "AUCpool": 0.93028,
+    "BAtest12": 0.75,
+    "params": {
+     "lr2": 0.00013435617937205917,
+     "wd2": 7.280805142966358e-07,
+     "csWeight": 0.26077417479366666,
+     "ccsWeight": 0.05307026768277344,
+     "zKernelMultiplier": 0.5,
+     "tau_att": 0.3855750533688152
+    }
+   },
+   "CLUST": {
+    "trial": 7,
+    "cef": 2.0,
+    "BApool": 0.81667,
+    "AUCpool": 0.9375,
+    "BAtest12": 0.75,
+    "params": {
+     "lr2": 0.0028906023336227006,
+     "wd2": 0.007294457781066435,
+     "clusteringWeight": 0.0011839749349254573,
+     "consistencyWeight": 0.0019112436195668347,
+     "informationWeight": 1.824729758659577,
+     "confidence": 0.9026223675895223,
+     "emaMomentumComplement": 0.0038446503288681075,
+     "tau_att": 0.017435617365075838
+    }
+   },
+   "CLUDA": {
+    "trial": 15,
+    "cef": 1.9155176166141552,
+    "BApool": 0.8,
+    "AUCpool": 0.9375,
+    "BAtest12": 0.66667,
+    "params": {
+     "lr2": 0.00014555502696296798,
+     "wd2": 2.8717018783342237e-06,
+     "contrastiveWeight": 0.4328933575453934,
+     "temperature": 0.9528331461537958,
+     "tau_att": 0.5764518155672227
+    }
+   }
+  }
+ }
+}

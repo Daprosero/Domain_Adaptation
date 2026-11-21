@@ -1,0 +1,173 @@
+{
+ "source": "eval_bases.py, protocol v82 final-rule bases; model = the prepared copy, frozen phase 1, seed 1",
+ "units": {
+  "d0p6-s0p5-r0": {
+   "BApool": 0.5,
+   "AUCpool": 0.40417,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.61111,
+   "cut": 0.19160051306294085
+  },
+  "d0p6-s0p5-r1": {
+   "BApool": 0.48333,
+   "AUCpool": 0.5375,
+   "BAtest12": 0.58333,
+   "AUCtest12": 0.66667,
+   "cut": 0.902947064058945
+  },
+  "d0p6-s1p5-r0": {
+   "BApool": 0.5,
+   "AUCpool": 0.40972,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.44444,
+   "cut": 0.19160051306294085
+  },
+  "d0p6-s1p5-r1": {
+   "BApool": 0.525,
+   "AUCpool": 0.58,
+   "BAtest12": 0.66667,
+   "AUCtest12": 0.69444,
+   "cut": 0.902947064058945
+  },
+  "d0p6-s3-r0": {
+   "BApool": 0.5,
+   "AUCpool": 0.50583,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.19444,
+   "cut": 0.19160051306294085
+  },
+  "d0p6-s3-r1": {
+   "BApool": 0.5,
+   "AUCpool": 0.62028,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.72222,
+   "cut": 0.902947064058945
+  },
+  "d1-s0p5-r0": {
+   "BApool": 0.5,
+   "AUCpool": 0.39278,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.58333,
+   "cut": 0.1740328740846121
+  },
+  "d1-s0p5-r1": {
+   "BApool": 0.5,
+   "AUCpool": 0.4775,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.44444,
+   "cut": 0.9632047271520778
+  },
+  "d1-s1p5-r0": {
+   "BApool": 0.5,
+   "AUCpool": 0.40611,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.52778,
+   "cut": 0.1740328740846121
+  },
+  "d1-s1p5-r1": {
+   "BApool": 0.50833,
+   "AUCpool": 0.53361,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.38889,
+   "cut": 0.9632047271520778
+  },
+  "d1-s3-r0": {
+   "BApool": 0.5,
+   "AUCpool": 0.52083,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.44444,
+   "cut": 0.1740328740846121
+  },
+  "d1-s3-r1": {
+   "BApool": 0.50833,
+   "AUCpool": 0.57861,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.44444,
+   "cut": 0.9632047271520778
+  },
+  "d1p5-s0p5-r0": {
+   "BApool": 0.675,
+   "AUCpool": 0.91611,
+   "BAtest12": 0.58333,
+   "AUCtest12": 0.91667,
+   "cut": 0.5603971519698578
+  },
+  "d1p5-s0p5-r1": {
+   "BApool": 0.89167,
+   "AUCpool": 0.93056,
+   "BAtest12": 1.0,
+   "AUCtest12": 1.0,
+   "cut": 0.7186118584949597
+  },
+  "d1p5-s1p5-r0": {
+   "BApool": 0.50833,
+   "AUCpool": 0.89694,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.77778,
+   "cut": 0.5603971519698578
+  },
+  "d1p5-s1p5-r1": {
+   "BApool": 0.50833,
+   "AUCpool": 0.94528,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.97222,
+   "cut": 0.7186118584949597
+  },
+  "d1p5-s3-r0": {
+   "BApool": 0.5,
+   "AUCpool": 0.89056,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.77778,
+   "cut": 0.5603971519698578
+  },
+  "d1p5-s3-r1": {
+   "BApool": 0.5,
+   "AUCpool": 0.94694,
+   "BAtest12": 0.5,
+   "AUCtest12": 0.91667,
+   "cut": 0.7186118584949597
+  },
+  "d2p5-s0p5-r0": {
+   "BApool": 0.96667,
+   "AUCpool": 0.98833,
+   "BAtest12": 1.0,
+   "AUCtest12": 1.0,
+   "cut": 0.430803973505365
+  },
+  "d2p5-s0p5-r1": {
+   "BApool": 0.975,
+   "AUCpool": 0.99917,
+   "BAtest12": 1.0,
+   "AUCtest12": 1.0,
+   "cut": 0.5688091228550158
+  },
+  "d2p5-s1p5-r0": {
+   "BApool": 0.525,
+   "AUCpool": 0.99444,
+   "BAtest12": 0.58333,
+   "AUCtest12": 1.0,
+   "cut": 0.430803973505365
+  },
+  "d2p5-s1p5-r1": {
+   "BApool": 0.73333,
+   "AUCpool": 0.99806,
+   "BAtest12": 0.66667,
+   "AUCtest12": 1.0,
+   "cut": 0.5688091228550158
+  },
+  "d2p5-s3-r0": {
+   "BApool": 0.5,
+   "AUCpool": 0.99556,
+   "BAtest12": 0.5,
+   "AUCtest12": 1.0,
+   "cut": 0.430803973505365
+  },
+  "d2p5-s3-r1": {
+   "BApool": 0.50833,
+   "AUCpool": 0.99611,
+   "BAtest12": 0.5,
+   "AUCtest12": 1.0,
+   "cut": 0.5688091228550158
+  }
+ }
+}
