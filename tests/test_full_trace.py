@@ -10,7 +10,7 @@ import pytest
 from MIL_CREDA_EEG import phase2_trace as P
 from MIL_CREDA_EEG import xpilot as XP
 
-RUN_CONFIG = Path(__file__).resolve().parents[1] / "tools/kaggle/sm-dev-e3-s15-r0/run-config.json"
+RUN_CONFIG = Path(__file__).resolve().parent / "fixtures" / "sm-dev-e3-s15-r0.run-config.json"
 
 
 def _run(tmp, full):

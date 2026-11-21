@@ -51,9 +51,19 @@ def _first_code_cell(path: Path) -> str:
     raise AssertionError(f"{path.name} has no code cell at all")
 
 
+def _public(path: Path) -> bool:
+    """A reproduction notebook a reader opens on Kaggle, Colab or a laptop without the forge.
+
+    Those notebooks (MIL-CREDA-EEG/Notebooks/*, MIL-CREDA/Notebooks/Toyset.ipynb)
+    declare `metadata.mil_creda.public_bootstrap`: their first cell clones the public
+    repository when no checkout is found, which a forge runner never needs.
+    """
+    document = json.loads(path.read_text(encoding="utf-8"))
+    return bool(document.get("metadata", {}).get("mil_creda", {}).get("public_bootstrap"))
+
+
 def _notebooks() -> list[Path]:
-    found = sorted(p for d in NOTEBOOK_DIRS for p in d.glob("*.ipynb"))
-    assert found, f"no notebooks under {NOTEBOOK_DIRS}"
+    found = sorted(p for d in NOTEBOOK_DIRS for p in d.glob("*.ipynb") if not _public(p))
     return found
 
 

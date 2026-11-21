@@ -15,7 +15,7 @@ from MIL_CREDA_EEG import phase2_trace
 from MIL_CREDA_EEG import xpilot as XP
 
 CLEAN = E.device("1020", 0.0, 0)
-RUN_CONFIG = Path(__file__).resolve().parents[1] / "tools/kaggle/sm-dev-e3-s15-r0/run-config.json"
+RUN_CONFIG = Path(__file__).resolve().parent / "fixtures" / "sm-dev-e3-s15-r0.run-config.json"
 
 
 # ------------------------------------------------------------------ calibrated effect

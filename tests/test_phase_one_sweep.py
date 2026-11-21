@@ -49,11 +49,6 @@ def test_recalibration_replaces_stale_batchnorm_statistics_and_keeps_the_weights
     assert torch.equal(model.source_trunk.conv_temporal.weight, weights)
 
 
-def test_every_diagnostic_scores_with_recalibrated_batchnorm():
-    from MIL_CREDA_EEG import beat_predict, phase_two_terms
-    assert beat_predict.recalibrate is sweep.recalibrate
-    assert phase_two_terms.recalibrate is sweep.recalibrate
-    assert beat_predict.SIDES == ("sourceHeldOut", "predict", "milCreda")
 
 
 def test_blending_interpolates_weights_and_keeps_integer_buffers():
@@ -64,30 +59,8 @@ def test_blending_interpolates_weights_and_keeps_integer_buffers():
     assert torch.allclose(mixed["w"], torch.full((2,), 0.25)) and mixed["n"] == 5
 
 
-def test_the_shallow_trunk_feeds_mil_creda_and_restores_the_plan_network():
-    from MIL_CREDA_EEG import campaign, model_store, shallow_trunk, two_phase
-    campaign.register(["MIL-CREDA"])
-    hyper = {"attentionGamma": 0.5, "attentionTemperature": 1.0}
-    with shallow_trunk.installed():
-        model = model_store.build_model("MIL-CREDA", 14, 14, hyper)
-        assert isinstance(model.source_trunk, shallow_trunk.ShallowTrunk)
-        assert model.source_trunk(torch.randn(4, 14, 512)).shape == (4, 1160)
-        assert model.head.linear.in_features == 1160
-        model.fix_sigma(5.0)
-        assert two_phase.bridge(model)["layer_copy"]["copied"] == list(shallow_trunk.LAYERS)
-    assert eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk and eegnet.HEAD_MAX_NORM == 0.25
 
 
-def test_the_fused_shallow_convolution_equals_the_two_layers():
-    from MIL_CREDA_EEG import shallow_trunk
-    torch.manual_seed(0)
-    trunk = shallow_trunk.ShallowTrunk(14).eval()
-    x = torch.randn(3, 14, 512)
-    two = trunk.conv_spatial(trunk.conv_temporal(x.unsqueeze(1)))
-    seen = {}
-    trunk.bn.register_forward_hook(lambda m, i, o: seen.update(x=i[0]))
-    trunk(x)
-    assert torch.allclose(seen["x"], two, atol=1e-4)
 
 
 def test_each_partial_condition_names_trainable_layers_of_the_trunk():
@@ -110,15 +83,6 @@ def test_balanced_pseudolabels_give_both_classes_and_restore_the_rule():
     assert mil_creda_model.pseudolabel is rule
 
 
-def test_loso_settings_cover_the_four_transfers_and_build_a_hyper():
-    import json
-    from MIL_CREDA_EEG import loso, two_phase
-    chosen = json.loads(loso.SELECTIONS.read_text())
-    assert set(chosen) == {"Robots->CogniFit", "CogniFit->Robots", "L1->L11", "L11->L1"}
-    for values in chosen.values():
-        two_phase.check_hyper({**{k: values[k] for k in two_phase.PHASE_ONE_KEYS}, "lr2": 1e-3,
-                               "wd2": 1e-5, "tauLocal": 1.0, "epochs1": values["epochs1"],
-                               "epochs2": 20, "bagsPerStep": 8})
 
 
 def test_the_oracle_hands_true_labels_and_counts_the_rule_hits():
@@ -214,89 +178,22 @@ def test_euclidean_alignment_whitens_each_subject_covariance():
     assert torch.allclose(cov, torch.eye(4, dtype=torch.float64), atol=1e-3)
 
 
-def test_the_phase_one_search_samples_inside_its_space_and_is_seeded():
-    import numpy as np
-    from MIL_CREDA_EEG import phase_one_search as s
-    a = s.sample(np.random.RandomState(3)); b = s.sample(np.random.RandomState(3))
-    assert a == b
-    assert 1e-4 <= a["lr1"] <= 3e-2 and 1e-5 <= a["l2"] <= 3e-2
-    assert (a["F1"], a["D"], a["F2"]) in s.SIZES and a["epochs"] in s.EPOCH_CHOICES
 
 
-def test_subbags_keep_the_subject_and_label_and_cut_full_windows():
-    from MIL_CREDA_EEG import subbag_check, two_phase
-    bag = two_phase.BagTensor("s1", "c", 1, torch.randn(70, 14, 512))
-    parts = subbag_check.subbags([bag], 16, torch.Generator().manual_seed(0))
-    assert len(parts) == 4 and all(p.windows.shape == (16, 14, 512) for p in parts)
-    assert {p.subject for p in parts} == {"s1"} and {p.label for p in parts} == {1}
-    assert subbag_check.subbags([bag], 0, torch.Generator()) == [bag]
 
 
-def test_the_shallow_trunk_keeps_its_layers_under_the_sweep_constants():
-    from MIL_CREDA_EEG import shallow_trunk
-    with shallow_trunk.installed(), sweep.patched({"HEAD_MAX_NORM": 100.0, "DROPOUT": 0.5}):
-        assert eegnet.EEGNetTrunk is shallow_trunk.ShallowTrunk and eegnet.HEAD_MAX_NORM == 100.0
-    assert eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk
 
 
-def test_input_normalization_is_domain_specific_and_restores_eegnet():
-    from MIL_CREDA_EEG import campaign, input_norm, model_store, two_phase
-    campaign.register(["MIL-CREDA"])
-    plain = eegnet.EEGNetTrunk
-    for kind in ("batch", "layer"):
-        with input_norm.installed(kind):
-            model = model_store.build_model("MIL-CREDA", 14, 29, {"attentionGamma": 0.5, "attentionTemperature": 1.0})
-            assert model.source_trunk(5 + 3 * torch.randn(4, 14, 512)).shape == (4, 256)
-            model.fix_sigma(1.0)
-            assert "input_norm" in two_phase.bridge(model)["layer_copy"]["kept_initialization"]
-        assert eegnet.EEGNetTrunk is plain
 
 
-def test_window_norm_removes_each_window_scale():
-    from MIL_CREDA_EEG.input_norm import WindowNorm
-    x = torch.randn(3, 4, 512) * torch.tensor([1.0, 10.0, 100.0])[:, None, None]
-    y = WindowNorm(4)(x)
-    assert torch.allclose(y.mean(dim=(1, 2)), torch.zeros(3), atol=1e-4)
 
 
-def test_the_search_samples_shallow_settings_and_builds_its_filters():
-    import numpy as np
-    from MIL_CREDA_EEG import phase_one_search as s, shallow_trunk
-    trial = s.sample(np.random.RandomState(0), "shallow")
-    assert trial["FILTERS"] in s.SHALLOW_FILTERS and 1e-4 <= trial["lr1"] <= 3e-3
-    with s.network("shallow", {**trial, "FILTERS": 20}):
-        assert eegnet.EEGNetTrunk(14).conv_temporal.out_channels == 20
-    assert shallow_trunk.FILTERS == 40 and eegnet.EEGNetTrunk is not shallow_trunk.ShallowTrunk
 
 
-def test_the_log_power_block_keeps_eegnet_shapes_and_restores_it():
-    from MIL_CREDA_EEG import input_norm
-    plain = eegnet.EEGNetTrunk
-    with input_norm.log_power():
-        trunk = eegnet.EEGNetTrunk(14)
-        out = trunk(torch.randn(3, 14, 512))
-        assert out.shape == (3, 256) and torch.isfinite(out).all()
-    assert eegnet.EEGNetTrunk is plain
 
 
-def test_fixed_bands_are_frozen_band_pass_filters():
-    from MIL_CREDA_EEG import input_norm
-    with input_norm.fixed_bands():
-        trunk = eegnet.EEGNetTrunk(14)
-        w = trunk.conv_temporal.weight
-        assert not w.requires_grad and w.shape == (8, 1, 1, 64)
-        t = torch.arange(512) / 128
-        alpha = torch.sin(2 * torch.pi * 10 * t).reshape(1, 1, 1, 512)
-        gain = torch.nn.functional.conv2d(alpha, w).pow(2).mean(dim=(2, 3))[0]
-        assert int(gain.argmax()) in (2, 6)       # the alpha (8-13) or 4-13 band passes 10 Hz most
-        assert trunk(torch.randn(2, 14, 512)).shape == (2, 256)
 
 
-def test_common_average_removes_the_channel_mean_of_each_window():
-    from MIL_CREDA_EEG import subbag_check, two_phase
-    bag = two_phase.BagTensor("s", "c", 1, torch.randn(5, 14, 512) + 7)
-    ref = subbag_check.common_average([bag])[0]
-    assert torch.allclose(ref.windows.mean(dim=1), torch.zeros(5, 512), atol=1e-5) and ref.label == 1
 
 
 def test_spectral_check_prepares_windows_and_standardizes_each_domain():

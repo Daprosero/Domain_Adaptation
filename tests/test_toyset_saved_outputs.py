@@ -11,7 +11,9 @@ from PIL import Image, ImageChops
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.mark.parametrize("method", ["CREDA", "MIL-CREDA"])
+# The MIL-CREDA toyset is now stripped of outputs and kept small; its run is
+# covered by tests/test_reproduce_tutorial.py.
+@pytest.mark.parametrize("method", ["CREDA"])
 def test_tutorial_keeps_completed_execution_and_visible_results(method):
     path = ROOT / method / "Notebooks" / "Toyset.ipynb"
     notebook = json.loads(path.read_text(encoding="utf-8"))
@@ -37,7 +39,9 @@ def test_tutorial_keeps_completed_execution_and_visible_results(method):
         assert "v2" in visible, "Saved CREDA results must use the default v2"
 
 
-@pytest.mark.parametrize("method", ["CREDA", "MIL-CREDA"])
+# The MIL-CREDA toyset is now stripped of outputs and kept small; its run is
+# covered by tests/test_reproduce_tutorial.py.
+@pytest.mark.parametrize("method", ["CREDA"])
 def test_saved_input_data_plot_is_visible(method):
     path = ROOT / method / "Notebooks" / "Toyset.ipynb"
     notebook = json.loads(path.read_text(encoding="utf-8"))
@@ -48,7 +52,9 @@ def test_saved_input_data_plot_is_visible(method):
                for o in cells[0].get("outputs", [])), "The input data overlay must be saved"
 
 
-@pytest.mark.parametrize("method", ["CREDA", "MIL-CREDA"])
+# The MIL-CREDA toyset is now stripped of outputs and kept small; its run is
+# covered by tests/test_reproduce_tutorial.py.
+@pytest.mark.parametrize("method", ["CREDA"])
 def test_saved_outputs_include_adaptation_and_confidence_gifs_for_each_family(method):
     path = ROOT / method / "Notebooks" / "Toyset.ipynb"
     notebook = json.loads(path.read_text(encoding="utf-8"))

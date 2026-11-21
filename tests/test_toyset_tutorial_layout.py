@@ -44,7 +44,7 @@ RETAINED = (
     "CREDA/Notebooks/Plots_Generator.ipynb",
     "CREDA/Notebooks/Results_Generator.ipynb",
     "CREDA/Notebooks/Tables_Generator.ipynb",
-    "MIL-CREDA-EEG/Notebooks/BALLADEER_03_Preprocesamiento.ipynb",
+    "MIL-CREDA-EEG/Notebooks/Results_Paper.ipynb",
 )
 
 #: What the retired split used to read or write: the stored sweep and its readers.
@@ -81,7 +81,7 @@ def test_the_retired_notebooks_outputs_are_gone(relative):
 
 
 @pytest.mark.parametrize("relative", RETAINED)
-def test_publication_and_balladeer_notebooks_stay(relative):
+def test_publication_notebooks_stay(relative):
     assert (ROOT / relative).is_file(), relative
 
 

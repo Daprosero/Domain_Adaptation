@@ -25,11 +25,10 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 FAMILIES = ("lunas", "toroide", "rollo")
 NOTEBOOKS = {
     "CREDA": REPOSITORY / "CREDA" / "Notebooks" / "Toyset.ipynb",
-    "MIL-CREDA": REPOSITORY / "MIL-CREDA" / "Notebooks" / "Toyset.ipynb",
 }
 #: What the figure cell must leave untouched, per notebook.
-CONFIGURATION = {"CREDA": ("CONFIG", "SEED"),
-                 "MIL-CREDA": ("ESCALA", "HIPER", "SEMILLA", "FAMILIAS")}
+CONFIGURATION = {"CREDA": ("CONFIG", "SEED")}
+# The MIL-CREDA toyset was rewritten on the paper's code; tests/test_reproduce_tutorial.py covers it.
 
 
 def _code_cells(method: str) -> list[dict]:
@@ -199,12 +198,6 @@ def test_the_figure_cell_draws_once_and_changes_no_state(executed) -> None:
     assert torch.equal(before["torch"], after["torch"])
     for key, value in before["configuration"].items():
         assert namespace[key] == value, (method, key)
-
-
-def test_mil_creda_keeps_the_figure_under_its_old_name(executed) -> None:
-    method, namespace = executed
-    if method == "MIL-CREDA":
-        assert namespace["FIGURAS"]["datos"] is namespace["INPUT_FIGURE"]
 
 
 def test_creda_draws_the_inputs_before_training() -> None:

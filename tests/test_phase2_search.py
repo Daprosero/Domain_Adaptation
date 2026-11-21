@@ -17,7 +17,7 @@ from MIL_CREDA_EEG import phase2_trace as P
 from MIL_CREDA_EEG import v63_setup as V
 from MIL_CREDA_EEG import xpilot as XP
 
-RUN_CONFIG = Path(__file__).resolve().parents[1] / "tools/kaggle/sm-dev-e3-s15-r0/run-config.json"
+RUN_CONFIG = Path(__file__).resolve().parent / "fixtures" / "sm-dev-e3-s15-r0.run-config.json"
 DEVICE = torch.device("cpu")
 SETTINGS = {"lr2": 2e-3, "epochs2": 2, "lambda_global": 2.5, "lambda_local": 0.3, "tau_local": 4.0}
 
