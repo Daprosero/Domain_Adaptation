@@ -1,0 +1,283 @@
+stage,name,obtained,paper,tolerance,within
+01 phase-1 bases,"synthetic first phase, mean BA over the 24 units (evaluation pool)",0.576,0.576,0.0,True
+01 phase-1 bases,"ADHD Phase 1 (source only), mean BA over the 10 units",0.655,0.655,0.0,True
+01 phase-1 bases,"ADHD Phase 1 (source only), mean AUC over the 10 units",0.717,0.717,0.0,True
+01 phase-1 bases,"ADHD Phase 1 (source only), mean kappa over the 10 units",0.309,0.309,0.0,True
+02 synthetic criteria pool,SND mean BA (l.340),0.504,0.504,0.0,True
+02 synthetic criteria pool,cef mean BA (l.340),0.689,0.689,0.0,True
+02 synthetic criteria pool,oracle mean BA (l.340),0.748,0.748,0.0,True
+02 synthetic criteria pool,cef mean rank (l.340),4.71,4.71,0.0,True
+02 synthetic criteria pool,criteria Friedman p (l.340),0.006,0.006,0.0,True
+02 synthetic criteria pool,cef vs ClassAMI pHolm (l.357),0.006,0.006,0.0,True
+02 synthetic criteria pool,cef vs BNM pHolm (l.355),0.014,0.014,0.0,True
+02 synthetic criteria pool,cef vs IM pHolm (l.356),0.014,0.014,0.0,True
+02 synthetic criteria pool,cef vs Centroid pHolm (l.353),0.079,0.079,0.0,True
+02 synthetic criteria pool,cef vs Source acc. pHolm (l.354),0.079,0.079,0.0,True
+02 synthetic criteria pool,cef vs Entropy pHolm (l.358),0.079,0.079,0.0,True
+02 synthetic criteria pool,cef vs SND pHolm (l.359),0.065,0.065,0.0,True
+02 synthetic criteria pool,min wins of cef at dC>=1.5 (l.340),10.0,10.0,0.0,True
+02 synthetic criteria pool,max wins of cef at dC>=1.5 (l.340),12.0,12.0,0.0,True
+02 synthetic criteria pool,max |gap to cef| at dC<=1 (l.340),0.014,0.014,0.0,True
+02 synthetic criteria pool,MIL-CREDA mean rank (l.370),3.33,3.33,0.0,True
+02 synthetic criteria pool,MIL-CREDA mean BA (l.370),0.721,0.721,0.0,True
+02 synthetic criteria pool,UDA-DDA mean rank (l.370),3.79,3.79,0.0,True
+02 synthetic criteria pool,UDA-DDA mean BA (l.370),0.707,0.707,0.0,True
+02 synthetic criteria pool,Phase 1 mean BA (l.370),0.576,0.576,0.0,True
+02 synthetic criteria pool,Phase 1 mean rank (l.363),5.79,5.79,0.0,True
+02 synthetic criteria pool,methods Friedman p (l.370),0.005,0.005,0.0,True
+02 synthetic criteria pool,Nemenyi CD (l.370),2.45,2.45,0.0,True
+02 synthetic criteria pool,MIL-CREDA vs CCA-LSC pHolm (l.370),0.013,0.013,0.0,True
+02 synthetic criteria pool,MIL-CREDA vs CLUST pHolm (l.370),0.007,0.007,0.0,True
+02 synthetic criteria pool,MIL-CREDA vs Phase 1 pHolm (l.370),0.077,0.077,0.0,True
+02 synthetic criteria pool,MIL-CREDA oracle BA (l.370),0.781,0.781,0.0,True
+02 synthetic criteria pool,"map: MIL-CREDA gain, dC>=1.5 & shift>=1.5 (l.380)",0.41,0.41,0.0,True
+02 synthetic criteria pool,"map: comparators gain, dC>=1.5 & shift>=1.5 (l.380)",0.33,0.33,0.0,True
+02 synthetic criteria pool,map: MIL-CREDA above comparators in those 4 cells (l.380),4.0,4.0,0.0,True
+02 synthetic criteria pool,"map: MIL-CREDA gain, other cells (l.380)",0.015,0.015,0.0,True
+02 synthetic criteria pool,map: max |gain| in the ADHD band row (l.380),1.0,1.0,0.0,True
+03 synthetic mechanisms,table attention: BA own,0.72,0.72,0.0,True
+03 synthetic mechanisms,table attention: BA own without consensus,0.71,0.71,0.0,True
+03 synthetic mechanisms,table attention: BA published attention,0.7,0.7,0.0,True
+03 synthetic mechanisms,table attention: BA gated attention,0.69,0.69,0.0,True
+03 synthetic mechanisms,table attention: BA mean,0.52,0.52,0.0,True
+03 synthetic mechanisms,table attention: BA sum,0.52,0.52,0.0,True
+03 synthetic mechanisms,table attention: rank own,2.71,2.71,0.0,True
+03 synthetic mechanisms,table attention: rank own without consensus,3.17,3.17,0.0,True
+03 synthetic mechanisms,table attention: rank published attention,3.21,3.21,0.0,True
+03 synthetic mechanisms,table attention: rank gated attention,3.15,3.15,0.0,True
+03 synthetic mechanisms,table attention: rank mean,4.6,4.6,0.0,True
+03 synthetic mechanisms,table attention: rank sum,4.17,4.17,0.0,True
+03 synthetic mechanisms,table attention: pHolm own without consensus,0.31,0.31,0.0,True
+03 synthetic mechanisms,table attention: pHolm published attention,0.61,0.61,0.0,True
+03 synthetic mechanisms,table attention: pHolm gated attention,0.61,0.61,0.0,True
+03 synthetic mechanisms,table attention: pHolm mean,0.01,0.01,0.0,True
+03 synthetic mechanisms,table attention: pHolm sum,0.02,0.02,0.0,True
+03 synthetic mechanisms,table attention: delta own without consensus,0.04,0.04,0.0,True
+03 synthetic mechanisms,table attention: delta published attention,0.01,0.01,0.0,True
+03 synthetic mechanisms,table attention: delta gated attention,0.03,0.03,0.0,True
+03 synthetic mechanisms,table attention: delta mean,0.38,0.38,0.0,True
+03 synthetic mechanisms,table attention: delta sum,0.33,0.33,0.0,True
+03 synthetic mechanisms,table attention: artifact AUC own,0.57,0.57,0.0,True
+03 synthetic mechanisms,table attention: artifact AUC own without consensus,0.53,0.53,0.0,True
+03 synthetic mechanisms,table attention: artifact AUC published attention,0.52,0.52,0.0,True
+03 synthetic mechanisms,table attention: artifact AUC gated attention,0.54,0.54,0.0,True
+03 synthetic mechanisms,table attention: event AUC own,0.63,0.63,0.0,True
+03 synthetic mechanisms,table attention: event AUC own without consensus,0.65,0.65,0.0,True
+03 synthetic mechanisms,table attention: event AUC published attention,0.62,0.62,0.0,True
+03 synthetic mechanisms,table attention: event AUC gated attention,0.62,0.62,0.0,True
+03 synthetic mechanisms,table attention: artifact AUC significant own,1.0,1.0,0.0,True
+03 synthetic mechanisms,table attention: artifact AUC significant own without consensus,0.0,0.0,0.0,True
+03 synthetic mechanisms,table attention: artifact AUC significant published attention,0.0,0.0,0.0,True
+03 synthetic mechanisms,table attention: artifact AUC significant gated attention,0.0,0.0,0.0,True
+03 synthetic mechanisms,table attention: event AUC significant own,1.0,1.0,0.0,True
+03 synthetic mechanisms,table attention: event AUC significant own without consensus,1.0,1.0,0.0,True
+03 synthetic mechanisms,table attention: event AUC significant published attention,1.0,1.0,0.0,True
+03 synthetic mechanisms,table attention: event AUC significant gated attention,1.0,1.0,0.0,True
+03 synthetic mechanisms,BA own (rel. + consensus),0.721,0.721,0.0,True
+03 synthetic mechanisms,BA mean,0.517,0.517,0.0,True
+03 synthetic mechanisms,BA sum,0.523,0.523,0.0,True
+03 synthetic mechanisms,pHolm mean,0.007,0.008,0.001,True
+03 synthetic mechanisms,pHolm sum,0.016,0.016,0.0,True
+03 synthetic mechanisms,BA gap own - relevance only,0.012,0.012,0.0,True
+03 synthetic mechanisms,BA gap own - gated (Ilse),0.033,0.033,0.0,True
+03 synthetic mechanisms,artifact AUC own,0.566,0.566,0.0,True
+03 synthetic mechanisms,artifact AUC own pHolm,0.011,0.011,0.0,True
+03 synthetic mechanisms,event AUC own,0.628,0.628,0.0,True
+03 synthetic mechanisms,event AUC own pHolm,0.012,0.012,0.0,True
+03 synthetic mechanisms,artifact AUC relevance only,0.534,0.534,0.0,True
+03 synthetic mechanisms,event AUC own at dC<=1,0.461,0.461,0.0,True
+03 synthetic mechanisms,artifact AUC own at dC<=1,0.557,0.557,0.0,True
+03 synthetic mechanisms,"excerpt subject: weight after the first events, MIL-CREDA",0.12,0.12,0.0,True
+03 synthetic mechanisms,"excerpt subject: weight after the first events, UDA-DDA",0.04,0.04,0.0,True
+03 synthetic mechanisms,"excerpt subject: window after the first events, start (s)",10.0,10.0,0.0,True
+03 synthetic mechanisms,"excerpt subject: % weight on events, MIL-CREDA",67.0,67.0,0.0,True
+03 synthetic mechanisms,"excerpt subject: % weight on events, UDA-DDA",87.0,87.0,0.0,True
+03 synthetic mechanisms,excerpt subject: % uniform weight on events,20.0,20.0,0.0,True
+03 synthetic mechanisms,"subjects: weight on events, MIL-CREDA",0.64,0.64,0.0,True
+03 synthetic mechanisms,"subjects: weight on events, UDA-DDA",0.68,0.68,0.0,True
+03 synthetic mechanisms,subjects: uniform weight on events,0.23,0.23,0.0,True
+03 synthetic mechanisms,subjects with ADHD,60.0,60.0,0.0,True
+03 synthetic mechanisms,"subjects: artifact-free events, MIL-CREDA",0.54,0.54,0.0,True
+03 synthetic mechanisms,"subjects: artifact-free events, UDA-DDA",0.55,0.55,0.0,True
+03 synthetic mechanisms,subjects: artifact-free events p,0.16,0.16,0.0,True
+03 synthetic mechanisms,subjects holding artifacts,117.0,117.0,0.0,True
+03 synthetic mechanisms,"subjects: artifact weight, UDA-DDA",0.211,0.211,0.0,True
+03 synthetic mechanisms,subjects: uniform artifact weight,0.215,0.215,0.0,True
+03 synthetic mechanisms,"subjects: artifact weight, MIL-CREDA",0.183,0.183,0.0,True
+03 synthetic mechanisms,subjects: artifact weight p,0.002,0.002,0.0,True
+03 synthetic mechanisms,subjects: event weight p,0.006,0.006,0.0,True
+03 synthetic mechanisms,"subjects: artifact-covered events, MIL-CREDA",0.1,0.1,0.0,True
+03 synthetic mechanisms,"subjects: artifact-covered events, UDA-DDA",0.13,0.13,0.0,True
+03 synthetic mechanisms,subjects: artifact-covered events not significant,1.0,1.0,0.0,True
+03 synthetic mechanisms,table terms: BA full,0.721,0.721,0.0,True
+03 synthetic mechanisms,table terms: BA global only,0.717,0.717,0.0,True
+03 synthetic mechanisms,table terms: BA local only,0.669,0.669,0.0,True
+03 synthetic mechanisms,table terms: BA no adaptation,0.576,0.576,0.0,True
+03 synthetic mechanisms,table terms: pHolm global only,0.453,0.453,0.0,True
+03 synthetic mechanisms,table terms: pHolm local only,0.155,0.155,0.0,True
+03 synthetic mechanisms,table terms: pHolm no adaptation,0.038,0.038,0.0,True
+03 synthetic mechanisms,terms Friedman p,0.099,0.099,0.0,True
+03 synthetic mechanisms,terms BA at dC>=1.5 full,0.943,0.943,0.0,True
+03 synthetic mechanisms,terms BA at dC>=1.5 global only,0.94,0.94,0.0,True
+03 synthetic mechanisms,terms BA at dC>=1.5 local only,0.841,0.841,0.0,True
+03 synthetic mechanisms,terms BA at dC>=1.5 no adaptation,0.649,0.649,0.0,True
+03 synthetic mechanisms,class-0 pair distance start,2.86,2.86,0.0,True
+03 synthetic mechanisms,class-1 pair distance start,6.24,6.24,0.0,True
+03 synthetic mechanisms,class-0 pair distance end (local term),0.41,0.41,0.0,True
+03 synthetic mechanisms,class-1 pair distance end (local term),1.16,1.16,0.0,True
+03 synthetic mechanisms,class-0 pair distance end (global only),0.58,0.58,0.0,True
+03 synthetic mechanisms,class-1 pair distance end (global only),0.96,0.96,0.0,True
+03 synthetic mechanisms,"own-pair distance start, mean over units",6.8,6.8,0.0,True
+03 synthetic mechanisms,own-pair distance end with local term,2.48,2.48,0.0,True
+03 synthetic mechanisms,own-pair distance end without local term,2.64,2.64,0.0,True
+03 synthetic mechanisms,units closer with the local term,21.0,21.0,0.0,True
+03 synthetic mechanisms,one-sided Wilcoxon p < 0.001,1.0,1.0,0.0,True
+03 synthetic mechanisms,local term only BA at dC>=1.5,0.841,0.841,0.0,True
+04 ADHD pool,MIL-CREDA cef rank,4.1,4.1,0.0,True
+04 ADHD pool,MIL-CREDA cef BA,0.663,0.663,0.0,True
+04 ADHD pool,MIL-CREDA cef AUC,0.72,0.72,0.0,True
+04 ADHD pool,MIL-CREDA cef kappa,0.325,0.325,0.0,True
+04 ADHD pool,MIL-CREDA best-test rank,3.75,3.75,0.0,True
+04 ADHD pool,MIL-CREDA best-test BA,0.82,0.82,0.0,True
+04 ADHD pool,CCA-LSC cef rank,4.6,4.6,0.0,True
+04 ADHD pool,CCA-LSC cef BA,0.654,0.654,0.0,True
+04 ADHD pool,CCA-LSC cef AUC,0.648,0.648,0.0,True
+04 ADHD pool,CCA-LSC cef kappa,0.307,0.307,0.0,True
+04 ADHD pool,CCA-LSC best-test rank,5.1,5.1,0.0,True
+04 ADHD pool,CCA-LSC best-test BA,0.794,0.794,0.0,True
+04 ADHD pool,CCA-LSC cef pHolm,1.0,1.0,0.0,True
+04 ADHD pool,CCA-LSC cef delta,0.05,0.05,0.0,True
+04 ADHD pool,CCA-LSC best-test pHolm,1.0,1.0,0.0,True
+04 ADHD pool,CCA-LSC best-test delta,0.25,0.25,0.0,True
+04 ADHD pool,Phase 1 (source only) cef rank,4.6,4.6,0.0,True
+04 ADHD pool,Phase 1 (source only) cef BA,0.655,0.655,0.0,True
+04 ADHD pool,Phase 1 (source only) cef AUC,0.717,0.717,0.0,True
+04 ADHD pool,Phase 1 (source only) cef kappa,0.309,0.309,0.0,True
+04 ADHD pool,Phase 1 (source only) best-test rank,8.1,8.1,0.0,True
+04 ADHD pool,Phase 1 (source only) best-test BA,0.655,0.655,0.0,True
+04 ADHD pool,Phase 1 (source only) cef pHolm,1.0,1.0,0.0,True
+04 ADHD pool,Phase 1 (source only) cef delta,0.02,0.02,0.0,True
+04 ADHD pool,Phase 1 (source only) best-test pHolm,0.062,0.062,0.0,True
+04 ADHD pool,Phase 1 (source only) best-test delta,0.82,0.82,0.0,True
+04 ADHD pool,CS+CCS cef rank,4.65,4.65,0.0,True
+04 ADHD pool,CS+CCS cef BA,0.646,0.646,0.0,True
+04 ADHD pool,CS+CCS cef AUC,0.716,0.716,0.0,True
+04 ADHD pool,CS+CCS cef kappa,0.292,0.292,0.0,True
+04 ADHD pool,CS+CCS best-test rank,5.7,5.7,0.0,True
+04 ADHD pool,CS+CCS best-test BA,0.763,0.763,0.0,True
+04 ADHD pool,CS+CCS cef pHolm,1.0,1.0,0.0,True
+04 ADHD pool,CS+CCS cef delta,0.06,0.06,0.0,True
+04 ADHD pool,CS+CCS best-test pHolm,0.438,0.438,0.0,True
+04 ADHD pool,CS+CCS best-test delta,0.49,0.49,0.0,True
+04 ADHD pool,CASUAL cef rank,4.85,4.85,0.0,True
+04 ADHD pool,CASUAL cef BA,0.638,0.638,0.0,True
+04 ADHD pool,CASUAL cef AUC,0.64,0.64,0.0,True
+04 ADHD pool,CASUAL cef kappa,0.276,0.276,0.0,True
+04 ADHD pool,CASUAL best-test rank,5.05,5.05,0.0,True
+04 ADHD pool,CASUAL best-test BA,0.796,0.796,0.0,True
+04 ADHD pool,CASUAL cef pHolm,1.0,1.0,0.0,True
+04 ADHD pool,CASUAL cef delta,0.13,0.13,0.0,True
+04 ADHD pool,CASUAL best-test pHolm,1.0,1.0,0.0,True
+04 ADHD pool,CASUAL best-test delta,0.16,0.16,0.0,True
+04 ADHD pool,CLUDA cef rank,5.4,5.4,0.0,True
+04 ADHD pool,CLUDA cef BA,0.63,0.63,0.0,True
+04 ADHD pool,CLUDA cef AUC,0.706,0.706,0.0,True
+04 ADHD pool,CLUDA cef kappa,0.259,0.259,0.0,True
+04 ADHD pool,CLUDA best-test rank,3.45,3.45,0.0,True
+04 ADHD pool,CLUDA best-test BA,0.829,0.829,0.0,True
+04 ADHD pool,CLUDA cef pHolm,1.0,1.0,0.0,True
+04 ADHD pool,CLUDA cef delta,0.17,0.17,0.0,True
+04 ADHD pool,CLUDA best-test pHolm,1.0,1.0,0.0,True
+04 ADHD pool,CLUDA best-test delta,-0.04,-0.04,0.0,True
+04 ADHD pool,UDA-DDA cef rank,5.5,5.5,0.0,True
+04 ADHD pool,UDA-DDA cef BA,0.623,0.623,0.0,True
+04 ADHD pool,UDA-DDA cef AUC,0.717,0.717,0.0,True
+04 ADHD pool,UDA-DDA cef kappa,0.245,0.245,0.0,True
+04 ADHD pool,UDA-DDA best-test rank,5.65,5.65,0.0,True
+04 ADHD pool,UDA-DDA best-test BA,0.764,0.764,0.0,True
+04 ADHD pool,UDA-DDA cef pHolm,1.0,1.0,0.0,True
+04 ADHD pool,UDA-DDA cef delta,0.25,0.25,0.0,True
+04 ADHD pool,UDA-DDA best-test pHolm,0.562,0.562,0.0,True
+04 ADHD pool,UDA-DDA best-test delta,0.4,0.4,0.0,True
+04 ADHD pool,COT cef rank,5.55,5.55,0.0,True
+04 ADHD pool,COT cef BA,0.605,0.605,0.0,True
+04 ADHD pool,COT cef AUC,0.705,0.705,0.0,True
+04 ADHD pool,COT cef kappa,0.209,0.209,0.0,True
+04 ADHD pool,COT best-test rank,3.9,3.9,0.0,True
+04 ADHD pool,COT best-test BA,0.819,0.819,0.0,True
+04 ADHD pool,COT cef pHolm,1.0,1.0,0.0,True
+04 ADHD pool,COT cef delta,0.3,0.3,0.0,True
+04 ADHD pool,COT best-test pHolm,1.0,1.0,0.0,True
+04 ADHD pool,COT best-test delta,0.05,0.05,0.0,True
+04 ADHD pool,CLUST (source-free) cef rank,5.75,5.75,0.0,True
+04 ADHD pool,CLUST (source-free) cef BA,0.604,0.604,0.0,True
+04 ADHD pool,CLUST (source-free) cef AUC,0.628,0.628,0.0,True
+04 ADHD pool,CLUST (source-free) cef kappa,0.206,0.206,0.0,True
+04 ADHD pool,CLUST (source-free) best-test rank,4.3,4.3,0.0,True
+04 ADHD pool,CLUST (source-free) best-test BA,0.808,0.808,0.0,True
+04 ADHD pool,CLUST (source-free) cef pHolm,0.5,0.5,0.0,True
+04 ADHD pool,CLUST (source-free) cef delta,0.28,0.28,0.0,True
+04 ADHD pool,CLUST (source-free) best-test pHolm,1.0,1.0,0.0,True
+04 ADHD pool,CLUST (source-free) best-test delta,0.17,0.17,0.0,True
+04 ADHD pool,cef Friedman p,0.849,0.849,0.0,True
+04 ADHD pool,best-test Friedman p (paper: <0.001),0.00029374464927652504,0.0,0.001,True
+04 ADHD pool,bootstrap observed,0.008,0.008,0.0,True
+04 ADHD pool,bootstrap CI low,-0.058,-0.058,0.0,True
+04 ADHD pool,bootstrap CI high,0.075,0.075,0.0,True
+04 ADHD pool,"oracle gain over phase 1, min",0.11,0.11,0.0,True
+04 ADHD pool,"oracle gain over phase 1, max",0.17,0.17,0.0,True
+04 ADHD pool,"oracle - cef gap, min",0.12,0.12,0.0,True
+04 ADHD pool,"oracle - cef gap, max",0.21,0.21,0.0,True
+05 attention influence,table random: ADHD cef,0.356,0.356,0.0,True
+05 attention influence,table random: ADHD best test,0.289,0.289,0.0,True
+05 attention influence,table random: synthetic 24 units,0.262,0.262,0.0,True
+05 attention influence,table random: synthetic dC>=1.5,0.307,0.307,0.0,True
+05 attention influence,table highest: ADHD cef,1.374,1.374,0.0,True
+05 attention influence,table highest: ADHD best test,1.105,1.105,0.0,True
+05 attention influence,table highest: synthetic 24 units,1.344,1.344,0.0,True
+05 attention influence,table highest: synthetic dC>=1.5,2.066,2.066,0.0,True
+05 attention influence,table lowest: ADHD cef,0.186,0.186,0.0,True
+05 attention influence,table lowest: ADHD best test,0.211,0.211,0.0,True
+05 attention influence,table lowest: synthetic 24 units,0.246,0.246,0.0,True
+05 attention influence,table lowest: synthetic dC>=1.5,0.363,0.363,0.0,True
+05 attention influence,table class-event: synthetic 24 units,0.672,0.672,0.0,True
+05 attention influence,table class-event: synthetic dC>=1.5,1.114,1.114,0.0,True
+05 attention influence,"text: class-event random baseline, 24 units",0.246,0.246,0.0,True
+05 attention influence,"text: class-event random baseline, dC>=1.5",0.284,0.284,0.0,True
+05 attention influence,"text: class-event p < 0.001, 24 units (1 = yes)",1.0,1.0,0.0,True
+05 attention influence,"text: class-event p < 0.001, dC>=1.5 (1 = yes)",1.0,1.0,0.0,True
+05 attention influence,"text: ADHD highest above random, units, cef",10.0,10.0,0.0,True
+05 attention influence,"text: ADHD highest above random, units, best",10.0,10.0,0.0,True
+05 attention influence,"text: ADHD highest above random, % subjects, cef",81.0,81.0,0.0,True
+05 attention influence,"text: ADHD highest above random, % subjects, best",83.0,83.0,0.0,True
+05 attention influence,"text: ADHD highest p < 0.001, cef (1 = yes)",1.0,1.0,0.0,True
+05 attention influence,"text: ADHD highest p < 0.001, best (1 = yes)",1.0,1.0,0.0,True
+05 attention influence,"text: toward true class, % subjects, best (40)",40.0,40.0,0.0,True
+05 attention influence,"text: toward true class, % subjects, cef (50)",50.0,50.0,0.0,True
+05 attention influence,"figure: control pair end, with local term",0.42,0.42,0.0,True
+05 attention influence,"figure: ADHD pair end, with local term",0.66,0.66,0.0,True
+05 attention influence,"figure: control pair start, without",1.22,1.22,0.0,True
+05 attention influence,"figure: control pair end, without",2.07,2.07,0.0,True
+05 attention influence,"figure: ADHD pair start, without",1.06,1.06,0.0,True
+05 attention influence,"figure: ADHD pair end, without",1.76,1.76,0.0,True
+06 ADHD graph analysis,"F4-Cz rank-biserial, all windows (l.477)",-0.5,-0.5,0.0,True
+06 ADHD graph analysis,"F4-Cz rank-biserial, top 25 % (l.477)",-0.48,-0.48,0.0,True
+06 ADHD graph analysis,"F4-Cz rank-biserial, random 25 % (l.477)",-0.43,-0.43,0.0,True
+06 ADHD graph analysis,F4-Cz leads all / top / random (l.477),1.0,1.0,0.0,True
+06 ADHD graph analysis,"XGBoost BA, top 25 % (l.477)",0.727,0.727,0.0,True
+06 ADHD graph analysis,"XGBoost AUC, top 25 % (l.477)",0.78,0.78,0.0,True
+06 ADHD graph analysis,"XGBoost BA, all windows (l.477)",0.645,0.645,0.0,True
+06 ADHD graph analysis,"XGBoost AUC, all windows (l.477)",0.672,0.672,0.0,True
+06 ADHD graph analysis,BA top - all (l.477),0.083,0.083,0.0,True
+06 ADHD graph analysis,"BA top - all, CI95 low (l.477)",0.008,0.008,0.0,True
+06 ADHD graph analysis,"BA top - all, CI95 high (l.477)",0.158,0.158,0.0,True
+06 ADHD graph analysis,"XGBoost BA, random 25 % (l.477)",0.686,0.686,0.0,True
+06 ADHD graph analysis,"XGBoost BA, bottom 25 % (l.477)",0.595,0.595,0.0,True
+06 ADHD graph analysis,"p Holm, random - all (l.477)",0.442,0.442,0.0,True
+06 ADHD graph analysis,"p Holm, bottom - all (l.477)",0.442,0.442,0.0,True
+06 ADHD graph analysis,"p Holm, top - all (l.477)",0.107,0.107,0.0,True
+06 ADHD graph analysis,pair descriptor correlation (l.507),0.988,0.988,0.0,True
+06 ADHD graph analysis,pair above 90 % of the unit's pairs (l.507),1.0,1.0,0.0,True
+06 ADHD graph analysis,"mean descriptor correlation, all pairs (l.507)",0.973,0.973,0.0,True
+06 ADHD graph analysis,pair centrality correlation (l.507),0.68,0.68,0.0,True
+06 ADHD graph analysis,pair centrality above 82 % of pairs (l.507),1.0,1.0,0.0,True
