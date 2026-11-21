@@ -120,14 +120,15 @@ def test_the_readme_states_the_creda_selector_and_batchnorm():
 @pytest.mark.parametrize("method, names", [
     ("CREDA", ("source_epochs", "source_patience", "adaptation_epochs",
                "epochs")),
-    ("MIL-CREDA", ("EPOCAS_1", "PACIENCIA_1", "EPOCAS_2")),
+    ("MIL-CREDA", ("TRIALS",)),
 ])
 def test_the_readme_quotes_the_budget_the_notebook_really_has(method, names):
     """A number in the README that the notebook does not carry misleads."""
     text = README.read_text(encoding="utf-8")
     code = _code(TUTORIALS[method])
     for name in names:
-        values = re.findall(rf"^\s*{name}\s*=\s*(\d+)", code, re.M)
+        # a value may read `1 if SMOKE else 6`: the full-run value is the last literal
+        values = re.findall(rf"^\s*{name}\s*=\s*(?:.*\belse\s+)?(\d+)", code, re.M)
         assert len(values) == 1, (name, values)
         assert f"`{name}={values[0]}`" in text or \
             f"`{name} = {values[0]}`" in text, (name, values[0])

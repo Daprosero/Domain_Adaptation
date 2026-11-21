@@ -81,7 +81,7 @@ The defaults are short so the notebooks finish quickly. They are not tuned and t
 |----------|---------------------|
 | CREDA, `v2` | `source_epochs=60` (ceiling, early stop with `source_patience=15`), then `adaptation_epochs=20` |
 | CREDA, `v01` | `epochs=60` of joint training |
-| MIL-CREDA | `EPOCAS_1 = 60` (ceiling, `PACIENCIA_1 = 15`), then `EPOCAS_2 = 20` |
+| MIL-CREDA | `TRIALS = 6` phase-2 configurations per family (the paper draws 100), phase 2 at the paper's 100 epochs |
 
 To change the CREDA budget, set `ADJUSTMENTS` (for example `{"source_epochs": 3, "adaptation_epochs": 2}`); for MIL-CREDA, edit the budget cell.
 
