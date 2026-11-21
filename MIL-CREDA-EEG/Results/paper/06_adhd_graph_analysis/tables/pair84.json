@@ -1,0 +1,11 @@
+{
+ "unit": "ieee-r3h1",
+ "target": "IEEE-v236",
+ "source": "IEEE-v265",
+ "descriptorCorrelation": 0.988282445120656,
+ "centralityCorrelation": 0.6768056406589515,
+ "percentileAmongAllPairs": 0.906392694063927,
+ "meanCorrelationAllPairs": 0.9733307182594031,
+ "nPairs": 876,
+ "centralityPercentile": 0.8276255707762558
+}

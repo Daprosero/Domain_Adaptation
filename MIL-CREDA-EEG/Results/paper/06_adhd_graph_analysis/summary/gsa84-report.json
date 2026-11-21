@@ -1,0 +1,102 @@
+[
+ {
+  "unit": "ieee-r0h0",
+  "trial": 4,
+  "npz": "ieee-x-out/ix-r0h0-s0/ieeepool-ieee-r0h0-sh0of8/MIL-CREDA-4.npz",
+  "BA": 0.6309523809523809,
+  "AUC": 0.6190476190476191,
+  "diff": 2.380952380920398e-06,
+  "reproduces": true,
+  "seconds": 12.5
+ },
+ {
+  "unit": "ieee-r0h1",
+  "trial": 4,
+  "npz": "ieee-x-out/ix-r0h1-s0/ieeepool-ieee-r0h1-sh0of8/MIL-CREDA-4.npz",
+  "BA": 0.5833333333333334,
+  "AUC": 0.6111111111111112,
+  "diff": 3.3333333333551707e-06,
+  "reproduces": true,
+  "seconds": 12.3
+ },
+ {
+  "unit": "ieee-r1h0",
+  "trial": 3,
+  "npz": "ieee-x-out/ix-r1h0-s0/ieeepool-ieee-r1h0-sh0of8/MIL-CREDA-3.npz",
+  "BA": 0.75,
+  "AUC": 0.9166666666666667,
+  "diff": 3.3333333332441484e-06,
+  "reproduces": true,
+  "seconds": 12.5
+ },
+ {
+  "unit": "ieee-r1h1",
+  "trial": 4,
+  "npz": "ieee-x-out/ix-r1h1-s0/ieeepool-ieee-r1h1-sh0of8/MIL-CREDA-4.npz",
+  "BA": 0.5833333333333334,
+  "AUC": 0.7222222222222222,
+  "diff": 3.3333333333551707e-06,
+  "reproduces": true,
+  "seconds": 12.5
+ },
+ {
+  "unit": "ieee-r2h0",
+  "trial": 3,
+  "npz": "ieee-x-out/ix-r2h0-s0/ieeepool-ieee-r2h0-sh0of8/MIL-CREDA-3.npz",
+  "BA": 0.5833333333333334,
+  "AUC": 0.5277777777777778,
+  "diff": 3.3333333333551707e-06,
+  "reproduces": true,
+  "seconds": 12.6
+ },
+ {
+  "unit": "ieee-r2h1",
+  "trial": 28,
+  "npz": "ieee-x-out/ix-r2h1-s2/ieeepool-ieee-r2h1-sh2of8/MIL-CREDA-28.npz",
+  "BA": 0.5,
+  "AUC": 0.6944444444444444,
+  "diff": 4.444444444473561e-06,
+  "reproduces": true,
+  "seconds": 12.2
+ },
+ {
+  "unit": "ieee-r3h0",
+  "trial": 0,
+  "npz": "ieee-x-out/ix-r3h0-s0/ieeepool-ieee-r3h0-sh0of8/MIL-CREDA-0.npz",
+  "BA": 0.6666666666666666,
+  "AUC": 0.6944444444444444,
+  "diff": 4.444444444473561e-06,
+  "reproduces": true,
+  "seconds": 12.4
+ },
+ {
+  "unit": "ieee-r3h1",
+  "trial": 21,
+  "npz": "ieee-x-out/ix-r3h1-s1/ieeepool-ieee-r3h1-sh1of8/MIL-CREDA-21.npz",
+  "BA": 0.8333333333333334,
+  "AUC": 0.9722222222222223,
+  "diff": 3.3333333333551707e-06,
+  "reproduces": true,
+  "seconds": 12.2
+ },
+ {
+  "unit": "ieee-r4h0",
+  "trial": 10,
+  "npz": "ieee-x-out/ix-r4h0-s0/ieeepool-ieee-r4h0-sh0of8/MIL-CREDA-10.npz",
+  "BA": 0.75,
+  "AUC": 0.6666666666666667,
+  "diff": 3.3333333332441484e-06,
+  "reproduces": true,
+  "seconds": 12.3
+ },
+ {
+  "unit": "ieee-r4h1",
+  "trial": 13,
+  "npz": "ieee-x-out/ix-r4h1-s1/ieeepool-ieee-r4h1-sh1of8/MIL-CREDA-13.npz",
+  "BA": 0.75,
+  "AUC": 0.7777777777777778,
+  "diff": 2.2222222222367805e-06,
+  "reproduces": true,
+  "seconds": 12.1
+ }
+]
