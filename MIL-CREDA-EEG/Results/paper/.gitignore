@@ -1,0 +1,5 @@
+# Raw per-trial outputs that a stage run regenerates (the ADHD pool alone is about 1.9 GB) are
+# never committed; each stage keeps only its condensed summary, tables and figures.
+*/raw/
+*/runs/
+*/bases/regenerated/

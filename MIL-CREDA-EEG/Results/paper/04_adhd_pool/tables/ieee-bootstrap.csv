@@ -1,0 +1,2 @@
+quantity,observed,ci95_low,ci95_high,resamples,p_bootstrap_le0
+BA(MIL-CREDA cef) - BA(phase 1),0.0083,-0.0583,0.075,10000,0.4008

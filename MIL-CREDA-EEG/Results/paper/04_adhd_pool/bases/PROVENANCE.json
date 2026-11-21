@@ -1,0 +1,16 @@
+{
+ "source": "git show d7a4ef3e:MIL-CREDA-EEG/Manifests/ieee_pool_bases/<file> (tag archive/ieee-pool-slim), identical to the clone each ix job ran (Results/v82-ieee-pool/ieee-out/ix-*/clone)",
+ "note": "the MANIFEST.json committed beside them at d7a4ef3e still lists the hashes of an earlier build; these are the files' own hashes",
+ "files": {
+  "ieee-r0h0-s1.pt": "427d4c84e4f1c3c1c48e5b58db8d14b428db5d14dd3165738acc3f4c07b3ed59",
+  "ieee-r0h1-s1.pt": "be2094e0005ecbfca6c673aa317935937f2a35743d6b12b1bbdbcd6c1c03b9f1",
+  "ieee-r1h0-s1.pt": "b0fe62c3fd4c4e03b818751fba60a14402b7423c0d9d242c67c95709e9bea534",
+  "ieee-r1h1-s1.pt": "72cc06ccfbc8074e4b51f0f43bad94041bf398c84a7bf5c3ac8b9f5e5e8cba54",
+  "ieee-r2h0-s1.pt": "f5ff36dc5bafa856f84bbdd9ecb5284e49f8b1f9189d6cee551657d547c179d6",
+  "ieee-r2h1-s1.pt": "d7935dd894105c791aae3354f293c527748315eb928ec4b242f3699187349fdd",
+  "ieee-r3h0-s1.pt": "38c1b5b1b8d2651ea1875749ee4e61f001f35fb8a3511db74a2f09378bcd0012",
+  "ieee-r3h1-s1.pt": "24ab79ac5906cb20d920bdacbe470a8ee86fef073fdb67fda73668c17f1eaca2",
+  "ieee-r4h0-s1.pt": "29178651295939d1fa9712c2aa2b4f5f7f7aa44e9039d309ec09dd875c52c05c",
+  "ieee-r4h1-s1.pt": "f5be13bb72e77b73df98e81b0ee64d3e71ba2e1ed15a26ca7f32f7cfc720df4b"
+ }
+}
