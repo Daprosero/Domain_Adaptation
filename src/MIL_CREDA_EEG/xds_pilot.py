@@ -57,9 +57,13 @@ def find_ieee(root: str | None = None) -> str:
     if root and glob.glob(f"{root}/ADHD_group/*.mat"):
         return root
     hits = sorted(glob.glob("/kaggle/input/**/TDAH/ieee/ADHD_group", recursive=True))
-    if not hits:
+    if hits:
+        return str(Path(hits[0]).parent)
+    if os.environ.get("MIL_CREDA_NO_DOWNLOAD"):
         raise FileNotFoundError("no IEEE ADHD_group folder under /kaggle/input")
-    return str(Path(hits[0]).parent)
+    from MIL_CREDA_EEG import repro                     # outside Kaggle: the public dataset
+
+    return repro.ieee_root()
 
 
 def instances(w: np.ndarray) -> torch.Tensor:
