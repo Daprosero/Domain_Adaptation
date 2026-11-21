@@ -15,20 +15,20 @@ Branch: repro-notebooks (merged to Diego and main at the end). Delivery: ask-on-
 
 ## Tasks
 
-- T1 [S4, S7] shared helper `repro.py` (Kaggle data access anywhere, SPLIT portions, Results/paper dirs, paper checks) + tests — inline
-- T2 [S3] Toyset notebook — delegated (parallel)
-- T3 [S2] 00_Tutorial_EEG — delegated (parallel)
-- T4 [S4, S5] 01_Phase1_Bases — delegated (parallel)
-- T5 [S4, S5] 02_Synthetic_Criteria_Pool — delegated (parallel)
-- T6 [S4, S5] 03_Synthetic_Mechanisms — delegated (parallel)
-- T7 [S4, S5] 04_ADHD_Pool — delegated (parallel)
-- T8 [S4, S5] 05_Attention_Influence — delegated (parallel)
-- T9 [S4, S5] 06_ADHD_Graph_Analysis — delegated (parallel)
-- T10 [S6] Results_Paper — inline
-- T11 [S8] README — inline
-- T12 [S1] BALLADEER removal — inline
-- T13 [S9] history rewrite + force-push — inline
-- T14 [S1] delete local Data/ — inline, last
+- T1 [S4, S7] repro.py + IEEE manifest + find_ieee fallback — inline — done (f73f592 before rewrite; 11 tests)
+- T2 [S3] Toyset notebook — delegated (parallel) — done (6.1 min headless; 15 tutorial tests)
+- T3 [S2] 00_Tutorial_EEG — delegated (parallel) — done (6.5 min headless; ADHD pick reproduces BA 0.833 / AUC 0.972)
+- T4 [S4, S5] 01_Phase1_Bases — delegated (parallel) — done (4/4 paper numbers)
+- T5 [S4, S5] 02_Synthetic_Criteria_Pool — delegated (parallel) — done (32/32)
+- T6 [S4, S5] 03_Synthetic_Mechanisms — delegated (parallel) — done (98/98; paper prints 0.008 where the stored Holm p is 0.00749)
+- T7 [S4, S5] 04_ADHD_Pool — delegated (parallel) — done (95/95)
+- T8 [S4, S5] 05_Attention_Influence — delegated (parallel) — done (32/32; pair IEEE-v236 -> v265)
+- T9 [S4, S5] 06_ADHD_Graph_Analysis — delegated (parallel) — done (21/21; full run 5 min locally)
+- T10 [S6] Results_Paper — inline — done (282/282 in 15 s)
+- T11 [S8] README + requirements — inline — done (4bf2085)
+- T12 [S1] BALLADEER removal — inline — done (f340693: 21 modules, 17 tests, tools, 1165 job folders, notebook); manifests restored to the paper's (00b9c0c)
+- T13 [S9] history rewrite + force-push — inline — done (pack 709 MB -> 161 MB; main/Diego/tag trees identical; 2 empty commits dropped)
+- T14 [S1] delete local Data/ — inline — done (73 GB)
 
 ## Log
 
@@ -36,3 +36,5 @@ Branch: repro-notebooks (merged to Diego and main at the end). Delivery: ask-on-
 - L2 (2026-11-21) "ese ultimo lo llamaría results paper, porque genera con lo gaurdao los resultados de lo que hay hoy en el paper. los demás desde que garanticen que se reproduzcan los resultados (no exactos, puede variar, en lo posible ojala sean los mismos ) esta bien, es decir, mismos parametros, etc."
 - L3 (2026-11-21) History rewrite approved: "si".
 - L4 Evidence: daprosero/mi-tdah-dataset is public (CC0, v5); IEEE ADHD files download one by one with kagglehub, about 33 MB in total. crit3.py is in Results/v77-pool24 and v74-criteria-pool; xgb84.py is in Results/v84-gsa.
+- L5 (2026-11-21) Evidence: the tracked Manifests were an older set; restored from archive/ieee-pool-slim (34/34 bases byte-identical to the Kaggle clones). Full suite after the removal: the only failures were tests of deleted modules and tests reading an untracked job folder, fixed with tests/fixtures. History rewritten with git filter-repo --strip-blobs-with-ids (92 blobs, 339 MB, none in main or in the archive tags' tips) and force-pushed; local branches reset with `git reset --mixed`, the collaborator's three modified files unchanged (md5).
+- L6 Open: main.tex:402 prints p_Holm 0.008 for the mean aggregation (stored 0.00749 -> 0.007); BALLADEER leftovers on disk that the collaborator's .gitignore keeps on purpose: Models/Balladeer (442 MB), Results/launch_v59 (7.8 GB), Results/hpo/*.db; three detached worktrees (band-row, criteria-pool, oracle-screen) keep the old history alive locally (pack 334 MB).
