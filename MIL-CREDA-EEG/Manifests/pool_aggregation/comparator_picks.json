@@ -1,0 +1,25 @@
+{
+ "source": "criteria pool out-all, seed 1; cef = exp entropy of argmax histogram of Pt; first max over finite trials in trial order",
+ "units": {
+  "d1p5-s1p5-r0": {
+   "UDA-DDA": {
+    "trial": 2,
+    "cef": 2.0,
+    "BApool": 0.775,
+    "AUCpool": 0.80944,
+    "BAtest12": 0.66667,
+    "params": {
+     "lr2": 0.009059131038930678,
+     "wd2": 0.0008883288089243551,
+     "mmdWeight": 0.028642226429545743,
+     "cmmdWeight": 0.1080207459797717,
+     "kernelMultiplier": 0.75,
+     "confidenceA": 0.6589288974053674,
+     "confidenceB": 0.8413855265937613,
+     "tau_att": 2.147785832587366
+    },
+    "trialsSeen": 100
+   }
+  }
+ }
+}

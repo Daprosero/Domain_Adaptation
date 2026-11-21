@@ -41,10 +41,12 @@ TRIALS = 100
 SHARDS = 4
 SEEDS = (1, 2, 3, 4, 5)
 SAMPLER_SEED = 20261115
-TAU_ATT = (1.0, 10.0)
-#: Eq. 34's softmax(kappa / tau_local) is uniform for tau_local >= 0.1 on the measured kappa spread
-#: (median within-class range 0.05), so the range reaches down to a hard match
-TAU_LOCAL = (1e-3, 1.0)
+#: protocol v81: the attention logits differ by at most 2 + gamma within a bag, so the softmax is uniform from
+#: tau 3 on; 0.01 gives a hard assignment for spreads of 0.5 and more
+TAU_ATT = (0.01, 1.0)
+#: Eq. 34's softmax(kappa / tau_local): a hard match at 1e-3 and normalized entropy 0.98 (ADHD) to 1.00
+#: (synthetic) at 0.3 on the measured kappa spread (protocol v81)
+TAU_LOCAL = (1e-3, 0.3)
 DEV_UNITS = tuple(f"d{d}-s{s}-r{r}" for d in ("1p5", "2p5") for s in ("0p5", "1p5", "3") for r in (0, 1))
 BOUNDARY_UNITS = tuple(f"d1-s{s}-r{r}" for s in ("0p5", "1p5", "3") for r in (0, 1))
 UNITS = DEV_UNITS + BOUNDARY_UNITS

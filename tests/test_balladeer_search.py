@@ -104,7 +104,7 @@ def test_the_spaces_are_exactly_those_of_sec_7_7():
         "MIL-CREDA": {**shared1, "attentionGamma": FloatDistribution(0.0, 1.0),
                       "attentionTemperature": FloatDistribution(0.1, 10.0, log=True),
                       "sigmaMultiplier": CategoricalDistribution((0.5, 0.75, 1.0, 1.5))}}
-    assert search.SHARED_PHASE_TWO == {"lr2": FloatDistribution(1e-5, 1e-2, log=True),
+    assert search.SHARED_PHASE_TWO == {"lr2": FloatDistribution(1e-4, 1e-2, log=True),
                                        "wd2": wd}
     assert search.phase_two_space("MIL-CREDA") == {
         **search.SHARED_PHASE_TWO, "tauLocal": FloatDistribution(0.1, 10.0, log=True)}

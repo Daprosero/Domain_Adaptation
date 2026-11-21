@@ -39,8 +39,10 @@ from MIL_CREDA_EEG.phase_one_sweep import explicit_l2
 SAMPLER_SEED = 20261111
 SEARCH_SEED = 0
 N_INNER = 3
+#: lr1, l2, width and epochs keep the v80 ranges (widening them gave unstable bases); tauAtt1 over the
+#: phase-1 attention's working range (gamma 0, logit spread <= 2: entropy 0.5 near 0.05, 0.9 near 0.4)
 SPACE = {"lr1": ("log", 1e-4, 1e-2), "l2": ("log", 1e-4, 1e-1), "width": ("cat", (32, 64, 128)),
-         "tauAtt1": ("log", 1.0, 10.0), "epochs": ("cat", (50, 100, 200))}
+         "tauAtt1": ("log", 0.01, 1.0), "epochs": ("cat", (50, 100, 200))}
 
 
 def suggest(trial) -> dict:
