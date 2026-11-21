@@ -1,0 +1,5 @@
+quantity,value,paper,main.tex line
+"synthetic first phase, mean BA over the 24 units (evaluation pool)",0.576,0.576,main.tex:370
+"ADHD Phase 1 (source only), mean BA over the 10 units",0.655,0.655,main.tex:459
+"ADHD Phase 1 (source only), mean AUC over the 10 units",0.717,0.717,main.tex:459
+"ADHD Phase 1 (source only), mean kappa over the 10 units",0.309,0.309,main.tex:459
