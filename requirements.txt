@@ -8,6 +8,11 @@ jupyter
 ipykernel==7.3.0
 gdown
 matplotlib==3.11.1
+# EEG simulation (eeg_sim.py): MNE builds the montage and forward model, NeuroDSP the oscillations.
+mne==1.10.1
+neurodsp==2.2.1
+# Imported directly by the tutorial visuals (PIL.Image), so declared instead of arriving through matplotlib.
+pillow==13.0.0
 # NumPy and pandas are pinned to the target venv's installed versions, the ones the suite runs under.
 # La busqueda de v2 elige el techo con Optuna y su GPSampler. GPSampler
 # necesita torch y scipy, que ya estan; se declara igual porque un
@@ -34,4 +39,7 @@ torch==2.13.0
 torchcam
 torchvision==0.28.0
 tqdm==4.70.0
+# Test runner for tests/.
+pytest==9.2.0
+# Optional, not installed here: transformers, only for the REVE trunk (reve_trunk.py).
 umap-learn==0.5.12
