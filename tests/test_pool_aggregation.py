@@ -56,7 +56,7 @@ def test_the_pick_check_accepts_the_pool_draw_up_to_its_last_bits():
     lr2 = C.draw("MIL-CREDA", 1)[4]["lr2"]
     pick = PA.checked_pick(UNIT, _picks(lr2=lr2 * (1 + 1e-15)))
     assert pick["params"]["lr2"] == lr2 * (1 + 1e-15) and 0 < pick["drawRelDiff"] <= PA.DRAW_RTOL
-    assert PA.checked_pick(UNIT)["trial"] == 4      # the shipped manifest
+    assert PA.checked_pick(UNIT)["trial"] == 34     # the shipped v82 manifest the paper ran
 
 
 def test_sum_weights_every_window_one_so_the_bag_is_the_plain_sum():
@@ -133,7 +133,7 @@ def test_a_short_real_run_writes_every_declared_key(tmp_path):
     for k in ("unitKey", "trial", "params", "drawRelDiff", "pickBApool", "reproduces", "BApoolDifference", "commit",
               "procs", "threads", "epochs2", "attentionSubjects", "families"):
         assert k in rec, k
-    assert rec["unitKey"] == UNIT and rec["trial"] == 4 and rec["epochs2"] == 1
+    assert rec["unitKey"] == UNIT and rec["trial"] == 34 and rec["epochs2"] == 1
     assert rec["attentionSubjects"] == "evaluation pool"
     assert isinstance(rec["reproduces"], bool)
     agg, terms = rec["families"]["aggregation"], rec["families"]["terms"]
@@ -142,7 +142,7 @@ def test_a_short_real_run_writes_every_declared_key(tmp_path):
     fig = rec["figure"]["UDA-DDA"]
     assert fig["family"] == "figure" and fig["nonFinite"] is False and fig["attention"] is not None
     assert fig["params"] == PA.checked_pick(UNIT, method="UDA-DDA")["params"]
-    assert rec["figurePick"]["trial"] == 2
+    assert rec["figurePick"]["trial"] == 43
     assert terms["full"] == {"reference": "aggregation/own"}
     own, mean, glob = agg["own"], agg["mean"], terms["global only"]
     assert (own["family"], mean["family"], glob["family"]) == ("aggregation", "aggregation", "terms")
@@ -203,7 +203,7 @@ def test_the_short_run_writes_the_sidecars_and_the_own_pair_states(tmp_path):
 def test_the_figure_runs_only_on_the_figure_unit_and_stays_out_of_both_families(tmp_path):
     assert PA.figure_task("d1-s1p5-r0", 100) is None
     task, pick = PA.figure_task(UNIT, 100)
-    assert task == ("UDA-DDA", pick["params"], C.train_seed(1, 2), 100) and pick["BApool"] == 0.775
+    assert task == ("UDA-DDA", pick["params"], C.train_seed(1, 43), 100) and pick["BApool"] == 0.9
     assert PA.design("UDA-DDA")["family"] == "figure"
     assert all("UDA-DDA" not in names for names in PA.FAMILIES.values()) and "UDA-DDA" not in PA.ALL
     out = PA.run("d1-s1p5-r0", variants=("mean",), procs=1, threads=1, workdir=tmp_path, epochs=1,
